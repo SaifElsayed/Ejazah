@@ -29,11 +29,11 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 
 **Purpose**: The workspace every later task is written inside.
 
-- [ ] T001 Create pnpm workspace root with `pnpm-workspace.yaml` and root `package.json` declaring the scripts named in quickstart.md
-- [ ] T002 [P] Create strict TypeScript base config in `packages/config/tsconfig.base.json` with `strict` and `noUncheckedIndexedAccess` enabled per research R-2
-- [ ] T003 [P] Create formatter config in `packages/config/prettier.config.js`
-- [ ] T004 [P] Create base ESLint config in `packages/config/eslint.base.js`, wired to consume the internal plugin added in T034
-- [ ] T005 [P] Create shared test-runner config in `packages/config/vitest.base.ts` with per-path coverage thresholds left empty for now, filled in T086
+- [x] T001 Create pnpm workspace root with `pnpm-workspace.yaml` and root `package.json` declaring the scripts named in quickstart.md
+- [x] T002 [P] Create strict TypeScript base config in `packages/config/tsconfig.base.json` with `strict` and `noUncheckedIndexedAccess` enabled per research R-2
+- [x] T003 [P] Create formatter config in `packages/config/prettier.config.js`
+- [x] T004 [P] Create base ESLint config in `packages/config/eslint.base.js`, wired to consume the internal plugin added in T034
+- [x] T005 [P] Create shared test-runner config in `packages/config/vitest.base.ts` with per-path coverage thresholds left empty for now, filled in T086
 - [ ] T006 [P] Scaffold the user application at `apps/mobile/` with the route-group tree (`src/app/(auth)`, `(student)`, `(teacher)`) and empty `src/features/{student,teacher,shared}/`
 - [ ] T007 [P] Scaffold the administrator application at `apps/admin/` with `src/` and its build config
 - [ ] T008 [P] Scaffold the backend at `apps/api/` with `src/main.ts` and `src/worker.ts` entrypoints sharing `src/modules/`

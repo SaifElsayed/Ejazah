@@ -1,0 +1,19 @@
+# Not ours to format.
+node_modules/
+.pnpm-store/
+
+# Build output and generated artefacts. Formatting a generated file would collide with R-PROC-9.
+dist/
+dist-ssr/
+build/
+web-build/
+coverage/
+*.tsbuildinfo
+.expo/
+.expo-shared/
+
+# Lockfiles are generated and never hand-edited (R-PROC-9).
+pnpm-lock.yaml
+
+# Prisma has its own formatter (`prisma format`); Prettier would fight it.
+prisma/migrations/

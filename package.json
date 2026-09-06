@@ -27,5 +27,15 @@
     "check:generated": "tsx scripts/generated-file-check.ts",
     "check:branch": "tsx scripts/branch-spec-check.ts",
     "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.10.0",
+    "husky": "9.1.7",
+    "prettier": "3.9.6",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   }
 }
