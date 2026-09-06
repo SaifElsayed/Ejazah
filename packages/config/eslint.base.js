@@ -12,6 +12,8 @@ const repositoryRoot = path.resolve(__dirname, '..', '..');
 
 const ignores = [
   '**/dist/**',
+  '**/build/**',
+  '**/web-build/**',
   '**/node_modules/**',
   '**/.expo/**',
   '**/coverage/**',
