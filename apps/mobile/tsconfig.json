@@ -5,9 +5,8 @@
     "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "noEmit": true,
-    "composite": false,
-    "declaration": false,
+    "outDir": "dist",
+    "emitDeclarationOnly": true,
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] }
   },

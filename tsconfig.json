@@ -1,6 +1,12 @@
 {
   "extends": "./packages/config/tsconfig.base.json",
   "compilerOptions": {
+    // Every file in this project is executed by tsx or by Vitest, both of which resolve
+    // like a bundler and accept ESM syntax regardless of the root package's CommonJS type
+    // field — which stays CommonJS so eslint.config.js and prettier.config.js can require().
+    // NodeNext here would reject that syntax file by file (TS1295) rather than describe it.
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
     "noEmit": true,
     "types": ["node"]
   },
@@ -9,7 +15,8 @@
     "tests/**/*.ts",
     "prisma/**/*.ts",
     "prisma.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "packages/config/vitest.base.ts"
   ],
   "references": [
     { "path": "packages/contracts" },
