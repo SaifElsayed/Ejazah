@@ -1,0 +1,849 @@
+# Ijazah — Software Requirements Specification
+
+**Version 1.4 — MVP Baseline (Buildable)**
+Supersedes v1.3, v1.2, v1.1 and v1.0. Date: September 2026.
+
+> **Amendment v1.4 — [ADR 0007](adr/0007-direct-gateway-checkout.md).** The payment model is **direct gateway checkout**: the Student pays through a payment gateway, the gateway deducts its own fee and settles 100% of the net to the Teacher's payout account, and the platform takes 0% commission and never holds funds. Payment is confirmed only by the gateway's signed webhook, which confirms the Enrollment and generates sessions automatically. Teachers configure a payout account in-app strictly after approval and are not bookable until the gateway verifies it. The v1.3 off-platform model (FR-PAYA-1 to 9) is retired. New requirements are the `FR-PAYG-*` family in §3.6; every other edit is marked *(v1.4)*.
+
+> **Amendment v1.3 (superseded by v1.4 for payment) — [ADR 0005](adr/0005-phase-0-document-amendments.md), decision D1.** The platform does not process payments. Payment is arranged directly between Teacher and Student: the Teacher tells the Student their preferred transfer method, the Student pays them, and the Teacher records that as their own paid flag. What v1.2 called "Mode A" is now the only model. "Mode B" (managed escrow via Paymob) is **retired, not deferred**: FR-PAY-1 through FR-PAY-22, the Wallet, the ledger view, the withdrawal queue and every escrow consequence elsewhere in this document are withdrawn. Retired identifiers are never reused. Requirements that carried a monetary clause keep their id with that clause removed; each such edit is marked *(v1.3)*.
+
+## How to read this document
+
+This version exists because v1.0, while a good product description, was not buildable without invention: ten requirements directly contradicted other requirements, and roughly forty decisions an engineer hits in week three were unstated. Every one of those is now resolved.
+
+Three markers appear throughout:
+
+| Marker    | Meaning                                                                                               |
+| --------- | ----------------------------------------------------------------------------------------------------- |
+| [DEC-nn]  | A decision made in the v1.0 → v1.1 review. Listed in full in §14.                                     |
+| [RISK-nn] | An accepted risk. The team has chosen to carry it knowingly. Listed in §15.                           |
+| [OPEN-nn] | Genuinely unresolved. Blocks nothing today but must close before the stated milestone. Listed in §16. |
+
+The rule for the team: if you are writing code and this document does not tell you what to do, stop and raise an OPEN item. Do not decide it at the keyboard. That is the failure mode this rewrite exists to prevent.
+
+Requirements use `FR-<MODULE>-<n>` and `NFR-<CATEGORY>-<n>`. "Shall" denotes mandatory, testable MVP behaviour. IDs from v1.0 are preserved where the requirement survived, so old tickets and notes still resolve.
+
+### Module prefix registry
+
+Source files cite requirements through a stable per-module alias of the form `SRS-<MOD>-*`. These aliases are not requirement identifiers and never appear as headings in this document; they resolve to the `FR-*` families below. A README or code comment reading `SRS-IDN-*` means "the identity requirements of this specification". The alias exists so that a module's citation survives renumbering inside its own section.
+
+| Code alias  | API module              | Requirements in this document                       |
+| ----------- | ----------------------- | --------------------------------------------------- |
+| `SRS-ADM-*` | `modules/admin`         | FR-ADMIN-_, FR-DISPUTE-_, FR-CANCEL-6, §3.11, §3.14 |
+| `SRS-BKG-*` | `modules/booking`       | FR-BOOK-_                                           |
+| `SRS-PAY-*` | `modules/payments`      | FR-PAYG-_, §3.6                                     |
+| `SRS-CAT-*` | `modules/catalog`       | FR-PROFILE-*                                        |
+| `SRS-CHT-*` | `modules/chat`          | FR-SESS-6, FR-SESS-7, FR-SESS-8, FR-SESS-13         |
+| `SRS-CRT-*` | `modules/certification` | FR-IJAZAH-_, FR-ISNAD-_                             |
+| `SRS-DSC-*` | `modules/catalog` (discovery service) | FR-DISC-*, §3.7.1                       |
+| `SRS-IDN-*` | `modules/identity`      | FR-AUTH-_, FR-GENDER-_, §2.2                        |
+| `SRS-MOD-*` | `modules/moderation`    | FR-SESS-15, FR-GENDER-4, FR-DISPUTE-*               |
+| `SRS-NTF-*` | `modules/notifications` | FR-NOTIF-*                                          |
+| `SRS-REV-*` | `modules/reviews`       | FR-REVIEW-*                                         |
+| `SRS-SES-*` | `modules/sessions`      | FR-SESS-_, FR-NOSHOW-_, FR-CANCEL-_, §3.7.5         |
+| `SRS-VRF-*` | `modules/verification`  | FR-VERIFY-*                                         |
+
+One family has no owning module under `apps/api/src/modules` and must be cited directly rather than through an alias: FR-LOC-*, which is enforced in the client and in shared packages rather than in a backend module. FR-PAY-* and FR-PAYA-* are retired; FR-PAYG-* belongs to `payments` (v1.4).
+
+Non-functional requirements are never aliased. Cite `NFR-PERF-*`, `NFR-SEC-*`, `NFR-AVAIL-*`, `NFR-USE-*`, `NFR-SCALE-*` and `NFR-COMP-*` as written.
+
+## 1. Introduction
+
+### 1.1 Product Overview
+
+Ijazah is a two-sided marketplace mobile application pairing students seeking verified instruction in the Qur'an and Islamic sciences (fiqh, aqeedah, hadith, tajweed and related disciplines) with admin-vetted teachers, for live one-to-one online sessions. The product is organised around a single outcome: the ijazah, a formal certificate of authorisation granted by a teacher to a student who has demonstrated mastery under that teacher's direct supervision. The platform digitises scheduling, payment, delivery and certification of that relationship while preserving its trust, rigour and cultural norms.
+
+### 1.2 Business Objectives
+
+- Become the trusted marketplace for verified one-to-one Qur'an and Islamic-sciences instruction.
+- Digitise the ijazah-granting relationship without diluting its authenticity.
+- Give teachers reliable income and low-friction reach: every booking is paid through the gateway before a session is generated, and the net settles straight to the teacher *(v1.4)*.
+- Give students confidence that every teacher is vetted and that gender-appropriate interaction is enforced by the product, not negotiated informally.
+- Validate demand in Egypt/MENA before monetising or expanding scope.
+
+### 1.3 Definitions
+
+| Term                 | Definition                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Ijazah               | Traditional certificate of authorisation granted by a teacher to a student, certifying mastery of a text or subject.               |
+| Isnad                | Chain of transmission linking a teacher back through their own teachers. Not in MVP (§13).                                         |
+| Teacher              | A user approved by an admin to offer paid one-to-one sessions and grant ijazahs.                                                   |
+| Student              | A user who books, pays through the gateway for, and attends sessions.                                                              |
+| Package              | A teacher-defined bundle of sessions with a price.                                                                                 |
+| Enrollment           | One student's purchase of one package. The unit that owns sessions and certification.                                             |
+| Session              | One scheduled live one-to-one meeting.                                                                                             |
+| Escrow               | *Retired.* The platform never holds funds; the gateway settles directly to the Teacher (§3.6).                                       |
+| Wallet               | *Retired.* The platform holds no balances.                                                                                          |
+| Payout account       | The Teacher's gateway-registered settlement destination, configured in-app after approval and verified by the gateway (§3.6.2). |
+| Gateway order        | One checkout attempt for one Enrollment, created by the platform on the gateway and confirmed only by the gateway's signed webhook.  |
+| Join window          | Configurable period after scheduled start within which a participant must connect to avoid being a no-show.                        |
+| Attendance threshold | Configurable percentage of scheduled duration both participants must be simultaneously connected for the session to auto-complete. |
+| Dispute window       | Configurable period after a session completes, during which either party may raise a dispute over that session.                    |
+| Admin                | Internal operator with access to the web admin panel.                                                                              |
+
+## 2. Overall Description
+
+### 2.1 Product Perspective
+
+Three components:
+
+- **Mobile application** (iOS and Android, single codebase) — used by students and teachers for discovery, booking, payment, live sessions, chat, certification and reviews.
+- **Admin web panel** — desktop web, internal operators only, English-only interface [DEC-31].
+- **Backend platform** — authentication, scheduling, gateway checkout and webhook confirmation, live-session orchestration, notifications, storage.
+
+### 2.2 Dual-Role Accounts [DEC-30]
+
+A single account may hold both Student and Teacher roles simultaneously. A teacher of one subject may legitimately wish to study another and receive an ijazah for it.
+
+Consequences, which are binding on the data model and every authorisation check:
+
+- Roles are a set, not a single value. `User.roles` is a collection.
+- The app presents a role switcher; the active role determines navigation and permissions for that context.
+- Gender rules apply per session role, not per account. A female user acting as Teacher is discoverable only by female students; the same user acting as Student sees and books only female teachers. Both sessions are same-gender, as every session is (§3.7.1), and in each her camera is optional and entirely her own choice (§3.7.2).
+- A user shall never be able to enroll with themselves. Enforced server-side.
+- Teacher approval applies to the Teacher role only. Suspending the Teacher role does not suspend the Student role; banning the account suspends both.
+
+### 2.3 User Classes
+
+| Class   | Description                                                                       | Proficiency                                   |
+| ------- | --------------------------------------------------------------------------------- | --------------------------------------------- |
+| Student | Books, pays for and attends sessions; receives ijazahs; leaves reviews.           | Low–medium; must be simple and mobile-first.  |
+| Teacher | Vetted expert. Sets availability and packages, conducts sessions, grants ijazahs. | Low–medium; many more comfortable in Arabic.  |
+| Admin   | Internal operator: vetting, disputes, oversight.                         | Medium–high; data-dense dashboard acceptable. |
+
+### 2.4 Operating Environment
+
+- Mobile: iOS and Android smartphones, single cross-platform codebase.
+- Admin: modern desktop browsers, latest two major versions.
+- Backend: cloud-hosted over HTTPS, with a managed third-party video provider.
+- Network: MENA mobile data and home broadband; usable on 3G/4G with instability.
+
+### 2.5 Constraints
+
+- MVP must be buildable by a small team (2 full-time, 1 part-time) in 4 months.
+- The platform is a technology intermediary, never a custodian. Payment flows Student → gateway → Teacher's payout account, with 0% platform commission, no wallet, no escrow and no ledger (§3.6, ADR 0007). Gateway selection is OPEN-11 *(v1.4)*.
+- Gender-interaction rules (§3.7) are system-enforced hard rules, not guidance.
+- Currency is EGP, stored as integer piasters [DEC-13].
+
+### 2.6 Assumptions and Dependencies
+
+- Users self-report gender at signup; trusted until disputed, at which point an admin reviews (§3.7.4).
+- Users self-report adulthood. No hard age block [DEC-04, RISK-01].
+- Teachers have a device with camera, microphone and a connection adequate for live video.
+- The chosen video provider offers server-minted, per-participant session tokens and session-lifecycle webhooks. Per-participant _publish_ permissions are **not** required: that constraint was retired with the camera matrix in §3.7.2 and no longer governs provider selection.
+
+## 3. Functional Requirements
+
+### 3.1 Account Creation, Authentication, Onboarding
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-AUTH-1  | The system shall allow registration using phone number or email, with password or OTP flow. Phone and email are separate, independently unique, individually nullable fields; at least one shall be present [DEC-25].                                                                                                                                                                                                                                      |
+| FR-AUTH-2  | The system shall require selection of at least one role at signup: Student or Teacher. Additional roles may be added later (§2.2).                                                                                                                                                                                                                                                                                                                         |
+| FR-AUTH-3  | The system shall require gender declaration (Male / Female) at signup as a mandatory field.                                                                                                                                                                                                                                                                                                                                                                |
+| FR-AUTH-4  | The system shall collect date of birth at signup. It shall not block registration on age. Accounts under 18 shall be flagged `is_minor` and surfaced to admin [DEC-04].                                                                                                                                                                                                                                                                                    |
+| FR-AUTH-5  | The system shall support Arabic and English, switchable at any time.                                                                                                                                                                                                                                                                                                                                                                                       |
+| FR-AUTH-6  | The system shall allow password reset via phone/email verification.                                                                                                                                                                                                                                                                                                                                                                                        |
+| FR-AUTH-7  | The system shall keep sessions active across app restarts within a reasonable lifetime, using refresh tokens with server-side revocation.                                                                                                                                                                                                                                                                                                                  |
+| FR-AUTH-8  | A Student role shall be usable for browsing and booking immediately after signup, without admin approval.                                                                                                                                                                                                                                                                                                                                                  |
+| FR-AUTH-9  | A Teacher role shall be Pending immediately after signup and shall not appear in search or be bookable until approved (§3.2).                                                                                                                                                                                                                                                                                                                              |
+| FR-AUTH-10 | The system shall capture the user's device timezone (IANA identifier) at signup and on every app launch, falling back to IP geolocation only if unavailable, and shall allow manual override in settings [DEC-19].                                                                                                                                                                                                                                         |
+| FR-AUTH-11 | The system shall require acceptance of Terms & Conditions at signup, recording version and timestamp. The Terms shall state that the platform may require identity documentation at any time and that falsifying gender is grounds for banning the account (§3.7.4). The Terms shall state that the platform is a technology intermediary: payment is settled by the gateway directly to the Teacher, the platform holds no funds, and any reimbursement is decided by Platform Administration through the moderation workflow (FR-DISPUTE-5/6) *(v1.4)* [DEC-22]. |
+
+> **Note on FR-AUTH-10:** IP geolocation alone is unreliable — Egyptian mobile carriers frequently route traffic through gateways in other governorates or countries, and any VPN user resolves incorrectly. Device timezone is authoritative and free; IP is fallback only.
+
+### 3.2 Teacher Application and Verification
+
+Trust in credentials is the core value proposition. No teacher is discoverable or bookable until they pass document review and a live verification call. The call is conducted outside the app (video call of the admin's choosing) and happens once per applicant [DEC-01].
+
+| ID           | Requirement                                                                                                                                                                                                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-VERIFY-1  | The system shall allow a Teacher applicant to upload identity documents (national ID or passport) and credential documents (ijazahs, certificates, proof of qualification) in the app.                                                                                                                |
+| FR-VERIFY-2  | The system shall allow the applicant to list the subject(s) they intend to teach alongside their credentials.                                                                                                                                                                                         |
+| FR-VERIFY-3  | The system shall surface all pending applications, with documents and subject claims, in the Admin verification queue.                                                                                                                                                                                |
+| FR-VERIFY-4  | The system shall allow an Admin to approve, reject, request additional documents from, or ban an applicant, with a note visible to the applicant.                                                                                                                                                     |
+| FR-VERIFY-5  | (Rewritten) The system shall require an Admin to record the outcome of the out-of-app verification call — completed date, outcome, and notes — before the Approve action becomes available. The system does not host or schedule the call [DEC-01].                                                   |
+| FR-VERIFY-6  | The system shall notify the applicant of approval, rejection or a request for more information, with reason, in-app and via push.                                                                                                                                                                     |
+| FR-VERIFY-7  | (Rewritten v1.4) Upon approval the system shall unlock profile creation and the in-app payout setup (§3.6.2). Availability, packages and appearance in search unlock only once the Teacher's payout configuration is verified by the gateway (FR-PAYG-14). |
+| FR-VERIFY-8  | The system shall allow an Admin to suspend or revoke an approved Teacher at any time. This shall immediately remove them from discovery and prevent new bookings. Already-scheduled sessions are handled per FR-SESS-16.                                                                              |
+| FR-VERIFY-9  | The system shall allow an Admin to ban an applicant, preventing further applications or access to the Teacher application flow.                                                                                                                                                                       |
+| FR-VERIFY-10 | The system shall allow an Admin to require identity documentation from any user (Student or Teacher) at any time, placing the account in Verification-Required state which blocks new bookings until satisfied. This is not the default; it is an admin-initiated action taken on suspicion [DEC-22]. |
+| FR-VERIFY-11 | (New v1.4) The application shall collect identity and academic credentials only. No payout, bank or wallet detail shall be requested or accepted before approval (FR-PAYG-12). |
+
+### 3.3 Teacher Profile and Package Management
+
+| ID           | Requirement                                                                                                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-PROFILE-1 | An approved Teacher shall create and edit a public profile: display name, gender, photo, bio, subject(s), years/type of qualification.                                                                                                              |
+| FR-PROFILE-2 | A Teacher shall define one or more Packages, each specifying: subject, session count, session duration, total price.                                                                                                                                |
+| FR-PROFILE-3 | A Teacher shall edit or deactivate a Package at any time. Edits shall not affect existing Enrollments, which hold an immutable snapshot of package terms at purchase (§6, Enrollment) [DEC-24].                                                     |
+| FR-PROFILE-4 | A Teacher shall define recurring weekly availability slots (day of week, start time, duration).                                                                                                                                                     |
+| FR-PROFILE-5 | (Deleted — restated no-rescheduling rule, misfiled and contradicting admin override. Rescheduling remains deferred, §13.) [DEC-07]                                                                                                                  |
+| FR-PROFILE-6 | A Teacher's public profile shall display aggregate rating and review count (§3.10).                                                                                                                                                                 |
+| FR-PROFILE-7 | A Teacher's public profile shall clearly display gender, since it determines discoverability and session pairing (§3.7.1). It does not determine camera rules; those are identical in every pairing (§3.7.2).                                       |
+| FR-PROFILE-8 | A Package's `session_duration_minutes` shall equal the duration of any AvailabilitySlot it is booked against. The system shall reject purchase attempts where they differ, and shall only offer slots of matching duration during booking [DEC-20]. |
+| FR-PROFILE-9 | A Teacher shall be able to deactivate an AvailabilitySlot at any time. Deactivation shall not affect sessions already generated against it; those proceed as scheduled [DEC-21].                                                                    |
+| FR-PROFILE-10 | (New v1.4) A Teacher whose payout configuration is not verified may draft Packages and availability but shall not publish them, and shall not appear in discovery or be bookable (FR-PAYG-14). Publishing unlocks automatically on verification. |
+
+### 3.4 Teacher Discovery and Search
+
+| ID        | Requirement                                                                                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-DISC-1 | The system shall provide subject-based search filtering Teachers by subject.                                                                                                                   |
+| FR-DISC-2 | The system shall provide a browse view of Teacher profiles independent of a search query.                                                                                                      |
+| FR-DISC-3 | The system shall exclude any Teacher of incompatible gender from a Student's search results, browse listings, and direct profile access, per §3.7.1. Enforced at the query layer, server-side. |
+| FR-DISC-4 | The system shall allow a Student to view a Teacher's full public profile before purchasing, subject to FR-DISC-3.                                                                              |
+| FR-DISC-5 | The system shall only surface Teachers whose status is Approved and whose payout configuration is verified (FR-PAYG-14, §3.7.1). Pending, Rejected, Suspended, Banned and payout-unverified teachers shall never appear *(v1.4)*. |
+
+### 3.5 Package Purchase and Session Booking
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-BOOK-1  | A Student shall select one of a Teacher's active Packages and initiate purchase.                                                                                                                                                                                                                                         |
+| FR-BOOK-2  | Before checkout, the system shall prompt the Student to select a recurring weekly slot from the Teacher's availability, filtered to matching duration (FR-PROFILE-8).                                                                                                                                                     |
+| FR-BOOK-3  | (Rewritten v1.4) The system shall require full payment through the gateway to confirm purchase (§3.6). The Enrollment is created as Pending-Payment when the Student confirms, and becomes Confirmed only when the gateway's signed webhook reports the order paid (FR-PAYG-3/5). |
+| FR-BOOK-4  | (v1.4) Upon gateway-confirmed payment (FR-PAYG-5), the system shall automatically generate all sessions in the Package at the selected recurring weekly slot until the session count is exhausted.                                                                                                                                                               |
+| FR-BOOK-5  | (Rewritten) The system shall prevent double-booking on two independent axes: (a) a Teacher shall not have two sessions overlapping in time; (b) a Student shall not have two sessions overlapping in time, including across different Teachers. Both are enforced server-side at generation and at reservation [DEC-06]. |
+| FR-BOOK-6  | (Merged into FR-CANCEL-1 to remove duplication. Student cancellation rules live in §3.8.) [DEC-29]                                                                                                                                                                                                                       |
+| FR-BOOK-7  | The system shall display, for each Student and Teacher, upcoming sessions, sessions completed, and sessions remaining per active Enrollment.                                                                                                                                                                             |
+| FR-BOOK-8  | The system shall notify both parties ahead of each session, at Admin-configurable offsets (defaults: 24 hours and 15 minutes).                                                                                                                                                                                           |
+| FR-BOOK-9  | (New) On entering checkout, the system shall place a hold on the selected slot for an Admin-configurable TTL (default 10 minutes). During the hold the slot is unavailable to other Students. The gateway order created for the Enrollment expires with the hold (FR-PAYG-6). On gateway-confirmed payment the hold converts to bookings; on expiry or failure the hold is released and the Enrollment is cancelled *(v1.4)* [DEC-17]. |
+| FR-BOOK-10 | (New) A recurring slot occupied by an Enrollment shall be released for re-booking from the week after the Enrollment's final generated session, plus an Admin-configurable buffer (default 0 weeks) [DEC-16].                                                                                                            |
+| FR-BOOK-11 | (New) A user shall not be able to purchase a Package from themselves (§2.2).                                                                                                                                                                                                                                             |
+
+### 3.6 Payments
+
+#### 3.6.0 One payment model — direct gateway checkout [ADR 0007, DEC-49]
+
+The Student pays through a payment gateway at checkout. The gateway deducts its own fee and settles the net — 100% of it — directly to the Teacher's payout account. The platform takes **0% commission**, holds no funds at any moment, keeps no wallet, ledger, balance or escrow, and never touches money in transit. Its role is to create the gateway order, verify the gateway's signed webhook, and turn a confirmed payment into a confirmed Enrollment with generated sessions.
+
+Everything after confirmation is independent of money inside the platform: attendance evaluation, the no-show state machine, cancellation, certification and reviews carry no monetary consequence in code. Where a termination leaves paid-for sessions undelivered, reimbursement is an administrative matter between the Student and Platform Administration, decided through the moderation workflow (FR-DISPUTE-5/6) and executed outside the platform's code path.
+
+#### 3.6.1 Gateway Checkout and Confirmation
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-PAYG-1  | The platform shall take 0% commission. The Package price is charged in full through the gateway; the gateway's own fee is deducted by the gateway; 100% of the net proceeds shall route to the Teacher's verified payout account. Funds shall never be held by, routed through, or claimable by the platform.                  |
+| FR-PAYG-2  | When a Student confirms an Enrollment, the system shall create a gateway order for the snapshot price and present the gateway's hosted checkout. The Enrollment shall be created in Pending-Payment.                                                                                                                         |
+| FR-PAYG-3  | Payment shall be confirmed only by the gateway's signed webhook. A client redirect, return URL, app-reported status or any client-supplied value shall never confirm a payment.                                                                                                                                              |
+| FR-PAYG-4  | Every inbound gateway event shall have its signature verified before any handler runs, and shall carry a provider event identifier that is unique and non-null. An unsigned or invalid event shall be rejected; a replayed event shall be acknowledged and shall have no effect.                                            |
+| FR-PAYG-5  | On a confirmed paid event, the system shall automatically — with no human step — transition the Enrollment to Confirmed, convert the slot hold, generate all sessions (FR-BOOK-4) and notify both parties. The step shall be idempotent: running it twice equals running it once.                                            |
+| FR-PAYG-6  | A gateway order shall expire with the slot hold (§3.14). On expiry, failure or cancellation at the gateway, the hold shall be released and the Enrollment set to Cancelled with the reason recorded. The Student may start again from package selection.                                                                     |
+| FR-PAYG-7  | The system shall record, per gateway order: gateway order identifier, gateway transaction identifier, gross amount, gateway fee, net amount, currency, status and timestamps, and every signed event received. These are records of what the gateway did, never balances the platform holds.                                 |
+| FR-PAYG-8  | The system shall provide no manual path to mark an Enrollment paid: no proof upload, no screenshot, no transaction-reference entry, no Teacher confirmation toggle, no Admin override. The only path is FR-PAYG-3 [DEC-48].                                                                                                    |
+| FR-PAYG-9  | The Terms shall state that the platform is a technology intermediary, that payment is settled by the gateway directly to the Teacher, and that the platform is not a custodian of funds.                                                                                                                                    |
+| FR-PAYG-10 | (v1.4) The platform shall never move, hold or route funds in its own code path. Financial reimbursement or compensation to a Student is strictly an administrative matter between the Student and Platform Administration, investigated and decided through the Admin moderation workflow (§3.8.4, FR-DISPUTE-5/6) — never an off-platform negotiation left to the Teacher. The platform records the decision and, when the gateway reports the resulting refund, the outcome (FR-PAYG-7). |
+| FR-PAYG-11 | An Admin shall have a read-only payments monitor listing gateway orders with status, amounts and webhook history (FR-ADMIN-18). No Admin action shall move money.                                                                                                                                                             |
+
+#### 3.6.2 Teacher Payout Onboarding — after approval
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-PAYG-12 | A Teacher shall apply with identity and academic credentials only (FR-VERIFY-11). No payout detail is collected before approval.                                                                                                                                                                                             |
+| FR-PAYG-13 | Immediately after approval, the app shall present payout setup: the Teacher registers a payout account with the gateway from inside the app. The platform shall store only the gateway's recipient reference, encrypted at rest (NFR-SEC-2), plus configuration and verification timestamps — never a raw account number.  |
+| FR-PAYG-14 | Until the gateway has verified the payout account, the Teacher shall not appear in discovery, shall not be bookable, and shall not publish Packages or availability (FR-PROFILE-10, FR-DISC-5, §3.7.1).                                                                                                                       |
+| FR-PAYG-15 | Verification shall be learned from the gateway (signed callback or poll), recorded as the verification timestamp, and notified to the Teacher. Publishing and discoverability unlock automatically.                                                                                                                         |
+| FR-PAYG-16 | A Teacher may replace their payout account at any time. Discoverability and publishing are suspended from the moment of the change until the new account is verified; already-confirmed Enrollments are unaffected.                                                                                                       |
+
+> **Student experience (ADR 0008).** The backend sequence above is invisible to the Student. The app shows a standard checkout: order summary and payment method → the gateway's hosted page → a brief "Confirming your payment" state → "Payment successful, enrollment confirmed" with the receipt and the scheduled sessions. Webhooks arrive in one to three seconds; the processing state is the window in which the app reads the server's answer, never a "waiting for the gateway" screen.
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-PAYG-17 | (New v1.4, ADR 0008) After the hosted checkout returns, the app shall subscribe to the Enrollment's status from the server and shall render the success screen — receipt, order reference, amount paid, and the generated sessions — only when the server reports Confirmed. The app shall never derive success from the gateway's return, redirect or any client-held value (FR-PAYG-3). |
+| FR-PAYG-18 | (New v1.4, ADR 0008) Where confirmation has not been reported within the Admin-configurable checkout confirmation timeout (§3.14, default 15 seconds), the app shall release the Student with a "payment received, finalising your sessions" state and a Confirming badge on the Enrollment, and the payment-confirmed notification (FR-NOTIF-1) shall resolve it. Where the gateway reports failure or cancellation, the app shall offer Retry (a new order on the same hold while its TTL holds) or another slot (FR-PAYG-6). |
+
+> **Why FR-PAYG-8 keeps DEC-48.** Payment-confirmation screenshots are trivially forged. Under v1.3 the platform refused to display them because it could not verify; under v1.4 it refuses because the gateway already verified. Either way, a "paid" state that did not come from a signed webhook is a lie to the user.
+
+#### 3.6.3 Retired models
+
+*(v1.4)* The off-platform direct model — FR-PAYA-1 through FR-PAYA-9, the Teacher's paid flag, and DEC-47 as amended in v1.3 — is retired by ADR 0007. *(v1.3)* The managed escrow model — FR-PAY-1 through FR-PAY-22, the Wallet, split timing, DEC-11, DEC-12, DEC-14, DEC-15, DEC-18, DEC-33, DEC-34, DEC-35, DEC-37, DEC-38, DEC-45, DEC-46 — was retired by ADR 0005. Identifiers are never reused.
+
+### 3.7 Live Sessions and Gender-Interaction Rules
+
+The most sensitive area of the product. Gender-appropriate interaction is a hard, system-enforced rule at every layer — discovery, booking, video, screen share and chat.
+
+#### 3.7.1 Discovery and Pairing Rule [DEC-39]
+
+Cross-gender pairings do not exist on this platform, in any direction, under any circumstance.
+
+- A Male Student sees, searches, books and meets only Male Teachers.
+- A Female Student sees, searches, books and meets only Female Teachers.
+
+Enforced at the data layer, not the UI layer. Teachers of the opposite gender are excluded from the result set of any query executed on behalf of a Student, at the API and database level — so the restriction cannot be bypassed by inspecting network traffic, guessing a profile ID, or any client-side manipulation. The profile is absent, not greyed out or locked. A direct request for such a profile returns the same response as a request for a non-existent profile.
+
+The rule is symmetric, which makes it simpler to reason about and simpler to test than the asymmetric v1.1 rule it replaces: there is exactly one legal pairing — same gender.
+
+**Visibility predicate** *(v1.3, ADR 0006)*. A Teacher is visible to a requester on any Student-facing path — search, browse, direct profile access, booking, token issuance — if and only if all four hold:
+
+```
+teacher.gender = requester.gender
+AND teacher_profile.verification_status = 'approved'      (FR-DISC-5)
+AND teacher.deleted_at IS NULL
+AND teacher_profile.payout_verified_at IS NOT NULL                (FR-PAYG-14, v1.4)
+```
+
+The predicate is implemented once, as the repository filter every Teacher-returning query on a Student-facing path must take (Constitution R-GENDER-5), and is enforced identically in both directions: a Male requester never receives Female Teacher data and a Female requester never receives Male Teacher data (NFR-SEC-4). Counts and facets are computed after the predicate is applied (R-GENDER-3).
+
+**Open gender dispute** *(v1.3, ADR 0006, OPEN-09)*. While a `gender_flags` row is pending, the flagged user remains active with their declared gender and the predicate above is applied to that declared value. No pre-emptive exclusion, hiding or suspension occurs. Only an Admin ruling changes the record (FR-GENDER-4), with the consequences FR-GENDER-6 and FR-GENDER-7 define.
+
+> **Business consequence, stated once:** this halves effective liquidity on both sides. Supply must be grown in both genders in parallel; a pool of excellent male teachers is worth nothing to a female student. Factor this into launch-cohort recruitment.
+
+#### 3.7.2 Camera and Screen-Share Rules [DEC-39]
+
+Because every session is same-gender, there is no gender-based camera restriction.
+
+| Pairing                         | Student camera / screen share | Teacher camera / screen share |
+| ------------------------------- | ----------------------------- | ----------------------------- |
+| Male Student — Male Teacher     | Optional, user's own choice   | Optional, user's own choice   |
+| Female Student — Female Teacher | Optional, user's own choice   | Optional, user's own choice   |
+| Any cross-gender pairing        | Cannot occur (§3.7.1)         | Cannot occur                  |
+
+Publishing video is always optional — nobody is ever required to turn a camera on, and either party may disable their camera at any time.
+
+Nothing about camera state is evaluated, snapshotted or persisted against a Session. There is no camera rule to resolve at session start and no per-participant publish permission to mint into a token — FR-SESS-3 binds a token to one session and one participant, and nothing further. An implementer needing a camera decision at any layer should read this subsection as complete.
+
+> **What this removes from v1.1:** the per-participant publish-permission matrix, the female-student camera lockout, the screen-share bypass rule, the per-session `camera_rule_snapshot` field now retired from §6.2, and — importantly — the hard requirement that the video provider support server-controlled per-participant publish permissions. That constraint no longer governs provider selection. Session tokens are still minted server-side, for authentication and session binding.
+
+#### 3.7.3 Live Session Requirements
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-SESS-1  | All live sessions shall be conducted in-app via a managed third-party video provider. No external Zoom or Meet links.                                                                                                                                                                                                    |
+| FR-SESS-2  | At session start the system shall verify from server-held records that both participants are of the same gender, and shall refuse to issue tokens for any session whose participants are not.                                                                                                                            |
+| FR-SESS-3  | The system shall mint every session token server-side, bound to a specific session and participant, and shall reject any token presented for a different session. Clients shall never construct or request arbitrary tokens.                                                                                             |
+| FR-SESS-4  | Both participants shall have audio (microphone) in every permitted pairing, since audio instruction is the core teaching modality.                                                                                                                                                                                       |
+| FR-SESS-5  | Before a session begins, the system shall display to both participants a pre-session screen confirming the counterparty, the scheduled duration, and their own camera and microphone state.                                                                                                                              |
+| FR-SESS-6  | The system shall support text chat between the two participants, scoped to the Enrollment and available from purchase until the Enrollment's chat retention expires (FR-SESS-13).                                                                                                                                        |
+| FR-SESS-7  | The system shall support sending PDF and document/text files via chat.                                                                                                                                                                                                                                                   |
+| FR-SESS-8  | The system shall reject image file types in chat, by extension and by content-type sniffing, regardless of gender pairing.                                                                                                                                                                                               |
+| FR-SESS-9  | The system shall log every session's scheduled start/end, actual per-participant join and leave events, and total simultaneous connected duration, from video-provider webhooks, server-side.                                                                                                                            |
+| FR-SESS-13 | (New) Chat messages shall be persisted server-side and readable by an Admin only in the context of an open Dispute or report. Messages shall be purged once the Enrollment is terminal and its dispute window has closed, unless a Dispute or report is open, in which case retention extends until resolution [DEC-26]. |
+| FR-SESS-14 | (New) Neither participant shall be able to join a session more than an Admin-configurable lead time before scheduled start (default 15 minutes).                                                                                                                                                                         |
+| FR-SESS-15 | (New) The system shall provide a report user action available from any session and any profile, routed to the Admin queue [DEC-04].                                                                                                                                                                                      |
+| FR-SESS-16 | (New) A Teacher whose status is Suspended, Revoked or Banned shall be unable to join any session, scheduled or in progress. Their remaining scheduled sessions shall be cancelled, each affected Student notified, and a compensation case opened for each affected Enrollment (FR-DISPUTE-5) *(v1.4)* [DEC-28].                                                  |
+
+#### 3.7.4 Gender Declaration, Dispute and Fraud [DEC-22]
+
+| ID          | Requirement                                                                                                                                                                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-GENDER-1 | Gender shall be captured as a mandatory, self-declared field at signup for all users.                                                                                                                                                                                                                                                      |
+| FR-GENDER-2 | Self-declared gender shall be authoritative for all discovery filtering and session-pairing logic, including while a dispute is open, until an Admin corrects the record (§3.7.1, ADR 0006). It governs no camera permission, there being none to govern (§3.7.2).                                                                                                                                         |
+| FR-GENDER-3 | Any user, or an Admin acting on a report, shall be able to flag another user's declared gender as disputed.                                                                                                                                                                                                                                |
+| FR-GENDER-4 | A raised gender dispute shall route to the Admin panel for manual review. The Admin may require identity documentation (FR-VERIFY-10) and may correct the record.                                                                                                                                                                          |
+| FR-GENDER-5 | The system shall provide no self-service path to change declared gender after signup. Change is possible only via Admin review.                                                                                                                                                                                                            |
+| FR-GENDER-6 | (Rewritten) Where an Admin determines a user falsified their gender at signup, the system shall ban the account and cancel all their Enrollments. A compensation case opens for each affected counterparty Enrollment (FR-DISPUTE-5) *(v1.4)*.                                                        |
+| FR-GENDER-7 | (New) Where an Admin corrects a gender declaration and the correction was not fraudulent (an honest error), the system shall identify all Enrollments rendered non-compliant by the correction, cancel their remaining sessions, notify both parties, and open a compensation case per affected Enrollment (FR-DISPUTE-5). No ban *(v1.4)* [DEC-22]. |
+
+> **Why there is no forfeiture:** the platform never holds a user's money, so there is nothing to forfeit or refund. Ban plus loss of access is the whole deterrent *(v1.3)*.
+
+#### 3.7.5 Session Completion Logic [DEC-02, DEC-03]
+
+This replaces v1.0's FR-SESS-10/11, which would have routed essentially every session into the dispute queue.
+
+A session's outcome is determined after its scheduled end time has passed, from server-recorded attendance:
+
+| Condition                                                                                   | Resulting Status | Enrollment effect *(v1.3)*                                                            |
+| ------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| Both participants simultaneously connected for ≥ attendance threshold of scheduled duration | Done             | Session consumed                                                                     |
+| Student never joined (per join definition); Teacher did                                     | Student-No-Show  | Session consumed                                                                     |
+| Teacher never joined; Student did                                                           | Teacher-No-Show  | Session not consumed; Teacher no-show count rises                                    |
+| Neither joined                                                                              | Both-No-Show     | Session not consumed; no no-show counted against Teacher                             |
+| Both joined, but simultaneous duration < threshold                                          | Under-Threshold  | Outcome frozen; routed to Admin review queue                                         |
+| Video provider reported an outage overlapping the session                                   | Provider-Outage  | Outcome frozen; routed to Admin review queue; no no-show counted against either party |
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-SESS-10 | A session shall be evaluated for completion only after its scheduled end time has passed.                                                                                                                                                                                                         |
+| FR-SESS-11 | A session shall be marked Done only where both participants were simultaneously connected for at least the Admin-configurable attendance threshold (default 70%) of scheduled duration [DEC-02].                                                                                                  |
+| FR-SESS-12 | Marking a session Done shall decrement the Enrollment's remaining sessions and notify both parties. No monetary effect *(v1.3)*. |
+| FR-SESS-17 | (New) A participant shall be considered to have joined where they were connected for at least an Admin-configurable minimum connection duration (default 60 seconds), within an Admin-configurable join window after scheduled start (default 10 minutes). Both values are configurable [DEC-03]. |
+| FR-SESS-18 | (New) Brief disconnections shall not penalise participants: simultaneous connected time is accumulated across reconnections within the scheduled window, not measured as a single unbroken interval.                                                                                              |
+| FR-SESS-19 | (New) Sessions in Under-Threshold or Provider-Outage shall appear in an Admin review queue with full attendance telemetry, and shall remain unresolved until an Admin resolves them *(v1.3)*.                                                                                                   |
+
+### 3.8 Cancellations, No-Shows, Refunds and Disputes
+
+#### 3.8.1 Cancellation — Mutual Agreement [DEC-40]
+
+Cancellation is symmetric. Neither party may cancel unilaterally without cost. A session is cancelled cleanly only when both parties agree.
+
+| ID          | Requirement                                                                                                                                                                                                                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-CANCEL-1 | (Rewritten) Either party may submit a cancellation request for an upcoming session, with a reason. The request notifies the counterparty, who may Accept or Decline.                                                                                                                                             |
+| FR-CANCEL-2 | Where the counterparty Accepts: the session is marked Cancelled-By-Agreement and no penalty is recorded against either party *(v1.3)*.                                                                                                                                |
+| FR-CANCEL-3 | Where the counterparty Declines, or does not respond before the scheduled start, the session stands. The requesting party is bound by the ordinary attendance rules of §3.8.3: a Teacher who then fails to attend is a no-show; a Student who then fails to attend is a Student-No-Show and the session is consumed *(v1.3)*. |
+| FR-CANCEL-4 | A pending cancellation request shall expire automatically at the session's scheduled start time.                                                                                                                                                                                                                 |
+| FR-CANCEL-5 | Repeated cancellation requests by either party shall be surfaced on that user's Admin record as a trust signal.                                                                                                                                                                                                  |
+| FR-CANCEL-6 | An Admin may cancel any session unilaterally, with a mandatory reason, recording no penalty; a compensation case opens for the Enrollment (FR-DISPUTE-5) *(v1.4)*.                                                                                                                                                                              |
+| FR-CANCEL-7 | A Student shall not be able to cancel an entire Enrollment in MVP. Enrollment-level termination occurs only via FR-NOSHOW-4, FR-SESS-16, or Admin action.                                                                                                                                                        |
+
+> **Note:** the v1.1 free-cancellation notice window (default 24h) is removed. It is superseded by mutual agreement, which is simpler, symmetric, and cannot be gamed by timing. The `free_cancellation_window` setting is retired.
+
+The practical case this handles well: a Student requests cancellation, the Teacher ignores it, and neither attends. That resolves as Both-No-Show, which §3.8.3 treats as mutual agreement — so an unresponsive counterparty does not punish a good-faith requester. The only way the requester loses out is if the counterparty actually shows up, which is the honest outcome.
+
+#### 3.8.3 No-Shows
+
+| ID          | Requirement                                                                                                                                                                                                                                                                      |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-NOSHOW-1 | Where the Student fails to join and the Teacher is present, the session is Student-No-Show and is consumed from the Enrollment, compensating the reserved time *(v1.3)*.                                                                                                                  |
+| FR-NOSHOW-2 | Where the Teacher fails to join and the Student is present, the session is Teacher-No-Show and is not consumed from the Enrollment *(v1.3)*.                                                                                                   |
+| FR-NOSHOW-3 | The system shall track cumulative Teacher no-shows per Enrollment against an Admin-configurable threshold (default 2).                                                                                                                                                           |
+| FR-NOSHOW-4 | Once the threshold is reached, the system shall cancel the remaining bookings, set the Enrollment status to Terminated-No-Show, notify both parties, and open a compensation case in the Admin moderation queue (FR-DISPUTE-5). Reimbursement is decided by the Admin, never negotiated between the parties *(v1.4)*. |
+| FR-NOSHOW-5 | The system shall notify both parties when a no-show is recorded, and notify the Student when they become eligible under FR-NOSHOW-4.                                                                                                                                             |
+| FR-NOSHOW-6 | (Rewritten) Both-No-Show shall be treated exactly as if both parties had agreed to cancel: the session is not consumed, and no no-show or penalty is recorded against either party *(v1.3)* [DEC-40].                                                          |
+
+#### 3.8.4 Disputes
+
+| ID           | Requirement                                                                                                                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-DISPUTE-1 | Either party shall be able to raise a dispute over a specific session, within the Admin-configurable dispute window after that session's scheduled end. Disputes may not be raised after the window closes. |
+| FR-DISPUTE-2 | The system shall surface open disputes in the Admin panel with the session's attendance telemetry (FR-SESS-9) and, where permitted, the Enrollment's chat log (FR-SESS-13).                                 |
+| FR-DISPUTE-3 | An Admin shall be able to issue a binding resolution — uphold the automatic outcome, re-mark the session as consumed or not consumed, record a no-show against either party, order compensation to the Student, suspend or ban — with a mandatory reason recorded to the audit log. Ordering compensation records the decision; it does not move funds in the platform's code path (FR-DISPUTE-6) *(v1.4)*. |
+| FR-DISPUTE-4 | (New) Raising a dispute shall mark the session Disputed and freeze its outcome (consumed / not consumed, no-show attribution) until resolution, even if the dispute window would otherwise have elapsed *(v1.3)*. |
+| FR-DISPUTE-5 | (New v1.4) Every enrollment-level termination that leaves paid-for sessions undelivered — teacher no-show threshold (FR-NOSHOW-4), Admin cancellation (FR-CANCEL-6), teacher suspension (FR-SESS-16), gender ban or correction (FR-GENDER-6/7) — shall automatically open a compensation case in the Admin moderation queue, linked to the Enrollment, so that reimbursement is always an Admin decision and never falls to the Teacher or the Student to negotiate. |
+| FR-DISPUTE-6 | (New v1.4) Where an Admin orders compensation, Platform Administration executes it outside the platform's code path — through the gateway's refund facility or the platform's own administrative payment — and the platform records the outcome when the gateway reports it (`payments.status = refunded`, FR-PAYG-7). The platform itself never initiates, holds or routes the funds (FR-PAYG-1, FR-PAYG-10). |
+
+### 3.9 Ijazah Certification and Chain of Transmission
+
+#### 3.9.1 Chain of Transmission (Isnad) [DEC-41]
+
+Promoted from deferred scope into the MVP. A verified chain of transmission is the platform's strongest trust signal and its clearest differentiator from generic tutoring.
+
+The model is deliberately minimal: a chain is an ordered list of transmitter names, held per Teacher per Subject. It is not a linked graph of shared scholar records, and transmitters are not platform users.
+
+| ID         | Requirement                                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-ISNAD-1 | A Teacher shall record, per Subject they teach, an ordered chain of transmitter names representing their own authorisation lineage, from their immediate teacher back to the origin of the text.                                                             |
+| FR-ISNAD-2 | Each chain entry shall consist of a position (ordinal) and a transmitter name (free text, Arabic or English). No further attributes are modelled in MVP.                                                                                                     |
+| FR-ISNAD-3 | A chain shall support an arbitrary number of entries, and the system shall impose no fixed maximum length.                                                                                                                                                   |
+| FR-ISNAD-4 | An Admin shall be able to review, edit and mark a chain as Verified or Unverified during teacher verification (§3.2), based on the applicant's uploaded credential documents.                                                                                |
+| FR-ISNAD-5 | A Teacher's public profile shall display their chains, with a clear indicator of verification status. An unverified chain shall be visibly labelled as such and shall never be presented as confirmed.                                                       |
+| FR-ISNAD-6 | A Teacher shall not be able to edit a Verified chain without the change re-entering Admin review and reverting to Unverified until re-approved.                                                                                                              |
+| FR-ISNAD-7 | On granting an ijazah, the system shall append the granting Teacher's name to the end of the relevant chain and record that extended chain as an immutable snapshot on the Ijazah record, so the certificate reflects the lineage as it stood at grant time. |
+
+#### 3.9.2 Certificate Generation [DEC-42]
+
+A Teacher grants an ijazah in one of exactly two modes, chosen at grant time:
+
+**Mode A — Generated.** The system produces a PDF from a standardised platform template, containing the certificate number, student and teacher names, subject, grant date, the full chain of transmission (FR-ISNAD-7), the Teacher's stored signature image, and a QR code linking to the public verification page.
+
+**Mode B — Uploaded.** The Teacher uploads a scan or photograph of a physical ijazah they issued in real life. The platform stores and displays it as an image or PDF. The platform does not generate, alter or attest to the content of an uploaded document — it attests only that this Teacher issued it to this Student on this date.
+
+| ID           | Requirement                                                                                                                                                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-IJAZAH-1  | A Teacher shall be able to grant an ijazah to a Student they hold an Enrollment with, at any point the Teacher judges appropriate.                                                                                                                                                       |
+| FR-IJAZAH-2  | (Rewritten) Granting shall require the Teacher to select Mode A (Generated) or Mode B (Uploaded). Mode A renders the platform template; Mode B accepts an uploaded image or PDF. Every ijazah carries a unique certificate identifier regardless of mode.                                |
+| FR-IJAZAH-3  | The certificate shall be viewable and downloadable in-app by the Student at any time, and by the granting Teacher.                                                                                                                                                                       |
+| FR-IJAZAH-4  | Every granted ijazah shall be recorded on the Student's profile as a permanent credential record.                                                                                                                                                                                        |
+| FR-IJAZAH-5  | For Mode A, the Teacher may additionally flag intent to issue a physical paper ijazah outside the app. Informational only.                                                                                                                                                               |
+| FR-IJAZAH-7  | Only a Teacher may grant an ijazah. No Admin action shall create one.                                                                                                                                                                                                                    |
+| FR-IJAZAH-8  | An Admin shall be able to revoke a granted ijazah with a mandatory reason, setting `revoked_at` and `revoked_reason`, marking it invalid at its verification endpoint, and hiding it from the Student's public credentials. Never hard-deleted.                                          |
+| FR-IJAZAH-9  | (Rewritten) Revocation of an ijazah shall not bar the Student from receiving future ijazahs, from that Teacher or any other [DEC-43]. Barring is a separate, explicit Admin action requiring its own reason, used only in cases of abuse.                                                |
+| FR-IJAZAH-10 | Each certificate shall carry a unique identifier and a QR code linking to a public verification page stating validity, subject, teacher, student name, grant date, chain of transmission (Mode A), and revocation status. PDFs shall be served from non-guessable, expiring signed URLs. |
+| FR-IJAZAH-11 | Mode A certificates shall render correct Arabic — RTL shaping, ligatures, embedded fonts, and long multi-entry chains without overflow. Proven by prototype in Week 2 of the build.                                                                                                      |
+| FR-IJAZAH-12 | (New) A Teacher shall upload a signature image before granting a Mode A certificate. The system shall block Mode A granting until one exists.                                                                                                                                            |
+| FR-IJAZAH-13 | (New) Mode B uploads shall be validated by content-type sniffing, size-limited, and stored under the same encrypted, signed-URL regime as verification documents (NFR-SEC-2/3/9).                                                                                                        |
+| FR-IJAZAH-14 | (New) The public verification page shall clearly state, for Mode B certificates, that the document was uploaded by the Teacher and is not platform-generated, so a viewer is never misled about what the platform is attesting to.                                                       |
+
+### 3.10 Ratings and Reviews
+
+| ID          | Requirement                                                                                                                                                                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-REVIEW-1 | (Rewritten) A Student shall be able to submit a 1–5 star rating and written review of a Teacher once the Enrollment reaches any terminal status — Completed, Terminated-No-Show, or Cancelled — provided at least one session actually occurred [DEC-08]. |
+| FR-REVIEW-2 | The system shall allow at most one review per Enrollment.                                                                                                                                                                                                 |
+| FR-REVIEW-3 | The system shall display a Teacher's aggregate average rating and total review count on their public profile.                                                                                                                                             |
+| FR-REVIEW-4 | A Teacher shall be able to view but not edit or delete reviews about them. An Admin shall be able to moderate a review.                                                                                                                                   |
+| FR-REVIEW-5 | (New) Moderating a review shall remove the written comment only. The star rating continues to count toward the Teacher's aggregate [DEC-32].                                                                                                              |
+
+> On FR-REVIEW-1: in v1.0 a teacher who abandoned a student mid-package was structurally immune to review, because abandonment set the enrollment to a non-Completed status. That was backwards.
+
+### 3.11 Admin Web Panel
+
+| ID          | Requirement                                                                                                                                                                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-ADMIN-1  | Admin authentication shall be separate from app login, restricted to authorised internal accounts, with mandatory multi-factor authentication.                                                                                                                   |
+| FR-ADMIN-2  | Teacher Verification Queue: pending applications with documents, subject claims and verification call record.                                                                                                                                                    |
+| FR-ADMIN-3  | Admin actions on applicants: approve, reject, request more information, ban.                                                                                                                                                                                     |
+| FR-ADMIN-4  | User directory: all users with profile details, roles, gender declaration, is_minor flag, verification status, account status.                                                                                                                                   |
+| FR-ADMIN-5  | Suspend or reinstate a user account, or an individual role on that account.                                                                                                                                                                                      |
+| FR-ADMIN-6  | Package and Session monitor: status, schedule, payment status from the gateway record; searchable and filterable by Student, Teacher or date *(v1.4)*. |
+| FR-ADMIN-7 | Disputes and Compensation Queue with binding resolution (FR-DISPUTE-3, FR-DISPUTE-5/6) *(v1.4)*. |
+| FR-ADMIN-8  | Gender Dispute Queue (FR-GENDER-4), including the correction and ban actions in FR-GENDER-6/7 *(v1.3)*.                                                                                                                  |
+| FR-ADMIN-9  | Configuration area exposing every setting in §3.14 without code deployment.                                                                                                                                                                                      |
+| FR-ADMIN-10 | *Retired (v1.3, ADR 0005).* Was the financial ledger view. |
+| FR-ADMIN-11 | Review moderation (FR-REVIEW-4/5).                                                                                                                                                                                                                               |
+| FR-ADMIN-12 | (New) Ijazah administration: revoke a granted ijazah, bar a user from receiving ijazahs (FR-IJAZAH-8/9). No grant capability.                                                                                                                                    |
+| FR-ADMIN-13 | *Retired (v1.3, ADR 0005).* Was the withdrawal queue. |
+| FR-ADMIN-14 | (New) Session Review Queue for Under-Threshold and Provider-Outage sessions (FR-SESS-19).                                                                                                                                                                        |
+| FR-ADMIN-15 | (New) Reports Queue for user reports raised under FR-SESS-15.                                                                                                                                                                                                    |
+| FR-ADMIN-16 | (New) Verification-document requests: an Admin may require ID from any user (FR-VERIFY-10). Admins may view documents but never modify or replace them; they may only request additional ones [DEC-13b].                                                         |
+| FR-ADMIN-17 | (New) Every Admin action listed in this section shall write an immutable audit-log entry with actor, action, target, timestamp, and reason where required (NFR-SEC-6).                                                                                           |
+| FR-ADMIN-18 | (New v1.4) Payments monitor: read-only list of gateway orders per Enrollment with status, gross, fee, net, gateway identifiers and webhook event history (FR-PAYG-11). No action on this screen moves, holds or refunds money. |
+
+### 3.12 Notifications
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-NOTIF-1 | The system shall send push notifications for: teacher application status changes, new bookings, session reminders (Admin-configurable offsets), no-show events, teacher cancellation requests and their acceptance/decline, payment confirmed, payment failed or expired, payout account verified, dispute resolutions, gender-flag outcomes, ijazah grants and revocations, and new reviews [DEC-13c]. |
+| FR-NOTIF-2 | (Rewritten) The app shall provide a notification centre reachable from a persistent icon, listing notification history with unread state, so a user can retrieve anything they missed. This is a history list, not a real-time activity feed [DEC-44].                                                                                                                                                          |
+| FR-NOTIF-3 | Notifications shall respect the user's selected language.                                                                                                                                                                                                                                                                                                                                                       |
+| FR-NOTIF-4 | (New) Notification delivery shall be queued and retried, never sent inline within a request handler, so a push provider outage cannot fail a booking *(v1.3)*.                                                                                                                                                                                                                                              |
+
+### 3.13 Localization
+
+| ID       | Requirement                                                                                         |
+| -------- | --------------------------------------------------------------------------------------------------- |
+| FR-LOC-1 | Complete Arabic and English translations of all user-facing mobile content.                         |
+| FR-LOC-2 | RTL layout for Arabic, LTR for English.                                                             |
+| FR-LOC-3 | Language switchable in-app without logout.                                                          |
+| FR-LOC-4 | Ijazah certificates produced in the language the Teacher selects at granting, defaulting to Arabic. |
+| FR-LOC-5 | (New) The Admin panel is English-only in MVP [DEC-31].                                              |
+
+### 3.14 Admin-Configurable Settings
+
+Every value below shall be adjustable from the admin panel without a code deployment. Changes shall be audit-logged, and shall apply prospectively only — never retroactively re-evaluating settled sessions *(v1.3)*.
+
+| Setting                                     | Default         | Governs                        |
+| ------------------------------------------- | --------------- | ------------------------------ |
+| Attendance threshold (%)                    | 70%             | FR-SESS-11                     |
+| Join window (minutes after start)           | 10              | FR-SESS-17                     |
+| Minimum connection duration (seconds)       | 60              | FR-SESS-17                     |
+| Early-join lead time (minutes)              | 15              | FR-SESS-14                     |
+| Teacher no-show termination threshold (count) | 2               | FR-NOSHOW-3/4                  |
+| Dispute window (hours)                      | 72              | FR-DISPUTE-1                   |
+| Slot-hold and gateway-order TTL at checkout (minutes) | 10 | FR-BOOK-9, FR-PAYG-6 |
+| Checkout confirmation timeout (seconds)     | 15              | FR-PAYG-18                     |
+| Idempotency key retention (hours)           | 24              | FR-042 (spec), ADR 0008 D2     |
+| Slot release buffer (weeks)                 | 0               | FR-BOOK-10                     |
+| Session reminder offsets                    | 24h, 15m        | FR-BOOK-8                      |
+| Chat retention beyond dispute window (days) | 0               | FR-SESS-13                     |
+| Currency                                    | EGP             | §2.5                           |
+
+Rule/action settings (not numeric): teacher application decision; teacher status override; dispute resolution override; gender declaration correction; review moderation; ijazah revocation and barring; ID-verification requirement *(v1.3)*.
+
+## 4. External Interface Requirements
+
+### 4.1 User Interfaces
+
+- **Student experience:** onboarding, subject search, teacher browse/profile, package purchase, booking calendar, live session screen, chat, gateway checkout, ijazah credentials, review submission, notifications, report user.
+- **Teacher experience:** application/verification status, profile & package editor, availability editor, booking calendar, live session screen, chat, cancellation requests, payout setup, ijazah-granting flow, reviews received *(v1.4)*.
+- **Admin panel:** verification queue, user directory, package/session monitor, session review queue, disputes queue, gender-dispute queue, reports queue, payments monitor, ijazah administration, configuration *(v1.4)*.
+
+Both mobile experiences share one codebase with role-based navigation and a role switcher (§2.2).
+
+### 4.2 Hardware Interfaces
+
+- Device camera and microphone via OS permissions and the video SDK, subject to §3.7.2.
+- Push services (APNs, FCM).
+
+### 4.3 Software Interfaces
+
+| Interface                      | Purpose                                                                                                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Managed video/audio SDK        | Live one-to-one transport with server-minted per-participant session tokens and session-lifecycle webhooks. Publish permissions are not server-controlled (§3.7.2). |
+| FCM / APNs                     | Push delivery.                                                                                                                                                      |
+| SMS/OTP gateway                | Phone signup verification and password reset.                                                                                                                       |
+| Payment gateway (OPEN-11)      | Hosted checkout, recipient onboarding for individual Teachers, direct settlement of net proceeds to the Teacher, signed webhooks for paid/failed/expired/recipient-verified (§3.6). |
+| Object storage (S3-compatible) | Verification documents and certificate PDFs, encrypted at rest, signed URL access only.                                                                             |
+| Server-side PDF renderer       | Ijazah certificates with Arabic RTL support.                                                                                                                        |
+
+### 4.4 Communication Interfaces
+
+- All client-server traffic over HTTPS/TLS 1.2+.
+- Real-time session media via the video provider (WebRTC); chat and presence over WebSocket or equivalent.
+- Webhooks in: payment gateway (order paid, failed, expired; recipient verified); video provider (participant joined, left, session ended, outage).
+- All webhook endpoints shall verify provider signatures and be idempotent — a replayed webhook shall never double-insert an attendance event or a payment event (`provider_event_id` unique on both) *(v1.4)*.
+
+## 5. Non-Functional Requirements
+
+### 5.1 Performance
+
+| ID         | Requirement                                                                          |
+| ---------- | ------------------------------------------------------------------------------------ |
+| NFR-PERF-1 | Search and browse shall return within 2 seconds on 4G or better.                     |
+| NFR-PERF-2 | Live session connection setup shall complete within 5 seconds on normal conditions.  |
+| NFR-PERF-3 | The system shall degrade gracefully (audio-only fallback) on constrained MENA 3G/4G. |
+
+### 5.2 Security and Privacy
+
+| ID         | Requirement                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-SEC-1  | All data in transit encrypted via TLS 1.2+.                                                                                                                                                                                                                                                                                                                    |
+| NFR-SEC-2  | Identity documents and payout recipient references encrypted at rest *(v1.4)*. |
+| NFR-SEC-3  | Verification documents accessible only to Admin roles and the uploading user.                                                                                                                                                                                                                                                                                  |
+| NFR-SEC-4  | (Rewritten v1.3, ADR 0006) A Teacher's profile data shall never be returned to a Student of the other gender through any API response — in either direction, Male Student to Female Teacher or Female Student to Male Teacher — including error bodies, partial payloads, aggregate counts, and search facets. A direct request shall be indistinguishable from a request for a non-existent record. The adversarial suite asserts both directions [DEC-10]. |
+| NFR-SEC-5  | Card data shall never be stored by the platform; tokenisation is delegated to the gateway.                                                                                                                                                                                                                                                                     |
+| NFR-SEC-6  | Admin panel access shall require authenticated, role-scoped accounts with MFA, and shall log every sensitive action with actor, timestamp and reason.                                                                                                                                                                                                          |
+| NFR-SEC-7  | (New) No secret shall ever enter version control. The repository shall enforce this mechanically — pre-commit secret scanning, provider push protection, and CI secret scanning — not by convention or memory. Secrets live in the hosting provider's secret store and are injected at runtime. A leaked-key rotation runbook shall exist before first deploy. |
+| NFR-SEC-8  | (New) All authorisation shall be enforced server-side at the service layer. No endpoint shall rely on the client having hidden a control. Gender rules in particular shall be enforced in the data-access layer, so they cannot be bypassed by a missing check in a new endpoint.                                                                              |
+| NFR-SEC-9  | (New) File uploads shall be validated by content-type sniffing and size limits, stored outside the web root, and served only through expiring signed URLs.                                                                                                                                                                                                     |
+| NFR-SEC-10 | (New) Rate limiting shall apply to authentication, OTP issuance, search, and payment initiation.                                                                                                                                                                                                                                                               |
+
+### 5.3 Availability and Reliability
+
+| ID          | Requirement                                                                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-AVAIL-1 | Booking, payment and live-session services shall target 99.5% monthly uptime.                                                                      |
+| NFR-AVAIL-2 | Provider-reported outages shall never result in a no-show penalty; affected sessions route to Admin review (§3.7.5).                               |
+| NFR-AVAIL-3 | Session evaluation and payment confirmation writes shall be transactional and durable. A partial failure shall never leave a session settled without its attendance evidence, nor an Enrollment confirmed without its paid event recorded, or vice versa *(v1.4)*. |
+| NFR-AVAIL-4 | (New) All money-moving operations shall be idempotent by key, so a retry — by a user, a client, or a webhook — cannot double-charge or double-pay. |
+
+### 5.4 Usability
+
+| ID        | Requirement                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------- |
+| NFR-USE-1 | Usable by low-to-medium technical proficiency users; simple linear flows over dense screens.                  |
+| NFR-USE-2 | Core flows (search, book, pay, join) completable in ≤5 primary taps from home.                                |
+| NFR-USE-3 | Arabic treated as first-class: layout, iconography, numerals and date/time formatting adapt correctly to RTL. |
+
+### 5.5 Scalability and Maintainability
+
+| ID          | Requirement                                                                                                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-SCALE-1 | Backend API shall scale horizontally, independent of the mobile release cycle.                                                                                                                                        |
+| NFR-SCALE-2 | Introducing a commission shall require configuration and calculation changes only.                                                                                                                                    |
+| NFR-SCALE-3 | Deferred features (§13) shall be addable without rewriting core booking, payment or session modules.                                                                                                                  |
+| NFR-SCALE-4 | (New) Every module shall have a single documented owner directory and a README stating what it is for. A new team member shall be able to locate the code for any requirement ID in this document within two minutes. |
+
+### 5.6 Compliance and Sensitivity
+
+| ID         | Requirement                                                                                                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-COMP-1 | Gender rules are compliance-grade. QA shall include explicit adversarial tests attempting to bypass them via direct API calls, forged IDs, token manipulation and client tampering. These tests shall run in CI on every commit.                                 |
+| NFR-COMP-2 | Personal data (identity documents, gender, DOB, payout recipient references) shall be handled with a documented retention and access policy.                                                                                                                      |
+| NFR-COMP-3 | (New) The app shall satisfy Apple App Review and Google Play policy for apps enabling user-to-user communication: an in-app report mechanism (FR-SESS-15), a block capability, published Terms prohibiting abuse, and a documented response procedure. [RISK-01] |
+
+## 6. Data Model
+
+Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.3 — 33 tables.
+
+### 6.1 Entities
+
+User, UserRole, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, VerificationDocument, VerificationRequest, Subject, TeacherSubject, Package, AvailabilitySlot, IsnadEntry, TeacherSignature, SlotHold, Enrollment, Payment, PaymentEvent, Session, SessionParticipantEvent, CancellationRequest, ChatMessage, Ijazah, IjazahBar, Review, Dispute, GenderFlag, UserReport, Notification, AdminUser, AuditLog, Setting, IdempotencyKey (platform kernel, ADR 0008). *(v1.3 removed Wallet, LedgerEntry, PayoutDestination, WithdrawalRequest; v1.4 adds Payment and PaymentEvent as gateway records, not balances.)*
+
+### 6.2 Key Entity Detail
+
+**User** — id, phone (nullable, unique), email (nullable, unique), password_hash, gender (Male/Female), date_of_birth, is_minor (derived), preferred_language, timezone (IANA), account_status (Active / Suspended / Verification-Required / Banned), terms_version_accepted, created_at. Minor status and ijazah-bar status are computed on read (R-DB-4). Constraint: at least one of phone or email present.
+
+**UserRole** — user_id, role (Student / Teacher), status, granted_at. Supports dual-role (§2.2).
+
+**TeacherProfile** — user_id, display_name, bio, photo_url, verification_status (Pending / Approved / Rejected / Suspended / Banned), verification_call_completed_at, verification_call_notes, approved_by_admin_id, approved_at, payout_account_ref_encrypted, payout_configured_at, payout_verified_at *(v1.4)*, average_rating (cached), review_count (cached).
+
+**Package** — id, teacher_user_id, subject_id (FK, not enum), session_count, session_duration_minutes, price_piasters, active.
+
+**AvailabilitySlot** — id, teacher_user_id, day_of_week, start_time_local, duration_minutes, timezone (IANA, teacher's), active.
+
+**SlotHold** — id, slot_id, student_user_id, expires_at. Enforces FR-BOOK-9.
+
+**Enrollment** — id, student_user_id, teacher_user_id, package_id, slot_id, snapshot fields: snapshot_price_piasters, snapshot_session_count, snapshot_duration_minutes, snapshot_subject_id; status (Pending-Payment / Confirmed / Completed / Terminated-No-Show / Cancelled), confirmed_at (set by the confirm-enrollment step on the gateway's paid event, FR-PAYG-5), cancellation_reason, purchased_at *(v1.4)*. `sessions_remaining` and the teacher no-show count are derived, never stored *(v1.3)*.
+
+**Session** — id, enrollment_id, sequence_number, scheduled_start_at, scheduled_end_at, simultaneous_connected_seconds, status (Scheduled / Done / Student-No-Show / Teacher-No-Show / Both-No-Show / Under-Threshold / Provider-Outage / Cancelled-By-Agreement / Cancelled-By-Admin / Disputed), evaluated_at *(v1.3)*. There is deliberately no Cancelled-By-Student status: a Student cannot cancel unilaterally (§3.8.1, FR-CANCEL-1 and FR-CANCEL-3), and a Student who abandons a session resolves as Student-No-Show under FR-NOSHOW-1. There is likewise no persisted camera rule, because camera is optional for both parties in every permitted pairing (§3.7.2). This status set is the one enumerated by the `sessions.status` enum in ERD.md.
+
+**SessionParticipantEvent** — id, session_id, user_id, event_type (joined / left), occurred_at, provider_event_id (unique — idempotency). This is the raw evidence for §3.7.5 and every dispute.
+
+**Payment** — id, enrollment_id, gateway, gateway_order_id (unique), gateway_transaction_id (unique, nullable), amount_piasters (gross), gateway_fee_piasters, net_piasters, currency, status (Created / Paid / Failed / Expired / Refunded), created_at, updated_at. One row per gateway order; a record of what the gateway did, never a balance (FR-PAYG-7).
+
+**PaymentEvent** — id, payment_id, provider_event_id (unique — replay safety, FR-PAYG-4), event_type, signature_verified_at, payload_hash, received_at. Append-only record of every signed gateway event.
+
+**Ijazah** — id, certificate_number (unique, non-sequential), enrollment_id, student_user_id, teacher_user_id, subject_id, language, mode (Generated / Uploaded), granted_at, paper_copy_intended, certificate_storage_key, chain_snapshot_json (immutable ordered names at grant time, FR-ISNAD-7), verification_token (unique), revoked_at, revoked_reason, revoked_by_admin_id.
+
+**IsnadEntry** — id, teacher_user_id, subject_id, position (ordinal), transmitter_name, verification_status (Verified / Unverified), verified_by_admin_id, verified_at. Unique on (teacher_user_id, subject_id, position). Ordered list, not a graph.
+
+**TeacherSignature** — id, teacher_user_id (unique), storage_key, uploaded_at. Required before Mode A granting (FR-IJAZAH-12).
+
+**CancellationRequest** — id, session_id, requested_by_user_id, reason, status (Pending / Accepted / Declined / Expired), responded_at.
+
+**AuditLog** — id, admin_id, action, target_type, target_id, reason, before_json, after_json, occurred_at. Append-only.
+
+**Setting** — key, value, updated_by_admin_id, updated_at. Backs §3.14.
+
+Remaining entities (Review, Dispute, GenderFlag, UserReport, ChatMessage, Notification, AdminUser, Subject, TeacherSubject, VerificationDocument, VerificationRequest, OtpCode, DevicePushToken, TermsAcceptance, IjazahBar) follow the same conventions and are detailed in the accompanying ERD.
+
+## 7. Business Rules Summary
+
+**Gender.** Every session is same-gender, without exception. Male students see and meet only male teachers; female students only female teachers. Enforced server-side at the query layer. There is consequently no gender-based camera restriction — camera is optional for both parties in every session. No images in chat. Gender is self-declared, changeable only via Admin review; proven falsification is grounds for ban *(v1.3)*.
+
+**Money.** The platform is a technology intermediary, never a custodian. The Student pays the gateway; the gateway deducts its fee and settles 100% of the net directly to the Teacher's verified payout account; the platform takes 0% commission and holds nothing. Payment is confirmed only by the gateway's signed webhook, which confirms the Enrollment and generates sessions automatically. No wallet, no ledger, no balance, no manual paid flag. Reimbursement is an Admin decision through the moderation workflow, executed by Platform Administration outside the platform's code path, never a negotiation between Student and Teacher *(v1.4)*.
+
+**Attendance.** Student absent, Teacher present → session consumed. Teacher absent, Student present → session not consumed, no-show counted. Both absent → treated as mutual cancellation: not consumed, no penalty either side. Below attendance threshold or provider outage → Admin review. Teacher no-shows past threshold → remaining sessions cancelled, the Enrollment terminated, and a compensation case opened for the Admin (FR-DISPUTE-5) *(v1.4)*.
+
+**Cancellation.** Symmetric. Either party may request; only the counterparty's acceptance makes it penalty-free. Decline or silence means the session stands and ordinary attendance rules apply. No enrollment-level cancellation, no rescheduling in MVP.
+
+**Certification.** Only a Teacher may grant an ijazah, in one of two modes: platform-generated with signature and chain of transmission, or an uploaded scan of a physical certificate. Every teacher records a chain of transmission per subject, admin-verified. Chains are snapshotted onto each certificate at grant time. Admins may revoke or bar, never grant. Revocation does not bar a student from future ijazahs. Certificates are publicly verifiable and never hard-deleted.
+
+**Trust.** No Teacher is discoverable until approved via document review and a recorded verification call, and until the gateway has verified their payout account (§3.6.2). A Student may review after any terminal Enrollment where at least one session occurred.
+
+## 8. Roles and Permissions Matrix
+
+| Capability                                 | Student                               | Teacher             | Admin                                     |
+| ------------------------------------------ | ------------------------------------- | ------------------- | ----------------------------------------- |
+| Register / manage own account              | Yes                                   | Yes                 | N/A                                       |
+| Search / browse teachers                   | Yes (gender-filtered)                 | No                  | Yes (all)                                 |
+| Create teacher profile & packages          | No                                    | Yes (post-approval) | No                                        |
+| Upload verification documents              | On request                            | Yes                 | View only; may request more, never modify |
+| Approve / reject / ban teacher application | No                                    | No                  | Yes                                       |
+| Require ID from a user                     | No                                    | No                  | Yes                                       |
+| Purchase a package                         | Yes                                   | No                  | No                                        |
+| Set weekly availability                    | No                                    | Yes                 | No                                        |
+| Request session cancellation               | Yes                                   | Yes                 | Yes (direct cancel)                       |
+| Accept/decline a cancellation request      | Yes                                   | Yes                 | Yes (override)                            |
+| Record chain of transmission               | No                                    | Yes                 | Verify / edit                             |
+| Join live session                          | Own sessions                          | Own sessions        | No                                        |
+| Grant an ijazah                            | No                                    | Yes — exclusively   | No                                        |
+| Revoke an ijazah / bar a user              | No                                    | No                  | Yes                                       |
+| Submit a review                            | Yes (terminal enrollment, ≥1 session) | No                  | Moderate comment only                     |
+| Raise a dispute                            | Yes                                   | Yes                 | Resolve                                   |
+| Flag a gender declaration                  | Yes                                   | Yes                 | Resolve                                   |
+| Report a user                              | Yes                                   | Yes                 | Action                                    |
+| Configure payout account                   | No                                    | Yes (own, after approval) | View status only                        |
+| Pay for a package via gateway              | Yes                                   | No                  | No                                        |
+| Suspend a user account                     | No                                    | No                  | Yes                                       |
+| Configure platform settings                | No                                    | No                  | Yes                                       |
+
+## 9. Key Use Cases
+
+**UC-1 — Teacher application and approval.** Applicant uploads ID and credentials, selects subjects → appears in Admin queue as Pending → Admin reviews documents, conducts an out-of-app verification call, records the outcome → Approve becomes available → Admin approves → Teacher notified, profile and payout setup unlocked → Teacher registers a payout account with the gateway in-app → gateway verifies it → packages and availability publishable, Teacher becomes discoverable subject to gender rules *(v1.4)*. Alternates: rejection with reason (may reapply); more-information request (stays Pending with a visible note); ban (no further applications).
+
+**UC-2 — Student discovers and books.** Student searches or browses → server returns only gender-compatible approved Teachers → opens profile, selects Package → chooses a recurring slot of matching duration → slot held for TTL → Student confirms → Enrollment created as Pending-Payment and a gateway order created → Student reviews the order on the Checkout screen and taps Pay → pays on the gateway's hosted page → app shows "Confirming your payment" → gateway's signed webhook reports paid → confirm-enrollment job sets Confirmed, converts the hold, generates all sessions at the recurring slot → app renders "Payment successful" with the receipt and sessions from server state (FR-PAYG-17) → both parties notified; net proceeds settle to the Teacher's payout account *(v1.4)*. Alternates: order expires or fails → hold released, Enrollment cancelled, Student may retry; slot taken during checkout → prompted to choose another; replayed webhook → acknowledged, no effect.
+
+**UC-3 — Live session.** Both tap Join within the early-join window → server verifies from its own records that both participants are the same gender and refuses to issue tokens otherwise (FR-SESS-2) → server mints each participant a token bound to that session and participant, carrying no publish restriction (FR-SESS-3) → the pre-session screen confirms the counterparty, the duration and each participant's own camera and microphone state (FR-SESS-5) → either party optionally enables their camera, and may disable it again at any time (§3.7.2) → participants converse; text and PDF chat permitted, images rejected → after scheduled end, server evaluates simultaneous connected time → ≥ threshold → Done, session consumed *(v1.3)*. Alternates: below threshold → Admin review queue; provider outage → Admin review, no penalty. There is no mixed-gender variant of this case: cross-gender pairings cannot occur (§3.7.1).
+
+**UC-4 — Teacher no-show and termination.** Student joins, Teacher does not within the join window → session marked Teacher-No-Show after scheduled end → session not consumed → no-show count (derived) rises → at threshold, remaining sessions cancelled and Enrollment set Terminated-No-Show → Student notified, and remains eligible to review (FR-REVIEW-1). A compensation case opens in the Admin moderation queue; reimbursement is the Admin's decision (FR-DISPUTE-5/6) *(v1.4)*.
+
+**UC-5 — Teacher requests cancellation.** Teacher submits a request with reason → Student notified → Accept → session Cancelled-By-Agreement, not consumed, no no-show *(v1.3)*. Decline or no response → session stands; if Teacher then misses it, ordinary no-show rules apply in full.
+
+**UC-6 — Dispute resolution.** Party raises a dispute within the dispute window → session outcome frozen as Disputed → dispute appears in Admin queue with attendance telemetry and chat log → Admin reviews and records a binding resolution with reason (outcome upheld or re-marked, no-show attributed, compensation ordered, or a party suspended or banned) → both parties notified → audit entry written → any ordered compensation executed by Platform Administration through the gateway, recorded when the gateway reports it. No funds move in the platform's code path *(v1.4)*.
+
+**UC-7 — Granting an ijazah.** Teacher opens the Enrollment, selects Grant Ijazah → confirms subject and language, optionally flags paper intent → system checks the Student is not barred → generates PDF from the platform template with unique number, QR and verification token → stored, recorded on the Student's profile, Student notified. Alternates: Student barred → rejected; erroneous grant → Admin revokes with reason, record retained.
+
+**UC-8 — Retired (v1.3, ADR 0005).** Was withdrawal.
+
+## 10. Technology Stack
+
+Sized for a team of three with no prior mobile, video or payments experience, relying substantially on AI assistance. The overriding criterion is minimising the number of unfamiliar contexts, not maximising theoretical fit.
+
+| Layer                    | Recommendation                        | Rationale                                                                                                                                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mobile                   | Expo (React Native + TypeScript)      | Same language as backend and admin panel. Shared types end-to-end. EAS Build removes the native toolchain and signing work that has no AI shortcut and reliably costs first-timers weeks. Mature video SDK support. Supersedes v1.0's Flutter recommendation, which assumed Dart familiarity the team does not have. |
+| Admin panel              | Vite + React SPA                      | Fast data-dense internal tooling; same React model as mobile. Ships as static assets, which is what ARCHITECTURE.md ("admin (vite SPA)") and research.md R-18 already assume. Supersedes this table's earlier Next.js recommendation, which no plan, task or package manifest ever adopted.                          |
+| Backend                  | NestJS (Node, TypeScript)             | Team leans JS. Opinionated module structure gives the codebase an enforced shape, which matters more than framework elegance when nobody is a tech lead.                                                                                                                                                             |
+| Database                 | PostgreSQL                            | Relational integrity suits bookings, sessions and enrollments.                                                                                                                                                                                                                                                        |
+| ORM                      | Prisma                                | Typed schema, readable migrations, low ceremony.                                                                                                                                                                                                                                                                     |
+| Live video               | Daily.co or LiveKit                   | Both offer server-minted session tokens and lifecycle webhooks, which is all §3.7 still requires. Per-participant publish permissions ceased to be a selection criterion with §3.7.2, so the field is wider than v1.1 assumed. Evaluate both in Week 1 against a camera and connectivity spike.                      |
+| Payment gateway          | Selection open (OPEN-11)              | Must offer hosted checkout, onboarding of individual recipients without a commercial register, direct settlement of net proceeds to the recipient with no platform custody, and signed webhooks. Behind `PaymentPort`; swapping is one adapter.                                                                          |
+| Push                     | Expo Notifications over FCM/APNs      | One API for both platforms.                                                                                                                                                                                                                                                                                          |
+| Storage                  | S3-compatible, encrypted, signed URLs | Verification documents and certificates.                                                                                                                                                                                                                                                                             |
+| Server-side PDF renderer | with proven Arabic shaping            | Prototype Week 2 (FR-IJAZAH-11).                                                                                                                                                                                                                                                                                     |
+| Jobs/queue               | BullMQ + Redis                        | Session evaluation, hold and gateway-order expiry, enrollment confirmation from paid events, notification retries, reminder scheduling, certificate rendering.                                                                                                                                                                                                                                      |
+| Hosting                  | Managed containers with CI/CD         | Small team, no infrastructure staff.                                                                                                                                                                                                                                                                                 |
+
+Deliberately excluded, versus the original broader concept: Elasticsearch, RabbitMQ, SignalR, any AI/LLM pipeline, any vector database, multi-tenant SaaS infrastructure. Search is a filtered query against a modest directory. There is no AI feature in this product. There is one marketplace, not a tenant per centre.
+
+## 11. Assumptions, Dependencies, Constraints
+
+**Assumptions.** Users self-report adulthood; DOB is collected but not enforced [RISK-01]. Gender is binary for discovery and pairing, self-declared, correctable only via Admin review; it does not drive camera logic (§3.7.2). Teachers have adequate devices and connectivity. Initial market is Egypt/MENA; currency EGP, Arabic first. The platform takes no commission and never holds money *(v1.4)*. A single admin team suffices for MVP volume — and in MVP that team is the three founders, which is real capacity consumed, not free.
+
+**Dependencies.** Video provider API stability, server-minted session tokens and lifecycle webhooks (critical to §3.7); per-participant publish control is no longer required (§3.7.2). Payment gateway availability, individual-recipient onboarding and signed webhooks (critical to §3.6, OPEN-11). Admin capacity to conduct verification calls promptly, since this gates teacher earning. Apple Developer and Google Play account approval, which can take weeks and should be started immediately.
+
+**Constraints.** Team of 2 full-time and 1 part-time, 4 months, no prior mobile/video/payments experience. Anything not explicitly specified here is out of scope until formally added. Gender rules are non-negotiable product requirements, not adjustable preferences.
+
+## 12. Traceability of Changes from v1.0
+
+**Contradictions resolved:** verification call (FR-VERIFY-5 vs six other sections); session completion routing every session to dispute (FR-SESS-10/11); undefined join window and "joined"; unhandled both-absent case; missing teacher cancellation; globally-scoped double-booking rule; misfiled FR-PROFILE-5; abandoned students unable to review; ijazah correction with no admin capability; dangling §6.7.3 reference.
+
+**Gaps closed:** wallet and refund mechanics; payout destinations; rounding and fee amortisation; dispute window versus payout; timezones and DST; slot occupancy lifetime; checkout race; package/slot duration mismatch; slot deletion with live enrollments; gender-correction fallout; screen-share bypass; chat persistence, admin access and retention; package-edit snapshotting; missing Payout/Admin/AuditLog entities; certificate verifiability; incomplete settings table; permission-matrix contradictions; missing notification events; suspended-teacher session access.
+
+## 13. Deferred Scope
+
+Parent/guardian accounts · session recording · platform-held funds of any kind (wallets, escrow, ledgers — retired by ADR 0005 and not reintroduced by ADR 0007) · AI-driven teacher recommendations · group or family sessions · session rescheduling · enrollment-level cancellation · languages beyond Arabic and English · in-app scheduling of verification calls.
+
+## 14. Decision Log
+
+| ID      | Decision                                                                                                                                                                                                                                                         |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DEC-01  | Verification call required once per applicant, conducted outside the app; Admin must record outcome before Approve unlocks.                                                                                                                                      |
+| DEC-02  | Completion = scheduled end passed AND both simultaneously connected ≥ configurable threshold (70%).                                                                                                                                                              |
+| DEC-03  | Join window and minimum connection duration both admin-configurable.                                                                                                                                                                                             |
+| DEC-04  | DOB collected, no hard age block, under-18 flagged to admin; report-user flow added.                                                                                                                                                                             |
+| DEC-04b | Both-No-Show → session not consumed, no no-show counted. *(Refund clause retired v1.3.)* |
+| DEC-05  | Teacher cancellation is a request; without Student acceptance, non-attendance is a full no-show.                                                                                                                                                                 |
+| DEC-06  | Double-booking scoped per-Teacher and per-Student.                                                                                                                                                                                                               |
+| DEC-07  | FR-PROFILE-5 deleted.                                                                                                                                                                                                                                            |
+| DEC-08  | Review allowed on any terminal Enrollment where ≥1 session occurred.                                                                                                                                                                                             |
+| DEC-09  | Teachers grant ijazahs exclusively; Admins may revoke and bar, never grant; never hard-delete.                                                                                                                                                                   |
+| DEC-10  | Dead §6.7.3 reference removed; NFR-SEC-4 rewritten without deep-link language.                                                                                                                                                                                   |
+| DEC-11  | *(Retired v1.3, ADR 0005.)* Single unified Wallet for refunds and earnings; payout destination required before withdrawal.                                                                                                                                                                   |
+| DEC-12  | *(Retired v1.3, ADR 0005.)* Paymob only in MVP, using both Accept (in) and Payouts (out). Withdrawals are automated, superseding the earlier manual recommendation.                                                                                                                          |
+| DEC-13  | Package prices as integer piasters with explicit currency. *(Idempotency-key clause retired v1.3.)* |
+| DEC-13b | Admins view documents and may request more; never modify.                                                                                                                                                                                                        |
+| DEC-13c | Notification list extended to dispute, gender-flag and revocation events. *(Withdrawal events retired v1.3.)*                                                                                                                                                                            |
+| DEC-14  | *(Retired v1.3, ADR 0005.)* Rounding remainder distributed one piaster to the first R sessions.                                                                                                                                                                                              |
+| DEC-15  | *(Retired v1.3, ADR 0005.)* Gateway fee recorded once at capture; per-session shares computed on net.                                                                                                                                                                                        |
+| DEC-16  | Slot freed the week after the final session, plus configurable buffer (default 0).                                                                                                                                                                               |
+| DEC-17  | Checkout slot hold with configurable TTL (default 10 min).                                                                                                                                                                                                       |
+| DEC-18  | *(Retired v1.3, ADR 0005.)* Configurable dispute window before released funds become withdrawable.                                                                                                                                                                                           |
+| DEC-18b | No enrollment-level student cancellation in MVP.                                                                                                                                                                                                                 |
+| DEC-19  | Timezone from device, IP as fallback, manual override available.                                                                                                                                                                                                 |
+| DEC-20  | Package duration must equal slot duration.                                                                                                                                                                                                                       |
+| DEC-21  | Slot deletion does not affect already-generated sessions.                                                                                                                                                                                                        |
+| DEC-22  | Gender fraud → ban; Admin may require ID from any user at any time; stated in Terms. The forfeiture this decision originally carried was withdrawn by DEC-38 and is moot since v1.3: the platform holds no funds. |
+| DEC-23  | Screen share governed by the same permission as camera. Superseded by DEC-39: the camera permission it referred to no longer exists, so screen share is simply optional for both participants in every pairing, exactly as camera is (§3.7.2).                   |
+| DEC-24  | Package terms snapshotted onto Enrollment.                                                                                                                                                                                                                       |
+| DEC-25  | Phone and email as separate, independently unique, nullable fields.                                                                                                                                                                                              |
+| DEC-26  | Chat persisted, admin-readable only under dispute/report, purged after dispute window.                                                                                                                                                                           |
+| DEC-27  | Standardised platform certificate template; QR + public verification; signed URLs; Arabic PDF proven Week 2.                                                                                                                                                     |
+| DEC-28  | Suspended teachers cannot join any session; remaining sessions cancelled. *(Refund clause retired v1.3.)*                                                                                                                                                                           |
+| DEC-29  | FR-BOOK-6 merged into FR-CANCEL-1.                                                                                                                                                                                                                               |
+| DEC-30  | Dual-role accounts supported; roles are a set; gender rules apply per session role.                                                                                                                                                                              |
+| DEC-31  | Admin panel English-only.                                                                                                                                                                                                                                        |
+| DEC-32  | Moderated reviews lose the comment; the star rating still counts.                                                                                                                                                                                                |
+| DEC-33  | *(Retired v1.3, ADR 0005.)* Automated disbursement with manual fallback on failure — not manual-first.                                                                                                                                                                                       |
+| DEC-34  | *(Retired v1.3, ADR 0005.)* Payout budget balance monitored with low-balance alerting.                                                                                                                                                                                                       |
+| DEC-35  | *(Retired v1.3, ADR 0005.)* Platform absorbs disbursement fees; minimum withdrawal (default 500 EGP) bounds the cost.                                                                                                                                                                        |
+| DEC-36  | (Superseded by DEC-45.)                                                                                                                                                                                                                                          |
+| DEC-37  | *(Retired v1.3, ADR 0005.)* Commission defaults to 0% and is Admin-adjustable at any time without code or schema change.                                                                                                                                                                     |
+| DEC-38  | *(Retired v1.3, ADR 0005.)* Forfeiture dropped entirely. Banned users' funds held 30 days for review, then refunded in full.                                                                                                                                                                 |
+| DEC-39  | Same-gender sessions only, both directions. Removes the camera matrix and the per-participant publish-permission provider constraint.                                                                                                                            |
+| DEC-40  | Cancellation is symmetric and requires mutual agreement. Both-no-show is treated as mutual agreement. Free-cancellation window retired.                                                                                                                          |
+| DEC-41  | Chain of transmission promoted into MVP as an ordered list of transmitter names per teacher per subject. Not a graph.                                                                                                                                            |
+| DEC-42  | Two certificate modes: platform-generated (with signature + chain) or teacher-uploaded scan.                                                                                                                                                                     |
+| DEC-43  | Ijazah revocation does not bar a student from future ijazahs; barring is a separate explicit action.                                                                                                                                                             |
+| DEC-44  | Notification centre (history list behind an icon), not a mirrored activity feed.                                                                                                                                                                                 |
+| DEC-45  | *(Retired v1.3, ADR 0005.)* Settlement model held agnostic. Paymob is a facilitator, not a merchant of record; the platform is the legal seller either way; legal registration is required regardless. Principal-vs-agent characterisation is an accounting ruling over an unchanged ledger. |
+| DEC-46  | *(Retired v1.3, ADR 0005.)* No downstream split before the dispute window closes.                                                                                                                                                                                                            |
+| DEC-47  | *(Superseded v1.4 by DEC-49, ADR 0007.)* Was: one off-platform payment model with a Teacher paid flag. |
+| DEC-48  | No payment-proof screenshots or manual paid marks, ever. A paid state comes only from the gateway's signed webhook (FR-PAYG-3/8).                                                                                                                              |
+| DEC-49  | *(v1.4, ADR 0007.)* Direct gateway checkout with 0% commission and zero custody: Student → gateway → Teacher's payout account; signed webhook confirms the Enrollment and generates sessions; Teacher payout onboarding happens in-app strictly after approval and gates discoverability. |
+| DEC-50  | *(v1.4.)* Reimbursement and compensation are an Admin moderation matter between the Student and Platform Administration, executed by Platform Administration outside the platform's code path. The platform never moves funds; the Teacher never negotiates refunds. |
+
+## 15. Accepted Risks
+
+| ID      | Risk                                                                                                                                                                                               | Position                                                                                                                                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| RISK-01 | Minors will use the platform. No hard age block. Private one-to-one adult–minor video is possible.                                                                                                 | Accepted by the founding team. Mitigated by DOB capture, minor flagging, report flow and Terms. Residual exposure: App Store / Play review rejection, and safeguarding liability. Revisit before submission. |
+| RISK-02 | Image content smuggled inside PDF attachments.                                                                                                                                                     | Accepted for MVP. Mitigated by report flow.                                                                                                                                                                  |
+| RISK-06 | Same-gender-only halves liquidity on both sides of the marketplace.                                                                                                                                | Accepted. Requires parallel supply growth in both genders at launch.                                                                                                                                         |
+| RISK-07 | *Retired (v1.3, ADR 0005).* Was the merchant-of-record VAT exposure; the platform is not a party to any payment. | — | — |
+| RISK-08 | Mode B (uploaded) certificates are displayed but not attested by the platform.                                                                                                                     | Mitigated by explicit labelling on the verification page (FR-IJAZAH-14).                                                                                                                                     |
+| RISK-09 | *Retired (v1.3).* Reinstated in substance as RISK-10 (v1.4). | — | — |
+| RISK-10 | Individual Teachers without a commercial register may fail the gateway's recipient KYC, in which case they cannot be verified and cannot be booked. | Verify with the selected gateway before Phase 1 payout onboarding is built (OPEN-11). | Launch dependency |
+| RISK-11 | The gateway fee is borne by the Teacher (net settlement). Teachers may perceive it as a platform cut. | Mitigated by showing gross, fee and net on the Teacher's confirmation and by the 0% commission statement in the Terms (FR-PAYG-9). | Accepted |
+| RISK-03 | Team has no prior mobile, video or payments delivery experience.                                                                                                                                   | Accepted. Mitigated by stack consolidation to one language, Week-1/2 technical spikes on the two highest-risk integrations, and phased scope with go/no-go gates.                                            |
+| RISK-04 | *Retired (v1.3, ADR 0005).* Was Paymob Payouts onboarding lead time. | — | — |
+| RISK-05 | *Retired (v1.3, ADR 0005).* Was the prefunded payout budget. | — | — |
+
+## 16. Open Items
+
+| ID      | Question                                                                                                  | Blocks                 | Needed by                |
+| ------- | --------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------ |
+| OPEN-01 | Principal or agent? — CLOSED (v1.3): the platform is not a party to any payment (ADR 0005).                | —                      | Closed                   |
+| OPEN-02 | Forfeiture on gender fraud? — RESOLVED: no forfeiture; the platform holds no funds (v1.3).                | —                      | Closed                   |
+| OPEN-03 | Expo or Flutter — RESOLVED: Expo (React Native + TypeScript).                                             | —                      | Closed                   |
+| OPEN-04 | *Closed (v1.3).* Was withdrawal cadence; there are no platform withdrawals.                                 | —                      | Closed                   |
+| OPEN-06 | Who bears the disbursement fee — CLOSED (v1.3): no disbursements exist (ADR 0005).                        | —                      | Closed                   |
+| OPEN-08 | Is the legal entity registered? Blocks Apple D-U-N-S and lawful operation.                                                     | Everything external    | Immediately              |
+| OPEN-05 | Retention period for verification documents after approval or rejection.                                  | NFR-COMP-2 policy      | Before launch            |
+| OPEN-09 | Filtering during an open gender dispute — RESOLVED (v1.3, ADR 0006): declared gender stays authoritative until an Admin rules; no pre-emptive exclusion. | —                      | Closed                   |
+| OPEN-10 | Refunds after termination — RESOLVED (v1.4): compensation is an administrative matter between the Student and Platform Administration, investigated and decided by the Admin through the moderation workflow (FR-DISPUTE-5/6) and executed outside the platform's code path; never negotiated between Student and Teacher. | — | Closed |
+| OPEN-11 | Gateway selection. Must offer hosted checkout, individual-recipient onboarding without a commercial register, direct net settlement with no platform custody, and signed webhooks. Paymob, Fawry and others to be evaluated against exactly these four capabilities. | PaymentPort real adapter (Phase 2), RISK-10 | Before Phase 1 payout onboarding |
+
+_End of document — SRS v1.4_

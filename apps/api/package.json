@@ -1,0 +1,21 @@
+{
+  "name": "@ijazah/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Backend: tRPC over Nest. Two separately mounted surfaces (user, administrator). The queue worker is a second process of this app, not a fourth application.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ijazah/contracts": "workspace:*",
+    "@ijazah/money": "workspace:*",
+    "@ijazah/time": "workspace:*"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@ijazah/money",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The branded Piasters type. The only place piaster arithmetic may happen (R-MONEY-5). The platform never holds money; the gateway settles directly to the teacher (ADR 0007).",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

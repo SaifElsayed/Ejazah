@@ -1,0 +1,16 @@
+{
+  "name": "@ijazah/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "tsconfig, prettier, eslint base, boundary rules, and the internal lint plugin. Every rule is named for the constitution rule it enforces.",
+  "main": "eslint.base.js",
+  "files": [
+    "tsconfig.base.json",
+    "prettier.config.js",
+    "eslint.base.js",
+    "eslint.boundaries.js",
+    "vitest.base.ts",
+    "module-tables.json",
+    "eslint-plugin-ijazah"
+  ]
+}

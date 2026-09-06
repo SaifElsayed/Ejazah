@@ -1,0 +1,3 @@
+// platform kernel domain (T134, ERD section 12, ADR 0008 D2). Owned by apps/api/src/platform/idempotency.
+// idempotency_keys: unique (scope, key), request_hash, response jsonb, status in_progress · completed, expires_at.
+// Not the webhook replay mechanism (that is provider_event_id on payment_events / session_participant_events).

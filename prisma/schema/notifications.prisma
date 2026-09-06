@@ -1,0 +1,3 @@
+// notifications domain (T062, ERD section 11). Owned by apps/api/src/modules/notifications.
+// notifications.
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

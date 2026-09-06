@@ -1,0 +1,4 @@
+// payments domain (T059, ERD section 7, ADR 0007). Owned by apps/api/src/modules/payments.
+// payments (one row per gateway order: gateway_order_id unique, gateway_transaction_id unique, gross/fee/net as reported),
+// payment_events (append-only signed events; provider_event_id unique NOT NULL). No balance column anywhere (FR-027).
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

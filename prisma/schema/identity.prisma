@@ -1,0 +1,3 @@
+// identity domain (T055, ERD section 2). Owned by apps/api/src/modules/identity.
+// users, user_roles, teacher_profiles, otp_codes, device_push_tokens, terms_acceptances. deleted_at on users. Encrypted and hashed columns per data-model.md section 7. teacher_profiles carries payout_account_ref_encrypted, payout_configured_at, payout_verified_at (FR-075, ADR 0007).
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

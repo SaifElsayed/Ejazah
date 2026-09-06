@@ -1,0 +1,3 @@
+// booking domain (T057, ERD section 5). Owned by apps/api/src/modules/booking.
+// slot_holds, enrollments. enrollments: deleted_at, status (pending_payment · confirmed · completed · terminated_no_show · cancelled), confirmed_at (one write path, FR-PAYG-5), cancellation_reason. Sessions tables live in sessions.prisma (ADR 0005 D2); payment records in payments.prisma (ADR 0007).
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

@@ -1,0 +1,59 @@
+# Pipeline stages ordered by how fast they fail (research R-13). Each stage is a placeholder until its task lands.
+name: ci
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+jobs:
+  stage-1-typecheck-and-fast-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T081 - typecheck and syntax-only lint, in parallel"
+
+  stage-2-unit-and-property-tests:
+    runs-on: ubuntu-latest
+    needs: stage-1-typecheck-and-fast-lint
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T081/T086 - unit and property tests with the scoped coverage floor"
+
+  stage-3-type-aware-lint-schema-snapshot:
+    runs-on: ubuntu-latest
+    needs: stage-2-unit-and-property-tests
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T071/T081 - type-aware lint, schema check, contract snapshot diff"
+
+  stage-4-database-integrity-probes:
+    runs-on: ubuntu-latest
+    needs: stage-3-type-aware-lint-schema-snapshot
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T081 - integrity probes as the application role against a live database"
+
+  stage-5-build:
+    runs-on: ubuntu-latest
+    needs: stage-4-database-integrity-probes
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T081 - build"
+
+  secret-scan:
+    # Independent of the pre-commit hook on purpose (SC-010). Scans full history including specs/.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: echo "T083 - gitleaks over full history"
+
+  adversarial-gender-suite:
+    # Blocking from the first commit even while its case coverage is small (FR-064).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T087 - tests/adversarial/gender.spec.ts"

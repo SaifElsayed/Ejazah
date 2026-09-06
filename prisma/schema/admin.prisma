@@ -1,0 +1,3 @@
+// admin domain (T063, ERD section 12). Owned by apps/api/src/modules/admin.
+// admin_users, audit_logs, settings. Administrator identity shares no table with users (R-SEC-8). audit_logs has no deleted_at.
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

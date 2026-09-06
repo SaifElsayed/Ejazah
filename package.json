@@ -1,0 +1,31 @@
+{
+  "name": "ijazah",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --recursive --filter \"./apps/**\" run dev",
+    "build": "pnpm --recursive run build",
+    "typecheck": "tsc --build",
+    "lint": "eslint .",
+    "lint:types": "eslint . --config eslint.types.config.js",
+    "test": "vitest run",
+    "test:violations": "vitest run --dir tests/violations",
+    "test:db-integrity": "vitest run --dir tests/db-integrity",
+    "test:adversarial": "vitest run --dir tests/adversarial",
+    "infra:up": "docker compose up --detach --wait",
+    "infra:down": "docker compose down",
+    "db:migrate": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:checksum": "tsx scripts/seed-checksum.ts",
+    "db:schema:check": "tsx scripts/schema-check.ts",
+    "contract:snapshot": "tsx scripts/contract-snapshot.ts",
+    "check:generated": "tsx scripts/generated-file-check.ts",
+    "check:branch": "tsx scripts/branch-spec-check.ts",
+    "prepare": "husky"
+  }
+}

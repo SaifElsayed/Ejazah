@@ -1,0 +1,22 @@
+{
+  "extends": "./packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "prisma/**/*.ts",
+    "prisma.config.ts",
+    "vitest.config.ts"
+  ],
+  "references": [
+    { "path": "packages/contracts" },
+    { "path": "packages/money" },
+    { "path": "packages/time" },
+    { "path": "apps/api" },
+    { "path": "apps/admin" },
+    { "path": "apps/mobile" }
+  ]
+}

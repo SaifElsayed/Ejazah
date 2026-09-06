@@ -1,0 +1,2 @@
+# Fast checks only (research R-10). Registered by T048 (fast lint) and T082 (Gitleaks).
+# Neither may be implemented as a call to the pipeline check. They are independent nets (SC-010).

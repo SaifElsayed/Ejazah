@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Ijazah",
+    "slug": "ijazah",
+    "scheme": "ijazah",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "extra": {
+      "supportsRTL": true,
+      "forcesRTL": true
+    },
+    "plugins": ["expo-router", "expo-localization"]
+  }
+}

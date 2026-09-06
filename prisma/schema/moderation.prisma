@@ -1,0 +1,3 @@
+// moderation domain (T061, ERD section 10). Owned by apps/api/src/modules/moderation.
+// disputes, gender_flags, user_reports.
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

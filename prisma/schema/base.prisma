@@ -1,0 +1,12 @@
+// Datasource, generator and EVERY centrally declared enum (T013, ERD section 0).
+// Enums are declared once, here; a duplicate definition anywhere else fails the schema check.
+// Migrations run as the owner role through DATABASE_URL_OWNER (research R-5).
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../node_modules/.prisma/client"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@ijazah/time",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Wall-clock-in-a-zone to UTC instant, per occurrence, DST-safe. The only place a domain datetime is constructed (R-TIME-1). Temporal is confined here (research R-4).",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

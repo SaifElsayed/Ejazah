@@ -1,0 +1,3 @@
+// certification domain (T060, ERD section 8). Owned by apps/api/src/modules/certification.
+// ijazahs, ijazah_bars. Hashed verification token; deleted_at on ijazahs.
+// Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

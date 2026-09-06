@@ -1,0 +1,3 @@
+// sessions domain (T057, ERD section 5). Owned by apps/api/src/modules/sessions (ADR 0005 D2).
+// sessions (deleted_at; UTC instants resolved at generation), session_participant_events (provider_event_id unique; no client-writable field), cancellation_requests.
+// Every timestamp is timestamptz and ends _at (ERD section 0).

@@ -1,0 +1,13 @@
+{
+  "name": "@ijazah/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The only shared type surface: router types, Zod schemas, shared enums. Additive-only from the moment a member exists (R-API-9).",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  }
+}

@@ -1,0 +1,13 @@
+# Deploy on merge to main. BLOCKED on the staging host and data residency decisions (research R-18, R-19).
+name: deploy-staging
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "T092 - provision and deploy; must be live within fifteen minutes (SC-008)"
