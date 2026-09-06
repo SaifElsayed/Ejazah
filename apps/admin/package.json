@@ -7,21 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --build",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@ijazah/contracts": "workspace:*",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
-  },
-  "devDependencies": {
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.7",
-    "@vitejs/plugin-react": "6.1.1",
-    "typescript": "5.9.3",
-    "vite": "8.2.2",
-    "vitest": "4.1.11"
+    "@ijazah/contracts": "workspace:*"
   }
 }
