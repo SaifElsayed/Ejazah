@@ -31,11 +31,16 @@
   "devDependencies": {
     "@types/node": "24.13.3",
     "@vitest/coverage-v8": "4.1.11",
+    "dotenv": "17.4.2",
     "eslint": "10.10.0",
     "husky": "9.1.7",
     "prettier": "3.9.6",
+    "prisma": "7.10.0",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
+  },
+  "dependencies": {
+    "@prisma/client": "7.10.0"
   }
 }
