@@ -179,14 +179,11 @@ enum CancellationRequestStatus {
 
 // payments (ERD section 7, ADR 0007)
 
-// One member per integrated gateway; the adapter is selected by configuration (R-API-4). The real
-// gateway is OPEN-11 and lands with its Phase 2 adapter as an added member. Mirrored by PAYMENT_GATEWAY
-// in apps/api/src/platform/config/env.schema.ts.
-enum PaymentGateway {
-  fake
-
-  @@map("payment_gateway")
-}
+// PaymentGateway is deliberately NOT declared here. The ERD allows one member per integrated gateway
+// and none is integrated (SRS OPEN-11); Prisma cannot declare an empty enum, and any member becomes
+// permanent (R-API-9). T059 declares it with the first real gateway and decides there whether the test
+// stand-in gets its own member. The PAYMENT_GATEWAY env value selects the adapter (R-API-4) and is
+// unrelated to this enum.
 
 enum PaymentStatus {
   created

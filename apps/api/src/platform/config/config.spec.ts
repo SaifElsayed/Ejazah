@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigError, loadConfig, loadConfigOrExit } from './config.module.js';
-import { envKeys, envSchema } from './env.schema.js';
+import { envKeys } from './env.schema.js';
 
 it.todo('T093: a missing or malformed value exits naming it, before traffic is accepted (FR-039)');
 
@@ -48,16 +48,21 @@ describe('env.schema (T015, FR-039)', () => {
     expect(envKeys).toContain('DAILY_WEBHOOK_SECRET');
   });
 
-  it('offers exactly the gateways base.prisma declares, so selection cannot name an unknown one', () => {
-    const schema = readFileSync(resolve(repositoryRoot, 'prisma/schema/base.prisma'), 'utf8');
-    const body = /enum PaymentGateway \{([^}]*)\}/.exec(schema)?.[1] ?? '';
-    const declared = body
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line !== '' && !line.startsWith('@@') && !line.startsWith('//'));
+  it('accepts the stand-in adapter and refuses an unknown gateway naming the key, never the value', () => {
+    expect(loadConfig(validEnv).PAYMENT_GATEWAY).toBe('fake');
 
-    expect(declared.length).toBeGreaterThan(0);
-    expect([...envSchema.shape.PAYMENT_GATEWAY.options].sort()).toEqual(declared.sort());
+    const unknown = 'not-a-gateway-xyz';
+    let failure: unknown;
+    try {
+      loadConfig({ ...validEnv, PAYMENT_GATEWAY: unknown });
+    } catch (error: unknown) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(ConfigError);
+    const configError = failure as ConfigError;
+    expect(configError.offendingKeys).toEqual(['PAYMENT_GATEWAY']);
+    expect(configError.message).toContain('PAYMENT_GATEWAY');
+    expect(configError.message).not.toContain(unknown);
   });
 });
 

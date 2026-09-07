@@ -53,8 +53,9 @@ const envObject = z.object({
   S3_ACCESS_KEY_ID: nonEmpty.optional(),
   S3_SECRET_ACCESS_KEY: nonEmpty.optional(),
 
-  // Mirrors the PaymentGateway enum in prisma/schema/base.prisma; the real gateway (OPEN-11) is added
-  // with its Phase 2 adapter. No default: a deployment must say which gateway it runs (R-HONEST-1).
+  // Selects the adapter behind the payment port (R-API-4). Real gateway names are added here by their
+  // Phase 2 adapter task, together with the DB enum in T059. No default: a deployment must say which
+  // gateway it runs (R-HONEST-1).
   PAYMENT_GATEWAY: z.enum(['fake']),
   PAYMENT_GATEWAY_API_KEY: nonEmpty.optional(),
   PAYMENT_GATEWAY_WEBHOOK_SECRET: nonEmpty.optional(),
