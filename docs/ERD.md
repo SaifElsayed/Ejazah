@@ -350,7 +350,7 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | |
-| gateway | enum (one value per integrated gateway) | Declared in `base.prisma`; the adapter is selected by config (R-API-4) |
+| gateway | enum (one value per integrated gateway) | Declared in `base.prisma` by T059 once a gateway is integrated (OPEN-11); absent until then, see the T013 note in tasks.md. The adapter is selected by config (R-API-4), independently of this enum |
 | gateway_order_id | text, unique | Created by the platform on the gateway (FR-PAYG-2) |
 | gateway_transaction_id | text, unique, nullable | Reported by the paid event |
 | amount_piasters | bigint | Gross — the snapshot price charged |
@@ -484,7 +484,7 @@ Backs both push delivery and the notification centre (FR-NOTIF-1/2).
 |---|---|---|
 | id | uuid | PK |
 | user_id | FK → users | |
-| type | enum | The full FR-NOTIF-1 event list |
+| type | enum teacher_application_status_changed · new_booking · session_reminder · no_show_recorded · cancellation_requested · cancellation_request_accepted · cancellation_request_declined · payment_confirmed · payment_failed · payment_expired · payout_account_verified · dispute_resolved · gender_flag_resolved · ijazah_granted · ijazah_revoked · new_review | One member per FR-NOTIF-1 event, in the order the SRS states them (DEC-13c) |
 | title_key / body_key | text | i18n keys — rendered in the user's language at display time (FR-NOTIF-3) |
 | payload | jsonb | Deep-link data (enrollment_id, session_id, …) |
 | read_at | timestamptz, nullable | Unread state for the centre |

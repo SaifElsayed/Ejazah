@@ -1,6 +1,17 @@
 // Datasource, generator and EVERY centrally declared enum (T013, ERD section 0).
 // Enums are declared once, here; a duplicate definition anywhere else fails the schema check.
-// Migrations run as the owner role through DATABASE_URL_OWNER (research R-5).
+//
+// Two connection strings, one invariant (research R-5):
+//   - Migrations run as the OWNER role. The owner URL (DATABASE_URL_OWNER) reaches the CLI only
+//     through `datasource.url` in prisma.config.ts; Prisma 7 removed `url`/`directUrl` from this
+//     block, so no URL is compiled into the schema or the generated client.
+//   - The runtime connects as the APPLICATION role: the process that creates the single Prisma
+//     client hands DATABASE_URL to a driver adapter. The generated client never sees the owner URL.
+//
+// Primary keys are UUID v7 (ERD section 0). PostgreSQL 18 ships `uuidv7()` natively, so every
+// model declared by T055+ uses `id String @id @default(dbgenerated("uuidv7()")) @db.Uuid`.
+// Every timestamp is `@db.Timestamptz(6)` and ends `_at` (research R-7); local wall-clock columns end
+// `_local` beside a `timezone` column (R-TIME-3).
 
 datasource db {
   provider = "postgresql"
@@ -9,4 +20,284 @@ datasource db {
 generator client {
   provider = "prisma-client"
   output   = "../../node_modules/.prisma/client"
+}
+
+// ---------------------------------------------------------------------------------------------
+// Enums. One Postgres type each, named snake_case in the database (ARCHITECTURE section 16).
+// Members are additive-only once published (R-API-9): never remove or rename one.
+// ---------------------------------------------------------------------------------------------
+
+// identity (ERD section 2)
+
+enum Gender {
+  male
+  female
+
+  @@map("gender")
+}
+
+// users.preferred_language and ijazahs.language (FR-LOC-4) share one type.
+enum Language {
+  ar
+  en
+
+  @@map("language")
+}
+
+enum AccountStatus {
+  active
+  suspended
+  verification_required
+  banned
+
+  @@map("account_status")
+}
+
+enum Role {
+  student
+  teacher
+
+  @@map("role")
+}
+
+enum RoleStatus {
+  active
+  suspended
+
+  @@map("role_status")
+}
+
+enum TeacherVerificationStatus {
+  pending
+  approved
+  rejected
+  suspended
+  banned
+
+  @@map("teacher_verification_status")
+}
+
+enum OtpPurpose {
+  signup
+  login
+  password_reset
+
+  @@map("otp_purpose")
+}
+
+enum DevicePlatform {
+  ios
+  android
+
+  @@map("device_platform")
+}
+
+// verification (ERD section 3)
+
+enum VerificationDocumentType {
+  national_id
+  passport
+  credential
+  other
+
+  @@map("verification_document_type")
+}
+
+enum VerificationRequestStatus {
+  open
+  satisfied
+  expired
+
+  @@map("verification_request_status")
+}
+
+// catalog (ERD section 4)
+
+enum IsnadVerificationStatus {
+  unverified
+  verified
+
+  @@map("isnad_verification_status")
+}
+
+// booking (ERD section 5)
+
+// `confirmed` is written only by the confirm-enrollment job on a persisted paid event (FR-PAYG-5, R-HONEST-1).
+enum EnrollmentStatus {
+  pending_payment
+  confirmed
+  completed
+  terminated_no_show
+  cancelled
+
+  @@map("enrollment_status")
+}
+
+enum CancellationReason {
+  payment_expired
+  payment_failed
+  admin
+  gender_correction
+  teacher_suspended
+
+  @@map("cancellation_reason")
+}
+
+// sessions (ERD section 5)
+
+// `under_threshold` and `provider_outage` leave only by admin action; no automatic transition exists (R-SESS-6).
+enum SessionStatus {
+  scheduled
+  done
+  student_no_show
+  teacher_no_show
+  both_no_show
+  under_threshold
+  provider_outage
+  cancelled_by_agreement
+  cancelled_by_admin
+  disputed
+
+  @@map("session_status")
+}
+
+enum ParticipantEventType {
+  joined
+  left
+
+  @@map("participant_event_type")
+}
+
+enum CancellationRequestStatus {
+  pending
+  accepted
+  declined
+  expired
+
+  @@map("cancellation_request_status")
+}
+
+// payments (ERD section 7, ADR 0007)
+
+// PaymentGateway is deliberately NOT declared here. The ERD allows one member per integrated gateway
+// and none is integrated (SRS OPEN-11); Prisma cannot declare an empty enum, and any member becomes
+// permanent (R-API-9). T059 declares it with the first real gateway and decides there whether the test
+// stand-in gets its own member. The PAYMENT_GATEWAY env value selects the adapter (R-API-4) and is
+// unrelated to this enum.
+
+enum PaymentStatus {
+  created
+  paid
+  failed
+  expired
+  refunded
+
+  @@map("payment_status")
+}
+
+enum PaymentEventType {
+  paid
+  failed
+  expired
+  refunded
+  recipient_verified
+  recipient_rejected
+
+  @@map("payment_event_type")
+}
+
+// certification (ERD section 8)
+
+enum IjazahMode {
+  generated
+  uploaded
+
+  @@map("ijazah_mode")
+}
+
+// moderation (ERD section 10)
+
+enum DisputeKind {
+  session_dispute
+  compensation_case
+
+  @@map("dispute_kind")
+}
+
+enum DisputeStatus {
+  open
+  resolved
+  dismissed
+
+  @@map("dispute_status")
+}
+
+// `compensation_ordered` records the decision only; execution happens outside the code path (FR-DISPUTE-6).
+enum DisputeResolution {
+  upheld
+  re_marked
+  no_show_recorded
+  compensation_ordered
+  party_suspended
+  party_banned
+
+  @@map("dispute_resolution")
+}
+
+enum GenderFlagStatus {
+  open
+  corrected
+  fraud_ban
+  dismissed
+
+  @@map("gender_flag_status")
+}
+
+enum UserReportContext {
+  session
+  profile
+  chat
+
+  @@map("user_report_context")
+}
+
+enum UserReportStatus {
+  open
+  actioned
+  dismissed
+
+  @@map("user_report_status")
+}
+
+// notifications (ERD section 11)
+
+// The FR-NOTIF-1 event list, one member per event, in the order the SRS states them (DEC-13c).
+enum NotificationType {
+  teacher_application_status_changed
+  new_booking
+  session_reminder
+  no_show_recorded
+  cancellation_requested
+  cancellation_request_accepted
+  cancellation_request_declined
+  payment_confirmed
+  payment_failed
+  payment_expired
+  payout_account_verified
+  dispute_resolved
+  gender_flag_resolved
+  ijazah_granted
+  ijazah_revoked
+  new_review
+
+  @@map("notification_type")
+}
+
+// platform kernel (ERD section 12, ADR 0008 D2)
+
+enum IdempotencyKeyStatus {
+  in_progress
+  completed
+
+  @@map("idempotency_key_status")
 }
