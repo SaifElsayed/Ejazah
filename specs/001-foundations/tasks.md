@@ -39,9 +39,10 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [x] T008 [P] Scaffold the backend at `apps/api/` with `src/main.ts` and `src/worker.ts` entrypoints sharing `src/modules/` — done 2026-09-06
 
 > **Note on T006–T008 dependencies (PR #3, 2026-09-07).** PR #2 declared Expo, React, Vite, Nest, tRPC, BullMQ and Zod under these three tasks; that was outside their text and was reverted in PR #3. `pnpm-lock.yaml` was **not changed** by the revert: regenerating it from the restored manifests produced the file already on `develop`. A dependency is declared by the task that first imports it, in the package that imports it, with the lockfile committed in the same commit.
-- [x] T009 [P] Scaffold `packages/contracts/` as the only shared type surface
-- [x] T010 Create `.env.example` covering every configuration value, with no real secret in it, and `.gitignore` excluding `.env`
-- [x] T011 Install and configure a native pre-commit hook manager at repository root, with no hooks registered yet (filled by T048 and T082)
+- [x] T009 [P] Scaffold `packages/contracts/` as the only shared type surface — done 2026-09-07
+- [x] T010 Create `.env.example` covering every configuration value, with no real secret in it, and `.gitignore` excluding `.env` — done 2026-09-07
+- [x] T011 Install and configure a native pre-commit hook manager at repository root, with no hooks registered yet (filled by T048 and T082) — done 2026-09-07
+  > **Note under T010 (PR #4, 2026-09-07).** T010 changed only comments: the file already covered every value the Phase 0 documents name. Two further values are *described* by the documents but not *named* by any of them (an externally reachable origin for webhooks, ARCHITECTURE §15; a video-provider webhook signing secret, kernel.md guards); they are deliberately not invented here and are named by **T015**, which owns the configuration schema. **T014** is already satisfied: both connection strings are present per research R-5, so T014 is a verification-only task for its owner.
 
 ---
 
@@ -54,7 +55,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T012 Create `docker-compose.yml` at repository root running PostgreSQL 18 and Redis with health checks — required by US2 to test against a real database and by US3 to run the stack
 - [ ] T013 Initialise the ORM with a multi-file schema layout in `prisma/schema/base.prisma`, holding the datasource, generator and every centrally declared enum per data-model.md §2
 - [ ] T014 Define both database connection strings in `.env.example` — a migration URL for the owner role and a runtime URL for the application role, per research R-5
-- [ ] T015 Create the configuration schema and startup loader in `apps/api/src/platform/config/env.schema.ts` and `config.module.ts`, validating every value before the process accepts traffic
+- [ ] T015 Create the configuration schema and startup loader in `apps/api/src/platform/config/env.schema.ts` and `config.module.ts`, validating every value before the process accepts traffic. The schema must cover every key in `.env.example` and name the two values T010 left unnamed (public webhook origin, video-provider webhook secret). `ENCRYPTION_KEY` is required in every environment, development included; there is no development bypass and no unencrypted code path (decided 2026-09-07). quickstart §1 carries the generate step
 - [ ] T016 [P] Create the domain-to-module ownership manifest in `packages/config/module-tables.json` from data-model.md §1 (twelve modules: identity, verification, catalog, booking, payments, sessions, chat, certification, reviews, moderation, notifications, admin — ADR 0005 D2, ADR 0007 D4), consumed later by the ownership lint rule in T047
 - [ ] T017 [P] Create the twelve empty backend module folders under `apps/api/src/modules/`, each with `index.ts` and a `README.md` stating what it owns and what it must never do
 - [ ] T018 Create the pipeline skeleton in `.github/workflows/ci.yml` with the five stages of research R-13 ordered by how fast they fail, each stage a no-op placeholder
