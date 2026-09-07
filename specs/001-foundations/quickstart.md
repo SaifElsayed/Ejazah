@@ -25,6 +25,7 @@ Each section maps to success criteria in [spec.md](./spec.md).
 ```bash
 pnpm install
 cp .env.example .env
+openssl rand -base64 32   # paste the output into ENCRYPTION_KEY in .env; it is required in every environment
 pnpm infra:up
 pnpm db:migrate
 pnpm db:seed
