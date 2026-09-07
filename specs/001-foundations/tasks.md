@@ -37,6 +37,8 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [x] T006 [P] Scaffold the user application at `apps/mobile/` with the route-group tree (`src/app/(auth)`, `(student)`, `(teacher)`) and empty `src/features/{student,teacher,shared}/` — done 2026-09-06
 - [x] T007 [P] Scaffold the administrator application at `apps/admin/` with `src/` and its build config — done 2026-09-06
 - [x] T008 [P] Scaffold the backend at `apps/api/` with `src/main.ts` and `src/worker.ts` entrypoints sharing `src/modules/` — done 2026-09-06
+
+> **Note on T006–T008 dependencies (PR #3, 2026-09-07).** PR #2 declared Expo, React, Vite, Nest, tRPC, BullMQ and Zod under these three tasks; that was outside their text and was reverted in PR #3. `pnpm-lock.yaml` was **not changed** by the revert: regenerating it from the restored manifests produced the file already on `develop`. A dependency is declared by the task that first imports it, in the package that imports it, with the lockfile committed in the same commit.
 - [ ] T009 [P] Scaffold `packages/contracts/` as the only shared type surface
 - [ ] T010 Create `.env.example` covering every configuration value, with no real secret in it, and `.gitignore` excluding `.env`
 - [ ] T011 Install and configure a native pre-commit hook manager at repository root, with no hooks registered yet (filled by T048 and T082)
