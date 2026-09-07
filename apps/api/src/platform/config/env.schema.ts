@@ -73,18 +73,27 @@ const envObject = z.object({
 
 export const envKeys: readonly string[] = Object.keys(envObject.shape);
 
-// Both values already passed the URL check, so `new URL` cannot throw here.
-function username(url: string): string {
-  return decodeURIComponent(new URL(url).username);
+// Total: object-level checks keep running after a failed URL check, so the input may be unparseable.
+// Undefined means "cannot compare"; the base z.url() check already reports the malformed key.
+function username(url: string): string | undefined {
+  if (!URL.canParse(url)) return undefined;
+  try {
+    return decodeURIComponent(new URL(url).username);
+  } catch {
+    return undefined;
+  }
 }
 
 export const envSchema = envObject.superRefine((env, ctx) => {
   // The runtime never connects as the owner: a runtime URL copied from the owner line would silently
   // undo every revocation the role migration makes (research R-5). The message never echoes a value.
+  const appUser = username(env.DATABASE_URL);
+  const ownerUser =
+    env.DATABASE_URL_OWNER === undefined ? undefined : username(env.DATABASE_URL_OWNER);
   if (
     env.DATABASE_URL_OWNER !== undefined &&
     (env.DATABASE_URL === env.DATABASE_URL_OWNER ||
-      username(env.DATABASE_URL) === username(env.DATABASE_URL_OWNER))
+      (appUser !== undefined && ownerUser !== undefined && appUser === ownerUser))
   ) {
     ctx.addIssue({
       code: 'custom',

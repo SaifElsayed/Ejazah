@@ -189,6 +189,42 @@ describe('loadConfig (T015, FR-039)', () => {
         loadConfig({ ...without(validEnv, 'DATABASE_URL_OWNER'), DATABASE_URL: ownerUrl }),
       ).not.toThrow();
     });
+
+    // A malformed string must surface as ConfigError, never as a raw TypeError/URIError whose crash
+    // output would print the credential-bearing input (FR-039, R-SEC-2).
+    function failure(env: Record<string, string>): ConfigError {
+      try {
+        loadConfig(env);
+      } catch (error: unknown) {
+        if (error instanceof ConfigError) return error;
+        throw error;
+      }
+      throw new Error('expected loadConfig to throw');
+    }
+
+    it('reports an unparseable DATABASE_URL as ConfigError naming the key, not the value', () => {
+      const error = failure({ ...validEnv, DATABASE_URL: 'garbage' });
+      expect(error.offendingKeys).toEqual(['DATABASE_URL']);
+      expect(error.message).not.toContain('garbage');
+    });
+
+    it('reports an unparseable DATABASE_URL_OWNER as ConfigError naming only that key', () => {
+      const error = failure({ ...validEnv, DATABASE_URL_OWNER: 'garbage' });
+      expect(error.offendingKeys).toEqual(['DATABASE_URL_OWNER']);
+      expect(error.message).not.toContain('garbage');
+    });
+
+    it('survives a username that is not valid percent-encoding', () => {
+      const badUser = 'postgresql://%zz:secret@localhost:5432/ijazah';
+      expect(() => loadConfig({ ...validEnv, DATABASE_URL: badUser })).not.toThrow(URIError);
+      let message = '';
+      try {
+        loadConfig({ ...validEnv, DATABASE_URL: badUser });
+      } catch (error: unknown) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      expect(message).not.toContain('secret');
+    });
   });
 
   it('requires every S3 value when the storage driver is s3 (FR-055)', () => {

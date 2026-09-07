@@ -51,9 +51,7 @@ export function loadConfig(source: EnvSource = process.env): Config {
 }
 
 // Meant to be the first call in main.ts and worker.ts, so nothing listens until it returns. Neither
-// entrypoint calls it yet: both are still `export {}` (T008), and no task line in tasks.md explicitly
-// owns wiring the entrypoints. The nearest are T112 (worker.ts queue) and T109/T110 (surfaces, health);
-// whichever lands first must call this before anything listens (raised in PR #7, 2026-09-07).
+// entrypoint calls it yet; the owner is named in the note under T015 in specs/001-foundations/tasks.md.
 export function loadConfigOrExit(source: EnvSource = process.env): Config {
   try {
     return loadConfig(source);
