@@ -8,7 +8,7 @@ Listed in `packages/config/module-tables.json`. Reaching a table outside this li
 
 ## Never
 
-Let a teacher edit a chain entry. Generate a certificate number or token from weak randomness (R-DB-6). Store the verification token bare (R-DB-7).
+Write `isnad_entries` or `teacher_signatures`; both stay in `catalog` and the chain is read through its public entry (ADR 0005 D2, ERD §1). Generate a certificate number or token from weak randomness (R-DB-6). Store the verification token bare (R-DB-7).
 
 ## Shape
 
