@@ -32,8 +32,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-**Expected**: every application starts. No step asks for a secret that is not
-already in the example environment file.
+**Expected**: every application starts. No step asks for a secret beyond the one locally generated encryption key.
 
 **The check that matters** — the seed is identical everywhere:
 
