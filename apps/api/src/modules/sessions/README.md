@@ -16,4 +16,4 @@ Accept attendance from the client; provider webhooks into `session_participant_e
 
 ## Requirement ids
 
-`SRS-SES-*`: FR-SESS-*, FR-NOSHOW-*, FR-CANCEL-*, section 3.7.5. _Filled as they land._
+`SRS-SES-*`: `FR-SESS-*`, `FR-NOSHOW-*`, `FR-CANCEL-*`, section 3.7.5. _Filled as they land._
