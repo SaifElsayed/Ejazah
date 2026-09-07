@@ -149,6 +149,43 @@ describe('loadConfig (T015, FR-039)', () => {
     expect(() => loadConfig(without(validEnv, 'DATABASE_URL_OWNER'))).not.toThrow();
   });
 
+  describe('the runtime URL never carries the owner role (research R-5)', () => {
+    const ownerUrl = validEnv['DATABASE_URL_OWNER'] as string;
+
+    it('refuses a DATABASE_URL whose username is the owner username, naming DATABASE_URL only', () => {
+      const env = {
+        ...validEnv,
+        DATABASE_URL: 'postgresql://ijazah_owner:other@db.internal:5432/ijazah',
+      };
+
+      let message = '';
+      try {
+        loadConfig(env);
+      } catch (error: unknown) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+
+      expect(message).toMatch(/DATABASE_URL \(/);
+      expect(message).not.toMatch(/DATABASE_URL_OWNER/);
+      expect(message).not.toContain('ijazah_owner');
+      expect(message).not.toContain('other');
+    });
+
+    it('refuses a DATABASE_URL identical to DATABASE_URL_OWNER', () => {
+      expect(() => loadConfig({ ...validEnv, DATABASE_URL: ownerUrl })).toThrow(/DATABASE_URL/);
+    });
+
+    it('accepts two URLs with different usernames', () => {
+      expect(() => loadConfig(validEnv)).not.toThrow();
+    });
+
+    it('accepts any application URL when the owner URL is absent', () => {
+      expect(() =>
+        loadConfig({ ...without(validEnv, 'DATABASE_URL_OWNER'), DATABASE_URL: ownerUrl }),
+      ).not.toThrow();
+    });
+  });
+
   it('requires every S3 value when the storage driver is s3 (FR-055)', () => {
     const s3Env = { ...validEnv, STORAGE_DRIVER: 's3', S3_BUCKET: 'ijazah' };
 

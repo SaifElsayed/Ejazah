@@ -72,7 +72,27 @@ const envObject = z.object({
 
 export const envKeys: readonly string[] = Object.keys(envObject.shape);
 
+// Both values already passed the URL check, so `new URL` cannot throw here.
+function username(url: string): string {
+  return decodeURIComponent(new URL(url).username);
+}
+
 export const envSchema = envObject.superRefine((env, ctx) => {
+  // The runtime never connects as the owner: a runtime URL copied from the owner line would silently
+  // undo every revocation the role migration makes (research R-5). The message never echoes a value.
+  if (
+    env.DATABASE_URL_OWNER !== undefined &&
+    (env.DATABASE_URL === env.DATABASE_URL_OWNER ||
+      username(env.DATABASE_URL) === username(env.DATABASE_URL_OWNER))
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['DATABASE_URL'],
+      message:
+        'must not use the owner role; runtime connects as the application role (research R-5)',
+    });
+  }
+
   if (env.STORAGE_DRIVER !== 's3') return;
   for (const key of s3Keys) {
     if (env[key] === undefined) {
