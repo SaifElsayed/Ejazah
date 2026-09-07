@@ -422,14 +422,15 @@ identifier, or a section of `docs/ERD.md` v1.0.
 ### Key Entities *(include if feature involves data)*
 
 Phase 0 creates the shape of the data without the behaviour that fills it. The
-authoritative model is `docs/ERD.md` v1.2, grouped into eleven domains. Listed
+authoritative model is `docs/ERD.md` v1.3, grouped into twelve domains plus
+the platform kernel (ADR 0007 D4, ADR 0008). Listed
 below are the entities whose structure is load-bearing for a constitutional rule.
 
 - **User**: the root identity, one row per person regardless of how many roles they hold, carrying gender, date of birth, locale, home zone and account status. Role and gender are server-held and never read from client input for an authorization decision. Never hard-deleted.
 - **Administrator, and administrator identity**: back-office access, entirely separate from users — different table, different authentication, no crossover — with a mandatory encrypted multi-factor secret.
 - **Audit record**: an append-only record of an administrative action, its actor, its target and its before-and-after state. Written by the administrative path itself, never edited, never deleted.
 - **Settings entry**: an operational number — a fee, a commission, a threshold, a window — held as a key with its current value and the administrator who last changed it. The only legitimate source of such numbers: code reads them from here and never carries them as constants, and no application path writes them.
-- **Ledger entry**: an append-only transfer between two named buckets, carrying a positive amount, its type, a mandatory unique idempotency key, and for a correction the acting administrator and a reason. Never updated, never deleted. Balances are summed from these rows and never stored.
+- **Ledger entry**: *Retired (ADR 0005 D1, ADR 0007).* The platform holds no funds and computes no balance; `payments` and `payment_events` record what the gateway reported (FR-016, FR-027, R-MONEY-6). Entry kept so old citations resolve.
 - **Availability slot**: a teacher's recurring weekly offer, stored as a local wall-clock time and duration beside the teacher's named zone. Never stored as an absolute instant.
 - **Enrollment**: one student's purchase of one package, snapshotting price, session count, duration, subject and the slot's zone at purchase, so that a later change to a parent cannot rewrite what was bought.
 - **Session**: one scheduled occurrence, an absolute instant resolved at generation from the enrollment's frozen zone, carrying its own status machine and its accumulated connected time.
@@ -484,7 +485,7 @@ below are the entities whose structure is load-bearing for a constitutional rule
 
 The constitution at `.specify/memory/constitution.md` is normative. Where another
 document disagrees, the constitution governs and the other document is corrected
-within this phase (R-PROC-2). `docs/ERD.md` v1.2 is the authoritative data model
+within this phase (R-PROC-2). `docs/ERD.md` v1.3 is the authoritative data model
 and agrees with the constitution on the load-bearing points — no balance tables,
 delete revoked at the role level, slots as local time beside a zone,
 administrator identity fully separate, and every invariant the constitution names
