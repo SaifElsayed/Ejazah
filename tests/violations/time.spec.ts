@@ -4,11 +4,8 @@
 // assertion and do not mark a case skipped to make the suite green:
 // `proc/no-focused-or-skipped-test` (R-PROC-10) exists so that route stays closed.
 //
-// R-MONEY-6 aside, this is the only prohibition in the inverted suite whose mechanism is stated
-// as two things at once — the constitution says "`Date` arithmetic and datetime libraries banned
-// outside the package", and contracts/lint-rules.md and T132 repeat both. A rule that refuses
-// hand-rolled `Date` maths and shrugs at an imported library leaves the confinement open, so
-// each half carries its own fixture under one rule id.
+// R-TIME-1 names two things, `Date` arithmetic and datetime libraries outside the package, so
+// each half carries its own fixture under one rule id, as T020 does for R-MOBILE-1.
 //
 // Neither fixture needs resolved types, so both are `fast`. Display formatting is deliberately
 // absent: a date rendered for a human is R-MOBILE-9, and T022 owns its fixture.

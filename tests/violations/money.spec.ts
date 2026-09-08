@@ -11,13 +11,9 @@
 // `platform/ports/payment`. A fixture proving one proves nothing about the other, so each half
 // carries its own case — the same reason T020 declared two cases for R-API-4.
 //
-// R-MONEY-2 and R-MONEY-5 are type-aware (research R-10): a name cannot tell you a type, and
-// `a - b` looks identical whatever the operands are. Their fixtures are therefore real `.ts`
-// files inside the fixture TypeScript program, and they import the brand from `@ijazah/money`,
-// which `tests/violations/fixtures/types/money-brand.d.ts` declares for the same reason
-// `types/prisma-client.d.ts` declares the generated database client: nothing links a workspace
-// package into a directory with no package.json, and neither rule can decide anything against
-// `any`. When the fixture tree gains a real link to `packages/money`, delete that shim.
+// R-MONEY-2 and R-MONEY-5 are type-aware (research R-10), so their fixtures live inside the
+// fixture TypeScript program and import the brand from `@ijazah/money`, declared by
+// `tests/violations/fixtures/types/money-brand.d.ts` (see that file for why and when to delete it).
 //
 // The three fixtures that legitimately name amounts live in `modules/payments`, where
 // money-carrying records belong, so `boundaries/no-money-vocabulary` stays silent on them and

@@ -12,11 +12,9 @@
 // give the fixtures a legal primitive and a legal `t()` to reference, so the only thing wrong in
 // each file is the one prohibition it exists for.
 //
-// Three fixtures are `.tsx` because the prohibition is stated in terms of a view: R-MOBILE-7 is
-// about a text position, and R-MOBILE-5 and R-MOBILE-6 about what a rendered element is composed
-// from. The fast rule set parses JSX (`packages/config/eslint.base.js`, `ecmaFeatures.jsx`), and
-// all eight cases are `fast`, so none of them needs the fixture TypeScript program — whose
-// `include` is `**/*.ts` and therefore does not cover them.
+// Three fixtures are `.tsx` because the prohibition is stated in terms of a rendered view
+// (R-MOBILE-5, R-MOBILE-6, R-MOBILE-7); the fast rule set parses JSX and the fixture program
+// includes `**/*.tsx`.
 
 import { describeViolations, type ViolationCase } from './harness';
 

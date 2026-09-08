@@ -4,10 +4,11 @@
     "target": "ES2023",
     "module": "Preserve",
     "moduleResolution": "Bundler",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
+    "jsx": "preserve",
     "strict": true,
     "noEmit": true,
     "types": []
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx"]
 }
