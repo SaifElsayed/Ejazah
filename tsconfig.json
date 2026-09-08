@@ -18,6 +18,10 @@
     "vitest.config.ts",
     "packages/config/vitest.base.ts"
   ],
+  // Violation fixtures (T019) are broken on purpose and carry their own tsconfig, which the
+  // type-aware lint run reaches through the project service. Compiling them here would fail the
+  // build on code whose whole job is to fail a rule.
+  "exclude": ["tests/violations/fixtures/**"],
   "references": [
     { "path": "packages/contracts" },
     { "path": "packages/money" },

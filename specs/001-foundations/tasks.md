@@ -78,9 +78,9 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 
 > Write these first. Each asserts a violation is **refused** — they must fail while the rule is missing, then pass once it exists.
 
-- [ ] T019 [P] [US1] Create the inverted-test harness in `tests/violations/harness.ts` that lints a fixture and asserts both failure and the rule identifier in the message
-- [ ] T020 [P] [US1] Boundary violation fixtures and assertions in `tests/violations/boundaries.spec.ts` covering R-MOBILE-1, R-MOBILE-2, R-API-3, R-API-4
-- [ ] T021 [P] [US1] Layer violation fixtures in `tests/violations/layers.spec.ts` covering R-API-1, R-API-2 and R-API-6
+- [x] T019 [P] [US1] Create the inverted-test harness in `tests/violations/harness.ts` that lints a fixture and asserts both failure and the rule identifier in the message — done 2026-09-08
+- [x] T020 [P] [US1] Boundary violation fixtures and assertions in `tests/violations/boundaries.spec.ts` covering R-MOBILE-1, R-MOBILE-2, R-API-3, R-API-4 — done 2026-09-08
+- [x] T021 [P] [US1] Layer violation fixtures in `tests/violations/layers.spec.ts` covering R-API-1, R-API-2 and R-API-6 — done 2026-09-08
 - [ ] T022 [P] [US1] Design and localisation fixtures in `tests/violations/mobile.spec.ts` covering R-MOBILE-4 through R-MOBILE-11
 - [ ] T023 [P] [US1] Money fixtures in `tests/violations/money.spec.ts` covering R-MONEY-1, R-MONEY-2, R-MONEY-5 and R-MONEY-6
 - [ ] T024 [P] [US1] Time fixtures in `tests/violations/time.spec.ts` covering R-TIME-1

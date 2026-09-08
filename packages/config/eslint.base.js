@@ -21,6 +21,10 @@ const ignores = [
   // Design assets, not source. `docs/design/frames/` holds device chrome and artboards that
   // apps/mobile never imports; they carry raw colours on purpose and are not subject to the wall.
   'docs/**',
+  // Violation fixtures (T019). Every file there breaks a rule on purpose, so `pnpm lint` must
+  // not read them. `tests/violations/harness.ts` lints them through this very configuration with
+  // the ignore list switched off — it is the one caller that is supposed to see them.
+  'tests/violations/fixtures/**',
 ];
 
 const fast = [
