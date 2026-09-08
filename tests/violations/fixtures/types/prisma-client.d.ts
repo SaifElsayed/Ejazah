@@ -3,7 +3,7 @@
 // `api/table-ownership` (R-API-6) has to resolve the query target against the ownership
 // manifest, which it cannot do against `any`; this declaration gives it a type to resolve
 // while the generator has nothing to emit. Delegate names follow Prisma's own convention —
-// the camelCased model name — so `payment` is the manifest's `payments` table.
+// the camelCased model name — so `review` is the manifest's `reviews` table.
 declare module '@prisma/client' {
   interface ModelDelegate {
     findMany(args?: unknown): Promise<unknown[]>;
@@ -15,6 +15,7 @@ declare module '@prisma/client' {
   export class PrismaClient {
     readonly enrollment: ModelDelegate;
     readonly slotHold: ModelDelegate;
+    readonly review: ModelDelegate;
     readonly payment: ModelDelegate;
     readonly paymentEvent: ModelDelegate;
   }
