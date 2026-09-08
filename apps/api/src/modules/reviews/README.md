@@ -8,7 +8,7 @@ Listed in `packages/config/module-tables.json`. Reaching a table outside this li
 
 ## Never
 
-Enforce one-review-per-enrollment in application code; the partial unique index does (R-DB-5). Alter a star on moderation.
+Enforce one-review-per-enrollment in application code; the plain unique constraint on `enrollment_id` does, unconditionally — never partial, because `reviews` carries no `deleted_at` (ERD §15.3, §15.11, ADR 0006 D3). Alter a star on moderation.
 
 ## Shape
 

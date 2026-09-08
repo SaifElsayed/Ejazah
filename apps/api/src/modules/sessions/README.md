@@ -12,8 +12,8 @@ Accept attendance from the client; provider webhooks into `session_participant_e
 
 ## Shape
 
-`sessions.service.ts` holds every rule. `sessions.repository.ts` holds every query. `sessions.router.ts` is thin: validate, call one service method, return. `index.ts` is the only import path. Session generation is exposed here for `booking` to call when an enrollment is marked paid. Arrives with Phase 2 (generation) and Phase 3 (lifecycle).
+`sessions.service.ts` holds every rule. `sessions.repository.ts` holds every query. `sessions.router.ts` is thin: validate, call one service method, return. `index.ts` is the only import path. Session generation is exposed here for `booking` to call when the `confirm-enrollment` job confirms an enrollment on the gateway’s paid event (FR-PAYG-5). Arrives with Phase 2 (generation) and Phase 3 (lifecycle).
 
 ## Requirement ids
 
-`SRS-SES-*`: FR-SESS-*, FR-NOSHOW-*, FR-CANCEL-*, section 3.7.5. _Filled as they land._
+`SRS-SES-*`: `FR-SESS-*`, `FR-NOSHOW-*`, `FR-CANCEL-*`, section 3.7.5. _Filled as they land._

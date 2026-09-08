@@ -270,7 +270,7 @@ unnecessary; the workspace already isolates it.
 ## R-11: Module and table ownership (FR-002, FR-005)
 
 **Decision**: A single manifest maps each module to the tables its domain owns,
-generated from the eleven-domain grouping in the data model. The type-aware lint
+generated from the twelve-domain grouping in the data model (twelve modules plus the platform kernel, ADR 0007 D4 and ADR 0008). The type-aware lint
 rule reads the manifest and flags any database access from a module to a table it
 does not own. Each module's written statement of what it owns and never does is
 checked for existence by the pipeline.

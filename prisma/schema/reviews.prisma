@@ -1,3 +1,4 @@
 // reviews domain (T061, ERD section 9). Owned by apps/api/src/modules/reviews.
-// reviews. Rating 1..5 by check constraint; one per live enrollment by partial unique index.
+// reviews. Rating 1..5 by check constraint; one per enrollment by a plain unique on
+// enrollment_id, never partial: reviews carries no deleted_at (ERD section 15.3, 15.11, ADR 0006 D3).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).

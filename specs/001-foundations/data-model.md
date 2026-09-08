@@ -153,7 +153,7 @@ application code (FR-030, R-DB-5).
 |---|---|---|
 | 1 | `users`: phone or email present | Check constraint |
 | 2 | `enrollments`: student ≠ teacher | Check constraint |
-| 3 | One review per enrollment | Partial unique index (§4) |
+| 3 | One review per enrollment | Plain unique constraint, never partial (§4, ERD §15.3, ADR 0006 D3) |
 | 4 | Provider event replay safety | Unique on `provider_event_id` |
 | 5 | *Retired (ADR 0005)* | — |
 | 6 | *Retired (ADR 0005)* | — |

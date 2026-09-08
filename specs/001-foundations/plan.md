@@ -175,7 +175,7 @@ worker is a second process of `apps/api` rather than a fourth application: it
 imports the same modules, which is what stops a background job from carrying its
 own divergent copy of a rule. `packages/` holds the four shared libraries; the
 two that contain real logic (money, time) are the two carrying the coverage
-floor in this phase. Backend modules map one-to-one onto the eleven domains in
+floor in this phase. Backend modules map one-to-one onto the twelve domains in
 the data model, which is what makes the table-ownership lint rule (R-API-6)
 mechanically checkable rather than a matter of judgement.
 

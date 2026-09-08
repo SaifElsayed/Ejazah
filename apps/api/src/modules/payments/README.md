@@ -16,4 +16,4 @@ Hold, route, balance, transfer or refund money; the gateway settles directly to 
 
 ## Requirement ids
 
-`SRS-PAY-*`: FR-PAYG-1 to FR-PAYG-16, FR-ADMIN-18, section 3.6. _Filled as they land._
+`SRS-PAY-*`: FR-PAYG-1 to FR-PAYG-18, FR-ADMIN-18, section 3.6. _Filled as they land._

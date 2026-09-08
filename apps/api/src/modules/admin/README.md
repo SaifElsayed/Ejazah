@@ -8,7 +8,7 @@ Listed in `packages/config/module-tables.json`. Reaching a table outside this li
 
 ## Never
 
-Be imported by any other module (R-API-4). Expose a procedure on the user surface (R-API-11). Delete an audit row, and no deleted_at exists to set (R-PROC-11). Write an operational number from application code (FR-034).
+Be imported by any other module (R-API-4). Expose a procedure on the user surface (R-API-11). Delete an audit row, and no `deleted_at` exists to set (R-DB-3). Write an operational number from application code (R-PROC-11, FR-034).
 
 ## Shape
 
