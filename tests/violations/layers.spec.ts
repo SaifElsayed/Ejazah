@@ -39,8 +39,10 @@ const layerViolations: readonly ViolationCase[] = [
     refuses: 'the database client imported by a service rather than a repository',
   },
   {
-    // `payments` belongs to the payments module in packages/config/module-tables.json; the
-    // fixture queries it from booking's repository.
+    // `reviews` belongs to the reviews module in packages/config/module-tables.json; the
+    // fixture queries it from booking's repository. The table is money-free on purpose, so
+    // `boundaries/no-money-vocabulary` (R-MONEY-6) has nothing to say about the fixture and
+    // this case cannot go green on the wrong rule once T035 lands.
     constitutionId: 'R-API-6',
     ruleId: 'api/table-ownership',
     ruleSet: 'typeAware',
