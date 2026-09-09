@@ -1,3 +1,22 @@
-import { it } from 'vitest';
+// T025 — the pairing rule, proved by handing a caller an unfiltered list (FR-005, SC-003).
+//
+// Red until T046 implements `gender/require-requester-gender`. Do not weaken the assertion and do
+// not mark the case skipped to make the suite green: `proc/no-focused-or-skipped-test` (R-PROC-10)
+// exists so that route stays closed. One case, because R-GENDER-5 states one prohibition. It is
+// `typeAware` because a filtered and an unfiltered method are syntactically identical; that both
+// directions of the predicate hold at runtime is T087's adversarial suite to prove, not a
+// signature's.
 
-it.todo('T025: R-GENDER-5, an unfiltered teacher repository method is refused');
+import { describeViolations, type ViolationCase } from './harness';
+
+const genderViolations: readonly ViolationCase[] = [
+  {
+    constitutionId: 'R-GENDER-5',
+    ruleId: 'gender/require-requester-gender',
+    ruleSet: 'typeAware',
+    fixture: 'apps/api/src/modules/catalog/catalog.repository.ts',
+    refuses: "a repository method returning teachers without the requester's gender",
+  },
+];
+
+describeViolations('T025 gender violations', genderViolations);

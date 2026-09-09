@@ -9,9 +9,15 @@ The tree mirrors the real one — `apps/mobile/src/features/{student,teacher,sha
 `apps/api/src/surfaces/` — because every rule these fixtures exercise decides from the
 file's path. A fixture at a path the rule cannot recognise proves nothing.
 
-Nothing here is compiled by `tsc --build` or linted by `pnpm lint`: the root `tsconfig.json`
-excludes the directory and `packages/config/eslint.base.js` ignores it. The harness lints it
-anyway, with the ignore list switched off, through the same configuration the pipeline uses.
+Nothing here is compiled by `tsc --build`, linted by `pnpm lint`, or collected by Vitest: the
+root `tsconfig.json` excludes the directory, `packages/config/eslint.base.js` ignores it, and the
+root `vitest.config.ts` excludes it from `include`. The harness lints it anyway, with the ignore
+list switched off, through the same configuration the pipeline uses.
+
+The runner exclusion is not cosmetic. T026's R-PROC-10 fixtures are real `*.spec.ts` files
+carrying `.only` and `.skip` — the prohibition itself. Collected, they run as real tests: the
+`.only` one passes and the `.skip` one reports skipped, and in CI Vitest refuses a `.only`
+outright (`allowOnly`), failing the run.
 
 Imports resolve inside this tree so a rule that classifies an import by resolving it reaches a
 real file rather than nothing.
