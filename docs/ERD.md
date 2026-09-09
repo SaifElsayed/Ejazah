@@ -204,7 +204,7 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 |---|---|---|
 | id | uuid | PK |
 | teacher_user_id | FK → users | |
-| day_of_week | smallint | 0–6 |
+| day_of_week | smallint | 0–6, 0 = Sunday (Postgres `EXTRACT(DOW)`) |
 | start_time_local | time | Local concept — never store UTC here |
 | duration_minutes | int | |
 | timezone | text (IANA) | The teacher's zone at creation |
