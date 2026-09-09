@@ -29,52 +29,34 @@
 // "table access" half of the note and keeps a configured word list, including the one below, from
 // reporting itself.
 //
-// Half (b) reads identifiers and property names only, never a string literal: `it.todo('a
-// duplicate payments.gateway_order_id is refused')` in `tests/db-integrity/` describes a
-// constraint, and describing where money lives is not reading an amount.
+// Half (b) reads identifiers, property names and quoted names, never a specifier and never prose:
+// `it.todo('a duplicate payments.gateway_order_id is refused')` in `tests/db-integrity/` describes
+// a constraint, and describing where money lives is not reading an amount. Half (a) is the half
+// that reads a specifier, and it reads every syntax that names a module (`../specifiers.js`), so
+// `require('./wallet-ledger')` and `import w = require('./wallet-ledger')` are refused alongside
+// the `import`, `export … from` and `import()` forms.
+//
+// WHICH IDENTIFIERS half (b) confines (T035, review of PR #20): the ERD's own money columns on the
+// `payments` row — `amount_piasters` (the gross), `gateway_fee_piasters`, `net_piasters` — plus any
+// name pairing a gateway word with an amount marker. A gateway *order* reference is not an amount
+// and is not confined: ARCHITECTURE hands the client a `CheckoutRef` carrying the order id, so
+// `packages/contracts` and the checkout screen name it legitimately.
 //
 // Names are split into words on camelCase and on any non-alphanumeric run, compared lowercase, so
-// `grossPiasters`, `gross_piasters` and `GROSS_PIASTERS` read alike. A trailing "s" is stripped
-// when the singular is a listed word, because `wallets` is the table a `wallet` concept creates.
+// `grossPiasters`, `gross_piasters` and `GROSS_PIASTERS` read alike. A trailing "s" is ignored on
+// either side of the comparison, because `wallets` is the table a `wallet` concept creates and
+// `heldFund` is the same idea as `held_funds`.
+//
+// WHERE IT REPORTS: at the binding, once — a declaration, a parameter, a property name, an import
+// specifier — and not at every later use of a name already reported in the same file, because a
+// build log listing one prohibition twenty times is a log nobody reads to the end. A name with no
+// binding in the file (a member access, a type imported from elsewhere) is reported where it is
+// written, which is the only place there is.
 //
 // The file is matched by its path segments, never by a path anchored at the repository root: the
 // violation fixtures mirror the real tree under `tests/violations/fixtures/` (note under T035).
 const { defineRule } = require('../rule');
-
-const DEFAULTS = {
-  // (a) Refused anywhere. A term of several words matches when the name carries all of them.
-  bannedVocabulary: ['wallet', 'ledger', 'balance', 'escrow', 'held_funds', 'platform_funds'],
-  // (b) Refused outside the two folders below.
-  gatewayAmountWords: ['gross', 'fee', 'net'],
-  amountMarkerWords: ['piasters', 'amount', 'total', 'cents'],
-  gatewayAmountIdentifiers: [
-    'gross_piasters',
-    'fee_piasters',
-    'net_piasters',
-    'gatewayOrderId',
-    'gateway_order_id',
-    'order_amount',
-  ],
-  paymentFolders: ['apps/api/src/modules/payments', 'apps/api/src/platform/ports/payment'],
-};
-
-function settingsFor(context) {
-  const configured = context.settings?.ijazah?.boundaries ?? {};
-  return {
-    bannedVocabulary: configured.bannedVocabulary ?? DEFAULTS.bannedVocabulary,
-    gatewayAmountWords: configured.gatewayAmountWords ?? DEFAULTS.gatewayAmountWords,
-    amountMarkerWords: configured.amountMarkerWords ?? DEFAULTS.amountMarkerWords,
-    gatewayAmountIdentifiers:
-      configured.gatewayAmountIdentifiers ?? DEFAULTS.gatewayAmountIdentifiers,
-    paymentFolders: configured.paymentFolders ?? DEFAULTS.paymentFolders,
-  };
-}
-
-function segmentsOf(value) {
-  return String(value)
-    .split(/[\\/]+/)
-    .filter((segment) => segment !== '' && segment !== '.');
-}
+const { onEverySpecifier, segmentsOf, settingsFor } = require('../specifiers');
 
 function containsSegments(segments, needle) {
   for (let start = 0; start + needle.length <= segments.length; start += 1) {
@@ -102,17 +84,29 @@ function wordSetOf(name) {
   return set;
 }
 
+/**
+ * Both sides singular: the name's words carry their own singular already, and a configured word
+ * is compared singular too, so `held_funds` catches `heldFund` the way it catches `fundsHeld`.
+ */
+function carries(wordSet, word) {
+  const lower = String(word).toLowerCase();
+  if (wordSet.has(lower)) return true;
+  return lower.endsWith('s') && wordSet.has(lower.slice(0, -1));
+}
+
 /** A configured term, kept beside the words it is made of, so the report can quote it as written. */
 function termsOf(configured) {
   return configured.map((term) => ({ term, words: wordsOf(term) }));
 }
 
 function matchingTerm(wordSet, terms) {
-  return terms.find(({ words }) => words.length > 0 && words.every((word) => wordSet.has(word)));
+  return terms.find(
+    ({ words }) => words.length > 0 && words.every((word) => carries(wordSet, word)),
+  );
 }
 
 function matchingWord(wordSet, configured) {
-  return configured.find((word) => wordSet.has(String(word).toLowerCase()));
+  return configured.find((word) => carries(wordSet, word));
 }
 
 module.exports = defineRule({
@@ -183,18 +177,35 @@ module.exports = defineRule({
       check(sourceNode, sourceNode.value, 'vocabularyOnly');
     }
 
+    // True where this name is declared, or nowhere in this file. A plain reference to a binding
+    // the file already declares is skipped: the prohibition was reported at the declaration, and
+    // repeating it at every use turns one wall into a wall of text.
+    function isBindingOrUnbound(node) {
+      const scope = context.sourceCode.getScope(node);
+      const reference = scope.references.find((candidate) => candidate.identifier === node);
+      if (reference === undefined) return true;
+
+      const resolved = reference.resolved;
+      if (resolved === null || resolved === undefined || resolved.defs.length === 0) return true;
+      return resolved.identifiers.includes(node);
+    }
+
+    function checkName(node, name) {
+      if (!isBindingOrUnbound(node)) return;
+      check(node, name, 'both');
+    }
+
     return {
-      Identifier: (node) => check(node, node.name, 'both'),
+      // Half (a) reads every syntax that names a module, the five path rules' list.
+      ...onEverySpecifier(checkSpecifier),
+      Identifier: (node) => checkName(node, node.name),
+      // `<WalletBalance />` in a screen names the same banned concept as `const WalletBalance`.
+      JSXIdentifier: (node) => checkName(node, node.name),
       Literal: (node) => {
         if (typeof node.value === 'string' && isNamePosition(node)) {
           check(node, node.value, 'both');
         }
       },
-      ImportDeclaration: (node) => checkSpecifier(node.source),
-      ExportNamedDeclaration: (node) => checkSpecifier(node.source),
-      ExportAllDeclaration: (node) => checkSpecifier(node.source),
-      ImportExpression: (node) =>
-        checkSpecifier(node.source.type === 'Literal' ? node.source : null),
     };
   },
 });

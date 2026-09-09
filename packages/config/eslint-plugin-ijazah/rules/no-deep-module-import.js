@@ -18,34 +18,20 @@
 // `modules/catalog/catalog.service` breaks the same wall for the same reason, so the rule asks
 // only where the import lands, and exempts the one case the prohibition does not cover.
 //
-// Path segments, never a root-anchored path (note under T035). Only relative specifiers are
-// resolved: a bare specifier is a package, never a path inside another module.
+// Path segments, never a root-anchored path (note under T035). A relative specifier is resolved
+// against the importing file and a configured path alias is expanded first; anything else is a
+// package, never a path inside another module. The resolver and the wall data live in
+// `../specifiers.js` and `packages/config/eslint.boundaries.js`.
 const path = require('node:path');
 
 const { defineRule } = require('../rule');
-
-const DEFAULTS = { moduleRoot: 'apps/api/src/modules' };
-
-function settingsFor(context) {
-  const configured = context.settings?.ijazah?.boundaries ?? {};
-  return { moduleRoot: configured.moduleRoot ?? DEFAULTS.moduleRoot };
-}
-
-function segmentsOf(value) {
-  return String(value)
-    .split(/[\\/]+/)
-    .filter((segment) => segment !== '' && segment !== '.');
-}
-
-/** Index just past `needle` where it appears as a run of segments, or -1. */
-function after(segments, needle) {
-  for (let start = 0; start + needle.length <= segments.length; start += 1) {
-    if (needle.every((part, offset) => segments[start + offset] === part)) {
-      return start + needle.length;
-    }
-  }
-  return -1;
-}
+const {
+  after,
+  onEverySpecifier,
+  resolveTarget,
+  segmentsOf,
+  settingsFor,
+} = require('../specifiers');
 
 /** `{ name, rest }` for a path inside the module root, else null. `rest` is what follows the module folder. */
 function moduleAt(value, moduleRoot) {
@@ -62,38 +48,6 @@ function isPublicEntry(rest) {
   return basename.slice(0, basename.length - path.extname(basename).length) === 'index';
 }
 
-function resolveTarget(filename, specifier) {
-  if (typeof specifier !== 'string' || !specifier.startsWith('.')) return null;
-  const from = String(filename).split('\\').join('/');
-  return path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
-}
-
-function isRequireCall(node) {
-  return (
-    node.callee.type === 'Identifier' &&
-    node.callee.name === 'require' &&
-    node.arguments.length > 0 &&
-    node.arguments[0].type === 'Literal'
-  );
-}
-
-function onEverySpecifier(check) {
-  return {
-    ImportDeclaration: (node) => check(node.source),
-    ExportNamedDeclaration: (node) => check(node.source),
-    ExportAllDeclaration: (node) => check(node.source),
-    ImportExpression: (node) => check(node.source.type === 'Literal' ? node.source : null),
-    TSImportEqualsDeclaration: (node) =>
-      check(
-        node.moduleReference.type === 'TSExternalModuleReference' &&
-          node.moduleReference.expression.type === 'Literal'
-          ? node.moduleReference.expression
-          : null,
-      ),
-    CallExpression: (node) => check(isRequireCall(node) ? node.arguments[0] : null),
-  };
-}
-
 module.exports = defineRule({
   constitutionId: 'R-API-3',
   description: 'Bans importing a module below its public entry',
@@ -103,12 +57,12 @@ module.exports = defineRule({
       '"{{specifier}}" reaches inside the {{module}} module — import a module only through its public entry, and if the export is missing add it there rather than reaching past it',
   },
   create(context) {
-    const { moduleRoot } = settingsFor(context);
+    const { moduleRoot, aliases } = settingsFor(context);
     const own = moduleAt(context.filename, moduleRoot);
 
     return onEverySpecifier((sourceNode) => {
       if (sourceNode === null || sourceNode === undefined) return;
-      const target = resolveTarget(context.filename, sourceNode.value);
+      const target = resolveTarget(context.filename, sourceNode.value, aliases);
       if (target === null) return;
 
       const imported = moduleAt(target, moduleRoot);

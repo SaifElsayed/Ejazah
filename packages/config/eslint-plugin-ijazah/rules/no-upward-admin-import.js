@@ -16,74 +16,28 @@
 // is why this rule looks only at which module the import lands in. Admin's own files may of course
 // import admin.
 //
-// Path segments, never a root-anchored path (note under T035). Only relative specifiers are
-// resolved: a bare specifier is a package, never a path inside another module.
-const path = require('node:path');
-
+// WHO IS CHECKED (T035, review of PR #20): every file outside the admin module, not only files
+// inside `modules/`. `platform/`, a shared package or a surface reaching into `modules/admin`
+// inverts the same dependency for the same reason — the kernel and the packages sit *below* the
+// modules, so an import from there into the administrative module is as upward as it gets
+// (R-API-4). The rule asks only whether the importer is admin's own code.
+//
+// Path segments, never a root-anchored path (note under T035). A relative specifier is resolved
+// against the importing file and a configured path alias is expanded first; anything else is a
+// package, never a path inside another module.
 const { defineRule } = require('../rule');
-
-const DEFAULTS = { moduleRoot: 'apps/api/src/modules', adminModule: 'admin' };
-
-function settingsFor(context) {
-  const configured = context.settings?.ijazah?.boundaries ?? {};
-  return {
-    moduleRoot: configured.moduleRoot ?? DEFAULTS.moduleRoot,
-    adminModule: configured.adminModule ?? DEFAULTS.adminModule,
-  };
-}
-
-function segmentsOf(value) {
-  return String(value)
-    .split(/[\\/]+/)
-    .filter((segment) => segment !== '' && segment !== '.');
-}
-
-/** Index just past `needle` where it appears as a run of segments, or -1. */
-function after(segments, needle) {
-  for (let start = 0; start + needle.length <= segments.length; start += 1) {
-    if (needle.every((part, offset) => segments[start + offset] === part)) {
-      return start + needle.length;
-    }
-  }
-  return -1;
-}
+const {
+  after,
+  onEverySpecifier,
+  resolveTarget,
+  segmentsOf,
+  settingsFor,
+} = require('../specifiers');
 
 function moduleOf(value, moduleRoot) {
   const segments = segmentsOf(value);
   const at = after(segments, segmentsOf(moduleRoot));
   return at === -1 || at >= segments.length ? null : segments[at];
-}
-
-function resolveTarget(filename, specifier) {
-  if (typeof specifier !== 'string' || !specifier.startsWith('.')) return null;
-  const from = String(filename).split('\\').join('/');
-  return path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
-}
-
-function isRequireCall(node) {
-  return (
-    node.callee.type === 'Identifier' &&
-    node.callee.name === 'require' &&
-    node.arguments.length > 0 &&
-    node.arguments[0].type === 'Literal'
-  );
-}
-
-function onEverySpecifier(check) {
-  return {
-    ImportDeclaration: (node) => check(node.source),
-    ExportNamedDeclaration: (node) => check(node.source),
-    ExportAllDeclaration: (node) => check(node.source),
-    ImportExpression: (node) => check(node.source.type === 'Literal' ? node.source : null),
-    TSImportEqualsDeclaration: (node) =>
-      check(
-        node.moduleReference.type === 'TSExternalModuleReference' &&
-          node.moduleReference.expression.type === 'Literal'
-          ? node.moduleReference.expression
-          : null,
-      ),
-    CallExpression: (node) => check(isRequireCall(node) ? node.arguments[0] : null),
-  };
 }
 
 module.exports = defineRule({
@@ -93,23 +47,24 @@ module.exports = defineRule({
     // Written without the identifier; `defineRule` appends it (FR-011). "upward import into
     // admin" says which of the two halves this identifier carries was broken.
     upwardIntoAdmin:
-      '"{{specifier}}" is an upward import into admin from the {{module}} module — dependencies point inward and nothing points at the administrative module, so let admin call down instead',
+      '"{{specifier}}" is an upward import into admin from {{importer}} — dependencies point inward and nothing points at the administrative module, so let admin call down instead',
   },
   create(context) {
-    const { moduleRoot, adminModule } = settingsFor(context);
+    const { moduleRoot, adminModule, aliases } = settingsFor(context);
     const own = moduleOf(context.filename, moduleRoot);
-    if (own === null || own === adminModule) return {};
+    if (own === adminModule) return {};
+    const importer = own === null ? 'outside the module tree' : `the ${own} module`;
 
     return onEverySpecifier((sourceNode) => {
       if (sourceNode === null || sourceNode === undefined) return;
-      const target = resolveTarget(context.filename, sourceNode.value);
+      const target = resolveTarget(context.filename, sourceNode.value, aliases);
       if (target === null) return;
       if (moduleOf(target, moduleRoot) !== adminModule) return;
 
       context.report({
         node: sourceNode,
         messageId: 'upwardIntoAdmin',
-        data: { specifier: String(sourceNode.value), module: own },
+        data: { specifier: String(sourceNode.value), importer },
       });
     });
   },

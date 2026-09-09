@@ -19,37 +19,21 @@
 // A file inside the same port folder may name its own adapter — that folder is where the vendor
 // lives, and its index is what wires the selected one.
 //
-// Path segments, never a root-anchored path (note under T035). Only relative specifiers are
-// resolved: a bare specifier is a package, never a path inside the port tree.
-const path = require('node:path');
-
+// Path segments, never a root-anchored path (note under T035). A relative specifier is resolved
+// against the importing file and a configured path alias is expanded first; anything else is a
+// package, never a path inside the port tree. The resolver and the wall data live in
+// `../specifiers.js` and `packages/config/eslint.boundaries.js`.
 const { defineRule } = require('../rule');
-
-const DEFAULTS = { portRoot: 'apps/api/src/platform/ports' };
+const {
+  after,
+  onEverySpecifier,
+  resolveTarget,
+  segmentsOf,
+  settingsFor,
+} = require('../specifiers');
 
 // `fake.adapter`, `fake.adapter.ts`, `paymob.adapter.mts`. Not `payment.port`, not `index`.
 const ADAPTER_BASENAME = /\.adapter(\.[^.]+)?$/;
-
-function settingsFor(context) {
-  const configured = context.settings?.ijazah?.boundaries ?? {};
-  return { portRoot: configured.portRoot ?? DEFAULTS.portRoot };
-}
-
-function segmentsOf(value) {
-  return String(value)
-    .split(/[\\/]+/)
-    .filter((segment) => segment !== '' && segment !== '.');
-}
-
-/** Index just past `needle` where it appears as a run of segments, or -1. */
-function after(segments, needle) {
-  for (let start = 0; start + needle.length <= segments.length; start += 1) {
-    if (needle.every((part, offset) => segments[start + offset] === part)) {
-      return start + needle.length;
-    }
-  }
-  return -1;
-}
 
 /** `{ port, rest }` for a path inside the port root, else null. */
 function portAt(value, portRoot) {
@@ -57,38 +41,6 @@ function portAt(value, portRoot) {
   const at = after(segments, segmentsOf(portRoot));
   if (at === -1 || at >= segments.length) return null;
   return { port: segments[at], rest: segments.slice(at + 1) };
-}
-
-function resolveTarget(filename, specifier) {
-  if (typeof specifier !== 'string' || !specifier.startsWith('.')) return null;
-  const from = String(filename).split('\\').join('/');
-  return path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
-}
-
-function isRequireCall(node) {
-  return (
-    node.callee.type === 'Identifier' &&
-    node.callee.name === 'require' &&
-    node.arguments.length > 0 &&
-    node.arguments[0].type === 'Literal'
-  );
-}
-
-function onEverySpecifier(check) {
-  return {
-    ImportDeclaration: (node) => check(node.source),
-    ExportNamedDeclaration: (node) => check(node.source),
-    ExportAllDeclaration: (node) => check(node.source),
-    ImportExpression: (node) => check(node.source.type === 'Literal' ? node.source : null),
-    TSImportEqualsDeclaration: (node) =>
-      check(
-        node.moduleReference.type === 'TSExternalModuleReference' &&
-          node.moduleReference.expression.type === 'Literal'
-          ? node.moduleReference.expression
-          : null,
-      ),
-    CallExpression: (node) => check(isRequireCall(node) ? node.arguments[0] : null),
-  };
 }
 
 module.exports = defineRule({
@@ -101,12 +53,12 @@ module.exports = defineRule({
       '"{{specifier}}" names a concrete adapter of the {{port}} port — depend on the port instead, because which adapter serves it is configuration and only its own folder may know a vendor name',
   },
   create(context) {
-    const { portRoot } = settingsFor(context);
+    const { portRoot, aliases } = settingsFor(context);
     const own = portAt(context.filename, portRoot);
 
     return onEverySpecifier((sourceNode) => {
       if (sourceNode === null || sourceNode === undefined) return;
-      const target = resolveTarget(context.filename, sourceNode.value);
+      const target = resolveTarget(context.filename, sourceNode.value, aliases);
       if (target === null) return;
 
       const imported = portAt(target, portRoot);

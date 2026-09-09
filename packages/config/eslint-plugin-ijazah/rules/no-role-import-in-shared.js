@@ -10,79 +10,23 @@
 // `no-cross-role-import.js` for the reasoning and `packages/config/eslint.boundaries.js` for the
 // wall data this rule reads through `settings`.
 //
-// Path segments, never a root-anchored path (note under T035). Only relative specifiers are
-// resolved: a bare specifier is a package, never a path inside the role tree.
-const path = require('node:path');
-
+// Path segments, never a root-anchored path (note under T035). A relative specifier is resolved
+// against the importing file and the application's path alias is expanded first
+// (`apps/mobile/tsconfig.json` declares `"@/*": ["src/*"]`), so `@/features/student/x` is refused
+// exactly like `../student/x`; anything else is a package, never a path inside the role tree.
 const { defineRule } = require('../rule');
-
-const DEFAULTS = {
-  roleTree: 'apps/mobile/src/features',
-  roles: ['student', 'teacher'],
-  sharedRole: 'shared',
-};
-
-function settingsFor(context) {
-  const configured = context.settings?.ijazah?.boundaries ?? {};
-  return {
-    roleTree: configured.roleTree ?? DEFAULTS.roleTree,
-    roles: configured.roles ?? DEFAULTS.roles,
-    sharedRole: configured.sharedRole ?? DEFAULTS.sharedRole,
-  };
-}
-
-function segmentsOf(value) {
-  return String(value)
-    .split(/[\\/]+/)
-    .filter((segment) => segment !== '' && segment !== '.');
-}
-
-/** Index just past `needle` where it appears as a run of segments, or -1. */
-function after(segments, needle) {
-  for (let start = 0; start + needle.length <= segments.length; start += 1) {
-    if (needle.every((part, offset) => segments[start + offset] === part)) {
-      return start + needle.length;
-    }
-  }
-  return -1;
-}
+const {
+  after,
+  onEverySpecifier,
+  resolveTarget,
+  segmentsOf,
+  settingsFor,
+} = require('../specifiers');
 
 function roleOf(value, roleTree) {
   const segments = segmentsOf(value);
   const at = after(segments, segmentsOf(roleTree));
   return at === -1 || at >= segments.length ? null : segments[at];
-}
-
-function resolveTarget(filename, specifier) {
-  if (typeof specifier !== 'string' || !specifier.startsWith('.')) return null;
-  const from = String(filename).split('\\').join('/');
-  return path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
-}
-
-function isRequireCall(node) {
-  return (
-    node.callee.type === 'Identifier' &&
-    node.callee.name === 'require' &&
-    node.arguments.length > 0 &&
-    node.arguments[0].type === 'Literal'
-  );
-}
-
-function onEverySpecifier(check) {
-  return {
-    ImportDeclaration: (node) => check(node.source),
-    ExportNamedDeclaration: (node) => check(node.source),
-    ExportAllDeclaration: (node) => check(node.source),
-    ImportExpression: (node) => check(node.source.type === 'Literal' ? node.source : null),
-    TSImportEqualsDeclaration: (node) =>
-      check(
-        node.moduleReference.type === 'TSExternalModuleReference' &&
-          node.moduleReference.expression.type === 'Literal'
-          ? node.moduleReference.expression
-          : null,
-      ),
-    CallExpression: (node) => check(isRequireCall(node) ? node.arguments[0] : null),
-  };
 }
 
 module.exports = defineRule({
@@ -94,12 +38,12 @@ module.exports = defineRule({
       '"{{specifier}}" reaches from features/shared into the {{to}} tree — shared code is what both roles may depend on, so it depends on neither; move what is needed down into shared',
   },
   create(context) {
-    const { roleTree, roles, sharedRole } = settingsFor(context);
+    const { roleTree, roles, sharedRole, aliases } = settingsFor(context);
     if (roleOf(context.filename, roleTree) !== sharedRole) return {};
 
     return onEverySpecifier((sourceNode) => {
       if (sourceNode === null || sourceNode === undefined) return;
-      const target = resolveTarget(context.filename, sourceNode.value);
+      const target = resolveTarget(context.filename, sourceNode.value, aliases);
       if (target === null) return;
 
       const to = roleOf(target, roleTree);

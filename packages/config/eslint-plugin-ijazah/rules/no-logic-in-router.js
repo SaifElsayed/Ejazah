@@ -26,10 +26,17 @@
 // Decisions counted, following the standard cyclomatic definition: `if` (an `else if` is another
 // `if`, so it counts itself), the ternary, each short-circuiting `&&`, `||` and `??` including
 // their assignment forms, every loop, every `case` carrying a test (`default` decides nothing),
-// and every `catch`. Optional chaining is not counted: `a?.b` guards a value, it does not carry a
-// rule. Each function is measured on its own — a nested callback's decisions belong to the
-// callback, not to its host — and the count starts at 1 for the single path through a function
-// that decides nothing.
+// every `catch`, and a default value on a parameter or a destructured property, which the header
+// above already names as one of the decisions a thin procedure may honestly make. Optional
+// chaining is not counted: `a?.b` guards a value, it does not carry a rule.
+//
+// WHAT IS MEASURED (T036, review of PR #20): every function on its own — a nested callback's
+// decisions belong to the callback, not to its host — and also the file's own top level and each
+// class static block, which are bodies that run and can decide exactly like a function body. A
+// six-way `if / else if` chain written outside any function is the same business rule in the same
+// wrong file, and counting only what sits inside a `function` keyword was an accident of how the
+// walk was written, not a rule anyone would defend. Each body's count starts at 1, for the single
+// path through a body that decides nothing.
 //
 // The file is matched by its basename, never by a path anchored at the repository root: the
 // violation fixtures mirror the real tree under `tests/violations/fixtures/`, so a rule comparing
@@ -50,9 +57,11 @@ function isRouterFile(filename) {
   return withoutExtension.toLowerCase().endsWith('.router');
 }
 
-// The name a reviewer would use for the function in the message. A procedure is normally a
-// property or a method of the router object, so those two come before the function's own id.
-function functionName(node) {
+// The name a reviewer would use for the body in the message. A procedure is normally a property
+// or a method of the router object, so those two come before the function's own id.
+function bodyName(node) {
+  if (node.type === 'Program') return "the file's top level";
+  if (node.type === 'StaticBlock') return 'a static block';
   if (node.id && node.id.name) return node.id.name;
 
   const parent = node.parent;
@@ -67,9 +76,6 @@ function functionName(node) {
     const key = parent.key;
     if (key.type === 'Identifier') return key.name;
     if (key.type === 'Literal') return String(key.value);
-  }
-  if (parent.type === 'MethodDefinition' && parent.key.type === 'Identifier') {
-    return parent.key.name;
   }
   if (parent.type === 'VariableDeclarator' && parent.id.type === 'Identifier') {
     return parent.id.name;
@@ -100,17 +106,16 @@ module.exports = defineRule({
   create(context) {
     if (!isRouterFile(context.filename)) return {};
 
-    const option = context.options[0];
-    const max =
-      option && typeof option.max === 'number' && Number.isInteger(option.max) && option.max >= 1
-        ? option.max
-        : DEFAULT_MAX;
+    // The schema above is what validates this; ESLint refuses the configuration before the rule
+    // ever runs, so a second check here would only be a second place to keep in step.
+    const max = context.options[0]?.max ?? DEFAULT_MAX;
 
-    // One entry per function currently being walked; a nested function counts on its own.
+    // One entry per body currently being walked — the file's top level, a function, a static
+    // block. A nested body counts on its own.
     const stack = [];
 
+    // `Program` frames the file, so there is always a body to charge the decision to.
     function decide() {
-      if (stack.length === 0) return;
       stack[stack.length - 1].complexity += 1;
     }
 
@@ -125,7 +130,7 @@ module.exports = defineRule({
         node: frame.node.id ?? frame.node,
         messageId: 'tooComplex',
         data: {
-          name: functionName(frame.node),
+          name: bodyName(frame.node),
           complexity: String(frame.complexity),
           max: String(max),
         },
@@ -133,6 +138,10 @@ module.exports = defineRule({
     }
 
     return {
+      Program: enter,
+      'Program:exit': leave,
+      StaticBlock: enter,
+      'StaticBlock:exit': leave,
       FunctionDeclaration: enter,
       'FunctionDeclaration:exit': leave,
       FunctionExpression: enter,
@@ -148,6 +157,8 @@ module.exports = defineRule({
       WhileStatement: decide,
       DoWhileStatement: decide,
       CatchClause: decide,
+      // `function p({ cursor = null })` — a default is a decision about the request.
+      AssignmentPattern: decide,
       SwitchCase: (node) => {
         // `default` chooses nothing; it is where control lands when nothing was chosen.
         if (node.test !== null) decide();
