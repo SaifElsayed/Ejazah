@@ -1,6 +1,7 @@
 // T021 — the layers, proved by collapsing them (FR-005, FR-071, SC-003).
 //
-// Each case is red until T036 (R-API-1, R-API-2) and T047 (R-API-6) implement the rule it names.
+// Each case is red until T036 (R-API-1, R-API-2), T047 (R-API-6) and T042 (R-API-15) implement the
+// rule it names.
 // Do not weaken an assertion and do not mark a case skipped to make the suite green:
 // `proc/no-focused-or-skipped-test` (R-PROC-10) exists so that route stays closed.
 //
@@ -48,6 +49,17 @@ const layerViolations: readonly ViolationCase[] = [
     ruleSet: 'typeAware',
     fixture: 'apps/api/src/modules/booking/booking.repository.ts',
     refuses: "one module's repository querying a table another module owns",
+  },
+  {
+    // Added with T027 (PR for T027, 2026-09-09): the contract publishes `api/no-push-outside-job`
+    // and no T020–T026 line named R-API-15, so the completeness check could never go green.
+    // The fixture imports the push port's public entry, not an adapter, so `boundaries/
+    // no-adapter-import` (R-API-4) stays silent and inline delivery is the only thing refused.
+    constitutionId: 'R-API-15',
+    ruleId: 'api/no-push-outside-job',
+    ruleSet: 'fast',
+    fixture: 'apps/api/src/modules/booking/notify-inline.ts',
+    refuses: 'a module sending a notification inline instead of enqueueing the delivery job',
   },
 ];
 
