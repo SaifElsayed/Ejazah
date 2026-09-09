@@ -119,7 +119,7 @@ by concatenation, because concatenation breaks both RTL and Arabic grammar.
 
 | ID | Rule | Enforced |
 |---|---|---|
-| R-MOBILE-1 | **Never** import from `features/teacher/**` inside `features/student/**`, or the reverse. | `LINT` (eslint-plugin-boundaries) - build error |
+| R-MOBILE-1 | **Never** import from `features/teacher/**` inside `features/student/**`, or the reverse. | `LINT` (`boundaries/no-cross-role-import`, a rule of `eslint-plugin-ijazah`; wall data in `packages/config/eslint.boundaries.js`) - build error |
 | R-MOBILE-2 | **Never** import role-specific code inside `features/shared/**`. Shared imports from neither tree. | `LINT` boundaries |
 | R-MOBILE-3 | **Never** put a screen in `shared/` that is only "roughly similar" between roles. Shared holds genuinely identical flows and primitives. Duplication beats a wrong abstraction. | `REVIEW` - the one wall rule a machine cannot judge |
 | R-MOBILE-4 | **Never** write a raw hex color, rgb value, or numeric spacing in a feature file. Tokens only. | `LINT` - regex ban on `#[0-9a-f]{3,8}`, `rgb(`, and raw spacing outside `design/` |
@@ -280,7 +280,7 @@ Who holds which rules. This is also the build list for Phase 0
 
 | Mechanism | Built in | Holds |
 |---|---|---|
-| **eslint-plugin-boundaries and custom rules** (`packages/config`) | Phase 0, workstream 1 | R-MONEY-1/2/5/6, R-TIME-1, R-GENDER-5, R-MOBILE-1/2/4/5/6/7/8/9/10/11, R-API-1/2/3/4/6/10/15, R-DB-6, R-SEC-1/2/11, R-PROC-7/8/10 |
+| **The internal rule plugin `eslint-plugin-ijazah`** (`packages/config`), including the six `boundaries/*` wall rules, whose wall data lives in `packages/config/eslint.boundaries.js` | Phase 0, workstream 1 | R-MONEY-1/2/5/6, R-TIME-1, R-GENDER-5, R-MOBILE-1/2/4/5/6/7/8/9/10/11, R-API-1/2/3/4/6/10/15, R-DB-6, R-SEC-1/2/11, R-PROC-7/8/10 |
 | **TypeScript** (branded types, schemas, separate routers) | Throughout | R-MONEY-1, R-TIME-6, R-GENDER-4/6, R-API-7/11, R-SEC-8, R-SESS-1, R-HONEST-4/5 |
 | **Postgres** (constraints, uniques, revoked privileges) | Phase 0, workstream 2 | R-MONEY-8, R-TIME-3, R-DB-3/5/8, R-SEC-8, R-SESS-1, R-PROC-11, ERD section 15 |
 | **Runtime guards** (`platform/`) | Phase 0, workstream 3, then per module | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
