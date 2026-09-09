@@ -1,6 +1,7 @@
 // The internal lint plugin (T034). Every rule is named for the constitution rule it enforces,
-// and every message ends with that identifier (FR-011) — appended by `./rule.js`, never typed by
-// hand. Rule ids are additive-only (R-API-9).
+// and every declared message template ends with that identifier (FR-011) — appended by
+// `./rule.js`, never typed by hand. A rule reporting a raw string instead of a declared message is
+// caught at runtime by `tests/violations/harness.ts`. Rule ids are additive-only (R-API-9).
 // Mapping: specs/001-foundations/contracts/lint-rules.md
 //
 // The catalog below is the plugin's single source of truth. `rules`, `configs.fast.rules` and

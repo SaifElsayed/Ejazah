@@ -14,7 +14,13 @@
 //
 // The contract is parsed at test time rather than mirrored in a list here — the same reason
 // `tests/violations/completeness.spec.ts` parses it. A copy would have to be edited alongside the
-// contract to stay true, and a check that has to be remembered is not a check.
+// contract to stay true, and a check that has to be remembered is not a check. Both specs read it
+// through the one parser in `tests/support/lint-contract.ts`, for that same reason.
+//
+// This spec lives under `tests/` rather than beside the plugin because `packages/config` is a
+// JavaScript package belonging to no TypeScript project: a `.spec.ts` inside it fails the
+// type-aware lint run, while `tests/**/*.ts` is already covered by the root `tsconfig.json` and by
+// the Vitest include.
 //
 // The six `boundaries/*` ids the contract publishes are configuration of `eslint-plugin-boundaries`
 // in `packages/config/eslint.boundaries.js` (T035), not rules of this plugin, so they are excluded
@@ -27,19 +33,23 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  contractPathFrom,
+  contractRelativePath,
+  parseContractRules,
+  unparsedRuleIds,
+  type RuleSet,
+} from '../support/lint-contract';
+
 const require = createRequire(import.meta.url);
 
 const specDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(specDirectory, '..', '..');
 
-const contractRelativePath = 'specs/001-foundations/contracts/lint-rules.md';
-const contractPath = path.join(repositoryRoot, ...contractRelativePath.split('/'));
+const contractPath = contractPathFrom(repositoryRoot);
 
 const pluginRelativePath = 'packages/config/eslint-plugin-ijazah';
 const pluginPath = path.join(repositoryRoot, ...pluginRelativePath.split('/'));
-
-/** The rule sets `packages/config/eslint.base.js` consumes, and the tables that decide them. */
-type RuleSet = 'fast' | 'typeAware';
 
 /** The plugin surface this spec reads. Declared here because the plugin is untyped CommonJS. */
 interface PluginRule {
@@ -56,66 +66,16 @@ interface Plugin {
   >;
 }
 
-interface ContractRule {
-  /** ESLint rule id as published, without the `ijazah/` plugin namespace. */
-  readonly ruleId: string;
-  /** The constitution rule the row's last column assigns to it. */
-  readonly constitutionId: string;
-  /** Which of the two rule tables the row sits in, which is the rule set it belongs to. */
-  readonly ruleSet: RuleSet;
-}
-
 const plugin = require(pluginPath) as Plugin;
 
-// A published rule is a table row whose first cell is a backticked `<group>/<name>` id. That
-// shape separates the two rule tables from the "Rules held elsewhere" table, whose first cell
-// names a mechanism, and from prose citing rule ids outside any table. The constitution id is the
-// last cell either way, so the three-column syntax-only table and the four-column type-aware one
-// parse alike. The heading above the row is what says which set the rule belongs to.
-const publishedRuleId = /^`([a-z]+\/[a-z][a-z-]*)`$/;
-const heading = /^##\s+(.+?)\s*$/;
-
-const ruleSetForHeading: Readonly<Record<string, RuleSet>> = {
-  'Syntax-only rules': 'fast',
-  'Type-aware rules': 'typeAware',
+// The two set names come from the factory rather than being written out here: a third set, or a
+// rename, must reach this spec instead of leaving it checking a list that no longer exists.
+const { RULE_SETS } = require(path.join(pluginPath, 'rule.js')) as {
+  readonly RULE_SETS: readonly RuleSet[];
 };
 
-function parseContractRules(markdown: string): readonly ContractRule[] {
-  const rules: ContractRule[] = [];
-  let ruleSet: RuleSet | undefined;
-
-  for (const line of markdown.split('\n')) {
-    const section = heading.exec(line);
-    if (section !== null) {
-      const title = section[1];
-      ruleSet = title === undefined ? undefined : ruleSetForHeading[title];
-      continue;
-    }
-
-    const row = line.trim();
-    if (ruleSet === undefined || !row.startsWith('|') || !row.endsWith('|')) continue;
-
-    const cells = row
-      .slice(1, -1)
-      .split('|')
-      .map((cell) => cell.trim());
-    const first = cells.at(0);
-    const last = cells.at(-1);
-    if (first === undefined || last === undefined) continue;
-
-    const published = publishedRuleId.exec(first);
-    if (published === null) continue;
-
-    const ruleId = published[1];
-    if (ruleId === undefined) continue;
-
-    rules.push({ ruleId, constitutionId: last, ruleSet });
-  }
-
-  return rules;
-}
-
-const contractRules = parseContractRules(readFileSync(contractPath, 'utf8'));
+const contractMarkdown = readFileSync(contractPath, 'utf8');
+const contractRules = parseContractRules(contractMarkdown);
 
 // `boundaries/*` is `eslint-plugin-boundaries` configuration (T035), not a rule of this plugin.
 const pluginContractRules = contractRules.filter((rule) => !rule.ruleId.startsWith('boundaries/'));
@@ -125,8 +85,7 @@ const registeredIds = Object.keys(plugin.rules).sort();
 
 function configuredSets(ruleId: string): readonly RuleSet[] {
   const namespaced = `ijazah/${ruleId}`;
-  const sets: RuleSet[] = ['fast', 'typeAware'];
-  return sets.filter((set) => Object.hasOwn(plugin.configs[set].rules, namespaced));
+  return RULE_SETS.filter((set) => Object.hasOwn(plugin.configs[set].rules, namespaced));
 }
 
 function list(lines: readonly string[]): string {
@@ -164,6 +123,20 @@ describe('T034 — the plugin and the published contract are the same list', () 
         `parsed       ${pluginContractRules.length} rows`,
       ),
     ).toEqual(['fast', 'typeAware']);
+
+    // A row can also vanish one at a time: a bolded id cell, a missing trailing pipe, a table
+    // added under a heading the parser does not know. The strict parse says nothing about a rule
+    // it never saw, so the file is scanned again loosely and every id it mentions must have
+    // parsed. Without this, a dropped row reads as "not published" rather than as a fault.
+    const unparsed = unparsedRuleIds(contractMarkdown);
+
+    expect(
+      unparsed,
+      report(
+        `${unparsed.length} rule ids appear in the contract but did not parse as rows — a row changed shape and is now unchecked in both directions`,
+        `unparsed    ${list(unparsed)}`,
+      ),
+    ).toEqual([]);
   });
 
   it('registers every published rule the plugin owns, and nothing else', () => {
@@ -270,9 +243,9 @@ describe('T034 — the plugin and the published contract are the same list', () 
   });
 
   it('configures nothing the plugin does not register', () => {
-    const sets: readonly RuleSet[] = ['fast', 'typeAware'];
-    const stray = sets
-      .flatMap((set) => Object.keys(plugin.configs[set].rules).map((id) => ({ set, id })))
+    const stray = RULE_SETS.flatMap((set) =>
+      Object.keys(plugin.configs[set].rules).map((id) => ({ set, id })),
+    )
       .filter(({ id }) => !Object.hasOwn(plugin.rules, id.replace(/^ijazah\//, '')))
       .map(({ set, id }) => `${id} is configured in ${set} but is not a rule of this plugin`);
 
