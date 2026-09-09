@@ -1,66 +1,103 @@
-// Internal lint plugin (T034). Every rule is named for the constitution rule it enforces,
-// and every message ends with that identifier (FR-011). Rule ids are additive-only (R-API-9).
+// The internal lint plugin (T034). Every rule is named for the constitution rule it enforces,
+// and every message ends with that identifier (FR-011) — appended by `./rule.js`, never typed by
+// hand. Rule ids are additive-only (R-API-9).
 // Mapping: specs/001-foundations/contracts/lint-rules.md
+//
+// The catalog below is the plugin's single source of truth. `rules`, `configs.fast.rules` and
+// `configs.typeAware.rules` are all derived from it, so a rule cannot be registered under one id
+// and configured under another, cannot be registered and left unconfigured, and cannot land in
+// both sets. Three hand-kept lists could drift; one table cannot disagree with itself.
+//
+// The six `boundaries/*` ids the contract publishes are not here: they are configuration of
+// `eslint-plugin-boundaries` in `../eslint.boundaries.js` (T035), not rules of this plugin.
+// This plugin owns the other 24 — 20 syntax-only, 4 type-aware (research R-10).
 
-const rules = {
-  'api/no-logic-in-router': require('./rules/no-logic-in-router'),
-  'api/no-orm-outside-repository': require('./rules/no-orm-outside-repository'),
-  'money/no-number-in-money-position': require('./rules/no-number-in-money-position'),
-  'time/no-datetime-outside-package': require('./rules/no-datetime-outside-package'),
-  'mobile/no-raw-color': require('./rules/no-raw-color'),
-  'mobile/no-physical-direction': require('./rules/no-physical-direction'),
-  'mobile/no-raw-control': require('./rules/no-raw-control'),
-  'mobile/no-literal-string': require('./rules/no-literal-string'),
-  'mobile/no-translated-concat': require('./rules/no-translated-concat'),
-  'mobile/no-manual-format': require('./rules/no-manual-format'),
-  'mobile/no-insecure-storage': require('./rules/no-insecure-storage'),
-  'mobile/no-direct-network': require('./rules/no-direct-network'),
-  'sec/no-disabled-tls': require('./rules/no-disabled-tls'),
-  'sec/no-body-logging': require('./rules/no-body-logging'),
-  'db/no-weak-random': require('./rules/no-weak-random'),
-  'api/no-push-outside-job': require('./rules/no-push-outside-job'),
-  'api/require-escape-hatch-reason': require('./rules/require-escape-hatch-reason'),
-  'proc/require-suppression-reason': require('./rules/require-suppression-reason'),
-  'proc/no-focused-or-skipped-test': require('./rules/no-focused-or-skipped-test'),
-  'proc/no-bare-marker': require('./rules/no-bare-marker'),
-  'money/no-arithmetic-outside-package': require('./rules/no-money-arithmetic'),
-  'money/require-piaster-suffix': require('./rules/require-piaster-suffix'),
-  'gender/require-requester-gender': require('./rules/require-requester-gender'),
-  'api/table-ownership': require('./rules/table-ownership'),
-};
+const { FAST, TYPE_AWARE, RULE_SETS } = require('./rule');
 
-const fast = {};
-const typeAware = {};
-fast['ijazah/api/no-logic-in-router'] = 'error';
-fast['ijazah/api/no-orm-outside-repository'] = 'error';
-fast['ijazah/money/no-number-in-money-position'] = 'error';
-fast['ijazah/time/no-datetime-outside-package'] = 'error';
-fast['ijazah/mobile/no-raw-color'] = 'error';
-fast['ijazah/mobile/no-physical-direction'] = 'error';
-fast['ijazah/mobile/no-raw-control'] = 'error';
-fast['ijazah/mobile/no-literal-string'] = 'error';
-fast['ijazah/mobile/no-translated-concat'] = 'error';
-fast['ijazah/mobile/no-manual-format'] = 'error';
-fast['ijazah/mobile/no-insecure-storage'] = 'error';
-fast['ijazah/mobile/no-direct-network'] = 'error';
-fast['ijazah/sec/no-disabled-tls'] = 'error';
-fast['ijazah/sec/no-body-logging'] = 'error';
-fast['ijazah/db/no-weak-random'] = 'error';
-fast['ijazah/api/no-push-outside-job'] = 'error';
-fast['ijazah/api/require-escape-hatch-reason'] = 'error';
-fast['ijazah/proc/require-suppression-reason'] = 'error';
-fast['ijazah/proc/no-focused-or-skipped-test'] = 'error';
-fast['ijazah/proc/no-bare-marker'] = 'error';
-typeAware['ijazah/money/no-arithmetic-outside-package'] = 'error';
-typeAware['ijazah/money/require-piaster-suffix'] = 'error';
-typeAware['ijazah/gender/require-requester-gender'] = 'error';
-typeAware['ijazah/api/table-ownership'] = 'error';
+const namespace = 'ijazah';
+
+const catalog = [
+  { id: 'api/no-logic-in-router', set: FAST, rule: require('./rules/no-logic-in-router') },
+  {
+    id: 'api/no-orm-outside-repository',
+    set: FAST,
+    rule: require('./rules/no-orm-outside-repository'),
+  },
+  {
+    id: 'money/no-number-in-money-position',
+    set: FAST,
+    rule: require('./rules/no-number-in-money-position'),
+  },
+  {
+    id: 'time/no-datetime-outside-package',
+    set: FAST,
+    rule: require('./rules/no-datetime-outside-package'),
+  },
+  { id: 'mobile/no-raw-color', set: FAST, rule: require('./rules/no-raw-color') },
+  { id: 'mobile/no-physical-direction', set: FAST, rule: require('./rules/no-physical-direction') },
+  { id: 'mobile/no-raw-control', set: FAST, rule: require('./rules/no-raw-control') },
+  { id: 'mobile/no-literal-string', set: FAST, rule: require('./rules/no-literal-string') },
+  { id: 'mobile/no-translated-concat', set: FAST, rule: require('./rules/no-translated-concat') },
+  { id: 'mobile/no-manual-format', set: FAST, rule: require('./rules/no-manual-format') },
+  { id: 'mobile/no-insecure-storage', set: FAST, rule: require('./rules/no-insecure-storage') },
+  { id: 'mobile/no-direct-network', set: FAST, rule: require('./rules/no-direct-network') },
+  { id: 'sec/no-disabled-tls', set: FAST, rule: require('./rules/no-disabled-tls') },
+  { id: 'sec/no-body-logging', set: FAST, rule: require('./rules/no-body-logging') },
+  { id: 'db/no-weak-random', set: FAST, rule: require('./rules/no-weak-random') },
+  { id: 'api/no-push-outside-job', set: FAST, rule: require('./rules/no-push-outside-job') },
+  {
+    id: 'api/require-escape-hatch-reason',
+    set: FAST,
+    rule: require('./rules/require-escape-hatch-reason'),
+  },
+  {
+    id: 'proc/require-suppression-reason',
+    set: FAST,
+    rule: require('./rules/require-suppression-reason'),
+  },
+  {
+    id: 'proc/no-focused-or-skipped-test',
+    set: FAST,
+    rule: require('./rules/no-focused-or-skipped-test'),
+  },
+  { id: 'proc/no-bare-marker', set: FAST, rule: require('./rules/no-bare-marker') },
+  {
+    id: 'money/no-arithmetic-outside-package',
+    set: TYPE_AWARE,
+    rule: require('./rules/no-money-arithmetic'),
+  },
+  {
+    id: 'money/require-piaster-suffix',
+    set: TYPE_AWARE,
+    rule: require('./rules/require-piaster-suffix'),
+  },
+  {
+    id: 'gender/require-requester-gender',
+    set: TYPE_AWARE,
+    rule: require('./rules/require-requester-gender'),
+  },
+  { id: 'api/table-ownership', set: TYPE_AWARE, rule: require('./rules/table-ownership') },
+];
+
+const rules = {};
+const sets = Object.fromEntries(RULE_SETS.map((name) => [name, {}]));
+
+for (const entry of catalog) {
+  if (Object.hasOwn(rules, entry.id)) {
+    throw new Error(`eslint-plugin-ijazah: "${entry.id}" is registered twice (R-API-9)`);
+  }
+  if (!Object.hasOwn(sets, entry.set)) {
+    throw new Error(`eslint-plugin-ijazah: "${entry.id}" names no rule set ("${entry.set}")`);
+  }
+  rules[entry.id] = entry.rule;
+  sets[entry.set][`${namespace}/${entry.id}`] = 'error';
+}
 
 module.exports = {
   meta: { name: 'eslint-plugin-ijazah' },
   rules,
   configs: {
-    fast: { rules: fast },
-    typeAware: { rules: typeAware },
+    fast: { rules: sets[FAST] },
+    typeAware: { rules: sets[TYPE_AWARE] },
   },
 };
