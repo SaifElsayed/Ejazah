@@ -10,11 +10,11 @@
 //   - a case whose constitution id differs from the contract row -> the FR-011 trace is broken
 //
 // This is the one spec here that is expected to go GREEN before the rules exist: it reads
-// declarations, never the linter, so it does not wait on T035, T036, T043 or T047. It is RED
-// today for a different reason — `gender.spec.ts` (T025) and `security.spec.ts` (T026) are still
-// `it.todo`, so the eight rule ids those two tasks own register no case. The failure names the ids.
-// (`api/no-push-outside-job`, R-API-15, had no fixture task at all; its case was added to
-// layers.spec.ts with T027 so this check can reach zero.)
+// declarations, never the linter, so it does not wait on T035, T036, T043 or T047. It went green
+// the moment T025 and T026 landed (PR #15): 30 published ids, 30 registered. While it was being
+// written it was red by those eight ids, plus `api/no-push-outside-job` (R-API-15), which had no
+// fixture task at all; that case was added to layers.spec.ts with T027 so the count could reach
+// zero. If it is red again, the failure names the ids.
 //
 // The contract is parsed at test time rather than mirrored in a list here. A copy of the list
 // would have to be edited alongside the contract to stay true, and a check that has to be
