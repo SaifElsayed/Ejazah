@@ -1,7 +1,8 @@
-// T026 fixture — VIOLATION of R-PROC-10, the focused half: `.only` leaves the file green while
-// every other case in it stops running. Named `*.spec.ts` because that is what the rule must
-// recognise, and excluded from the runner by the root `vitest.config.ts` so it cannot silence
-// this suite. The skipped half is `modules/notifications/notifications.service.spec.ts`.
+// T026 fixture — VIOLATION of R-PROC-10, the focused half: `.only` leaves the file reporting
+// green while every other case in it stops running. Named `*.spec.ts` because that is what the
+// rule must recognise, and excluded from the runner by the root `vitest.config.ts` because a
+// collected fixture runs as a real test and in CI Vitest refuses a `.only` outright. The skipped
+// half is `modules/notifications/notifications.service.spec.ts`.
 // Refused by proc/no-focused-or-skipped-test.
 import { describe, expect, it } from 'vitest';
 

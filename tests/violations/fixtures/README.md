@@ -15,8 +15,9 @@ root `vitest.config.ts` excludes it from `include`. The harness lints it anyway,
 list switched off, through the same configuration the pipeline uses.
 
 The runner exclusion is not cosmetic. T026's R-PROC-10 fixtures are real `*.spec.ts` files
-carrying `.only` and `.skip` — the prohibition itself — and a collected `.only` would silence
-every other test in the run.
+carrying `.only` and `.skip` — the prohibition itself. Collected, they run as real tests: the
+`.only` one passes and the `.skip` one reports skipped, and in CI Vitest refuses a `.only`
+outright (`allowOnly`), failing the run.
 
 Imports resolve inside this tree so a rule that classifies an import by resolving it reaches a
 real file rather than nothing.
