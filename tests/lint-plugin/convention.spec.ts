@@ -29,24 +29,19 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import {
-  contractPathFrom,
+  contractPath,
   contractRelativePath,
   parseContractRules,
+  repositoryRoot,
   unparsedRuleIds,
   type RuleSet,
 } from '../support/lint-contract';
 
 const require = createRequire(import.meta.url);
-
-const specDirectory = path.dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = path.resolve(specDirectory, '..', '..');
-
-const contractPath = contractPathFrom(repositoryRoot);
 
 const pluginRelativePath = 'packages/config/eslint-plugin-ijazah';
 const pluginPath = path.join(repositoryRoot, ...pluginRelativePath.split('/'));

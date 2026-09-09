@@ -11,6 +11,7 @@
 // collects `tests/**/*.spec.ts` only, so it is type-checked and linted without being run.
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /** The rule sets `packages/config/eslint.base.js` consumes, and the tables that decide them. */
 export type RuleSet = 'fast' | 'typeAware';
@@ -26,10 +27,15 @@ export interface ContractRule {
 
 export const contractRelativePath = 'specs/001-foundations/contracts/lint-rules.md';
 
-/** The contract file, resolved from a repository root a caller already knows. */
-export function contractPathFrom(repositoryRoot: string): string {
-  return path.join(repositoryRoot, ...contractRelativePath.split('/'));
-}
+/** The repository root, resolved once here: this file sits at `tests/support/`. */
+export const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+);
+
+/** The contract file itself, so no caller has to resolve the root a second time. */
+export const contractPath = path.join(repositoryRoot, ...contractRelativePath.split('/'));
 
 // A published rule is a table row whose first cell is a backticked `<group>/<name>` id. That
 // shape separates the two rule tables from the "Rules held elsewhere" table, whose first cell
@@ -46,10 +52,25 @@ const ruleSetForHeading = new Map<string, RuleSet>([
 ]);
 
 // The loose scan behind `unparsedRuleIds`: every backticked `<group>/<name>` token anywhere in
-// the file, table or prose, anchored to nothing. A rule name always carries a hyphen and the
-// source paths the contract cites in prose (`modules/payments`, `packages/time`) never do, which
-// is what keeps a path out of this set without an allow-list to maintain.
-const mentionedRuleId = /`([a-z]+\/[a-z]+(?:-[a-z]+)+)`/g;
+// the file, table or prose, anchored to nothing. The hyphen is optional, because a future rule
+// named `api/foo` is exactly the row this scan exists to notice. What keeps the source paths the
+// contract cites in prose out of the set is their first segment, not their shape.
+const mentionedRuleId = /`([a-z]+\/[a-z][a-z-]*)`/g;
+
+// The first segments the contract uses for source paths rather than rule groups. A rule group is
+// never one of these, so excluding them by name costs one line per path the contract starts
+// citing and never hides a rule id.
+const SOURCE_PATH_GROUPS = new Set([
+  'modules',
+  'packages',
+  'platform',
+  'apps',
+  'src',
+  'tests',
+  'prisma',
+  'docs',
+  'specs',
+]);
 
 /**
  * Every rule row of the two rule tables, in file order.
@@ -104,7 +125,8 @@ export function unparsedRuleIds(markdown: string): readonly string[] {
   const mentioned = new Set(
     [...markdown.matchAll(mentionedRuleId)]
       .map((match) => match[1])
-      .filter((ruleId): ruleId is string => ruleId !== undefined),
+      .filter((ruleId): ruleId is string => ruleId !== undefined)
+      .filter((ruleId) => !SOURCE_PATH_GROUPS.has(ruleId.slice(0, ruleId.indexOf('/')))),
   );
 
   return [...mentioned].filter((ruleId) => !parsed.has(ruleId)).sort();

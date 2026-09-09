@@ -31,19 +31,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  contractPathFrom,
-  contractRelativePath,
-  parseContractRules,
-} from '../support/lint-contract';
+import { contractPath, contractRelativePath, parseContractRules } from '../support/lint-contract';
 
 import { registeredViolations, withRegistrationOnly, type ViolationCase } from './harness';
 
 const specFile = fileURLToPath(import.meta.url);
 const specDirectory = path.dirname(specFile);
-const repositoryRoot = path.resolve(specDirectory, '..', '..');
-
-const contractPath = contractPathFrom(repositoryRoot);
 
 const contractRules = parseContractRules(readFileSync(contractPath, 'utf8'));
 const constitutionIdFor = new Map(contractRules.map((rule) => [rule.ruleId, rule.constitutionId]));

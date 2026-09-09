@@ -42,11 +42,19 @@ const DEFINITION_KEYS = new Set([
   'fixable',
   'hasSuggestions',
   'deprecated',
-  'replacedBy',
   'defaultOptions',
 ]);
 
 const FIXABLE = ['code', 'whitespace'];
+const TYPES = ['problem', 'suggestion', 'layout'];
+
+// `replacedBy` at the top level of `meta` is the legacy shape. ESLint 9.21 moved it inside
+// `deprecated`, so a rule declaring it here would be writing a key ESLint no longer reads.
+const DEPRECATED_HINT = 'use deprecated: { replacedBy: [...] }';
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
 function fail(constitutionId, detail) {
   return new Error(`eslint-plugin-ijazah (${constitutionId ?? 'unknown rule'}): ${detail}`);
@@ -66,8 +74,7 @@ function fail(constitutionId, detail) {
  * @param {Array} [definition.schema]         Option schema; defaults to none.
  * @param {'code'|'whitespace'} [definition.fixable]  Required by ESLint before a rule may fix.
  * @param {boolean} [definition.hasSuggestions]       Required by ESLint before a rule may suggest.
- * @param {object|boolean} [definition.deprecated]    Forwarded to `meta` untouched.
- * @param {Array} [definition.replacedBy]             Forwarded to `meta` untouched.
+ * @param {object|boolean} [definition.deprecated]    Forwarded to `meta`; carries `replacedBy`.
  * @param {Array} [definition.defaultOptions]         Forwarded to `meta` untouched.
  * @returns {{ meta: object, create: Function }}
  */
@@ -86,7 +93,6 @@ function defineRule(definition) {
     fixable,
     hasSuggestions,
     deprecated,
-    replacedBy,
     defaultOptions,
   } = definition;
 
@@ -96,7 +102,8 @@ function defineRule(definition) {
 
   for (const key of Object.keys(definition)) {
     if (!DEFINITION_KEYS.has(key)) {
-      throw fail(constitutionId, `unknown key "${key}"`);
+      const hint = key === 'replacedBy' ? ` — ${DEPRECATED_HINT}` : '';
+      throw fail(constitutionId, `unknown key "${key}"${hint}`);
     }
   }
 
@@ -108,6 +115,27 @@ function defineRule(definition) {
   }
   if (fixable !== undefined && !FIXABLE.includes(fixable)) {
     throw fail(constitutionId, `fixable must be ${FIXABLE.join(' or ')}, not "${String(fixable)}"`);
+  }
+  // An accepted key with a shape ESLint does not read is the same failure as an unknown key, one
+  // step later: the rule loads, the metadata is ignored, and nobody learns why.
+  if (!TYPES.includes(type)) {
+    throw fail(constitutionId, `type must be ${TYPES.join(', ')}, not "${String(type)}"`);
+  }
+  if (hasSuggestions !== undefined && typeof hasSuggestions !== 'boolean') {
+    throw fail(constitutionId, 'hasSuggestions must be a boolean');
+  }
+  if (description !== undefined && typeof description !== 'string') {
+    throw fail(constitutionId, 'description must be a string');
+  }
+  // ESLint accepts either an array of option schemas or one whole-options JSON Schema object.
+  if (!Array.isArray(schema) && !isPlainObject(schema)) {
+    throw fail(constitutionId, 'schema must be an array or an object');
+  }
+  if (deprecated !== undefined && typeof deprecated !== 'boolean' && !isPlainObject(deprecated)) {
+    throw fail(constitutionId, 'deprecated must be a boolean or an object');
+  }
+  if (defaultOptions !== undefined && !Array.isArray(defaultOptions)) {
+    throw fail(constitutionId, 'defaultOptions must be an array');
   }
 
   const entries = Object.entries(messages);
@@ -148,7 +176,6 @@ function defineRule(definition) {
   if (fixable !== undefined) meta.fixable = fixable;
   if (hasSuggestions !== undefined) meta.hasSuggestions = hasSuggestions;
   if (deprecated !== undefined) meta.deprecated = deprecated;
-  if (replacedBy !== undefined) meta.replacedBy = replacedBy;
   if (defaultOptions !== undefined) meta.defaultOptions = defaultOptions;
 
   return { meta, create };

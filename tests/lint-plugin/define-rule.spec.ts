@@ -18,14 +18,12 @@
 
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const require = createRequire(import.meta.url);
+import { repositoryRoot } from '../support/lint-contract';
 
-const specDirectory = path.dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = path.resolve(specDirectory, '..', '..');
+const require = createRequire(import.meta.url);
 
 const rulePath = path.join(
   repositoryRoot,
@@ -42,7 +40,6 @@ interface RuleModule {
     readonly fixable?: unknown;
     readonly hasSuggestions?: unknown;
     readonly deprecated?: unknown;
-    readonly replacedBy?: unknown;
     readonly defaultOptions?: unknown;
   };
   readonly create: unknown;
@@ -155,6 +152,27 @@ describe('T034 — the rule factory refuses what it cannot trace', () => {
     expect(() => defineRule(valid({ fixable: 'CODE' }))).toThrow(/fixable must be/);
   });
 
+  it('refuses an accepted key carrying a shape ESLint does not read', () => {
+    // The rule would load and ESLint would ignore the metadata, which is the unknown-key failure
+    // one step later. Each accepted key is checked for the one shape ESLint honours.
+    expect(() => defineRule(valid({ type: 'x' }))).toThrow(
+      /type must be problem, suggestion, layout/,
+    );
+    expect(() => defineRule(valid({ hasSuggestions: 'true' }))).toThrow(
+      /hasSuggestions must be a boolean/,
+    );
+    expect(() => defineRule(valid({ description: 42 }))).toThrow(/description must be a string/);
+    expect(() => defineRule(valid({ schema: 'x' }))).toThrow(
+      /schema must be an array or an object/,
+    );
+    expect(() => defineRule(valid({ deprecated: 'yes' }))).toThrow(
+      /deprecated must be a boolean or an object/,
+    );
+    expect(() => defineRule(valid({ defaultOptions: {} }))).toThrow(
+      /defaultOptions must be an array/,
+    );
+  });
+
   it('appends the identifier to every message, trimmed, exactly once', () => {
     const rule = defineRule(
       valid({
@@ -212,17 +230,25 @@ describe('T034 — the rule factory refuses what it cannot trace', () => {
     expect(fixer.meta.hasSuggestions).toBe(true);
     expect(defineRule(valid({ fixable: 'whitespace' })).meta.fixable).toBe('whitespace');
 
+    // `replacedBy` lives inside `deprecated` since ESLint 9.21; the top-level form is refused with
+    // a hint rather than forwarded to a key ESLint no longer reads.
     const retired = defineRule(
-      valid({ deprecated: true, replacedBy: ['ijazah/api/table-ownership'], defaultOptions: [{}] }),
+      valid({
+        deprecated: { replacedBy: [{ rule: { name: 'ijazah/api/table-ownership' } }] },
+        defaultOptions: [{}],
+      }),
     );
 
-    expect(retired.meta.deprecated).toBe(true);
-    expect(retired.meta.replacedBy).toEqual(['ijazah/api/table-ownership']);
+    expect(retired.meta.deprecated).toEqual({
+      replacedBy: [{ rule: { name: 'ijazah/api/table-ownership' } }],
+    });
     expect(retired.meta.defaultOptions).toEqual([{}]);
+    expect(() => defineRule(valid({ replacedBy: ['x'] }))).toThrow(
+      /unknown key "replacedBy" — use deprecated: { replacedBy/,
+    );
   });
 
   it('publishes the two rule sets the configs are built from', () => {
     expect(RULE_SETS).toEqual([FAST, TYPE_AWARE]);
-    expect(RULE_SETS).toEqual(['fast', 'typeAware']);
   });
 });
