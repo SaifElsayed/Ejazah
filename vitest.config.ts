@@ -6,11 +6,8 @@ export default mergeConfig(
   defineConfig({
     test: {
       include: ['tests/**/*.spec.ts', 'apps/**/src/**/*.spec.ts', 'packages/**/src/**/*.spec.ts'],
-      // Violation fixtures (T019) are broken on purpose, and two of them (T026, R-PROC-10) are
-      // `*.spec.ts` files carrying `.only` and `.skip` — that is the prohibition they exist to
-      // prove. `tests/**/*.spec.ts` above would otherwise collect them, and a collected `.only`
-      // would silence every other test in the run. This is the runner's half of the exclusion
-      // the root `tsconfig.json` and `packages/config/eslint.base.js` already carry.
+      // Two violation fixtures are `*.spec.ts` files carrying `.only` and `.skip` — the very
+      // prohibition they prove (T026, R-PROC-10) — so a collected one would silence the run.
       exclude: [...configDefaults.exclude, 'tests/violations/fixtures/**'],
     },
   }),
