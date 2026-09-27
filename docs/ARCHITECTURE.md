@@ -374,11 +374,13 @@ No wallet, no balance, no escrow, no ledger, no per-session share, no commission
 
 Store UTC. Compute in the teacher's zone. Display in the viewer's zone.
 
-`AvailabilitySlot` holds local wall-clock time + IANA timezone. `Session` holds UTC instants resolved at generation.
+`AvailabilitySlot` holds local wall-clock time + IANA timezone. `Session` holds its own local date, local start time and IANA zone, plus UTC instants derived from them (ADR 0009).
 
 The DST trap. Wrong: add 7×24 hours per occurrence — across Egypt's transition every later session silently shifts an hour. Right: for each occurrence, resolve that week's local date + slot time in the teacher's zone to a UTC instant, independently.
 
 Handle spring-forward gaps (shift forward) and autumn ambiguity (take the first) explicitly. Unit-test against real Cairo transition dates. All of it lives in `packages/time`.
+
+A future instant is only as right as the time zone rules that produced it, and governments change those rules. So a session keeps what the teacher chose, its local date, local start time and IANA zone, and that is the schedule. Its UTC start and end are a derived cache, recomputed from the local fields whenever the server's time zone data changes, as calendar systems do ([ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md), FR-SESS-20).
 
 ## 10. Gender enforcement
 

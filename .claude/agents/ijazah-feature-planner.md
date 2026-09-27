@@ -85,9 +85,9 @@ Non-negotiable rules your plans must respect:
 - **The file tree is the nav tree.** Route groups are guard boundaries: `(auth)`, `(student)`, `(teacher)`.
 - **Tokens are the only source of colour.** A hex literal in a component is a review blocker.
 - **The platform never holds money.** Prices and gateway-reported amounts are branded piasters from `packages/money`; money-carrying records live only in `payments`; wallet, ledger, balance and escrow vocabulary is banned everywhere (R-MONEY-6). A paid state has exactly one write path: the persisted, signature-verified gateway event and the idempotent `confirm-enrollment` job (R-HONEST-1). Teachers are invisible until their payout account is gateway-verified (FR-PAYG-14). Twelve modules: identity, verification, catalog (incl. discovery), booking, payments, sessions, chat, certification, reviews, moderation, notifications, admin.
-- **Two kinds of time, never conflated** (R-TIME-3): `availability_slots` hold local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` hold UTC instants (`*_at`). Resolution from the first to the second happens only inside `packages/time`, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2).
+- **Two kinds of time, never conflated** (R-TIME-3): `availability_slots` hold local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` hold their requested local date, local start time and IANA zone as the schedule, plus UTC instants (`*_at`) derived from them (ADR 0009). Resolution from local time to an instant happens only inside `packages/time`, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2).
 - **Jobs are idempotent**; **migrations are immutable after merge** (roll forward, never edit).
-- Derived values are computed, not stored — exactly two cached exceptions exist, both on `teacher_profiles`; a third requires an ADR (R-DB-4).
+- Derived values are computed, not stored — the only cached exceptions are `teacher_profiles.average_rating` / `review_count` and `sessions.scheduled_start_at` / `scheduled_end_at` (ADR 0009); another requires an ADR (R-DB-4).
 
 ## System Invariants (ADR 0005, 0006, 0007 — binding)
 
@@ -101,7 +101,7 @@ Non-negotiable rules your plans must respect:
 
 **Reviews (ADR 0006).** `reviews.enrollment_id` is a plain unique constraint — never partial, never conditional on `deleted_at` (reviews have none). A soft-deleted enrollment is absent from reads and cannot be reviewed; nothing "releases" a review slot.
 
-**Time (R-TIME).** `availability_slots` hold local wall-clock beside an IANA zone; `sessions` hold UTC instants; resolution happens only in `packages/time`, per occurrence, never by adding intervals.
+**Time (R-TIME).** `availability_slots` hold local wall-clock beside an IANA zone; `sessions` hold their requested local date, local start time and IANA zone (`*_local` beside `timezone`) as the schedule, plus UTC instants (`*_at`) derived from them and recomputed when zone data changes (ADR 0009); resolution happens only in `packages/time`, per occurrence, never by adding intervals.
 
 ## Production & Scalability Principles (binding on every plan, implementation and review)
 

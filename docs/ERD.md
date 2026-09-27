@@ -20,7 +20,7 @@ Conventions, binding on every table:
 - Where hard deletion is forbidden, the table carries `deleted_at` and removal is a soft deletion. This covers `users`, `sessions`, `enrollments` and `ijazahs`. One table is excepted and has no removal path whatsoever: `audit_logs`, which is strictly append-only.
 - A soft-deleted row is excluded from every ordinary read, count and facet. Where a unique constraint covers a value a deleted row still holds, the constraint says explicitly whether the row keeps occupying it — see §15.11.
 - Every table carries `created_at`; mutable tables carry `updated_at`.
-- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored, with exactly two deliberate cached exceptions, both on `teacher_profiles`. A third requires an ADR before it exists (R-DB-4).
+- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored. The only deliberate cached exceptions are `teacher_profiles.average_rating` with `review_count`, and `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009). Another requires an ADR before it exists (R-DB-4).
 - Secrets are never plaintext. What must be *verified* is hashed (`*_hash`); what must be *recovered or presented to a third party* is encrypted in the column (`*_encrypted`, bytea).
 
 ## 1. Domain map
@@ -204,7 +204,7 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 |---|---|---|
 | id | uuid | PK |
 | teacher_user_id | FK → users | |
-| day_of_week | smallint | 0–6 |
+| day_of_week | smallint | 0–6, 0 = Sunday (Postgres `EXTRACT(DOW)`) |
 | start_time_local | time | Local concept — never store UTC here |
 | duration_minutes | int | |
 | timezone | text (IANA) | The teacher's zone at creation |
@@ -273,18 +273,21 @@ The central entity: one student's purchase of one package. Snapshots everything 
 
 `sessions_remaining` is derived: `snapshot_session_count − count(sessions where status is terminal-delivered)`. Never stored.
 
-The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived — `count(sessions where status = 'teacher_no_show')` — not a stored counter. Two cached values are permitted in this model and both belong to `teacher_profiles` (R-DB-4).
+The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived — `count(sessions where status = 'teacher_no_show')` — not a stored counter. The only cached values in this model are `teacher_profiles.average_rating` and `review_count`, and `sessions.scheduled_start_at` and `scheduled_end_at` (ADR 0009); nothing about no-shows is among them (R-DB-4).
 
 ### `sessions`
 
-One scheduled occurrence. UTC instants, resolved at generation (Architecture §9).
+One scheduled occurrence. Its local date, local start time and zone are the schedule; the UTC instants are derived from them and recomputed when the time zone data changes (Architecture §9, ADR 0009).
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | |
 | sequence_number | int ≥ 1 | unique (enrollment_id, sequence_number) |
-| scheduled_start_at / scheduled_end_at | timestamptz | |
+| scheduled_date_local | date | The calendar date the occurrence was requested for. With the next two columns, the session's schedule and the source of truth; stores what was asked for, never where a DST gap moved it (ADR 0009 D1) |
+| scheduled_start_time_local | time | The start time the teacher chose, as requested (the slot's `start_time_local`) |
+| timezone | text (IANA) | Zone of the local fields (the enrollment's `snapshot_slot_timezone`) |
+| scheduled_start_at / scheduled_end_at | timestamptz | Cached exception #2 (ADR 0009 D2, R-DB-4): the local start resolved in `timezone`, and that instant plus `snapshot_duration_minutes`. Recomputed when the time zone data changes |
 | status | enum scheduled · done · student_no_show · teacher_no_show · both_no_show · under_threshold · provider_outage · cancelled_by_agreement · cancelled_by_admin · disputed | Full machine, SRS §3.7.5 + §3.8 |
 | simultaneous_connected_seconds | int, default 0 | Accumulated across reconnections (FR-SESS-18) |
 | provider_room_id | text, nullable | Video provider reference |

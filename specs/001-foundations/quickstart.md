@@ -70,7 +70,8 @@ pnpm db:schema:check
 **Expected**: passes. This asserts what the schema conventions promise — every
 timestamp carries a timezone and the right suffix, every local wall-clock column
 sits beside a zone column, every money column carries the piaster suffix, no
-secret column is bare, and exactly two cached derived values exist. Run it after
+secret column is bare, and the only cached derived values are the four columns
+R-DB-4 declares. Run it after
 any migration; it is the check most likely to catch an accidental convention
 breach.
 

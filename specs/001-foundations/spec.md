@@ -135,7 +135,7 @@ attempt must be rejected by the database itself.
 9. **Given** a secret that must be verified, **When** it is stored, **Then** it is hashed; and **Given** one that must be recovered or presented — a multi-factor secret, a national identity document reference, a provider push token — **When** it is stored, **Then** it is encrypted (R-DB-7, R-DB-8).
 10. **Given** the schema, **When** it is searched for any wallet, ledger, balance or escrow column, **Then** none exists; the only money columns are package prices, their enrollment snapshot, and the gross, fee and net the gateway reported on a payment record (R-MONEY-6, FR-PAYG-7).
 11. **Given** the schema, **When** administrator identity is compared with user identity, **Then** they share no table (R-SEC-8).
-12. **Given** the schema, **When** it is searched for stored derived values, **Then** only the two permitted caches exist, each recorded in the model documentation (R-DB-4).
+12. **Given** the schema, **When** it is searched for stored derived values, **Then** only the four cached columns R-DB-4 declares exist, `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at`, `sessions.scheduled_end_at`, each recorded in the model documentation (R-DB-4, ADR 0009).
 13. **Given** a merged migration, **When** its content is altered rather than superseded, **Then** the pipeline fails checksum verification (R-DB-1).
 14. **Given** an empty database, **When** the full migration history is applied, **Then** it completes in one run with no manual step and produces the complete model.
 
@@ -352,7 +352,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-017**: The time package MUST be the only place a domain datetime is constructed or resolved, and the system MUST refuse direct date arithmetic and third-party datetime libraries everywhere else (R-TIME-1).
 - **FR-018**: The time package MUST resolve each recurring occurrence independently, from that occurrence's own local date and the slot's local time in the relevant zone, and MUST NOT advance by fixed multiples of twenty-four hours. This MUST be proven against real Cairo daylight-saving transition dates (R-TIME-2).
 - **FR-019**: The time package MUST handle a nonexistent local time by shifting forward and an ambiguous local time by taking the first occurrence, each carrying a mandatory test (R-TIME-7).
-- **FR-020**: Availability MUST be stored as local wall-clock time with a named zone, and scheduled sessions as absolute instants resolved at generation. The two MUST be distinguishable in the model and never conflated (R-TIME-3, ERD sections 4 and 5).
+- **FR-020**: Availability MUST be stored as local wall-clock time with a named zone. A scheduled session's schedule MUST likewise be its requested local date, local start time and zone, and its absolute start and end instants MUST be derived from them at generation and recomputed when the time zone data changes (ADR 0009). Local values and instants MUST be distinguishable in the model and never conflated (R-TIME-3, ERD sections 4 and 5).
 - **FR-021**: The system MUST accept no client-supplied timestamp for any decision that matters, by admitting no such field in any write schema (R-TIME-6).
 
 **Data model**
@@ -368,7 +368,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-030**: Every integrity rule in ERD section 15 MUST be implemented in the schema rather than in application code, and the set MUST be extended to cover every invariant the constitution assigns to the database (R-DB-5).
 - **FR-031**: Secrets that must be verified MUST be stored hashed; secrets that must be recovered or presented to a third party MUST be stored encrypted. Neither category may be stored in plain text (R-DB-7, R-DB-8).
 - **FR-032**: Administrator identity MUST share no table, token or middleware path with user identity (R-SEC-8, ERD section 12).
-- **FR-033**: The model MUST store no derived value beyond the two caches the constitution permits. Every other derived quantity MUST be computed on read, and any additional cache MUST be justified by a recorded architectural decision before it exists (R-DB-4).
+- **FR-033**: The model MUST store no derived value beyond the caches the constitution declares in R-DB-4: `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at` and `sessions.scheduled_end_at` (ADR 0009). Every other derived quantity MUST be computed on read, and any additional cache MUST be justified by a recorded architectural decision before it exists (R-DB-4).
 - **FR-034**: Every operational number — a fee, a commission, a threshold, a window — MUST be read from the settings store at the moment it is needed and MUST NOT exist as a constant anywhere in code. The store MUST be writable only through the administrative surface, with the change audit-logged. Scheduling a change for a future moment is not required: a change applies from when it is made, and terms already agreed are protected by the snapshot an enrollment takes at purchase (R-MONEY-12, R-PROC-11).
 - **FR-035**: Indexes MUST be limited to primary keys, uniques, foreign keys and the composites declared in ERD section 14. Any addition MUST be justified by a measured slow query (R-DB-9).
 - **FR-036**: Attendance MUST be modelled as provider-reported events keyed uniquely by the provider's own event identifier, with no client-writable attendance field anywhere in the model (R-SESS-1, ERD section 5).
@@ -433,7 +433,7 @@ below are the entities whose structure is load-bearing for a constitutional rule
 - **Ledger entry**: *Retired (ADR 0005 D1, ADR 0007).* The platform holds no funds and computes no balance; `payments` and `payment_events` record what the gateway reported (FR-016, FR-027, R-MONEY-6). Entry kept so old citations resolve.
 - **Availability slot**: a teacher's recurring weekly offer, stored as a local wall-clock time and duration beside the teacher's named zone. Never stored as an absolute instant.
 - **Enrollment**: one student's purchase of one package, snapshotting price, session count, duration, subject and the slot's zone at purchase, so that a later change to a parent cannot rewrite what was bought.
-- **Session**: one scheduled occurrence, an absolute instant resolved at generation from the enrollment's frozen zone, carrying its own status machine and its accumulated connected time.
+- **Session**: one scheduled occurrence. Its schedule is the requested local date, local start time and zone, frozen at generation. Its absolute start and end instants are derived from them and recomputed when the time zone data changes (ADR 0009). It carries its own status machine and its accumulated connected time.
 - **Session participant event**: the provider-reported join and leave record from which attendance is derived, uniquely keyed by the provider's own event identifier so a replayed webhook cannot double-count. Never written by a client.
 - **Ijazah**: a granted certificate carrying an unguessable certificate number and verification token, an immutable chain snapshot, and a revocation record. Never hard-deleted; a revoked one is never shown as valid.
 - **Stored file reference**: a pointer to a document, certificate, signature, attachment or photo, reachable only through a signed, expiring link, and encrypted where it identifies a person.
@@ -456,7 +456,7 @@ below are the entities whose structure is load-bearing for a constitutional rule
 - **SC-011**: The review checklist contains exactly the twelve review-only items, so a reviewer's obligation fits on one screen.
 - **SC-012**: The user surface's generated types contain zero administrative capabilities.
 - **SC-013**: Recurrence resolved across a real Cairo daylight-saving transition produces occurrences at the intended local time on both sides of the transition, with zero drift, and nonexistent and ambiguous local times each resolve deterministically.
-- **SC-014**: The number of stored derived values in the schema is exactly two, each recorded in the model documentation.
+- **SC-014**: The stored derived values in the schema are exactly the four columns R-DB-4 declares, `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at` and `sessions.scheduled_end_at`, each recorded in the model documentation.
 - **SC-015**: Both risk spikes are closed with a written outcome naming what was tested, on what hardware and network, and what was decided.
 - **SC-016**: Every disagreement between the data model and the constitution is closed by an amendment to one of them, with the amendment recorded. The number left open at phase end is zero.
 - **SC-017**: No item in this phase's definition of done depends on a person remembering a rule. Every one is demonstrated by a machine refusing something.

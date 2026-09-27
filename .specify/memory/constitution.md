@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.1.3. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md) and [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md).
+Version 2.1.3. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md) and [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -171,7 +171,7 @@ encrypted at rest.
 | R-DB-1 | **Never** edit a migration after it merges. Fix forward with a new migration. | `CI` - migration checksum verification |
 | R-DB-2 | **Never** hand-edit a local schema. A diverged database is reset from migrations, not patched. | `REVIEW`, plus the team runbook |
 | R-DB-3 | **Never** hard-delete: audit logs, ijazahs, sessions, enrollments, users. Terminal states are statuses; the first four carry `deleted_at`, the audit log has no removal path at all. | `DB` - DELETE revoked on those tables for the app role |
-| R-DB-4 | **Never** store a derived value, except the two declared caches (`average_rating`, `review_count`) - and never add a third without an ADR. | `REVIEW`; the ERD is the registry |
+| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`, and `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)) - and never add another without an ADR. | `REVIEW`; the ERD is the registry |
 | R-DB-5 | **Never** enforce a cross-field invariant only in code when a check constraint can hold it (self-enrollment, phone-or-email, rating range, body-or-attachment). | `DB` check constraints per ERD section 15 |
 | R-DB-6 | **Never** issue a sequential or guessable identifier for anything public: certificate numbers, verification tokens. Crypto-random. | `RT` - generation utility in `platform/`; `Math.random` banned by `LINT` |
 | R-DB-7 | **Never** store an OTP code, token, or password in plain text. Hashed, always. *(Reversible secrets: R-DB-8.)* | `CI` - `*_hash` column naming check; `REVIEW` |
@@ -379,6 +379,7 @@ that was rejected.
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
 | 2.1.3 | 2026-09-27 | PATCH (PR #20, T035): the R-MOBILE-1 enforcement cell and the enforcement-map row name the six `boundaries/*` rules of `eslint-plugin-ijazah`, with wall data in `packages/config/eslint.boundaries.js`, instead of `eslint-plugin-boundaries`; the R-MONEY-6 enforcement cell adds `packages/money`, the money type's own package (R-MONEY-5), to the folders where gateway amounts may be named. No prohibition changed. Follows 2.1.2 (ADR 0009, PR #21). |
+| 2.1.2 | 2026-09-27 | ADR 0009. PATCH: R-DB-4 lists `sessions.scheduled_start_at` and `scheduled_end_at` among the declared caches, derived from the session's stored local time and zone and recomputed when time zone data changes. R-DB-4 already permitted a new cache through an ADR, so no prohibition changed. |
 | 2.1.1 | 2026-09-06 | PATCH: commit subject and task-branch naming stated in R-PROC-1 and Order of work — `Ejazah_app(<phase>): <task> description` and `Ejazah_app/<phase>/<task>`. No prohibition changed. |
 | 2.1.0 | 2026-09-06 | ADR 0007. MINOR: direct gateway checkout with 0% commission and zero custody. R-MONEY-8 and R-MONEY-9 reinstated for gateway events; R-MONEY-6 redefined to confine money-carrying records to `payments`; R-HONEST-1 redefined so a paid state has exactly one write path (the signed webhook); enforcement map updated. R-MONEY-3/4/7/10/11 remain superseded. |
 | 2.0.0 | 2026-09-05 | ADR 0005. MAJOR: the platform no longer processes payments. R-MONEY-3/4/7/8/9/10/11 superseded (ids retained); R-MONEY-6 redefined as a codebase-wide ban on money-movement vocabulary; R-MONEY-12 gate widened to every module; R-HONEST-1 generalised beyond "Mode A"; R-DB-3, R-API-14, R-SESS intro and R-SESS-6 lose their ledger cross-references; R-PROC-1/4 define `develop` as the integration branch; R-PROC-5 references per-path coverage floors; enforcement map and "five rules" recomputed. The twelve-item PR checklist is unchanged. |

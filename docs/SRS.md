@@ -359,6 +359,7 @@ A session's outcome is determined after its scheduled end time has passed, from 
 | FR-SESS-17 | (New) A participant shall be considered to have joined where they were connected for at least an Admin-configurable minimum connection duration (default 60 seconds), within an Admin-configurable join window after scheduled start (default 10 minutes). Both values are configurable [DEC-03]. |
 | FR-SESS-18 | (New) Brief disconnections shall not penalise participants: simultaneous connected time is accumulated across reconnections within the scheduled window, not measured as a single unbroken interval.                                                                                              |
 | FR-SESS-19 | (New) Sessions in Under-Threshold or Provider-Outage shall appear in an Admin review queue with full attendance telemetry, and shall remain unresolved until an Admin resolves them *(v1.3)*.                                                                                                   |
+| FR-SESS-20 | (New) Each session shall store its requested local date, local start time and IANA zone as its schedule. Its UTC start and end shall be derived from them, and shall be recomputed for every session still scheduled, with its reminders rescheduled, whenever the time zone data the server runs on changes ([ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md)). |
 
 ### 3.8 Cancellations, No-Shows, Refunds and Disputes
 

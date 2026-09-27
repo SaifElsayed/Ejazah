@@ -53,7 +53,7 @@ You are the implementer. You receive an approved plan and translate it into prod
 
 **Reviews (ADR 0006).** `reviews.enrollment_id` is a plain unique constraint — never partial, never conditional on `deleted_at` (reviews have none). A soft-deleted enrollment is absent from reads and cannot be reviewed; nothing "releases" a review slot.
 
-**Time (R-TIME).** `availability_slots` hold local wall-clock beside an IANA zone; `sessions` hold UTC instants; resolution happens only in `packages/time`, per occurrence, never by adding intervals.
+**Time (R-TIME).** `availability_slots` hold local wall-clock beside an IANA zone; `sessions` hold their requested local date, local start time and IANA zone (`*_local` beside `timezone`) as the schedule, plus UTC instants (`*_at`) derived from them and recomputed when zone data changes (ADR 0009); resolution happens only in `packages/time`, per occurrence, never by adding intervals.
 
 ## Production & Scalability Principles (binding on every plan, implementation and review)
 
@@ -142,8 +142,8 @@ Once typecheck, lint and tests are green:
 
 ### Data & domain invariants
 - The platform never holds money (ADR 0007). Prices and gateway-reported gross/fee/net are branded `Piasters` from `packages/money`; never float, never decimal, never computed outside that package. Money-carrying records exist only in `modules/payments`; wallet, ledger, balance and escrow concepts are banned everywhere (R-MONEY-6). `enrollments.confirmed_at` is written only by the `confirm-enrollment` job on a persisted, signature-verified paid event — never from a redirect, toggle, admin action or upload (R-HONEST-1, R-MONEY-8/9). Teachers with `payout_verified_at IS NULL` are invisible and unbookable (FR-PAYG-14).
-- Two kinds of time, never conflated (R-TIME-3): `availability_slots` store local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` store UTC instants (`*_at`, `timestamptz`). Resolving one to the other happens only inside `packages/time`, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2).
-- Derived values are computed, not stored — the only cached values are the two on `teacher_profiles` (R-DB-4).
+- Two kinds of time, never conflated (R-TIME-3): `availability_slots` store local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` store their requested local date, local start time and IANA zone as the schedule, plus UTC instants (`*_at`, `timestamptz`) derived from them (ADR 0009). Resolving local time to an instant happens only inside `packages/time`, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2).
+- Derived values are computed, not stored — the only cached values are `teacher_profiles.average_rating` / `review_count` and `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's stored local time and zone (R-DB-4, ADR 0009).
 - Nothing that matters is hard-deleted: respect `deleted_at` soft deletion and exclude soft-deleted rows from ordinary reads. `audit_logs` are append-only.
 - Secrets never in plaintext, never in the repo (R-SEC-1). Raw request bodies, tokens, one-time codes and gateway payloads never reach a log (R-SEC-2); `payment_events` stores a payload hash, never the body.
 - **Concurrency-safe by construction.** Read-then-write transitions (`slot_holds` → `enrollments`, `pending_payment` → `confirmed`, session evaluation, hold expiry) run in one transaction holding `SELECT … FOR UPDATE` on the governing row and re-check the precondition after the lock. Uniqueness under concurrency is a database constraint, never an application check. Jobs and webhooks are idempotent: the same input twice produces one effect and one row.
