@@ -119,10 +119,11 @@ function assertLocalTime(offendingField: string, value: LocalTime): LocalTime {
 }
 
 /**
- * A fixed offset such as `+02:00` parses as a zone and then never observes a transition, so a slot
+ * An offset string such as `+02:00` parses as a zone and then never observes a transition, so a slot
  * stored with one would keep its summer offset all winter — the failure R-TIME-3 exists to prevent.
- * Only a named identifier is a zone; whether that name is in the IANA database is settled below, by
- * the conversion itself.
+ * Only a named identifier passes; whether that name is in the IANA database is settled below, by the
+ * conversion itself. IANA's own fixed-offset names (`Etc/GMT-2`, `UTC`, `EST`) are named identifiers
+ * and are accepted; whether to refuse them is open (note under T032 and T033).
  */
 function assertTimeZoneShape(value: TimeZoneId): TimeZoneId {
   if (!/^[A-Za-z]/.test(value)) {
