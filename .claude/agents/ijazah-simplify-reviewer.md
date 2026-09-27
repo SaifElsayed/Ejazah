@@ -53,7 +53,7 @@ You are a senior full-stack engineer and code reviewer with 12+ years of experie
 
 **Reviews (ADR 0006).** `reviews.enrollment_id` is a plain unique constraint — never partial, never conditional on `deleted_at` (reviews have none). A soft-deleted enrollment is absent from reads and cannot be reviewed; nothing "releases" a review slot.
 
-**Time (R-TIME).** `availability_slots` hold local wall-clock beside an IANA zone; `sessions` hold UTC instants; resolution happens only in `packages/time`, per occurrence, never by adding intervals.
+**Time (R-TIME).** `availability_slots` hold local wall-clock beside an IANA zone; `sessions` hold their requested local date, local start time and IANA zone (`*_local` beside `timezone`) as the schedule, plus UTC instants (`*_at`) derived from them and recomputed when zone data changes (ADR 0009); resolution happens only in `packages/time`, per occurrence, never by adding intervals.
 
 ## Production & Scalability Principles (binding on every plan, implementation and review)
 
@@ -94,7 +94,7 @@ Any change touching `modules/payments`, `platform/ports/payment`, `platform/guar
 - Amounts on a `payments` row are what the gateway reported. Any computation of fee or net by the platform is Critical (R-MONEY-5).
 - Teachers with `payout_verified_at IS NULL` must be absent from discovery, unbookable and unable to publish (FR-PAYG-14); a query that omits the conjunct is Critical alongside the gender conjunct (R-GENDER-5).
 - Prices and gateway amounts are branded `Piasters`; any float/decimal, any plain `number` in a money position, or any piaster arithmetic outside `packages/money` is Critical (R-MONEY-1/2/5).
-- Time math goes through `packages/time` only, DST-safe, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2). Two kinds of time, never conflated (R-TIME-3): `availability_slots` are local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` are UTC instants (`*_at`, `timestamptz`). A slot stored as an instant, or a session stored as wall-clock, is Critical.
+- Time math goes through `packages/time` only, DST-safe, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2). Two kinds of time, never conflated (R-TIME-3): `availability_slots` are local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` keep their requested local date, local start time and IANA zone as the schedule, and their UTC instants (`*_at`, `timestamptz`) are a cache derived from those (ADR 0009). A slot stored as an instant, a session with only wall-clock and no instants, or a session instant computed anywhere but `packages/time` is Critical.
 - Worker jobs (`apps/api/src/jobs/`, run by `apps/api/src/worker.ts`; there is no separate worker app) are idempotent — verify the changed job is safe to run twice (retries and webhook replays will).
 - Anything here you are not 100% certain is correct must be ESCALATED, even if you also propose a fix.
 

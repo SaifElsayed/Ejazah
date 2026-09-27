@@ -20,7 +20,7 @@ Conventions, binding on every table:
 - Where hard deletion is forbidden, the table carries `deleted_at` and removal is a soft deletion. This covers `users`, `sessions`, `enrollments` and `ijazahs`. One table is excepted and has no removal path whatsoever: `audit_logs`, which is strictly append-only.
 - A soft-deleted row is excluded from every ordinary read, count and facet. Where a unique constraint covers a value a deleted row still holds, the constraint says explicitly whether the row keeps occupying it — see §15.11.
 - Every table carries `created_at`; mutable tables carry `updated_at`.
-- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored, with two deliberate cached exceptions: `teacher_profiles.average_rating` with `review_count`, and `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009). Another requires an ADR before it exists (R-DB-4).
+- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored. The only deliberate cached exceptions are `teacher_profiles.average_rating` with `review_count`, and `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009). Another requires an ADR before it exists (R-DB-4).
 - Secrets are never plaintext. What must be *verified* is hashed (`*_hash`); what must be *recovered or presented to a third party* is encrypted in the column (`*_encrypted`, bytea).
 
 ## 1. Domain map
