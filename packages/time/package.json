@@ -11,6 +11,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@js-temporal/polyfill": "^0.5.1"
+    "@js-temporal/polyfill": "0.5.1"
   }
 }

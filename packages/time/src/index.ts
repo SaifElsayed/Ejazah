@@ -110,6 +110,10 @@ function assertLocalTime(offendingField: string, value: LocalTime): LocalTime {
   if (!LOCAL_TIME_PATTERN.test(value)) {
     throw new TimeError(offendingField, value, 'expected the canonical form HH:MM:SS');
   }
+  // Temporal reads a leap second `:60` as `:59` even under `overflow: 'reject'`, a silent repair.
+  if (value.endsWith(':60')) {
+    throw new TimeError(offendingField, value, 'not a time on the clock');
+  }
   try {
     Temporal.PlainTime.from(value, { overflow: 'reject' });
   } catch (error: unknown) {

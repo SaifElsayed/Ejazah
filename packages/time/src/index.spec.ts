@@ -181,7 +181,14 @@ describe('T032 what the package refuses', () => {
   });
 
   it('refuses a local time that is not the canonical form or not on the clock', () => {
-    for (const localTime of ['9:00:00', '09:00', '09:00:00.500', '25:00:00', '09:60:00']) {
+    for (const localTime of [
+      '9:00:00',
+      '09:00',
+      '09:00:00.500',
+      '25:00:00',
+      '09:60:00',
+      '23:59:60',
+    ]) {
       const error = refusalFrom(() =>
         resolveLocalDateTime({ localDate: FRIDAY, localTime, timezone: CAIRO }),
       );

@@ -101,7 +101,7 @@ importers:
   packages/time:
     dependencies:
       '@js-temporal/polyfill':
-        specifier: ^0.5.1
+        specifier: 0.5.1
         version: 0.5.1
 
 packages:
