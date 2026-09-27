@@ -41,18 +41,29 @@ This ADR stops dropping it.
 
 ### D1 — A session carries its own local start and zone, and those are the fact
 
-`sessions` gains three columns, written at generation from the output of
-`packages/time`'s `resolveOccurrences`, which already returns them:
+`sessions` gains three columns, written at generation:
 
-| Column                       | Type          | Meaning                                                                    |
-| ---------------------------- | ------------- | -------------------------------------------------------------------------- |
-| `scheduled_local_date`       | `date`        | The local calendar date of the session                                     |
-| `scheduled_start_time_local` | `time`        | The local start time the teacher chose (the slot's `start_time_local`)     |
-| `timezone`                   | `text` (IANA) | The zone that local time is in (the enrollment's `snapshot_slot_timezone`) |
+| Column                       | Type          | Meaning                                                                           |
+| ---------------------------- | ------------- | --------------------------------------------------------------------------------- |
+| `scheduled_date_local`       | `date`        | The calendar date the occurrence was **requested** for (that week's slot day)     |
+| `scheduled_start_time_local` | `time`        | The start time the teacher **chose**: the slot's `start_time_local`, as requested |
+| `timezone`                   | `text` (IANA) | The zone those local values are in (the enrollment's `snapshot_slot_timezone`)    |
 
-These three are the session's schedule. They follow the same shape as
-`availability_slots` (R-TIME-3), and the `_local` column has an adjacent
-`timezone` column (R-TIME-5). None is a timestamp, so R-TIME-4 does not apply.
+These three store what was asked for, never where the instant landed. The two
+differ only inside a spring-forward gap. There a requested `00:30` resolves to
+`01:30` (R-TIME-7), and `packages/time`'s `resolveOccurrences` returns the
+landed values, which is the right answer for display and the wrong one to keep.
+Storing the landed time would make a later rule change recompute from a time the
+teacher never chose. RFC 5545 does the same: `DTSTART` keeps the requested local
+time, and the gap is applied when an instant is computed from it. So generation
+writes the occurrence's requested date and the slot's `start_time_local`, not
+the `localDate` and `startTimeLocal` it gets back. The sessions phase either
+computes the requested date alongside the call, or adds the requested fields to
+`Occurrence`.
+
+The three columns follow the same shape as `availability_slots` (R-TIME-3).
+Every local column ends in `_local` and sits next to its `timezone` column
+(R-TIME-5, ERD conventions). None is a timestamp, so R-TIME-4 does not apply.
 All three are additive (R-API-9).
 
 ### D2 — `scheduled_start_at` and `scheduled_end_at` become a declared derived cache
@@ -79,9 +90,12 @@ delayed job keyed to a session's start, such as reminders (FR-NOTIF-1,
 Sessions in any other status have been held or settled, and keep their instants.
 
 The job is keyed in `idempotency_keys` (ADR 0008 D2) under the scope
-`tzdata-reresolve`, with the version as the key. Each version is therefore
-applied once, however many workers start (R-API-14). No new table or setting is
-needed.
+`tzdata-reresolve`, with the version as the key. The key is recorded only
+**after** the run completes. If it were written first and the worker crashed
+halfway, the remaining sessions and reminders would never be recomputed for
+that version. A run interrupted before the key is written simply runs again.
+That is harmless, because the recompute is a pure function of D1's columns, so
+two runs give the same result (R-API-14). No new table or setting is needed.
 
 ### D4 — Keeping the data current is an operational duty
 
@@ -91,10 +105,13 @@ as a priority update, especially one that carries an Egyptian rule change.
 
 ### D5 — A session is shown in the teacher's zone and in the viewer's
 
-Wherever a session's time is shown, it appears twice: first as the local time
-and zone from D1, as the server stores them, for example "Friday 09:00, Cairo
-time"; then converted to the viewer's own zone, for example "(10:00 your time)".
-The first line never depends on the viewer's device. If the device's own time
+Wherever a session's time is shown, it appears twice. The first line is the
+session's local time in its own zone, as the server resolves it from D1 through
+`packages/time`, for example "Friday 09:00, Cairo time". This equals the time
+the teacher chose, except inside a spring-forward gap, where it shows the
+shifted time the lesson actually starts. The second line converts to the
+viewer's own zone, for example "(10:00 your time)". The first line never depends
+on the viewer's device. If the device's own time
 zone data is out of date, the two lines disagree visibly instead of the lesson
 silently showing at the wrong hour. It also explains to a teacher or student in
 another country why the number differs from the one the teacher chose. Display

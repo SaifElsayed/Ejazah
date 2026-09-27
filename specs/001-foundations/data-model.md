@@ -56,15 +56,19 @@ Every convention in ERD §0 needs a machine behind it or it is a style guide.
 | Enums declared once, centrally | Schema check asserts no duplicate enum definition | ERD §0 |
 | Nothing that matters is hard-deleted | Revoked privilege — see §4 | R-DB-3 |
 | Secrets are `*_hash` or `*_encrypted`, never bare | Schema check asserts no column named `token`, `secret`, `password`, `code` without a suffix | R-DB-7, R-DB-8 |
-| Derived values are computed, with exactly two exceptions | Schema check counts cached columns against an allow-list of two | R-DB-4 |
+| Derived values are computed, except the caches R-DB-4 declares | Schema check compares cached columns against the allow-list of four: `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at`, `sessions.scheduled_end_at` (ADR 0009) | R-DB-4 |
 
 ---
 
-## 3. The two permitted cached values
+## 3. The permitted cached values
 
-`teacher_profiles.average_rating` and `teacher_profiles.review_count`. That is
-the entire allow-list, and the schema check asserts its size is two. A third
-requires a recorded architectural decision *before* the column exists (R-DB-4).
+`teacher_profiles.average_rating` and `teacher_profiles.review_count`, and
+`sessions.scheduled_start_at` and `sessions.scheduled_end_at`, which are derived
+from the session's stored local date, local start time and zone and recomputed
+when the time zone data changes (ADR 0009). Those four columns are the entire
+allow-list, and the schema check asserts that no other cached column exists.
+Another requires a recorded architectural decision *before* the column exists
+(R-DB-4).
 
 Removed from the model in ERD v1.1 and now computed on read:
 

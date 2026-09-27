@@ -87,7 +87,7 @@ Non-negotiable rules your plans must respect:
 - **The platform never holds money.** Prices and gateway-reported amounts are branded piasters from `packages/money`; money-carrying records live only in `payments`; wallet, ledger, balance and escrow vocabulary is banned everywhere (R-MONEY-6). A paid state has exactly one write path: the persisted, signature-verified gateway event and the idempotent `confirm-enrollment` job (R-HONEST-1). Teachers are invisible until their payout account is gateway-verified (FR-PAYG-14). Twelve modules: identity, verification, catalog (incl. discovery), booking, payments, sessions, chat, certification, reviews, moderation, notifications, admin.
 - **Two kinds of time, never conflated** (R-TIME-3): `availability_slots` hold local wall-clock (`*_local`) beside an IANA `timezone` column; `sessions` hold UTC instants (`*_at`). Resolution from the first to the second happens only inside `packages/time`, per occurrence, never by adding intervals (R-TIME-1, R-TIME-2).
 - **Jobs are idempotent**; **migrations are immutable after merge** (roll forward, never edit).
-- Derived values are computed, not stored — exactly two cached exceptions exist, both on `teacher_profiles`; a third requires an ADR (R-DB-4).
+- Derived values are computed, not stored — the only cached exceptions are `teacher_profiles.average_rating` / `review_count` and `sessions.scheduled_start_at` / `scheduled_end_at` (ADR 0009); another requires an ADR (R-DB-4).
 
 ## System Invariants (ADR 0005, 0006, 0007 — binding)
 
