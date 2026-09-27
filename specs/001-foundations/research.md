@@ -51,7 +51,9 @@ leaky. An older LTS — no benefit, and shorter support runway than the project.
 
 **Decision**: A branded type using a `unique symbol` declared but never exported:
 
-- The brand makes `number` unassignable to the money type in both directions.
+- The brand makes `number` unassignable to the money type, and a money consumer
+  unable to stand in for a number consumer; the reverse widening is closed by the
+  R-MONEY-1 lint rule (FR-072, T131).
 - Construction goes through the package's own constructors, so every value that
   exists was deliberately made.
 - Arithmetic is banned outside the package by a **type-aware** custom lint rule

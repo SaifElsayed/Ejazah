@@ -194,8 +194,9 @@ implementation passes every same-week test and silently fails once a year.
 pnpm --filter @ijazah/money test
 ```
 
-**Expected**: a plain number is not assignable to `Piasters` and `Piasters` is not
-assignable to a plain number, in both directions, proven by type-level tests.
+**Expected**: a plain number is not assignable to `Piasters`, and a money consumer cannot
+stand in for a number consumer, proven by type-level tests; the reverse widening is closed
+by the R-MONEY-1 lint rule (FR-072, T131).
 There is no share splitting to test: the platform never holds money; gateway-reported amounts are recorded, never computed (ADR 0007).
 
 ---
