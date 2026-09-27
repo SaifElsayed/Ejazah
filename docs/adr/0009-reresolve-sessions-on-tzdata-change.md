@@ -1,100 +1,120 @@
-# ADR 0009 — Re-resolve future sessions when time zone data changes
+# ADR 0009 — A session's local time is the source of truth; its UTC instants are recomputed when time zone rules change
 
-**Status:** proposed · **Date:** 2026-09-27 · **Amends:** [Architecture §9](../ARCHITECTURE.md), ERD `enrollments` and `sessions`
+**Status:** proposed · **Date:** 2026-09-27 · **Amends:** [Architecture §9](../ARCHITECTURE.md), ERD `sessions`
 
 ## Context
 
-A session stores the UTC instant resolved when the enrollment was confirmed
-(FR-020, Architecture §9: "Store UTC. Compute in the teacher's zone."). The
-instant is computed from the slot's local wall-clock time and IANA zone, using the
-time zone rules the server has at that moment. The server gets those rules from
-the time zone data bundled with its runtime (Node's ICU data, read through
-`@js-temporal/polyfill`).
+A session stores only the UTC instants resolved when its enrollment was
+confirmed (FR-020, Architecture §9). They are computed from the slot's local
+wall-clock time and IANA zone, using the time zone rules the server has at that
+moment. The server gets those rules from the time zone data bundled with its
+runtime: Node's ICU data, read through `@js-temporal/polyfill`.
 
 Governments change their clock rules, sometimes at short notice. Egypt cancelled
-summer time days before its 2016 start, and reinstated it in 2023. When that
-happens after sessions were generated, every stored instant after the change is
-off by the size of the change. A lesson the teacher set for 09:00 in Cairo
-would start at 08:00 or 10:00 Cairo time. Nothing in the model notices, because
-the stored value is an instant, not the local time the teacher chose.
+summer time days before its 2016 start, and reinstated it in 2023. Once that
+happens, a stored instant for a later lesson is off by the size of the change. A
+lesson the teacher set for 09:00 in Cairo would start at 08:00 or 10:00 Cairo
+time, and nothing in the model can notice. The local time the teacher chose was
+never stored on the session, and converting the stored instant with the new rules
+gives the wrong local time. That conversion is the bug itself.
 
-This was found during the review of PR #19 (T032/T033). No document covered it.
+This was found during the review of PR #19 (T032/T033). No project document
+covered it.
+
+## What the rest of the industry does
+
+This is a solved problem, and the sources agree:
+
+| Source                                                 | What it says                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Jon Skeet, _Storing UTC is not a silver bullet_ (2019) | For a future event, store the **local time and the zone ID** the user supplied, and treat UTC as "derived data" recalculated when rules change. Of the three options he compares, this is his "preferred option". Storing UTC alone breaks, and so does storing UTC plus a rules version and remapping it, which is complex and needs the old rules. |
+| W3C, _Working with Time Zones_, §4.2.2–4.2.3           | Future events need the time zone ID, not an offset, "because a future event's wall time depends on time zone-related information". Each recurrence computes its own instant from the governing zone's rules.                                                                                                                                         |
+| Google Calendar API, `Event.start.timeZone`            | "For recurring events this field is required and specifies the time zone in which the recurrence is expanded". The format is an IANA name.                                                                                                                                                                                                           |
+| RFC 5545 (iCalendar)                                   | A recurring event is `DTSTART;TZID=<zone>:<local time>` plus `RRULE`, so it is local time plus zone. An ambiguous local time "refers to the first occurrence". A local time in a gap is read "using the UTC offset before the gap", which moves it forward. That is R-TIME-7.                                                                        |
+| TC39 Temporal docs, `ZonedDateTime` `offset` option    | When a zone's definition changes after a future value was stored, `'ignore'` "will keep local time unchanged but may result in a different exact time than was originally stored". That is the behaviour a calendar needs.                                                                                                                           |
+
+The project already follows this for availability: a slot is local wall-clock
+time plus an IANA zone (R-TIME-3). A session drops that intent at generation.
+This ADR stops dropping it.
 
 ## Decision
 
-### D1 — Future sessions are re-resolved when the time zone data changes
+### D1 — A session carries its own local start and zone, and those are the fact
 
-When the runtime's time zone data version differs from the last version the
-platform applied, a job re-resolves every session whose `status` is `scheduled`
-and whose `scheduled_start_at` is in the future. Each one is resolved again from
-its own local date, the enrollment's frozen start time and the enrollment's
-frozen zone, through `packages/time` (R-TIME-1, R-TIME-2, R-TIME-7). Where the
-new instant differs, `scheduled_start_at` and `scheduled_end_at` are updated.
-Past sessions, and sessions in any status other than `scheduled`, are never
-touched.
+`sessions` gains three columns, written at generation from the output of
+`packages/time`'s `resolveOccurrences`, which already returns them:
 
-The local time the teacher chose is the fact. The UTC instant is derived from it
-and is recomputed when the rules that derive it change.
+| Column                       | Type          | Meaning                                                                    |
+| ---------------------------- | ------------- | -------------------------------------------------------------------------- |
+| `scheduled_local_date`       | `date`        | The local calendar date of the session                                     |
+| `scheduled_start_time_local` | `time`        | The local start time the teacher chose (the slot's `start_time_local`)     |
+| `timezone`                   | `text` (IANA) | The zone that local time is in (the enrollment's `snapshot_slot_timezone`) |
 
-### D2 — The local intent is stored, not derived
+These three are the session's schedule. They follow the same shape as
+`availability_slots` (R-TIME-3), and the `_local` column has an adjacent
+`timezone` column (R-TIME-5). None is a timestamp, so R-TIME-4 does not apply.
+All three are additive (R-API-9).
 
-Re-resolution cannot recover the intended local time from the stored instant,
-because converting that instant with the new rules gives the wrong answer; that
-is the bug. So the intent is frozen at generation, the same way the enrollment
-already freezes its zone:
+### D2 — `scheduled_start_at` and `scheduled_end_at` become a declared derived cache
 
-| Table         | New column                  | Type   | Meaning                                                                           |
-| ------------- | --------------------------- | ------ | --------------------------------------------------------------------------------- |
-| `enrollments` | `snapshot_start_time_local` | `time` | The slot's `start_time_local`, frozen at purchase beside `snapshot_slot_timezone` |
-| `sessions`    | `scheduled_local_date`      | `date` | The local calendar date this session was resolved from                            |
+The two UTC columns stay, because reminders, the join window (FR-SESS-14),
+evaluation (FR-SESS-10) and every "what starts next" query read and index them.
+They are now derived: `scheduled_start_at` is the local start resolved in
+`timezone` (R-TIME-7 for gaps and overlaps). `scheduled_end_at` is that instant
+plus the enrollment's `snapshot_duration_minutes` of elapsed time. R-DB-4
+forbids a derived value without an ADR, and this ADR is that declaration. The
+cache is written only by generation and by D3, both through `packages/time`.
 
-Both columns are plain `time` and `date`, not timestamps, so R-TIME-4 does not
-apply to them. Both are additive (R-API-9). The table count stays 33.
-
-### D3 — Detection and idempotency
+### D3 — The cache is recomputed when the time zone data changes
 
 The worker reads the runtime's time zone data version (`process.versions.tz` on
-Node) at startup. The job is keyed in `idempotency_keys` (ADR 0008 D2) under the
-scope `tzdata-reresolve` with the version as the key. A version is therefore
-applied exactly once, however many workers start (R-API-14). No new table or
-setting is needed.
+Node) at startup. When it differs from the last version applied, a job
+recomputes the cache for every session whose `status` is `scheduled` and whose
+start is still in the future. It recomputes from D1's three columns, never from
+the old instant. Any delayed job keyed to a session's start, such as reminders
+(FR-NOTIF-1, `reminder_offsets`), is rescheduled from the new instant in the same
+run. Past sessions, and sessions in any other status, keep the instants they
+were held at.
 
-### D4 — Everything keyed to the old instant follows it
+The job is keyed in `idempotency_keys` (ADR 0008 D2) under the scope
+`tzdata-reresolve`, with the version as the key. Each version is therefore
+applied once, however many workers start (R-API-14). No new table or setting is
+needed.
 
-Any delayed job scheduled from a session's start is rescheduled from the new
-instant in the same run. That covers session reminders (FR-NOTIF-1, offsets from
-`reminder_offsets`) and anything else computed the same way. Both participants
-of a changed session are notified that its time was corrected for a clock change.
-The teacher's local time is unchanged. A student in a different zone sees the
-session move in their own local time, and needs to know why.
+### D4 — Keeping the data current is an operational duty
 
-### D5 — Keeping the data current is an operational duty
-
-The job only helps if the runtime's data is current. The runbook's upgrade
-routine must treat a Node release that updates the bundled time zone data as a
-priority update, in particular one carrying an Egyptian rule change.
+The recomputation only helps if the runtime's data is current. The runbook's
+upgrade routine treats a Node release that updates the bundled time zone data
+as a priority update, especially one that carries an Egyptian rule change.
 
 ## Consequences
 
-- One new requirement in the SRS, FR-SESS-20, states D1 and D4.
-- The ERD gains the two columns in D2. Session generation must write both.
-- Session generation (`sessions.generateForEnrollment`) and the re-resolution
-  job share `packages/time`'s `resolveLocalDateTime`, so one rule governs both.
-- A rule change that lands _during_ a lesson's day is handled only if the runtime
-  update is deployed before the lesson. D5 is what makes that likely; nothing in
-  code can make it certain.
+- One new requirement in the SRS, FR-SESS-20, states D1 to D3.
+- The ERD gains D1's three columns on `sessions` and records D2's cache.
+  Session generation must write all five schedule columns. The table count stays 33.
+- Session generation (`sessions.generateForEnrollment`) and the D3 job both
+  resolve through `packages/time`, so one rule governs both.
+- A rule change that takes effect before the runtime update is deployed is not
+  seen in time. D4 is what makes a timely update likely; nothing in code can
+  make it certain.
 - No task implements this yet. It belongs to the phase that builds the sessions
   module, which must pick up FR-SESS-20.
 
 ## Alternatives rejected
 
-- **Resolve sessions lazily, shortly before they start.** This avoids storing
-  instants early, but the SRS stores scheduled instants at generation, and the
-  reminders, the join window (FR-SESS-14) and evaluation (FR-SESS-10) all read
-  them. Moving every reader to on-demand resolution is a larger change for the
-  same result.
-- **Store only the instant and re-derive the local time with the old rules.**
-  The old rules are gone once the runtime is updated. There is nothing to derive
-  with.
-- **Do nothing and correct by hand.** An admin cannot see which sessions a rule
-  change moved, and Egypt has changed its rules with only days of warning.
+- **Store only the UTC instant** (today's model). This is Skeet's option 1: it
+  silently breaks on any rule change.
+- **Store the UTC instant plus the rules version, and remap on change.** This is
+  Skeet's option 2. The remap needs the old rules, which are gone once the
+  runtime is updated, and he rejects it as complex for no benefit.
+- **Resolve on demand and store no UTC at all.** It is correct, but every reader
+  and every index needs the instant (D2), so the cache is kept and recomputed
+  instead.
+
+## References
+
+- Jon Skeet, "Storing UTC is not a silver bullet", 2019 — https://codeblog.jonskeet.uk/2019/03/27/storing-utc-is-not-a-silver-bullet/
+- W3C, "Working with Time Zones" — https://www.w3.org/TR/timezone/
+- Google Calendar API, Events resource — https://developers.google.com/workspace/calendar/api/v3/reference/events
+- RFC 5545, Internet Calendaring and Scheduling Core Object Specification — https://datatracker.ietf.org/doc/html/rfc5545
+- TC39 Temporal, `ZonedDateTime` and `TimeZone` documentation — https://tc39.es/proposal-temporal/docs/zoneddatetime.html
