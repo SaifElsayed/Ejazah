@@ -121,15 +121,42 @@ function assertLocalTime(offendingField: string, value: LocalTime): LocalTime {
 /**
  * An offset string such as `+02:00` parses as a zone and then never observes a transition, so a slot
  * stored with one would keep its summer offset all winter — the failure R-TIME-3 exists to prevent.
- * Only a named identifier passes; whether that name is in the IANA database is settled below, by the
- * conversion itself. IANA's own fixed-offset names (`Etc/GMT-2`, `UTC`, `EST`) are named identifiers
- * and are accepted; whether to refuse them is open (note under T032 and T033).
+ * This is the fast first refusal; whether a name is in the IANA database is settled by the
+ * conversion, and whether it is a place by `assertAreaLocation` after it.
  */
 function assertTimeZoneShape(value: TimeZoneId): TimeZoneId {
   if (!/^[A-Za-z]/.test(value)) {
     throw new TimeError('timezone', value, 'expected an IANA zone identifier, not a fixed offset');
   }
   return value;
+}
+
+// IANA's continent and ocean areas (theory.html: names are AREA/LOCATION).
+const IANA_AREAS: ReadonlySet<string> = new Set([
+  'Africa',
+  'America',
+  'Antarctica',
+  'Arctic',
+  'Asia',
+  'Atlantic',
+  'Australia',
+  'Europe',
+  'Indian',
+  'Pacific',
+]);
+
+/**
+ * A slot's zone must name a place, so it follows that place's clock law summer and winter. W3C
+ * "Working with Time Zones" §3.3.3 says to avoid special-purpose ids such as `Etc/*` and to prefer
+ * continent/city over legacy ids; IANA names a place AREA/LOCATION. So `Etc/GMT-2`, `UTC`, `GMT`,
+ * `EST`, `Egypt`, `US/Eastern` and `africa/cairo` all resolve in Temporal and are still refused
+ * (decided by Amr in the #19 review, note under T032 and T033).
+ */
+function assertAreaLocation(value: TimeZoneId): void {
+  const [area, location] = value.split('/');
+  if (area === undefined || location === undefined || !IANA_AREAS.has(area)) {
+    throw new TimeError('timezone', value, 'expected a continent/city IANA zone');
+  }
 }
 
 /** Canonical UTC render: no fractional seconds, `Z` rather than `+00:00`. */
@@ -174,6 +201,7 @@ export function resolveLocalDateTime(input: {
     // The date and the time are already known good, so the zone is the only input left to blame.
     throw new TimeError('timezone', timezone, 'not a zone in the IANA database', { cause: error });
   }
+  assertAreaLocation(timezone);
 
   const disambiguation: Disambiguation =
     Temporal.ZonedDateTime.compare(earlier, later) === 0

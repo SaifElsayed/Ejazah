@@ -202,6 +202,37 @@ describe('T032 what the package refuses', () => {
     }
   });
 
+  it('refuses a zone that resolves but is not a continent/city place (W3C §3.3.3)', () => {
+    // Each of these is in the IANA database, so the conversion succeeds; a missing `cause` is what
+    // shows the area check refused it rather than the database lookup.
+    for (const timezone of [
+      'Etc/GMT-2',
+      'Etc/UTC',
+      'UTC',
+      'GMT',
+      'EST',
+      'Egypt',
+      'US/Eastern',
+      'africa/cairo',
+    ]) {
+      const error = refusalFrom(() =>
+        resolveLocalDateTime({ localDate: FRIDAY, localTime: '09:00:00', timezone }),
+      );
+      expect(error.offendingField).toBe('timezone');
+      expect(error.offendingValue).toBe(timezone);
+      expect(error.cause).toBeUndefined();
+    }
+  });
+
+  it('accepts a continent/city zone with or without summer time, at any depth', () => {
+    // Kolkata has had no transition since 1945; the rule is "a place", not "has DST".
+    for (const timezone of ['Asia/Kolkata', 'America/Argentina/Buenos_Aires']) {
+      expect(
+        resolveLocalDateTime({ localDate: FRIDAY, localTime: '09:00:00', timezone }).timezone,
+      ).toBe(timezone);
+    }
+  });
+
   it('refuses a zone that is not in the IANA database', () => {
     const error = refusalFrom(() =>
       resolveLocalDateTime({
