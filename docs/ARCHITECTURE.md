@@ -380,6 +380,8 @@ The DST trap. Wrong: add 7×24 hours per occurrence — across Egypt's transitio
 
 Handle spring-forward gaps (shift forward) and autumn ambiguity (take the first) explicitly. Unit-test against real Cairo transition dates. All of it lives in `packages/time`.
 
+A stored instant is only as right as the time zone rules that produced it. Each session also keeps the local date it was resolved from, and its enrollment keeps the local start time and zone. When the server's time zone data changes, a job re-resolves every future scheduled session from those, moves its reminders and tells both participants ([ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md), FR-SESS-20).
+
 ## 10. Gender enforcement
 
 Every session is same-gender. Exactly one legal pairing.

@@ -265,6 +265,7 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_duration_minutes | int | |
 | snapshot_subject_id | FK → subjects | |
 | snapshot_slot_timezone | text | Zone frozen at purchase — DST maths uses this |
+| snapshot_start_time_local | time | The slot's `start_time_local`, frozen at purchase beside the zone; re-resolution reads it (ADR 0009) |
 | status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` on order expiry or failure (FR-PAYG-6); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
 | cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended, nullable | Why a `cancelled` enrollment was cancelled |
@@ -277,13 +278,14 @@ The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived
 
 ### `sessions`
 
-One scheduled occurrence. UTC instants, resolved at generation (Architecture §9).
+One scheduled occurrence. UTC instants, resolved at generation and re-resolved when the time zone data changes (Architecture §9, ADR 0009).
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | |
 | sequence_number | int ≥ 1 | unique (enrollment_id, sequence_number) |
+| scheduled_local_date | date | The local calendar date this session was resolved from; re-resolution reads it (ADR 0009) |
 | scheduled_start_at / scheduled_end_at | timestamptz | |
 | status | enum scheduled · done · student_no_show · teacher_no_show · both_no_show · under_threshold · provider_outage · cancelled_by_agreement · cancelled_by_admin · disputed | Full machine, SRS §3.7.5 + §3.8 |
 | simultaneous_connected_seconds | int, default 0 | Accumulated across reconnections (FR-SESS-18) |
