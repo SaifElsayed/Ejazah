@@ -110,7 +110,13 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 
 ### Implementation for User Story 1
 
-- [ ] T030 [US1] Implement the branded money type and constructors in `packages/money/src/index.ts` using a non-exported `unique symbol`, making plain numbers and piasters mutually unassignable (FR-012, research R-3)
+- [x] T030 [US1] Implement the branded money type and constructors in `packages/money/src/index.ts` using a non-exported `unique symbol`, making plain numbers and piasters mutually unassignable (FR-012, research R-3) — done 2026-09-09
+  > **Note under T030 (2026-09-09).** The published surface is five names: `Piasters`, `piasters`, `isPiasters`, `toPlainNumber`, `MoneyError`. Four decisions the task line left open:
+  > **What a piaster amount is.** `Number.isSafeInteger(value) && value >= 0`, shared by guard and constructor; money columns are `bigint`, so unsafe integers are refused rather than rounded, and `-0` normalises to `0`.
+  > **Throws, not a result type.** Every call site is a validated boundary or a database row, where a failure is a bug or corrupt data (R-API-8); a caller that wants to branch asks `isPiasters` first.
+  > **No arithmetic helpers.** Under ADR 0007 the domain does no money arithmetic (gateway amounts are "as reported, never computed here", ERD §7); the first task that needs an operation adds it here with its own test.
+  > **The serialisation unwrap does not defeat FR-012.** A branded intersection widens to `number` by itself; `toPlainNumber` only gives that widening one greppable call site. The type system holds one direction (a number never becomes `Piasters` without the constructor); the reverse is closed by the R-MONEY-1 lint rule (FR-072, T131), not here. quickstart §7 and research R-3 were reconciled to say so.
+  > **Scope.** `packages/money/src/index.spec.ts` travels with this task because quickstart §7 and T086 require it and no other task names it. It holds the `@ts-expect-error` type-level assertions and a syntax-tree check that the brand is declared once and never exported.
 - [ ] ~~T031~~ Retired (ADR 0005 D1): share splitting no longer exists.
 - [ ] T032 [US1] Implement the time package in `packages/time/src/index.ts` over `@js-temporal/polyfill`, exposing the project's own types and never a Temporal object (FR-017, research R-4)
 - [ ] T033 [US1] Implement per-occurrence recurrence resolution in `packages/time/src/resolve.ts` — each occurrence from its own local date and the slot's local time, never by adding intervals (FR-018)
