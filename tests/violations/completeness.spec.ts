@@ -18,7 +18,9 @@
 //
 // The contract is parsed at test time rather than mirrored in a list here. A copy of the list
 // would have to be edited alongside the contract to stay true, and a check that has to be
-// remembered is not a check: adding a row with no fixture must turn this suite red by itself.
+// remembered is not a check: adding a row with no fixture must turn this suite red by itself. The
+// parser itself is shared with `tests/lint-plugin/convention.spec.ts` — it lives in
+// `tests/support/lint-contract.ts` — for exactly the same reason.
 //
 // Do not weaken an assertion and do not mark a case skipped to make the suite green:
 // `proc/no-focused-or-skipped-test` (R-PROC-10) exists so that route stays closed.
@@ -29,57 +31,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { contractPath, contractRelativePath, parseContractRules } from '../support/lint-contract';
+
 import { registeredViolations, withRegistrationOnly, type ViolationCase } from './harness';
 
 const specFile = fileURLToPath(import.meta.url);
 const specDirectory = path.dirname(specFile);
-const repositoryRoot = path.resolve(specDirectory, '..', '..');
-
-const contractRelativePath = 'specs/001-foundations/contracts/lint-rules.md';
-const contractPath = path.join(repositoryRoot, ...contractRelativePath.split('/'));
-
-interface ContractRule {
-  /** ESLint rule id as published, without the `ijazah/` plugin namespace. */
-  readonly ruleId: string;
-  /** The constitution rule the row's last column assigns to it. */
-  readonly constitutionId: string;
-}
-
-/**
- * A published rule is a table row whose first cell is a backticked `<group>/<name>` id. That
- * shape is what separates the two rule tables from the "Rules held elsewhere" table, whose first
- * cell names a mechanism, and from the prose that cites rule ids outside any table. The
- * constitution id is the last cell either way, so the three-column syntax-only table and the
- * four-column type-aware one parse alike.
- */
-const publishedRuleId = /^`([a-z]+\/[a-z][a-z-]*)`$/;
-
-function parseContractRules(markdown: string): readonly ContractRule[] {
-  const rules: ContractRule[] = [];
-
-  for (const line of markdown.split('\n')) {
-    const row = line.trim();
-    if (!row.startsWith('|') || !row.endsWith('|')) continue;
-
-    const cells = row
-      .slice(1, -1)
-      .split('|')
-      .map((cell) => cell.trim());
-    const first = cells.at(0);
-    const last = cells.at(-1);
-    if (first === undefined || last === undefined) continue;
-
-    const published = publishedRuleId.exec(first);
-    if (published === null) continue;
-
-    const ruleId = published[1];
-    if (ruleId === undefined) continue;
-
-    rules.push({ ruleId, constitutionId: last });
-  }
-
-  return rules;
-}
 
 const contractRules = parseContractRules(readFileSync(contractPath, 'utf8'));
 const constitutionIdFor = new Map(contractRules.map((rule) => [rule.ruleId, rule.constitutionId]));
