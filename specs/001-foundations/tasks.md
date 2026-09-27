@@ -185,7 +185,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T067 [US2] Add the partial index on scheduled sessions declared in ERD §14, and no index beyond that section (FR-035)
 - [ ] T068 [P] [US2] Implement column encryption in `apps/api/src/platform/crypto/encryption.ts` — authenticated encryption above the database so the key never enters a query (FR-031, research R-8)
 - [ ] T069 [P] [US2] Implement hashing in `apps/api/src/platform/crypto/hashing.ts` — a memory-hard function for passwords and one-time codes, a fast unsalted hash for lookup tokens (research R-9)
-- [ ] T070 [US2] Implement the schema-check script in `scripts/schema-check.ts`, querying the live catalogue for timezone-less timestamps, wrong column-name suffixes, bare secret columns, the two `users` partial indexes missing or `reviews.enrollment_id` made partial (ADR 0006), and a cached-derived-value count other than two (FR-024, SC-014)
+- [ ] T070 [US2] Implement the schema-check script in `scripts/schema-check.ts`, querying the live catalogue for timezone-less timestamps, wrong column-name suffixes, bare secret columns, the two `users` partial indexes missing or `reviews.enrollment_id` made partial (ADR 0006), and any cached derived value outside the four columns R-DB-4 declares (FR-024, SC-014; ADR 0009)
 - [ ] T071 [US2] Wire migration checksum verification and the schema check into the pipeline in `.github/workflows/ci.yml` (FR-037)
 
 **Checkpoint**: Every forbidden statement is refused by the database as the application role. The revocations are real, not conventional.

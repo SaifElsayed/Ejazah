@@ -1,6 +1,6 @@
 # ADR 0009 — A session's local time is the source of truth; its UTC instants are recomputed when time zone rules change
 
-**Status:** proposed · **Date:** 2026-09-27 · **Amends:** [Architecture §9](../ARCHITECTURE.md), ERD `sessions`
+**Status:** proposed · **Date:** 2026-09-27 · **Amends:** [Architecture §9](../ARCHITECTURE.md), ERD `sessions`, constitution R-DB-4 (v2.1.2), Phase 0 spec FR-020, FR-033, SC-014, quickstart and T070
 
 ## Context
 
