@@ -17,6 +17,7 @@ const sessions = 'apps/api/src/modules/sessions/attendance.ts';
 const payments = 'apps/api/src/modules/payments/payments.repository.ts';
 const port = 'apps/api/src/platform/ports/payment/payment.port.ts';
 const screen = 'apps/mobile/src/features/student/screens/checkout.tsx';
+const money = 'packages/money/src/index.ts';
 
 typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-vocabulary.js'), {
   valid: [
@@ -41,6 +42,11 @@ typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-
       filename: port,
     },
     {
+      name: 'the money package names an amount generically',
+      code: 'export function toPlainNumber(amount_piasters: number): number { return amount_piasters; }',
+      filename: money,
+    },
+    {
       name: 'a gateway order reference, which is not an amount',
       code: 'export interface CheckoutRef { readonly gateway_order_id: string }',
       filename: 'packages/contracts/src/checkout.ts',
@@ -52,6 +58,12 @@ typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-
     },
   ],
   invalid: [
+    {
+      name: 'held-funds vocabulary is still refused in the money package',
+      code: 'export const walletId = "w";',
+      filename: money,
+      errors: [{ messageId: 'vocabulary', data: { name: 'walletId', term: 'wallet' } }],
+    },
     {
       name: 'a wallet identifier',
       code: 'export const walletId = "w";',

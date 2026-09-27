@@ -8,8 +8,9 @@
 //   (a) vocabulary, refused ANYWHERE — wallet, ledger, balance, escrow and platform-held-funds
 //       words. There is no account to credit and no balance to compute, so a name carrying one of
 //       these describes a system this one is not. T023's fixture: booking/wallet-ledger.ts.
-//   (b) confinement, refused OUTSIDE modules/payments and platform/ports/payment — the gateway's
-//       order, gross, fee and net. Money-carrying records live in those two folders; every other
+//   (b) confinement, refused OUTSIDE modules/payments, platform/ports/payment and packages/money —
+//       the gateway's order, gross, fee and net. Money-carrying records live in the first two
+//       folders, and packages/money is the money type's own package (R-MONEY-5); every other
 //       module speaks to the port or to the payments module's public entry and never reads an
 //       amount. T023's fixture: sessions/gateway-settlement.ts.
 //
@@ -119,7 +120,7 @@ module.exports = defineRule({
     vocabulary:
       '"{{name}}" carries "{{term}}" vocabulary — the platform holds no funds and computes no share, so there is nothing to credit, settle or reconcile anywhere in the applications (ADR 0007)',
     confinement:
-      '"{{name}}" names a gateway amount outside the payments module and the payment port — money-carrying records live only there, and every other module speaks to the port or to the payments public entry rather than reading an amount (ADR 0007)',
+      '"{{name}}" names a gateway amount outside the payments module, the payment port and the money package — money-carrying records live only there, and every other module speaks to the port or to the payments public entry rather than reading an amount (ADR 0007)',
   },
   create(context) {
     const configured = settingsFor(context);

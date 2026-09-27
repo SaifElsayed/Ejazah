@@ -67,7 +67,15 @@ const wall = {
   gatewayAmountWords: ['gross', 'fee', 'net'],
   amountMarkerWords: ['piasters', 'amount', 'total', 'cents'],
   gatewayAmountIdentifiers: ['amount_piasters', 'gateway_fee_piasters', 'net_piasters'],
-  paymentFolders: ['apps/api/src/modules/payments', 'apps/api/src/platform/ports/payment'],
+  //
+  // `packages/money` is exempt as well: it is the money type's own package, the one place R-MONEY-5
+  // allows piaster arithmetic, and its API names an amount generically (`toPlainNumber(amount_piasters)`).
+  // Half (a) still applies there; only the gateway-amount confinement does not (decided by Amr, PR #20).
+  paymentFolders: [
+    'apps/api/src/modules/payments',
+    'apps/api/src/platform/ports/payment',
+    'packages/money',
+  ],
 };
 
 module.exports = [{ settings: { ijazah: { boundaries: wall } } }];

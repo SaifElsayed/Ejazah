@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.1.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md) and [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md).
+Version 2.1.3. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md) and [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -68,7 +68,7 @@ Rules 8 and 9 are reinstated for gateway events.
 | R-MONEY-3 | *Superseded (ADR 0005).* Was: never store a balance. There is no balance to store. | — |
 | R-MONEY-4 | *Superseded (ADR 0005).* Was: never UPDATE or DELETE a ledger row. There is no ledger. Hard-deletion of every other record that matters is R-DB-3. | — |
 | R-MONEY-5 | **Never** do money arithmetic outside `packages/money`. No `+`, `-`, `*` on piaster values in feature code. | `LINT` - arithmetic on `Piasters` type banned outside the package |
-| R-MONEY-6 | **Never** introduce a wallet, balance, escrow, ledger or platform-held-funds concept anywhere. Money-carrying records (gateway order, gross, fee, net) live only in `payments`; every other module speaks to the `PaymentPort` or to `payments`' public entry and never reads a money amount. *(Redefined by ADR 0007.)* | `LINT` boundary rule `boundaries/no-money-vocabulary` outside `modules/payments` and `platform/ports/payment` |
+| R-MONEY-6 | **Never** introduce a wallet, balance, escrow, ledger or platform-held-funds concept anywhere. Money-carrying records (gateway order, gross, fee, net) live only in `payments`; every other module speaks to the `PaymentPort` or to `payments`' public entry and never reads a money amount. *(Redefined by ADR 0007.)* | `LINT` boundary rule `boundaries/no-money-vocabulary` outside `modules/payments`, `platform/ports/payment` and `packages/money` |
 | R-MONEY-7 | *Superseded (ADR 0005).* Was: never disburse during the dispute window. Nothing is disbursed. | — |
 | R-MONEY-8 | **Never** act on a gateway event without a provider event id that is unique and NOT NULL. A replayed event is acknowledged and ignored. *(Reinstated by ADR 0007. Jobs generally: R-API-14.)* | `DB` - `payment_events.provider_event_id` unique, NOT NULL |
 | R-MONEY-9 | **Never** process a gateway webhook without verifying its signature first, on the raw body, before any handler runs. *(Reinstated by ADR 0007. Video-provider webhooks: R-SEC-12.)* | `RT` guard - unsigned or invalid requests rejected before any handler; `CI` test |
@@ -378,6 +378,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.1.3 | 2026-09-27 | PATCH (PR #20, T035): the R-MOBILE-1 enforcement cell and the enforcement-map row name the six `boundaries/*` rules of `eslint-plugin-ijazah`, with wall data in `packages/config/eslint.boundaries.js`, instead of `eslint-plugin-boundaries`; the R-MONEY-6 enforcement cell adds `packages/money`, the money type's own package (R-MONEY-5), to the folders where gateway amounts may be named. No prohibition changed. Follows 2.1.2 (ADR 0009, PR #21). |
 | 2.1.1 | 2026-09-06 | PATCH: commit subject and task-branch naming stated in R-PROC-1 and Order of work — `Ejazah_app(<phase>): <task> description` and `Ejazah_app/<phase>/<task>`. No prohibition changed. |
 | 2.1.0 | 2026-09-06 | ADR 0007. MINOR: direct gateway checkout with 0% commission and zero custody. R-MONEY-8 and R-MONEY-9 reinstated for gateway events; R-MONEY-6 redefined to confine money-carrying records to `payments`; R-HONEST-1 redefined so a paid state has exactly one write path (the signed webhook); enforcement map updated. R-MONEY-3/4/7/10/11 remain superseded. |
 | 2.0.0 | 2026-09-05 | ADR 0005. MAJOR: the platform no longer processes payments. R-MONEY-3/4/7/8/9/10/11 superseded (ids retained); R-MONEY-6 redefined as a codebase-wide ban on money-movement vocabulary; R-MONEY-12 gate widened to every module; R-HONEST-1 generalised beyond "Mode A"; R-DB-3, R-API-14, R-SESS intro and R-SESS-6 lose their ledger cross-references; R-PROC-1/4 define `develop` as the integration branch; R-PROC-5 references per-path coverage floors; enforcement map and "five rules" recomputed. The twelve-item PR checklist is unchanged. |
@@ -392,4 +393,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.1.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-09-06
+**Version**: 2.1.3 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-09-27
