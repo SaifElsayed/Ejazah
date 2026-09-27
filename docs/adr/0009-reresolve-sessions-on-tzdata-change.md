@@ -69,12 +69,14 @@ cache is written only by generation and by D3, both through `packages/time`.
 
 The worker reads the runtime's time zone data version (`process.versions.tz` on
 Node) at startup. When it differs from the last version applied, a job
-recomputes the cache for every session whose `status` is `scheduled` and whose
-start is still in the future. It recomputes from D1's three columns, never from
-the old instant. Any delayed job keyed to a session's start, such as reminders
-(FR-NOTIF-1, `reminder_offsets`), is rescheduled from the new instant in the same
-run. Past sessions, and sessions in any other status, keep the instants they
-were held at.
+recomputes the cache for every session whose `status` is still `scheduled`,
+whatever its cached start says. The cached start is exactly the value that may
+be wrong. If the update is deployed late, a session whose stale instant has just
+passed may still be ahead in real time, and filtering on that instant would skip
+it. The job recomputes from D1's three columns, never from the old instant. Any
+delayed job keyed to a session's start, such as reminders (FR-NOTIF-1,
+`reminder_offsets`), is rescheduled from the new instant in the same run.
+Sessions in any other status have been held or settled, and keep their instants.
 
 The job is keyed in `idempotency_keys` (ADR 0008 D2) under the scope
 `tzdata-reresolve`, with the version as the key. Each version is therefore
@@ -87,9 +89,21 @@ The recomputation only helps if the runtime's data is current. The runbook's
 upgrade routine treats a Node release that updates the bundled time zone data
 as a priority update, especially one that carries an Egyptian rule change.
 
+### D5 — A session is shown in the teacher's zone and in the viewer's
+
+Wherever a session's time is shown, it appears twice: first as the local time
+and zone from D1, as the server stores them, for example "Friday 09:00, Cairo
+time"; then converted to the viewer's own zone, for example "(10:00 your time)".
+The first line never depends on the viewer's device. If the device's own time
+zone data is out of date, the two lines disagree visibly instead of the lesson
+silently showing at the wrong hour. It also explains to a teacher or student in
+another country why the number differs from the one the teacher chose. Display
+formatting stays in the viewer's locale (R-MOBILE-9).
+
 ## Consequences
 
-- One new requirement in the SRS, FR-SESS-20, states D1 to D3.
+- One new requirement in the SRS, FR-SESS-20, states D1 to D3. D5 is a display
+  rule for the screens that show sessions.
 - The ERD gains D1's three columns on `sessions` and records D2's cache.
   Session generation must write all five schedule columns. The table count stays 33.
 - Session generation (`sessions.generateForEnrollment`) and the D3 job both
