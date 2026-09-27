@@ -87,27 +87,27 @@ pnpm test:db-integrity
 
 Each of these must be rejected by the database itself:
 
-| Attempt                                                        | Expected                                            |
-| -------------------------------------------------------------- | --------------------------------------------------- |
-| `DELETE` a user, session, enrollment or ijazah row             | Refused — privilege revoked                         |
-| `DELETE` an audit row                                          | Refused — and no `deleted_at` exists to set instead |
-| Insert an enrollment where student equals teacher              | Refused — check constraint                          |
-| Insert a user with neither phone nor email                     | Refused — check constraint                          |
-| Insert a second review for one enrollment                      | Refused — unique violation (plain, never partial)   |
-| Insert a rating of 0 or 6                                      | Refused — check constraint                          |
-| Insert a chat message with neither body nor attachment         | Refused — check constraint                          |
-| Replay a provider event identifier (attendance or gateway)     | Refused — unique violation                          |
-| Insert a gateway event with no provider event identifier       | Refused — not-null violation                        |
-| Insert a second payment with the same gateway order identifier | Refused — unique violation                          |
+| Attempt | Expected |
+|---|---|
+| `DELETE` a user, session, enrollment or ijazah row | Refused — privilege revoked |
+| `DELETE` an audit row | Refused — and no `deleted_at` exists to set instead |
+| Insert an enrollment where student equals teacher | Refused — check constraint |
+| Insert a user with neither phone nor email | Refused — check constraint |
+| Insert a second review for one enrollment | Refused — unique violation (plain, never partial) |
+| Insert a rating of 0 or 6 | Refused — check constraint |
+| Insert a chat message with neither body nor attachment | Refused — check constraint |
+| Replay a provider event identifier (attendance or gateway) | Refused — unique violation |
+| Insert a gateway event with no provider event identifier | Refused — not-null violation |
+| Insert a second payment with the same gateway order identifier | Refused — unique violation |
 
 **Then the soft-deletion behaviour:**
 
-| Attempt                                                      | Expected                                                                                               |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Soft-delete a user, then read them through an ordinary query | Absent                                                                                                 |
-| Soft-delete a user, then count users                         | Not counted                                                                                            |
-| Soft-delete a user, then register their phone number again   | **Succeeds** — the partial index released it                                                           |
-| Soft-delete an enrollment, then try to review it             | Refused by the service — the enrollment is absent from reads; its one review, if any, stays (ADR 0006) |
+| Attempt | Expected |
+|---|---|
+| Soft-delete a user, then read them through an ordinary query | Absent |
+| Soft-delete a user, then count users | Not counted |
+| Soft-delete a user, then register their phone number again | **Succeeds** — the partial index released it |
+| Soft-delete an enrollment, then try to review it | Refused by the service — the enrollment is absent from reads; its one review, if any, stays (ADR 0006) |
 
 That third row is the one people get wrong. If it fails, someone made the unique
 index total instead of partial, and a person who deletes their account can never
@@ -176,12 +176,12 @@ pnpm --filter @ijazah/time test
 
 Mandatory cases, against real Cairo transition dates:
 
-| Case                                                   | Expected                                                          |
-| ------------------------------------------------------ | ----------------------------------------------------------------- |
+| Case | Expected |
+|---|---|
 | Weekly recurrence spanning a spring-forward transition | Every occurrence at the intended local time, both sides. No drift |
-| Weekly recurrence spanning a fall-back transition      | Same                                                              |
-| A local time that does not exist                       | Shifts forward                                                    |
-| A local time that occurs twice                         | Takes the first                                                   |
+| Weekly recurrence spanning a fall-back transition | Same |
+| A local time that does not exist | Shifts forward |
+| A local time that occurs twice | Takes the first |
 
 The recurrence cases are the ones that catch the real defect. A build-by-adding
 implementation passes every same-week test and silently fails once a year.
@@ -205,17 +205,17 @@ There is no share splitting to test: the platform never holds money; gateway-rep
 
 Each must fail:
 
-| Attempt                                         | Expected                                |
-| ----------------------------------------------- | --------------------------------------- |
-| Push directly to the default branch             | Refused                                 |
-| Merge without an approving review               | Blocked                                 |
-| Merge with a failing pipeline                   | Blocked                                 |
-| Merge with an open critical dependency alert    | Blocked                                 |
-| Open a branch not matching a spec directory     | Pipeline fails, `R-PROC-1`              |
-| Hand-edit a generated file                      | Pipeline fails, `R-PROC-9`              |
-| Remove a procedure, field or enum member        | Contract snapshot diff fails, `R-API-9` |
-| Add one                                         | Passes without comment                  |
-| Drop coverage below the floor in a covered path | Pipeline fails, `R-PROC-5`              |
+| Attempt | Expected |
+|---|---|
+| Push directly to the default branch | Refused |
+| Merge without an approving review | Blocked |
+| Merge with a failing pipeline | Blocked |
+| Merge with an open critical dependency alert | Blocked |
+| Open a branch not matching a spec directory | Pipeline fails, `R-PROC-1` |
+| Hand-edit a generated file | Pipeline fails, `R-PROC-9` |
+| Remove a procedure, field or enum member | Contract snapshot diff fails, `R-API-9` |
+| Add one | Passes without comment |
+| Drop coverage below the floor in a covered path | Pipeline fails, `R-PROC-5` |
 
 **Secret scanning, both independently** (SC-010):
 
@@ -242,17 +242,17 @@ mobile data, not from the office.
 
 ## 10. Kernel defaults (SC-012 and the kernel contract)
 
-| Check                                                         | Expected                                                                                      |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Start with a required config value missing                    | Exits naming the value, before accepting traffic                                              |
-| Trigger a failure deep in the stack                           | One error shape out. No stack trace, query text or internal path                              |
-| Inspect the log for that request                              | Correlation identifier present; no body, token, code, session id, document link or credential |
-| Submit an idempotent operation twice                          | Second returns the first outcome, effect not repeated; one `idempotency_keys` row exists      |
-| Call an auth or search endpoint past its limit                | Throttled                                                                                     |
-| Upload a file whose extension lies about its content          | Content decides; the declaration is ignored                                                   |
-| Deliver a gateway webhook with a missing or invalid signature | Rejected before any handler runs; no event row is written                                     |
-| Inspect the user surface's generated types                    | Zero administrative capabilities                                                              |
-| Perform an administrative action                              | Audit record written by the caller kind, not by the handler                                   |
+| Check | Expected |
+|---|---|
+| Start with a required config value missing | Exits naming the value, before accepting traffic |
+| Trigger a failure deep in the stack | One error shape out. No stack trace, query text or internal path |
+| Inspect the log for that request | Correlation identifier present; no body, token, code, session id, document link or credential |
+| Submit an idempotent operation twice | Second returns the first outcome, effect not repeated; one `idempotency_keys` row exists |
+| Call an auth or search endpoint past its limit | Throttled |
+| Upload a file whose extension lies about its content | Content decides; the declaration is ignored |
+| Deliver a gateway webhook with a missing or invalid signature | Rejected before any handler runs; no event row is written |
+| Inspect the user surface's generated types | Zero administrative capabilities |
+| Perform an administrative action | Audit record written by the caller kind, not by the handler |
 
 ---
 
@@ -260,15 +260,15 @@ mobile data, not from the office.
 
 PLAN.md's Phase 0 list, and where each is proven:
 
-| Item                                                      | Section                |
-| --------------------------------------------------------- | ---------------------- |
-| CI green on typecheck, lint, test, build                  | §8                     |
-| Secret scanning and branch protection enforced            | §8                     |
-| Staging deploys automatically from the default branch     | §9                     |
-| Migrations run clean from empty database                  | §2                     |
-| Delete revoked at role level on the five protected tables | §3                     |
-| Every port has a working stand-in                         | §5                     |
-| Both spikes closed with a written outcome                 | Read the two documents |
+| Item | Section |
+|---|---|
+| CI green on typecheck, lint, test, build | §8 |
+| Secret scanning and branch protection enforced | §8 |
+| Staging deploys automatically from the default branch | §9 |
+| Migrations run clean from empty database | §2 |
+| Delete revoked at role level on the five protected tables | §3 |
+| Every port has a working stand-in | §5 |
+| Both spikes closed with a written outcome | Read the two documents |
 
 **Then the question this phase actually answers**: pick any rule in
 `.specify/memory/constitution.md` with a machine tier. Try to break it. If you

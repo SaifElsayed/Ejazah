@@ -1,5 +1,6 @@
 ---
-description: 'Task list for Phase 0 — Foundations'
+
+description: "Task list for Phase 0 — Foundations"
 ---
 
 # Tasks: Phase 0 — Foundations
@@ -8,7 +9,7 @@ description: 'Task list for Phase 0 — Foundations'
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/)
 
-**Tests**: Included, and not optional here. The specification requires them by name — SC-003 requires a reproducible failing case for every machine-enforced rule, FR-019 makes two DST edge-case tests mandatory, and SC-005 requires the whole suite to pass with no credential present. In this phase a test that _fails on purpose_ is the deliverable, not a check on one.
+**Tests**: Included, and not optional here. The specification requires them by name — SC-003 requires a reproducible failing case for every machine-enforced rule, FR-019 makes two DST edge-case tests mandatory, and SC-005 requires the whole suite to pass with no credential present. In this phase a test that *fails on purpose* is the deliverable, not a check on one.
 
 **Organization**: Grouped by the seven user stories in spec.md, in priority order.
 
@@ -38,11 +39,10 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [x] T008 [P] Scaffold the backend at `apps/api/` with `src/main.ts` and `src/worker.ts` entrypoints sharing `src/modules/` — done 2026-09-06
 
 > **Note on T006–T008 dependencies (PR #3, 2026-09-07).** PR #2 declared Expo, React, Vite, Nest, tRPC, BullMQ and Zod under these three tasks; that was outside their text and was reverted in PR #3. `pnpm-lock.yaml` was **not changed** by the revert: regenerating it from the restored manifests produced the file already on `develop`. A dependency is declared by the task that first imports it, in the package that imports it, with the lockfile committed in the same commit.
-
 - [x] T009 [P] Scaffold `packages/contracts/` as the only shared type surface — done 2026-09-07
 - [x] T010 Create `.env.example` covering every configuration value, with no real secret in it, and `.gitignore` excluding `.env` — done 2026-09-07
 - [x] T011 Install and configure a native pre-commit hook manager at repository root, with no hooks registered yet (filled by T048 and T082) — done 2026-09-07
-  > **Note under T010 (PR #4, 2026-09-07).** T010 changed only comments: the file already covered every value the Phase 0 documents name. Two further values are _described_ by the documents but not _named_ by any of them (an externally reachable origin for webhooks, ARCHITECTURE §15; a video-provider webhook signing secret, kernel.md guards); they are deliberately not invented here and are named by **T015**, which owns the configuration schema. **T014** is already satisfied: both connection strings are present per research R-5, so T014 is a verification-only task for its owner.
+  > **Note under T010 (PR #4, 2026-09-07).** T010 changed only comments: the file already covered every value the Phase 0 documents name. Two further values are *described* by the documents but not *named* by any of them (an externally reachable origin for webhooks, ARCHITECTURE §15; a video-provider webhook signing secret, kernel.md guards); they are deliberately not invented here and are named by **T015**, which owns the configuration schema. **T014** is already satisfied: both connection strings are present per research R-5, so T014 is a verification-only task for its owner.
 
 ---
 
@@ -126,7 +126,6 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 > **Note under T035 (PR #16, 2026-09-09), for T035–T047, T131 and T132.** Declare every plugin rule through `defineRule` (see the note under T034).
   > **Note under T035 (PR #9, 2026-09-08).** Match a file by its path segments, not by an anchor at the repository root. T020's fixtures mirror the real tree exactly (`apps/mobile/src/features/{student,teacher,shared}/`, `apps/api/src/modules/*/`, `apps/api/src/platform/ports/payment/`) but sit under `tests/violations/fixtures/`, so a rule testing for `apps/mobile/src/features/student/` *within* the filename works and one comparing a root-relative path for equality does not. The alternative is putting deliberately broken files into the real application trees, which is worse. Both directions of R-MOBILE-1 and R-MOBILE-2 have a fixture, so a rule that refuses one direction and shrugs at the other stays red.
 > **Note under T035 (PR #11, 2026-09-08).** Match identifiers, imports and table access, not comments or free text, so a word like "balance" in prose is not a false positive. T023 declares one fixture per half (`booking/wallet-ledger.ts`, `sessions/gateway-settlement.ts`). T021's `booking/booking.repository.ts` fixture used to read `payments` and name `gross`; PR #12 changed it to read `reviews` so it stays a one-rule fixture.
-
 - [ ] T036 [P] [US1] Implement `api/no-orm-outside-repository` in `packages/config/eslint-plugin-ijazah/rules/no-orm-outside-repository.js` (FR-005), and `api/no-logic-in-router` in `rules/no-logic-in-router.js` as a complexity ceiling on `*.router.ts` (FR-071)
   > **Note under T036 (PR #9, 2026-09-08).** Two values no Phase 0 document fixes, deliberately left for this task rather than invented in T021. **The complexity ceiling**: the constitution, contracts/lint-rules.md and this task line all say "complexity ceiling" and none names a number; record the value and the reasoning in the rule file. T021's fixture carries more than twenty independent decisions in one procedure, so it stays over any defensible ceiling. **The database-client specifier**: `prisma/schema/base.prisma` uses the `prisma-client` generator writing to `node_modules/.prisma/client`, and no repository file exists yet to settle what a repository actually imports. T021's fixture assumes `@prisma/client`, the canonical name; if this task bans a different specifier, update `tests/violations/fixtures/apps/api/src/modules/booking/booking.service.ts` in the same commit rather than leaving a mystery red.
 - [ ] T037 [P] [US1] Implement the design and direction rules — `mobile/no-raw-color`, `mobile/no-physical-direction`, `mobile/no-raw-control` — under `packages/config/eslint-plugin-ijazah/rules/` (FR-006, FR-007)
@@ -141,9 +140,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T043 [US1] Enable type-aware linting in `packages/config/eslint.base.js` by pointing the parser at the project, and split the configuration into fast and type-aware sets per research R-10
 - [ ] T044 [P] [US1] Implement `money/no-arithmetic-outside-package` in `packages/config/eslint-plugin-ijazah/rules/no-money-arithmetic.js`, flagging any binary-expression operand carrying the brand (FR-013)
 - [ ] T045 [P] [US1] Implement `money/require-piaster-suffix` in `packages/config/eslint-plugin-ijazah/rules/require-piaster-suffix.js`, resolving the identifier's type rather than guessing from its name (FR-014)
-
 > **Note under T045 and T131 (PR #11, 2026-09-08).** Money identifiers use the constitution's literal form, `snake_case` with the `_piasters` suffix (`price_piasters`, `gross_piasters`, `fee_piasters`, `net_piasters`), the same spelling as the database columns (ERD section 0), so a name can be traced from schema to code without translation. The T023 fixtures are written in that form; if either rule keys on a different casing, change the rule, not the fixtures.
-
 - [ ] T046 [P] [US1] Implement `gender/require-requester-gender` in `packages/config/eslint-plugin-ijazah/rules/require-requester-gender.js`, refusing a repository method returning teachers whose signature omits the requester's gender (FR-005)
 - [ ] T047 [P] [US1] Implement `api/table-ownership` in `packages/config/eslint-plugin-ijazah/rules/table-ownership.js`, reading the manifest from T016 (FR-005)
   > **Note under T047 (PR #9, 2026-09-08).** Two things T021's fixture makes concrete, in addition to the `$comment` key T016's note already flags. The rule must **map a Prisma delegate to a manifest table name**: the fixture calls `prisma.review.findMany` and the manifest lists `reviews`; models are PascalCase and `@@map` to snake_case plural per `base.prisma`. And the fixture is deliberately a `*.repository.ts` file, so holding the client there is legal and the only prohibition it breaks is the ownership one — `reviews` belongs to the reviews module and the fixture queries it from booking.

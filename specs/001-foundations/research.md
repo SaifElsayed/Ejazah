@@ -146,12 +146,12 @@ different problem (which rows), not this one (which verbs).
 is additionally asserted by the schema-check script so that a future migration
 cannot quietly drop one:
 
-| Construct                                           | Why raw SQL                                                | Serves          |
-| --------------------------------------------------- | ---------------------------------------------------------- | --------------- |
-| `REVOKE` / `GRANT` / default privileges             | Not a schema-modelling concept                             | FR-025, FR-026  |
-| Partial unique indexes (`WHERE deleted_at IS NULL`) | Partial indexes are not expressible in the schema language | ERD §15.11      |
-| Partial index on scheduled sessions                 | Same                                                       | ERD §14         |
-| Check constraints                                   | Expressible only as raw SQL in this toolchain              | FR-030, ERD §15 |
+| Construct | Why raw SQL | Serves |
+|---|---|---|
+| `REVOKE` / `GRANT` / default privileges | Not a schema-modelling concept | FR-025, FR-026 |
+| Partial unique indexes (`WHERE deleted_at IS NULL`) | Partial indexes are not expressible in the schema language | ERD §15.11 |
+| Partial index on scheduled sessions | Same | ERD §14 |
+| Check constraints | Expressible only as raw SQL in this toolchain | FR-030, ERD §15 |
 
 **Rationale**: All four are load-bearing for a constitution rule, so "the ORM
 cannot express it" is not a reason to move the guarantee up into application
@@ -213,18 +213,18 @@ and for a small value space is close to reversible.
 
 **Decision**:
 
-| Value                     | Storage                                              | Lookup                                                                                   |
-| ------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| OTP code, password        | Hash with a memory-hard KDF (Argon2id)               | Verify by comparison                                                                     |
-| Ijazah verification token | SHA-256 hash, unique                                 | The QR carries the plaintext; the server hashes the presented value and looks up by hash |
-| Device push token         | AES-GCM ciphertext, plus SHA-256 hash for uniqueness | Deduplicate by hash, decrypt only when sending                                           |
+| Value | Storage | Lookup |
+|---|---|---|
+| OTP code, password | Hash with a memory-hard KDF (Argon2id) | Verify by comparison |
+| Ijazah verification token | SHA-256 hash, unique | The QR carries the plaintext; the server hashes the presented value and looks up by hash |
+| Device push token | AES-GCM ciphertext, plus SHA-256 hash for uniqueness | Deduplicate by hash, decrypt only when sending |
 
 **Rationale**: Two different jobs are being confused if one mechanism is used for
 both. A password is never needed again in plaintext, so a slow, salted KDF is
 correct. A verification token must be matched against a value someone presents,
 so a fast unsalted hash is correct — it is a high-entropy random value, so the
 brute-force resistance a KDF provides is unnecessary. A push token must be
-_presented to a third party_, so it cannot be hashed at all and belongs under
+*presented to a third party*, so it cannot be hashed at all and belongs under
 R-DB-8 instead.
 
 **Consequence worth flagging to Phase 4**: with only the hash stored, a lost
@@ -352,7 +352,7 @@ hosting platform's own push protection as a third net.
 point: the hook can be bypassed with a flag, the pipeline catches what the hook
 missed but only after the secret is already in a remote branch, and push
 protection refuses the push itself. The spec's SC-010 requires the local and
-pipeline checks to reject a planted secret _independently_, so neither may be
+pipeline checks to reject a planted secret *independently*, so neither may be
 implemented as a call to the other.
 
 ---
@@ -459,10 +459,10 @@ computing them here is R-MONEY-5 arithmetic with no caller.
 
 ## Summary of what remains open
 
-| Item                            | Status                              | Blocks                                                             |
-| ------------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
-| Staging host (R-18)             | Recommendation pending confirmation | Task list for FR-066, not the design                               |
-| Data residency (R-19)           | Recommendation pending confirmation | Provisioning, not the design                                       |
-| Gateway selection (SRS OPEN-11) | Business evaluation pending         | The Phase 2 real adapter; not the port, the stand-in or the schema |
+| Item | Status | Blocks |
+|---|---|---|
+| Staging host (R-18) | Recommendation pending confirmation | Task list for FR-066, not the design |
+| Data residency (R-19) | Recommendation pending confirmation | Provisioning, not the design |
+| Gateway selection (SRS OPEN-11) | Business evaluation pending | The Phase 2 real adapter; not the port, the stand-in or the schema |
 
 Nothing open blocks Phase 1 design or the task breakdown.
