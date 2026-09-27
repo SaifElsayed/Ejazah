@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { MoneyError, isPiasters, piasters, toPlainNumber, type Piasters } from './index.js';
 
@@ -110,16 +111,16 @@ describe('isPiasters (T030)', () => {
 describe('the brand makes a number and a piaster amount non-interchangeable (FR-012, FR-072)', () => {
   it('refuses a plain number where money is expected, in every position', () => {
     // @ts-expect-error T030/FR-012: a plain number is not assignable to Piasters.
-    const fromLiteral_piasters: Piasters = 150_000;
+    const from_literal_piasters: Piasters = 150_000;
 
     const plain: number = 150_000;
     // @ts-expect-error T030/FR-012: nor is a number-typed value, however it was obtained.
-    const fromVariable_piasters: Piasters = plain;
+    const from_variable_piasters: Piasters = plain;
 
     // @ts-expect-error T030/FR-012: nor in an argument position.
     const unwrapped = toPlainNumber(150_000);
 
-    expect([fromLiteral_piasters, fromVariable_piasters, unwrapped]).toHaveLength(3);
+    expect([from_literal_piasters, from_variable_piasters, unwrapped]).toHaveLength(3);
   });
 
   it('is a distinct type from number, so aliasing it away fails the build', () => {
@@ -149,13 +150,80 @@ describe('the brand makes a number and a piaster amount non-interchangeable (FR-
 
     expect(consumeNumber(piasters(7))).toBe(7);
   });
+});
 
-  it('never exports the brand, which is the only thing holding the guarantee up', () => {
-    const source = readFileSync(sourcePath, 'utf8');
+// Exporting the brand moves nothing in the type system, so these read `index.ts` as a syntax tree.
+// The tree makes them indifferent to formatting, comments and a rename of the symbol.
+describe('the brand stays private to index.ts, which is the only thing holding FR-012 up', () => {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    readFileSync(sourcePath, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  );
 
-    expect(source).toMatch(/^declare const piastersBrand: unique symbol;$/m);
-    expect(source).not.toMatch(/export\s+declare\s+const\s+piastersBrand/);
-    expect(source).not.toMatch(/export\s*\{[^}]*piastersBrand/);
-    expect(source).not.toMatch(/export\s+type\s+\w+\s*=\s*typeof\s+piastersBrand/);
+  function collect<T extends ts.Node>(test: (node: ts.Node) => node is T): T[] {
+    const found: T[] = [];
+    const visit = (node: ts.Node): void => {
+      if (test(node)) found.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return found;
+  }
+
+  function isUniqueSymbolDeclaration(
+    node: ts.Node,
+  ): node is ts.VariableDeclaration & { name: ts.Identifier } {
+    return (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.type !== undefined &&
+      ts.isTypeOperatorNode(node.type) &&
+      node.type.operator === ts.SyntaxKind.UniqueKeyword
+    );
+  }
+
+  function theBrand(): ts.VariableDeclaration & { name: ts.Identifier } {
+    const found = collect(isUniqueSymbolDeclaration);
+    const [brand] = found;
+    if (found.length !== 1 || brand === undefined) {
+      throw new Error(
+        `index.ts must declare exactly one \`unique symbol\` brand, found ${found.length}. The declaration is missing or duplicated; this is not an export.`,
+      );
+    }
+    return brand;
+  }
+
+  function where(node: ts.Node): string {
+    const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+    return `line ${line + 1}: ${node.parent.getText(sourceFile)}`;
+  }
+
+  it('is declared exactly once, as a unique symbol', () => {
+    expect(theBrand().name.text).not.toBe('');
+  });
+
+  it('is never exported, and never used except as a computed property key', () => {
+    const declaration = theBrand();
+    const brand = declaration.name.text;
+    const statement = declaration.parent.parent;
+    const exported = (
+      ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined
+    )?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
+
+    // The one legal use is the key in `{ readonly [brand]: true }`. Any other reference — an export
+    // list, `export default`, `typeof` in an exported type, an alias exported later — is a way for
+    // code outside this file to mint a `Piasters` without the constructor.
+    const leaks = collect(
+      (node): node is ts.Identifier =>
+        ts.isIdentifier(node) &&
+        node.text === brand &&
+        node !== declaration.name &&
+        !ts.isComputedPropertyName(node.parent),
+    ).map(where);
+    if (exported === true) leaks.unshift(where(declaration.name));
+
+    expect(leaks, `the brand "${brand}" escapes index.ts`).toEqual([]);
   });
 });
