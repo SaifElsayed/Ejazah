@@ -9,7 +9,7 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // The package exposes no `add`, `subtract`, `multiply` or `split`. R-MONEY-5 makes this the only
 // legal place for piaster arithmetic, and under ADR 0007 the domain has none to do: a teacher sets
 // `packages.price_piasters`, an enrollment snapshots it, and the gateway reports gross, fee and net
-// (`net = amount − fee`, "as reported, never computed here" — ERD §7). Share splitting and the
+// (`net = gross − fee`, "as reported, never computed here" — ERD §7). Share splitting and the
 // rounding remainder that needed it are retired (FR-015, DEC-14). An operation added before a task
 // names the requirement that needs it is an invitation for feature code to do money maths.
 

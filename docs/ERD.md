@@ -358,7 +358,7 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | gateway_transaction_id | text, unique, nullable | Reported by the paid event |
 | gross_piasters | bigint | Gross — the snapshot price charged. Named for what it is, so the R-MONEY-6 confinement rule recognises it by its words (PR #20) |
 | gateway_fee_piasters | bigint, nullable | Reported by the gateway on the paid event |
-| net_piasters | bigint, nullable | Settled to the teacher; `amount − fee`, as reported, never computed here (R-MONEY-5) |
+| net_piasters | bigint, nullable | Settled to the teacher; `gross − fee`, as reported, never computed here (R-MONEY-5) |
 | currency | char(3) | |
 | status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10) |
 | created_at / updated_at | timestamptz | |
