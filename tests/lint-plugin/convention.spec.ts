@@ -22,9 +22,10 @@
 // type-aware lint run, while `tests/**/*.ts` is already covered by the root `tsconfig.json` and by
 // the Vitest include.
 //
-// The six `boundaries/*` ids the contract publishes are configuration of `eslint-plugin-boundaries`
-// in `packages/config/eslint.boundaries.js` (T035), not rules of this plugin, so they are excluded
-// from the comparison in both directions.
+// Every published rule id is compared, the six `boundaries/*` included: T035 implemented those as
+// rules of this plugin rather than as `eslint-plugin-boundaries` configuration, because the
+// library reports under its own ids and the published id is what a build log has to carry
+// (FR-011). The exclusion this spec used to carry is gone with them.
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -72,9 +73,9 @@ const { RULE_SETS } = require(path.join(pluginPath, 'rule.js')) as {
 const contractMarkdown = readFileSync(contractPath, 'utf8');
 const contractRules = parseContractRules(contractMarkdown);
 
-// `boundaries/*` is `eslint-plugin-boundaries` configuration (T035), not a rule of this plugin.
-const pluginContractRules = contractRules.filter((rule) => !rule.ruleId.startsWith('boundaries/'));
-const contractRuleById = new Map(pluginContractRules.map((rule) => [rule.ruleId, rule]));
+// Every row of both rule tables, unfiltered: the plugin registers all thirty.
+const publishedRules = contractRules;
+const contractRuleById = new Map(publishedRules.map((rule) => [rule.ruleId, rule]));
 
 const registeredIds = Object.keys(plugin.rules).sort();
 
@@ -101,7 +102,7 @@ function report(verdict: string, detail: string): string {
 describe('T034 — the plugin and the published contract are the same list', () => {
   it('parses the contract at all', () => {
     expect(
-      pluginContractRules.length,
+      publishedRules.length,
       report(
         'no rule row parsed at all — the parser is broken, not the contract',
         `registered   ${registeredIds.length} rule ids`,
@@ -109,13 +110,13 @@ describe('T034 — the plugin and the published contract are the same list', () 
       // Both headings must have been recognised, or a whole table would be silently skipped.
     ).toBeGreaterThan(0);
 
-    const bySet = new Set(pluginContractRules.map((rule) => rule.ruleSet));
+    const bySet = new Set(publishedRules.map((rule) => rule.ruleSet));
 
     expect(
       [...bySet].sort(),
       report(
         'the contract yielded rules from fewer than both tables — a heading was renamed and a whole table is going unchecked',
-        `parsed       ${pluginContractRules.length} rows`,
+        `parsed       ${publishedRules.length} rows`,
       ),
     ).toEqual(['fast', 'typeAware']);
 
@@ -134,8 +135,8 @@ describe('T034 — the plugin and the published contract are the same list', () 
     ).toEqual([]);
   });
 
-  it('registers every published rule the plugin owns, and nothing else', () => {
-    const missing = pluginContractRules
+  it('registers every published rule, and nothing else', () => {
+    const missing = publishedRules
       .map((rule) => rule.ruleId)
       .filter((ruleId) => !Object.hasOwn(plugin.rules, ruleId))
       .sort();

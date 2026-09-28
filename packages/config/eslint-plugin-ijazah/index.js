@@ -9,15 +9,40 @@
 // and configured under another, cannot be registered and left unconfigured, and cannot land in
 // both sets. Three hand-kept lists could drift; one table cannot disagree with itself.
 //
-// The six `boundaries/*` ids the contract publishes are not here: they are configuration of
-// `eslint-plugin-boundaries` in `../eslint.boundaries.js` (T035), not rules of this plugin.
-// This plugin owns the other 24 — 20 syntax-only, 4 type-aware (research R-10).
+// The six `boundaries/*` ids the contract publishes are rules of this plugin too, since T035.
+// They were going to be `eslint-plugin-boundaries` configuration; that library reports under its
+// own rule ids, so a build log could never carry the id the contract publishes and FR-011 could
+// not hold. `../eslint.boundaries.js` still owns the wall — the paths, folders and word lists —
+// and hands it to those six rules as flat-config `settings`.
+// This plugin owns all 30 — 26 syntax-only, 4 type-aware (research R-10).
 
 const { FAST, TYPE_AWARE, RULE_SETS } = require('./rule');
 
 const namespace = 'ijazah';
 
 const catalog = [
+  {
+    id: 'boundaries/no-cross-role-import',
+    set: FAST,
+    rule: require('./rules/no-cross-role-import'),
+  },
+  {
+    id: 'boundaries/no-role-import-in-shared',
+    set: FAST,
+    rule: require('./rules/no-role-import-in-shared'),
+  },
+  {
+    id: 'boundaries/no-deep-module-import',
+    set: FAST,
+    rule: require('./rules/no-deep-module-import'),
+  },
+  { id: 'boundaries/no-adapter-import', set: FAST, rule: require('./rules/no-adapter-import') },
+  {
+    id: 'boundaries/no-upward-admin-import',
+    set: FAST,
+    rule: require('./rules/no-upward-admin-import'),
+  },
+  { id: 'boundaries/no-money-vocabulary', set: FAST, rule: require('./rules/no-money-vocabulary') },
   { id: 'api/no-logic-in-router', set: FAST, rule: require('./rules/no-logic-in-router') },
   {
     id: 'api/no-orm-outside-repository',

@@ -41,7 +41,7 @@ interface with a stand-in and meets its provider in the phase that first calls i
 
 **Language/Version**: TypeScript 5.x, `strict` plus `noUncheckedIndexedAccess`, on Node 24 LTS. Nine constitution rules are enforced by the compiler, so anything less than strict weakens tier `TYPE` across the board.
 
-**Primary Dependencies**: pnpm workspaces; tRPC over Nest for the backend request surface; Prisma with a multi-file schema; Expo Router for the mobile application; Vite for the admin web application; BullMQ over Redis for queued work; `@js-temporal/polyfill` confined to `packages/time`; Vitest; ESLint with `eslint-plugin-boundaries` and an internal rule plugin; Zod for input schemas; Gitleaks; Sentry.
+**Primary Dependencies**: pnpm workspaces; tRPC over Nest for the backend request surface; Prisma with a multi-file schema; Expo Router for the mobile application; Vite for the admin web application; BullMQ over Redis for queued work; `@js-temporal/polyfill` confined to `packages/time`; Vitest; ESLint with the internal rule plugin `eslint-plugin-ijazah`, whose six `boundaries/*` rules carry the wall and read their data from `packages/config/eslint.boundaries.js`; Zod for input schemas; Gitleaks; Sentry.
 
 **Storage**: PostgreSQL 18 as the system of record, with native time-ordered UUID generation for primary keys per the data model's conventions. Redis for queueing and rate limiting only — never for anything whose loss would diverge from the database. Object storage behind the storage port, with a local implementation for development and a remote one for deployed environments.
 
