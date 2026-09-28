@@ -169,7 +169,7 @@ Ground truth for this section: the constitution's R-SEC, R-GENDER and R-API rule
 - Zero new typecheck or lint warnings in changed files.
 
 ### 1.8 Test Coverage (mandatory when applicable)
-- Every changed file that carries behavior — service, repository query logic, router guard/mapping, worker job, package logic, utility, hook/guard — must have covering specs in this diff: new specs for new behavior, updated specs for changed behavior. Missing coverage is a finding, not a suggestion: **Warning** by default, **Critical** on the 1.3 critical paths (payments, payment honesty, time, jobs).
+- Every changed file that carries behavior — service, repository query logic, router guard/mapping, worker job, package logic, utility, hook/guard — must have covering specs in this diff: new specs for new behavior, updated specs for changed behavior. Missing coverage is a finding, not a suggestion: **Major** by default, **Critical** on the 1.3 critical paths (payments, payment honesty, time, jobs).
 - Worker job changes must include an idempotency test (safe to run twice).
 - The only acceptable skips: files with nothing to assert (config, generated code, docs, assets, design tokens, type-only changes) or purely visual markup with no logic. An "untestable" claim on a file that plainly has logic gets flagged.
 - A spec that merely exists doesn't count — read it and confirm it actually exercises the new/changed behavior. Never write the missing tests yourself; escalate them, the implementer writes tests with the implementation context.
@@ -281,7 +281,7 @@ Severity ladder, used everywhere in this file: **Critical** (harm to money, reco
 
 ### Findings
 - Critical: <n> · Major: <n> · Warnings: <n> · Suggestions: <n>
-- Security (1.5b): threat pass <done> · Critical <n> · Major <n>
+- Security (1.5b): threat pass <done> · Critical <n> · Major <n> · Warning <n>
 
 ### Auto-Fixed
 - <bullets>
