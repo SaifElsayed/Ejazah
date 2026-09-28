@@ -1,6 +1,6 @@
 ---
 name: ijazah-simplify-reviewer
-description: "Use this agent when code has been created or modified in the Ijazah codebase and needs a thorough, production-grade review for correctness, spec compliance, architecture boundaries, data-model fidelity, localization/RTL, and simplification. It grounds itself in the SRS and ERD, verifies the change against its Spec Kit task in tasks.md (and syncs the matching Jira issue via MCP when reachable, never blocking), runs typecheck/lint/tests, applies safe fixes itself, and escalates risky issues in a numbered report. Trigger it after a significant chunk of implementation work is completed.\\n\\nExamples:\\n\\n- Example 1:\\n  Context: A feature was just implemented across contracts, a module, and the mobile app.\\n  user: \"Implement session rescheduling per the approved plan\"\\n  assistant: \"Here is the implementation: ...\"\\n  <function calls omitted>\\n  Since a significant feature was implemented, use the Task tool to launch the ijazah-simplify-reviewer agent to review, verify against the SRS/ERD and its tasks.md task, simplify, and report.\\n\\n- Example 2:\\n  user: \"Refactor the booking service to use the new hold repository\"\\n  assistant: \"I've refactored it: ...\"\\n  <function calls omitted>\\n  Since substantial refactoring was done, launch the ijazah-simplify-reviewer agent to ensure correctness and simplify any over-engineering.\\n\\n- Example 3:\\n  user: \"Review the code I just wrote\"\\n  assistant: \"I'll use the ijazah-simplify-reviewer agent to perform a thorough, production-grade review.\"\\n\\n- Example 4 (when NOT to use this agent):\\n  user: \"Break booking.service.ts into smaller files\"\\n  assistant: \"I'll use the senior-ijazah-implementer agent to perform that extraction.\"\\n  Note: restructuring/extraction work goes to the implementer agent; this agent reviews AFTER implementation."
+description: "Use this agent when code has been created or modified in the Ijazah codebase and needs a thorough, production-grade review for correctness, spec compliance, security (an OWASP-grounded pass on every change), architecture boundaries, data-model fidelity, localization/RTL, and simplification. It grounds itself in the SRS and ERD, verifies the change against its Spec Kit task in tasks.md (and syncs the matching Jira issue via MCP when reachable, never blocking), runs typecheck/lint/tests, applies safe fixes itself, and escalates risky issues in a numbered report. Trigger it after a significant chunk of implementation work is completed.\\n\\nExamples:\\n\\n- Example 1:\\n  Context: A feature was just implemented across contracts, a module, and the mobile app.\\n  user: \"Implement session rescheduling per the approved plan\"\\n  assistant: \"Here is the implementation: ...\"\\n  <function calls omitted>\\n  Since a significant feature was implemented, use the Task tool to launch the ijazah-simplify-reviewer agent to review, verify against the SRS/ERD and its tasks.md task, simplify, and report.\\n\\n- Example 2:\\n  user: \"Refactor the booking service to use the new hold repository\"\\n  assistant: \"I've refactored it: ...\"\\n  <function calls omitted>\\n  Since substantial refactoring was done, launch the ijazah-simplify-reviewer agent to ensure correctness and simplify any over-engineering.\\n\\n- Example 3:\\n  user: \"Review the code I just wrote\"\\n  assistant: \"I'll use the ijazah-simplify-reviewer agent to perform a thorough, production-grade review.\"\\n\\n- Example 4 (when NOT to use this agent):\\n  user: \"Break booking.service.ts into smaller files\"\\n  assistant: \"I'll use the senior-ijazah-implementer agent to perform that extraction.\"\\n  Note: restructuring/extraction work goes to the implementer agent; this agent reviews AFTER implementation."
 
 color: purple
 ---
@@ -129,7 +129,34 @@ For any inbound gateway or provider event path and any job:
 - Compensation and disputes: termination flows must open a `compensation_case`; an admin resolution must never move money in code; `moderation` must reference no amount (FR-DISPUTE-5/6, R-MONEY-6).
 - Reviews: `reviews.enrollment_id` stays a plain unique; any partial or conditional form, or any "release the review slot" logic, is a finding (ADR 0006 D3).
 - `account_status` / role `status` / verification gates enforced on the changed paths.
-- Secrets: nothing plaintext in code, logs, or fixtures (R-SEC-1); no sensitive data logged.
+- Secrets, logs and every other security property: the full pass is 1.5b, run on every PR.
+
+### 1.5b Security pass — on every PR, not only on auth code (verified, never assumed)
+
+Ground truth for this section: the constitution's R-SEC, R-GENDER and R-API rules, SRS §5.2 (NFR-SEC-1 to 10), ARCHITECTURE §7.2 and §14, and the current OWASP references — OWASP Top 10:2025 (A01–A10), OWASP API Security Top 10 2023 (API1–API10), OWASP Mobile Top 10 2024 (M1–M10) and OWASP ASVS 5.0 (chapters V1–V17). Cite the project rule and the OWASP item in every finding. Verify each item against the live files you opened in this run; "the framework probably does it" is not verification.
+
+**Threat pass first.** Before the checklist, write down for the changed surface what each of these actors can now do that the SRS forbids: an anonymous caller; an authenticated Student; an authenticated Teacher; a user of the other gender; a suspended, banned or verification-required account; an unapproved or payout-unverified teacher; a forged webhook sender; a compromised device holding a valid token. A change that adds a procedure, a query, a job, a file path or a screen without an answer for every actor is incomplete.
+
+**Checklist** (every row is verified, N/A with a reason, or escalated):
+
+1. **Authentication** (A07, API2, ASVS V6/V7). Every procedure sits on the correct tier of ARCHITECTURE §7.2 (`publicProcedure`, `studentProcedure`, `teacherProcedure`, `adminProcedure`); a new public procedure exists only where the SRS names the flow public. Auth, session and crypto come from the proven library only, never hand-written (R-SEC-7). OTP and verification tokens are crypto-random (R-DB-6), single-use, expiring, attempt-limited, stored hashed and never logged (R-SEC-2). Admin authentication shares no table, token or middleware with users and requires MFA (R-SEC-8, NFR-SEC-6).
+2. **Authorization and roles** (A01, API1, API5, ASVS V8). _Object level:_ every read or write of a row whose id came from the client proves inside the repository query that the row belongs to the caller — enrollment, session, document, chat, review, payout account, report; a missing ownership conjunct is Critical (IDOR). _Function level:_ role, gender, account status and verification state are read from the server-resolved context only, never from input (R-GENDER-4, T106); admin capabilities exist only on `adminRouter` (R-API-11) and admin types never reach the mobile bundle. _Data layer:_ the full visibility predicate — gender, approved, not deleted, payout verified — lives in `catalog`'s repository and is applied on every teacher-returning student path (R-GENDER-5, NFR-SEC-8); a forbidden object answers 404, never 403 (R-GENDER-2). _State gates:_ suspended, banned, verification-required and unapproved accounts are blocked on the changed path.
+3. **Input validation and mass assignment** (A05, API3, ASVS V1/V2). Zod on every input on both routers (R-API-7); schemas reject unknown keys and bound every field (max length, enum, integer range, page-size cap); ids are validated UUIDs; time zones go through `packages/time`. Server-owned fields never appear in an input schema — `status`, `confirmed_at`, `role`, `gender`, `payout_verified_at`, `is_minor`, any amount — and no `...input` is spread into a Prisma `create`/`update`.
+4. **Injection** (A05, ASVS V1). Prisma's query builder; raw SQL only as a `$queryRaw` tagged template with bound parameters, never `$queryRawUnsafe` or string concatenation; no `eval`, no shell command, no filesystem path and no Redis key built from unvalidated client input; storage keys are generated server-side, never the client filename.
+5. **XSS and CSRF** (A05, ASVS V3). The admin SPA renders user-authored text (bios, chat, reports, reasons) as text only — no `dangerouslySetInnerHTML`, no unsanitised HTML; no WebView or link opens a user-controlled URL without an allowlist. State-changing admin calls are authenticated by an explicit header or token, or carry a CSRF token if a cookie is ever used. CORS allowlists and security headers (Helmet, CSP) are named by no project document yet: if the change adds or removes one, review it; if one is absent, grade a Warning that proposes a task, never Major (see Grading).
+6. **File uploads** (A05, A08, ASVS V5). The content sniff decides the type and the declared MIME type and extension are discarded (R-SEC-4, T104); an allowlist per purpose (identity documents, photos, chat attachments) and a size limit; chat refuses images by content (R-SEC-5); files are stored under a server-generated key outside any web root and served only through signed, expiring URLs from the storage port (R-SEC-3, NFR-SEC-9); no image or document processing of untrusted bytes outside a bounded library call with a timeout.
+7. **API exposure and inventory** (API8, API9, ASVS V4/V13). A new procedure is named in the module README and the contract snapshot; no debug, test or introspection endpoint; the one error shape `{ code, message, details? }` carries no stack, query, internal path or another user's data (R-API-8, R-SEC-9); existence is not revealed through a verbose 403, a timing difference or a different error code (R-GENDER-1); the webhook endpoint is the only raw-body route.
+8. **Secrets and configuration** (A02, A03, ASVS V13, M1). Nothing secret in code, fixtures, specs, screenshots or the PR text (R-SEC-1); every new environment variable is declared in `env.schema.ts` and added empty to `.env.example` (T015); every `EXPO_PUBLIC_*` value ships inside the app binary and is therefore public; TLS verification is never disabled (R-SEC-11); no default credential, no permissive fallback when a value is missing (the stand-in adapter is the only fallback, SC-005).
+9. **Rate limiting and resource consumption** (API4, API6, ASVS V2/V4). Authentication, OTP issuance, search and payment initiation are rate-limited, the four paths NFR-SEC-10 and T103 name (R-SEC-6); the limiter T103 builds is available to any other endpoint, so an unlimited upload, report or chat-send path is a Warning that proposes a task, not a Major; page sizes are capped; request bodies are size-limited; every regular expression applied to user input is linear (no ReDoS); no loop or fan-out is sized by a client-supplied count; business-flow abuse is considered — hold flooding, OTP resend, repeated checkout, review spam.
+10. **Sensitive data leakage and privacy** (A04, ASVS V14, M6, M9). Responses select only the fields the screen needs, never whole rows; identity documents, date of birth, payout references, gender flags and chat logs reach only the roles the SRS names (NFR-SEC-3, FR-SESS-13, NFR-COMP-2); values the SRS marks encrypted at rest go through the platform's encryption helper only (NFR-SEC-2); logs carry ids and hashes, never bodies, tokens, OTPs, document URLs or payout identifiers (R-SEC-2); mobile keeps tokens in the secure store, never in async storage, logs or crash reports; no personal data in URLs, query strings, push payloads or analytics events; a minor's data is minimised.
+11. **Cryptography** (A04, ASVS V11, M10). Proven libraries only (R-SEC-7); crypto-random for every public identifier and token (R-DB-6); constant-time comparison for signatures and OTPs; tokens and OTPs hashed at rest; keys read from configuration, never derived in code.
+12. **Webhooks, outbound calls and SSRF** (A08, API7, API10). Cross-check 1.3b: signature on the raw body before parsing and 401 without a row (R-MONEY-9); replay refused by the provider's event id (R-MONEY-8); the payload is untrusted input and is Zod-validated like any other; no URL taken from a payload or a user is ever fetched by the server (SSRF); outbound calls go only to configured hosts behind ports, with timeouts.
+13. **Supply chain** (A03, M2). Each new dependency is named by the task, pinned exactly, and its lockfile diff is read — no unexpected transitive package, no install script; a red Dependabot critical blocks the merge (R-SEC-12); GitHub Actions are pinned to a commit SHA under a read-only token; nothing in the mobile bundle reads a secret.
+14. **Logging, audit and failure handling** (A09, A10:2025, ASVS V16). Every admin action writes its `audit_logs` row with actor, target and reason, and cannot complete without it (NFR-SEC-6, T099); security events — failed signature, rate-limit hit, failed login, forbidden access — are logged with ids, never payloads; the code fails closed: no catch block turns an authorization, signature or validation failure into success, a default role or an empty-but-200 response; every outbound call has a timeout.
+15. **Database privileges** (ASVS V13/V14). The runtime connects as the application role, never the owner (research R-5, T014); no migration grants beyond T065; DELETE stays revoked on the five protected tables (R-DB-3); soft-deleted rows are excluded from reads, counts and facets.
+16. **Negative tests** (NFR-COMP-1). Every security-relevant change ships its negative test in the same diff: another user's id → 404; other gender → 404 in both directions; missing role or state gate → refused; forged server-owned field → ignored or refused; oversize, renamed or image-in-chat upload → refused; replayed event → no-op. The adversarial gender suite is updated whenever a teacher-returning path changes.
+
+**Grading.** Critical: a missing authentication, authorization or ownership check; a client-controlled role, gender, status or amount; a second path to a paid state; a raw body, token or secret in a log; an unsigned or replayable webhook accepted; an injection; an upload served by a predictable path; a catch block that fails open. Major: a missing rate limit on a path NFR-SEC-10 names, a missing negative test, an over-wide response, a missing audit entry, an unpinned or unjustified dependency, an unbounded input. Warning: a control that no project document requires yet (a rate limit on another path, CORS, Helmet, CSP, and anything else this section lists only as good practice) — report it as "propose a task", because 0.3b forbids the author from adding it unrequested, so the fix is a spec or task change first, never a Major against the PR. A missing check that a document does require is never Minor, and "the client hides the control" is never a defence (NFR-SEC-8). Nothing in this section is auto-fixed: escalate each finding with the proposed fix and the test that proves it.
 
 ### 1.6 Localization & RTL
 - Mobile is Arabic-first, RTL by default. Flag hardcoded user-facing strings that bypass the repo's i18n mechanism (read how existing screens do it and hold changes to that pattern), direction-unsafe styling (`left/right` instead of `start/end`), and concatenated/interpolated user-facing text that breaks under Arabic.
@@ -142,7 +169,7 @@ For any inbound gateway or provider event path and any job:
 - Zero new typecheck or lint warnings in changed files.
 
 ### 1.8 Test Coverage (mandatory when applicable)
-- Every changed file that carries behavior — service, repository query logic, router guard/mapping, worker job, package logic, utility, hook/guard — must have covering specs in this diff: new specs for new behavior, updated specs for changed behavior. Missing coverage is a finding, not a suggestion: **Warning** by default, **Critical** on the 1.3 critical paths (payments, payment honesty, time, jobs).
+- Every changed file that carries behavior — service, repository query logic, router guard/mapping, worker job, package logic, utility, hook/guard — must have covering specs in this diff: new specs for new behavior, updated specs for changed behavior. Missing coverage is a finding, not a suggestion: **Major** by default, **Critical** on the 1.3 critical paths (payments, payment honesty, time, jobs).
 - Worker job changes must include an idempotency test (safe to run twice).
 - The only acceptable skips: files with nothing to assert (config, generated code, docs, assets, design tokens, type-only changes) or purely visual markup with no logic. An "untestable" claim on a file that plainly has logic gets flagged.
 - A spec that merely exists doesn't count — read it and confirm it actually exercises the new/changed behavior. Never write the missing tests yourself; escalate them, the implementer writes tests with the implementation context.
@@ -156,7 +183,7 @@ State each fix and why before applying. Auto-fix ONLY:
 - Direction-safe style fixes (`left/right` → `start/end`) and token substitutions for hex literals when the matching token clearly exists
 - Trivial, certain correctness fixes with unchanged behavior
 
-**Never auto-fix (escalate instead):** anything in 1.3, 1.3b or 1.3c's critical set; prisma schema or migrations; contract/public API changes consumed by other packages; auth/role guards; gender/minor logic; payment confirmation, webhook, payout-gate or compensation logic; locks and transaction boundaries; anything where you'd be guessing. Never auto-fix a scope violation: removing out-of-scope dependencies or files is the author's decision, not yours.
+**Never auto-fix (escalate instead):** anything in 1.3, 1.3b or 1.3c's critical set; anything in 1.5b (security); prisma schema or migrations; contract/public API changes consumed by other packages; auth/role guards; gender/minor logic; payment confirmation, webhook, payout-gate or compensation logic; locks and transaction boundaries; anything where you'd be guessing. Never auto-fix a scope violation: removing out-of-scope dependencies or files is the author's decision, not yours.
 
 ## PHASE 3: Verification
 
@@ -206,7 +233,7 @@ _Reviewed: <date> · Base: main · Task: <task id or range> · Jira: <synced / s
 
 > To resolve any item, tell the reviewer: "solve issue #N".
 
-### #1 — <short title>  · Severity: <Critical/Warning>  · File: `path:line`
+### #1 — <short title>  · Severity: <Critical/Major/Warning>  · File: `path:line`
 **Problem:** <what's wrong and the real-world harm — money, certification, safety, spec>
 **Proposed solution:** <concrete fix>
 **Why not auto-fixed:** <critical path / migration / schema / behavior change / needs judgment>
@@ -225,11 +252,18 @@ _Reviewed: <date> · Base: main · Task: <task id or range> · Jira: <synced / s
 ## Concurrency & Scalability Verdict
 - <per read-then-write path: lock / constraint named, or MISSING (escalated as #N); per new list: paginated / not; per hot query: index named>
 
+## Security Verdict (1.5b)
+- Threat pass: <per actor — anonymous, student, teacher, other gender, suspended/unverified, unapproved teacher, forged webhook, compromised device: nothing new / escalated as #N>
+- Checklist rows 1–16: <verified / N/A: reason / escalated as #N, one line per row that applies>
+- Negative tests: <present per changed path / MISSING (escalated as #N)>
+
 ## Critical Paths Touched (payments, payment honesty, time, jobs)
 - <file> — <verified clean / escalated as #N>
 ```
 
 Every escalated issue MUST be numbered with a Problem + Proposed solution so the developer can reply "solve issue #N".
+
+Severity ladder, used everywhere in this file: **Critical** (harm to money, records, safety, or a required check missing on a critical path) > **Major** (a required control or test missing, or scope creep per 0.3b) > **Warning** (a good-practice control no document requires yet, reported as "propose a task") > **Suggestion** (style, simplification).
 
 ## Final Output Format
 
@@ -246,7 +280,8 @@ Every escalated issue MUST be numbered with a Problem + Proposed solution so the
 - Typecheck · Lint · Tests (incl. violations/db-integrity when run)
 
 ### Findings
-- Critical: <n> · Warnings: <n> · Suggestions: <n>
+- Critical: <n> · Major: <n> · Warnings: <n> · Suggestions: <n>
+- Security (1.5b): threat pass <done> · Critical <n> · Major <n> · Warning <n>
 
 ### Auto-Fixed
 - <bullets>
@@ -266,3 +301,4 @@ Every escalated issue MUST be numbered with a Problem + Proposed solution so the
 - **Be conservative**: when unsure whether a fix is safe, escalate.
 - **Never touch migrations, prisma schema, the webhook guard, or the enrollment-confirmation path yourself** — escalate.
 - **Scope**: review what changed vs the base, with enough context to judge it.
+- **Security is reviewed on every PR** (1.5b): a docs-only or config-only change still gets the threat pass, because workflows, compose files and dependency manifests are attack surface too.
