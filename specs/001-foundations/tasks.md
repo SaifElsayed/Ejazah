@@ -278,6 +278,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T098 [P] [US5] Surface disjointness test in `apps/api/src/surfaces/surfaces.spec.ts` — the two capability sets share nothing, and the user surface's generated types carry zero administrative capabilities (FR-048, SC-012)
 - [ ] T099 [P] [US5] Audit test in `apps/api/src/surfaces/admin-procedure.spec.ts` — an administrative action cannot complete without its audit record, because the caller kind writes it (FR-049)
 - [ ] T135 [P] [US5] Headers and origin test in `apps/api/src/platform/guards/security-headers.spec.ts` — a browser-facing response carries the security headers, an allowlisted origin is answered, an unlisted origin is refused, a wildcard origin is refused by the configuration schema at startup, and Strict-Transport-Security is asserted in production mode only (FR-076)
+- [ ] T137 [P] [US5] Rate-limit test in `apps/api/src/platform/guards/rate-limit.spec.ts` — each of the four default paths (authentication, one-time-code, search, payment initiation) is throttled beyond its configured limit, an endpoint outside the four is untouched unless it opts in, and the limit is read from settings rather than a constant (FR-043, R-SEC-6, NFR-SEC-10)
 
 ### Implementation for User Story 5
 
@@ -381,7 +382,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - Setup: T002–T009 all parallel
 - US1: all nine test tasks parallel; then the syntax rules T035–T042 and T131–T132 parallel; then the type-aware rules T044–T047 parallel
 - US2: all six probe suites parallel; the nine schema-domain files T055–T063 parallel
-- US5: all eight test tasks parallel; the kernel components T100–T105, T133 and T136 parallel
+- US5: all nine test tasks parallel; the kernel components T100–T105, T133 and T136 parallel
 - US6: all five port definitions parallel (payment, storage, video, push, sms)
 - US7: both spikes parallel, and parallel with everything else
 
