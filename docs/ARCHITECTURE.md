@@ -445,7 +445,7 @@ Vitest throughout. React Native Testing Library on mobile.
 - Secrets in the host's secret manager, injected at runtime. Never in repo, Slack, Jira or a screenshot.
 - If a key leaks: rotate first, investigate second. Runbook holds per-provider steps.
 
-From day one: rate limiting on auth/OTP/search · Zod on every input · parameterised queries · signed expiring URLs · MFA on admin · audit log on every admin action · security headers and a CORS origin allowlist on every browser-facing surface (NFR-SEC-11) · Dependabot.
+From day one: rate limiting on auth/OTP/search/payment initiation · Zod on every input · parameterised queries · signed expiring URLs · MFA on admin · audit log on every admin action · security headers and a CORS origin allowlist on every browser-facing surface (NFR-SEC-11) · Dependabot.
 
 ## 15. Local development
 
