@@ -57,6 +57,7 @@
 // The file is matched by its path segments, never by a path anchored at the repository root: the
 // violation fixtures mirror the real tree under `tests/violations/fixtures/` (note under T035).
 const { defineRule } = require('../rule');
+const { wordsOf } = require('../names');
 const { onEverySpecifier, segmentsOf, settingsFor } = require('../specifiers');
 
 function containsSegments(segments, needle) {
@@ -64,15 +65,6 @@ function containsSegments(segments, needle) {
     if (needle.every((part, offset) => segments[start + offset] === part)) return true;
   }
   return false;
-}
-
-function wordsOf(name) {
-  return String(name)
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .split(/[^A-Za-z0-9]+/)
-    .filter((word) => word !== '')
-    .map((word) => word.toLowerCase());
 }
 
 /** Every word of a name, plus the singular of each, so `wallets` reads as `wallet`. */
