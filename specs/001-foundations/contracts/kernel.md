@@ -116,7 +116,7 @@ a token. Neither mechanism is sufficient alone, which is why R-SEC-2 gets both.
 
 | Guard | Applies to | Rule |
 |---|---|---|
-| Rate limiting | Authentication, one-time-code and search paths, available to any endpoint | R-SEC-6 |
+| Rate limiting | Authentication, one-time-code, search and payment-initiation paths, available to any endpoint | R-SEC-6, NFR-SEC-10 |
 | Content sniffing | Every upload; the declared type is discarded, not compared | R-SEC-4 |
 | Webhook signature verification | Every inbound gateway or provider event, on the raw body, before any handler; unsigned or invalid requests are rejected and no row is written | R-MONEY-9, R-SEC-12 |
 | Cryptographic identifier generation | Certificate numbers, verification tokens | R-DB-6 |

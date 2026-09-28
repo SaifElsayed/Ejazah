@@ -229,7 +229,7 @@ inspect exactly what the client receives and what the log recorded.
 2. **Given** a failure at any depth, **When** the response is returned, **Then** it carries one consistent shape of code, message and optional details, containing no stack trace, query text or internal path (R-API-8, R-SEC-9).
 3. **Given** a logged request, **When** the record is inspected, **Then** it carries a correlating request identifier and contains no request body, token, one-time code, session identifier, document link or provider credential (R-SEC-2).
 4. **Given** an operation carrying an idempotency key, **When** it is submitted twice, **Then** the second submission returns the first outcome without repeating the effect (R-API-14).
-5. **Given** an authentication, one-time-code or search endpoint, **When** it is called beyond its configured limit, **Then** further calls are throttled (R-SEC-6).
+5. **Given** an authentication, one-time-code, search or payment-initiation endpoint, **When** it is called beyond its configured limit, **Then** further calls are throttled (R-SEC-6).
 6. **Given** an upload whose declared type disagrees with its actual content, **When** it is accepted, **Then** the content decides and the declaration is ignored (R-SEC-4).
 7. **Given** an identifier intended to be publicly visible — a certificate number, a verification token — **When** it is generated, **Then** it is unguessable and drawn from a cryptographic source, and no code path may use a non-cryptographic one (R-DB-6).
 8. **Given** the two request surfaces, **When** the user surface's generated client types are inspected, **Then** no administrative capability appears in them, and a test asserts the two capability sets are disjoint (R-API-11).
@@ -383,7 +383,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-040**: All logging MUST pass through a shared logger carrying a request correlation identifier, excluding every value the constitution prohibits from logs (R-SEC-2).
 - **FR-041**: Every error reaching a client MUST be mapped to one shape of code, message and optional details, exposing no stack trace, query text or internal path (R-API-8, R-SEC-9).
 - **FR-042**: The system MUST provide a shared idempotency mechanism recognising a repeated operation and returning the original outcome without repeating the effect (R-API-14). The idempotency record lives in the `idempotency_keys` table owned by the platform kernel (ERD section 12, ADR 0008), keyed by scope and client key, with the first outcome stored for replay.
-- **FR-043**: The system MUST provide rate limiting available to any endpoint and applied by default to authentication, one-time-code and search paths (R-SEC-6).
+- **FR-043**: The system MUST provide rate limiting available to any endpoint and applied by default to authentication, one-time-code, search and payment-initiation paths (R-SEC-6, NFR-SEC-10).
 - **FR-044**: The system MUST determine an upload's type by inspecting its content and MUST ignore the client's declaration (R-SEC-4).
 - **FR-045**: The system MUST generate publicly visible identifiers — certificate numbers and verification tokens — from a cryptographic source, and MUST refuse non-cryptographic random use at build time (R-DB-6).
 - **FR-046**: The request context MUST carry the caller's identity, role, gender, locale and a correlation identifier, all resolved server-side, with no authorization input read from the client (R-GENDER-4).
