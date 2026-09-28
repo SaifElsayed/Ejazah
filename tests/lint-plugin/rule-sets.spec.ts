@@ -284,6 +284,11 @@ describe('T043 — the fast and type-aware sets are split as research R-10 says'
     }
   });
 
+  // This case builds two TypeScript programs (the root build and the fixture tree) and runs
+  // alongside the violation harness, which builds the same programs in its own worker. Under a
+  // full `pnpm test` that took over five seconds on a laptop once the eighteen T037–T042 rule
+  // tables joined the run, so the case carries a 30 second allowance rather than the 5 second
+  // default meant for a unit test: it builds a program, and a slow build is not a wrong one.
   it('hands the type-aware set a program containing the linted file, fixtures included', async () => {
     const { sightings, fatal } = await observePrograms('typeAware', [realFile, fixtureFile]);
 
@@ -308,5 +313,5 @@ describe('T043 — the fast and type-aware sets are split as research R-10 says'
         ),
       ).toEqual({ program: 'program', containsFile: true });
     }
-  });
+  }, 30_000);
 });
