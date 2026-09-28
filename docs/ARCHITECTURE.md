@@ -249,7 +249,7 @@ The rule for `shared/`: genuinely identical flows and primitives only. When stud
 
 ### 6.2 The wall is a lint rule, not a promise
 
-`eslint-plugin-boundaries` in `packages/config`:
+The six `boundaries/*` rules of `eslint-plugin-ijazah` in `packages/config`, with the wall data in `packages/config/eslint.boundaries.js`:
 
 | From                  | May import                                                  |
 | --------------------- | ----------------------------------------------------------- |

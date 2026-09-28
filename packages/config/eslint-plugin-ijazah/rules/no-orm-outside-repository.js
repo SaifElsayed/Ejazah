@@ -38,12 +38,22 @@
 // is where a query is caught by what it touches rather than by what it imports, and review is the
 // backstop the constitution already names. Adding a specifier here later is additive and cheap.
 //
+// DECISION (T036, second review of PR #20) — the rule applies inside `apps/api` only. R-API-2 is
+// about services and repositories, and both exist only in the API. `eslint.base.js` runs the fast
+// set on every file in the repository, so without this scope the seed (`prisma/seed.ts`, T074) and
+// the seed tests (`tests/seed/`, T072 and T073), which must create a client, would fail lint before
+// they are written. `apps/api` is matched as a run of path segments, like every other rule here.
+//
 // The file is matched by its basename, never by a path anchored at the repository root: the
 // violation fixtures mirror the real tree under `tests/violations/fixtures/`, so a rule comparing
-// a root-relative path would see none of them (note under T035).
+// a root-relative path would see none of them (note under T035). Every import spelling, including
+// `type C = import('…')`, is read through the shared `onEverySpecifier` in `../specifiers.js`.
 const path = require('node:path');
 
 const { defineRule } = require('../rule');
+const { after, onEverySpecifier, segmentsOf } = require('../specifiers');
+
+const API_TREE = ['apps', 'api'];
 
 // The package and every subpath it publishes; the generated output path anywhere in a deeper
 // relative path, with or without a subpath of its own.
@@ -63,39 +73,16 @@ function isDatabaseClient(specifier) {
   return BANNED.some((banned) => banned.test(specifier));
 }
 
-/**
- * The string inside `import('…')` as a type: `type C = import('@prisma/client').PrismaClient`.
- *
- * The node carries the specifier under `source`; `argument` is the older name for the same thing
- * and is read only as a fallback, because reading it on a current parser warns that it is
- * deprecated. Either way the literal may be wrapped in a `TSLiteralType`.
- */
-function typeImportSource(node) {
-  const source = node.source ?? node.argument;
-  if (source === null || source === undefined) return null;
-  if (source.type === 'Literal') return source;
-  if (source.type === 'TSLiteralType' && source.literal?.type === 'Literal') return source.literal;
-  return null;
-}
-
-function isRequireCall(node) {
-  return (
-    node.callee.type === 'Identifier' &&
-    node.callee.name === 'require' &&
-    node.arguments.length > 0 &&
-    node.arguments[0].type === 'Literal'
-  );
-}
-
 module.exports = defineRule({
   constitutionId: 'R-API-2',
-  description: 'Bans importing the database client outside a *.repository.ts file',
+  description: 'Bans importing the database client in apps/api outside a *.repository.ts file',
   messages: {
     // Written without the identifier; `defineRule` appends it (FR-011).
     outsideRepository:
       '"{{specifier}}" is the database client — import it only from a *.repository.ts file, and let a service ask the repository that owns the table',
   },
   create(context) {
+    if (after(segmentsOf(context.filename), API_TREE) === -1) return {};
     if (isRepositoryFile(context.filename)) return {};
 
     function check(sourceNode) {
@@ -108,26 +95,6 @@ module.exports = defineRule({
       });
     }
 
-    return {
-      // import … from '…'  /  export … from '…'  /  import('…')
-      ImportDeclaration: (node) => check(node.source),
-      ExportNamedDeclaration: (node) => check(node.source),
-      ExportAllDeclaration: (node) => check(node.source),
-      ImportExpression: (node) => check(node.source.type === 'Literal' ? node.source : null),
-      // import x = require('…'), the TypeScript form.
-      TSImportEqualsDeclaration: (node) =>
-        check(
-          node.moduleReference.type === 'TSExternalModuleReference' &&
-            node.moduleReference.expression.type === 'Literal'
-            ? node.moduleReference.expression
-            : null,
-        ),
-      // require('…') — the plugin's own configuration files and any CommonJS worker entry.
-      CallExpression: (node) => check(isRequireCall(node) ? node.arguments[0] : null),
-      // type C = import('…').PrismaClient — a type-only form, and refused like the others: a
-      // service that names the client's type knows the database's shape, which is the thing
-      // R-API-2 keeps inside the repository.
-      TSImportType: (node) => check(typeImportSource(node)),
-    };
+    return onEverySpecifier(check);
   },
 });

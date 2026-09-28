@@ -52,30 +52,21 @@ const wall = {
   // `heldFunds`, `funds_held` and `heldFund`.
   bannedVocabulary: ['wallet', 'ledger', 'balance', 'escrow', 'held_funds', 'platform_funds'],
 
-  // R-MONEY-6 (b) — refused outside `paymentFolders`. A gateway word beside an amount
-  // marker, or one of the named identifiers. `payout` is in neither list and is legal: a
-  // teacher payout account is part of the ADR 0007 model.
+  // R-MONEY-6 (b) — refused outside `paymentFolders`: a name pairing a gateway word with an
+  // amount marker. The ERD's gateway columns are `gross_piasters`, `gateway_fee_piasters` and
+  // `net_piasters`, so the words alone catch all three in any spelling (`grossPiasters`), and no
+  // list of special names is needed. A generic `amount` is NOT a gateway word: `amountPiasters`
+  // in a formatter or in `packages/money` is legal, because the gross column is named for what it
+  // is (decided by Amr, second review of PR #20; ERD `payments`). A gateway *order* reference is
+  // not an amount either: ARCHITECTURE hands the client a `CheckoutRef` carrying the order id.
+  // `payout` is in neither list and is legal: a teacher payout account is part of ADR 0007.
   //
-  // The identifiers are the ERD's own money columns on the `payments` row and nothing else
-  // (ERD §`payments`, lines 356-358): `amount_piasters` is the gross the gateway was asked for
-  // and carries no gross/fee/net word of its own, so a rule reading words alone would miss the
-  // one column that names the amount. A gateway *order* reference is not an amount and is not
-  // listed: ARCHITECTURE hands the client a `CheckoutRef` carrying the order id, so
-  // `packages/contracts` and the checkout screen name it legitimately, and half (b) of R-MONEY-6
-  // is about amounts. Matching is by word set, so each name below also catches its camelCase
-  // spelling (`netPiasters`, `gatewayFeePiasters`).
+  // No folder beyond these two is exempt, `packages/money` included. The money package is where
+  // R-MONEY-5 allows piaster arithmetic, so it is exactly where `net = gross - fee`, which ADR 0007
+  // forbids computing anywhere, would otherwise be written unseen.
   gatewayAmountWords: ['gross', 'fee', 'net'],
   amountMarkerWords: ['piasters', 'amount', 'total', 'cents'],
-  gatewayAmountIdentifiers: ['amount_piasters', 'gateway_fee_piasters', 'net_piasters'],
-  //
-  // `packages/money` is exempt as well: it is the money type's own package, the one place R-MONEY-5
-  // allows piaster arithmetic, and its API names an amount generically (`toPlainNumber(amount_piasters)`).
-  // Half (a) still applies there; only the gateway-amount confinement does not (decided by Amr, PR #20).
-  paymentFolders: [
-    'apps/api/src/modules/payments',
-    'apps/api/src/platform/ports/payment',
-    'packages/money',
-  ],
+  paymentFolders: ['apps/api/src/modules/payments', 'apps/api/src/platform/ports/payment'],
 };
 
 module.exports = [{ settings: { ijazah: { boundaries: wall } } }];

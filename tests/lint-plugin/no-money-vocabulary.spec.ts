@@ -5,9 +5,10 @@
 // refused outside the two payment folders, and `payout` — the teacher payout account of the ADR
 // 0007 model, and `payout_verified_at`, the discovery gate — is legal everywhere.
 //
-// The identifiers half (b) confines are the ERD's own money columns on the `payments` row, so the
-// valid table names a gateway order id, which is a reference and not an amount, and the invalid
-// table names `amount_piasters`, which is the gross and carries no gross/fee/net word of its own.
+// Half (b) recognises a gateway amount by its words (gross, fee or net with an amount marker), which
+// is how the ERD names all three gateway columns: `gross_piasters`, `gateway_fee_piasters`,
+// `net_piasters`. So the valid table names a generic `amountPiasters` and a gateway order id, and no
+// folder beyond the two payment folders is exempt, the money package included.
 // Money identifiers here are snake_case with `_piasters`, the repository's spelling (note under
 // T035).
 
@@ -18,6 +19,7 @@ const payments = 'apps/api/src/modules/payments/payments.repository.ts';
 const port = 'apps/api/src/platform/ports/payment/payment.port.ts';
 const screen = 'apps/mobile/src/features/student/screens/checkout.tsx';
 const money = 'packages/money/src/index.ts';
+const formatter = 'apps/mobile/src/lib/format.ts';
 
 typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-vocabulary.js'), {
   valid: [
@@ -33,7 +35,7 @@ typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-
     },
     {
       name: 'the gateway’s amounts inside the payments module',
-      code: 'export interface Row { readonly amount_piasters: bigint; readonly gateway_fee_piasters: bigint; readonly net_piasters: bigint }',
+      code: 'export interface Row { readonly gross_piasters: bigint; readonly gateway_fee_piasters: bigint; readonly net_piasters: bigint }',
       filename: payments,
     },
     {
@@ -42,9 +44,14 @@ typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-
       filename: port,
     },
     {
-      name: 'the money package names an amount generically',
+      name: 'a generic amount in the money package, which is not a gateway word',
       code: 'export function toPlainNumber(amount_piasters: number): number { return amount_piasters; }',
       filename: money,
+    },
+    {
+      name: 'a generic amount in a display formatter (R-MOBILE-9)',
+      code: 'export function formatPiasters(amountPiasters: number): string { return String(amountPiasters); }',
+      filename: formatter,
     },
     {
       name: 'a gateway order reference, which is not an amount',
@@ -126,9 +133,15 @@ typescriptRuleTester().run('boundaries/no-money-vocabulary', loadRule('no-money-
     },
     {
       name: 'the gross column, outside payments',
-      code: 'export interface Row { readonly amount_piasters: bigint }',
+      code: 'export interface Row { readonly gross_piasters: bigint }',
       filename: sessions,
-      errors: [{ messageId: 'confinement', data: { name: 'amount_piasters' } }],
+      errors: [{ messageId: 'confinement', data: { name: 'gross_piasters' } }],
+    },
+    {
+      name: 'net computed in the money package, which ADR 0007 forbids anywhere',
+      code: 'export const net_piasters = 0;',
+      filename: money,
+      errors: [{ messageId: 'confinement', data: { name: 'net_piasters' } }],
     },
     {
       name: 'the gateway fee column, outside payments',

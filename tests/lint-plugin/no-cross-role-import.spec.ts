@@ -34,6 +34,12 @@ typescriptRuleTester().run('boundaries/no-cross-role-import', loadRule('no-cross
   ],
   invalid: [
     {
+      name: 'the inline type import from the student tree into the teacher tree',
+      code: "export type R = import('../../teacher/screens/roster').Roster;",
+      filename: student,
+      errors: 1,
+    },
+    {
       name: 'student reaching into teacher',
       code: "import { roster } from '../../teacher/screens/roster';",
       filename: student,

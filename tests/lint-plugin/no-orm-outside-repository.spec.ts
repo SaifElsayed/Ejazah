@@ -22,6 +22,16 @@ typescriptRuleTester().run(
   {
     valid: [
       {
+        name: 'the seed outside apps/api (T074), which must create a client',
+        code: "import { PrismaClient } from '@prisma/client';\nexport const client = new PrismaClient();",
+        filename: 'prisma/seed.ts',
+      },
+      {
+        name: 'a seed test outside apps/api (T072)',
+        code: "import { PrismaClient } from '@prisma/client';\nexport const c = PrismaClient;",
+        filename: 'tests/seed/determinism.spec.ts',
+      },
+      {
         name: 'a repository naming the client',
         code: "import { PrismaClient } from '@prisma/client';\nexport const c = PrismaClient;",
         filename: repository,

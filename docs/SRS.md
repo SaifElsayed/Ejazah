@@ -641,7 +641,7 @@ User, UserRole, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, Verif
 
 **SessionParticipantEvent** — id, session_id, user_id, event_type (joined / left), occurred_at, provider_event_id (unique — idempotency). This is the raw evidence for §3.7.5 and every dispute.
 
-**Payment** — id, enrollment_id, gateway, gateway_order_id (unique), gateway_transaction_id (unique, nullable), amount_piasters (gross), gateway_fee_piasters, net_piasters, currency, status (Created / Paid / Failed / Expired / Refunded), created_at, updated_at. One row per gateway order; a record of what the gateway did, never a balance (FR-PAYG-7).
+**Payment** — id, enrollment_id, gateway, gateway_order_id (unique), gateway_transaction_id (unique, nullable), gross_piasters, gateway_fee_piasters, net_piasters, currency, status (Created / Paid / Failed / Expired / Refunded), created_at, updated_at. One row per gateway order; a record of what the gateway did, never a balance (FR-PAYG-7).
 
 **PaymentEvent** — id, payment_id, provider_event_id (unique — replay safety, FR-PAYG-4), event_type, signature_verified_at, payload_hash, received_at. Append-only record of every signed gateway event.
 

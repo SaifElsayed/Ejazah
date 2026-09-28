@@ -24,7 +24,7 @@ needed.
 | `boundaries/no-deep-module-import` | Importing a module below its public entry | R-API-3 |
 | `boundaries/no-adapter-import` | Importing a concrete provider implementation outside its port folder | R-API-4 |
 | `boundaries/no-upward-admin-import` | Importing upward into the administrative module | R-API-4 |
-| `boundaries/no-money-vocabulary` | Wallet, ledger, balance, escrow or platform-held-funds vocabulary anywhere; and gateway order, gross, fee or net amounts referenced outside `modules/payments`, `platform/ports/payment` and `packages/money` (redefined by ADR 0007) | R-MONEY-6 |
+| `boundaries/no-money-vocabulary` | Wallet, ledger, balance, escrow or platform-held-funds vocabulary anywhere; and gateway order, gross, fee or net amounts referenced outside `modules/payments` and `platform/ports/payment` (redefined by ADR 0007) | R-MONEY-6 |
 | `api/no-logic-in-router` | A router file exceeding the complexity ceiling, which is how a business rule shows up there | R-API-1 |
 | `api/no-orm-outside-repository` | Database client imported outside a repository file | R-API-2 |
 | `money/no-number-in-money-position` | A declared money position typed as plain `number` rather than the branded type | R-MONEY-1 |

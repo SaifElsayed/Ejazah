@@ -1,7 +1,7 @@
 // api/no-logic-in-router (R-API-1) against a table of code (T036).
 //
 // The rule is a complexity ceiling of 5 per body on any `*.router.ts` file, so the cases that
-// matter are the two either side of the boundary — five decisions pass, six do not — and the
+// matter are the two either side of the boundary — complexity 5 passes, 6 does not — and the
 // bodies that are not functions. A six-way `if / else if` chain written at the top level of a
 // router file is the same business rule in the same wrong file, and it used to lint clean.
 

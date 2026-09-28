@@ -23,6 +23,12 @@ typescriptRuleTester().run(
     ],
     invalid: [
       {
+        name: 'the inline type import from shared into a role tree',
+        code: "export type B = import('../../student/screens/booking').Booking;",
+        filename: shared,
+        errors: 1,
+      },
+      {
         name: 'shared reaching into student',
         code: "import { booking } from '../../student/screens/booking';",
         filename: shared,

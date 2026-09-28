@@ -37,6 +37,12 @@ typescriptRuleTester().run(
     ],
     invalid: [
       {
+        name: 'the inline type import past another module’s public entry',
+        code: "export type X = import('../catalog/catalog.repository').Teacher;",
+        filename: booking,
+        errors: 1,
+      },
+      {
         name: 'below the entry',
         code: "import { find } from '../catalog/catalog.service';",
         filename: booking,

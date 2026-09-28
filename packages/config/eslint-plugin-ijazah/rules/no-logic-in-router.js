@@ -101,7 +101,7 @@ module.exports = defineRule({
   messages: {
     // Written without the identifier; `defineRule` appends it (FR-011).
     tooComplex:
-      '"{{name}}" makes {{complexity}} decisions, over the ceiling of {{max}} — a request procedure validates its input, calls one service method and returns, so a rule this size belongs in the service',
+      '"{{name}}" has complexity {{complexity}}, over the ceiling of {{max}} — a request procedure validates its input, calls one service method and returns, so a rule this size belongs in the service',
   },
   create(context) {
     if (!isRouterFile(context.filename)) return {};

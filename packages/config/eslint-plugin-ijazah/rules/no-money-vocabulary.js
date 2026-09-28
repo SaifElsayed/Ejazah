@@ -8,9 +8,8 @@
 //   (a) vocabulary, refused ANYWHERE — wallet, ledger, balance, escrow and platform-held-funds
 //       words. There is no account to credit and no balance to compute, so a name carrying one of
 //       these describes a system this one is not. T023's fixture: booking/wallet-ledger.ts.
-//   (b) confinement, refused OUTSIDE modules/payments, platform/ports/payment and packages/money —
-//       the gateway's order, gross, fee and net. Money-carrying records live in the first two
-//       folders, and packages/money is the money type's own package (R-MONEY-5); every other
+//   (b) confinement, refused OUTSIDE modules/payments and platform/ports/payment — the gateway's
+//       gross, fee and net amounts. Money-carrying records live in those two folders; every other
 //       module speaks to the port or to the payments module's public entry and never reads an
 //       amount. T023's fixture: sessions/gateway-settlement.ts.
 //
@@ -37,9 +36,10 @@
 // `require('./wallet-ledger')` and `import w = require('./wallet-ledger')` are refused alongside
 // the `import`, `export … from` and `import()` forms.
 //
-// WHICH IDENTIFIERS half (b) confines (T035, review of PR #20): the ERD's own money columns on the
-// `payments` row — `amount_piasters` (the gross), `gateway_fee_piasters`, `net_piasters` — plus any
-// name pairing a gateway word with an amount marker. A gateway *order* reference is not an amount
+// WHICH IDENTIFIERS half (b) confines (T035, reviews of PR #20): any name pairing a gateway word
+// (gross, fee, net) with an amount marker. The ERD names its gateway columns `gross_piasters`,
+// `gateway_fee_piasters` and `net_piasters`, so the words catch all three and no list of special
+// names exists; a generic `amountPiasters` is legal everywhere. A gateway *order* reference is not an amount
 // and is not confined: ARCHITECTURE hands the client a `CheckoutRef` carrying the order id, so
 // `packages/contracts` and the checkout screen name it legitimately.
 //
@@ -113,19 +113,18 @@ function matchingWord(wordSet, configured) {
 module.exports = defineRule({
   constitutionId: 'R-MONEY-6',
   description:
-    'Bans held-funds vocabulary anywhere, and gateway amounts outside the payments module and the payment port',
+    'Bans held-funds vocabulary anywhere, and gateway gross, fee and net amounts outside the payments module and the payment port',
   messages: {
     // Written without the identifier; `defineRule` appends it (FR-011). Each message names which
     // of the two halves this identifier carries was broken.
     vocabulary:
       '"{{name}}" carries "{{term}}" vocabulary — the platform holds no funds and computes no share, so there is nothing to credit, settle or reconcile anywhere in the applications (ADR 0007)',
     confinement:
-      '"{{name}}" names a gateway amount outside the payments module, the payment port and the money package — money-carrying records live only there, and every other module speaks to the port or to the payments public entry rather than reading an amount (ADR 0007)',
+      '"{{name}}" names a gateway amount outside the payments module and the payment port — money-carrying records live only there, and every other module speaks to the port or to the payments public entry rather than reading an amount (ADR 0007)',
   },
   create(context) {
     const configured = settingsFor(context);
     const vocabulary = termsOf(configured.bannedVocabulary);
-    const gatewayIdentifiers = termsOf(configured.gatewayAmountIdentifiers);
 
     const fileSegments = segmentsOf(context.filename);
     const confined = configured.paymentFolders.some((folder) =>
@@ -133,7 +132,6 @@ module.exports = defineRule({
     );
 
     function isGatewayAmount(wordSet) {
-      if (matchingTerm(wordSet, gatewayIdentifiers) !== undefined) return true;
       return (
         matchingWord(wordSet, configured.gatewayAmountWords) !== undefined &&
         matchingWord(wordSet, configured.amountMarkerWords) !== undefined

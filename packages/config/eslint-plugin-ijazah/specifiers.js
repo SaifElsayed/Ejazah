@@ -69,9 +69,27 @@ function isRequireCall(node) {
   );
 }
 
+/**
+ * The string inside `import('…')` used as a type: `type T = import('../teacher/roster').Roster`.
+ *
+ * The node carries the specifier under `source`; `argument` is the older name for the same thing
+ * and is read only as a fallback, because reading it on a current parser warns that it is
+ * deprecated. Either way the literal may be wrapped in a `TSLiteralType`.
+ */
+function typeImportSource(node) {
+  const source = node.source ?? node.argument;
+  if (source === null || source === undefined) return null;
+  if (source.type === 'Literal') return source;
+  if (source.type === 'TSLiteralType' && source.literal?.type === 'Literal') return source.literal;
+  return null;
+}
+
 /** Every syntax that names a module, so a rule cannot be walked around by writing the import differently. */
 function onEverySpecifier(check) {
   return {
+    // type T = import('…').X — the inline type form. `import type { … }` is an ImportDeclaration
+    // and is already covered above it; this spelling was the one left open (review of PR #20).
+    TSImportType: (node) => check(typeImportSource(node)),
     ImportDeclaration: (node) => check(node.source),
     ExportNamedDeclaration: (node) => check(node.source),
     ExportAllDeclaration: (node) => check(node.source),
@@ -87,4 +105,12 @@ function onEverySpecifier(check) {
   };
 }
 
-module.exports = { after, isRequireCall, onEverySpecifier, resolveTarget, segmentsOf, settingsFor };
+module.exports = {
+  after,
+  isRequireCall,
+  onEverySpecifier,
+  resolveTarget,
+  segmentsOf,
+  settingsFor,
+  typeImportSource,
+};
