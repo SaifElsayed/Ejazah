@@ -2,13 +2,25 @@
 //   fast      - syntax only; editor and pre-commit hook
 //   typeAware - needs the program; pipeline only
 // Both consume the internal plugin, in which every rule is named for a constitution rule
-// and every message ends with that identifier (FR-011). Wired fully by T004 and T043.
+// and every message ends with that identifier (FR-011). Wired by T004; T043 made the two sets
+// agree on which files they cover and proved the split in `tests/lint-plugin/rule-sets.spec.ts`:
+// the fast set never carries a program, the type-aware set always carries one that contains the
+// linted file, and each set enables exactly the rules the plugin's catalog puts in it.
 const path = require('node:path');
 const tsParser = require('@typescript-eslint/parser');
 const ijazah = require('./eslint-plugin-ijazah');
 const boundaries = require('./eslint.boundaries');
 
 const repositoryRoot = path.resolve(__dirname, '..', '..');
+
+// One list of TypeScript extensions for every block below. The parser block, the fast rules block
+// and the type-aware block used to name three different lists, so a `.mts` file was parsed and
+// then checked against no rule at all in either set — a silent gap, where a file outside every
+// tsconfig at least fails loudly. Under the type-aware set a TypeScript file is either in a
+// program or a parse error; there is no third state in which the four type-aware rules quietly
+// skip it.
+const typescriptFiles = ['**/*.{ts,tsx,mts,cts}'];
+const lintedFiles = ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'];
 
 const ignores = [
   '**/dist/**',
@@ -33,7 +45,7 @@ const fast = [
   {
     // Syntax only: the parser reads TypeScript but is never handed the program, so this set
     // stays fast enough for every keystroke and for the pre-commit hook (research R-10).
-    files: ['**/*.{ts,tsx,mts,cts}'],
+    files: typescriptFiles,
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -44,7 +56,7 @@ const fast = [
     },
   },
   {
-    files: ['**/*.{ts,tsx,js,jsx,mjs,cjs}'],
+    files: lintedFiles,
     plugins: { ijazah },
     rules: ijazah.configs.fast.rules,
   },
@@ -53,12 +65,14 @@ const fast = [
 const typeAware = [
   ...fast,
   {
-    files: ['**/*.{ts,tsx}'],
+    files: typescriptFiles,
     languageOptions: {
       parser: tsParser,
       parserOptions: {
         // The program is what the four type-aware rules need and the reason this set runs in
-        // the pipeline only (research R-10, R-13). T043 completes the wiring.
+        // the pipeline only (research R-10, R-13). The project service finds each file's own
+        // tsconfig from the repository root, so the violation fixtures reach the program through
+        // `tests/violations/fixtures/tsconfig.json` while staying out of the root build.
         tsconfigRootDir: repositoryRoot,
         projectService: {
           // Per-package test-runner configs sit outside every tsconfig on purpose: adding them
