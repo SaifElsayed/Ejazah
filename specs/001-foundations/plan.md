@@ -146,7 +146,7 @@ apps/
         │   ├── config/          # Validated at startup; refuses traffic on failure
         │   ├── logging/         # Redaction list declared here
         │   ├── errors/          # One shape out
-        │   ├── guards/          # Rate limiting, sniffing, crypto-random ids
+        │   ├── guards/          # Rate limiting, sniffing, crypto-random ids, security headers
         │   ├── crypto/          # Column encryption, hashing
         │   ├── idempotency/     # Keyed in Postgres, not Redis
         │   └── ports/           # Five ports (payment, storage, video, push, sms): interface plus stand-in; storage also has real ones

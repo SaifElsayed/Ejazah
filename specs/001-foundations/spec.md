@@ -237,6 +237,7 @@ inspect exactly what the client receives and what the log recorded.
 10. **Given** an administrative action, **When** it completes, **Then** the shared administrative path has already written the audit record, leaving no administrative route that bypasses auditing (R-API-12).
 11. **Given** an operational number such as a fee, commission, threshold or window, **When** it is read, **Then** it comes from stored settings rather than a constant, and no code path can write a settings value (R-MONEY-12, R-PROC-11).
 12. **Given** the running system, **When** it is asked whether it is alive and separately whether its dependencies are reachable, **Then** the two answers are distinguishable; and **When** an unhandled error occurs, **Then** it is reported to the error-tracking destination.
+13. **Given** a browser-facing response, **When** its headers are inspected, **Then** the security headers are present; and **Given** a cross-origin request, **When** its origin is not on the configured allowlist, **Then** it is refused, and no configuration can express a wildcard origin (NFR-SEC-11).
 
 ---
 
@@ -345,6 +346,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-073**: Every inbound gateway event MUST be recorded with a provider event identifier that is both unique and non-nullable before it is acted on, so a replayed webhook is acknowledged and has no effect (R-MONEY-8, ADR 0007).
 - **FR-074**: The kernel MUST provide a webhook signature guard that verifies a gateway or provider signature on the raw request body before any handler runs, rejecting unsigned or invalid requests; the payment port's stand-in MUST be able to produce both valid and invalid signatures so the guard is testable without a network (R-MONEY-9, R-SEC-12).
 - **FR-075**: The teacher profile MUST carry payout readiness as an encrypted gateway recipient reference plus configuration and verification timestamps, with no raw account number stored, so the Phase 2 bookability gate has a column to test (R-DB-8, FR-PAYG-13/14).
+- **FR-076**: The kernel MUST set browser security headers (Content Security Policy, Strict-Transport-Security, X-Content-Type-Options, frame-ancestors) once, through a proven middleware, on every browser-facing surface, and MUST answer cross-origin requests only for an explicit allowlist of origins read from configuration, refusing a wildcard. The allowlist is the configuration value `ADMIN_ALLOWED_ORIGINS`, validated at startup. The host that serves the Admin panel's HTML sends the same headers; where that host is not the API, the staging decision (research R-18) records it (NFR-SEC-11, OWASP ASVS 5.0 V3).
 - **FR-016**: Wallet, ledger, balance, escrow and platform-held-funds concepts MUST be refused at build time anywhere in the applications; money-carrying records MUST be confined to the payments module, reached by every other module only through the payment port or that module's public entry (R-MONEY-6).
 
 **Time**

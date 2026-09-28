@@ -277,6 +277,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T097 [P] [US5] Sniffing test in `apps/api/src/platform/guards/upload.spec.ts` using a renamed image — content decides, the declaration is discarded rather than compared (FR-044)
 - [ ] T098 [P] [US5] Surface disjointness test in `apps/api/src/surfaces/surfaces.spec.ts` — the two capability sets share nothing, and the user surface's generated types carry zero administrative capabilities (FR-048, SC-012)
 - [ ] T099 [P] [US5] Audit test in `apps/api/src/surfaces/admin-procedure.spec.ts` — an administrative action cannot complete without its audit record, because the caller kind writes it (FR-049)
+- [ ] T135 [P] [US5] Headers and origin test in `apps/api/src/platform/guards/security-headers.spec.ts` — a browser-facing response carries the security headers, an allowlisted origin is answered, an unlisted origin is refused, a wildcard origin is refused by the configuration schema at startup, and Strict-Transport-Security is asserted in production mode only (FR-076)
 
 ### Implementation for User Story 5
 
@@ -284,6 +285,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T101 [P] [US5] Implement the global error filter and single error shape in `apps/api/src/platform/errors/error-filter.ts` and `domain-error.ts` (FR-041)
 - [ ] T102 [P] [US5] Implement the idempotency mechanism in `apps/api/src/platform/idempotency/idempotency.service.ts` over the `idempotency_keys` table (T134), keyed in the database rather than the cache so one transaction covers key and effect, with the `expire-idempotency-keys` job sweeping expired rows (FR-042, research R-14, ADR 0008)
 - [ ] T103 [P] [US5] Implement rate limiting in `apps/api/src/platform/guards/rate-limit.guard.ts`, available to any endpoint and applied by default to authentication, one-time-code and search paths (FR-043)
+- [ ] T136 [P] [US5] Implement browser security headers and the CORS origin allowlist in `apps/api/src/platform/guards/security-headers.middleware.ts`, headers set once by a proven middleware; origins read from the configuration value `ADMIN_ALLOWED_ORIGINS`, declared in `env.schema.ts` and added empty to `.env.example` (T015), with the no-wildcard rule in the schema itself; Strict-Transport-Security sent only outside development; applied to every browser-facing surface. Where the Admin panel's HTML is served by a host other than the API, that host sends the same headers and research R-18 records it as part of the staging decision (FR-076, NFR-SEC-11)
 - [ ] T104 [P] [US5] Implement upload content sniffing in `apps/api/src/platform/guards/upload.middleware.ts` (FR-044)
 - [ ] T105 [P] [US5] Implement cryptographic identifier generation in `apps/api/src/platform/guards/identifiers.ts` for certificate numbers and verification tokens (FR-045)
 - [ ] T133 [P] [US5] Implement the webhook signature guard in `apps/api/src/platform/guards/webhook-signature.guard.ts`, verifying on the raw body before any handler and rejecting unsigned or invalid requests; test in `webhook-signature.spec.ts` against the payment stand-in's valid and invalid signatures (FR-074, R-MONEY-9)
@@ -379,7 +381,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - Setup: T002–T009 all parallel
 - US1: all nine test tasks parallel; then the syntax rules T035–T042 and T131–T132 parallel; then the type-aware rules T044–T047 parallel
 - US2: all six probe suites parallel; the nine schema-domain files T055–T063 parallel
-- US5: all seven test tasks parallel; the kernel components T100–T105 parallel
+- US5: all eight test tasks parallel; the kernel components T100–T105, T133 and T136 parallel
 - US6: all five port definitions parallel (payment, storage, video, push, sms)
 - US7: both spikes parallel, and parallel with everything else
 
