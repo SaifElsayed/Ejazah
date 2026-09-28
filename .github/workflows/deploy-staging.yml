@@ -1,6 +1,11 @@
 # Deploy on merge to main. BLOCKED on the staging host and data residency decisions (research R-18, R-19).
 name: deploy-staging
 
+# The token gets read access only (GitHub Actions hardening guide, OpenSSF Scorecard Token-Permissions).
+# A stage that must write, such as a deploy, raises it on its own job, never here.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -9,5 +14,5 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: echo "T092 - provision and deploy; must be live within fifteen minutes (SC-008)"

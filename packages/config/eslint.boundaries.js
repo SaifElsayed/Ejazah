@@ -14,8 +14,8 @@
 // (`boundaries/element-types`, `boundaries/no-private`), and `tests/violations/harness.ts` credits
 // a rule only when the reported id equals the published id and the message ends with the
 // constitution id. Configuration of that library could satisfy neither half, so FR-011 — a build
-// log that leads to the prohibition — decided it. `eslint-plugin-boundaries` stays declared as a
-// dependency; removing it is a follow-up, not this task.
+// log that leads to the prohibition — decided it. `eslint-plugin-boundaries` was never imported and was
+// removed from `packages/config` on 2026-09-28 (develop health check after PR #20).
 //
 // What stays here is the wall itself: every path, folder and word the six rules compare against,
 // in one place, so moving the mobile role tree or adding a held-funds synonym is one edit here
