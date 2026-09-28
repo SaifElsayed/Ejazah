@@ -578,6 +578,7 @@ Both mobile experiences share one codebase with role-based navigation and a role
 | NFR-SEC-8  | (New) All authorisation shall be enforced server-side at the service layer. No endpoint shall rely on the client having hidden a control. Gender rules in particular shall be enforced in the data-access layer, so they cannot be bypassed by a missing check in a new endpoint.                                                                              |
 | NFR-SEC-9  | (New) File uploads shall be validated by content-type sniffing and size limits, stored outside the web root, and served only through expiring signed URLs.                                                                                                                                                                                                     |
 | NFR-SEC-10 | (New) Rate limiting shall apply to authentication, OTP issuance, search, and payment initiation.                                                                                                                                                                                                                                                               |
+| NFR-SEC-11 | (New, 2026-09-28) Every browser-facing surface — the Admin panel and any HTTP route a browser can reach — shall send browser security headers (Content Security Policy, Strict-Transport-Security, X-Content-Type-Options, frame-ancestors) set once by a proven middleware, and shall answer cross-origin requests only for an explicit allowlist of origins read from configuration. A wildcard origin is forbidden. Mobile clients and server-to-server webhooks are unaffected. (OWASP ASVS 5.0 V3; DEC-51) |
 
 ### 5.3 Availability and Reliability
 
@@ -815,6 +816,7 @@ Parent/guardian accounts · session recording · platform-held funds of any kind
 | DEC-48  | No payment-proof screenshots or manual paid marks, ever. A paid state comes only from the gateway's signed webhook (FR-PAYG-3/8).                                                                                                                              |
 | DEC-49  | *(v1.4, ADR 0007.)* Direct gateway checkout with 0% commission and zero custody: Student → gateway → Teacher's payout account; signed webhook confirms the Enrollment and generates sessions; Teacher payout onboarding happens in-app strictly after approval and gates discoverability. |
 | DEC-50  | *(v1.4.)* Reimbursement and compensation are an Admin moderation matter between the Student and Platform Administration, executed by Platform Administration outside the platform's code path. The platform never moves funds; the Teacher never negotiates refunds. |
+| DEC-51  | *(2026-09-28.)* Browser security headers and a CORS origin allowlist are a kernel guarantee for every browser-facing surface (NFR-SEC-11). They were absent from v1.0–v1.4, which listed rate limiting, validation, signed URLs, MFA and audit but no HTTP header hygiene; found by the develop security review after PR #23. |
 
 ## 15. Accepted Risks
 
