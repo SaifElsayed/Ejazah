@@ -2,12 +2,17 @@
 //
 // The fixture proves one method: an exported function returning `Promise<readonly TeacherCard[]>`
 // with no gender anywhere in its signature. This table proves the legal counterparts the fixture
-// deliberately leaves out — the gender as a parameter, as a property of an options object, as the
-// literal union Prisma emits, as an optional parameter — and the ways a teacher list can hide from
-// a name match: an alias, an inferred return type, a class method. It also proves what stays out
-// of reach: a method returning something that is not a teacher, a private method, and any file
-// that is not a repository. Parameter names are never consulted, so the legal cases use names
-// that say nothing about gender and the refused ones use a name that does.
+// deliberately leaves out — the requester's gender as a parameter, as a property of an options
+// object, as an optional parameter, behind an interface — and the ways a teacher list can hide
+// from a name match: an alias, an inferred return type, a class method. It also proves what is
+// refused on purpose since 2026-09-28: a plain `Gender`, the literal union Prisma emits, a string,
+// a plain gender inside an options object — none of them is the requester's gender, because the
+// brand is minted only by the request context (T106). And it proves what stays out of reach: a
+// method returning something that is not a teacher, a private method, and any file that is not a
+// repository. Parameter names are never consulted, so the legal cases use names that say nothing
+// about gender and the refused ones use a name that does. The brand is declared the way
+// `packages/contracts` will declare it, a `unique symbol` that is never exported, the shape the
+// money brand uses (research R-3).
 
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
 
@@ -16,6 +21,8 @@ const service = virtualFile('apps/api/src/modules/catalog/catalog.service.ts');
 
 const shapes = [
   "type Gender = 'male' | 'female';",
+  'declare const requesterGenderBrand: unique symbol;',
+  'type RequesterGender = Gender & { readonly [requesterGenderBrand]: true };',
   'interface TeacherCard { readonly id: string }',
   'interface SubjectRow { readonly id: string }',
 ].join('\n');
@@ -32,28 +39,35 @@ typeAwareRuleTester().run(
       {
         name: 'the requester’s gender as a parameter',
         code: withShapes(
-          'export declare function listTeachers(who: Gender, subjectId: string): Promise<readonly TeacherCard[]>;',
+          'export declare function listTeachers(who: RequesterGender, subjectId: string): Promise<readonly TeacherCard[]>;',
         ),
         filename: repository,
       },
       {
-        name: 'the gender inside an options object',
+        name: 'the requester’s gender inside an options object',
         code: withShapes(
-          'export declare function listTeachers(options: { readonly by: Gender; readonly subjectId: string }): Promise<TeacherCard[]>;',
+          'export declare function listTeachers(options: { readonly by: RequesterGender; readonly subjectId: string }): Promise<TeacherCard[]>;',
         ),
         filename: repository,
       },
       {
-        name: 'the literal union Prisma emits for enum Gender, with no alias',
+        name: 'the requester’s gender behind an options interface',
         code: withShapes(
-          "export declare function findTeacher(id: string, g: 'female' | 'male'): Promise<TeacherCard | null>;",
+          'interface Query { readonly by: RequesterGender; readonly subjectId: string }\nexport declare function listTeachers(options: Query): Promise<TeacherCard[]>;',
         ),
         filename: repository,
       },
       {
-        name: 'an optional gender parameter still takes it',
+        name: 'an optional requester’s gender still takes it',
         code: withShapes(
-          'export declare function findTeacher(id: string, g?: Gender): Promise<TeacherCard | null>;',
+          'export declare function findTeacher(id: string, g?: RequesterGender): Promise<TeacherCard | null>;',
+        ),
+        filename: repository,
+      },
+      {
+        name: 'the brand survives a nullable and a mapped type',
+        code: withShapes(
+          'export declare function findTeacher(options: Readonly<{ by: RequesterGender | null }>): Promise<TeacherCard | null>;',
         ),
         filename: repository,
       },
@@ -104,6 +118,46 @@ typeAwareRuleTester().run(
         filename: repository,
         errors: [
           { messageId: 'missingGender', data: { name: 'listTeachers', teacher: 'TeacherCard' } },
+        ],
+      },
+      {
+        name: 'a plain Gender parameter, which could be the teacher’s or the client’s',
+        code: withShapes(
+          'export declare function listTeachers(requesterGender: Gender, subjectId: string): Promise<readonly TeacherCard[]>;',
+        ),
+        filename: repository,
+        errors: [
+          { messageId: 'plainGender', data: { name: 'listTeachers', teacher: 'TeacherCard' } },
+        ],
+      },
+      {
+        name: 'the literal union Prisma emits for enum Gender is a plain gender too',
+        code: withShapes(
+          "export declare function findTeacher(id: string, requesterGender: 'female' | 'male'): Promise<TeacherCard | null>;",
+        ),
+        filename: repository,
+        errors: [
+          { messageId: 'plainGender', data: { name: 'findTeacher', teacher: 'TeacherCard' } },
+        ],
+      },
+      {
+        name: 'a plain Gender inside an options object',
+        code: withShapes(
+          'export declare function listTeachers(options: { readonly requesterGender: Gender; readonly subjectId: string }): Promise<TeacherCard[]>;',
+        ),
+        filename: repository,
+        errors: [
+          { messageId: 'plainGender', data: { name: 'listTeachers', teacher: 'TeacherCard' } },
+        ],
+      },
+      {
+        name: 'an optional plain Gender is still plain',
+        code: withShapes(
+          'export declare function findTeacher(id: string, requesterGender?: Gender): Promise<TeacherCard | null>;',
+        ),
+        filename: repository,
+        errors: [
+          { messageId: 'plainGender', data: { name: 'findTeacher', teacher: 'TeacherCard' } },
         ],
       },
       {

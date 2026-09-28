@@ -2,12 +2,16 @@
 //
 // The fixture proves one access: booking's repository reading `reviews` through a module-level
 // client. This table proves the other ways a module reaches a table — a transaction client, a
-// client passed in as a parameter, a delegate kept in a local — and the places the rule must stay
-// silent: a module's own table, the kernel's `idempotency_keys`, `$`-prefixed client members,
-// a member with the same name on something that is not the database client, and every file
-// outside `apps/api`. The last case walks all 33 manifest tables through the rule from a job
-// file, which is how the delegate-to-table mapping is proved against the real manifest rather
-// than against a copy of it.
+// client passed in as a parameter, a delegate kept in a local, a delegate destructured out of the
+// client (plain, renamed, nested, as a parameter) — and the places the rule must stay silent: a
+// module's own table, read directly or destructured, the kernel's `idempotency_keys`, `$`-prefixed
+// client members that name no table, a member with the same name on something that is not the
+// database client, and every file outside `apps/api`. Raw SQL has its own rows: `$queryRaw`,
+// `$executeRaw` and the `Unsafe` pair are refused anywhere in `apps/api` except under
+// `apps/api/src/platform/db/`, the kernel folder that owns the typed helpers (decision of
+// 2026-09-28, note under T047). The all-tables case walks all 33 manifest tables through the rule
+// from a job file, which is how the delegate-to-table mapping is proved against the real manifest
+// rather than against a copy of it.
 //
 // Each case declares a small `@prisma/client` in its own code, the way the fixture stub does, so
 // the rule meets the shape it will meet in generated code — the delegates are members of a class
@@ -95,7 +99,13 @@ function client(delegates: readonly string[]): string {
     '  export class PrismaClient {',
     members,
     "    $transaction<T>(run: (tx: Omit<PrismaClient, '$transaction'>) => Promise<T>): Promise<T>;",
-    '    $queryRaw(query: TemplateStringsArray): Promise<unknown>;',
+    '    $connect(): Promise<void>;',
+    // The raw SQL surface, declared here because the fixture stub declares none of it: the
+    // tagged pair takes a template, the `Unsafe` pair a string.
+    '    $queryRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<unknown>;',
+    '    $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;',
+    '    $queryRawUnsafe(query: string, ...values: unknown[]): Promise<unknown>;',
+    '    $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;',
     '  }',
     '}',
     "declare const prisma: import('@prisma/client').PrismaClient;",
@@ -103,6 +113,9 @@ function client(delegates: readonly string[]): string {
 }
 
 const shortClient = client(['review', 'enrollment', 'slotHold', 'idempotencyKey', 'lessonPlan']);
+
+/** Lines the client preamble occupies, so a case can pin a report to its own line. */
+const clientLines = shortClient.split('\n').length;
 
 function withClient(code: string): string {
   return `${shortClient}\n${code}`;
@@ -112,6 +125,7 @@ const bookingRepository = virtualFile('apps/api/src/modules/booking/booking.repo
 const bookingService = virtualFile('apps/api/src/modules/booking/booking.service.ts');
 const reviewsRepository = virtualFile('apps/api/src/modules/reviews/reviews.repository.ts');
 const kernel = virtualFile('apps/api/src/platform/idempotency/idempotency.repository.ts');
+const kernelDb = virtualFile('apps/api/src/platform/db/lock-row.ts');
 const job = virtualFile('apps/api/src/jobs/expire-holds.ts');
 const worker = virtualFile('apps/api/src/worker.ts');
 const seed = virtualFile('prisma/seed.ts');
@@ -141,9 +155,16 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       filename: kernel,
     },
     {
-      name: 'raw SQL through a $ member names no table',
-      code: withClient('prisma.$queryRaw`select 1`;'),
-      filename: job,
+      name: 'a $ member that names no table and no SQL',
+      code: withClient('prisma.$transaction(async () => 0);\nprisma.$connect();'),
+      filename: bookingRepository,
+    },
+    {
+      name: 'raw SQL inside the kernel’s db folder, the one place a typed helper may write it',
+      code: withClient(
+        'prisma.$queryRaw`select 1`;\nprisma.$transaction(async (tx) => tx.$executeRaw`select 1`);',
+      ),
+      filename: kernelDb,
     },
     {
       name: 'a member called review on something that is not the database client',
@@ -151,8 +172,17 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       filename: bookingRepository,
     },
     {
-      name: 'the seed, outside apps/api, may touch any table',
-      code: withClient('prisma.review.findMany();\nprisma.idempotencyKey.findMany();'),
+      name: 'a module destructuring its own delegate in its own repository',
+      code: withClient(
+        'const { enrollment, slotHold: holds } = prisma;\nenrollment.findMany();\nholds.findMany();',
+      ),
+      filename: bookingRepository,
+    },
+    {
+      name: 'the seed, outside apps/api, may touch any table and write any SQL',
+      code: withClient(
+        'prisma.review.findMany();\nprisma.idempotencyKey.findMany();\nprisma.$queryRawUnsafe("select 1");',
+      ),
       filename: seed,
     },
   ],
@@ -208,6 +238,94 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       code: withClient('prisma.lessonPlan.findMany();'),
       filename: reviewsRepository,
       errors: [{ messageId: 'unknownDelegate', data: { delegate: 'lessonPlan' } }],
+    },
+    {
+      name: 'a delegate destructured out of the client, reported on the property',
+      code: withClient('const { review } = prisma;\nreview.findMany();'),
+      filename: bookingRepository,
+      errors: [
+        {
+          messageId: 'foreignTable',
+          data: { module: 'booking', table: 'reviews', delegate: 'review', owner: 'reviews' },
+        },
+      ],
+    },
+    {
+      name: 'a delegate destructured under another name out of a transaction client, reported on the property',
+      code: withClient(
+        'prisma.$transaction(async (tx) => {\n  const { review: r } = tx;\n  return r.findMany();\n});',
+      ),
+      filename: bookingRepository,
+      errors: [
+        {
+          messageId: 'foreignTable',
+          data: { module: 'booking', table: 'reviews', delegate: 'review', owner: 'reviews' },
+          // The whole `review: r` property, not just its key: the report lands on the pattern
+          // property, so the fix is pointed at the destructuring.
+          line: clientLines + 2,
+          column: 11,
+          endColumn: 20,
+        },
+      ],
+    },
+    {
+      name: 'a delegate destructured in a parameter',
+      code: withClient(
+        "function read({ review }: import('@prisma/client').PrismaClient) { return review.findMany(); }\nread(prisma);",
+      ),
+      filename: bookingService,
+      errors: [
+        {
+          messageId: 'foreignTable',
+          data: { module: 'booking', table: 'reviews', delegate: 'review', owner: 'reviews' },
+        },
+      ],
+    },
+    {
+      name: 'a nested destructuring reports the delegate once, not its members',
+      code: withClient('const { review: { findMany } } = prisma;\nfindMany();'),
+      filename: kernel,
+      errors: [
+        {
+          messageId: 'foreignTable',
+          data: { module: 'platform', table: 'reviews', delegate: 'review', owner: 'reviews' },
+        },
+      ],
+    },
+    {
+      name: 'a job destructuring a table it may not touch from outside every module',
+      code: withClient('const { slotHold } = prisma;\nslotHold.findMany();'),
+      filename: job,
+      errors: [
+        {
+          messageId: 'outsideModules',
+          data: { delegate: 'slotHold', table: 'slot_holds', owner: 'booking' },
+        },
+      ],
+    },
+    {
+      name: 'a tagged raw query in a module repository',
+      code: withClient('prisma.$queryRaw`select 1`;'),
+      filename: bookingRepository,
+      errors: [{ messageId: 'rawSql', data: { member: '$queryRaw' } }],
+    },
+    {
+      name: 'an unsafe raw statement, refused even in a kernel folder that is not db',
+      code: withClient('prisma.$executeRawUnsafe("delete from reviews");'),
+      filename: kernel,
+      errors: [{ messageId: 'rawSqlUnsafe', data: { member: '$executeRawUnsafe' } }],
+    },
+    {
+      name: 'a raw query through a transaction client from a job',
+      code: withClient('prisma.$transaction(async (tx) => tx.$queryRaw`select 1`);'),
+      filename: job,
+      errors: [{ messageId: 'rawSql', data: { member: '$queryRaw' } }],
+    },
+    {
+      name: 'raw SQL destructured out of the client is the same access',
+      code: withClient('const { $queryRawUnsafe: raw } = prisma;\nraw("select 1");'),
+      filename: bookingRepository,
+      errors: [{ messageId: 'rawSqlUnsafe', data: { member: '$queryRawUnsafe' } }],
     },
     {
       name: 'a job reading a table directly instead of through its owner',

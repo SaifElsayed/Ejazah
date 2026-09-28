@@ -17,9 +17,22 @@
 // member's declaration), and deciding by the declaring client — not by any member of the module —
 // keeps a delegate's own methods and fields (`findMany`, `fields`) from being mistaken for
 // delegates. Any read of the delegate counts, not only `<client>.<delegate>.<method>`, so handing
-// the delegate to a local first is the same access. `$`-prefixed members (`$transaction`,
-// `$queryRaw`, `$executeRaw`) name no table and are ignored: raw SQL is out of this rule's reach
-// and stays with review. Destructuring a delegate out of the client is not chased.
+// the delegate to a local first is the same access, and so is destructuring it out (revised
+// 2026-09-28): `const { review } = prisma`, `const { review: r } = tx`, a destructured parameter
+// `({ review }: PrismaClient)` and a nested pattern are read through the pattern's type — the
+// checker knows what a binding pattern destructures — and reported on the property, under the same
+// messages. `$`-prefixed members other than raw SQL (`$transaction`, `$connect`, …) name no table
+// and are ignored.
+//
+// DECISION (T047) — raw SQL (author, 2026-09-28). Runtime raw SQL is confined to the platform
+// kernel; modules never write SQL. A raw query names its table where no rule can read it, which is
+// exactly the access this rule exists to see, so inside `apps/api` any access to `$queryRaw`,
+// `$executeRaw`, `$queryRawUnsafe` or `$executeRawUnsafe` declared on `PrismaClient` (through a
+// transaction client too) is refused unless the file sits under `apps/api/src/platform/db/`, the
+// folder that will hold the kernel's typed helpers (a row lock whose table is a string literal,
+// checked like a delegate — a separate US5 task, note under T047). The `Unsafe` pair gets its own
+// message: it takes a string and cannot be parameterised. Until the helper exists the ban is total
+// outside `platform/db/`; a suppression with a reason (R-PROC-7) is the only way through.
 //
 // DECISION (T047) — delegate to table, by Prisma's convention in reverse. Models are PascalCase and
 // `@@map` to snake_case plural tables (`base.prisma`); a delegate is the camelCased model name. So
@@ -51,7 +64,10 @@ const RULE_ID = 'api/table-ownership';
 
 const API_SOURCE = ['apps', 'api', 'src'];
 const API_TREE = ['apps', 'api'];
+const KERNEL_DB = ['apps', 'api', 'src', 'platform', 'db'];
 const PLATFORM = 'platform';
+const RAW_SQL_TAGGED = new Set(['$queryRaw', '$executeRaw']);
+const RAW_SQL_UNSAFE = new Set(['$queryRawUnsafe', '$executeRawUnsafe']);
 const CLIENT_NAME = 'PrismaClient';
 const CLIENT_MODULE = '@prisma/client';
 const CLIENT_PATHS = [/\/@prisma\/client\//, /\/\.prisma\/client\//];
@@ -127,6 +143,23 @@ function isClientMember(declaration) {
   return container?.name?.text === CLIENT_NAME && insideClientModule(declaration);
 }
 
+function isClientSymbol(symbol) {
+  return symbol !== undefined && (symbol.declarations ?? []).some(isClientMember);
+}
+
+function isRawSql(name) {
+  return RAW_SQL_TAGGED.has(name) || RAW_SQL_UNSAFE.has(name);
+}
+
+/** The name a binding-pattern property destructures, or null when it is computed. */
+function patternKey(property) {
+  if (property.type !== 'Property' || property.computed) return null;
+  const { key } = property;
+  if (key.type === 'Identifier') return key.name;
+  if (key.type === 'Literal' && typeof key.value === 'string') return key.value;
+  return null;
+}
+
 module.exports = defineRule({
   constitutionId: 'R-API-6',
   description: 'Bans database access to a table another module owns (module-tables.json)',
@@ -138,35 +171,64 @@ module.exports = defineRule({
       "'{{delegate}}' reaches table '{{table}}' from outside every module; only the repository of its owner, '{{owner}}', may touch it.",
     unknownDelegate:
       "'{{delegate}}' is a database delegate with no table in module-tables.json. Add the table under its owning module in the manifest.",
+    rawSql:
+      "'{{member}}' is raw SQL that names its table where no rule can read it; use the platform kernel's typed helper (apps/api/src/platform/db) or the owning module's repository through the client.",
+    rawSqlUnsafe:
+      "'{{member}}' takes a string and cannot be parameterised; raw SQL lives only in the platform kernel (apps/api/src/platform/db) as a typed helper such as a row lock.",
   },
   create(context) {
     const program = requireProgram(context, RULE_ID);
     const segments = segmentsOf(context.filename);
     if (after(segments, API_TREE) === -1) return {};
     const fileOwner = ownerOf(segments);
+    const insideKernelDb = after(segments, KERNEL_DB) !== -1;
+
+    /** One client member reached, by member access or by destructuring, under its declared name. */
+    function checkAccess(reportNode, name, symbol) {
+      if (name.startsWith('$') && !isRawSql(name)) return;
+      if (!isClientSymbol(symbol)) return;
+
+      if (isRawSql(name)) {
+        if (insideKernelDb) return;
+        context.report({
+          node: reportNode,
+          messageId: RAW_SQL_UNSAFE.has(name) ? 'rawSqlUnsafe' : 'rawSql',
+          data: { member: name },
+        });
+        return;
+      }
+
+      const delegate = name;
+      const target = DELEGATES.get(delegate);
+      if (target === undefined) {
+        context.report({ node: reportNode, messageId: 'unknownDelegate', data: { delegate } });
+        return;
+      }
+      if (target.owner === fileOwner) return;
+      const data = { delegate, table: target.table, owner: target.owner, module: fileOwner };
+      context.report({
+        node: reportNode,
+        messageId: fileOwner === null ? 'outsideModules' : 'foreignTable',
+        data,
+      });
+    }
 
     return {
       MemberExpression(node) {
         const { property } = node;
-        if (node.computed || property.type !== 'Identifier' || property.name.startsWith('$')) {
-          return;
-        }
+        if (node.computed || property.type !== 'Identifier') return;
         const symbol = program.checker.getSymbolAtLocation(program.toTs(property));
-        if (symbol === undefined || !(symbol.declarations ?? []).some(isClientMember)) return;
-
-        const delegate = property.name;
-        const target = DELEGATES.get(delegate);
-        if (target === undefined) {
-          context.report({ node: property, messageId: 'unknownDelegate', data: { delegate } });
-          return;
+        checkAccess(property, property.name, symbol);
+      },
+      ObjectPattern(node) {
+        // The pattern's own type is what it destructures: the initialiser's for a declaration,
+        // the annotation's or the contextual one for a parameter, the parent property's when nested.
+        const source = program.checker.getNonNullableType(program.typeOf(node));
+        for (const property of node.properties) {
+          const name = patternKey(property);
+          if (name === null) continue;
+          checkAccess(property, name, program.checker.getPropertyOfType(source, name));
         }
-        if (target.owner === fileOwner) return;
-        const data = { delegate, table: target.table, owner: target.owner, module: fileOwner };
-        context.report({
-          node: property,
-          messageId: fileOwner === null ? 'outsideModules' : 'foreignTable',
-          data,
-        });
       },
     };
   },

@@ -23,25 +23,37 @@
 // no such name (an un-annotated `findMany` result) is not recognised; repositories return named
 // types, and the first catalog repository task is where that is checked against the real client.
 //
-// DECISION (T046) — "takes the requester's gender" is a type-level fact too. Some parameter, or
-// some property of an object-typed parameter (one level, so `{ requesterGender, subjectId }` in an
-// options object counts), resolves to the gender type: a type whose symbol or alias name is
-// `Gender`, or exactly the literal union `'male' | 'female'`, which is what Prisma emits for
-// `enum Gender` in `prisma/schema/base.prisma`. Parameter names are not consulted, so renaming a
-// parameter can neither satisfy nor break the rule. A parameter carrying the teacher's gender
-// rather than the requester's would also satisfy it; that is a review question, not designed for.
+// DECISION (T046) — "takes the requester's gender" is a type-level fact too, and the type is the
+// requester's, not any gender (revised 2026-09-28). Some parameter, or some property of an
+// object-typed parameter (one level, so `{ requester, subjectId }` in an options object counts),
+// must resolve to `RequesterGender`: `Gender & { readonly [requesterGenderBrand]: true }`, branded
+// with a `unique symbol` that is never exported, the technique of the money brand (research R-3).
+// The request context (T106) is the only place that mints it and `packages/contracts` is where the
+// type is exported from, so a value of that type can only have come from the server-held session
+// (R-GENDER-4). It is recognised by the brand's declaration through `isRequesterGenderType` in
+// `../types.js`, never by a name. A plain `Gender` — the alias, or the literal union
+// `'male' | 'female'` Prisma emits for `enum Gender` — is refused on purpose, with a message of its
+// own: it could be the teacher's gender or a value the client sent, and a repository method cannot
+// tell. Parameter names are not consulted, so renaming a parameter can neither satisfy nor break
+// the rule.
 const path = require('node:path');
 
 const ts = require('typescript');
 
 const { defineRule } = require('../rule');
-const { presentConstituents, requireProgram } = require('../types');
+const { isRequesterGenderType, presentConstituents, requireProgram } = require('../types');
 
 const RULE_ID = 'gender/require-requester-gender';
 
 const TEACHER = /Teacher/;
 const GENDER_NAME = 'Gender';
 const GENDER_VALUES = ['female', 'male'];
+
+// What a signature's parameters carry, strongest first: the branded requester's gender, a plain
+// gender that satisfies nothing but earns the more specific message, or no gender at all.
+const REQUESTER = 'requester';
+const PLAIN = 'plain';
+const NONE = 'none';
 
 function isRepositoryFile(filename) {
   if (typeof filename !== 'string' || filename === '') return false;
@@ -92,16 +104,33 @@ function isGenderType(type) {
   );
 }
 
-function takesGender(checker, signature) {
-  return signature.getParameters().some((parameter) => {
-    const type = checker.getTypeOfSymbol(parameter);
-    if (isGenderType(type)) return true;
-    const options = checker.getNonNullableType(type);
-    if ((options.flags & ts.TypeFlags.Object) === 0 && !options.isIntersection()) return false;
-    return checker
-      .getPropertiesOfType(options)
-      .some((property) => isGenderType(checker.getTypeOfSymbol(property)));
-  });
+function genderKind(type) {
+  if (isRequesterGenderType(type)) return REQUESTER;
+  if (isGenderType(type)) return PLAIN;
+  return NONE;
+}
+
+/** The parameter type itself and, for an options object, each of its properties' types. */
+function candidateTypes(checker, parameter) {
+  const type = checker.getTypeOfSymbol(parameter);
+  const options = checker.getNonNullableType(type);
+  if ((options.flags & ts.TypeFlags.Object) === 0 && !options.isIntersection()) return [type];
+  return [
+    type,
+    ...checker.getPropertiesOfType(options).map((property) => checker.getTypeOfSymbol(property)),
+  ];
+}
+
+function genderTaken(checker, signature) {
+  let taken = NONE;
+  for (const parameter of signature.getParameters()) {
+    for (const candidate of candidateTypes(checker, parameter)) {
+      const kind = genderKind(candidate);
+      if (kind === REQUESTER) return REQUESTER;
+      if (kind === PLAIN) taken = PLAIN;
+    }
+  }
+  return taken;
 }
 
 module.exports = defineRule({
@@ -110,7 +139,9 @@ module.exports = defineRule({
   messages: {
     // Written without the identifier; `defineRule` appends it (FR-011).
     missingGender:
-      "Repository method '{{name}}' returns {{teacher}} but takes no requester gender, so a caller cannot apply the same-gender predicate (SRS §3.7.1). Take the requester's Gender as a parameter or an options property.",
+      "Repository method '{{name}}' returns {{teacher}} but takes no requester gender, so a caller cannot apply the same-gender predicate (SRS §3.7.1). Take the requester's gender from the request context (RequesterGender, exported by packages/contracts) as a parameter or an options property.",
+    plainGender:
+      "Repository method '{{name}}' returns {{teacher}} but its gender parameter is a plain Gender, which could be the teacher's or a value the client sent (R-GENDER-4). The parameter must be the requester's gender from the request context (RequesterGender, exported by packages/contracts), the only type the server-held session can produce.",
   },
   create(context) {
     const program = requireProgram(context, RULE_ID);
@@ -123,8 +154,14 @@ module.exports = defineRule({
         declaration === undefined ? undefined : checker.getSignatureFromDeclaration(declaration);
       if (signature === undefined) return;
       const teacher = teacherIn(checker, checker.getReturnTypeOfSignature(signature));
-      if (teacher === null || takesGender(checker, signature)) return;
-      context.report({ node: reportNode, messageId: 'missingGender', data: { name, teacher } });
+      if (teacher === null) return;
+      const taken = genderTaken(checker, signature);
+      if (taken === REQUESTER) return;
+      context.report({
+        node: reportNode,
+        messageId: taken === PLAIN ? 'plainGender' : 'missingGender',
+        data: { name, teacher },
+      });
     }
 
     function checkExportedFunction(node) {

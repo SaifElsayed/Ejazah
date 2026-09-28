@@ -9,13 +9,15 @@
 //
 // DECISION (T044) — what counts as arithmetic. The contract row says "any arithmetic operand
 // carrying the money brand", and the operator can be spelled four ways that are the same
-// prohibition: a binary `+ - * / % **`, a compound assignment `+= -= *= /= %= **=`, a unary `-` or
-// `+`, and an update `++` or `--`. All four are refused. Comparisons (`< > <= >= === !==`) are not
+// prohibition: a binary `+ - * / % ** & | ^ << >> >>>`, a compound assignment `+= -= *= /= %= **=
+// &= |= ^= <<= >>= >>>=`, a unary `-`, `+` or `~`, and an update `++` or `--`. All four are
+// refused. Bitwise and shift operators are arithmetic here (revised 2026-09-28): `price_piasters
+// >> 1` halves an amount, `| 0` and `~~x` truncate one, so they compute a new amount exactly as
+// `/ 2` and `Math.trunc` would and R-MONEY-5 owns them. Comparisons (`< > <= >= === !==`) are not
 // arithmetic and stay legal: in the R-MONEY-5 fixture, `gross_piasters - fee_piasters > 0` is
 // refused for the `-`, never for the `>`. A `+` with a string on the other side is refused too,
 // because R-MONEY-5 bans `+` on a piaster value whatever it produces; an amount reaches text
-// through `toPlainNumber` or a formatter. Bitwise and shift operators are not arithmetic in this
-// reading and are not covered.
+// through `toPlainNumber` or a formatter.
 //
 // DECISION (T044) — one report per expression, naming the first operand that carries the brand,
 // so `a_piasters - b_piasters` is one problem and not two. A chain `a + b + c` is two expressions
@@ -38,9 +40,22 @@ const RULE_ID = 'money/no-arithmetic-outside-package';
 
 const MONEY_PACKAGE = ['packages', 'money'];
 
-const BINARY = new Set(['+', '-', '*', '/', '%', '**']);
-const COMPOUND = new Set(['+=', '-=', '*=', '/=', '%=', '**=']);
-const UNARY = new Set(['-', '+']);
+const BINARY = new Set(['+', '-', '*', '/', '%', '**', '&', '|', '^', '<<', '>>', '>>>']);
+const COMPOUND = new Set([
+  '+=',
+  '-=',
+  '*=',
+  '/=',
+  '%=',
+  '**=',
+  '&=',
+  '|=',
+  '^=',
+  '<<=',
+  '>>=',
+  '>>>=',
+]);
+const UNARY = new Set(['-', '+', '~']);
 
 function insideMoneyPackage(filename) {
   return after(segmentsOf(filename), MONEY_PACKAGE) !== -1;

@@ -1,10 +1,11 @@
 // money/no-arithmetic-outside-package (R-MONEY-5) against a table of type-checked code (T044).
 //
 // The fixture proves one spelling, a binary `-` between two amounts. This table proves the other
-// three spellings of the same operation — compound assignment, unary and update — and the
-// neighbours that must stay legal: a comparison between amounts, arithmetic on plain numbers,
-// and any arithmetic at all inside `packages/money`, which is the one place R-MONEY-5 allows it.
-// Every case declares the brand the way `packages/money/src/index.ts` does, so the rule is tested
+// spellings of the same operation — compound assignment, unary and update, and the bitwise and
+// shift forms that halve (`>> 1`) or truncate (`| 0`, `~~x`) an amount — and the neighbours that
+// must stay legal: a comparison between amounts, arithmetic and shifts on plain numbers, and any
+// arithmetic at all inside `packages/money`, which is the one place R-MONEY-5 allows it. Every
+// case declares the brand the way `packages/money/src/index.ts` does, so the rule is tested
 // against the real shape and not against a name.
 
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
@@ -55,6 +56,11 @@ typeAwareRuleTester().run(
       {
         name: 'a string concatenation with no amount in it',
         code: "export const label = (name: string): string => 'Teacher ' + name;",
+        filename: feature,
+      },
+      {
+        name: 'a shift and a mask on plain numbers, so the brand and not the operator decides',
+        code: 'export const flags = (mask: number, bit: number): number => (mask >> bit) | 0;',
         filename: feature,
       },
     ],
@@ -146,6 +152,38 @@ typeAwareRuleTester().run(
         ),
         filename: feature,
         errors: [{ messageId: 'arithmetic', data: { operand: 'copy', operator: '*' } }],
+      },
+      {
+        name: 'a right shift, which halves an amount',
+        code: withBrand(
+          'export const half = (price_piasters: Piasters): number => price_piasters >> 1;',
+        ),
+        filename: feature,
+        errors: [{ messageId: 'arithmetic', data: { operand: 'price_piasters', operator: '>>' } }],
+      },
+      {
+        name: 'a bitwise or with zero, which truncates an amount',
+        code: withBrand(
+          'export const whole = (price_piasters: Piasters): number => price_piasters | 0;',
+        ),
+        filename: feature,
+        errors: [{ messageId: 'arithmetic', data: { operand: 'price_piasters', operator: '|' } }],
+      },
+      {
+        name: 'a double bitwise not, which truncates an amount, reported once for the inner operator',
+        code: withBrand(
+          'export const whole = (price_piasters: Piasters): number => ~~price_piasters;',
+        ),
+        filename: feature,
+        errors: [{ messageId: 'arithmetic', data: { operand: 'price_piasters', operator: '~' } }],
+      },
+      {
+        name: 'a compound shift assignment',
+        code: withBrand(
+          'export function shrink(total: number, price_piasters: Piasters): number { total <<= price_piasters; return total; }',
+        ),
+        filename: feature,
+        errors: [{ messageId: 'arithmetic', data: { operand: 'price_piasters', operator: '<<=' } }],
       },
     ],
   },
