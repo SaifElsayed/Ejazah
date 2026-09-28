@@ -6,7 +6,10 @@
 // The ceiling is a number no Phase 0 document fixes, so this fixture does not aim just past it:
 // `enroll` carries more than twenty independent decisions, which is over any ceiling a reviewer
 // would defend. See the note in tests/violations/layers.spec.ts.
+// The price is typed with the brand so `money/no-number-in-money-position` (R-MONEY-1, T131) has
+// nothing to say and the complexity is the only thing wrong here.
 // Refused by api/no-logic-in-router.
+import type { Piasters } from '@ijazah/money';
 
 interface EnrollInput {
   readonly requesterGender: string;
@@ -16,7 +19,7 @@ interface EnrollInput {
   readonly holdExpired: boolean;
   readonly holdOwnerId: string;
   readonly requesterId: string;
-  readonly packagePricePiasters: number;
+  readonly packagePricePiasters: Piasters;
   readonly sessionCount: number;
   readonly locale: string;
   readonly slotTimezone: string;
