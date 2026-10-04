@@ -111,8 +111,8 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
       filename: module_,
     },
     {
-      name: 'a fact about a photo URL, and a redacted one',
-      code: "logger.info('profile', { hasPhotoUrl, isImageUrlSet, photoUrl: redact(photoUrl), image_url: maskUrl(row.image_url), photo_url: 'present' });",
+      name: 'a fact about a photo or signature URL, and a redacted one',
+      code: "logger.info('profile', { hasPhotoUrl, isSignatureUrlSet, photoUrl: redact(photoUrl), signature_url: maskUrl(row.signature_url), photo_url: 'present' });",
       filename: module_,
     },
     {
