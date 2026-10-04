@@ -9,6 +9,9 @@ import { typescriptRuleTester, loadRule } from '../support/rule-tester';
 
 const file = 'apps/api/src/modules/notifications/payload-cast.ts';
 
+// The words a marker comment opens with, which are never a tracker project (justification.js).
+const MARKERS = ['TODO', 'FIXME', 'HACK', 'XXX'];
+
 typescriptRuleTester().run(
   'api/require-escape-hatch-reason',
   loadRule('require-escape-hatch-reason.js'),
@@ -37,6 +40,11 @@ typescriptRuleTester().run(
       {
         name: 'another tracker key shape',
         code: '// IJZ-231: vendor typings are missing\nexport const p: any = input;',
+        filename: file,
+      },
+      {
+        name: 'a ticket with a zero in its number, and a low one',
+        code: '// T100 the port has no payload type yet\nexport const p = input as any;\n// #10 the port has no payload type yet\nexport const q = input as any;\n// IJZ-1 the port has no payload type yet\nexport const r = input as any;',
         filename: file,
       },
       {
@@ -156,6 +164,40 @@ typescriptRuleTester().run(
         ].join('\n'),
         filename: file,
         errors: 6,
+      },
+      {
+        name: 'a ticket whose number is zero was never issued',
+        code: [
+          '// T000 needs this cast here',
+          'export const a = input as any;',
+          '// #0 needs this cast here',
+          'export const b = input as any;',
+          '// XX-0 needs this cast here',
+          'export const c = input as any;',
+          '// SCRUM-000 needs this cast here',
+          'export const d = input as any;',
+          '// T000-T005 needs this cast here',
+          'export const e = input as any;',
+        ].join('\n'),
+        filename: file,
+        errors: 5,
+      },
+      {
+        name: 'a marker word is never a tracker project',
+        code: [
+          `// ${MARKERS[0]}-1 needs this cast here`,
+          'export const a = input as any;',
+          `// ${MARKERS[1]}-12 needs this cast here`,
+          'export const b = input as any;',
+          `// ${MARKERS[2]}-3 needs this cast here`,
+          'export const c = input as any;',
+          `// ${MARKERS[3]}-4 needs this cast here`,
+          'export const d = input as any;',
+          '// NOTE-5 needs this cast here',
+          'export const e = input as any;',
+        ].join('\n'),
+        filename: file,
+        errors: 5,
       },
       {
         name: 'a multi-segment requirement id does not fall apart into a ticket',

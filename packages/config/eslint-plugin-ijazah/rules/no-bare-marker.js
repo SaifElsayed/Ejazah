@@ -12,8 +12,16 @@
 // HALF ONE — a marker with no ticket. The markers are the words TODO, FIXME, HACK and XXX; a
 // comment is a marker comment when one of them
 //
-//   - opens the comment or one of its lines, in capitals, as a whole word; or
+//   - opens the comment or one of its lines, as a whole word, in any letter case: a line reading
+//     "todo fix this" or "fixme later", or opening with a capitalised "Todo", is a marker
+//     (review of the pull request for T037–T042, item m9). The JSDoc tag form counts the same
+//     way: `@todo` and `@fixme` at the start of a comment or of a line of a block; or
 //   - appears anywhere, in any case, directly followed by `:` or `(`, with no space between.
+//
+// A marker word in the MIDDLE of a line, with no `:` or `(` after it, is still not a marker: a
+// remark that goes on to say "… TODO remove" after its own label is read as prose. This is the
+// reading of core `no-warning-comments` with `location: 'start'`, the mechanism the constitution
+// names, and it is why the opening position can afford to ignore case.
 //
 // It is refused unless the same comment carries a ticket: a task id (`T041`), `#123`, or a
 // tracker key (`SCRUM-51`). A rule or requirement id is never a ticket; the syntax is decided in
@@ -33,13 +41,26 @@
 //   - and what it parses to is a statement that does something: a declaration, an import or
 //     export, a control-flow statement, or a call, `new`, `await`, assignment or update.
 //
-// PROSE IS NEVER REFUSED AS CODE, and the four conditions are how. A sentence does not parse. A
-// comment that explains and then shows an example does not parse as a whole, so documentation
-// with a code sample in it stays legal. A lone word or name (`deprecated`, `x.y`), a label
-// followed by a word (`Note: important`) and a bare expression parse but do nothing, and are not
-// refused. The cost is stated honestly: commented-out code directly under a sentence in the same
-// run of comments is not seen, and neither is a fragment that does not parse on its own (two
-// lines out of the middle of an object literal).
+// PROSE IS ALMOST NEVER REFUSED AS CODE, and the four conditions are how. A sentence does not
+// parse. A comment that explains and then shows an example does not parse as a whole, so
+// documentation with a code sample in it stays legal. A lone word or name (`deprecated`, `x.y`),
+// a label followed by a word (`Note: important`) and a bare expression parse but do nothing, and
+// are not refused. The cost is stated honestly: commented-out code directly under a sentence in
+// the same run of comments is not seen, and neither is a fragment that does not parse on its own
+// (two lines out of the middle of an object literal).
+//
+// THE PROSE THAT IS REFUSED, stated plainly (m9). A short comment that happens to be a complete
+// statement IS refused, because nothing in its text tells it from code. Two shapes are known:
+//
+//   a lead-in and a call     a line reading: e.g. foo();      the abbreviation's dots parse as
+//                                                              member access, so this is a call
+//   an equation              a line reading: keys = values;   an assignment
+//
+// Both end in `;` and parse to a statement that does something. Write the code part in
+// backticks and it is prose again: "e.g. `foo()`;" no longer parses, and "`keys = values`;" is a
+// bare template literal, which does nothing. Dropping the final `;` works too. No exemption is
+// made for an "e.g." or "i.e." lead-in: a line of real commented-out code can follow one in the
+// same run, and the rule could not tell the two apart.
 //
 // The rule reads every file. Directive comments (`eslint-…`, `@ts-…`) are not code and are the
 // business of R-PROC-7 and R-API-10.
@@ -48,7 +69,8 @@ const { hasTicket } = require('../justification');
 const { unwrap } = require('../syntax');
 
 const MARKERS = ['TODO', 'FIXME', 'HACK', 'XXX'];
-const OPENING_MARKER = new RegExp(`^[\\s*@]*(${MARKERS.join('|')})(?![\\w-])`);
+// Opening a line, in any case, with or without the JSDoc `@` (m9).
+const OPENING_MARKER = new RegExp(`^[\\s*@]*(${MARKERS.join('|')})(?![\\w-])`, 'i');
 const TAGGED_MARKER = new RegExp(`(?<![\\w.-])(${MARKERS.join('|')})[:(]`, 'i');
 
 const CODE_LINE_ENDINGS = new Set([';', '{', '}']);

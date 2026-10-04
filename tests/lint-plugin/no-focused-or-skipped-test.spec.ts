@@ -31,6 +31,11 @@ typescriptRuleTester().run(
         filename: spec,
       },
       {
+        name: 'an expected failure runs, so it is neither a focus nor a skip',
+        code: "it.fails('T096: a repeated operation is refused', () => {});\ntest.fails('again', () => {});",
+        filename: spec,
+      },
+      {
         name: 'a condition on the environment',
         code: "it.skipIf(!process.env.DATABASE_URL)('reads a row', () => {});\nit.runIf(hasDocker)('probes', () => {});",
         filename: spec,

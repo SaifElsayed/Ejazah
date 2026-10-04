@@ -48,6 +48,17 @@
 // `linterOptions.reportUnusedDisableDirectives: 'error'` so a directive that suppresses nothing
 // cannot linger. Both belong to the configuration and pipeline tasks, not to T041.
 //
+// A REPORT AT `1:0` (note under T041). The last-resort position above is line 1, column -1, which
+// ESLint prints as `1:0` and hands to a formatter as `column: 0`. Columns are 1-based everywhere
+// else, so a consumer that assumes that (a SARIF upload step, T048; an editor integration) must
+// tolerate a zero here rather than reject the run.
+//
+// COST ON A VERY LONG TOKEN (review of PR #29, N5). The names an inline configuration sets are
+// found with one expression that looks for a run of name characters followed by a colon, tried
+// from every position; on a single run of many thousands of name characters with no colon after
+// it, that costs time growing with the square of the length. A comment written by hand holds no
+// such token, so this is recorded rather than rewritten.
+//
 // Whether the reason is true and whether the ticket exists are review's.
 const { defineRule } = require('../rule');
 const { EXPECTED, isJustified } = require('../justification');

@@ -11,6 +11,17 @@
 //   #123                 a GitHub issue or pull request
 //   SCRUM-51, IJZ-231    a tracker key: upper-case project, a dash, a number
 //
+// THE NUMBER IS NEVER ZERO (review of PR #29, N4). No tracker issues a zero, so `T000`, `#0` and
+// `XX-0` are placeholders typed to satisfy a rule, and are refused. And a marker word is never a
+// project: the words a marker comment opens with, and the label for a remark, cannot be a
+// tracker prefix, so a marker followed by a dash and a number is not a ticket. The list is
+// `MARKER_PREFIXES` below.
+//
+// THE TIGHTER OPTION, not taken yet. Any upper-case project followed by a number still reads as a
+// tracker key, because no document fixes which tracker and which project key this repository
+// uses. Once one does, restricting the tracker shape to that key is a one-line change here and
+// closes the invented-key case (`ABC-1`); until then that case is review's (note under T041).
+//
 // A SPECIFICATION OR GOVERNANCE ID IS NEVER A TICKET. `R-API-10`, `FR-012`, `FR-NOTIF-4`,
 // `NFR-SEC-2`, `SC-003`, `ADR-0007`, `OPEN-11`, `DEC-48`, `RISK-01`, `UC-4` and `SRS-IDN-1` name a
 // rule, a requirement or a decision. Citing the rule one is breaking is not a plan to stop
@@ -29,6 +40,9 @@
 // stays one token that is not a ticket rather than falling apart into `NOTIF-4`.
 
 const SPEC_PREFIXES = new Set(['R', 'FR', 'NFR', 'SC', 'ADR', 'OPEN', 'DEC', 'RISK', 'UC', 'SRS']);
+
+// Words a marker comment opens with, and the label for a remark: never a tracker project (N4).
+const MARKER_PREFIXES = new Set(['TODO', 'FIXME', 'HACK', 'XXX', 'NOTE']);
 
 // Upper-case names that are followed by a number and are not a tracker project.
 const STANDARDS = new Set([
@@ -51,8 +65,8 @@ const STANDARDS = new Set([
   'OWASP',
 ]);
 
-const TASK_ID = /^T\d{3,4}$/;
-const ISSUE = /^#\d+$/;
+const TASK_ID = /^T(\d{3,4})$/;
+const ISSUE = /^#(\d+)$/;
 const TRACKER_KEY = /^([A-Z][A-Z0-9]+)-(\d+)$/;
 const SPEC_PART = /^[A-Z0-9*]+$/;
 const LETTER = /\p{L}/u;
@@ -70,16 +84,27 @@ function isSpecId(token) {
   return parts.slice(1).every((part) => SPEC_PART.test(part));
 }
 
+/** True when a run of digits is a number some tracker could have issued: anything but zero. */
+function isIssued(digits) {
+  return /[1-9]/.test(digits);
+}
+
+function isTaskId(token) {
+  const task = TASK_ID.exec(token);
+  return task !== null && isIssued(task[1]);
+}
+
 function isTicket(token) {
-  if (ISSUE.test(token)) return true;
-  if (TASK_ID.test(token)) return true;
+  const issue = ISSUE.exec(token);
+  if (issue !== null) return isIssued(issue[1]);
+  if (isTaskId(token)) return true;
 
   const range = token.split('-');
-  if (range.length === 2 && range.every((part) => TASK_ID.test(part))) return true;
+  if (range.length === 2 && range.every(isTaskId)) return true;
 
   const key = TRACKER_KEY.exec(token);
-  if (key === null) return false;
-  return !SPEC_PREFIXES.has(key[1]) && !STANDARDS.has(key[1]);
+  if (key === null || !isIssued(key[2])) return false;
+  return !SPEC_PREFIXES.has(key[1]) && !STANDARDS.has(key[1]) && !MARKER_PREFIXES.has(key[1]);
 }
 
 /** `{ ticket, words }`: the first ticket in the text, or null, and how many words of reason. */

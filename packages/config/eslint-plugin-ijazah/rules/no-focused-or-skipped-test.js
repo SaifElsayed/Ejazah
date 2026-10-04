@@ -31,6 +31,12 @@
 //                       condition is honest — `skipIf(true)` is not — is review's, which is the
 //                       second mechanism the constitution names for this rule.
 //
+//   it.fails(…)         asserts that the case fails, and goes red the day it passes. It runs,
+//                       so it is neither a focus nor a skip, which are the two marks R-PROC-10's
+//                       cell names; the rule is read narrowly and does not refuse it (review of
+//                       PR #29, N9). Whether an expected failure is a silenced defect is
+//                       review's.
+//
 // WHAT IS NOT SEEN, and is review's. An aliased entry point is not followed
 // (`import { it as spec } from 'vitest'`, `const run = it`); this rule runs without types
 // (research R-10). A skip requested from inside the test body through its context

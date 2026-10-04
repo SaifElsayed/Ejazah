@@ -38,6 +38,26 @@ typescriptRuleTester().run('proc/no-bare-marker', loadRule('no-bare-marker.js'),
       filename: file,
     },
     {
+      name: 'a marker word in the middle of a remark, with no colon after it',
+      code: `// NOTE: ${MARK} remove once the port lands\n// see the ${FIX.toLowerCase()} list in the runbook\nexport const a = 1;`,
+      filename: file,
+    },
+    {
+      name: 'a lower-case marker opening a line, with a ticket',
+      code: `// ${MARK.toLowerCase()} release the hold, T057\n/** @${MARK.toLowerCase()} #123 release the hold */\nexport const a = 1;`,
+      filename: file,
+    },
+    {
+      name: 'a lower-case word that only starts like a marker',
+      code: `// ${MARK.toLowerCase()}s are tracked in tasks.md\n// hackathon notes live elsewhere\nexport const a = 1;`,
+      filename: file,
+    },
+    {
+      name: 'short prose with its code in backticks',
+      code: '// e.g. `foo()`;\n\n// `keys = values`;\nexport const a = 1;',
+      filename: file,
+    },
+    {
       name: 'a word that only starts like a marker',
       code: `// ${MARK}s are tracked in tasks.md; XXXL is a size.\nexport const a = 1;`,
       filename: file,
@@ -140,6 +160,36 @@ typescriptRuleTester().run('proc/no-bare-marker', loadRule('no-bare-marker.js'),
       code: `// ${MARK.toLowerCase()}: release the hold\nexport const a = 1;`,
       filename: file,
       errors: 1,
+    },
+    {
+      name: 'a lower-case and a capitalised marker opening a line, with no colon',
+      code: `// ${MARK.toLowerCase()} fix this\n// ${FIX.toLowerCase()} later\n// ${MARK[0]}${MARK.slice(1).toLowerCase()}: x\n// hack around the provider\n// xxx\nexport const a = 1;`,
+      filename: file,
+      errors: [
+        { messageId: 'bareMarker', data: { marker: MARK }, line: 1 },
+        { messageId: 'bareMarker', data: { marker: FIX }, line: 2 },
+        { messageId: 'bareMarker', data: { marker: MARK }, line: 3 },
+        { messageId: 'bareMarker', data: { marker: 'HACK' }, line: 4 },
+        { messageId: 'bareMarker', data: { marker: 'XXX' }, line: 5 },
+      ],
+    },
+    {
+      name: 'the JSDoc tag form, in a line comment and on a line of a block',
+      code: `// @${FIX.toLowerCase()} later\n/**\n * Expires holds.\n * @${MARK.toLowerCase()} release the hold\n */\nexport const a = 1;`,
+      filename: file,
+      errors: [
+        { messageId: 'bareMarker', data: { marker: FIX }, line: 1 },
+        { messageId: 'bareMarker', data: { marker: MARK }, line: 2 },
+      ],
+    },
+    {
+      name: 'short prose that is a complete statement',
+      code: '// e.g. foo();\n\n// keys = values;\nexport const a = 1;',
+      filename: file,
+      errors: [
+        { messageId: 'commentedCode', line: 1 },
+        { messageId: 'commentedCode', line: 3 },
+      ],
     },
     {
       name: 'a marker with a parenthesised name instead of a ticket',
