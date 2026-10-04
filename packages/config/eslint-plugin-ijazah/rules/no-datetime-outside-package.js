@@ -6,7 +6,10 @@
 // constitution's mechanism is "`Date` arithmetic and datetime libraries banned outside the
 // package" (FR-017). Display formatting is the neighbouring rule, R-MOBILE-9.
 //
-// WHAT IS REFUSED, in every file outside `packages/time`:
+// WHAT IS REFUSED, in every file outside `packages/time` (matched as that pair of path segments
+// anywhere in the file's path, never anchored at the repository root, so the fixture tree's
+// mirror of the package is exempt too; a folder of that name elsewhere would be exempt as well,
+// none exists, and creating one is review's — review of PR #29, N8):
 //
 //   arithmetic     `+ - * / % **` and their compound assignments, where an operand is a date read
 //                  as a number:
@@ -30,8 +33,10 @@
 //                  zone, and `Date.UTC(…)`.
 //   a library      `@js-temporal/polyfill`, `temporal-polyfill`, `moment`, `moment-timezone`,
 //                  `dayjs`, `date-fns`, `date-fns-tz`, `@date-fns/tz`, `@date-fns/utc`, `luxon`,
-//                  `@js-joda/core`, `@js-joda/timezone`, `js-joda`, `spacetime`, `rrule` and
-//                  `chrono-node`, by name or subpath, in every import syntax, type-only included:
+//                  `@js-joda/core`, `@js-joda/timezone`, `js-joda`, `spacetime`, `rrule`,
+//                  `chrono-node`, and the calendar and formatting libraries `moment-hijri`,
+//                  `date-fns-jalali`, `@internationalized/date` and `@formkit/tempo` (review of
+//                  PR #29, N11), by name or subpath, in every import syntax, type-only included:
 //                  a type from the library is the library's object crossing the boundary (FR-017).
 //                  The native `Temporal` global is the same library without an import and is
 //                  refused wherever no local binding of that name exists.
@@ -41,15 +46,40 @@
 // A method name alone is not a date: `items.length.valueOf() + 1` is arithmetic on a length, and
 // a setter handed a plain value (`picker.setDate(3)`, `d.setTime(saved)`) computes nothing. A
 // bare `setDate(day + 1)` is a function — a state setter — not a Date method. `performance.now()`
-// is a monotonic counter, not a datetime, and is the right tool for measuring a duration. A `+`
-// with a string literal on the other side is text, which R-MOBILE-9 owns.
+// is a monotonic counter, not a datetime, and is the right tool for measuring a duration.
+//
+// TWO SHAPES THAT ARE NOT DATE ARITHMETIC (review of PR #29, m10):
+//
+//   text       a `+` is concatenation when either operand is a string literal, a template
+//              literal, or a `+` chain that holds one: `d.getHours() + ':' + d.getMinutes()`
+//              builds a string and computes no instant. Formatting by hand is R-MOBILE-9's, not
+//              this rule's. Arithmetic inside such a chain is still arithmetic:
+//              `d.getTime() + 1000 + 'ms'` is refused at `d.getTime() + 1000`.
+//   ordering   `a.getTime() - b.getTime()` (or `.valueOf()` on both sides) when it is what a
+//              comparator written in place returns to `.sort(…)` or `.toSorted(…)`: the body of
+//              an arrow, or a `return` of the function, directly or as an arm of a conditional
+//              or of `||`, `&&`, `??` (a tie-breaker). The sign of the difference orders two
+//              instants; nothing is added to either. Anything else in the same position is
+//              still refused: the clock (`a.getTime() - Date.now()`), a scaled difference
+//              (`(a.getTime() - b.getTime()) / 1000`), the same subtraction handed to `.map(…)`,
+//              and a comparator defined apart and passed by name, which this rule cannot tell
+//              from a duration.
+//
+// `Date.now() - startedAt` and `Math.floor(Date.now() / 1000)` stay refused: a duration and a
+// timestamp in seconds are arithmetic on the clock, and both belong to `packages/time`.
 //
 // THE SYNTAX LIMIT, stated plainly. This rule runs without types (research R-10), so a Date that
 // is not written as one is not seen: `a - b` on two Date variables, `+d + 1000`, and a number
 // that came from a date under another name (`const ms = d.getTime(); … ms + WEEK`, unless it is
-// handed straight to `new Date(…)`). Each needs the operand's resolved type; a type-aware
-// companion that asks the program whether an arithmetic operand is a `Date` would close it, and
-// is not written here. A setter or getter name on an object that is not a Date is a false
+// handed straight to `new Date(…)`). NOR IS ZONE CONVERSION WITHOUT A LIBRARY (m10): formatting an
+// instant in a zone and parsing the text back, `new Date(d.toLocaleString('en-US', { timeZone:
+// tz }))`, and reading a zone's wall-clock parts from `Intl.DateTimeFormat(locale, { timeZone
+// }).formatToParts(d)`, resolve a datetime outside `packages/time` with no arithmetic and no
+// import for this rule to see. In the mobile application R-MOBILE-9 refuses both spellings
+// outside `lib/` (`toLocaleString`, `Intl`); in the API nothing does, and they are review's.
+// The arithmetic shapes need the operand's resolved type; a type-aware companion that asks the
+// program whether an arithmetic operand is a `Date` would close them, and is not written here.
+// A setter or getter name on an object that is not a Date is a false
 // positive this rule accepts. Until then those shapes are review's.
 //
 // THE DESIGN CONSEQUENCE. `Date.now() + ttl` is refused like any other date arithmetic, so an
@@ -59,7 +89,14 @@
 const { defineRule } = require('../rule');
 const { globalNamed, heldGlobal, unboundReferences } = require('../globals');
 const { after, onEverySpecifier, segmentsOf } = require('../specifiers');
-const { alternatives, mergeVisitors, propertyName, unwrap, wrapped } = require('../syntax');
+const {
+  alternatives,
+  isFunction,
+  mergeVisitors,
+  propertyName,
+  unwrap,
+  wrapped,
+} = require('../syntax');
 
 const TIME_PACKAGE = ['packages', 'time'];
 
@@ -71,6 +108,10 @@ const ARITHMETIC = new Set(['+', '-', '*', '/', '%', '**']);
 const COMPOUND = new Set(['+=', '-=', '*=', '/=', '%=', '**=']);
 
 const DATE_STATICS = new Set(['now', 'parse', 'UTC']);
+
+// What a comparator reads off each of the two values it orders, and the methods it is handed to.
+const ORDERED_BY = new Set(['getTime', 'valueOf']);
+const SORTERS = new Set(['sort', 'toSorted']);
 
 const PARTS = ['Date', 'Day', 'FullYear', 'Hours', 'Milliseconds', 'Minutes', 'Month', 'Seconds'];
 const GETTERS = new Set([
@@ -100,16 +141,68 @@ const LIBRARIES = [
   'spacetime',
   'rrule',
   'chrono-node',
+  'moment-hijri',
+  'date-fns-jalali',
+  '@internationalized/date',
+  '@formkit/tempo',
 ];
 
 function isLibrary(specifier) {
   return LIBRARIES.some((name) => specifier === name || specifier.startsWith(`${name}/`));
 }
 
+/** Text: a string or template literal, or a `+` chain that holds one, which is concatenation. */
 function isText(node) {
   const inner = unwrap(node);
   if (inner.type === 'TemplateLiteral') return true;
-  return inner.type === 'Literal' && typeof inner.value === 'string';
+  if (inner.type === 'Literal') return typeof inner.value === 'string';
+  if (inner.type !== 'BinaryExpression' || inner.operator !== '+') return false;
+  if (inner.left.type === 'PrivateIdentifier') return false;
+  return isText(inner.left) || isText(inner.right);
+}
+
+/** `x.getTime()` or `x.valueOf()`, on any receiver. */
+function isOrderingRead(node) {
+  const call = unwrap(node);
+  if (call.type !== 'CallExpression' || call.arguments.length !== 0) return false;
+  const callee = unwrap(call.callee);
+  if (callee.type !== 'MemberExpression') return false;
+  const name = propertyName(callee);
+  return name !== null && ORDERED_BY.has(name);
+}
+
+/**
+ * `a.getTime() - b.getTime()` as what a comparator written in place returns to `.sort(…)` or
+ * `.toSorted(…)`: an ordering of two instants, not a datetime (header, "ordering").
+ */
+function isSortComparison(binary) {
+  if (binary.operator !== '-') return false;
+  if (!isOrderingRead(binary.left) || !isOrderingRead(binary.right)) return false;
+
+  // Up through the choices the returned expression can be an arm of.
+  let value = wrapped(binary);
+  for (;;) {
+    const { parent } = value;
+    if (parent.type === 'ConditionalExpression' && parent.test !== value) value = wrapped(parent);
+    else if (parent.type === 'LogicalExpression') value = wrapped(parent);
+    else break;
+  }
+
+  let fn = value.parent;
+  if (fn.type === 'ReturnStatement') {
+    while (fn !== null && fn !== undefined && !isFunction(fn)) fn = fn.parent;
+  } else if (fn.type !== 'ArrowFunctionExpression' || fn.body !== value) {
+    return false;
+  }
+  if (!isFunction(fn)) return false;
+
+  const comparator = wrapped(fn);
+  const call = comparator.parent;
+  if (call.type !== 'CallExpression' || call.arguments[0] !== comparator) return false;
+  const callee = unwrap(call.callee);
+  if (callee.type !== 'MemberExpression') return false;
+  const method = propertyName(callee);
+  return method !== null && SORTERS.has(method);
 }
 
 module.exports = defineRule({
@@ -185,6 +278,7 @@ module.exports = defineRule({
       if (!ARITHMETIC.has(binary.operator)) return false;
       if (binary.left.type === 'PrivateIdentifier') return false;
       if (binary.operator === '+' && (isText(binary.left) || isText(binary.right))) return false;
+      if (isSortComparison(binary)) return false;
       return isDateNumber(binary.left) || isDateNumber(binary.right);
     }
 

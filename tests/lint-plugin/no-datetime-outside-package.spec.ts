@@ -71,6 +71,26 @@ typescriptRuleTester().run(
         filename: file,
       },
       {
+        name: 'parts joined into text: a chain with a string in it is concatenation',
+        code: "export const clock = (d: Date) => d.getHours() + ':' + d.getMinutes();\nexport const stamp = (d: Date) => `${d.getFullYear()}` + d.getMonth() + d.getDate();",
+        filename: file,
+      },
+      {
+        name: 'a comparator handed to sort orders two instants',
+        code: 'export const byTime = (rows: Row[]) => rows.sort((a, b) => a.created_at.getTime() - b.created_at.getTime());',
+        filename: file,
+      },
+      {
+        name: 'a comparator handed to toSorted, with a block body, valueOf and a cast',
+        code: 'export const newest = (rows: Row[]) => rows.toSorted(function (a, b) { return (b.at.valueOf() - a.at.valueOf()) as number; });',
+        filename: file,
+      },
+      {
+        name: 'a comparator with a tie-breaker and a direction',
+        code: 'export const a = (rows: Row[]) => rows.sort((x, y) => x.at.getTime() - y.at.getTime() || x.id.localeCompare(y.id));\nexport const b = (rows: Row[], desc: boolean) => rows?.sort((x, y) => { if (x.pinned) return -1; return desc ? y.at.getTime() - x.at.getTime() : x.at.getTime() - y.at.getTime(); });',
+        filename: file,
+      },
+      {
         name: 'the project’s own time package and unrelated packages',
         code: "import { resolveLocalDateTime } from '@ijazah/time';\nimport ms from 'ms';\nimport momentum from 'momentum';\nimport { x } from './moment';\nexport default [resolveLocalDateTime, ms, momentum, x];",
         filename: file,
@@ -110,6 +130,64 @@ typescriptRuleTester().run(
         code: 'export const a = (start: Date) => new Date().getTime() - start.getTime();\nexport const b = (start: number) => +new Date() - start;\nexport const c = (start: number) => Number(new Date()) - start;',
         filename: file,
         errors: 3,
+      },
+      {
+        name: 'a duration since the clock, and the clock in seconds, stay refused',
+        code: 'export const elapsed = (startedAt: number) => Date.now() - startedAt;\nexport const seconds = () => Math.floor(Date.now() / 1000);',
+        filename: file,
+        errors: [
+          { messageId: 'arithmetic', line: 1 },
+          { messageId: 'arithmetic', line: 2 },
+        ],
+      },
+      {
+        name: 'arithmetic inside a chain that ends in text is still arithmetic',
+        code: "export const label = (d: Date) => d.getTime() + 1000 + 'ms';",
+        filename: file,
+        errors: [{ messageId: 'arithmetic' }],
+      },
+      {
+        name: 'the same subtraction where it is not what a sort comparator returns',
+        code: [
+          'export const byTime = (a: Date, b: Date) => a.getTime() - b.getTime();',
+          'export const spans = (rows: Row[]) => rows.map((r) => r.end.getTime() - r.start.getTime());',
+          'export const f = (rows: Row[]) => rows.sort((a, b) => { const gap = a.at.getTime() - b.at.getTime(); return gap; });',
+          'export const g = (rows: Row[]) => rows.reduce((a, b) => a.at.getTime() - b.at.getTime(), 0);',
+        ].join('\n'),
+        filename: file,
+        errors: [
+          { messageId: 'arithmetic', line: 1 },
+          { messageId: 'arithmetic', line: 2 },
+          { messageId: 'arithmetic', line: 3 },
+          { messageId: 'arithmetic', line: 4 },
+        ],
+      },
+      {
+        name: 'a sort comparator that does more than order two instants',
+        code: [
+          'export const a = (rows: Row[]) => rows.sort((x, y) => x.at.getTime() - Date.now());',
+          'export const b = (rows: Row[]) => rows.sort((x, y) => (x.at.getTime() - y.at.getTime()) / 1000);',
+          'export const c = (rows: Row[]) => rows.sort((x, y) => x.at.getTime() + y.at.getTime());',
+          'export const d = (rows: Row[]) => rows.sort((x, y) => x.at.getHours() - y.at.getHours());',
+        ].join('\n'),
+        filename: file,
+        errors: [
+          { messageId: 'arithmetic', line: 1 },
+          { messageId: 'arithmetic', line: 2 },
+          { messageId: 'arithmetic', line: 3 },
+          { messageId: 'arithmetic', line: 4 },
+        ],
+      },
+      {
+        name: 'the calendar and formatting libraries',
+        code: "import moment from 'moment-hijri';\nimport { format } from 'date-fns-jalali';\nimport { CalendarDate } from '@internationalized/date';\nimport { format as tempo } from '@formkit/tempo';\nexport default [moment, format, CalendarDate, tempo];",
+        filename: file,
+        errors: [
+          { messageId: 'library', data: { specifier: 'moment-hijri' } },
+          { messageId: 'library', data: { specifier: 'date-fns-jalali' } },
+          { messageId: 'library', data: { specifier: '@internationalized/date' } },
+          { messageId: 'library', data: { specifier: '@formkit/tempo' } },
+        ],
       },
       {
         name: 'a chain is one piece of arithmetic',
