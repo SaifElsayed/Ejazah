@@ -70,7 +70,9 @@
 //              parameter counts by its bindings: `({ at: x }, { at: y }) => x.getTime() -
 //              y.getTime()` takes one binding from each pattern and is an ordering. The name is
 //              resolved through the scopes the parser built, so a parameter shadowed inside the
-//              body is not the parameter.
+//              body is not the parameter. Neither is one that is redeclared with `var`, given a
+//              default value, or assigned anywhere in the comparator (third review of PR #29,
+//              nit B): once written to, the name no longer stands for what `sort` handed over.
 //
 //              A COMPARATOR OVER CONSTRUCTED DATES ORDERS TOO (owner decisions, 2026-10-04).
 //              Rows that hold their instants as text or as numbers are ordered by reading
@@ -239,6 +241,10 @@ function parameterIndex(sourceCode, fn, identifier) {
     if (variable !== undefined && variable.defs.length > 0) {
       const binding = variable.defs.find((def) => def.type === 'Parameter' && def.node === fn);
       if (binding === undefined) return -1;
+      // Redeclared in the body (`var b = start`), given a default (`b = start`) or assigned
+      // (`b = start;`): the name no longer stands for what `sort` handed over.
+      if (variable.defs.length !== 1) return -1;
+      if (variable.references.some((reference) => reference.isWrite())) return -1;
       const [start, end] = binding.name.range;
       return fn.params.findIndex((param) => param.range[0] <= start && end <= param.range[1]);
     }

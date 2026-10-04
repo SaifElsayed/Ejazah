@@ -217,9 +217,13 @@ typescriptRuleTester().run(
           'export const h = (xs: Row[]) => xs.sort(({ start, end }, other) => end.getTime() - start.getTime());',
           'export const j = (xs: Date[], start: Date, end: Date, desc: boolean) => xs.sort((a, b) => (desc ? end.getTime() - start.getTime() : a.getTime() - b.getTime()));',
           'export const k = (xs: Date[], start: Date) => xs.sort((a, b) => a.getTime() - b.getTime() || b.getTime() - start.getTime());',
+          'export const l = (xs: Date[], start: Date) => xs.sort((a, b) => { b = start; return a.getTime() - b.getTime(); });',
+          'export const m = (xs: Date[], start: Date) => xs.sort(function (a, b) { var b = start; return a.getTime() - b.getTime(); });',
+          'export const n = (xs: Date[], start: Date) => xs.sort((a, b = start) => a.getTime() - b.getTime());',
+          'export const o = (xs: Row[]) => xs.sort(({ at: x }, { at: y = new Date() }) => x.getTime() - y.getTime());',
         ].join('\n'),
         filename: file,
-        errors: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((line) => ({
+        errors: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((line) => ({
           messageId: 'arithmetic',
           line,
         })),
