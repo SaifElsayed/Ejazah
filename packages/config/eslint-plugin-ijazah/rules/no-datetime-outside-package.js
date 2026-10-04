@@ -72,17 +72,31 @@
 //              resolved through the scopes the parser built, so a parameter shadowed inside the
 //              body is not the parameter.
 //
+//              A COMPARATOR OVER CONSTRUCTED DATES ORDERS TOO (owner decisions, 2026-10-04).
+//              Rows that hold their instants as text or as numbers are ordered by reading
+//              each one as a date first, and that computes nothing either. So an operand may
+//              also be `new Date(x).getTime()` (or `.valueOf()`), or `Date.parse(x)`, where
+//              `x` is the ONE argument and is itself the parameter or a member chain on it,
+//              under the same test as above, one operand from each parameter:
+//              `(a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()`, the descending
+//              form, `({ at: x }, { at: y }) => Date.parse(x) - Date.parse(y)`, and the two
+//              forms mixed with a plain receiver.
+//
 //              Anything else in the same position is still refused. A callback that orders
 //              nothing it was handed: `timer.sort(() => end.getTime() - start.getTime())` is a
 //              duration computed inside a sort call. Both operands from one parameter
 //              (`a.getTime() - a.getTime()`, or two bindings of one pattern), an operand from
-//              outside, a function of one or three parameters. A receiver that is not a member
-//              chain on a parameter: `new Date(a.at).getTime() - new Date(b.at).getTime()`
-//              constructs two dates to compare them; compare what `packages/time` returns, or
-//              the stored values. The clock (`a.getTime() - Date.now()`), a scaled difference
-//              (`(a.getTime() - b.getTime()) / 1000`), the same subtraction handed to
-//              `.map(…)`, and a comparator defined apart and passed by name, which this rule
-//              cannot tell from a duration.
+//              outside, a function of one or three parameters. A constructed date that is not
+//              one parameter's value read as a date: the clock (`new Date().getTime() -
+//              new Date(b.at).getTime()`), a value from outside (`new Date(outer)`), components
+//              (`new Date(a.at, 1)`), a computed argument (`new Date(a.at + offset)`,
+//              `Date.parse(a.day + 'T00:00')`), and both dates constructed from one parameter.
+//              Any other reading of a constructed date (`+new Date(a.at)`,
+//              `Number(new Date(a.at))`, a part getter). The clock (`a.getTime() - Date.now()`),
+//              a scaled or offset difference (`(a.getTime() - b.getTime()) / 1000`, `… + ttl`),
+//              the same subtraction handed to `.map(…)` or written outside a comparator, and a
+//              comparator defined apart and passed by name, which this rule cannot tell from a
+//              duration.
 //
 // `Date.now() - startedAt` and `Math.floor(Date.now() / 1000)` stay refused: a duration and a
 // timestamp in seconds are arithmetic on the clock, and both belong to `packages/time`.
@@ -130,6 +144,7 @@ const DATE_STATICS = new Set(['now', 'parse', 'UTC']);
 
 // What a comparator reads off each of the two values it orders, and the methods it is handed to.
 const ORDERED_BY = new Set(['getTime', 'valueOf']);
+const PARSE = 'parse';
 const SORTERS = new Set(['sort', 'toSorted']);
 
 const PARTS = ['Date', 'Day', 'FullYear', 'Hours', 'Milliseconds', 'Minutes', 'Month', 'Seconds'];
@@ -180,22 +195,40 @@ function isText(node) {
   return isText(inner.left) || isText(inner.right);
 }
 
+/** The identifier a member chain starts at: `a` in `a.slot.startsAt`. Null for anything else. */
+function chainRoot(node) {
+  let current = unwrap(node);
+  while (current.type === 'MemberExpression') current = unwrap(current.object);
+  return current.type === 'Identifier' ? current : null;
+}
+
+/** Where the one argument of `new Date(x)` or `Date.parse(x)` starts; null unless exactly one. */
+function soleArgumentRoot(node) {
+  if (node.arguments.length !== 1 || node.arguments[0].type === 'SpreadElement') return null;
+  return chainRoot(node.arguments[0]);
+}
+
 /**
- * The identifier the receiver of `x.getTime()` or `x.valueOf()` starts at: `a` in
- * `a.slot.startsAt.getTime()`. Null when the read is another call, or its receiver is anything
- * but an identifier and member accesses on it.
+ * The identifier one operand of a comparator's subtraction reads its instant from: `a` in
+ * `a.slot.startsAt.getTime()`, in `new Date(a.at).getTime()` and in `Date.parse(a.at)`
+ * (`.valueOf()` reads the same as `.getTime()`). Null for every other expression: another call,
+ * a receiver that is not a member chain, a Date constructed from no argument, from several, or
+ * from one that is not itself a member chain.
  */
-function orderingRoot(node) {
+function orderingRoot(node, isGlobalDate) {
   const call = unwrap(node);
-  if (call.type !== 'CallExpression' || call.arguments.length !== 0) return null;
+  if (call.type !== 'CallExpression') return null;
   const callee = unwrap(call.callee);
   if (callee.type !== 'MemberExpression') return null;
   const name = propertyName(callee);
-  if (name === null || !ORDERED_BY.has(name)) return null;
+  if (name === null) return null;
 
-  let receiver = unwrap(callee.object);
-  while (receiver.type === 'MemberExpression') receiver = unwrap(receiver.object);
-  return receiver.type === 'Identifier' ? receiver : null;
+  if (name === PARSE && isGlobalDate(callee.object)) return soleArgumentRoot(call);
+  if (!ORDERED_BY.has(name) || call.arguments.length !== 0) return null;
+
+  const receiver = unwrap(callee.object);
+  if (receiver.type !== 'NewExpression') return chainRoot(receiver);
+  return isGlobalDate(receiver.callee) ? soleArgumentRoot(receiver) : null;
 }
 
 /** Which parameter of the function binds the identifier, by position, or -1 when none does. */
@@ -216,13 +249,14 @@ function parameterIndex(sourceCode, fn, identifier) {
 
 /**
  * `a.getTime() - b.getTime()` as what a comparator written in place returns to `.sort(…)` or
- * `.toSorted(…)`, where `a` and `b` are that comparator's two parameters: an ordering of two
- * instants, not a datetime (header, "ordering").
+ * `.toSorted(…)`, where `a` and `b` are that comparator's two parameters, each read as it is or
+ * through `new Date(…)` or `Date.parse(…)`: an ordering of two instants, not a datetime (header,
+ * "ordering").
  */
-function isSortComparison(sourceCode, binary) {
+function isSortComparison(sourceCode, binary, isGlobalDate) {
   if (binary.operator !== '-') return false;
-  const left = orderingRoot(binary.left);
-  const right = orderingRoot(binary.right);
+  const left = orderingRoot(binary.left, isGlobalDate);
+  const right = orderingRoot(binary.right, isGlobalDate);
   if (left === null || right === null) return false;
 
   // Up through the choices the returned expression can be an arm of.
@@ -330,7 +364,7 @@ module.exports = defineRule({
       if (!ARITHMETIC.has(binary.operator)) return false;
       if (binary.left.type === 'PrivateIdentifier') return false;
       if (binary.operator === '+' && (isText(binary.left) || isText(binary.right))) return false;
-      if (isSortComparison(sourceCode, binary)) return false;
+      if (isSortComparison(sourceCode, binary, isGlobalDate)) return false;
       return isDateNumber(binary.left) || isDateNumber(binary.right);
     }
 
