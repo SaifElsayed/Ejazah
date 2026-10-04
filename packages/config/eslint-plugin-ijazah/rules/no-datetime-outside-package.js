@@ -58,12 +58,31 @@
 //   ordering   `a.getTime() - b.getTime()` (or `.valueOf()` on both sides) when it is what a
 //              comparator written in place returns to `.sort(…)` or `.toSorted(…)`: the body of
 //              an arrow, or a `return` of the function, directly or as an arm of a conditional
-//              or of `||`, `&&`, `??` (a tie-breaker). The sign of the difference orders two
-//              instants; nothing is added to either. Anything else in the same position is
-//              still refused: the clock (`a.getTime() - Date.now()`), a scaled difference
-//              (`(a.getTime() - b.getTime()) / 1000`), the same subtraction handed to `.map(…)`,
-//              and a comparator defined apart and passed by name, which this rule cannot tell
-//              from a duration.
+//              or of `||`, `&&`, `??` (a tie-breaker), each arm under the same test. The sign of
+//              the difference orders two instants; nothing is added to either.
+//
+//              THE SUBTRACTION MUST ORDER THE COMPARATOR'S OWN TWO VALUES (second review of
+//              PR #29, minor 1). The function has exactly two parameters, and one operand's
+//              receiver starts at one of them and the other operand's at the other, in either
+//              order, so a descending sort is an ordering too. A receiver is the parameter or
+//              a member chain on it, through optional chaining and the TypeScript wrappers:
+//              `b.slot.startsAt.getTime() - a?.slot.startsAt.getTime()`. A destructured
+//              parameter counts by its bindings: `({ at: x }, { at: y }) => x.getTime() -
+//              y.getTime()` takes one binding from each pattern and is an ordering. The name is
+//              resolved through the scopes the parser built, so a parameter shadowed inside the
+//              body is not the parameter.
+//
+//              Anything else in the same position is still refused. A callback that orders
+//              nothing it was handed: `timer.sort(() => end.getTime() - start.getTime())` is a
+//              duration computed inside a sort call. Both operands from one parameter
+//              (`a.getTime() - a.getTime()`, or two bindings of one pattern), an operand from
+//              outside, a function of one or three parameters. A receiver that is not a member
+//              chain on a parameter: `new Date(a.at).getTime() - new Date(b.at).getTime()`
+//              constructs two dates to compare them; compare what `packages/time` returns, or
+//              the stored values. The clock (`a.getTime() - Date.now()`), a scaled difference
+//              (`(a.getTime() - b.getTime()) / 1000`), the same subtraction handed to
+//              `.map(…)`, and a comparator defined apart and passed by name, which this rule
+//              cannot tell from a duration.
 //
 // `Date.now() - startedAt` and `Math.floor(Date.now() / 1000)` stay refused: a duration and a
 // timestamp in seconds are arithmetic on the clock, and both belong to `packages/time`.
@@ -161,23 +180,50 @@ function isText(node) {
   return isText(inner.left) || isText(inner.right);
 }
 
-/** `x.getTime()` or `x.valueOf()`, on any receiver. */
-function isOrderingRead(node) {
+/**
+ * The identifier the receiver of `x.getTime()` or `x.valueOf()` starts at: `a` in
+ * `a.slot.startsAt.getTime()`. Null when the read is another call, or its receiver is anything
+ * but an identifier and member accesses on it.
+ */
+function orderingRoot(node) {
   const call = unwrap(node);
-  if (call.type !== 'CallExpression' || call.arguments.length !== 0) return false;
+  if (call.type !== 'CallExpression' || call.arguments.length !== 0) return null;
   const callee = unwrap(call.callee);
-  if (callee.type !== 'MemberExpression') return false;
+  if (callee.type !== 'MemberExpression') return null;
   const name = propertyName(callee);
-  return name !== null && ORDERED_BY.has(name);
+  if (name === null || !ORDERED_BY.has(name)) return null;
+
+  let receiver = unwrap(callee.object);
+  while (receiver.type === 'MemberExpression') receiver = unwrap(receiver.object);
+  return receiver.type === 'Identifier' ? receiver : null;
+}
+
+/** Which parameter of the function binds the identifier, by position, or -1 when none does. */
+function parameterIndex(sourceCode, fn, identifier) {
+  let scope = sourceCode.getScope(identifier);
+  while (scope !== null && scope !== undefined) {
+    const variable = scope.set.get(identifier.name);
+    if (variable !== undefined && variable.defs.length > 0) {
+      const binding = variable.defs.find((def) => def.type === 'Parameter' && def.node === fn);
+      if (binding === undefined) return -1;
+      const [start, end] = binding.name.range;
+      return fn.params.findIndex((param) => param.range[0] <= start && end <= param.range[1]);
+    }
+    scope = scope.upper;
+  }
+  return -1;
 }
 
 /**
  * `a.getTime() - b.getTime()` as what a comparator written in place returns to `.sort(…)` or
- * `.toSorted(…)`: an ordering of two instants, not a datetime (header, "ordering").
+ * `.toSorted(…)`, where `a` and `b` are that comparator's two parameters: an ordering of two
+ * instants, not a datetime (header, "ordering").
  */
-function isSortComparison(binary) {
+function isSortComparison(sourceCode, binary) {
   if (binary.operator !== '-') return false;
-  if (!isOrderingRead(binary.left) || !isOrderingRead(binary.right)) return false;
+  const left = orderingRoot(binary.left);
+  const right = orderingRoot(binary.right);
+  if (left === null || right === null) return false;
 
   // Up through the choices the returned expression can be an arm of.
   let value = wrapped(binary);
@@ -202,7 +248,13 @@ function isSortComparison(binary) {
   const callee = unwrap(call.callee);
   if (callee.type !== 'MemberExpression') return false;
   const method = propertyName(callee);
-  return method !== null && SORTERS.has(method);
+  if (method === null || !SORTERS.has(method)) return false;
+
+  // The two operands are the comparator's own two values, one each.
+  if (fn.params.length !== 2) return false;
+  const first = parameterIndex(sourceCode, fn, left);
+  const second = parameterIndex(sourceCode, fn, right);
+  return first !== -1 && second !== -1 && first !== second;
 }
 
 module.exports = defineRule({
@@ -278,7 +330,7 @@ module.exports = defineRule({
       if (!ARITHMETIC.has(binary.operator)) return false;
       if (binary.left.type === 'PrivateIdentifier') return false;
       if (binary.operator === '+' && (isText(binary.left) || isText(binary.right))) return false;
-      if (isSortComparison(binary)) return false;
+      if (isSortComparison(sourceCode, binary)) return false;
       return isDateNumber(binary.left) || isDateNumber(binary.right);
     }
 

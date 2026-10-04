@@ -91,6 +91,25 @@ typescriptRuleTester().run(
         filename: file,
       },
       {
+        name: 'a comparator over member chains, descending, optional chaining and typed parameters',
+        code: [
+          'export const a = (rows: Row[]) => rows.sort((a, b) => b.slot.startsAt.getTime() - a.slot.startsAt.getTime());',
+          'export const b = (rows: Row[]) => rows.toSorted((a: Row, b: Row) => a?.slot?.startsAt.getTime() - b!.slot.startsAt.getTime());',
+          "export const c = (rows: Row[]) => rows.sort((a, b = fallback) => a['at'].valueOf() - (b as Row).at.valueOf());",
+          'export const d = (dates: Date[]) => dates.sort((a, b) => a.getTime() - b.getTime());',
+        ].join('\n'),
+        filename: file,
+      },
+      {
+        name: 'a comparator whose parameters are destructured, one binding from each',
+        code: [
+          'export const a = (rows: Row[]) => rows.sort(({ at: x }, { at: y }) => x.getTime() - y.getTime());',
+          'export const b = (pairs: [string, Date][]) => pairs.toSorted(([, x], [, y]) => y.valueOf() - x.valueOf());',
+          'export const c = (rows: Row[]) => rows.sort(({ slot }, other) => slot.startsAt.getTime() - other.slot.startsAt.getTime());',
+        ].join('\n'),
+        filename: file,
+      },
+      {
         name: 'the project’s own time package and unrelated packages',
         code: "import { resolveLocalDateTime } from '@ijazah/time';\nimport ms from 'ms';\nimport momentum from 'momentum';\nimport { x } from './moment';\nexport default [resolveLocalDateTime, ms, momentum, x];",
         filename: file,
@@ -161,6 +180,27 @@ typescriptRuleTester().run(
           { messageId: 'arithmetic', line: 3 },
           { messageId: 'arithmetic', line: 4 },
         ],
+      },
+      {
+        name: 'a subtraction in a sort callback that does not order the callback’s two parameters',
+        code: [
+          'export const a = (timer: number[], start: Date, end: Date) => timer.sort(() => end.getTime() - start.getTime());',
+          'export const b = (wrap: number[], startedAt: Date, finishedAt: Date) => wrap.toSorted(() => finishedAt.getTime() - startedAt.getTime());',
+          'export const c = (xs: Date[]) => xs.sort((a, b) => a.getTime() - a.getTime());',
+          'export const d = (xs: Date[], end: Date) => xs.sort((a, b) => a.getTime() - end.getTime());',
+          'export const e = (xs: Date[], start: Date) => xs.sort((a) => a.getTime() - start.getTime());',
+          'export const f = (xs: Date[]) => xs.sort((a, b, c) => a.getTime() - b.getTime());',
+          'export const g = (xs: Date[], start: Date) => xs.sort((a, b) => { { const b = start; return a.getTime() - b.getTime(); } });',
+          'export const h = (xs: Row[]) => xs.sort(({ start, end }, other) => end.getTime() - start.getTime());',
+          'export const i = (xs: Row[]) => xs.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());',
+          'export const j = (xs: Date[], start: Date, end: Date, desc: boolean) => xs.sort((a, b) => (desc ? end.getTime() - start.getTime() : a.getTime() - b.getTime()));',
+          'export const k = (xs: Date[], start: Date) => xs.sort((a, b) => a.getTime() - b.getTime() || b.getTime() - start.getTime());',
+        ].join('\n'),
+        filename: file,
+        errors: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((line) => ({
+          messageId: 'arithmetic',
+          line,
+        })),
       },
       {
         name: 'a sort comparator that does more than order two instants',
