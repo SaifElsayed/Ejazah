@@ -53,6 +53,16 @@ typescriptRuleTester().run('mobile/no-physical-direction', loadRule('no-physical
       filename: feature,
     },
     {
+      name: 'the insets of a touch target have no logical keys',
+      code: 'export const V = () => <Tap hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }} pressRetentionOffset={{ left: 20, right: 20 }} />;',
+      filename: feature,
+    },
+    {
+      name: 'insets held in a constant, an object key and a conditional',
+      code: 'export const HIT_SLOP = { top: 8, left: 8, bottom: 8, right: 8 } as const;\nexport const props = (wide: boolean) => ({ hitSlop: wide ? { left: 12, right: 12 } : { left: 4, right: 4 } });',
+      filename: feature,
+    },
+    {
       name: 'text aligned from a token',
       code: 'export const s = { textAlign: alignment };',
       filename: feature,
@@ -141,6 +151,18 @@ typescriptRuleTester().run('mobile/no-physical-direction', loadRule('no-physical
     {
       name: 'a negative position and a conditional one',
       code: 'export const s = (on: boolean) => ({ left: -4, right: on ? 0 : offset });',
+      filename: feature,
+      errors: 2,
+    },
+    {
+      name: 'a style beside the insets is not exempt',
+      code: 'export const V = () => <Tap style={{ left: 8 }} hitSlop={{ left: 8 }} />;',
+      filename: feature,
+      errors: [{ messageId: 'physicalStyle', data: { found: 'left', logical: 'start' } }],
+    },
+    {
+      name: 'an object under another name is not insets',
+      code: 'export const slop = { left: 8 };\nexport const hitSlopStyle = { marginLeft: 8 };',
       filename: feature,
       errors: 2,
     },

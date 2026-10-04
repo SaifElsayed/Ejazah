@@ -43,6 +43,31 @@ typescriptRuleTester().run('mobile/no-raw-control', loadRule('no-raw-control.js'
       filename: feature,
     },
     {
+      name: 'a toggle is not one of the four things R-MOBILE-6 names',
+      code: "import { Switch } from 'react-native';\nimport * as RN from 'react-native';\nexport const x = [Switch, RN.Switch];",
+      filename: feature,
+    },
+    {
+      name: 'a deep path to something that is not a control',
+      code: "import View from 'react-native/Libraries/Components/View/View';\nexport const V = View;",
+      filename: feature,
+    },
+    {
+      name: 'a type-only deep import builds nothing',
+      code: "import type TextInput from 'react-native/Libraries/Components/TextInput/TextInput';\nexport type Ref = TextInput;\nexport type P = import('react-native/Libraries/Components/Pressable/Pressable').default;",
+      filename: feature,
+    },
+    {
+      name: 'the default export under a name, used for layout only',
+      code: "import { default as RN } from 'react-native';\nexport const V = () => <RN.View />;",
+      filename: feature,
+    },
+    {
+      name: 'a deep path inside design/',
+      code: "import Pressable from 'react-native/Libraries/Components/Pressable/Pressable';\nexport const Button = Pressable;",
+      filename: primitive,
+    },
+    {
       name: 'a control of the same name from another library',
       code: "import { Button } from 'some-ui-kit';\nexport const B = Button;",
       filename: feature,
@@ -78,9 +103,38 @@ typescriptRuleTester().run('mobile/no-raw-control', loadRule('no-raw-control.js'
     },
     {
       name: 'every control in the family',
-      code: "import { Button, TouchableOpacity, TouchableHighlight, TouchableWithoutFeedback, TouchableNativeFeedback, Switch, Modal } from 'react-native';\nexport const x = [Button, TouchableOpacity, TouchableHighlight, TouchableWithoutFeedback, TouchableNativeFeedback, Switch, Modal];",
+      code: "import { Button, TouchableOpacity, TouchableHighlight, TouchableWithoutFeedback, TouchableNativeFeedback, Modal } from 'react-native';\nexport const x = [Button, TouchableOpacity, TouchableHighlight, TouchableWithoutFeedback, TouchableNativeFeedback, Modal];",
       filename: feature,
-      errors: 7,
+      errors: 6,
+    },
+    {
+      name: 'a deep path whose last segment is a control',
+      code: "import Pressable from 'react-native/Libraries/Components/Pressable/Pressable';\nexport const P = Pressable;",
+      filename: feature,
+      errors: [
+        {
+          messageId: 'rawControl',
+          data: {
+            control: 'Pressable',
+            source: 'react-native/Libraries/Components/Pressable/Pressable',
+          },
+        },
+      ],
+    },
+    {
+      name: 'a deep path through require, a dynamic import and a re-export',
+      code: "const TextInput = require('react-native/Libraries/Components/TextInput/TextInput');\nexport const load = () => import('react-native/Libraries/Components/Touchable/TouchableOpacity');\nexport { default as Sheet } from 'react-native/Libraries/Modal/Modal';\nexport const T = TextInput;",
+      filename: feature,
+      errors: 3,
+    },
+    {
+      name: 'the default export under a name is the namespace',
+      code: "import { default as RN } from 'react-native';\nexport const F = () => <RN.Pressable />;\nexport const b = RN.TextInput;",
+      filename: feature,
+      errors: [
+        { messageId: 'rawControl', data: { control: 'Pressable', source: 'react-native' } },
+        { messageId: 'rawControl', data: { control: 'TextInput', source: 'react-native' } },
+      ],
     },
     {
       name: 'a route file under app/',
@@ -108,7 +162,7 @@ typescriptRuleTester().run('mobile/no-raw-control', loadRule('no-raw-control.js'
     },
     {
       name: 'a namespace behind optional chaining and a cast',
-      code: "import * as RN from 'react-native';\nexport const a = RN?.Pressable;\nexport const b = (RN as any).Switch;",
+      code: "import * as RN from 'react-native';\nexport const a = RN?.Pressable;\nexport const b = (RN as any).Modal;",
       filename: feature,
       errors: 2,
     },

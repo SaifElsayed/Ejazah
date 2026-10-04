@@ -25,16 +25,27 @@
 //            TypeScript wrappers; `textAlign` when a value it can take is `'left'` or `'right'`,
 //            so `textAlign: 'left' as const` is refused.
 //
+// EXEMPT — the insets of a touch target (review of PR #29, m12). React Native's `Insets` type has
+// the keys `top`, `left`, `bottom` and `right` and no logical ones, so there is no `start` to
+// write. An object literal is not read when it is what `hitSlop` or `pressRetentionOffset` holds:
+// the value of that JSX prop, of an object key of that name, or of a variable whose name is those
+// words (`hitSlop`, `HIT_SLOP`), directly or through a conditional, `||`, `&&`, `??` and the
+// TypeScript wrappers. Nothing else in the same element is exempt.
+//
 // WHAT IS NOT REFUSED, and is review's. Physical utilities the constitution's list does not name
 // (`rounded-l-*`, `border-r-*`, `float-left`): adding them is an amendment to R-MOBILE-5, not a
 // decision for a rule. A class assembled at run time from a template (`ml-` followed by `${n}`).
 // `left: someVariable`, because `{ left, right }` is also how a pair of operands is spelled and
 // this rule runs without types. A directional icon flipped by hand is R-MOBILE-14, review-only.
+// A physical utility followed by a NAMED step (`ml-md`, `pl-gutter`): the design tokens name no
+// spacing step yet, so no such class exists to match; the names are added to the values read
+// here by the task that adds them to the tokens (note under T037).
 //
 // The file is matched by path segments, never by a root-anchored path (note under T035).
 const { defineRule } = require('../rule');
 const { mobileFile } = require('../mobile');
-const { alternatives, keyName } = require('../syntax');
+const { alternatives, keyName, wrapped } = require('../syntax');
+const { wordsOf } = require('../words');
 
 // Physical utility prefix -> the logical one the constitution names for it.
 const LOGICAL_CLASS = {
@@ -60,6 +71,41 @@ const LOGICAL_KEY = {
 // Style keys that are physical only when they hold a position, not a pair of operands.
 const INSET_KEY = { left: 'start', right: 'end' };
 const TEXT_ALIGN_VALUE = { left: 'start', right: 'end' };
+
+// What holds React Native's `Insets`, which has no logical keys (m12). Compared as words.
+const INSETS_HOLDERS = new Set(['hit slop', 'press retention offset']);
+
+function isInsetsName(name) {
+  return typeof name === 'string' && INSETS_HOLDERS.has(wordsOf(name).join(' '));
+}
+
+/** True when the object literal is what a `hitSlop` or `pressRetentionOffset` holds. */
+function isInsets(object) {
+  let current = wrapped(object);
+  for (;;) {
+    const { parent } = current;
+    if (parent.type === 'ConditionalExpression' && parent.test !== current) {
+      current = wrapped(parent);
+    } else if (parent.type === 'LogicalExpression') {
+      current = wrapped(parent);
+    } else if (parent.type === 'JSXExpressionContainer') {
+      const attribute = parent.parent;
+      return (
+        attribute.type === 'JSXAttribute' &&
+        attribute.name.type === 'JSXIdentifier' &&
+        isInsetsName(attribute.name.name)
+      );
+    } else if (parent.type === 'Property') {
+      return parent.value === current && isInsetsName(keyName(parent));
+    } else if (parent.type === 'VariableDeclarator') {
+      return (
+        parent.init === current && parent.id.type === 'Identifier' && isInsetsName(parent.id.name)
+      );
+    } else {
+      return false;
+    }
+  }
+}
 
 /** The utility of a class token, with its variants, `!` and leading minus removed. */
 function utilityOf(token) {
@@ -172,7 +218,7 @@ module.exports = defineRule({
         checkText(node, node.value.cooked);
       },
       Property(node) {
-        if (node.parent.type !== 'ObjectExpression') return;
+        if (node.parent.type !== 'ObjectExpression' || isInsets(node.parent)) return;
         checkStyle(node.key, keyName(node), node.value);
       },
       JSXAttribute(node) {

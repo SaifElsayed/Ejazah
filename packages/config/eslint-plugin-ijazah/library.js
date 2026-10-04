@@ -7,6 +7,8 @@
 //   import { X } from 'lib'             named, and aliased (`X as Y`)
 //   import * as L from 'lib' … L.X      namespace or default binding: member access, dotted or
 //   import L from 'lib' … <L.X />         computed with a string, and JSX
+//   import { default as L } from 'lib'  the default export under a name of one's own, which is
+//                                         the same binding as `import L from 'lib'`
 //   import L = require('lib') … L.X     the TypeScript import-equals form
 //   const L = require('lib') … L.X      a binding assigned from `require`
 //   const { X } = L                     destructured off any of those bindings
@@ -62,6 +64,10 @@ function onLibraryMembers({ isSource, isName, report, reportAll }) {
         }
         if (specifier.importKind === 'type') continue;
         const name = specifierName(specifier.imported);
+        if (name === 'default') {
+          holders.set(specifier.local.name, source);
+          continue;
+        }
         if (isName(name)) report(specifier, name, source);
       }
     },

@@ -19,7 +19,11 @@
 //   spacing  a number other than zero, or a string that is a number with an optional px, rem, em,
 //            pt or dp unit, as the value of a margin, padding or gap style key or JSX prop
 //            (`padding`, `marginTop`, `paddingHorizontal`, `gap`, `rowGap`, `columnGap`), read
-//            through `cond ? 8 : 16`, `a ?? 8`, a minus sign and the TypeScript wrappers; and a
+//            through `cond ? 8 : 16`, `a ?? 8`, a minus sign and the TypeScript wrappers. After
+//            `margin` or `padding` only a direction counts: `Top`, `Bottom`, `Left`, `Right`,
+//            `Start`, `End`, `Horizontal`, `Vertical`, `Block`, `Inline`, `BlockStart`,
+//            `BlockEnd`, `InlineStart` and `InlineEnd`; a name that merely starts with the word
+//            (`paddingToken`, `marginOfError`) is not a spacing key (review of PR #29, N6). And a
 //            Tailwind arbitrary spacing class (`p-[13px]`, `-mx-[7px]`, `gap-[3px]`), which is
 //            the same raw number in class form. The scale classes (`p-4`) are tokens: the
 //            Tailwind configuration consumes `tokens.ts`.
@@ -35,6 +39,17 @@
 // (`'#' + hex`); zero, which is no spacing; a percentage, which is a proportion and not a step of
 // the scale; radii, font sizes and dimensions, which the constitution's cell does not name; a
 // spacing value held in a variable first, because this rule runs without types (research R-10).
+//
+// TWO RECORDED LIMITS (review of PR #29, N6). Spacing computed in place, `{ padding: 4 * 2 }`, is
+// not a literal and is not read: the operands of an expression are not followed. A colour written
+// as text between two tags, `<Text>#fff</Text>`, is JSX text, not a string literal, and is not
+// read either; as soon as such text carries a letter it is a hardcoded string, which R-MOBILE-7
+// refuses.
+//
+// COST ON A VERY LONG STRING (review of PR #29, N5). For every `#` run of a colour's length that
+// follows a space, the text before it is trimmed and split again, so one literal holding many
+// thousands of such runs costs time that grows with the square of its length. Source written by
+// hand holds no such literal, so this is recorded rather than rewritten.
 //
 // The file is matched by path segments, never by a root-anchored path (note under T035); the
 // reading of the mobile tree is shared with the other `mobile/*` rules in `../mobile.js`.
@@ -62,7 +77,9 @@ const BORDER_STYLES = new Set([
   'ridge',
 ]);
 
-const SPACING_KEY = /^(?:margin|padding)(?:[A-Z][A-Za-z]*)?$/;
+// After `margin` or `padding`, only a direction makes a spacing key (N6).
+const SPACING_KEY =
+  /^(?:margin|padding)(?:Top|Bottom|Left|Right|Start|End|Horizontal|Vertical|Block(?:Start|End)?|Inline(?:Start|End)?)?$/;
 const GAP_KEYS = new Set(['gap', 'rowGap', 'columnGap']);
 const SPACING_STRING = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|pt|dp)?$/;
 const ARBITRARY_SPACING = /^(?:[mp][trblxyse]?|gap|gap-[xy]|space-[xy])-\[/;
