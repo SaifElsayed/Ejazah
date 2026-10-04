@@ -62,6 +62,31 @@ typescriptRuleTester().run('mobile/no-direct-network', loadRule('no-direct-netwo
       filename: feature,
     },
     {
+      name: 'destructuring something that is not the holder of the globals',
+      code: 'export const read = (client: Client) => { const { fetch, WebSocket } = client; return [fetch, WebSocket]; };',
+      filename: feature,
+    },
+    {
+      name: 'destructuring a holder for something that is not a network global',
+      code: 'const { setTimeout, console: out } = globalThis;\nexport const x = [setTimeout, out];',
+      filename: feature,
+    },
+    {
+      name: 'destructuring a local binding named like the holder',
+      code: 'export const read = (window: { fetch: () => void }) => { const { fetch } = window; return fetch; };',
+      filename: feature,
+    },
+    {
+      name: 'other Expo entries are not the network',
+      code: "import * as FileSystem from 'expo-file-system';\nimport { x } from 'expo/fetch-mock';\nexport const y = [FileSystem, x];",
+      filename: feature,
+    },
+    {
+      name: 'destructuring inside lib/',
+      code: "const { fetch } = globalThis;\nexport { fetch as expoFetch } from 'expo/fetch';\nexport const call = fetch;",
+      filename: 'apps/mobile/src/lib/client.ts',
+    },
+    {
       name: 'a package whose name merely starts alike',
       code: "import x from 'axios-mock-adapter-types';\nexport default x;",
       filename: feature,
@@ -132,6 +157,40 @@ typescriptRuleTester().run('mobile/no-direct-network', loadRule('no-direct-netwo
       code: 'export const a = globalThis?.fetch;\nexport const b = (globalThis as any).fetch;\nexport const c = globalThis!.fetch;',
       filename: feature,
       errors: 3,
+    },
+    {
+      name: 'fetch destructured off the holder',
+      code: 'const { fetch } = globalThis;\nexport const call = (url: string) => fetch(url);',
+      filename: feature,
+      errors: [{ messageId: 'directGlobal', data: { name: 'fetch' } }],
+    },
+    {
+      name: 'a global destructured and renamed',
+      code: "const { WebSocket: W } = globalThis;\nexport const open = () => new W('wss://example.invalid');",
+      filename: feature,
+      errors: [{ messageId: 'directGlobal', data: { name: 'WebSocket' } }],
+    },
+    {
+      name: 'destructured off the other holders, behind a cast, by a quoted key',
+      code: "const { fetch: a } = window;\nconst { XMLHttpRequest } = self;\nconst { 'EventSource': E } = globalThis as any;\nexport const x = [a, XMLHttpRequest, E];",
+      filename: feature,
+      errors: [
+        { messageId: 'directGlobal', data: { name: 'fetch' } },
+        { messageId: 'directGlobal', data: { name: 'XMLHttpRequest' } },
+        { messageId: 'directGlobal', data: { name: 'EventSource' } },
+      ],
+    },
+    {
+      name: 'destructured by assignment',
+      code: 'let f: unknown;\n({ fetch: f } = globalThis);\nexport const x = f;',
+      filename: feature,
+      errors: [{ messageId: 'directGlobal', data: { name: 'fetch' } }],
+    },
+    {
+      name: 'expo/fetch',
+      code: "import { fetch } from 'expo/fetch';\nexport const call = (url: string) => fetch(url);",
+      filename: feature,
+      errors: [{ messageId: 'clientPackage', data: { specifier: 'expo/fetch' } }],
     },
     {
       name: 'new globalThis.WebSocket',

@@ -14,6 +14,10 @@
 // A type position is not a use: `let socket: WebSocket` and `typeof fetch` in a type name the
 // global's type and reach nothing at run time, so only value references are returned.
 //
+// A global destructured off the object that holds it (`const { fetch } = globalThis`) is the same
+// global again; `isHolder` answers whether an expression is that object, for the rules that read
+// the pattern (R-MOBILE-11; R-DB-6 asks the same of `Math` through `globalNamed`).
+//
 // What this cannot do is follow a value: after `const g = globalThis`, `g.fetch` is not seen.
 // These rules run without the TypeScript program (research R-10).
 const { propertyName, unwrap } = require('./syntax');
@@ -51,6 +55,13 @@ function globalNamed(sourceCode, node, names) {
   return HOLDERS.has(holder.name) && isUnbound(sourceCode, holder) ? name : null;
 }
 
+/** True when the expression is the object that holds the globals, by an unbound name of it. */
+function isHolder(sourceCode, node) {
+  const inner = unwrap(node);
+  if (inner === null || inner === undefined || inner.type !== 'Identifier') return false;
+  return HOLDERS.has(inner.name) && isUnbound(sourceCode, inner);
+}
+
 /** Every identifier in the file that is a value reference to one of the named globals. */
 function unboundReferences(sourceCode, names) {
   const found = [];
@@ -76,4 +87,4 @@ function heldGlobal(sourceCode, node, names) {
   return globalNamed(sourceCode, node, names);
 }
 
-module.exports = { globalNamed, heldGlobal, isUnbound, unboundReferences };
+module.exports = { globalNamed, heldGlobal, isHolder, isUnbound, unboundReferences };
