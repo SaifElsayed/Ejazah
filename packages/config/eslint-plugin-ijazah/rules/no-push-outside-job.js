@@ -41,6 +41,14 @@
 // against the importing file and a configured alias is expanded first, as the wall rules do; the
 // port root is the wall's own `portRoot` (`packages/config/eslint.boundaries.js`).
 //
+// AN ALIAS THE WALL DOES NOT KNOW IS NOT RESOLVED (review of PR #29, N10). A specifier that is
+// neither relative nor a configured alias is read as a package name, and a package is only
+// checked against the vendor list. The wall's alias data (`aliases` in
+// `packages/config/eslint.boundaries.js`) holds the mobile alias `@/` and no alias for the API,
+// because `apps/api` declares none today. The day `apps/api/tsconfig.json` gains a path alias
+// (`@api/*`, `~/*`), it must be added to that alias data in the same change, or
+// `@api/platform/ports/push/push.port` passes this rule and the five wall rules alike.
+//
 // WHAT IS NOT SEEN, and is review's. The port reached without naming its folder: re-exported
 // through a module of one's own, handed over as an argument, or injected by a string token
 // (`@Inject('PUSH_PORT')`). A provider's HTTP endpoint called directly. A vendor SDK that is not
