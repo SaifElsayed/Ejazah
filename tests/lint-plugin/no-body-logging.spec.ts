@@ -106,8 +106,8 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
       filename: module_,
     },
     {
-      name: 'an avatar URL is not judged: no project document names such a file',
-      code: "logger.info('profile', { avatarUrl, avatar_url: user.avatar_url, photoKey, photoCount, imageCount });",
+      name: 'an avatar URL and a plain image URL are not judged: neither word names a stored file',
+      code: "logger.info('profile', { avatarUrl, avatar_url: user.avatar_url, imageUrl, image_uri: target, logoImageUrl, photoKey, photoCount, imageCount });",
       filename: module_,
     },
     {
@@ -493,16 +493,16 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
       ),
     },
     {
-      name: 'a signed URL to a photo or an image',
-      code: "logger.info('u', photoUrl);\nlogger.info('u', profile.photo_url);\nlogger.info('u', { profilePhotoUrl: url });\nlogger.info('u', imageUrl);\nlogger.info('u', signatureImageUrl);\nlogger.info('u', { image_uri: target });\nlogger.info('u', photoLinks);",
+      name: 'a signed URL to a photo or a signature',
+      code: "logger.info('u', photoUrl);\nlogger.info('u', profile.photo_url);\nlogger.info('u', { profilePhotoUrl: url });\nlogger.info('u', signatureUrl);\nlogger.info('u', signatureImageUrl);\nlogger.info('u', { signature_uri: target });\nlogger.info('u', photoLinks);",
       filename: module_,
       errors: [
         'photoUrl',
         'photo_url',
         'profilePhotoUrl',
-        'imageUrl',
+        'signatureUrl',
         'signatureImageUrl',
-        'image_uri',
+        'signature_uri',
         'photoLinks',
       ].map((name, index) => ({
         messageId: 'prohibitedValue',

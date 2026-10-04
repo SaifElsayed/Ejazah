@@ -50,7 +50,7 @@
 //                   request body       body with request, req or raw
 //                   payment payload    payload with payment, gateway or webhook
 //                   document URL       url, uri or link with document, doc, signed, certificate,
-//                                      attachment, download, upload, presigned, photo or image
+//                                      attachment, download, upload, presigned, photo or signature
 //                   payout identifier  payout with ref, reference, account or recipient;
 //                                      recipient with ref or reference
 //                   card fragment      cvv, cvc; or card with number, pan, last, last4, digits,
@@ -85,14 +85,17 @@
 //                           photo is `teacher_profiles.photo_key`, "Storage key, served via
 //                           signed URL" (ERD §2), `photo_url` in the SRS data model (§6.2,
 //                           TeacherProfile): `photoUrl`, `photo_url`, `profilePhotoUrl`.
-//   url with image          (owner decisions, 2026-10-04) the SRS's word for two stored files
-//                           under the same regime: the teacher's "stored signature image"
-//                           (§3.9, FR-IJAZAH-12) and the Mode B certificate, "an uploaded image
-//                           or PDF" kept "under the same encrypted, signed-URL regime as
-//                           verification documents" (FR-IJAZAH-2, FR-IJAZAH-13).
+//   url with signature      (owner decisions, 2026-10-04) the teacher's "stored signature image"
+//                           (SRS §3.9, FR-IJAZAH-12) is a stored file under the same regime:
+//                           `signatureUrl`, `signatureImageUrl`, `signature_uri`. The Mode B
+//                           certificate, "an uploaded image or PDF" (FR-IJAZAH-2, FR-IJAZAH-13),
+//                           is read through `certificate` above.
 //
-// `avatar` is NOT added: no project document uses the word, so `avatarUrl` is not judged. If a
-// file is ever stored under that name, the word is added here with its source.
+// `image` and `avatar` are NOT added. `image` is how the SRS describes those two files, but as a
+// name it is any picture, a logo or an icon included, and `imageUrl` would be refused wherever it
+// is logged; the two stored files are named by `signature` and `certificate` instead. No project
+// document uses `avatar`. If a file is ever stored under either name, the word is added here with
+// its source.
 //
 // A bare `code` stays legal: an error code, a country code and a status code are what a log line
 // is for.
@@ -229,7 +232,7 @@ const STORED_FILE_WORDS = [
   'upload',
   'presigned',
   'photo',
-  'image',
+  'signature',
 ];
 
 // Beside one of these, `code` is a one-time code (FR-AUTH-1, FR-AUTH-6, FR-ADMIN-1) …
