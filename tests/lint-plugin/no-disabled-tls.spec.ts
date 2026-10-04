@@ -12,6 +12,8 @@ const adapter = 'apps/api/src/platform/ports/sms/provider.adapter.ts';
 
 // Assembled, as in the rule, so this file does not name the switch `pnpm lint` refuses.
 const SWITCH = ['NODE', 'TLS', 'REJECT', 'UNAUTHORIZED'].join('_');
+// Windows environment names are case-insensitive, so the lower-case spelling is the same switch.
+const LOWER_SWITCH = SWITCH.toLowerCase();
 // The connection-string parameters, assembled for the same reason.
 const PRISMA_UNVERIFIED = ['sslaccept', 'accept_invalid_certs'].join('=');
 const PG_UNVERIFIED = ['sslmode', 'no-verify'].join('=');
@@ -81,6 +83,48 @@ typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js')
     {
       name: 'the switch assigned a value that is not zero',
       code: `export const command = '${SWITCH}=1 node server.js';`,
+      filename: adapter,
+    },
+    {
+      name: 'the switch assigned a value that is not zero, quoted or longer',
+      code: [
+        `export const a = '${SWITCH}="1" node server.js';`,
+        `export const b = "${SWITCH}='1'";`,
+        `export const c = '${SWITCH}=01';`,
+        `export const d = '${SWITCH}=0.5';`,
+        `export const e = '${SWITCH} = 10';`,
+        `export const f = (entry: string) => \`${SWITCH}=1 \${entry}\`;`,
+      ].join('\n'),
+      filename: adapter,
+    },
+    {
+      name: 'prose that names the switch and assigns it nothing',
+      code: [
+        `export const a = 'set ${SWITCH} to 0 and verification is off';`,
+        `export const b = '${SWITCH}: the process-wide switch, never set';`,
+        `export const c = (file: string) => \`${SWITCH} was found in \${file}\`;`,
+        `export const d = (file: string) => \`${SWITCH}: \${file}\`;`,
+      ].join('\n'),
+      filename: adapter,
+    },
+    {
+      name: 'an identity check with an alternative that can be an error',
+      code: [
+        "import tls from 'node:tls';",
+        'export const a = { checkServerIdentity: (host: string, pinned: boolean) => (pinned ? undefined : new Error(host)) };',
+        'export const b = { checkServerIdentity(host: string, cert: never) { return tls.checkServerIdentity(host, cert) || undefined; } };',
+        'export const c = { checkServerIdentity: (host: string, cert: never) => (audit(host), tls.checkServerIdentity(host, cert)) };',
+        'export const d = { checkServerIdentity(host: string, error?: Error) { return error ?? null; } };',
+        'export const e = { checkServerIdentity: () => !0 };',
+      ].join('\n'),
+      filename: adapter,
+    },
+    {
+      name: 'a dead or locally caught throw still counts as able to fail, and is review’s',
+      code: [
+        'export const a = { checkServerIdentity(host: string) { return undefined; throw new Error(host); } };',
+        'export const b = { checkServerIdentity(host: string) { try { throw new Error(host); } catch { return undefined; } } };',
+      ].join('\n'),
       filename: adapter,
     },
     {
@@ -315,6 +359,95 @@ typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js')
         { messageId: 'environmentSwitch', data: { name: SWITCH }, line: 1 },
         { messageId: 'environmentSwitch', data: { name: SWITCH }, line: 2 },
       ],
+    },
+    {
+      name: 'the switch assigned zero in every spelling a shell, a dotenv file or a YAML file takes',
+      code: [
+        `export const a = '${SWITCH}="0" node x.js';`,
+        `export const b = "${SWITCH}='0' node x.js";`,
+        `export const c = '${SWITCH} = 0';`,
+        `export const d = '${SWITCH}: 0';`,
+        `export const e = 'env ${SWITCH}=0';`,
+        `export const f = '${SWITCH}=0;';`,
+      ].join('\n'),
+      filename: adapter,
+      errors: [1, 2, 3, 4, 5, 6].map((line) => ({
+        messageId: 'environmentSwitch',
+        data: { name: SWITCH },
+        line,
+      })),
+    },
+    {
+      name: 'the switch assigned zero under its lower-case name',
+      code: [
+        `export const a = '${LOWER_SWITCH}=0';`,
+        `export const b = 'set ${LOWER_SWITCH}="0" && node x.js';`,
+      ].join('\n'),
+      filename: adapter,
+      errors: [
+        { messageId: 'environmentSwitch', data: { name: SWITCH }, line: 1 },
+        { messageId: 'environmentSwitch', data: { name: SWITCH }, line: 2 },
+      ],
+    },
+    {
+      name: 'the switch assigned whatever a value interpolated in place holds',
+      code: [
+        `export const a = (flag: string, entry: string) => \`cross-env ${SWITCH}=\${flag} node \${entry}\`;`,
+        `export const b = (flag: string) => \`${SWITCH}="\${flag}"\`;`,
+        `export const c = (flag: string) => \`${SWITCH} = \${flag}\`;`,
+        `export const d = (flag: string) => \`${LOWER_SWITCH}=\${flag}\`;`,
+      ].join('\n'),
+      filename: adapter,
+      errors: [1, 2, 3, 4].map((line) => ({
+        messageId: 'environmentSwitch',
+        data: { name: SWITCH },
+        line,
+      })),
+    },
+    {
+      name: 'zero and an interpolated value in one piece of text are reported once',
+      code: `export const a = (flag: string) => \`${SWITCH}=0 node a.js && ${SWITCH}=\${flag} node b.js\`;`,
+      filename: adapter,
+      errors: [{ messageId: 'environmentSwitch', data: { name: SWITCH } }],
+    },
+    {
+      name: 'an identity check whose every returned alternative is falsy',
+      code: [
+        'export const a = { checkServerIdentity(host: string, x: boolean) { return x ? undefined : null; } };',
+        'export const b = { checkServerIdentity(host: string) { return (1, undefined); } };',
+        'export const c = { checkServerIdentity(host: string) { return undefined ?? null; } };',
+        'export const d = { checkServerIdentity(host: string) { return NaN; } };',
+        'export const e = { checkServerIdentity(host: string) { return -0; } };',
+        'export const f = { checkServerIdentity(host: string) { return 0n; } };',
+        'export const g = { checkServerIdentity(host: string) { return ``; } };',
+        'export const h = { checkServerIdentity(host: string) { return !1; } };',
+        'export const i = { checkServerIdentity(host: string) { return !true; } };',
+        'export const j = { checkServerIdentity(host: string, x: boolean) { if (x) return false; return 0 || ""; } };',
+      ].join('\n'),
+      filename: adapter,
+      errors: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((line) => ({
+        messageId: 'identityUnchecked',
+        line,
+      })),
+    },
+    {
+      name: 'the same falsy alternatives as the expression body of an arrow',
+      code: [
+        'export const a = { checkServerIdentity: (host: string, x: boolean) => (x ? undefined : null) };',
+        'export const b = { checkServerIdentity: () => (1, undefined) };',
+        'export const c = { checkServerIdentity: () => undefined ?? null };',
+        'export const d = { checkServerIdentity: () => NaN };',
+        'export const e = { checkServerIdentity: () => -0 };',
+        'export const f = { checkServerIdentity: () => 0n };',
+        'export const g = { checkServerIdentity: () => `` };',
+        'export const h = { checkServerIdentity: () => !1 };',
+        'export const i = { checkServerIdentity: (host: string) => !"skip" };',
+      ].join('\n'),
+      filename: adapter,
+      errors: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((line) => ({
+        messageId: 'identityUnchecked',
+        line,
+      })),
     },
     {
       name: 'an identity check assigned',

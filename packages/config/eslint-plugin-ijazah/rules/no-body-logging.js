@@ -32,18 +32,26 @@
 //                 `this.logger.log(input)`, `ctx.rawInput`, `opts.input`. In a tRPC procedure
 //                 that name is the request body after parsing, and it is the same payload under
 //                 the framework's word for it (review of PR #29, m1). A field picked out of it
-//                 (`input.locale`) is judged by its own name. A bare `payload` is NOT refused:
+//                 (`input.locale`) is judged by its own name. A call to a function or method
+//                 named exactly `getRawInput`, awaited or not, is the same payload under the
+//                 spelling tRPC v11 gives it and is refused the same way:
+//                 `logger.info(await opts.getRawInput())`,
+//                 `logger.info({ raw: await getRawInput() })` (second review of PR #29, nit 4).
+//                 No other call is read. A bare `payload` is NOT refused:
 //                 the word also names a job's data and a notification's deep-link ids, and it is
 //                 refused only beside `payment`, `gateway` or `webhook`, below.
 //   a prohibited  an identifier, a member or an object key whose name carries one of the values
 //   value         R-SEC-2 lists (words compared whole, camelCase and snake_case alike):
-//                   one-time code      otp
+//                   one-time code      otp, totp; mfa with code; code with verification, reset,
+//                                      login, or with both one and time
 //                   token              token
 //                   session ID         authorization, cookie; or `session` with `auth`
 //                   request body       body with request, req or raw
 //                   payment payload    payload with payment, gateway or webhook
-//                   document URL       url, uri or link with document, doc or signed
-//                   payout identifier  payout with ref, reference, account or recipient
+//                   document URL       url, uri or link with document, doc, signed, certificate,
+//                                      attachment, download, upload or presigned
+//                   payout identifier  payout with ref, reference, account or recipient;
+//                                      recipient with ref or reference
 //                   card fragment      cvv, cvc; or card with number, pan, last, last4, digits,
 //                                      expiry, bin, fragment or holder
 //                   credential         password, passwd, secret, credential; or key with api,
@@ -54,12 +62,47 @@
 // (`{ ctx: { payload: req.body } }`), a template literal, a `+` and `JSON.stringify(…)`, and a
 // private member reads as its name: `this.#refreshToken` is `refreshToken` (M1).
 //
+// WHERE THE VOCABULARY COMES FROM (second review of PR #29, minor 3). Each word above is one the
+// project's own documents use for a value R-SEC-2 lists; nothing is added on a guess.
+//
+//   recipient with ref      the payout identifier is "the gateway's recipient reference"
+//   or reference            (FR-PAYG-13), the port's `RecipientRef` (ARCHITECTURE §3.4), stored as
+//                           `teacher_profiles.payout_account_ref_encrypted` (R-DB-8).
+//   totp; mfa with code     administrators sign in with mandatory multi-factor authentication
+//                           (FR-ADMIN-1, NFR-SEC-6; ERD `admin_users.mfa_secret_encrypted`), and
+//                           the code typed at sign-in is a one-time code. `mfa` with `secret` was
+//                           already refused, as a credential, by `secret`.
+//   code with verification, signup verification, sign-in and password reset each send a one-time
+//   reset, login, one+time  code (FR-AUTH-1, FR-AUTH-6; ERD `otp_codes.purpose`: signup, login,
+//                           password_reset, and `code_hash`, "never store the code plain").
+//   url with certificate,   R-SEC-3: signed, expiring URLs for "documents, certificates, chat
+//   attachment, download,   attachments, photos"; FR-IJAZAH-10: certificate PDFs "served from
+//   upload or presigned     non-guessable, expiring signed URLs". A URL to fetch or to store such
+//                           a file is the access to it for as long as it lives.
+//
+// A bare `code` stays legal: an error code, a country code and a status code are what a log line
+// is for. The price of the pairs is stated plainly: a name carrying both words is refused whatever
+// else it carries, so `loginErrorCode` reads as a login code. Rename it or log a fact about it.
+//
+// AMBIGUOUS NAMES THAT ARE NOT REFUSED, and that the logger's redaction list (T100) must carry,
+// beside `card` (below):
+//
+//   event, gatewayEvent   the parsed payment payload is the port's `GatewayEvent`
+//                         (ARCHITECTURE §3.4), and `event` is also every other event in the code;
+//   code                  bare, it may be the one-time code itself (`{ code }` in the OTP flow);
+//   storageKey,           see "storage_key" under the domain vocabulary, below.
+//   storage_key
+//
+// This vocabulary and the redaction list of T100 name the same values and should come from one
+// shared list, so that neither can drift from the other. That sharing is not built here.
+//
 // A NAME THAT SAYS WHEN, HOW MANY OR WHETHER is not the value (review of PR #29, m2). A name is
 // not prohibited when its last word is `at`, `count` or `attempts`, or its first word is `has` or
 // `is`: `tokenExpiresAt`, `passwordChangedAt`, `otp_expires_at`, `otpAttempts`, `tokenCount`,
-// `hasToken`, `isTokenValid`. These are the ERD's own shapes (`otp_codes.expires_at`,
-// `attempt_count`). A name ending in `id` is NOT exempt: an authentication session's id is one of
-// the values R-SEC-2 lists, so `authSessionId` stays refused.
+// `hasToken`, `isTokenValid`, `resetCodeAttempts`, `hasTotp`, `verificationCodeExpiresAt`. These
+// are the ERD's own shapes (`otp_codes.expires_at`, `attempt_count`). A name ending in `id` is
+// NOT exempt: an authentication session's id is one of the values R-SEC-2 lists, so
+// `authSessionId` stays refused.
 //
 // A KEY WHOSE VALUE CANNOT CARRY THE SECRET is not judged, and that value is not read further
 // (m2). There are exactly four such values:
@@ -75,15 +118,21 @@
 // Every other call still has its key judged: `{ token: String(token) }`, `{ token: getToken() }`
 // and `{ password: decrypt(stored) }` are refused, because the name says what the call returns.
 //
-// DOMAIN VOCABULARY THAT STAYS LOGGABLE (decided here, because the words collide):
+// DOMAIN VOCABULARY THAT THIS RULE DOES NOT REFUSE (decided here, because the words collide):
 //
 //   sessionId, session_id   a TEACHING session's key (ERD `sessions.id`). "Session ID" in R-SEC-2
 //                           is the authentication session, matched only as `session` with `token`
 //                           or with `auth`.
 //   payoutVerifiedAt,       ERD columns that say when, not which account. `payout` is refused
 //   payout_configured_at    only beside ref, reference, account or recipient.
-//   idempotencyKey,         a `key` is refused only beside a word that makes it a secret.
-//   storage_key
+//   idempotencyKey          a `key` is refused only beside a word that makes it a secret.
+//   storage_key,            NOT JUDGED by this rule, for the same reason, which is not the same
+//   storageKey              as loggable. A verification document's storage reference is an
+//                           encrypted column (ERD §3, `verification_documents.storage_key_encrypted`,
+//                           R-DB-8: a national-ID reference is never stored unencrypted), while
+//                           other storage keys are plain text (`teacher_signatures.storage_key`).
+//                           The name alone does not say which one it is, so the logger's
+//                           redaction list (T100) must cover it.
 //   hasToken: !!token       a key whose value is a boolean literal, a negation or a comparison
 //                           records a fact about the value, not the value (and see the two
 //                           sections above).
@@ -126,12 +175,26 @@ const REQUEST_WORDS = ['req', 'request'];
 const REQUEST_BAGS = new Set(['body', 'rawBody', 'headers', 'cookies']);
 // The parsed request body under the framework's own name for it (m1).
 const REQUEST_INPUTS = new Set(['input', 'rawInput']);
+// The call that hands back the same body in tRPC v11 (second review, nit 4).
+const REQUEST_INPUT_READ = 'getRawInput';
 
 // A name ending or starting with one of these says when, how many or whether (m2).
 const FACT_LAST_WORDS = new Set(['at', 'count', 'attempts']);
 const FACT_FIRST_WORDS = new Set(['has', 'is']);
 // A call to a function named with one of these returns something that is not the secret (m2).
 const REDACTION_WORDS = ['redact', 'mask', 'hash', 'fingerprint', 'obfuscate'];
+
+// What makes a URL the access to a stored file: R-SEC-3 and FR-IJAZAH-10 (header).
+const STORED_FILE_WORDS = [
+  'document',
+  'doc',
+  'signed',
+  'certificate',
+  'attachment',
+  'download',
+  'upload',
+  'presigned',
+];
 
 /** What a name says it holds, in R-SEC-2's own terms, or null. */
 function prohibitedKind(name) {
@@ -140,7 +203,11 @@ function prohibitedKind(name) {
 
   const words = wordSetOf(name);
 
-  if (words.has('otp')) return 'a one-time code';
+  if (hasAny(words, ['otp', 'totp'])) return 'a one-time code';
+  if (words.has('code')) {
+    if (hasAny(words, ['mfa', 'verification', 'reset', 'login'])) return 'a one-time code';
+    if (words.has('one') && words.has('time')) return 'a one-time code';
+  }
   if (words.has('token')) return 'a token';
   if (hasAny(words, ['authorization', 'cookie'])) return 'a session identifier';
   if (words.has('session') && words.has('auth')) return 'a session identifier';
@@ -148,12 +215,13 @@ function prohibitedKind(name) {
   if (words.has('payload') && hasAny(words, ['payment', 'gateway', 'webhook'])) {
     return 'a payment payload';
   }
-  if (hasAny(words, ['url', 'uri', 'link']) && hasAny(words, ['document', 'doc', 'signed'])) {
+  if (hasAny(words, ['url', 'uri', 'link']) && hasAny(words, STORED_FILE_WORDS)) {
     return 'a document URL';
   }
   if (words.has('payout') && hasAny(words, ['ref', 'reference', 'account', 'recipient'])) {
     return 'a payout identifier';
   }
+  if (words.has('recipient') && hasAny(words, ['ref', 'reference'])) return 'a payout identifier';
   if (hasAny(words, ['cvv', 'cvc'])) return 'a card fragment';
   if (
     words.has('card') &&
@@ -334,8 +402,9 @@ module.exports = defineRule({
             pending.push(leaf.argument);
           } else if (leaf.type === 'BinaryExpression' && leaf.operator === '+') {
             pending.push(leaf.left, leaf.right);
-          } else if (leaf.type === 'CallExpression' && isJsonStringify(leaf)) {
-            pending.push(leaf.arguments[0]);
+          } else if (leaf.type === 'CallExpression') {
+            if (calleeName(leaf) === REQUEST_INPUT_READ) reportInput(leaf);
+            else if (isJsonStringify(leaf)) pending.push(leaf.arguments[0]);
           }
         }
       }

@@ -33,12 +33,25 @@
 //                            and `() => undefined`, `() => null`, `() => void check()` and a
 //                            falsy literal are not;
 //                          - a block body is legal only when it holds a `throw`, or a `return`
-//                            of something other than `undefined`, `null`, `void …`, a falsy
-//                            literal or nothing. A block that only CALLS something
-//                            (`{ tls.checkServerIdentity(h, c); }`, `{ logger.debug('skip'); }`)
-//                            drops the answer and accepts every host: it is refused. The usual
-//                            wrapper, `const e = tls.checkServerIdentity(h, c); if (e) return e;`,
+//                            of something other than a falsy value or nothing. A block that only
+//                            CALLS something (`{ tls.checkServerIdentity(h, c); }`,
+//                            `{ logger.debug('skip'); }`) drops the answer and accepts every
+//                            host: it is refused. The usual wrapper,
+//                            `const e = tls.checkServerIdentity(h, c); if (e) return e;`,
 //                            returns the answer and is legal.
+//                        A FALSY VALUE (second review of PR #29, nit 1) is `undefined`, `null`,
+//                        `false`, `0`, `-0`, `0n`, `NaN`, `''`, an empty template literal,
+//                        `void x`, and `!` in front of a truthy literal (`!1`, `!true`). What is
+//                        returned is read through every value it can turn out to be: both arms
+//                        of a conditional, both sides of `||`, `&&` and `??`, and the last
+//                        operand of a comma expression. It can fail only when at least one of
+//                        those is not a falsy value, so `return x ? undefined : null`,
+//                        `return (1, undefined)` and `() => undefined ?? null` are refused, and
+//                        `return pinned ? undefined : new Error(host)` is legal.
+//                        A `throw` counts wherever it stands in the body: one that can never be
+//                        reached (after a `return`) or that the function itself catches still
+//                        reads as able to fail. Telling them apart is control-flow analysis
+//                        this rule does not do; they are review's.
 //                        A value that is not a function written in place (a reference to a
 //                        function defined elsewhere) is not judged.
 //   insecureHTTPParser   anything but absent or the literal `false`. A lenient parser is not a
@@ -50,12 +63,28 @@
 //                        for a later change to the constitution.
 //   a connection string  a string literal, or the text of a template literal, containing
 //                        `sslaccept=accept_invalid_certs` (Prisma) or `sslmode=no-verify`
-//                        (node-postgres), in any letter case, or the environment switch written
-//                        as an assignment, `NODE_TLS_REJECT_UNAUTHORIZED=0`, anywhere inside a
-//                        longer string such as a command line (review of PR #29, m4).
+//                        (node-postgres), in any letter case (review of PR #29, m4).
 //                        `sslmode=disable` is NOT refused: it turns TLS off altogether, which is
 //                        what a local database without certificates needs, and is a different
 //                        decision from keeping TLS and not verifying the peer.
+//   the switch assigned  a string literal, or the text of a template literal, in which the name
+//   inside a string      of the environment switch is followed by optional whitespace, `=` or
+//                        `:`, optional whitespace, an optional single or double quote, and then
+//                        `0` not followed by another digit or a dot (m4; second review of
+//                        PR #29, minor 2). That is the assignment as a command line, a dotenv
+//                        file and a YAML file spell it: `…=0`, `…="0"`, `…='0'`, `… = 0`,
+//                        `…: 0`. The name is matched in any letter case here, because Windows
+//                        environment names are case-insensitive. In a template literal the
+//                        name followed by `=` (same whitespace and quote) and then DIRECTLY by
+//                        an interpolation is refused too: "in any environment" leaves no value
+//                        to select. One piece of text is reported once.
+//                        What stays legal as far as this string check goes: `…=1`, `…="1"`;
+//                        `…=01`, `…=0.5` and `…=10`, because Node switches verification off only
+//                        for the exact value `0` and none of these is it; and prose that names
+//                        the switch without assigning it (an error message, documentation).
+//                        Prose that spells the assignment out, "…=0 is forbidden", IS refused:
+//                        nothing in the text tells it from a command line. Not seen: the name
+//                        closed by a quote before the separator, as a JSON key is.
 //
 // The value is read through the TypeScript wrappers (`false as boolean`).
 //
@@ -75,8 +104,16 @@
 // passed to another program (`curl -k`, `NODE_OPTIONS`). A connection string assembled from
 // parts, or read from the environment (above). This rule runs without types (research R-10) and
 // none of those is a literal spelling.
+//
+// WHAT THIS RULE DOES NOT PROVE (second review of PR #29, recorded). Refusing the explicit
+// unverified parameters in code does not by itself show that a connection URL verifies the
+// server certificate. Whether a Prisma connection URL does so when it names no such parameter
+// depends on the Prisma version and on the connection method in use, and this rule asserts no
+// default. Which parameters a URL is REQUIRED to carry is for the environment validation at boot
+// to settle, against the Prisma version the project installs.
 const { defineRule } = require('../rule');
 const {
+  alternatives,
   containsNode,
   isFunction,
   keyName,
@@ -94,8 +131,13 @@ const IDENTITY_CHECK = 'checkServerIdentity';
 // Node's process-wide switch. Assembled rather than written out so that this file, which the
 // rule also lints, does not name the thing it refuses.
 const ENVIRONMENT_SWITCH = ['NODE', 'TLS', 'REJECT', 'UNAUTHORIZED'].join('_');
-// The switch written as an assignment inside a longer string, such as a command line.
-const ENVIRONMENT_SWITCH_OFF = `${ENVIRONMENT_SWITCH}=0`;
+// The switch assigned zero inside a longer string, as a command line, a dotenv file or a YAML
+// file spells it. The name is fixed text and every repeated part is followed by a character it
+// cannot itself match, so the search is linear in the length of the string.
+const ASSIGNED_BY = (separators) => `${ENVIRONMENT_SWITCH}\\s*[${separators}]\\s*['"]?`;
+const SWITCH_ASSIGNED_ZERO = new RegExp(`${ASSIGNED_BY('=:')}0(?![\\d.])`, 'i');
+// The switch assigned whatever the interpolation that directly follows this text holds.
+const SWITCH_ASSIGNED_VALUE = new RegExp(`${ASSIGNED_BY('=')}$`, 'i');
 
 // Connection-string parameters that keep TLS and stop verifying the peer, lower-case. Assembled
 // for the same reason as the switch above.
@@ -109,13 +151,34 @@ function isLiteral(node, value) {
   return inner !== null && inner !== undefined && inner.type === 'Literal' && inner.value === value;
 }
 
+const FALSY_NAMES = new Set(['undefined', 'NaN']);
+
+/** A literal whose value is falsy: `null`, `false`, `0`, `0n`, `''`. A regex is an object. */
+function isFalsyLiteral(node) {
+  return node.type === 'Literal' && node.regex === undefined && !node.value;
+}
+
+/** One value, wrappers off, that Node reads as "the certificate matches". */
+function isFalsyLeaf(leaf) {
+  if (leaf.type === 'Identifier') return FALSY_NAMES.has(leaf.name);
+  if (leaf.type === 'TemplateLiteral') {
+    return leaf.expressions.length === 0 && leaf.quasis[0].value.cooked === '';
+  }
+  if (leaf.type === 'UnaryExpression') {
+    if (leaf.operator === 'void') return true;
+    const operand = unwrap(leaf.argument);
+    // `!1`, `!true`: the negation of a literal that is truthy.
+    if (leaf.operator === '!') return operand.type === 'Literal' && !isFalsyLiteral(operand);
+    // `-0`, `+0`, `-0n`
+    return (leaf.operator === '-' || leaf.operator === '+') && isFalsyLiteral(operand);
+  }
+  return isFalsyLiteral(leaf);
+}
+
+/** True when every value the expression can turn out to be is falsy, or there is none. */
 function isFalsyValue(node) {
-  const inner = unwrap(node);
-  if (inner === null || inner === undefined) return true;
-  if (inner.type === 'Identifier') return inner.name === 'undefined';
-  if (inner.type === 'UnaryExpression') return inner.operator === 'void';
-  if (inner.type !== 'Literal') return false;
-  return inner.value === null || inner.value === false || inner.value === 0 || inner.value === '';
+  if (node === null || node === undefined) return true;
+  return alternatives(node).every(isFalsyLeaf);
 }
 
 module.exports = defineRule({
@@ -143,10 +206,7 @@ module.exports = defineRule({
      * back anything Node would read as an error. A call whose answer is dropped refuses nothing.
      */
     function cannotFail(fn) {
-      if (fn.body.type !== 'BlockStatement') {
-        const body = unwrap(fn.body);
-        return isFalsyValue(body);
-      }
+      if (fn.body.type !== 'BlockStatement') return isFalsyValue(fn.body);
       return !containsNode(sourceCode, fn.body, (node) => {
         if (node.type === 'ThrowStatement') return true;
         return node.type === 'ReturnStatement' && !isFalsyValue(node.argument);
@@ -181,10 +241,13 @@ module.exports = defineRule({
       context.report({ node, messageId: 'environmentSwitch', data: { name } });
     }
 
-    /** What a string says beyond being a name: the switch assigned, or an unverified connection. */
-    function checkText(node, text) {
+    /**
+     * What a string says beyond being a name: the switch assigned, or an unverified connection.
+     * `interpolated` is true when a value is written directly after this text.
+     */
+    function checkText(node, text, interpolated) {
       if (typeof text !== 'string') return;
-      if (text.includes(ENVIRONMENT_SWITCH_OFF)) {
+      if (SWITCH_ASSIGNED_ZERO.test(text) || (interpolated && SWITCH_ASSIGNED_VALUE.test(text))) {
         context.report({
           node,
           messageId: 'environmentSwitch',
@@ -245,11 +308,11 @@ module.exports = defineRule({
       Literal(node) {
         if (typeof node.value !== 'string') return;
         checkEnvironmentName(node, node.value);
-        checkText(node, node.value);
+        checkText(node, node.value, false);
       },
       TemplateElement(node) {
         if (node.parent.expressions.length === 0) checkEnvironmentName(node, node.value.cooked);
-        checkText(node, node.value.cooked);
+        checkText(node, node.value.cooked, !node.tail);
       },
     };
   },

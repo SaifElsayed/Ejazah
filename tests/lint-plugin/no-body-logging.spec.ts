@@ -81,6 +81,36 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
       filename: module_,
     },
     {
+      name: 'a bare code is an error code, a country code or a status code',
+      code: "logger.warn('gateway refused', { code, errorCode, countryCode, statusCode: res.statusCode });\nlogger.warn('gateway refused', error.code);",
+      filename: module_,
+    },
+    {
+      name: 'a code name that says when, how many or whether',
+      code: "logger.info('auth', { resetCodeAttempts, hasTotp, verificationCodeExpiresAt, isMfaCodeValid, loginCodeCount, totp_verified_at: row.totp_verified_at });",
+      filename: module_,
+    },
+    {
+      name: 'half of a pair is not the pair',
+      code: "logger.info('payout', { recipient, recipientStatus, reference, bookingRef, mfa, mfaEnabled, timeCode, oneCode, verification, login, reset });",
+      filename: module_,
+    },
+    {
+      name: 'ambiguous names are left to the redaction list of the logger',
+      code: "logger.info('webhook', { event, gatewayEvent, storageKey, storage_key: file.storage_key });",
+      filename: module_,
+    },
+    {
+      name: 'a URL that is not a stored file’s',
+      code: "logger.info('request', { url: req.url, callbackUrl, profileLink, uploadCount, downloadSpeed, certificateNumber, attachmentMime });",
+      filename: module_,
+    },
+    {
+      name: 'the answer of any other call is not read',
+      code: "logger.info('in', getInput(), opts.getRawInputSize(), parse(await opts.getRawInput()));",
+      filename: module_,
+    },
+    {
       name: 'a console method on something that is not the console',
       code: 'export const show = (panel: Panel, token: string) => { panel.dir(token); table.table(token); };',
       filename: module_,
@@ -376,6 +406,86 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
           messageId: 'prohibitedValue',
           data: { name: 'payoutRecipient', kind: 'a payout identifier' },
         },
+      ],
+    },
+    {
+      name: 'a payout recipient reference',
+      code: "logger.info('p', recipientRef);\nlogger.info('p', profile.recipient_reference);\nlogger.info('p', { gatewayRecipientRef: ref });",
+      filename: module_,
+      errors: [
+        {
+          messageId: 'prohibitedValue',
+          data: { name: 'recipientRef', kind: 'a payout identifier' },
+          line: 1,
+        },
+        {
+          messageId: 'prohibitedValue',
+          data: { name: 'recipient_reference', kind: 'a payout identifier' },
+          line: 2,
+        },
+        {
+          messageId: 'prohibitedValue',
+          data: { name: 'gatewayRecipientRef', kind: 'a payout identifier' },
+          line: 3,
+        },
+      ],
+    },
+    {
+      name: 'a one-time code under its other names',
+      code: "logger.info('c', totp);\nlogger.info('c', user.totpCode);\nlogger.info('c', mfaCode);\nlogger.info('c', verificationCode);\nlogger.info('c', row.reset_code);\nlogger.info('c', loginCode);\nlogger.info('c', oneTimeCode);\nlogger.info('c', { one_time_code: value });",
+      filename: module_,
+      errors: [
+        'totp',
+        'totpCode',
+        'mfaCode',
+        'verificationCode',
+        'reset_code',
+        'loginCode',
+        'oneTimeCode',
+        'one_time_code',
+      ].map((name, index) => ({
+        messageId: 'prohibitedValue',
+        data: { name, kind: 'a one-time code' },
+        line: index + 1,
+      })),
+    },
+    {
+      name: 'an MFA secret is a credential',
+      code: "logger.info('c', admin.mfaSecret);\nlogger.info('c', { mfa_secret_encrypted: row.mfa_secret_encrypted });",
+      filename: module_,
+      errors: [
+        { messageId: 'prohibitedValue', data: { name: 'mfaSecret', kind: 'a credential' } },
+        {
+          messageId: 'prohibitedValue',
+          data: { name: 'mfa_secret_encrypted', kind: 'a credential' },
+        },
+        {
+          messageId: 'prohibitedValue',
+          data: { name: 'mfa_secret_encrypted', kind: 'a credential' },
+        },
+      ],
+    },
+    {
+      name: 'a signed URL to a stored file',
+      code: "logger.info('u', certificateUrl);\nlogger.info('u', message.attachment_url);\nlogger.info('u', downloadLink);\nlogger.info('u', { uploadUri: target });\nlogger.info('u', presignedUrl);",
+      filename: module_,
+      errors: ['certificateUrl', 'attachment_url', 'downloadLink', 'uploadUri', 'presignedUrl'].map(
+        (name, index) => ({
+          messageId: 'prohibitedValue',
+          data: { name, kind: 'a document URL' },
+          line: index + 1,
+        }),
+      ),
+    },
+    {
+      name: 'the raw input read through getRawInput, awaited or not',
+      code: "logger.info(await opts.getRawInput());\nlogger.info({ raw: await getRawInput() });\nlogger.debug('in', opts.getRawInput());\nlogger.info(opts.getRawInput?.() ?? null);",
+      filename: module_,
+      errors: [
+        { messageId: 'requestInput', data: { text: 'opts.getRawInput()' }, line: 1 },
+        { messageId: 'requestInput', data: { text: 'getRawInput()' }, line: 2 },
+        { messageId: 'requestInput', data: { text: 'opts.getRawInput()' }, line: 3 },
+        { messageId: 'requestInput', data: { text: 'opts.getRawInput?.()' }, line: 4 },
       ],
     },
     {
