@@ -9,11 +9,15 @@
 // This rule is that refusal. The logger's own redaction list (T100) is the second net, for a
 // value nested where no rule can see it.
 //
-// A LOGGER CALL is a call to `log`, `info`, `warn`, `error`, `debug`, `trace`, `fatal`, `verbose`
-// or `child` on something that reads as a logger: `console`, or a name whose words include `log`
-// or `logger` — `logger`, `log`, `this.logger`, `ctx.log`, `req.log`, `auditLogger`,
-// `getLogger()`, `logger.child({ … })`. The call itself may be optional (`logger?.info(…)`).
-// `Math.log(x)` is not one: `Math` does not read as a logger.
+// A LOGGER CALL is a call to `log`, `info`, `warn`, `error`, `debug`, `trace`, `fatal`, `verbose`,
+// `notice`, `http`, `silly`, `alert`, `crit`, `emerg` or `child` on something that reads as a
+// logger: a name whose words include `log` or `logger` — `logger`, `log`, `this.logger`,
+// `this.#logger`, `ctx.log`, `req.log`, `auditLogger`, `getLogger()`, `logger.child({ … })`. The
+// level names are those of the console, pino, Nest, winston and syslog. EVERY method called on
+// `console` is a logger call, whatever its name (`console.dir`, `console.table`,
+// `console.assert`, `console[level]`): each one prints its arguments (review of PR #29, M2). The
+// call itself may be optional (`logger?.info(…)`). `Math.log(x)` is not one: `Math` does not read
+// as a logger.
 //
 // WHAT IS REFUSED among the arguments
 //
@@ -23,6 +27,14 @@
 //                 the constitution's own example; the header and cookie bags are how a token and
 //                 an authentication session reach a log. A field picked out of one
 //                 (`req.body.locale`, `req.headers['user-agent']`) is judged by its own name.
+//   the request   an identifier, or the last name of a member access, that is exactly `input` or
+//   input         `rawInput`, handed over whole: `logger.info(input)`, `logger.info({ input })`,
+//                 `this.logger.log(input)`, `ctx.rawInput`, `opts.input`. In a tRPC procedure
+//                 that name is the request body after parsing, and it is the same payload under
+//                 the framework's word for it (review of PR #29, m1). A field picked out of it
+//                 (`input.locale`) is judged by its own name. A bare `payload` is NOT refused:
+//                 the word also names a job's data and a notification's deep-link ids, and it is
+//                 refused only beside `payment`, `gateway` or `webhook`, below.
 //   a prohibited  an identifier, a member or an object key whose name carries one of the values
 //   value         R-SEC-2 lists (words compared whole, camelCase and snake_case alike):
 //                   one-time code      otp
@@ -39,7 +51,29 @@
 //
 // Each is found through optional chaining (`req?.body`), the TypeScript wrappers, a conditional
 // (`debug ? req.body : null`), `||`, `&&`, `??`, a spread, a nested object or array at any depth
-// (`{ ctx: { payload: req.body } }`), a template literal, a `+` and `JSON.stringify(…)`.
+// (`{ ctx: { payload: req.body } }`), a template literal, a `+` and `JSON.stringify(…)`, and a
+// private member reads as its name: `this.#refreshToken` is `refreshToken` (M1).
+//
+// A NAME THAT SAYS WHEN, HOW MANY OR WHETHER is not the value (review of PR #29, m2). A name is
+// not prohibited when its last word is `at`, `count` or `attempts`, or its first word is `has` or
+// `is`: `tokenExpiresAt`, `passwordChangedAt`, `otp_expires_at`, `otpAttempts`, `tokenCount`,
+// `hasToken`, `isTokenValid`. These are the ERD's own shapes (`otp_codes.expires_at`,
+// `attempt_count`). A name ending in `id` is NOT exempt: an authentication session's id is one of
+// the values R-SEC-2 lists, so `authSessionId` stays refused.
+//
+// A KEY WHOSE VALUE CANNOT CARRY THE SECRET is not judged, and that value is not read further
+// (m2). There are exactly four such values:
+//
+//   a fact             a boolean literal, a negation or a comparison: `hasToken: !!token`
+//   a string literal   `{ token: 'present' }`, `{ password: '[redacted]' }`: text written in the
+//                      source, not a value that arrived
+//   Boolean(x)         `{ token: Boolean(token) }`
+//   a redaction call   a call whose function name carries the word `redact`, `mask`, `hash`,
+//                      `fingerprint` or `obfuscate`: `{ token: redact(token) }`,
+//                      `{ cardNumber: maskCard(pan) }`, `{ token: hashToken(token) }`
+//
+// Every other call still has its key judged: `{ token: String(token) }`, `{ token: getToken() }`
+// and `{ password: decrypt(stored) }` are refused, because the name says what the call returns.
 //
 // DOMAIN VOCABULARY THAT STAYS LOGGABLE (decided here, because the words collide):
 //
@@ -51,19 +85,23 @@
 //   idempotencyKey,         a `key` is refused only beside a word that makes it a secret.
 //   storage_key
 //   hasToken: !!token       a key whose value is a boolean literal, a negation or a comparison
-//                           records a fact about the value, not the value.
+//                           records a fact about the value, not the value (and see the two
+//                           sections above).
 //
 // WHAT IS NOT SEEN, and is review's (the constitution keeps review behind this rule). A value
-// renamed first (`const { body } = req; logger.info(body)`); a value wrapped in a call other than
-// `JSON.stringify` — `util.inspect(req.body)`, `String(token)`, a redaction helper, which is the
-// one legitimate wrapper and looks the same; the whole request object (`logger.info({ req })`),
-// which the logger's serialiser and redaction list own; a logger reached under another name; a
-// bare `log(…)` or `debug(…)` function; a field named by a bare `card` (`req.body.card`), because
-// `card` alone also names a profile card or a UI card and is refused only beside a word that makes
-// it a payment card. This rule runs without types (research R-10).
+// renamed first (`const { body } = req; logger.info(body)`, `const data = input`); a value
+// wrapped in a call other than `JSON.stringify` and handed over under no telling name —
+// `logger.info(util.inspect(req.body))`, `logger.info(String(token))`: the arguments of a call
+// are not read, because a redaction helper is the one legitimate wrapper and looks the same; the
+// whole request object (`logger.info({ req })`), which the logger's serialiser and redaction list
+// own; a logger reached under another name; a bare `log(…)` or `debug(…)` function; a field named
+// by a bare `card` (`req.body.card`, `{ card: req.body.card }`), because `card` alone also names
+// a profile card or a UI card and is refused only beside a word that makes it a payment card, so
+// the logger's redaction list (T100) must carry `card`. This rule runs without types
+// (research R-10).
 const { defineRule } = require('../rule');
-const { alternatives, keyName, propertyName, unwrap } = require('../syntax');
-const { hasAny, wordSetOf } = require('../words');
+const { alternatives, keyName, propertyName, staticString, unwrap } = require('../syntax');
+const { hasAny, wordSetOf, wordsOf } = require('../words');
 
 const LOG_METHODS = new Set([
   'log',
@@ -74,14 +112,32 @@ const LOG_METHODS = new Set([
   'trace',
   'fatal',
   'verbose',
+  'notice',
+  'http',
+  'silly',
+  'alert',
+  'crit',
+  'emerg',
   'child',
 ]);
+const CONSOLE = 'console';
 const LOGGER_WORDS = ['log', 'logger'];
 const REQUEST_WORDS = ['req', 'request'];
 const REQUEST_BAGS = new Set(['body', 'rawBody', 'headers', 'cookies']);
+// The parsed request body under the framework's own name for it (m1).
+const REQUEST_INPUTS = new Set(['input', 'rawInput']);
+
+// A name ending or starting with one of these says when, how many or whether (m2).
+const FACT_LAST_WORDS = new Set(['at', 'count', 'attempts']);
+const FACT_FIRST_WORDS = new Set(['has', 'is']);
+// A call to a function named with one of these returns something that is not the secret (m2).
+const REDACTION_WORDS = ['redact', 'mask', 'hash', 'fingerprint', 'obfuscate'];
 
 /** What a name says it holds, in R-SEC-2's own terms, or null. */
 function prohibitedKind(name) {
+  const ordered = wordsOf(name);
+  if (FACT_LAST_WORDS.has(ordered.at(-1)) || FACT_FIRST_WORDS.has(ordered[0])) return null;
+
   const words = wordSetOf(name);
 
   if (words.has('otp')) return 'a one-time code';
@@ -130,7 +186,15 @@ function readsAs(name, words) {
 }
 
 function isLoggerName(name) {
-  return name === 'console' || readsAs(name, LOGGER_WORDS);
+  return name === CONSOLE || readsAs(name, LOGGER_WORDS);
+}
+
+/** `console`, or the same object through what holds it (`globalThis.console`). */
+function isConsole(node) {
+  const inner = unwrap(node);
+  if (inner === null || inner === undefined) return false;
+  if (inner.type === 'Identifier') return inner.name === CONSOLE;
+  return inner.type === 'MemberExpression' && propertyName(inner) === CONSOLE;
 }
 
 function isLogger(node) {
@@ -158,11 +222,27 @@ function requestBagOf(member) {
   return null;
 }
 
-/** A value that states a fact about something rather than carrying it. */
+/** The name a call's function goes by: `redact` in `redact(x)`, `mask` in `pii.mask(x)`. */
+function calleeName(call) {
+  const callee = unwrap(call.callee);
+  if (callee.type === 'Identifier') return callee.name;
+  return callee.type === 'MemberExpression' ? propertyName(callee) : null;
+}
+
+/**
+ * A value that cannot carry the secret its key names: a fact about it, a string written in the
+ * source, `Boolean(x)`, or what a redaction helper returns. Nothing else, and no other call.
+ */
 function isFact(node) {
   const inner = unwrap(node);
-  if (inner.type === 'Literal') return typeof inner.value === 'boolean';
+  if (inner.type === 'Literal' && typeof inner.value === 'boolean') return true;
+  if (staticString(inner) !== null) return true;
   if (inner.type === 'UnaryExpression') return inner.operator === '!';
+  if (inner.type === 'CallExpression') {
+    const name = calleeName(inner);
+    if (name === null) return false;
+    return name === 'Boolean' || hasAny(wordSetOf(name), REDACTION_WORDS);
+  }
   if (inner.type !== 'BinaryExpression') return false;
   return ['===', '!==', '==', '!=', '<', '>', '<=', '>=', 'in', 'instanceof'].includes(
     inner.operator,
@@ -184,6 +264,8 @@ module.exports = defineRule({
     // Written without the identifier; `defineRule` appends it (FR-011).
     requestBag:
       '"{{text}}" hands the logger the raw request {{bag}} — log the fields you need by name, because a log line leaves the system and this carries whatever the client sent',
+    requestInput:
+      '"{{text}}" hands the logger the whole request input — log the fields you need by name, because a log line leaves the system and this carries whatever the client sent',
     prohibitedValue:
       '"{{name}}" reads as {{kind}} and is handed to a logger — leave it out or log a fact about it, because a log line leaves the system',
   },
@@ -195,6 +277,14 @@ module.exports = defineRule({
       const kind = prohibitedKind(name);
       if (kind !== null)
         context.report({ node, messageId: 'prohibitedValue', data: { name, kind } });
+    }
+
+    function reportInput(node) {
+      context.report({
+        node,
+        messageId: 'requestInput',
+        data: { text: sourceCode.getText(node) },
+      });
     }
 
     function inspect(argument) {
@@ -209,7 +299,8 @@ module.exports = defineRule({
 
         for (const leaf of alternatives(next)) {
           if (leaf.type === 'Identifier') {
-            checkName(leaf, leaf.name);
+            if (REQUEST_INPUTS.has(leaf.name)) reportInput(leaf);
+            else checkName(leaf, leaf.name);
           } else if (leaf.type === 'MemberExpression') {
             const bag = requestBagOf(leaf);
             if (bag !== null) {
@@ -218,6 +309,8 @@ module.exports = defineRule({
                 messageId: 'requestBag',
                 data: { text: sourceCode.getText(leaf), bag },
               });
+            } else if (REQUEST_INPUTS.has(propertyName(leaf))) {
+              reportInput(leaf);
             } else {
               checkName(leaf, propertyName(leaf));
             }
@@ -252,9 +345,12 @@ module.exports = defineRule({
       CallExpression(node) {
         const callee = unwrap(node.callee);
         if (callee.type !== 'MemberExpression') return;
-        const method = propertyName(callee);
-        if (method === null || !LOG_METHODS.has(method)) return;
-        if (!isLogger(callee.object)) return;
+        // Every method of the console prints its arguments; elsewhere the level names decide.
+        if (!isConsole(callee.object)) {
+          const method = propertyName(callee);
+          if (method === null || !LOG_METHODS.has(method)) return;
+          if (!isLogger(callee.object)) return;
+        }
         for (const argument of node.arguments) inspect(argument);
       },
     };

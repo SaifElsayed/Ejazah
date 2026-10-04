@@ -12,6 +12,9 @@ const adapter = 'apps/api/src/platform/ports/sms/provider.adapter.ts';
 
 // Assembled, as in the rule, so this file does not name the switch `pnpm lint` refuses.
 const SWITCH = ['NODE', 'TLS', 'REJECT', 'UNAUTHORIZED'].join('_');
+// The connection-string parameters, assembled for the same reason.
+const PRISMA_UNVERIFIED = ['sslaccept', 'accept_invalid_certs'].join('=');
+const PG_UNVERIFIED = ['sslmode', 'no-verify'].join('=');
 
 typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js'), {
   valid: [
@@ -53,6 +56,31 @@ typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js')
     {
       name: 'an identity check that returns an error',
       code: 'export const options = { checkServerIdentity: (host: string) => mismatch(host) };',
+      filename: adapter,
+    },
+    {
+      name: 'an identity check that returns what the default check answers',
+      code: "import tls from 'node:tls';\nexport const options = { checkServerIdentity(host: string, cert: never) { const error = tls.checkServerIdentity(host, cert); if (error) return error; return undefined; } };",
+      filename: adapter,
+    },
+    {
+      name: 'an identity check that returns the call from a block',
+      code: "import tls from 'node:tls';\nexport const options = { checkServerIdentity: (host: string, cert: never) => { return tls.checkServerIdentity(host, cert); } };",
+      filename: adapter,
+    },
+    {
+      name: 'an identity check that is a reference to a function defined elsewhere',
+      code: 'export const options = { checkServerIdentity: pinnedIdentityCheck };',
+      filename: adapter,
+    },
+    {
+      name: 'a connection string that verifies, and one with TLS off altogether',
+      code: "export const a = 'postgresql://app@db.example.invalid/ijazah?sslmode=verify-full';\nexport const b = 'postgresql://app@localhost/ijazah?sslmode=disable';\nexport const c = 'postgresql://app@db.example.invalid/ijazah?sslaccept=strict';",
+      filename: adapter,
+    },
+    {
+      name: 'the switch assigned a value that is not zero',
+      code: `export const command = '${SWITCH}=1 node server.js';`,
       filename: adapter,
     },
     {
@@ -163,6 +191,15 @@ typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js')
       errors: 1,
     },
     {
+      name: 'a private class field and a private member assigned',
+      code: 'export class Transport {\n  #rejectUnauthorized = false;\n  off() { this.#rejectUnauthorized = false; }\n}',
+      filename: adapter,
+      errors: [
+        { messageId: 'verificationOff', data: { name: 'rejectUnauthorized' }, line: 2 },
+        { messageId: 'verificationOff', data: { name: 'rejectUnauthorized' }, line: 3 },
+      ],
+    },
+    {
       name: 'the environment switch written',
       code: `process.env.${SWITCH} = '0';`,
       filename: adapter,
@@ -221,6 +258,63 @@ typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js')
       code: 'export const a = { checkServerIdentity: () => null };\nexport const b = { checkServerIdentity: function () { return void 0; } };\nexport const c = { checkServerIdentity: () => { return; } };',
       filename: adapter,
       errors: 3,
+    },
+    {
+      name: 'an identity check that calls the default and drops the answer',
+      code: "import tls from 'node:tls';\nexport const options = { checkServerIdentity(host: string, cert: never) { tls.checkServerIdentity(host, cert); } };",
+      filename: adapter,
+      errors: [{ messageId: 'identityUnchecked' }],
+    },
+    {
+      name: 'an identity check that only logs',
+      code: "export const options = { checkServerIdentity: () => { logger.debug('skip'); } };",
+      filename: adapter,
+      errors: [{ messageId: 'identityUnchecked' }],
+    },
+    {
+      name: 'an identity check that calls, constructs and returns nothing',
+      code: 'export const options = { checkServerIdentity: function (host: string) { audit(host); new Probe(host); return undefined; } };',
+      filename: adapter,
+      errors: 1,
+    },
+    {
+      name: 'an identity check whose only throw is inside a callback it never awaits',
+      code: 'export const options = { checkServerIdentity(host: string) { later(() => { throw new Error(host); }); } };',
+      filename: adapter,
+      errors: 1,
+    },
+    {
+      name: 'an expression-bodied identity check that discards the answer',
+      code: 'export const options = { checkServerIdentity: (host: string) => void verify(host) };',
+      filename: adapter,
+      errors: 1,
+    },
+    {
+      name: 'a Prisma connection string that accepts invalid certificates',
+      code: `export const url = 'postgresql://app@db.example.invalid/ijazah?${PRISMA_UNVERIFIED}';`,
+      filename: adapter,
+      errors: [{ messageId: 'unverifiedConnection', data: { parameter: PRISMA_UNVERIFIED } }],
+    },
+    {
+      name: 'a node-postgres connection string that does not verify, in upper case',
+      code: `export const url = 'postgresql://app@db.example.invalid/ijazah?${PG_UNVERIFIED.toUpperCase()}&x=1';`,
+      filename: adapter,
+      errors: [{ messageId: 'unverifiedConnection', data: { parameter: PG_UNVERIFIED } }],
+    },
+    {
+      name: 'the parameter in the text of a template literal with values in it',
+      code: `export const url = (host: string) => \`postgresql://app@\${host}/ijazah?${PG_UNVERIFIED}\`;`,
+      filename: adapter,
+      errors: [{ messageId: 'unverifiedConnection' }],
+    },
+    {
+      name: 'the environment switch assigned inside a command line',
+      code: `export const command = '${SWITCH}=0 node server.js';\nexport const script = \`cross-env ${SWITCH}=0 \${entry}\`;`,
+      filename: adapter,
+      errors: [
+        { messageId: 'environmentSwitch', data: { name: SWITCH }, line: 1 },
+        { messageId: 'environmentSwitch', data: { name: SWITCH }, line: 2 },
+      ],
     },
     {
       name: 'an identity check assigned',

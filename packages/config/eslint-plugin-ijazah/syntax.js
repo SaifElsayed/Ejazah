@@ -6,7 +6,9 @@
 //   - what is this expression once the wrappers are off? `a?.b`, `a!.b`, `(a as X).b`,
 //     `a satisfies X` and `<X>a` all carry the same value as `a.b` and `a`;
 //   - what name does this member access or this property key carry? `x.name`, `x['name']` and
-//     x[`name`] name one property;
+//     x[`name`] name one property, and so does a private one: `this.#name`, `#name: T` and
+//     `#name()` carry the name `name` (review of PR #29, M1). A `#` hides a member from other
+//     classes, not from a log line or from the type it is declared with;
 //   - which values can this expression turn out to be? `cond ? a : b`, `a || b`, `a ?? b` and
 //     `(a, b)` hand on one of their operands.
 //
@@ -59,22 +61,32 @@ function staticString(node) {
   return null;
 }
 
-/** The property a member access names: `x.name`, `x['name']`, x[`name`]. Null when computed from a value. */
+/**
+ * The property a member access names: `x.name`, `x['name']`, x[`name`], and `x.#name` without its
+ * `#`. Null when computed from a value.
+ */
 function propertyName(member) {
   if (member === null || member === undefined) return null;
   if (member.type !== 'MemberExpression' && member.type !== 'JSXMemberExpression') return null;
   const { property } = member;
   if (member.type === 'JSXMemberExpression') return property.name;
-  if (!member.computed) return property.type === 'Identifier' ? property.name : null;
+  if (!member.computed) {
+    return property.type === 'Identifier' || property.type === 'PrivateIdentifier'
+      ? property.name
+      : null;
+  }
   return staticString(property);
 }
 
-/** The name a property, class member or type member is declared under, quoted or not. */
+/**
+ * The name a property, class member or type member is declared under, quoted or not; a private
+ * member (`#name`) answers with its name without the `#`.
+ */
 function keyName(node) {
   const { key } = node;
   if (key === null || key === undefined) return null;
   if (!node.computed) {
-    if (key.type === 'Identifier') return key.name;
+    if (key.type === 'Identifier' || key.type === 'PrivateIdentifier') return key.name;
     if (key.type === 'Literal') return String(key.value);
     return null;
   }
