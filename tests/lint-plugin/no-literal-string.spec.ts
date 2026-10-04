@@ -37,6 +37,31 @@ typescriptRuleTester().run('mobile/no-literal-string', loadRule('no-literal-stri
       filename: feature,
     },
     {
+      name: 'translated navigation options',
+      code: "export const S = () => <Stack.Screen name=\"home\" options={{ title: t('home.title'), headerBackTitle: t('common.back') }} />;",
+      filename: feature,
+    },
+    {
+      name: 'navigation options that are configuration, not prose',
+      code: "export const S = () => <Stack.Screen options={{ headerShown: false, animation: 'fade', presentation: 'modal' }} />;",
+      filename: feature,
+    },
+    {
+      name: 'navigation options returned by a function, translated',
+      code: 'export const S = () => <Tabs.Screen options={({ route }) => ({ tabBarLabel: t(route.name) })} />;',
+      filename: feature,
+    },
+    {
+      name: 'an options prop that is not an object of navigation options',
+      code: "export const S = () => <Select options={['small', 'large']} />;",
+      filename: feature,
+    },
+    {
+      name: 'children handed a translation',
+      code: "export const V = () => <Text children={t('student.empty.title')} />;",
+      filename: feature,
+    },
+    {
       name: 'a translated fallback',
       code: "export const V = () => <Text>{name ?? t('student.anonymous')}</Text>;",
       filename: feature,
@@ -156,6 +181,41 @@ typescriptRuleTester().run('mobile/no-literal-string', loadRule('no-literal-stri
       code: "export const V = () => <Button title={t('save') || 'Save'} />;",
       filename: feature,
       errors: [{ messageId: 'literalProp', data: { text: 'Save', prop: 'title' } }],
+    },
+    {
+      name: 'a navigation option written in place',
+      code: "export const S = () => <Stack.Screen options={{ title: 'Home' }} />;",
+      filename: feature,
+      errors: [{ messageId: 'literalProp', data: { text: 'Home', prop: 'title' } }],
+    },
+    {
+      name: 'navigation options returned by an arrow function',
+      code: "export const S = () => <Stack.Screen options={() => ({ title: 'Home' })} />;",
+      filename: feature,
+      errors: [{ messageId: 'literalProp', data: { text: 'Home', prop: 'title' } }],
+    },
+    {
+      name: 'every visible option, returned from a block body',
+      code: "export const S = () => (\n  <Tabs.Screen\n    options={({ route }) => {\n      return { headerTitle: 'Details', tabBarLabel: 'Tab', drawerLabel: 'Drawer', headerBackTitle: 'Back', headerShown: true };\n    }}\n  />\n);",
+      filename: feature,
+      errors: [
+        { messageId: 'literalProp', data: { text: 'Details', prop: 'headerTitle' } },
+        { messageId: 'literalProp', data: { text: 'Tab', prop: 'tabBarLabel' } },
+        { messageId: 'literalProp', data: { text: 'Drawer', prop: 'drawerLabel' } },
+        { messageId: 'literalProp', data: { text: 'Back', prop: 'headerBackTitle' } },
+      ],
+    },
+    {
+      name: 'a navigation option behind a conditional, a cast and a fallback',
+      code: "export const S = (p: { wide: boolean }) => <Stack.Screen options={(p.wide ? { title: 'Wide' } : { title: name ?? 'Narrow' }) as Options} />;",
+      filename: feature,
+      errors: 2,
+    },
+    {
+      name: 'children as a prop',
+      code: 'export const V = () => <Text children="No teachers yet." />;',
+      filename: feature,
+      errors: [{ messageId: 'literalProp', data: { text: 'No teachers yet.', prop: 'children' } }],
     },
     {
       name: 'accessibility props are read aloud',

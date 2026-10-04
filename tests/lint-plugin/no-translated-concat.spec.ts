@@ -8,6 +8,7 @@
 import { typescriptRuleTester, loadRule } from '../support/rule-tester';
 
 const feature = 'apps/mobile/src/features/shared/greeting.ts';
+const view = 'apps/mobile/src/features/shared/greeting-line.tsx';
 
 typescriptRuleTester().run('mobile/no-translated-concat', loadRule('no-translated-concat.js'), {
   valid: [
@@ -57,6 +58,36 @@ typescriptRuleTester().run('mobile/no-translated-concat', loadRule('no-translate
       filename: feature,
     },
     {
+      name: 'a translation alone between two tags',
+      code: "export const V = () => <Text>{t('a')}</Text>;",
+      filename: view,
+    },
+    {
+      name: 'a translation beside an element',
+      code: "export const V = () => <Text>{t('label')}<Icon /></Text>;",
+      filename: view,
+    },
+    {
+      name: 'a translation, a space and an element',
+      code: "export const V = () => <Text>{t('label')}{' '}<Icon /></Text>;",
+      filename: view,
+    },
+    {
+      name: 'a translation beside a comment, a guarded element and nothing',
+      code: "export const V = (p: { busy: boolean }) => (\n  <Row>\n    {/* the title */}\n    {t('title')}\n    {p.busy && <Spinner />}\n    {p.busy ? <Dot /> : null}\n    {undefined}\n    {false}\n  </Row>\n);",
+      filename: view,
+    },
+    {
+      name: 'text and a value with no translation are not this rule’s',
+      code: 'export const V = (p: { a: number; b: number }) => <Text>{p.a} / {p.b}</Text>;',
+      filename: view,
+    },
+    {
+      name: 'two translations in two elements',
+      code: "export const V = () => <Row><Text>{t('a')}</Text><Text>{t('b')}</Text></Row>;",
+      filename: view,
+    },
+    {
       name: 'a file outside the mobile application',
       code: "export const g = () => t('a') + t('b');",
       filename: 'apps/admin/src/x.ts',
@@ -73,6 +104,42 @@ typescriptRuleTester().run('mobile/no-translated-concat', loadRule('no-translate
       name: 'a fragment joined to a value, reported once for the chain',
       code: "export const g = (name: string) => t('hello') + ' ' + name + '!';",
       filename: feature,
+      errors: 1,
+    },
+    {
+      name: 'two translations side by side in one element',
+      code: "export const V = () => <Text>{t('a')} {t('b')}</Text>;",
+      filename: view,
+      errors: [{ messageId: 'sideBySide' }],
+    },
+    {
+      name: 'a translation with punctuation and a value beside it',
+      code: "export const V = (p: { name: string }) => <Text>{t('greeting')}, {p.name}!</Text>;",
+      filename: view,
+      errors: [{ messageId: 'sideBySide' }],
+    },
+    {
+      name: 'a translation and a value with an explicit space between',
+      code: "export const V = (p: { count: number }) => <Text>{t('sessions')}{' '}{p.count}</Text>;",
+      filename: view,
+      errors: [{ messageId: 'sideBySide' }],
+    },
+    {
+      name: 'a translation followed by a colon',
+      code: "export const V = () => <Text>{t('label')}: <Value /></Text>;",
+      filename: view,
+      errors: 1,
+    },
+    {
+      name: 'side by side in a fragment, behind a conditional and through i18n.t',
+      code: "export const V = (p: { am: boolean; name: string }) => <>{p.am ? i18n.t('morning') : i18n.t('evening')} {p.name}</>;",
+      filename: view,
+      errors: [{ messageId: 'sideBySide' }],
+    },
+    {
+      name: 'a translation beside a guarded value',
+      code: "export const V = (p: { unit?: string }) => <Text>{t('price')}{p.unit && p.unit}</Text>;",
+      filename: view,
       errors: 1,
     },
     {

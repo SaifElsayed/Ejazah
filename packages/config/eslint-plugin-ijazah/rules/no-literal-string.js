@@ -19,6 +19,8 @@
 //   <Text>{'Hello ' + name}</Text>                an operand of `+`
 //   <Text>{['Mon', 'Tue'].join(', ')}</Text>      an element of an array that is rendered or joined
 //   <Field placeholder="Search" />                a user-visible prop, as a string or an expression
+//   <Text children="Hello" />                     `children` is the text between the tags
+//   <Stack.Screen options={{ title: 'Home' }} />  a navigation option the navigator shows
 //
 // each read through optional chaining and the TypeScript wrappers (`'Yes' as const`).
 //
@@ -27,6 +29,14 @@
 // `href`, `key` and every other prop carry identifiers, not prose, and are never read. A string
 // with no letter in it — `'—'`, `': '`, `'12'` — is punctuation or a number and is not refused.
 //
+// NAVIGATION OPTIONS (review of PR #29, m8). The object literal handed to a JSX `options` prop is
+// read for the keys the navigator puts on screen: `title`, `headerTitle`, `tabBarLabel`,
+// `drawerLabel` and `headerBackTitle`. The object is found directly, through a conditional, `||`,
+// `&&`, `??` and the TypeScript wrappers, and as what a function written in place returns
+// (`options={() => ({ title: 'Home' })}`, or a block body's `return { … }`). Every other key of
+// the object (`headerShown`, `animation`, `presentation`) is configuration and is not read.
+// `options={{ title: t('home.title') }}` is the legal form.
+//
 // DECISION (T038) — where it applies. Every file under `apps/mobile/src`, `design/` included,
 // because a primitive with a hardcoded label is shown to the same user. Test files (`*.spec.*`,
 // `*.test.*`, `__tests__/`) are NOT read: the rule's own words are "user-facing string", and a
@@ -34,20 +44,29 @@
 // and is outside this rule.
 //
 // WHAT IS NOT REFUSED, and is review's or the pipeline's. A string that reaches the screen
-// through a call (`Alert.alert('Saved')`, `toast.show('Saved')`, a navigation option object) or a
-// variable (`const label = 'Save'` rendered as `{label}`): neither is a JSX text position, and
-// following a value needs the program this fast rule does not have (research R-10). A prop
-// outside the list. Whether a key exists in both language files is the pipeline's parity check.
+// through a call (`Alert.alert('Saved')`, `toast.show('Saved')`, `navigation.setOptions({ … })`)
+// or a variable (`const label = 'Save'` rendered as `{label}`, an options object built first and
+// passed by name): neither is a JSX text position, and following a value needs the program this
+// fast rule does not have (research R-10). A navigator's `screenOptions`, and a prop outside the
+// list. Whether a key exists in both language files is the pipeline's parity check.
 //
 // The file is matched by path segments, never by a root-anchored path (note under T035).
 const { defineRule } = require('../rule');
 const { isTestFile, mobileFile } = require('../mobile');
-const { alternatives, propertyName, unwrap } = require('../syntax');
+const {
+  alternatives,
+  containsNode,
+  isFunction,
+  keyName,
+  propertyName,
+  unwrap,
+} = require('../syntax');
 
 const LETTER = /\p{L}/u;
 
 // Props whose value a user reads or hears.
 const VISIBLE_PROPS = new Set([
+  'children',
   'placeholder',
   'title',
   'subtitle',
@@ -73,6 +92,16 @@ const VISIBLE_PROPS = new Set([
   'aria-description',
   'aria-placeholder',
   'aria-valuetext',
+]);
+
+// The JSX prop that carries a screen's navigation options, and the keys of it a user reads (m8).
+const OPTIONS_PROP = 'options';
+const VISIBLE_OPTIONS = new Set([
+  'title',
+  'headerTitle',
+  'tabBarLabel',
+  'drawerLabel',
+  'headerBackTitle',
 ]);
 
 const MAX_QUOTED = 40;
@@ -125,8 +154,52 @@ module.exports = defineRule({
   create(context) {
     if (mobileFile(context.filename) === null || isTestFile(context.filename)) return {};
 
+    const { sourceCode } = context;
+
     function isChild(node) {
       return node.parent.type === 'JSXElement' || node.parent.type === 'JSXFragment';
+    }
+
+    /** Every object literal an `options` value is, or a function written in place returns. */
+    function optionObjects(expression) {
+      const found = [];
+      const pending = [expression];
+      while (pending.length > 0) {
+        for (const leaf of alternatives(pending.pop())) {
+          if (leaf.type === 'ObjectExpression') {
+            found.push(leaf);
+          } else if (isFunction(leaf)) {
+            if (leaf.body.type !== 'BlockStatement') {
+              pending.push(leaf.body);
+              continue;
+            }
+            containsNode(sourceCode, leaf.body, (node) => {
+              if (node.type === 'ReturnStatement' && node.argument !== null) {
+                pending.push(node.argument);
+              }
+              return false;
+            });
+          }
+        }
+      }
+      return found;
+    }
+
+    function checkOptions(expression) {
+      for (const object of optionObjects(expression)) {
+        for (const property of object.properties) {
+          if (property.type !== 'Property') continue;
+          const prop = keyName(property);
+          if (prop === null || !VISIBLE_OPTIONS.has(prop)) continue;
+          for (const literal of visibleLiterals(property.value)) {
+            context.report({
+              node: literal.node,
+              messageId: 'literalProp',
+              data: { text: quoted(literal.text), prop },
+            });
+          }
+        }
+      }
     }
 
     return {
@@ -147,11 +220,16 @@ module.exports = defineRule({
       JSXAttribute(node) {
         if (node.name.type !== 'JSXIdentifier' || node.value === null) return;
         const prop = node.name.name;
-        if (!VISIBLE_PROPS.has(prop)) return;
+        if (!VISIBLE_PROPS.has(prop) && prop !== OPTIONS_PROP) return;
 
         const expression =
           node.value.type === 'JSXExpressionContainer' ? node.value.expression : node.value;
         if (expression.type === 'JSXEmptyExpression') return;
+
+        if (prop === OPTIONS_PROP) {
+          checkOptions(expression);
+          return;
+        }
 
         for (const literal of visibleLiterals(expression)) {
           context.report({
