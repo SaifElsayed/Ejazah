@@ -20,15 +20,19 @@
 //     and so do those of a `///` or `//!` comment; or
 //   - is written as a JSDoc tag, `@todo` or `@fixme` (and the same for the other two words), at
 //     the start of the comment or of ANY line of a block comment; or
+//   - opens ANY line of a block comment written in CAPITALS, exactly as the four words are
+//     spelled (third review of PR #29, minor A): the commonest bare marker in a doc comment is
+//     a capitalised line under the description; or
 //   - appears anywhere, in any case, directly followed by `:` or `(`, with no space between.
 //
-// A bare marker word that opens a LATER line of a block comment is not a marker (second review of
-// PR #29, nit 2): a block whose second line happens to begin "todo items for the teacher" is a
-// sentence that wrapped there. Nor is a marker word in the MIDDLE of a line, with no `:` or `(`
-// after it: a remark that goes on to say "… TODO remove" after its own label is read as prose.
-// Both are the reading of core `no-warning-comments` with `location: 'start'`, the mechanism the
-// constitution names, which looks at the start of each comment and not of each of its lines; it
-// is why the opening position can afford to ignore case.
+// A marker word in lower or mixed case that opens a LATER line of a block comment is not a marker
+// (second review of PR #29, nit 2): a block whose second line happens to begin "todo items for
+// the teacher" is a sentence that wrapped there, and prose does not write the word in capitals.
+// Nor is a marker word in the MIDDLE of a line, with no `:` or `(` after it: a remark that goes
+// on to say "… TODO remove" after its own label is read as prose. Core `no-warning-comments`
+// with `location: 'start'`, the mechanism the constitution names, looks at the start of each
+// comment and not of each of its lines; the capitals on a later line are the one place this rule
+// reads further than it does, because R-PROC-8 says a marker carries a ticket or does not exist.
 //
 // Every `//` comment is a comment of its own and is judged at its own start, however many stand
 // in a row: a second `//` line that begins with a marker word is a marker. Prose that wraps
@@ -87,6 +91,9 @@ const OPENING_MARKER = new RegExp(`^[\\s*/!]*@?(${WORDS})(?![\\w-])`, 'i');
 // The JSDoc tag at the start of any line of a block comment, after the gutter. Spaces and tabs
 // only, never a line break, so each line is read once.
 const TAG_LINE = new RegExp(`^[ \\t*]*@(${WORDS})(?![\\w-])`, 'im');
+// The word in capitals at the start of any line of a block comment. Case is the signal here, so
+// no `i` flag: "todo items for the teacher" on a wrapped line stays prose (third review, minor A).
+const CAPITAL_LINE = new RegExp(`^[ \\t*]*(${WORDS})(?![\\w-])`, 'm');
 const TAGGED_MARKER = new RegExp(`(?<![\\w.-])(${WORDS})[:(]`, 'i');
 
 const CODE_LINE_ENDINGS = new Set([';', '{', '}']);
@@ -144,7 +151,7 @@ function markerIn(comment) {
   const text = comment.value;
   const match =
     OPENING_MARKER.exec(text) ??
-    (comment.type === 'Block' ? TAG_LINE.exec(text) : null) ??
+    (comment.type === 'Block' ? (TAG_LINE.exec(text) ?? CAPITAL_LINE.exec(text)) : null) ??
     TAGGED_MARKER.exec(text);
   return match === null ? null : match[1].toUpperCase();
 }
