@@ -12,16 +12,27 @@
 // HALF ONE — a marker with no ticket. The markers are the words TODO, FIXME, HACK and XXX; a
 // comment is a marker comment when one of them
 //
-//   - opens the comment or one of its lines, as a whole word, in any letter case: a line reading
+//   - opens the COMMENT ITSELF, as a whole word, in any letter case: a comment reading
 //     "todo fix this" or "fixme later", or opening with a capitalised "Todo", is a marker
-//     (review of the pull request for T037–T042, item m9). The JSDoc tag form counts the same
-//     way: `@todo` and `@fixme` at the start of a comment or of a line of a block; or
+//     (review of the pull request for T037–T042, item m9). The start of the comment is what is
+//     left once its own decoration is off: whitespace, line breaks and the characters `*`, `/`
+//     and `!`, so the first words of a `/** … */` block count wherever its gutter puts them,
+//     and so do those of a `///` or `//!` comment; or
+//   - is written as a JSDoc tag, `@todo` or `@fixme` (and the same for the other two words), at
+//     the start of the comment or of ANY line of a block comment; or
 //   - appears anywhere, in any case, directly followed by `:` or `(`, with no space between.
 //
-// A marker word in the MIDDLE of a line, with no `:` or `(` after it, is still not a marker: a
-// remark that goes on to say "… TODO remove" after its own label is read as prose. This is the
-// reading of core `no-warning-comments` with `location: 'start'`, the mechanism the constitution
-// names, and it is why the opening position can afford to ignore case.
+// A bare marker word that opens a LATER line of a block comment is not a marker (second review of
+// PR #29, nit 2): a block whose second line happens to begin "todo items for the teacher" is a
+// sentence that wrapped there. Nor is a marker word in the MIDDLE of a line, with no `:` or `(`
+// after it: a remark that goes on to say "… TODO remove" after its own label is read as prose.
+// Both are the reading of core `no-warning-comments` with `location: 'start'`, the mechanism the
+// constitution names, which looks at the start of each comment and not of each of its lines; it
+// is why the opening position can afford to ignore case.
+//
+// Every `//` comment is a comment of its own and is judged at its own start, however many stand
+// in a row: a second `//` line that begins with a marker word is a marker. Prose that wraps
+// there is reworded or moved into one block comment.
 //
 // It is refused unless the same comment carries a ticket: a task id (`T041`), `#123`, or a
 // tracker key (`SCRUM-51`). A rule or requirement id is never a ticket; the syntax is decided in
@@ -69,9 +80,14 @@ const { hasTicket } = require('../justification');
 const { unwrap } = require('../syntax');
 
 const MARKERS = ['TODO', 'FIXME', 'HACK', 'XXX'];
-// Opening a line, in any case, with or without the JSDoc `@` (m9).
-const OPENING_MARKER = new RegExp(`^[\\s*@]*(${MARKERS.join('|')})(?![\\w-])`, 'i');
-const TAGGED_MARKER = new RegExp(`(?<![\\w.-])(${MARKERS.join('|')})[:(]`, 'i');
+const WORDS = MARKERS.join('|');
+// Opening the comment itself, after its decoration, in any case, with or without the JSDoc `@`
+// (m9; second review, nit 2).
+const OPENING_MARKER = new RegExp(`^[\\s*/!]*@?(${WORDS})(?![\\w-])`, 'i');
+// The JSDoc tag at the start of any line of a block comment, after the gutter. Spaces and tabs
+// only, never a line break, so each line is read once.
+const TAG_LINE = new RegExp(`^[ \\t*]*@(${WORDS})(?![\\w-])`, 'im');
+const TAGGED_MARKER = new RegExp(`(?<![\\w.-])(${WORDS})[:(]`, 'i');
 
 const CODE_LINE_ENDINGS = new Set([';', '{', '}']);
 
@@ -123,13 +139,14 @@ function doesSomething(statement) {
   return EFFECTS.has(expression.type);
 }
 
-/** The marker a comment line carries, or null. */
-function markerIn(text) {
-  for (const line of text.split('\n')) {
-    const match = OPENING_MARKER.exec(line) ?? TAGGED_MARKER.exec(line);
-    if (match !== null) return match[1].toUpperCase();
-  }
-  return null;
+/** The marker a comment carries, or null. */
+function markerIn(comment) {
+  const text = comment.value;
+  const match =
+    OPENING_MARKER.exec(text) ??
+    (comment.type === 'Block' ? TAG_LINE.exec(text) : null) ??
+    TAGGED_MARKER.exec(text);
+  return match === null ? null : match[1].toUpperCase();
 }
 
 /** The text of a comment as its author wrote the lines, without the `*` gutter of a block. */
@@ -223,7 +240,7 @@ module.exports = defineRule({
           .filter((comment) => comment.type !== 'Shebang');
 
         for (const comment of comments) {
-          const marker = markerIn(linesOf(comment).join('\n'));
+          const marker = markerIn(comment);
           if (marker === null || hasTicket(comment.value)) continue;
           context.report({ loc: comment.loc, messageId: 'bareMarker', data: { marker } });
         }
