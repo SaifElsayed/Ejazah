@@ -43,13 +43,14 @@
 //   a prohibited  an identifier, a member or an object key whose name carries one of the values
 //   value         R-SEC-2 lists (words compared whole, camelCase and snake_case alike):
 //                   one-time code      otp, totp; mfa with code; code with verification, reset,
-//                                      login, or with both one and time
+//                                      login, or with both one and time (and see "A
+//                                      CLASSIFICATION CODE", below)
 //                   token              token
 //                   session ID         authorization, cookie; or `session` with `auth`
 //                   request body       body with request, req or raw
 //                   payment payload    payload with payment, gateway or webhook
 //                   document URL       url, uri or link with document, doc, signed, certificate,
-//                                      attachment, download, upload or presigned
+//                                      attachment, download, upload, presigned, photo or image
 //                   payout identifier  payout with ref, reference, account or recipient;
 //                                      recipient with ref or reference
 //                   card fragment      cvv, cvc; or card with number, pan, last, last4, digits,
@@ -79,10 +80,42 @@
 //   attachment, download,   attachments, photos"; FR-IJAZAH-10: certificate PDFs "served from
 //   upload or presigned     non-guessable, expiring signed URLs". A URL to fetch or to store such
 //                           a file is the access to it for as long as it lives.
+//   url with photo          (owner decisions, 2026-10-04) R-SEC-3 names "photos" among the files
+//                           served only through signed, expiring URLs; the teacher's profile
+//                           photo is `teacher_profiles.photo_key`, "Storage key, served via
+//                           signed URL" (ERD §2), `photo_url` in the SRS data model (§6.2,
+//                           TeacherProfile): `photoUrl`, `photo_url`, `profilePhotoUrl`.
+//   url with image          (owner decisions, 2026-10-04) the SRS's word for two stored files
+//                           under the same regime: the teacher's "stored signature image"
+//                           (§3.9, FR-IJAZAH-12) and the Mode B certificate, "an uploaded image
+//                           or PDF" kept "under the same encrypted, signed-URL regime as
+//                           verification documents" (FR-IJAZAH-2, FR-IJAZAH-13).
+//
+// `avatar` is NOT added: no project document uses the word, so `avatarUrl` is not judged. If a
+// file is ever stored under that name, the word is added here with its source.
 //
 // A bare `code` stays legal: an error code, a country code and a status code are what a log line
-// is for. The price of the pairs is stated plainly: a name carrying both words is refused whatever
-// else it carries, so `loginErrorCode` reads as a login code. Rename it or log a fact about it.
+// is for.
+//
+// A CLASSIFICATION CODE IS NOT A ONE-TIME CODE (owner decisions, 2026-10-04). In the pairs that
+// make `code` a one-time code beside `mfa`, `verification`, `reset` or `login`, the word `code`
+// does not count when the word directly before it is `error`, `status`, `result`, `reason` or
+// `http`: an error code, a status code, a result code, a reason code and an HTTP code classify
+// what happened and are what a log line is for. `loginErrorCode`, `resetStatusCode`,
+// `verificationResultCode`, `login_error_code`, `mfaReasonCode` and `loginHttpCode` are legal.
+//
+//   it excuses nothing   the qualifier is read by those pairs only, so a name that anything
+//   another rule         else refuses stays refused: `otpErrorCode` and `totpStatusCode` (a
+//   refuses              bare `otp` or `totp`), `oneTimeErrorCode` (`one` with `time`),
+//                        `tokenErrorCode` (`token`), `passwordResetStatusCode` (`password`).
+//   the word must sit    `loginCodeResult`, `resetCodeStatus` and `errorLoginCode` stay refused:
+//   directly before      what issuing a code returns is named that way and carries the code, so
+//   `code`               only the compound itself (`errorCode`, `statusCode`, …) is read as a
+//                        classification. Every `code` in the name must be qualified:
+//                        `loginCodeErrorCode` is refused.
+//
+// `resetCode`, `loginCode`, `verificationCode`, `mfaCode` and `passwordResetCode` are refused as
+// before.
 //
 // AMBIGUOUS NAMES THAT ARE NOT REFUSED, and that the logger's redaction list (T100) must carry,
 // beside `card` (below):
@@ -184,7 +217,8 @@ const FACT_FIRST_WORDS = new Set(['has', 'is']);
 // A call to a function named with one of these returns something that is not the secret (m2).
 const REDACTION_WORDS = ['redact', 'mask', 'hash', 'fingerprint', 'obfuscate'];
 
-// What makes a URL the access to a stored file: R-SEC-3 and FR-IJAZAH-10 (header).
+// What makes a URL the access to a stored file: R-SEC-3, FR-IJAZAH-10/12/13, ERD `photo_key`
+// (header).
 const STORED_FILE_WORDS = [
   'document',
   'doc',
@@ -194,7 +228,22 @@ const STORED_FILE_WORDS = [
   'download',
   'upload',
   'presigned',
+  'photo',
+  'image',
 ];
+
+// Beside one of these, `code` is a one-time code (FR-AUTH-1, FR-AUTH-6, FR-ADMIN-1) …
+const ONE_TIME_CODE_WORDS = ['mfa', 'verification', 'reset', 'login'];
+// … unless one of these sits directly before it: then it classifies an outcome (header).
+const CLASSIFICATION_WORDS = new Set(['error', 'status', 'result', 'reason', 'http']);
+
+/** True when every `code` in the name is an error, status, result, reason or HTTP code. */
+function isClassificationCode(ordered) {
+  return ordered.every(
+    (word, index) =>
+      (word !== 'code' && word !== 'codes') || CLASSIFICATION_WORDS.has(ordered[index - 1]),
+  );
+}
 
 /** What a name says it holds, in R-SEC-2's own terms, or null. */
 function prohibitedKind(name) {
@@ -205,7 +254,9 @@ function prohibitedKind(name) {
 
   if (hasAny(words, ['otp', 'totp'])) return 'a one-time code';
   if (words.has('code')) {
-    if (hasAny(words, ['mfa', 'verification', 'reset', 'login'])) return 'a one-time code';
+    if (hasAny(words, ONE_TIME_CODE_WORDS) && !isClassificationCode(ordered)) {
+      return 'a one-time code';
+    }
     if (words.has('one') && words.has('time')) return 'a one-time code';
   }
   if (words.has('token')) return 'a token';

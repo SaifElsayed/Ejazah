@@ -106,6 +106,21 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
       filename: module_,
     },
     {
+      name: 'an avatar URL is not judged: no project document names such a file',
+      code: "logger.info('profile', { avatarUrl, avatar_url: user.avatar_url, photoKey, photoCount, imageCount });",
+      filename: module_,
+    },
+    {
+      name: 'a fact about a photo URL, and a redacted one',
+      code: "logger.info('profile', { hasPhotoUrl, isImageUrlSet, photoUrl: redact(photoUrl), image_url: maskUrl(row.image_url), photo_url: 'present' });",
+      filename: module_,
+    },
+    {
+      name: 'a classification code beside a one-time-code word is not the code',
+      code: "logger.warn('sign-in refused', { loginErrorCode, resetStatusCode, verificationResultCode, login_error_code: row.login_error_code, mfaReasonCode, loginHttpCode, loginErrorCodes });\nlogger.warn('sign-in refused', result.loginErrorCode);",
+      filename: module_,
+    },
+    {
       name: 'the answer of any other call is not read',
       code: "logger.info('in', getInput(), opts.getRawInputSize(), parse(await opts.getRawInput()));",
       filename: module_,
@@ -476,6 +491,60 @@ typescriptRuleTester().run('sec/no-body-logging', loadRule('no-body-logging.js')
           line: index + 1,
         }),
       ),
+    },
+    {
+      name: 'a signed URL to a photo or an image',
+      code: "logger.info('u', photoUrl);\nlogger.info('u', profile.photo_url);\nlogger.info('u', { profilePhotoUrl: url });\nlogger.info('u', imageUrl);\nlogger.info('u', signatureImageUrl);\nlogger.info('u', { image_uri: target });\nlogger.info('u', photoLinks);",
+      filename: module_,
+      errors: [
+        'photoUrl',
+        'photo_url',
+        'profilePhotoUrl',
+        'imageUrl',
+        'signatureImageUrl',
+        'image_uri',
+        'photoLinks',
+      ].map((name, index) => ({
+        messageId: 'prohibitedValue',
+        data: { name, kind: 'a document URL' },
+        line: index + 1,
+      })),
+    },
+    {
+      name: 'the classification qualifier excuses nothing another rule refuses',
+      code: "logger.info('c', otpErrorCode);\nlogger.info('c', totpStatusCode);\nlogger.info('c', oneTimeErrorCode);\nlogger.info('c', tokenErrorCode);\nlogger.info('c', passwordResetStatusCode);\nlogger.info('c', { otp_error_code: value });",
+      filename: module_,
+      errors: [
+        ['otpErrorCode', 'a one-time code'],
+        ['totpStatusCode', 'a one-time code'],
+        ['oneTimeErrorCode', 'a one-time code'],
+        ['tokenErrorCode', 'a token'],
+        ['passwordResetStatusCode', 'a credential'],
+        ['otp_error_code', 'a one-time code'],
+      ].map(([name, kind], index) => ({
+        messageId: 'prohibitedValue',
+        data: { name, kind },
+        line: index + 1,
+      })),
+    },
+    {
+      name: 'a one-time code stays one unless the qualifier sits directly before every code',
+      code: "logger.info('c', passwordResetCode);\nlogger.info('c', resetCode);\nlogger.info('c', loginCodeResult);\nlogger.info('c', resetCodeStatus);\nlogger.info('c', errorLoginCode);\nlogger.info('c', loginCodeErrorCode);\nlogger.info('c', { verification_code_result: issued });\nlogger.info('c', statusMfaCodes);",
+      filename: module_,
+      errors: [
+        'passwordResetCode',
+        'resetCode',
+        'loginCodeResult',
+        'resetCodeStatus',
+        'errorLoginCode',
+        'loginCodeErrorCode',
+        'verification_code_result',
+        'statusMfaCodes',
+      ].map((name, index) => ({
+        messageId: 'prohibitedValue',
+        data: { name, kind: 'a one-time code' },
+        line: index + 1,
+      })),
     },
     {
       name: 'the raw input read through getRawInput, awaited or not',
