@@ -19,7 +19,9 @@
 //   where        a parameter (default, rest and constructor parameter property included), a
 //                variable, an interface or type-literal member, a class property or accessor, a
 //                setter's parameter, and the return type of a function, method, getter or declared
-//                function carrying a money name;
+//                function carrying a money name. A private member is the same position under its
+//                name: `#price_piasters: number`, `#total_piasters(): number` and
+//                `set #fee_piasters(value: number)` are refused (review of PR #29, M1);
 //                the type-level forms too: the parameters of a function type, a constructor type,
 //                a call or construct signature and a method signature, and a method signature's
 //                return type.
@@ -33,12 +35,18 @@
 //                money name (`price_piasters as number`, `row.net_piasters as number`, through
 //                optional chaining, `!` and an inner cast), or where the result lands in a money
 //                position: a money-named variable, object property, class property, default or
-//                assignment target, directly or through a conditional, `||`, `&&` or `??`.
+//                assignment target (`this.#price_piasters = n as number` included), directly or
+//                through a conditional, `||`, `&&` or `??`.
 //                A branded value leaves the brand through `toPlainNumber()` and a number enters it
 //                through `piasters()`; a cast is neither.
 //
 // `packages/money` is exempt: it is where a plain number becomes money and back (the constructor,
-// the guard and the unwrap), which is the one place the constitution puts that.
+// the guard and the unwrap), which is the one place the constitution puts that. The exemption is
+// matched as the pair of path segments `packages`, `money` wherever it appears in the file's
+// path, not anchored at the repository root, so that the fixture tree's mirror of the package is
+// exempt too (note under T035). The cost, recorded (review of PR #29, N8): a folder named
+// `packages/money` anywhere else, such as `apps/api/src/packages/money/`, would be exempt as
+// well. No such folder exists; creating one is what review would stop.
 //
 // WHAT IS NOT SEEN, and why.
 //
@@ -51,6 +59,11 @@
 //     rule's question.
 //   - A type alias or a generic standing for number (`type Amount = number`), an intersection, a
 //     mapped or conditional type. Resolving those needs the program (research R-10).
+//   - A named tuple member and an index signature that carry a money name (N8):
+//     `type Row = [price_piasters: number]` and `{ [price_piasters: string]: number }`. A tuple
+//     is read for a plain number only when the tuple itself stands at a money position, and the
+//     name inside an index signature names the key, not an amount. Neither shape is how an
+//     amount is declared in this codebase; review.
 //   - A Zod schema. `z.number()` at a money key in `packages/contracts` declares a plain number
 //     at run time and is not read here: it is a call, not a type annotation. Open for the
 //     contracts work (note under T131).

@@ -42,6 +42,11 @@ typescriptRuleTester().run(
         filename: file,
       },
       {
+        name: 'private members typed with the brand, and a private name that is not an amount',
+        code: 'export class Row {\n  #price_piasters: Piasters;\n  #piastersPerPound: number = 100;\n  #count: number = 0;\n  #total_piasters(): Piasters { return this.#price_piasters; }\n  constructor(value: Piasters) { this.#price_piasters = value; this.#count = value as unknown as number; }\n}',
+        filename: file,
+      },
+      {
         name: 'a cast to number of something that is not money',
         code: 'export const count = raw as number;\nexport const row = { session_count: value as number };',
         filename: file,
@@ -111,6 +116,26 @@ typescriptRuleTester().run(
         code: 'export class Row {\n  price_piasters: number = 0;\n  static accessor net_piasters: number = 0;\n  constructor(private readonly gross_piasters: number) {}\n}',
         filename: file,
         errors: 3,
+      },
+      {
+        name: 'a private field, a private method, a private setter and a private accessor',
+        code: 'export class Row {\n  #price_piasters: number = 0;\n  #total_piasters(): number { return this.#price_piasters; }\n  set #fee_piasters(value: number) {}\n  static accessor #net_piasters: number = 0;\n}',
+        filename: file,
+        errors: [
+          { messageId: 'plainNumber', data: { name: 'price_piasters' }, line: 2 },
+          { messageId: 'plainNumberReturned', data: { name: 'total_piasters' }, line: 3 },
+          { messageId: 'plainNumber', data: { name: 'fee_piasters' }, line: 4 },
+          { messageId: 'plainNumber', data: { name: 'net_piasters' }, line: 5 },
+        ],
+      },
+      {
+        name: 'a cast that lands in a private member, and a private member cast back',
+        code: 'export class Row {\n  #price_piasters: Piasters;\n  constructor(n: unknown) { this.#price_piasters = n as number; }\n  plain() { return this.#price_piasters as number; }\n}',
+        filename: 'apps/api/src/modules/payments/payments.service.ts',
+        errors: [
+          { messageId: 'castToNumber', data: { name: 'price_piasters' }, line: 3 },
+          { messageId: 'castToNumber', data: { name: 'price_piasters' }, line: 4 },
+        ],
       },
       {
         name: 'a setter, and an abstract property',
