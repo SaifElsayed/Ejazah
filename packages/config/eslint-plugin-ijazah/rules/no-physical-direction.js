@@ -32,6 +32,12 @@
 // words (`hitSlop`, `HIT_SLOP`), directly or through a conditional, `||`, `&&`, `??` and the
 // TypeScript wrappers. Nothing else in the same element is exempt.
 //
+// ONE RECORDED LIMIT of that exemption (second review of PR #29, nit 5). The exemption goes by
+// the name of the key, so a STYLE entry that is itself named `hitSlop` inside
+// `StyleSheet.create({ hitSlop: { left: 8 } })` is exempt too, although it is a style and not a
+// touch target's insets. The name is a rare one for a style; telling the two apart needs what the
+// object is handed to, and is left to review.
+//
 // WHAT IS NOT REFUSED, and is review's. Physical utilities the constitution's list does not name
 // (`rounded-l-*`, `border-r-*`, `float-left`): adding them is an amendment to R-MOBILE-5, not a
 // decision for a rule. A class assembled at run time from a template (`ml-` followed by `${n}`).

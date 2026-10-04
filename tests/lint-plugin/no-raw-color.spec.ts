@@ -95,7 +95,7 @@ typescriptRuleTester().run('mobile/no-raw-color', loadRule('no-raw-color.js'), {
     },
     {
       name: 'a name that only starts with margin or padding is not a spacing key',
-      code: 'export const s = { paddingToken: 4, marginOfError: 0.5, paddingless: 2, marginTopOffset: 3 };',
+      code: 'export const s = { paddingToken: 4, marginOfError: 0.5, paddingless: 2, marginTopOffset: 3, paddingXl: 4, marginYAxis: 2, paddingZ: 1 };',
       filename: feature,
     },
     {
@@ -200,6 +200,19 @@ typescriptRuleTester().run('mobile/no-raw-color', loadRule('no-raw-color.js'), {
       code: 'export const s = { marginTop: 1, marginBottom: 1, paddingLeft: 1, paddingRight: 1, marginStart: 1, marginEnd: 1, paddingHorizontal: 1, paddingVertical: 1, marginBlock: 1, marginInline: 1, paddingBlockStart: 1, paddingBlockEnd: 1, marginInlineStart: 1, marginInlineEnd: 1 };',
       filename: feature,
       errors: 14,
+    },
+    {
+      name: 'the X and Y axis shorthands after margin and padding',
+      code: 'export const s = { paddingX: 8, paddingY: 4, marginX: 12, marginY: -2 };\nexport const V = () => <Box paddingX={8} marginY="4px" />;',
+      filename: feature,
+      errors: [
+        { messageId: 'rawSpacing', data: { value: '8', name: 'paddingX' }, line: 1 },
+        { messageId: 'rawSpacing', data: { value: '4', name: 'paddingY' }, line: 1 },
+        { messageId: 'rawSpacing', data: { value: '12', name: 'marginX' }, line: 1 },
+        { messageId: 'rawSpacing', data: { value: '-2', name: 'marginY' }, line: 1 },
+        { messageId: 'rawSpacing', data: { value: '8', name: 'paddingX' }, line: 2 },
+        { messageId: 'rawSpacing', data: { value: '4px', name: 'marginY' }, line: 2 },
+      ],
     },
     {
       name: 'a negative number',

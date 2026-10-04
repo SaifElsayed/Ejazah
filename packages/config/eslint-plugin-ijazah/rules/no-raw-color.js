@@ -22,11 +22,12 @@
 //            through `cond ? 8 : 16`, `a ?? 8`, a minus sign and the TypeScript wrappers. After
 //            `margin` or `padding` only a direction counts: `Top`, `Bottom`, `Left`, `Right`,
 //            `Start`, `End`, `Horizontal`, `Vertical`, `Block`, `Inline`, `BlockStart`,
-//            `BlockEnd`, `InlineStart` and `InlineEnd`; a name that merely starts with the word
-//            (`paddingToken`, `marginOfError`) is not a spacing key (review of PR #29, N6). And a
-//            Tailwind arbitrary spacing class (`p-[13px]`, `-mx-[7px]`, `gap-[3px]`), which is
-//            the same raw number in class form. The scale classes (`p-4`) are tokens: the
-//            Tailwind configuration consumes `tokens.ts`.
+//            `BlockEnd`, `InlineStart`, `InlineEnd`, and the axis shorthands `X` and `Y`
+//            (`paddingX`, `marginY`: second review of PR #29, nit 3); a name that merely starts
+//            with the word (`paddingToken`, `marginOfError`, `paddingXl`) is not a spacing key
+//            (review of PR #29, N6). And a Tailwind arbitrary spacing class (`p-[13px]`,
+//            `-mx-[7px]`, `gap-[3px]`), which is the same raw number in class form. The scale
+//            classes (`p-4`) are tokens: the Tailwind configuration consumes `tokens.ts`.
 //
 // A `#` IS A COLOUR ONLY WHERE A VALUE STANDS. It is read as one when the run is the whole
 // literal, when it directly follows `[`, `(`, `,`, `:` or `=` (`bg-[#0f766e]`, `color:#fff`), or
@@ -79,7 +80,7 @@ const BORDER_STYLES = new Set([
 
 // After `margin` or `padding`, only a direction makes a spacing key (N6).
 const SPACING_KEY =
-  /^(?:margin|padding)(?:Top|Bottom|Left|Right|Start|End|Horizontal|Vertical|Block(?:Start|End)?|Inline(?:Start|End)?)?$/;
+  /^(?:margin|padding)(?:Top|Bottom|Left|Right|Start|End|Horizontal|Vertical|X|Y|Block(?:Start|End)?|Inline(?:Start|End)?)?$/;
 const GAP_KEYS = new Set(['gap', 'rowGap', 'columnGap']);
 const SPACING_STRING = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|pt|dp)?$/;
 const ARBITRARY_SPACING = /^(?:[mp][trblxyse]?|gap|gap-[xy]|space-[xy])-\[/;
