@@ -14,9 +14,13 @@
 //     mirrored under the virtual tree, which is the only place the rule recognises it. A brand
 //     with the same key name declared in the repository file itself is a forgery and is refused.
 //   - which functions are repository methods: whatever the file exposes to another file, by any
-//     export form (inline, `export { x }`, renamed, default, an exported object's members, class
-//     methods, property arrows, abstract and static methods, getters). A function that is not
-//     exported stays legal.
+//     export form (inline, `export { x }`, renamed, default, re-exported, an exported object's
+//     members, class methods, property arrows, abstract and static methods, getters), wherever the
+//     member is declared outside a library (a base class, an imported interface or object, which
+//     the second review of PR #27 found unread), a class exposed as a value, the members of a
+//     callable export, and what an exported function returns one level down (a factory, a curried
+//     function). A function that is not exported stays legal, and so do `private` members; a
+//     `protected` one and a gender inside a rest tuple are refused, which fails closed.
 //   - what "returns teachers" means: a `Teacher…` object type directly or one property step down,
 //     with promises, arrays, unions, intersections and type arguments unwrapped around that step.
 //     A branded `TeacherId`, an enum `TeacherStatus` and a teacher two property steps down are
@@ -24,12 +28,16 @@
 //
 // Parameter names are never consulted, so the legal cases use names that say nothing about gender
 // and the refused ones use a name that does. Every case is a module, because the brand is
-// imported, and the spec keeps to two virtual file names (the default project allows eight).
+// imported, and the spec keeps to three virtual file names (the default project allows eight).
+// The multi-file cases import from `catalog.base.ts`, a second file on disk under the virtual
+// tree beside the brand stub: a case's code exists only in memory, so what it imports from
+// another file has to be readable from disk.
 
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
 
 const repository = virtualFile('apps/api/src/modules/catalog/catalog.repository.ts');
 const service = virtualFile('apps/api/src/modules/catalog/catalog.service.ts');
+const nameless = virtualFile('apps/api/src/modules/catalog/.repository.ts');
 
 const shapes = [
   "import type { RequesterGender } from '../../platform/guards/requester-gender';",
@@ -178,6 +186,18 @@ typeAwareRuleTester().run(
         name: 'an exported list of teachers is data: its array methods are not repository methods',
         code: withShapes('export declare const featured: readonly TeacherCard[];'),
         filename: repository,
+      },
+      {
+        name: 'a factory whose returned methods take the requester’s gender',
+        code: withShapes(
+          'export function createRepository() {\n  return { list(who: RequesterGender): TeacherCard[] { return who === "male" ? [] : []; } };\n}',
+        ),
+        filename: repository,
+      },
+      {
+        name: 'a file named .repository.ts with no name in front is not a repository file (Nit 11)',
+        code: withShapes('export declare function listTeachers(): Promise<TeacherCard[]>;'),
+        filename: nameless,
       },
       {
         name: 'a file that is not a repository',
@@ -427,6 +447,110 @@ typeAwareRuleTester().run(
         filename: repository,
         errors: [{ messageId: 'missingGender', data: { name: 'all', teacher: 'TeacherCard' } }],
       },
+      refused({
+        name: 'a protected method is read: a subclass can expose it, so the rule fails closed (Nit 9)',
+        code: 'export class CatalogRepository {\n  protected list(): TeacherCard[] { return []; }\n}',
+        method: 'list',
+      }),
+      refused({
+        name: 'the gender inside a rest tuple is refused as optional, which fails closed (Nit 9)',
+        code: 'export declare function list(...args: [who: RequesterGender, id: string]): TeacherCard[];',
+        method: 'list',
+        messageId: 'optionalGender',
+      }),
+
+      // Members declared in another file are read too (Major 1 of the second review). The other
+      // file is `catalog.base.ts`, on disk beside this virtual repository; nothing in it takes a
+      // gender.
+      refused({
+        name: 'a class extending a generic base from another file (Major 1)',
+        code: "import { BaseRepository } from './catalog.base';\nexport class CatalogRepository extends BaseRepository<TeacherCard> {}",
+        method: 'all',
+      }),
+      refused({
+        name: 'a class extending a base from another file that returns teachers (Major 1)',
+        code: "import { TeacherBase } from './catalog.base';\nexport class CatalogRepository extends TeacherBase {}",
+        method: 'list',
+      }),
+      refused({
+        name: 'an exported instance of an imported class (Major 1)',
+        code: "import { TeacherBase } from './catalog.base';\nexport const catalogRepository = new TeacherBase();",
+        method: 'list',
+      }),
+      refused({
+        name: 'an exported const typed by an interface from another file (Major 1)',
+        code: "import type { RepoShape } from './catalog.base';\nexport declare const catalogRepository: RepoShape;",
+        method: 'list',
+      }),
+      refused({
+        name: 'an imported object exported under a new name (Major 1)',
+        code: "import { repoObject } from './catalog.base';\nexport const repo = repoObject;",
+        method: 'list',
+      }),
+      refused({
+        name: 'another file exported as a namespace (Major 1)',
+        code: "export * as base from './catalog.base';",
+        method: 'allTeachers',
+      }),
+      refused({
+        name: 'a function re-exported by name from another file (Minor 7)',
+        code: "export { allTeachers } from './catalog.base';",
+        method: 'allTeachers',
+      }),
+      {
+        name: 'everything another file exports, re-exported (Minor 7)',
+        code: withShapes("export * from './catalog.base';"),
+        filename: repository,
+        errors: [
+          { messageId: 'missingGender', data: { name: 'allTeachers', teacher: 'TeacherCard' } },
+          { messageId: 'missingGender', data: { name: 'list', teacher: 'TeacherCard' } },
+          { messageId: 'missingGender', data: { name: 'list', teacher: 'TeacherCard' } },
+        ],
+      },
+
+      // A class exposed as a value builds instances, and their methods are read (Major 2).
+      refused({
+        name: 'a class expression bound to an exported const (Major 2)',
+        code: 'export const CatalogRepository = class {\n  list(): TeacherCard[] { return []; }\n};',
+        method: 'list',
+      }),
+      refused({
+        name: 'a class exported under an alias (Major 2)',
+        code: 'class Impl {\n  list(): TeacherCard[] { return []; }\n}\nexport const CatalogRepository = Impl;',
+        method: 'list',
+      }),
+      refused({
+        name: 'a class passed through a mixin (Major 2)',
+        code: 'function Traced<B extends new (...args: never[]) => object>(Base: B) { return class extends Base {}; }\nclass Impl {\n  list(): TeacherCard[] { return []; }\n}\nexport const CatalogRepository = Traced(Impl);',
+        method: 'list',
+      }),
+
+      // Return and exposure shapes (Minor 4).
+      refused({
+        name: 'a type parameter constrained to a teacher is read through its constraint (Minor 4)',
+        code: 'export declare function list<T extends TeacherCard>(map: (row: SubjectRow) => T): Promise<T[]>;',
+        method: 'list',
+      }),
+      refused({
+        name: 'a member of a function merged with a namespace (Minor 4)',
+        code: 'export function repo(): void {}\nexport namespace repo {\n  export const list = (): TeacherCard[] => [];\n}',
+        method: 'list',
+      }),
+      refused({
+        name: 'a factory returning an object of methods (Minor 4)',
+        code: 'export function createRepository() {\n  return { list(): TeacherCard[] { return []; } };\n}',
+        method: 'list',
+      }),
+      refused({
+        name: 'a factory returning a promise of an unexported class’s instance (Minor 4)',
+        code: 'class Impl {\n  list(): TeacherCard[] { return []; }\n}\nexport async function createRepository(): Promise<Impl> { return new Impl(); }',
+        method: 'list',
+      }),
+      refused({
+        name: 'a curried function whose returned function returns teachers (Minor 4)',
+        code: 'export const list = () => (): TeacherCard[] => [];',
+        method: 'list',
+      }),
     ],
   },
 );

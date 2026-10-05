@@ -12,18 +12,35 @@
 //
 // DECISION (T046, 2026-10-05) — which files and which methods. Files named
 // `<name>.repository.<extension>` (the extension is dropped first, as
-// `api/no-orm-outside-repository` does). A repository method is any function such a file exposes
-// to another file, whatever the form of the export, so it is read from the module's exports
-// through the checker and never from the syntax of one export form: an exported function or
-// declared overload, a function bound to an exported name (`export const f = () => …`,
-// `export { f }`, `export { f as g }`), a default export of either kind, and the members of an
-// exported object, class or class instance — methods, properties holding a function (a class
-// property arrow), abstract methods, static methods and getters. A getter takes no parameter, so
-// one that returns teachers is always refused. A function that is not exported stays legal: a
-// private row mapper is not callable from a student-facing path. So do `private` and `#private`
-// class members. Deliberately left: members are read one level down (a function inside an object
-// inside an exported object is not), and only members declared in the file itself, so the
-// methods of an exported array or `Map` are not mistaken for repository methods.
+// `api/no-orm-outside-repository` does), with a name in front: since the second review of PR #27
+// a file named exactly `.repository.ts` is not one. A repository method is any function such a
+// file exposes to another file, whatever the form of the export, so it is read from the module's
+// exports through the checker and never from the syntax of one export form: an exported function
+// or declared overload, a function bound to an exported name (`export const f = () => …`,
+// `export { f }`, `export { f as g }`), a default export of either kind, a re-export
+// (`export { f } from`, `export * from`, `export * as ns from`), and the members of an exported
+// object, class or class instance — methods, properties holding a function (a class property
+// arrow), abstract methods, static methods and getters. A getter takes no parameter, so one that
+// returns teachers is always refused. A function that is not exported stays legal: a private row
+// mapper is not callable from a student-facing path.
+//
+// DECISION (T046, 2026-10-05, second review of PR #27) — members are read wherever they are
+// declared, except in a library. A member declared in this file, in a base class in another file,
+// in an imported interface that types an export or on an imported object is a repository method all
+// the same; a member every declaration of which sits in the standard library or an installed
+// package is not, so the methods of an exported array or `Map` are not mistaken for repository
+// methods. A report lands on the member's own name when this file declares it, on the exported name
+// otherwise. A class exposed as a value (`export const R = class { … }`, `export const R = Impl`, a
+// mixin `Traced(Impl)`) is read through the instances its construct signatures build. A callable
+// export has its members read too (a function merged with a namespace). An exported function's
+// result, after a promise is unwrapped, is read one level as an exported object is: a function it
+// returns (`() => (): TeacherCard[] => []`) and the members of the object or instance it returns (a
+// factory). Those returned methods are judged by their own parameters, so a factory that takes the
+// requester's gender and returns methods that do not is refused: it fails closed, and the method
+// should take the gender itself. `private` and `#private` members are skipped, because nothing
+// outside the class can call them; a `protected` member is read and refused like a public one,
+// because a subclass can expose it (fails closed). Deliberately left: members are read one level
+// down, so a function inside an object inside an exported object is not.
 //
 // DECISION (T046, 2026-10-05) — "returns teachers" is a type-level fact, read exactly as the
 // contract's second note defines it. An object type whose name carries `Teacher` appears in the
@@ -32,31 +49,35 @@
 // Promises, arrays, tuples, unions, intersections and the type arguments of a generic type — an
 // alias's too, so `Page<TeacherCard>`, `Pick<TeacherCard, 'id'>`, `Map<string, TeacherCard>` and
 // `Record<string, TeacherCard>` count — are unwrapped before and after that step and are not a
-// step themselves. Only the name of an object type, or of an intersection whose members are all
-// object types (`type TeacherView = UserRow & { bio: string }`), is read, from the alias symbol
-// as well as the symbol; an intersection with a primitive, such as a branded `TeacherId`, is not,
-// and neither is an enum such as `TeacherStatus`, so an id or a status does not make the row that
-// carries it a teacher. This is deliberately wide: a `TeacherSubject` or `TeacherSignature` row is
+// step themselves, and so is the constraint of a type parameter or an indexed access, so
+// `list<T extends TeacherCard>(): Promise<T[]>` returns teachers. Only the name of an object
+// type, or of an intersection whose members are all object types
+// (`type TeacherView = UserRow & { bio: string }`), is read, from the alias symbol as well as the
+// symbol; an intersection with a primitive, such as a branded `TeacherId`, is not, and neither
+// is an enum such as `TeacherStatus`, so an id or a status does not make the row that carries it
+// a teacher. This is deliberately wide: a `TeacherSubject` or `TeacherSignature` row is
 // teacher data, and so is any module's row carrying a teacher-typed property. Held by review, not
 // by this rule (R-GENDER-5's second mechanism): a teacher more than one property step down or
 // behind an index signature, and a teacher returned under a type whose name does not carry
 // `Teacher` (the condition under T055 closes the generated payload case).
 //
 // DECISION (T046, 2026-10-05) — "takes the requester's gender" is a type-level fact too. The
-// signature must have a required parameter, or a required property of a required options
-// parameter, that is not nullable and whose type is `RequesterGender`: the gender value branded
-// in the kernel file `apps/api/src/platform/guards/requester-gender.ts` (T138), which only the
-// request context may mint in production code (T106). The brand is recognised by where it is
-// declared, through `isRequesterGenderType` in `../types.js`, never by the name of its key, so a
-// brand of the same name declared anywhere else is refused. An optional or nullable one is
-// refused under a message of its own, because a call that leaves it out still compiles and that
-// call is the unfiltered method. A plain `Gender` — the alias, or the literal union
-// `'male' | 'female'` Prisma emits for `enum Gender` — is refused under its own message as well:
-// it could be the teacher's gender or a value the client sent (R-GENDER-4). Parameter names are
-// never consulted. The rule accepts `RequesterGender` and nothing else, so a teacher-returning
-// method for an administrator, a background job or a public caller cannot be written yet; the
-// first task that needs one adds its own type to the contract row (first note under the
-// type-aware table). A cast to `RequesterGender` is not seen here and is held by review.
+// signature must have a required parameter, or a required property of a required options parameter,
+// that is not nullable and whose type is `RequesterGender`: the gender value branded in the kernel
+// file `apps/api/src/platform/guards/requester-gender.ts` (T138), which only the request context
+// may mint in production code (T106). The brand is recognised by where it is declared, through
+// `isRequesterGenderType` in `../types.js`, never by the name of its key, so a brand of the same
+// name declared anywhere else is refused. An optional or nullable one is refused under a message of
+// its own, because a call that leaves it out still compiles and that call is the unfiltered method.
+// A rest parameter is never required, so a gender inside a rest tuple (`...args: [who:
+// RequesterGender, id: string]`) is refused as optional too, though the tuple makes it required:
+// the rule fails closed, and the fix is a plain parameter. A plain `Gender` — the alias, or the
+// literal union `'male' | 'female'` Prisma emits for `enum Gender` — is refused under its own
+// message as well: it could be the teacher's gender or a value the client sent (R-GENDER-4).
+// Parameter names are never consulted. The rule accepts `RequesterGender` and nothing else, so a
+// teacher-returning method for an administrator, a background job or a public caller cannot be
+// written yet; the first task that needs one adds its own type to the contract row (first note
+// under the type-aware table). A cast to `RequesterGender` is not seen here and is held by review.
 const path = require('node:path');
 
 const ts = require('typescript');
@@ -90,11 +111,17 @@ const MESSAGE_FOR = {
   [OPTIONAL]: 'optionalGender',
 };
 
+const REPOSITORY_SUFFIX = '.repository';
+
+/** `<name>.repository.<extension>` with a name in front: `.repository.ts` alone is not one. */
 function isRepositoryFile(filename) {
   if (typeof filename !== 'string' || filename === '') return false;
   const basename = path.basename(filename);
   const withoutExtension = basename.slice(0, basename.length - path.extname(basename).length);
-  return withoutExtension.toLowerCase().endsWith('.repository');
+  return (
+    withoutExtension.toLowerCase().endsWith(REPOSITORY_SUFFIX) &&
+    withoutExtension.length > REPOSITORY_SUFFIX.length
+  );
 }
 
 function isObjectType(type) {
@@ -113,13 +140,16 @@ function readableNames(type) {
 
 /**
  * Every type reached from `type` without a property step: through unions, intersections,
- * promises, arrays, tuples and the type arguments of a generic type or alias.
+ * promises, arrays, tuples, the type arguments of a generic type or alias, and the constraint of
+ * a type parameter or an indexed access.
  */
 function unwrap(checker, type, reached = new Set()) {
   if (reached.has(type)) return reached;
   reached.add(type);
 
   const inner = [];
+  const constraint = checker.getBaseConstraintOfType(type);
+  if (constraint !== undefined && constraint !== type) inner.push(constraint);
   if (type.isUnionOrIntersection()) inner.push(...type.types);
   if (type.aliasTypeArguments !== undefined) inner.push(...type.aliasTypeArguments);
   if (isObjectType(type) && (type.objectFlags & ts.ObjectFlags.Reference) !== 0) {
@@ -256,6 +286,9 @@ module.exports = defineRule({
           return programNode;
         }
 
+        /** Whether a member is library code throughout: an array's, a `Map`'s, a package's. */
+        const fromLibrary = (declarations) => declarations.every(program.inLibrary);
+
         function report(key, node, name, teacher, taken) {
           if (taken === REQUESTER || reported.has(key)) return;
           reported.add(key);
@@ -278,13 +311,18 @@ module.exports = defineRule({
           }
         }
 
-        /** The members of an exported object, class or instance that this file declares. */
-        function checkMembers(type) {
+        /**
+         * The members of an exported object, class or instance, wherever they are declared outside
+         * a library: in this file, in a base class, in an imported interface or object. A report
+         * lands on the member's own name when this file declares it, on the export otherwise.
+         */
+        function checkMembers(type, exportSite) {
           for (const member of checker.getPropertiesOfType(type)) {
-            const declarations = (member.declarations ?? []).filter(inThisFile);
-            if (declarations.length === 0 || declarations.some(isHidden)) continue;
+            const declarations = member.declarations ?? [];
+            if (declarations.length === 0 || fromLibrary(declarations)) continue;
+            if (declarations.some(isHidden)) continue;
             const memberType = checker.getTypeOfSymbol(member);
-            const anchors = declarations.map((declaration) => declaration.name);
+            const anchors = [...declarations.map((declaration) => declaration.name), ...exportSite];
 
             if (memberType.getCallSignatures().length > 0) {
               checkSignatures(memberType, member.name, anchors);
@@ -294,8 +332,34 @@ module.exports = defineRule({
             if (getter === undefined) continue;
             const teacher = teacherIn(checker, memberType);
             if (teacher !== null) {
-              report(getter, reportNode([getter.name]), member.name, teacher, NONE);
+              report(getter, reportNode(anchors), member.name, teacher, NONE);
             }
+          }
+        }
+
+        /** The instances a class exposed as a value builds: a class expression, alias or mixin. */
+        function checkInstances(type, exportSite) {
+          for (const signature of type.getConstructSignatures()) {
+            checkMembers(checker.getReturnTypeOfSignature(signature), exportSite);
+          }
+        }
+
+        /**
+         * What an exported function hands back, read one level as an exported object is: a
+         * function it returns (the curried form) and the members of the object or instance it
+         * returns (the factory form). Library code is not read, so a function returning a list or
+         * a promise of one is not mistaken for a factory.
+         */
+        function checkReturned(type, name, exportSite) {
+          for (const signature of type.getCallSignatures()) {
+            const result = checker.getReturnTypeOfSignature(signature);
+            const returned = checker.getNonNullableType(checker.getAwaitedType(result) ?? result);
+            const ownCalls = returned.getCallSignatures().some((inner) => {
+              const declaration = inner.getDeclaration();
+              return declaration === undefined || !program.inLibrary(declaration);
+            });
+            if (ownCalls) checkSignatures(returned, name, exportSite);
+            checkMembers(returned, exportSite);
           }
         }
 
@@ -314,13 +378,16 @@ module.exports = defineRule({
           const declaredName = symbol.name === 'default' ? exported.name : symbol.name;
 
           if ((symbol.flags & ts.SymbolFlags.Class) !== 0) {
-            checkMembers(checker.getDeclaredTypeOfSymbol(symbol));
-            checkMembers(type);
-          } else if (type.getCallSignatures().length > 0) {
-            checkSignatures(type, declaredName, [symbol.valueDeclaration?.name, ...exportSite]);
+            checkMembers(checker.getDeclaredTypeOfSymbol(symbol), exportSite);
           } else {
-            checkMembers(type);
+            checkInstances(type, exportSite);
           }
+          if (type.getCallSignatures().length > 0) {
+            const anchors = [symbol.valueDeclaration?.name, ...exportSite];
+            checkSignatures(type, declaredName, anchors);
+            checkReturned(type, declaredName, anchors);
+          }
+          checkMembers(type, exportSite);
         }
       },
     };

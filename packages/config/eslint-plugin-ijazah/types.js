@@ -57,8 +57,9 @@ const REQUESTER_GENDER_FILE = ['apps', 'api', 'src', 'platform', 'guards', 'requ
 const NULLISH = ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void;
 
 /**
- * The program, its checker and a way from an ESTree node to its TypeScript node and back, or a
- * thrown error naming the rule when the parser was not given a project.
+ * The program's checker, whether a declaration is library code, and a way from an ESTree node to
+ * its TypeScript node and back, or a thrown error naming the rule when the parser was not given a
+ * project.
  */
 function requireProgram(context, ruleId) {
   const services = context.sourceCode.parserServices;
@@ -72,8 +73,16 @@ function requireProgram(context, ruleId) {
   }
   const checker = program.getTypeChecker();
   const toTs = (node) => services.esTreeNodeToTSNodeMap.get(node);
+  const inDefaultLibrary = (declaration) =>
+    program.isSourceFileDefaultLibrary(declaration.getSourceFile());
   return {
     checker,
+    /** Whether a declaration sits in one of the standard library's `lib.*.d.ts` files. */
+    inDefaultLibrary,
+    /** Whether a declaration sits in the standard library or in an installed package. */
+    inLibrary: (declaration) =>
+      inDefaultLibrary(declaration) ||
+      program.isSourceFileFromExternalLibrary(declaration.getSourceFile()),
     toTs,
     toEs: (node) => services.tsNodeToESTreeNodeMap.get(node),
     typeOf: (node) => checker.getTypeAtLocation(toTs(node)),
