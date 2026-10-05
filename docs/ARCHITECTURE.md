@@ -1,6 +1,6 @@
 # Ijazah — System Architecture
 
-_Version 3.2 · Companion to SRS v1.4, ERD v1.3, Constitution 2.1 · September 2026_
+_Version 3.2 · Companion to SRS v1.4, ERD v1.3, Constitution 2.2 · September 2026_
 _Adds ports-and-adapters for external capabilities. Supersedes v3.0. Amended by [ADR 0007](adr/0007-direct-gateway-checkout.md): direct gateway checkout with 0% commission and zero custody, payment port and payments module, post-approval payout gate; and by [ADR 0005](adr/0005-phase-0-document-amendments.md): eleven modules with unified table ownership, worker as a second process of the API, `surfaces/` router directory, per-path coverage floor, `develop` as the integration branch._
 
 ## 0. How to use this document
@@ -150,7 +150,7 @@ Each module has a service (all rules), a repository (all queries), a router (thi
 | moderation    | disputes, compensation cases (opened automatically on termination), gender flags, reports, admin actions | `disputes` `gender_flags` `user_reports`                                                        |
 | notifications | templating, delivery, notification centre                               | `notifications`                                                                                    |
 | admin         | admin auth, queues, settings, audit log                                 | `admin_users` `audit_logs` `settings`                                                           |
-| platform      | config, logging, errors, idempotency, guards, PORTS (§3)                | `idempotency_keys` (ADR 0008 D2)                                                                   |
+| platform      | config, logging, errors, db, idempotency, guards, PORTS (§3)            | `idempotency_keys` (ADR 0008 D2)                                                                   |
 
 Discovery is a service inside `catalog`, not a module: search is a filtered query over catalog's own tables (§3.2), and a module owning no tables would have to read another module's tables to do anything, which R-API-6 forbids. Session generation is triggered by `booking` when an enrollment is marked paid, but the rows are written by `sessions` through its public entry — `booking` never touches the `sessions` table. Certification reads the isnad chain through `catalog`'s public entry. `payments` is the only module with an HTTP endpoint outside tRPC: the gateway's webhook is a plain POST whose raw body must reach the signature check untouched (§8).
 
@@ -177,7 +177,7 @@ ijazah/
 │   │   │   └── procedures.ts        public / student / teacher / admin caller kinds
 │   │   ├── platform/
 │   │   │   ├── ports/               §3.4
-│   │   │   └── config/ logging/ errors/ guards/ crypto/ idempotency/ health/
+│   │   │   └── config/ logging/ errors/ guards/ crypto/ db/ idempotency/ health/
 │   │   ├── modules/                 twelve, one per domain (§4)
 │   │   │   └── booking/
 │   │   │       ├── booking.service.ts       ALL rules
