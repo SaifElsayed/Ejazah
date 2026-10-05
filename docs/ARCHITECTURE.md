@@ -177,7 +177,7 @@ ijazah/
 │   │   │   └── procedures.ts        public / student / teacher / admin caller kinds
 │   │   ├── platform/
 │   │   │   ├── ports/               §3.4
-│   │   │   └── config/ logging/ errors/ guards/ crypto/ idempotency/ health/
+│   │   │   └── config/ logging/ errors/ guards/ crypto/ db/ idempotency/ health/
 │   │   ├── modules/                 twelve, one per domain (§4)
 │   │   │   └── booking/
 │   │   │       ├── booking.service.ts       ALL rules
