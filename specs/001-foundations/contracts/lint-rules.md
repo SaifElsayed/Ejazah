@@ -75,8 +75,27 @@ guards something the constitution treats as unrecoverable.
 |---|---|---|---|
 | `money/no-arithmetic-outside-package` | Any arithmetic operand carrying the money brand, outside its package | `a + b` looks identical whatever the operands are | R-MONEY-5 |
 | `money/require-piaster-suffix` | An identifier whose resolved type is money but whose name lacks the suffix | The name alone cannot tell you the type | R-MONEY-2 |
-| `gender/require-requester-gender` | A repository method returning teachers whose signature omits the requester's gender | A filtered and an unfiltered method are syntactically identical | R-GENDER-5 |
-| `api/table-ownership` | Database access from a module to a table its domain does not own | Requires resolving the query target against the ownership manifest | R-API-6 |
+| `gender/require-requester-gender` | A repository method returning teachers whose signature does not require the requester's gender: a parameter, or a property of an options parameter, that is neither optional nor nullable and whose type is `RequesterGender` — the gender value branded in `packages/contracts` and minted only by the request context. A plain gender value, an optional one and a nullable one are refused alike | A filtered and an unfiltered method are syntactically identical, and a requester's gender and any other gender value are the same string | R-GENDER-5 |
+| `api/table-ownership` | Inside `apps/api`: database access to a table from any file other than a repository file of the module that owns it; any member of the database client whose name starts with `$`, other than `$transaction`, outside `apps/api/src/platform/db/`; and the string-taking raw forms `$queryRawUnsafe` and `$executeRawUnsafe` everywhere, the kernel included | Requires resolving the query target against the ownership manifest, and a raw query names its table where no rule can read it | R-API-6 |
+
+Two notes on the last two rows, decided 2026-10-05 after the two reviews of
+PR #27.
+
+**Callers that are not a student.** `gender/require-requester-gender` accepts
+`RequesterGender` and nothing else, so a teacher-returning repository method for
+an administrator or a background job cannot be written yet. That is deliberate:
+the rule fails closed. The first task that needs such a method adds, in this row
+and in its own task line, a separate type minted only in that caller's own
+context, so that a student-facing path can never obtain it. No such type is
+designed here, because no task needs one yet (R-PROC-3).
+
+**Database client members are refused by default.** `api/table-ownership` lists
+what a module may use (`$transaction`), not what it may not, so a raw-query
+entry point the client gains later is refused on the day it appears. No kernel
+helper is specified here: no document asks for a runtime raw query (the row lock
+of R-MONEY-10 is superseded), and the first task that needs one writes it under
+`apps/api/src/platform/db/` with a table name that is a literal checked against
+the manifest.
 
 ---
 
