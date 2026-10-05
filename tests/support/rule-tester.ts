@@ -21,6 +21,25 @@
 //
 // The rules are CommonJS in a JavaScript package, so they are loaded through `createRequire`
 // rather than imported, the same way `tests/lint-plugin/define-rule.spec.ts` loads the factory.
+//
+// The four type-aware rules (T044–T047) need a TypeScript program, which a string of code does not
+// have until something hands it to the project service. `typeAwareRuleTester` does that through
+// the same `projectService` the type-aware set uses (T043), with one difference: the code of each
+// case exists only in memory, under a virtual tree (`virtualFile`) below `tests/lint-plugin/virtual/`
+// that mirrors the real one. Two files under that tree do exist on disk, and stay, both for the
+// specs of T046: `apps/api/src/platform/guards/requester-gender.ts`, the stub declaring the
+// requester's gender brand, because `gender/require-requester-gender` recognises the brand by the
+// path of the file that declares it and a case can only import a type the compiler can read
+// (contracts/lint-rules.md); and `apps/api/src/modules/catalog/catalog.base.ts`, the declarations
+// its multi-file cases import (a base class, an interface, an object, a function). Both are files
+// of the root project like any other under `tests/`; no case is ever opened at either path. No
+// tsconfig claims a file that is not on disk, so each case is opened
+// in the project service's default project, whose compiler options are the root `tsconfig.json`'s
+// (strict, like the real code). The default project is allowed for the few folder shapes listed in
+// `virtualFolders` and nothing wider: typescript-eslint refuses a `**` glob there and caps the
+// files one process may open that way at eight, so each spec keeps to a handful of file names.
+// Every case declares the types it needs — the brand, the gender union, a small client — in its
+// own code, so the specs never depend on a real package being built or generated.
 
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -54,6 +73,42 @@ export function typescriptRuleTester(): RuleTester {
       ecmaVersion: 'latest',
       sourceType: 'module',
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+  });
+}
+
+/** The in-memory tree the type-aware specs write to; only the two T046 files under it exist on disk. */
+const virtualRoot = path.join(repositoryRoot, 'tests', 'lint-plugin', 'virtual');
+
+/** The folder shapes a virtual file may take, relative to `virtualRoot`. Kept narrow on purpose. */
+const virtualFolders = [
+  'apps/api/src/*.ts',
+  'apps/api/src/*/*.ts',
+  'apps/api/src/modules/*/*.ts',
+  'apps/api/src/platform/*/*.ts',
+  'packages/*/src/*.ts',
+  'prisma/*.ts',
+];
+
+/** An absolute path under the virtual tree, written as the repository-relative path it mirrors. */
+export function virtualFile(relativePath: string): string {
+  return path.join(virtualRoot, relativePath);
+}
+
+/** A tester whose cases are type-checked, for the four rules that need the program (T044–T047). */
+export function typeAwareRuleTester(): RuleTester {
+  const virtualPrefix = path.relative(repositoryRoot, virtualRoot).split(path.sep).join('/');
+  return new RuleTester({
+    languageOptions: {
+      parser: configRequire('@typescript-eslint/parser') as never,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        tsconfigRootDir: repositoryRoot,
+        projectService: {
+          allowDefaultProject: virtualFolders.map((folder) => `${virtualPrefix}/${folder}`),
+        },
+      },
     },
   });
 }
