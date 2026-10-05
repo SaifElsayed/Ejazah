@@ -329,11 +329,15 @@ cancel.
   recomputes the instants of every scheduled session. A uniform shift moves
   back-to-back sessions together, but checked as each row is written, one of
   them collides for a moment with the next one not yet moved. So the job
-  recomputes inside one transaction per teacher and runs `SET CONSTRAINTS …
-  DEFERRED` first (D1): a uniform shift commits, and only a true overlap is
-  refused, at commit. On a true overlap that teacher's batch does not commit,
-  its sessions keep their previous instants, and the job reports the refusal to
-  the error-tracking destination (Phase 0 spec FR-051) for an operator to
+  recomputes every affected session inside one transaction and runs `SET
+  CONSTRAINTS … DEFERRED` first (D1): a uniform shift commits, and only a true
+  overlap is refused, at commit. One transaction for the whole run, not one per
+  teacher, because the student constraint links teachers: a student with teacher
+  A at 09–10 and teacher B at 10–11, both moved +1h, would refuse A's batch
+  while B's is still unmoved. On a refusal at commit, the job reruns the
+  transaction without the sessions the conflict names, so the rest of the run
+  commits; the left-out sessions keep their previous instants and are reported
+  to the error-tracking destination (Phase 0 spec FR-051) for an operator to
   resolve. No new queue is added.
 - **A daylight-saving gap at generation.** A slot whose local start falls inside
   a spring-forward gap is moved forward by `packages/time` (ADR 0009), and the
