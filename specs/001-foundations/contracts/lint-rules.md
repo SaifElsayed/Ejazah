@@ -42,7 +42,7 @@ needed.
 | `db/no-weak-random` | Non-cryptographic randomness | R-DB-6 |
 | `api/no-push-outside-job` | Notification delivery reached outside the queued job | R-API-15 |
 | `api/require-escape-hatch-reason` | `any`, `as any` or `@ts-ignore` with no justification comment and ticket | R-API-10 |
-| `proc/require-suppression-reason` | An `eslint-disable` carrying no justification and ticket | R-PROC-7 |
+| `proc/require-suppression-reason` | An `eslint-disable` directive or an inline `eslint` configuration comment carrying no justification and ticket | R-PROC-7 |
 | `proc/no-focused-or-skipped-test` | A test marked exclusive or skipped | R-PROC-10 |
 | `proc/no-bare-marker` | A comment marker carrying no ticket reference, and a block of commented-out code | R-PROC-8 |
 
