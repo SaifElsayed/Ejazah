@@ -106,8 +106,8 @@ providers: [
 
 ```ts
 export interface PaymentPort {
-  createCheckout(enrollmentId: string, amount: Piasters, currency: string): Promise<CheckoutRef>;   // order id + hosted checkout URL
-  cancelCheckout(orderRef: CheckoutRef): Promise<'cancelled' | 'paid' | 'unsupported'>;            // cancels an unpaid order, moves no money (ADR 0010 D6)
+  createCheckout(enrollmentId: string, amount: Piasters, currency: string, latestExpiry: Date): Promise<CheckoutRef>;   // order id + hosted checkout URL; the order expires no later than latestExpiry (ADR 0010 D4)
+  cancelCheckout(gatewayOrderId: string): Promise<'cancelled' | 'paid' | 'in_progress' | 'unsupported'>;              // cancels an unpaid order, moves no money; an order already cancelled or expired answers 'cancelled' (ADR 0010 D6)
   verifyAndParseEvent(rawBody: Buffer, headers: Record<string, string>): Promise<GatewayEvent>;   // throws on bad signature
   registerPayoutRecipient(teacherUserId: string, details: PayoutDetails): Promise<RecipientRef>;
   getRecipientStatus(recipientRef: RecipientRef): Promise<'pending' | 'verified' | 'rejected'>;
@@ -336,7 +336,10 @@ Direct gateway checkout, 0% commission, zero custody (ADR 0007). Read this befor
 ```
 student confirms enrollment
    │  booking: enrollment = pending_payment, linked to the slot hold placed on entering checkout
-   │  payments: PaymentPort.createCheckout → payments row (created) → hosted checkout URL to the client
+   │  payments: PaymentPort.createCheckout(…, latestExpiry), outside any transaction → payments row (created)
+   │     recorded, and the hosted checkout URL handed to the client, only in a transaction whose conditional
+   │     update of the hold row finds it still active; otherwise the checkout is withheld and the order
+   │     cancelled where the gateway allows (ADR 0010 D6). Retry creates its order on the same hold the same way
    ▼
 student pays on the gateway's hosted page          (the platform never sees card data)
    │
@@ -349,9 +352,12 @@ gateway POSTs a signed webhook  →  payments.webhook endpoint (raw body, outsid
    ▼
 confirm-enrollment job (idempotent, double-run safe)
    │  if enrollment already confirmed, or a compensation case for it exists → no-op
-   │  one transaction (ADR 0010 D5, FR-PAYG-19):
-   │     hold released (late payment) → insert a new active hold for the enrollment on its slot
-   │     booking.confirmEnrollment(id)  →  status = confirmed, confirmed_at, hold converted
+   │  one transaction (ADR 0010 D5, FR-PAYG-19), the branch decided by writing, not by reading:
+   │     booking.confirmEnrollment(id)  →  hold converted by a conditional update (released_at IS NULL);
+   │        status = confirmed only from pending_payment or cancelled, confirmed_at
+   │     conversion matched no row (late payment) → release the expired holds on the slot and the student's
+   │        own expired hold (their enrollments cancelled, D7), insert a new active hold for the enrollment
+   │        on its slot, convert it
    │     sessions.generateForEnrollment(id)
    │  refused by the database — slot held by another student, the student holding another slot,
    │  or an overlapping session (ERD §15.17–19) → nothing of it kept; refusal branch, new transaction:
@@ -367,7 +373,7 @@ client: after the hosted checkout returns, the app subscribes to enrollments.sta
         it releases the student with a "Confirming" badge; the push resolves it (FR-PAYG-18, ADR 0008)
 ```
 
-The gateway order expires at the checkout TTL; the slot hold outlives it by a grace ([ADR 0010](adr/0010-database-refuses-double-booking.md) D4). A failed or cancelled event marks that order failed and keeps the hold, so the student may Retry on it or choose another slot. A hold is released only by conversion, by its expiry, by the student's own new checkout (which first has the gateway cancel an order on it that is still payable, `PaymentPort.cancelCheckout`, D6), or by the refusal branch above, and a release without conversion cancels its enrollment in the same transaction (D7). `expire-pending-payments` is keyed on the enrollment: a `pending_payment` enrollment whose hold has expired gets its hold released if still active and is cancelled (`payment_failed` if its last order failed, else `payment_expired`); the student starts again from package selection. `expire-holds` releases expired holds that carry no enrollment yet. A paid event that still arrives takes the late-payment branch above. The database refuses a second active hold on a slot or for a student, and overlapping sessions for a teacher or a student (ERD §15.17–19).
+The gateway order expires at the checkout TTL; the slot hold outlives it by a grace ([ADR 0010](adr/0010-database-refuses-double-booking.md) D4). A failed or cancelled event marks that order failed and keeps the hold, so the student may Retry on it or choose another slot. A hold is released only by conversion, by its expiry, by the student's own new checkout (which releases the old hold first and then checks its orders; an order on it that is still payable (`created`) must first be cancelled by the gateway, `PaymentPort.cancelCheckout`, and a `paid` or `in_progress` answer writes nothing and refuses the new checkout, D6), or by the refusal branch above, and a release without conversion cancels its enrollment in the same transaction (D7). `expire-pending-payments` is keyed on the enrollment: a `pending_payment` enrollment whose hold has expired gets its hold released by a conditional update (`released_at IS NULL`) and is cancelled only from `pending_payment` (`payment_failed` if its last order failed, else `payment_expired`); the student starts again from package selection. `expire-holds` releases expired holds that carry no enrollment yet, its conditional update requiring `released_at IS NULL` and `enrollment_id IS NULL`. A paid event that still arrives takes the late-payment branch above. The database refuses a second active hold on a slot or for a student, and overlapping sessions for a teacher or a student (ERD §15.17–19).
 
 ### 8.2 Payout onboarding gate
 

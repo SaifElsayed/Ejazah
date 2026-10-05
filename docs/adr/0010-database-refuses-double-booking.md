@@ -75,35 +75,45 @@ Each scenario is walked under the decisions below.
    A's order expired. That can happen only if the gateway accepts payment after
    its own expiry, or could not be given an expiry that short (Stripe's minimum
    is 30 minutes). The paid event is recorded as always (FR-PAYG-4, FR-PAYG-7).
-   `confirm-enrollment` finds A's hold released, so it inserts a new hold for
-   A's enrollment on the slot; the per-slot index refuses it while B holds the
-   slot, and once B is confirmed the teacher's exclusion constraint refuses A's
-   sessions instead. Nothing of that transaction is kept. In a new one, A's
-   enrollment is cancelled with `slot_unavailable` and a compensation case is
-   opened for A (D5). B's booking is untouched whichever of the two commits
-   first, because B's hold placement inserts before it checks sessions (D3): it
-   either waits on A's new hold and is refused, or comes after A's commit and
-   sees A's sessions. Had the slot and both parties' times still been free, A's
-   enrollment would have been confirmed as usual.
+   `confirm-enrollment`'s conditional conversion of A's hold matches no row,
+   because the hold is released, so the same transaction takes the late branch
+   (D5): it inserts a new hold for A's enrollment on the slot; the per-slot
+   index refuses it while B holds the slot, and once B is confirmed the
+   teacher's exclusion constraint refuses A's sessions instead. Nothing of that
+   transaction is kept. In a new one, A's enrollment is cancelled with
+   `slot_unavailable` and a compensation case is opened for A (D5). B's booking
+   is untouched whichever of the two commits first, because B's hold placement
+   inserts before it checks sessions (D3): it either waits on A's new hold and
+   then, once A's transaction commits, sees A's sessions in the check that
+   follows the insert, or comes after that commit and sees them in the same
+   check. Had the slot and both parties' times still been free, A's enrollment
+   would have been confirmed as usual.
 4. **The same student double-submits, or uses two tabs on the same slot.**
    Already held: a repeated mutation with the same idempotency key returns the
    first outcome and repeats no effect (ADR 0008 D2). A second request with a
    different key is a new checkout by the same student, so D6 ends the first
-   checkout before the second hold is placed: at once if no order was created
-   on the first hold or all its orders failed, otherwise only after the gateway
-   confirms it cancelled the first order. If the gateway reports that order
-   paid, the second checkout is refused and the student is told the first
-   payment succeeded. If the gateway cannot cancel an order, the second
-   checkout is refused and the student is offered to continue the first
-   payment, with the time left on it. Either way only one order can be paid.
+   checkout before the second hold is placed: at once if no order on the first
+   hold is still payable (`created`), otherwise only after the gateway confirms
+   it cancelled that order. If the gateway reports that order paid or its
+   payment still in progress, nothing is written, the second checkout is
+   refused, and the student is told the earlier payment went through or is
+   still being processed and is taken to that enrollment's Processing screen.
+   If the gateway cannot cancel an order, the second checkout is refused and
+   the student is offered to continue the first payment, with the time left on
+   it. An order whose creation was still in flight when the second checkout
+   released the first hold is never handed to the student, because an order is
+   recorded, and its checkout returned, only while its hold is still active
+   (D6). So the two checkouts never each have an order the student can pay; the
+   one path to a second charge left is a payment completed after its hold
+   expired (scenario 5).
 5. **The same student, two tabs, two teachers, overlapping times.** Before this
    ADR, nothing stopped both holds, both payments and two overlapping sets of
    sessions; the reservation check sees confirmed sessions, not other holds.
    Now the second checkout goes through D6 exactly as in scenario 4, so the
-   first order is cancelled, found paid, or left to finish before a second
-   order can exist. If the second checkout starts after the first has
-   converted, the check after the hold's insert sees the first enrollment's
-   sessions and abandons the hold (D3). One path to a second charge remains: an
+   first order is cancelled, found paid or still in progress, or left to
+   finish before a second order can exist. If the second checkout starts after
+   the first has converted, the check after the hold's insert sees the first
+   enrollment's sessions and abandons the hold (D3). One path to a second charge remains: an
    order paid after its hold expired (D4) while the student is already in the
    second checkout. That late payment cannot take a hold, because the
    per-student index refuses it, so its enrollment takes D5's refusal branch
@@ -189,8 +199,9 @@ transaction, the service that places a hold:
 The order of 3 and 4 is what makes the check sound. A check made before the
 insert can pass while another transaction is still writing sessions for the
 same slot, as D5's late branch does. Inserted first, the hold either waits on
-that transaction's own hold and is refused, or comes after its commit and sees
-its sessions. The expiry jobs remain the sweep for everything else (D7). Two
+that transaction's hold and then, once it commits, sees its sessions in the
+check that follows the insert, or comes after its commit and sees them in the
+same check. The expiry jobs remain the sweep for everything else (D7). Two
 requests releasing the same expired hold do not conflict: the second `UPDATE`
 waits for the first and then matches no row, and the unique index decides which
 insert wins.
@@ -202,7 +213,9 @@ minutes). The slot hold expires at that TTL plus a new Admin-configurable grace
 (default 5 minutes). Both are measured from when the hold is placed. Every order
 created on the hold, a Retry included, is asked to expire no later than the
 hold's expiry minus the grace, where the gateway lets the platform set an
-expiry.
+expiry. The payment port's create operation takes that moment as its
+`latestExpiry` argument, since a Retry's deadline belongs to its hold
+(Architecture §3.4).
 
 A failed event marks that order failed and leaves the hold in place, so the
 student may Retry on it (FR-PAYG-18) or choose another slot (D6). A cancellation
@@ -228,14 +241,24 @@ enrollment, and for an enrollment that already has a compensation case
 (`disputes.kind = compensation_case`), so a replayed event or a second run opens
 no second case.
 
-- **Hold active.** In one transaction the step confirms the enrollment,
-  generates its sessions and converts the hold (FR-PAYG-5).
-- **Hold released** (a late payment). In one transaction the step inserts a new
-  active hold for the enrollment on its slot, through the two partial unique
-  indexes, confirms the enrollment, generates its sessions and converts that
-  hold. The enrollment moves from `cancelled` to `confirmed` through the same
-  single write path (R-HONEST-1), and its `cancellation_reason` returns to NULL,
-  since that column records why a cancelled enrollment was cancelled.
+The step decides between its two branches by writing, not by reading. In one
+transaction it converts the enrollment's hold with a conditional update
+(`released_at IS NULL`), and it confirms the enrollment only from
+`pending_payment` or `cancelled`, also as a conditional update. An expiry job
+that releases the hold at the same moment uses the same conditional form (D7),
+so the two meet on the hold's row and exactly one of them changes it.
+
+- **Hold active** (the conversion matches a row). The same transaction
+  confirms the enrollment and generates its sessions (FR-PAYG-5).
+- **Hold released** (a late payment; the conversion matches no row). The same
+  transaction takes the late branch. It first releases the expired holds on the
+  slot and the student's own expired hold, as D3 does, cancelling their
+  enrollments as D7 says. It then inserts a new active hold for the enrollment
+  on its slot, through the two partial unique indexes, confirms the enrollment,
+  generates its sessions and converts that hold. The enrollment moves from
+  `cancelled` to `confirmed` through the same single write path (R-HONEST-1),
+  and its `cancellation_reason` returns to NULL, since that column records why a
+  cancelled enrollment was cancelled.
 
 If the database refuses that transaction, nothing of it is kept, and the
 **refusal branch** runs in a new transaction. A refusal comes from the per-slot
@@ -262,24 +285,45 @@ new business rule, approved by the owner, and stated as FR-BOOK-12.
 
 When a student whose hold has not expired starts a new checkout (the "Choose
 another slot" action of the checkout screens, or a second tab), the old hold is
-ended first:
+ended first. The transaction that places the new hold begins by releasing the
+old hold, through a conditional update of its row (`released_at IS NULL`), and
+only then reads the hold's orders, so it sees every order recorded before the
+release:
 
-1. **No order on it, or every order on it failed.** The old hold is released and
-   its enrollment, if any, cancelled with `checkout_abandoned`, in the same
-   transaction that places the new hold (D3).
-2. **An order on it has not failed.** The platform asks the gateway, through the
-   payment port, to cancel that unpaid order. The operation cancels an unpaid
-   order and moves no money, so it stays within ADR 0007 and outside the port's
-   prohibited balance, transfer and refund operations. It is called before, and
-   outside, the transaction that places the new hold, so no transaction stays
-   open across a call to the gateway. If the gateway confirms the cancellation,
-   that order is recorded as failed, as a gateway cancellation is (D4), and case
-   1 follows. If the gateway reports the order paid, the old checkout proceeds
-   to confirmation (D5), the new checkout is refused, and the student is told
-   the first payment succeeded.
+1. **No order on it is still payable (`created`).** No order was created on it,
+   or every order on it failed. The release stands, and the hold's enrollment,
+   if any, is cancelled with `checkout_abandoned` in the same transaction, which
+   goes on to place the new hold (D3).
+2. **An order on it is still payable (`created`).** That transaction is rolled
+   back, so the old hold stays active, and the platform asks the gateway,
+   through the payment port, to cancel that order, given its gateway order id.
+   The operation cancels an unpaid order and moves no money, so it stays within
+   ADR 0007 and outside the port's prohibited balance, transfer and refund
+   operations. It is called outside any transaction, so no transaction stays
+   open across a call to the gateway. The gateway answers one of four ways:
+   - `cancelled`: that order is recorded as failed, as a gateway cancellation
+     is (D4), and case 1 follows. Cancelling an order that is already
+     cancelled or expired also answers `cancelled`, so when two tabs both
+     cancel the same order, both proceed, and the per-student index lets
+     exactly one new hold commit.
+   - `paid` or `in_progress` (a payment under way, such as 3-D Secure or an
+     asynchronous method): nothing is written (R-HONEST-1). The new checkout
+     is refused, and the student is told the earlier payment went through or
+     is still being processed and is taken to that enrollment's Processing
+     screen. The enrollment is confirmed only when the signed paid event is
+     processed (D5).
+   - `unsupported`: case 3.
 3. **The gateway offers no cancellation.** The new checkout is refused with a
    clear message, an action to continue the previous payment, and the time left
    on it.
+
+Pay and Retry create an order on a hold at the gateway, outside any
+transaction. The order is recorded, and its hosted checkout handed to the
+client, only in a transaction that finds the hold still active through a
+conditional update of the hold row; otherwise the checkout is withheld and the
+order cancelled where the gateway allows. An order is therefore either recorded
+before a new checkout releases the hold, and case 1 or 2 sees it, or never
+reaches the student.
 
 An expired hold of the student's is no longer a checkout: D3 releases it
 without asking the gateway, and a payment that still completes on it follows
@@ -307,12 +351,16 @@ The two expiry jobs split the sweep by what a hold carries:
 - `expire-pending-payments` (owned by `payments`) is keyed on the enrollment:
   every `pending_payment` enrollment whose hold's `expires_at` has passed,
   whether or not the hold was already released. Through `booking`'s public
-  entry, in one transaction, it releases the hold if it is still active and
-  cancels the enrollment with the expiry reason above. Keyed this way, it also
-  catches an enrollment whose hold was released without the enrollment
-  following it.
+  entry, in one transaction, it releases the hold with a conditional update
+  (`released_at IS NULL`) and cancels the enrollment with the expiry reason
+  above, only from `pending_payment`. Keyed this way, it also catches an
+  enrollment whose hold was released without the enrollment following it.
+  Racing `confirm-enrollment` (D5), whichever writes the hold's row first
+  decides, and the other's conditional update matches no row.
 - `expire-holds` (owned by `booking`) releases the expired active holds that
-  carry no enrollment: the student entered checkout and never pressed Pay.
+  carry no enrollment: the student entered checkout and never pressed Pay. Its
+  conditional update also requires `enrollment_id IS NULL`, so a hold linked by
+  a concurrent Pay is left to `expire-pending-payments`.
 
 Both are idempotent (R-API-14): a second run finds nothing left to release or
 cancel.
@@ -331,14 +379,22 @@ cancel.
   them collides for a moment with the next one not yet moved. So the job
   recomputes every affected session inside one transaction and runs `SET
   CONSTRAINTS … DEFERRED` first (D1): a uniform shift commits, and only a true
-  overlap is refused, at commit. One transaction for the whole run, not one per
-  teacher, because the student constraint links teachers: a student with teacher
-  A at 09–10 and teacher B at 10–11, both moved +1h, would refuse A's batch
-  while B's is still unmoved. On a refusal at commit, the job reruns the
-  transaction without the sessions the conflict names, so the rest of the run
-  commits; the left-out sessions keep their previous instants and are reported
-  to the error-tracking destination (Phase 0 spec FR-051) for an operator to
-  resolve. No new queue is added.
+  overlap is refused, at commit. One transaction for the whole run, not one for
+  each teacher, because the student constraint links teachers: a student with
+  teacher A at 09–10 and teacher B at 10–11, both moved +1h, would have A's
+  sessions refused while B's are still unmoved. A refusal at commit names key
+  values and ranges rather than session ids, and only the first conflict, so
+  the job does not rely on it. Before committing, it queries the moved sessions
+  for an overlap with another session of the same teacher or the same student
+  that the constraints count (`start < other.end AND end > other.start`, which
+  needs no raw SQL), restores those sessions to their previous instants,
+  reports them to the error-tracking destination (Phase 0 spec FR-051) for an
+  operator to resolve, and commits the rest. A commit still refused by a
+  concurrent write reruns the run. Reminders are rescheduled from the new
+  instants only after the commit, still in the same run (ADR 0009 D3), so a
+  rolled-back run leaves the queue as it was. `SET CONSTRAINTS` is raw SQL, so
+  under R-API-6 it lives behind a kernel helper in `apps/api/src/platform/db/`.
+  No new queue is added.
 - **A daylight-saving gap at generation.** A slot whose local start falls inside
   a spring-forward gap is moved forward by `packages/time` (ADR 0009), and the
   moved session can overlap the teacher's next slot: a 01:00 London slot shifted
@@ -384,8 +440,10 @@ cancel.
   unique indexes and the two exclusion constraints, §15 gains rules 17 to 19.
   The table count stays 33.
 - Constitution 2.3.1: R-DB-4 names the two new caches.
-- The payment port gains one operation, cancelling an unpaid checkout
-  (Architecture §3.4, the port contract, T117). It moves no money.
+- The payment port gains one operation, cancelling an unpaid checkout given its
+  gateway order id (Architecture §3.4, the port contract, T117). It moves no
+  money. Creating a checkout also takes the latest moment the order may be paid
+  (D4).
 - Phase 0 builds the guarantee only. T057 models the three columns and the two
   enum members, T066 adds the two `slot_holds` indexes, T141 adds `btree_gist`
   and the deferrable exclusion constraints, T142 proves all of them as the
@@ -393,9 +451,10 @@ cancel.
 - The behaviour belongs to the booking and payments implementation tasks of
   later phases: the write-then-check placement of D3, the hold and order timing
   of D4, the confirmation and refusal branch of D5, the cancellation flow of D6,
-  the enrollment states and expiry sweeps of D7, the deferred constraints in the
-  re-resolution job, and turning a constraint refusal into a message for the
-  student or into the refusal branch (R-API-8). No task is added for it in
+  the enrollment states and expiry sweeps of D7, the deferred constraints, the
+  overlap check before commit and the kernel helper of the re-resolution job,
+  and turning a constraint refusal into a message for the student or into the
+  refusal branch (R-API-8). No task is added for it in
   001-foundations.
 - One point is left for the phase that builds D5, which must raise it rather
   than decide it at the keyboard (R-PROC-3): `notifications.type` has no member
