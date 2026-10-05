@@ -37,7 +37,7 @@ server-held session; none is read from client input (R-GENDER-4).
 |---|---|
 | Caller identity | Session |
 | Role | Session |
-| Gender | Session; typed `RequesterGender` (declared in the kernel, `apps/api/src/platform/guards/requester-gender.ts`), and the request context is the only place that may mint it |
+| Gender | Session; typed `RequesterGender` (declared in the kernel, `apps/api/src/platform/guards/requester-gender.ts`), and the request context is the only place in production code that may mint it |
 | Locale | Session, defaulting to Arabic |
 | Correlation identifier | Generated per request |
 

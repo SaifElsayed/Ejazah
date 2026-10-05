@@ -75,7 +75,7 @@ guards something the constitution treats as unrecoverable.
 |---|---|---|---|
 | `money/no-arithmetic-outside-package` | Any arithmetic operand carrying the money brand, outside its package | `a + b` looks identical whatever the operands are | R-MONEY-5 |
 | `money/require-piaster-suffix` | An identifier whose resolved type is money but whose name lacks the suffix | The name alone cannot tell you the type | R-MONEY-2 |
-| `gender/require-requester-gender` | A repository method returning teachers whose signature does not require the requester's gender: a required parameter, or a required property of a required options parameter, that is not nullable and whose type is `RequesterGender` — the gender value branded in the kernel file `apps/api/src/platform/guards/requester-gender.ts`, which only the request context may mint. The brand is recognised by where it is declared, that file, never by the name of its key; a brand of the same name declared anywhere else is refused. A plain gender value, an optional one and a nullable one are refused alike | A filtered and an unfiltered method are syntactically identical, and a requester's gender and any other gender value are the same string | R-GENDER-5 |
+| `gender/require-requester-gender` | A repository method returning teachers whose signature does not require the requester's gender: a required parameter, or a required property of a required options parameter, that is not nullable and whose type is `RequesterGender` — the gender value branded in the kernel file `apps/api/src/platform/guards/requester-gender.ts`, which only the request context may mint in production code. The brand is recognised by where it is declared, that file, never by the name of its key; a brand of the same name declared anywhere else is refused. A plain gender value, an optional one and a nullable one are refused alike | A filtered and an unfiltered method are syntactically identical, and a requester's gender and any other gender value are the same string | R-GENDER-5 |
 | `api/table-ownership` | Inside `apps/api`: database access to a table from any file other than a repository file (a file named `<name>.repository.<extension>`) of the module, or of the platform kernel, that owns it; any member of the database client whose name starts with `$`, other than `$transaction`, outside `apps/api/src/platform/db/`; and the string-taking raw forms `$queryRawUnsafe` and `$executeRawUnsafe` everywhere inside `apps/api`, the kernel included. The transaction client and a client returned by `$extends` are the database client, and a member is the same member by any spelling that reaches it; an access whose member cannot be resolved is refused | Requires resolving the query target against the ownership manifest, and a raw query names its table where no rule can read it | R-API-6 |
 
 Four notes on the last two rows, decided 2026-10-05 after the two reviews of
@@ -100,8 +100,10 @@ when an object type whose name carries `Teacher` appears in its resolved return
 type: directly, or one property step down, through a property of an object type,
 named or unnamed. Promises, arrays, tuples, unions, intersections and the type
 arguments of a generic type are unwrapped before and after that step and do not
-count as one. Only an object type's name is read, so a branded identifier such
-as a teacher's id does not make the row that carries it a teacher. A named
+count as one. Only the name of an object type, or of an intersection whose
+members are all object types, is read; an intersection with a primitive, such as
+a branded teacher's id, is not, so the id does not make the row that carries it
+a teacher. A named
 wrapper is read like an unnamed one because an interface around a list of
 teachers is the ordinary way to write a page of results. The same reading makes
 any module's method that returns a row carrying a teacher-typed property a
@@ -112,10 +114,12 @@ the first note.
 is a server-only authorization type no client needs, and nothing published there
 may later be removed (R-API-9). The file is matched as a run of path segments,
 like every other path in the plugin, so the specs of T046 declare the brand in a
-stub at the mirrored path under `tests/` until T138 lands.
+stub at the mirrored path under `tests/`, which stays after T138 lands: the
+specs never depend on the real file.
 
 Three things the rule does not see are held by review, the second mechanism
-R-GENDER-5 names: a teacher more than one property step down; a teacher returned
+R-GENDER-5 names: a teacher more than one property step down, or behind an
+index signature; a teacher returned
 under a type whose name does not carry `Teacher` (the condition under T055
 closes the generated payload case); and a cast to `RequesterGender` outside
 `apps/api/src/surfaces/context.ts` in any file that is not a spec file. A spec
@@ -139,7 +143,7 @@ ARCHITECTURE §13 asks for may read and write the tables its own repository owns
 It gains nothing else: rows it needs in another owner's tables are set up
 through helpers under `tests/`, which sit outside `apps/api` and so outside this
 rule, and the client's `$` members stay refused there as in any repository file
-(owner decision, 2026-10-05). R-API-2 is unchanged: a spec file never imports
+(owner decision, 2026-10-05). R-API-2 is unchanged: a spec file inside `apps/api` never imports
 the client or its types; it takes the client from
 `apps/api/src/platform/db/prisma.repository.ts`.
 
