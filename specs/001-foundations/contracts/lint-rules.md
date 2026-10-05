@@ -160,7 +160,7 @@ that appear to enforce something they cannot.
 | The database | R-MONEY-8, R-TIME-3, R-DB-3/5/8, R-SEC-8, R-SESS-1, R-PROC-11 |
 | Runtime guards | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
 | Superseded by ADR 0005 (ids retained, nothing to enforce) | R-MONEY-3/4/7/10/11 |
-| Pipeline gates | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/9 |
+| Pipeline gates | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/7/9 |
 | Human review alone | R-MOBILE-3, R-MOBILE-12, R-MOBILE-14, R-API-5, R-DB-2, R-DB-4, R-DB-9, R-SEC-7, R-SEC-10, R-PROC-2, R-PROC-3, R-PROC-6 |
 
 The twelve in the last row are the pull request template, and they are the only

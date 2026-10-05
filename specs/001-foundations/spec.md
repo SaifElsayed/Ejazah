@@ -92,9 +92,9 @@ branch. Each must be refused, and the refusal must identify the rule.
 8. **Given** any file outside the time package, **When** it constructs or resolves a domain datetime directly, **Then** the build fails naming R-TIME-1.
 9. **Given** a service file that imports the database client, **When** the build runs, **Then** it fails naming R-API-2; and **Given** a module imported by a path deeper than its public entry, **Then** the build fails naming R-API-3.
 10. **Given** a repository method returning teachers whose signature omits the requester's gender, **When** the build runs, **Then** it fails naming R-GENDER-5.
-11. **Given** a type or lint escape hatch with no justification comment and ticket reference, **When** the build runs, **Then** it fails naming R-API-10 or R-PROC-7.
+11. **Given** a type or lint escape hatch with no justification comment and ticket reference, **When** the build runs, **Then** it fails naming R-API-10 or R-PROC-7; and **Given** a comment that switches that lint check itself off, **When** the pipeline runs, **Then** the unjustified suppression is still refused.
 12. **Given** a value resembling a secret, **When** it is committed, **Then** the local check refuses it; and **When** it reaches the pipeline by any path including the specs directory, **Then** the pipeline fails naming R-SEC-1.
-13. **Given** code that disables transport security verification, **When** the build runs, **Then** it fails naming R-SEC-11.
+13. **Given** code that disables transport security verification or switches on a lenient HTTP parser, **When** the build runs, **Then** it fails naming R-SEC-11.
 14. **Given** a test marked skipped or exclusive, or a bare comment marker carrying no ticket, **When** the pipeline runs, **Then** it fails naming R-PROC-10 or R-PROC-8.
 
 ---
@@ -330,7 +330,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-005**: The system MUST refuse at build time a database client import outside a repository file, and MUST restrict each module's database access to the tables its domain owns per ERD section 1, reached from its repository files only, with runtime raw SQL confined to the platform kernel (R-API-2, R-API-6).
 - **FR-006**: The system MUST refuse at build time: a raw colour or spacing value in a feature file; a physical direction utility; a hardcoded user-facing string; a sentence assembled by concatenating translated fragments; a hand-written date, time or number format outside the shared formatting layer; a direct network call bypassing the shared client; and sensitive storage outside the secure storage layer (R-MOBILE-4 through R-MOBILE-11).
 - **FR-007**: The system MUST refuse at build time a component composed from raw platform controls rather than from the shared primitives (R-MOBILE-6).
-- **FR-008**: The system MUST refuse at build time an escape hatch — a suppressed type error or a disabled lint rule — carrying no justification comment and ticket reference (R-API-10, R-PROC-7).
+- **FR-008**: The system MUST refuse at build time an escape hatch — a suppressed type error or a disabled lint rule — carrying no justification comment and ticket reference (R-API-10, R-PROC-7). The pipeline MUST apply the lint half of this check a second time with inline configuration ignored, so that no comment can switch the check off, and MUST refuse a lint suppression that no longer suppresses anything.
 - **FR-009**: The system MUST refuse at build time any disabling of transport security verification or of strict HTTP parsing, in every environment including local development (R-SEC-11).
 - **FR-010**: The system MUST refuse at build time a logging call receiving a raw request body or another prohibited value (R-SEC-2).
 - **FR-071**: The system MUST refuse at build time a request procedure carrying a business rule rather than validating its input, calling one service method and returning (R-API-1).
