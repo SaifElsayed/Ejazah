@@ -9,9 +9,20 @@
 // against the real shape and not against a name. A type parameter constrained to the brand is read
 // through its constraint. One valid case pins the known limits the rule header records — an
 // amount widened to `number`, a template literal, `Math.max` and a `Piasters | number` union — so
-// that closing one of them is a visible change to this table.
+// that closing one of them is a visible change to this table. Because every case declares its own
+// brand, a last test pins the identifier of the brand's key that `types.js` reads to the one
+// `packages/money/src/index.ts` declares, so renaming one without the other fails here.
 
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { repositoryRoot } from '../support/lint-contract';
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
+
+const require = createRequire(import.meta.url);
 
 const feature = virtualFile('apps/api/src/modules/payments/receipt.ts');
 const moneyPackage = virtualFile('packages/money/src/index.ts');
@@ -221,3 +232,26 @@ typeAwareRuleTester().run(
     ],
   },
 );
+
+// The rules recognise money by the identifier of the brand's key, not by the alias name, so that
+// identifier is a contract between `types.js` and `packages/money`: renaming it on one side alone
+// would switch R-MONEY-2 and R-MONEY-5 off with every case above still green, because the cases
+// declare their own brand (second review of PR #27, Omar 10).
+describe('the money brand key the rules read (T044)', () => {
+  it('is the identifier packages/money declares its brand under', () => {
+    const { MONEY_BRAND_KEY } = require(
+      path.join(repositoryRoot, ...'packages/config/eslint-plugin-ijazah/types.js'.split('/')),
+    ) as { readonly MONEY_BRAND_KEY: string };
+    const source = readFileSync(
+      path.join(repositoryRoot, 'packages', 'money', 'src', 'index.ts'),
+      'utf8',
+    );
+
+    const declared = /declare const (\w+): unique symbol;/.exec(source)?.[1];
+    const keyed = /export type Piasters = number & \{ readonly \[(\w+)\]: true \};/.exec(
+      source,
+    )?.[1];
+    expect(declared).toBe(MONEY_BRAND_KEY);
+    expect(keyed).toBe(MONEY_BRAND_KEY);
+  });
+});

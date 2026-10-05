@@ -15,7 +15,12 @@
 // `unique symbol` travels with the value wherever it goes. So a type is money when it is an
 // intersection of a number with an object whose property is declared under the computed key
 // `[piastersBrand]`; a union of that with `null` or `undefined` (an optional or nullable amount)
-// is money too. An array of amounts is not "a money value" and is not recognised here.
+// is money too. An array of amounts is not "a money value" and is not recognised here. The key
+// is read by its identifier, `MONEY_BRAND_KEY` below, so renaming the brand in `packages/money`
+// alone would switch the money rules off; the constant is exported and
+// `tests/lint-plugin/no-money-arithmetic.spec.ts` asserts that `packages/money/src/index.ts`
+// declares its brand under exactly that identifier, so the two can only change together (second
+// review of PR #27).
 //
 // DECISION (T044, 2026-10-05) — a type parameter is read through its constraint. `T extends
 // Piasters`, and `Row[K]` with `K extends 'gross_piasters'`, hold an amount under a type that is
@@ -161,6 +166,7 @@ function isRequesterGenderType(type) {
 }
 
 module.exports = {
+  MONEY_BRAND_KEY,
   isMoneyType,
   isNullish,
   isRequesterGenderType,
