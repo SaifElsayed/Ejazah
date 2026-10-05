@@ -66,7 +66,7 @@ The root identity. One row per human, regardless of how many roles they hold.
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | created_at / updated_at | timestamptz | |
 
-`is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a third cached value and the constitution permits two (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
+`is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
 
 ### `user_roles`
 
@@ -246,8 +246,9 @@ Checkout reservation with TTL (FR-BOOK-9). Enforced against double-booking toget
 | id | uuid | PK |
 | slot_id | FK → availability_slots | |
 | student_user_id | FK → users | |
+| enrollment_id | FK → enrollments, nullable | Set in the transaction that creates the enrollment at Pay; NULL while the student is in checkout before Pay. Conversion, release, the late-payment branch and a new checkout find the hold through it (ADR 0010 D2) |
 | expires_at | timestamptz | Gateway checkout TTL plus the hold grace, counted from placement (defaults 10 + 5 min, admin-configurable; FR-BOOK-9, ADR 0010 D4) |
-| released_at | timestamptz, nullable | Set on conversion, on a failed or cancelled gateway event, by the expiry job, or by the release of expired holds before a new hold on the same slot or by the same student (ADR 0010 D3). NULL means active: §15.17–18 count the row even past `expires_at` |
+| released_at | timestamptz, nullable | Set on conversion, on expiry (by the expiry jobs, or before a new hold on the same slot or by the same student, ADR 0010 D3), by the student's own new checkout (FR-BOOK-12, ADR 0010 D6), or by the refusal branch of FR-PAYG-19. A failed gateway event does not set it (ADR 0010 D4). A release without conversion cancels the linked enrollment in the same transaction (ADR 0010 D7). NULL means active: §15.17–18 count the row even past `expires_at` |
 
 ### `enrollments`
 
@@ -265,9 +266,9 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_duration_minutes | int | |
 | snapshot_subject_id | FK → subjects | |
 | snapshot_slot_timezone | text | Zone frozen at purchase — DST maths uses this |
-| status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` on hold expiry or payment failure (FR-PAYG-6), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
+| status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` when its hold is released without conversion (FR-PAYG-6, ADR 0010 D7), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
-| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended, nullable | Why a `cancelled` enrollment was cancelled |
+| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7 |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | purchased_at | timestamptz | |
 
@@ -583,6 +584,7 @@ erDiagram
 erDiagram
     users ||--o{ slot_holds : "student holds"
     availability_slots ||--o{ slot_holds : "held"
+    enrollments |o--o{ slot_holds : "checked out through"
     users ||--o{ enrollments : "student buys"
     users ||--o{ enrollments : "teacher delivers"
     packages ||--o{ enrollments : "purchased as"
@@ -633,8 +635,8 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | `sessions (scheduled_end_at) WHERE status = 'scheduled'` partial | The evaluate-session sweep |
 | `slot_holds (slot_id) WHERE released_at IS NULL` partial unique | Availability checks; one active hold per slot (§15.17). Replaces the plain partial index v1.3 listed here |
 | `slot_holds (student_user_id) WHERE released_at IS NULL` partial unique | One active checkout per student (§15.18) |
-| `sessions` GiST exclusion `(teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial | No overlapping sessions per teacher (§15.19); the teacher's calendar |
-| `sessions` GiST exclusion `(student_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial | No overlapping sessions per student (§15.19); the reservation check against the student's sessions |
+| `sessions` GiST exclusion `(teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions per teacher (§15.19); the teacher's calendar |
+| `sessions` GiST exclusion `(student_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions per student (§15.19); the reservation check against the student's sessions |
 | `notifications (user_id, read_at)` | Notification centre badge |
 
 Add nothing else until a query is measurably slow (Architecture §17).
@@ -659,9 +661,9 @@ Rules that must hold even if application code is buggy — so they live in the s
 14. `payments.gateway_order_id` unique; `payments.gateway_transaction_id` unique where present — one platform record per gateway order.
 15. `enrollments.confirmed_at` is written only by the confirm-enrollment job; no application path sets `status = 'confirmed'` without a `paid` event row for that enrollment. Held at the service layer and by the CI test of R-HONEST-1, since the database cannot express the cross-table dependency without a trigger (research R-5).
 16. `idempotency_keys (scope, key)` unique — a repeated client mutation returns the first outcome and never repeats the effect (FR-042, R-API-14, ADR 0008).
-17. `slot_holds (slot_id)` unique `WHERE released_at IS NULL` — one active hold per slot, so two students cannot hold the same slot at once (FR-BOOK-9, ADR 0010 D1). An expired hold still counts until `released_at` is set; the service releases expired holds on the slot, and the student's own active hold, in the same transaction before it inserts (ADR 0010 D3, D6).
-18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time; a new checkout releases the student's own previous hold first (FR-BOOK-12, ADR 0010 D6).
-19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)` and the same with `student_user_id`, each `WHERE deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The range includes its start and excludes its end, so back-to-back sessions are allowed.
+17. `slot_holds (slot_id)` unique `WHERE released_at IS NULL` — one active hold per slot, so two students cannot hold the same slot at once (FR-BOOK-9, ADR 0010 D1). An expired hold still counts until `released_at` is set; the service releases the expired holds on the slot, and the student's own expired hold, in the same transaction before it inserts, then checks the existing sessions after the insert (ADR 0010 D3).
+18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time; a new checkout ends the student's own unexpired hold first, at once when no order on it is still payable and otherwise only once the gateway has cancelled that order (FR-BOOK-12, ADR 0010 D6).
+19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a system termination (FR-NOSHOW-4, FR-SESS-16, FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction per teacher with `SET CONSTRAINTS … DEFERRED`, so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused, at commit. On a true overlap that teacher's batch does not commit, its sessions keep their previous instants, and the job reports it to error tracking for an operator.
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
@@ -673,9 +675,10 @@ Rule 10 treats `audit_logs` differently on purpose. Every other table on that li
 
 | # | Change | Decision |
 |---|---|---|
-| 1 | `sessions` gains `teacher_user_id` and `student_user_id`, copied from the enrollment at generation and declared caches under R-DB-4. | ADR 0010 D2 |
-| 2 | §14: the `slot_holds (slot_id)` partial index becomes a partial unique index; a `slot_holds (student_user_id)` partial unique index and two GiST exclusion constraints on `sessions` are added. §15: rules 17, 18 and 19. | ADR 0010 D1, D6 |
-| 3 | `slot_holds.expires_at` is the gateway checkout TTL plus the hold grace; `released_at` is also set by a failed or cancelled gateway event and by the release of expired holds before a new hold. | ADR 0010 D3, D4 |
+| 1 | `sessions` gains `teacher_user_id` and `student_user_id`, copied from the enrollment at generation and declared caches under R-DB-4. `slot_holds` gains `enrollment_id`, a nullable link to the enrollment created at Pay (§13.2). | ADR 0010 D2 |
+| 2 | §14: the `slot_holds (slot_id)` partial index becomes a partial unique index; a `slot_holds (student_user_id)` partial unique index and two deferrable GiST exclusion constraints on `sessions` are added. §15: rules 17, 18 and 19. | ADR 0010 D1, D6 |
+| 3 | `slot_holds.expires_at` is the gateway checkout TTL plus the hold grace; `released_at` is set on conversion, on expiry, by the student's own new checkout and by the refusal branch, never by a failed gateway event. | ADR 0010 D3, D4, D6 |
+| 4 | `enrollments.cancellation_reason` gains `slot_unavailable` and `checkout_abandoned`; a hold released without conversion cancels its enrollment. | ADR 0010 D7 |
 
 ## Changelog — v1.3 addendum (ADR 0008)
 

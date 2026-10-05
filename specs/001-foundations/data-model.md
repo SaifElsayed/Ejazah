@@ -176,7 +176,7 @@ application code (FR-030, R-DB-5).
 | 16 | Client-retried mutations are idempotent | Unique on `idempotency_keys (scope, key)`; first outcome stored and replayed (ADR 0008) |
 | 17 | One active hold per slot | Partial unique index on `slot_holds (slot_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D1) |
 | 18 | One active hold per student | Partial unique index on `slot_holds (student_user_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D6) |
-| 19 | No overlapping sessions per teacher, nor per student | Two GiST exclusion constraints on `sessions`, `teacher_user_id WITH =` and `student_user_id WITH =`, each with `tstzrange(scheduled_start_at, scheduled_end_at) WITH &&`, `WHERE deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')`, on `btree_gist`, raw SQL (ADR 0010 D1) |
+| 19 | No overlapping sessions per teacher, nor per student | Two GiST exclusion constraints on `sessions`, `teacher_user_id WITH =` and `student_user_id WITH =`, each with `tstzrange(scheduled_start_at, scheduled_end_at) WITH &&`, `WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin'))`, `DEFERRABLE INITIALLY IMMEDIATE`, on `btree_gist`, raw SQL (ADR 0010 D1). Only the re-resolution job of ADR 0009 defers them (`SET CONSTRAINTS … DEFERRED`, one transaction per teacher), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused, at commit; that teacher's batch then does not commit, its sessions keep their previous instants, and the job reports it to error tracking (FR-051) |
 
 Rules 5, 6 and 12 belonged to the managed-payment tables removed by ADR 0005 D1;
 their numbers are kept so old citations resolve. Rules 17 to 19 replace a read
@@ -232,8 +232,9 @@ added later by someone who reads the enum as a list of equals.
 
 **Enrollment** — `pending_payment` gates session generation. It is released only
 by the `confirm-enrollment` job acting on a persisted, signature-verified `paid`
-event (FR-PAYG-5); `confirmed_at` has no other write path (R-HONEST-1). Order
-expiry or failure moves it to `cancelled` with a `cancellation_reason`.
+event (FR-PAYG-5); `confirmed_at` has no other write path (R-HONEST-1). A failed
+order leaves it pending on its hold; the release of its hold without conversion
+moves it to `cancelled` with a `cancellation_reason` (ADR 0010 D7).
 
 ---
 

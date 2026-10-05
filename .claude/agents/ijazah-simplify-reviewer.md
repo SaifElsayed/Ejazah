@@ -84,7 +84,7 @@ Read every changed file in full. Check systematically:
 - Any `prisma/schema/*.prisma` change must be sanctioned by the ERD. A table or column not in the ERD → **escalate: out of spec** (ERD §0). Never "fix" schema yourself.
 - Conventions: UUID v7 `id`, `_piasters` integer money, UTC `timestamptz` `_at`, `_local` next to a timezone column, assertion booleans, Postgres enums in `base.prisma`.
 - Soft deletion respected: no hard DELETE on `users`/`sessions`/`enrollments`/`ijazahs`; soft-deleted rows excluded from reads/counts/facets; `audit_logs` append-only.
-- Derived values computed, not stored — only the caches R-DB-4 declares are allowed: `teacher_profiles.average_rating` / `review_count` and `sessions.scheduled_start_at` / `scheduled_end_at` (ADR 0009); a new cached value → escalate, it needs an ADR.
+- Derived values computed, not stored — only the caches R-DB-4 declares are allowed: `teacher_profiles.average_rating` / `review_count`, `sessions.scheduled_start_at` / `scheduled_end_at` (ADR 0009) and `sessions.teacher_user_id` / `student_user_id` (ADR 0010); a new cached value → escalate, it needs an ADR.
 - **Migrations**: never edit a merged migration (immutable, roll forward). A migration edited in place, missing for a schema change, or added without a schema change → **escalate, never touch migrations yourself.**
 
 ### 1.3 Payments, Payment Honesty & Time (CRITICAL FILES — maximum scrutiny)
