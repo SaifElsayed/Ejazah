@@ -8,8 +8,9 @@
 // `typescriptRuleTester()` uses, with no project — and asserts the throw and its message: it names
 // the rule id, says type information is needed and points at the type-aware configuration file.
 // The rules are read from the plugin's own type-aware set rather than listed here, so a fifth
-// type-aware rule is covered the day it is registered, and a rule that passed `requireProgram` an
-// id other than its published one is caught by the id assertion.
+// type-aware rule is covered the day it is registered — the first test asserts that the four of
+// T044–T047 are in that set, not that they are the whole of it — and a rule that passed
+// `requireProgram` an id other than its published one is caught by the id assertion.
 //
 // ESLint wraps a throw from a rule's `create` in its own "Error while loading rule" message and
 // rethrows it, so the assertion reads the text of what reaches the caller; a `RuleTester` case
@@ -89,12 +90,14 @@ function thrownBy(run: () => void): Error {
 
 describe('the type-aware rules refuse to run without a program (requireProgram)', () => {
   it('finds the four type-aware rules in the plugin’s own set', () => {
-    expect(typeAwareRuleIds).toEqual([
-      'api/table-ownership',
-      'gender/require-requester-gender',
-      'money/no-arithmetic-outside-package',
-      'money/require-piaster-suffix',
-    ]);
+    expect(typeAwareRuleIds).toEqual(
+      expect.arrayContaining([
+        'api/table-ownership',
+        'gender/require-requester-gender',
+        'money/no-arithmetic-outside-package',
+        'money/require-piaster-suffix',
+      ]),
+    );
   });
 
   for (const ruleId of typeAwareRuleIds) {

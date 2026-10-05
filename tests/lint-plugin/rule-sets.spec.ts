@@ -284,6 +284,9 @@ describe('T043 — the fast and type-aware sets are split as research R-10 says'
     }
   });
 
+  // The one test here that builds two TypeScript programs with the four type-aware rules loaded.
+  // Alone it takes about three seconds; in the full suite, beside every other worker, it ran past
+  // Vitest's five-second default (reviews of PR #27), so it carries its own limit, in milliseconds.
   it('hands the type-aware set a program containing the linted file, fixtures included', async () => {
     const { sightings, fatal } = await observePrograms('typeAware', [realFile, fixtureFile]);
 
@@ -308,5 +311,5 @@ describe('T043 — the fast and type-aware sets are split as research R-10 says'
         ),
       ).toEqual({ program: 'program', containsFile: true });
     }
-  });
+  }, 30_000);
 });
