@@ -56,17 +56,20 @@ Every convention in ERD §0 needs a machine behind it or it is a style guide.
 | Enums declared once, centrally | Schema check asserts no duplicate enum definition | ERD §0 |
 | Nothing that matters is hard-deleted | Revoked privilege — see §4 | R-DB-3 |
 | Secrets are `*_hash` or `*_encrypted`, never bare | Schema check asserts no column named `token`, `secret`, `password`, `code` without a suffix | R-DB-7, R-DB-8 |
-| Derived values are computed, except the caches R-DB-4 declares | Schema check compares cached columns against the allow-list of four: `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at`, `sessions.scheduled_end_at` (ADR 0009) | R-DB-4 |
+| Derived values are computed, except the caches R-DB-4 declares | Schema check compares cached columns against the allow-list of six: `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at`, `sessions.scheduled_end_at` (ADR 0009), `sessions.teacher_user_id`, `sessions.student_user_id` (ADR 0010) | R-DB-4 |
 
 ---
 
 ## 3. The permitted cached values
 
-`teacher_profiles.average_rating` and `teacher_profiles.review_count`, and
+`teacher_profiles.average_rating` and `teacher_profiles.review_count`;
 `sessions.scheduled_start_at` and `sessions.scheduled_end_at`, which are derived
 from the session's stored local date, local start time and zone and recomputed
-when the time zone data changes (ADR 0009). Those four columns are the entire
-allow-list, and the schema check asserts that no other cached column exists.
+when the time zone data changes (ADR 0009); and `sessions.teacher_user_id` and
+`sessions.student_user_id`, copied from the enrollment at generation and never
+changed, so the exclusion constraints of rule 19 (§6) can refuse overlapping
+sessions (ADR 0010). Those six columns are the entire allow-list, and the schema
+check asserts that no other cached column exists.
 Another requires a recorded architectural decision *before* the column exists
 (R-DB-4).
 
@@ -171,9 +174,15 @@ application code (FR-030, R-DB-5).
 | 14 | One record per gateway order | Unique on `payments.gateway_order_id` and `gateway_transaction_id` |
 | 15 | `confirmed_at` has one write path | Service layer plus the CI test of R-HONEST-1; not expressible in the database without a trigger (research R-5) |
 | 16 | Client-retried mutations are idempotent | Unique on `idempotency_keys (scope, key)`; first outcome stored and replayed (ADR 0008) |
+| 17 | One active hold per slot | Partial unique index on `slot_holds (slot_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D1) |
+| 18 | One active hold per student | Partial unique index on `slot_holds (student_user_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D6) |
+| 19 | No overlapping sessions per teacher, nor per student | Two GiST exclusion constraints on `sessions`, `teacher_user_id WITH =` and `student_user_id WITH =`, each with `tstzrange(scheduled_start_at, scheduled_end_at) WITH &&`, `WHERE deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')`, on `btree_gist`, raw SQL (ADR 0010 D1) |
 
 Rules 5, 6 and 12 belonged to the managed-payment tables removed by ADR 0005 D1;
-their numbers are kept so old citations resolve.
+their numbers are kept so old citations resolve. Rules 17 to 19 replace a read
+followed by a write in the booking service, which two concurrent requests can
+both pass at Read Committed (ADR 0010). Like the partial uniques of §4, none of
+the three can be written in the schema language.
 
 ---
 

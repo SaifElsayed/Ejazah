@@ -20,7 +20,7 @@ Conventions, binding on every table:
 - Where hard deletion is forbidden, the table carries `deleted_at` and removal is a soft deletion. This covers `users`, `sessions`, `enrollments` and `ijazahs`. One table is excepted and has no removal path whatsoever: `audit_logs`, which is strictly append-only.
 - A soft-deleted row is excluded from every ordinary read, count and facet. Where a unique constraint covers a value a deleted row still holds, the constraint says explicitly whether the row keeps occupying it — see §15.11.
 - Every table carries `created_at`; mutable tables carry `updated_at`.
-- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored. The only deliberate cached exceptions are `teacher_profiles.average_rating` with `review_count`, and `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009). Another requires an ADR before it exists (R-DB-4).
+- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored. The only deliberate cached exceptions are `teacher_profiles.average_rating` with `review_count`; `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009); and `sessions.teacher_user_id` with `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions (ADR 0010). Another requires an ADR before it exists (R-DB-4).
 - Secrets are never plaintext. What must be *verified* is hashed (`*_hash`); what must be *recovered or presented to a third party* is encrypted in the column (`*_encrypted`, bytea).
 
 ## 1. Domain map
@@ -239,15 +239,15 @@ Two modules share this section. `booking` owns `slot_holds` and `enrollments`; `
 
 ### `slot_holds`
 
-Checkout reservation with TTL (FR-BOOK-9). Enforced against double-booking together with `sessions`.
+Checkout reservation with TTL (FR-BOOK-9). Enforced against double-booking together with `sessions`. At most one active hold per slot and per student (§15.17–18, ADR 0010).
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | slot_id | FK → availability_slots | |
 | student_user_id | FK → users | |
-| expires_at | timestamptz | Default 10 min, admin-configurable |
-| released_at | timestamptz, nullable | Set on conversion or expiry job |
+| expires_at | timestamptz | Gateway checkout TTL plus the hold grace, counted from placement (defaults 10 + 5 min, admin-configurable; FR-BOOK-9, ADR 0010 D4) |
+| released_at | timestamptz, nullable | Set on conversion, on a failed or cancelled gateway event, by the expiry job, or by the release of expired holds before a new hold on the same slot or by the same student (ADR 0010 D3). NULL means active: §15.17–18 count the row even past `expires_at` |
 
 ### `enrollments`
 
@@ -265,7 +265,7 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_duration_minutes | int | |
 | snapshot_subject_id | FK → subjects | |
 | snapshot_slot_timezone | text | Zone frozen at purchase — DST maths uses this |
-| status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` on order expiry or failure (FR-PAYG-6); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
+| status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` on hold expiry or payment failure (FR-PAYG-6), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
 | cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended, nullable | Why a `cancelled` enrollment was cancelled |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
@@ -273,7 +273,7 @@ The central entity: one student's purchase of one package. Snapshots everything 
 
 `sessions_remaining` is derived: `snapshot_session_count − count(sessions where status is terminal-delivered)`. Never stored.
 
-The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived — `count(sessions where status = 'teacher_no_show')` — not a stored counter. The only cached values in this model are `teacher_profiles.average_rating` and `review_count`, and `sessions.scheduled_start_at` and `scheduled_end_at` (ADR 0009); nothing about no-shows is among them (R-DB-4).
+The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived — `count(sessions where status = 'teacher_no_show')` — not a stored counter. The only cached values in this model are `teacher_profiles.average_rating` and `review_count`, `sessions.scheduled_start_at` and `scheduled_end_at` (ADR 0009), and `sessions.teacher_user_id` and `student_user_id` (ADR 0010); nothing about no-shows is among them (R-DB-4).
 
 ### `sessions`
 
@@ -283,6 +283,8 @@ One scheduled occurrence. Its local date, local start time and zone are the sche
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | |
+| teacher_user_id | FK → users | Cached exception #3 (ADR 0010 D2, R-DB-4): copied from the enrollment at generation, never changed. Lets §15.19 refuse overlapping sessions for one teacher |
+| student_user_id | FK → users | Cached with it: copied from the enrollment at generation, never changed. Lets §15.19 refuse overlapping sessions for one student |
 | sequence_number | int ≥ 1 | unique (enrollment_id, sequence_number) |
 | scheduled_date_local | date | The calendar date the occurrence was requested for. With the next two columns, the session's schedule and the source of truth; stores what was asked for, never where a DST gap moved it (ADR 0009 D1) |
 | scheduled_start_time_local | time | The start time the teacher chose, as requested (the slot's `start_time_local`) |
@@ -623,13 +625,16 @@ erDiagram
 
 ## 14. Indexes that matter
 
-Beyond PKs, uniques and FK indexes, four composites carry the hot paths:
+Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking guards (ADR 0010):
 
 | Index | Serves |
 |---|---|
 | `sessions (enrollment_id, sequence_number)` unique | Ordered session lists |
 | `sessions (scheduled_end_at) WHERE status = 'scheduled'` partial | The evaluate-session sweep |
-| `slot_holds (slot_id) WHERE released_at IS NULL` partial | Availability checks |
+| `slot_holds (slot_id) WHERE released_at IS NULL` partial unique | Availability checks; one active hold per slot (§15.17). Replaces the plain partial index v1.3 listed here |
+| `slot_holds (student_user_id) WHERE released_at IS NULL` partial unique | One active checkout per student (§15.18) |
+| `sessions` GiST exclusion `(teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial | No overlapping sessions per teacher (§15.19); the teacher's calendar |
+| `sessions` GiST exclusion `(student_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial | No overlapping sessions per student (§15.19); the reservation check against the student's sessions |
 | `notifications (user_id, read_at)` | Notification centre badge |
 
 Add nothing else until a query is measurably slow (Architecture §17).
@@ -654,12 +659,23 @@ Rules that must hold even if application code is buggy — so they live in the s
 14. `payments.gateway_order_id` unique; `payments.gateway_transaction_id` unique where present — one platform record per gateway order.
 15. `enrollments.confirmed_at` is written only by the confirm-enrollment job; no application path sets `status = 'confirmed'` without a `paid` event row for that enrollment. Held at the service layer and by the CI test of R-HONEST-1, since the database cannot express the cross-table dependency without a trigger (research R-5).
 16. `idempotency_keys (scope, key)` unique — a repeated client mutation returns the first outcome and never repeats the effect (FR-042, R-API-14, ADR 0008).
+17. `slot_holds (slot_id)` unique `WHERE released_at IS NULL` — one active hold per slot, so two students cannot hold the same slot at once (FR-BOOK-9, ADR 0010 D1). An expired hold still counts until `released_at` is set; the service releases expired holds on the slot in the same transaction before it inserts (ADR 0010 D3).
+18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time (FR-BOOK-12, ADR 0010 D6).
+19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)` and the same with `student_user_id`, each `WHERE deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The range includes its start and excludes its end, so back-to-back sessions are allowed.
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
 *End of document. 33 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+
+## Changelog — v1.3 addendum (ADR 0010)
+
+| # | Change | Decision |
+|---|---|---|
+| 1 | `sessions` gains `teacher_user_id` and `student_user_id`, copied from the enrollment at generation and declared caches under R-DB-4. | ADR 0010 D2 |
+| 2 | §14: the `slot_holds (slot_id)` partial index becomes a partial unique index; a `slot_holds (student_user_id)` partial unique index and two GiST exclusion constraints on `sessions` are added. §15: rules 17, 18 and 19. | ADR 0010 D1, D6 |
+| 3 | `slot_holds.expires_at` is the gateway checkout TTL plus the hold grace; `released_at` is also set by a failed or cancelled gateway event and by the release of expired holds before a new hold. | ADR 0010 D3, D4 |
 
 ## Changelog — v1.3 addendum (ADR 0008)
 

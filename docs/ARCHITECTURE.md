@@ -348,8 +348,14 @@ gateway POSTs a signed webhook  →  payments.webhook endpoint (raw body, outsid
    ▼
 confirm-enrollment job (idempotent, double-run safe)
    │  if enrollment already confirmed → no-op
+   │  if the hold was already released (late payment, ADR 0010 D5, FR-PAYG-19):
+   │     slot and both parties' times still free → re-acquire the hold, then continue below
+   │     otherwise → no sessions, enrollment stays cancelled,
+   │                 moderation opens a compensation case, student notified — stop here
    │  booking.confirmEnrollment(id)  →  status = confirmed, confirmed_at, hold converted
-   │  sessions.generateForEnrollment(id)
+   │  sessions.generateForEnrollment(id)   commits with the confirmation; an overlap refused by
+   │                                       the database (ERD §15.19) generates nothing, the
+   │                                       enrollment is not confirmed → as "otherwise"
    │  notifications: both parties
    ▼
 net proceeds settle to the teacher's payout account, gateway-side
@@ -360,7 +366,7 @@ client: after the hosted checkout returns, the app subscribes to enrollments.sta
         it releases the student with a "Confirming" badge; the push resolves it (FR-PAYG-18, ADR 0008)
 ```
 
-The gateway order expires with the slot hold. `expire-pending-payments` releases the hold and cancels the enrollment (`cancellation_reason = payment_expired`); the student starts again from package selection.
+The gateway order expires at the checkout TTL; the slot hold outlives it by a grace, and before the hold expires only a failed or cancelled event from the gateway releases it ([ADR 0010](adr/0010-database-refuses-double-booking.md) D4). When the hold expires with no paid event, `expire-pending-payments` releases it and cancels the enrollment (`cancellation_reason = payment_expired`); the student starts again from package selection. A paid event that still arrives takes the late-payment branch above. The database refuses a second active hold on a slot or for a student, and overlapping sessions for a teacher or a student (ERD §15.17–19).
 
 ### 8.2 Payout onboarding gate
 

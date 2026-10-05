@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.3.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md) and [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md).
+Version 2.3.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -171,7 +171,7 @@ encrypted at rest.
 | R-DB-1 | **Never** edit a migration after it merges. Fix forward with a new migration. | `CI` - migration checksum verification |
 | R-DB-2 | **Never** hand-edit a local schema. A diverged database is reset from migrations, not patched. | `REVIEW`, plus the team runbook |
 | R-DB-3 | **Never** hard-delete: audit logs, ijazahs, sessions, enrollments, users. Terminal states are statuses; the first four carry `deleted_at`, the audit log has no removal path at all. | `DB` - DELETE revoked on those tables for the app role |
-| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`, and `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)) - and never add another without an ADR. | `REVIEW`; the ERD is the registry |
+| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`; `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)); and `sessions.teacher_user_id` / `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions ([ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md)) - and never add another without an ADR. | `REVIEW`; the ERD is the registry |
 | R-DB-5 | **Never** enforce a cross-field invariant only in code when a check constraint can hold it (self-enrollment, phone-or-email, rating range, body-or-attachment). | `DB` check constraints per ERD section 15 |
 | R-DB-6 | **Never** issue a sequential or guessable identifier for anything public: certificate numbers, verification tokens. Crypto-random. | `RT` - generation utility in `platform/`; `Math.random` banned by `LINT` |
 | R-DB-7 | **Never** store an OTP code, token, or password in plain text. Hashed, always. *(Reversible secrets: R-DB-8.)* | `CI` - `*_hash` column naming check; `REVIEW` |
@@ -378,6 +378,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.3.1 | 2026-10-05 | ADR 0010. PATCH: R-DB-4 lists `sessions.teacher_user_id` and `student_user_id` among the declared caches, copied from the enrollment at generation and never changed, so the exclusion constraints of ERD §15.19 can refuse overlapping sessions. R-DB-4 already permitted a new cache through an ADR, so no prohibition changed. Follows 2.3.0. |
 | 2.3.0 | 2026-10-05 | MINOR (review of PR #29, T040): R-SEC-11 is expanded. It now names strict HTTP parsing beside TLS verification, so switching on a lenient HTTP parser is prohibited by the rule's own words, and the enforcement cell names `insecureHTTPParser: true` beside `rejectUnauthorized: false`. `sec/no-disabled-tls` has refused that option since PR #29, by the owner's recorded decision that a lenient parser is what request smuggling needs; this amendment gives that refusal its text. The enforcement cell of R-PROC-7, and with it the CI rows of the enforcement map and of the lint contract, gain a pipeline half (review of PR #31, T139 and T140): the suppression check is run a second time with inline configuration ignored, because a comment could switch the rule off in the first run, and an unused directive becomes an error. The prohibition of R-PROC-7 is unchanged. No prohibition removed or weakened, so no ADR. Follows 2.2.0. |
 | 2.2.0 | 2026-10-05 | MINOR (reviews of PR #27 and PR #30, T047): R-API-6 is expanded. The access path is the repository of the owning module or of the kernel. Runtime raw SQL is confined to the platform kernel (`apps/api/src/platform/db/`) and its string-taking `Unsafe` forms are written nowhere in the API; the enforcement cell names repository files, the refusal of database client members other than `$transaction` outside `platform/db/`, and review for what lint cannot see (a database driver used directly, `Prisma.raw`). R-API-2 gains an inline cross-reference to R-API-6 for a query through an injected client, as "One prohibition, one rule" requires. Rationale: a raw query names its table where the per-module allowlist cannot read it, so it was a way around the rule as written. No prohibition removed or weakened, so no ADR. Follows 2.1.3. |
 | 2.1.3 | 2026-09-27 | PATCH (PR #20, T035): the R-MOBILE-1 enforcement cell and the enforcement-map row name the six `boundaries/*` rules of `eslint-plugin-ijazah`, with wall data in `packages/config/eslint.boundaries.js`, instead of `eslint-plugin-boundaries`. No prohibition changed. Follows 2.1.2 (ADR 0009, PR #21). |
@@ -396,4 +397,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.3.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-05
+**Version**: 2.3.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-05
