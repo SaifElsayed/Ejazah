@@ -6,9 +6,9 @@
 // of PR #27 found:
 //
 //   - who may reach a table: only a repository file of the module, or of the kernel, that owns it.
-//     A service querying its own module's table is refused, and so are a service's spec file and a
-//     kernel file that is not a repository reading the kernel's table; the kernel's repository
-//     under `platform/db/` reading a module's table is a foreign table. A
+//     A service querying its own module's table is refused, and so are a spec file that is not a
+//     repository spec and a kernel file that is not a repository reading the kernel's table; the
+//     kernel's repository under `platform/db/` reading a module's table is a foreign table. A
 //     `<name>.repository.spec.<extension>` file is a repository file of its module and gains
 //     nothing else, and a file named `.repository.ts` with nothing in front is not one.
 //   - what the database client is: a module-level client, a client passed as a parameter, the
@@ -16,7 +16,8 @@
 //     that no `PrismaClient` declaration carries — also behind the standard library's `Omit`,
 //     `Readonly` and `Pick`, which is how an extended client's transaction client arrives. The
 //     client module and its namespaces are not the client, and a property an intersection adds
-//     beside the client is not a delegate.
+//     beside the client is not a delegate, while an extended client inside an intersection keeps
+//     the delegates its mapped part holds.
 //   - every spelling that reaches a member: dot access, a computed literal key, a literal-typed
 //     key, declaration destructuring (plain, renamed, nested, computed, as a parameter) and
 //     assignment-expression destructuring. A key the rule cannot resolve is refused, and so is the
@@ -46,7 +47,11 @@
 // the eight were rearranged: the kernel is now one repository inside `platform/db/` and one
 // non-repository file outside it (which carries the nameless `.repository.ts` case too), and the
 // entrypoint `apps/api/src/worker.ts` was dropped, because a job is outside every module in the
-// same way and `jobs/expire-holds.ts` keeps those cases.
+// same way and `jobs/expire-holds.ts` keeps those cases. The final check of PR #27 restored the
+// case that a file under `platform/db/` that is not a repository may use the client's `$` members,
+// so the least-used name, the service's spec file `booking.service.spec.ts`, became
+// `platform/db/lock-row.spec.ts`: a spec file that is not a repository spec, which its one case
+// still needs, and a non-repository file inside `platform/db/`, which the restored case needs.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -172,9 +177,11 @@ const bookingRepositorySpec = virtualFile(
   'apps/api/src/modules/booking/booking.repository.spec.ts',
 );
 const bookingService = virtualFile('apps/api/src/modules/booking/booking.service.ts');
-const bookingServiceSpec = virtualFile('apps/api/src/modules/booking/booking.service.spec.ts');
 // The kernel's repository, inside `platform/db/`: a repository file, and where `$` members live.
 const kernelRepository = virtualFile('apps/api/src/platform/db/prisma.repository.ts');
+// A spec file inside `platform/db/` that is neither a repository nor a repository spec: it may use
+// `$` members, and it may not reach a table.
+const kernelDbSpec = virtualFile('apps/api/src/platform/db/lock-row.spec.ts');
 // A kernel file outside `platform/db/` that is not a repository file. Its name is `.repository.ts`
 // with nothing in front, which since the second review (Nit 11) is not a repository name, so this
 // one file proves that too.
@@ -226,6 +233,18 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
         'prisma.$queryRaw`select 1`;\nprisma.$transaction(async (tx) => tx.$executeRaw`select 1`);\nprisma.$connect();\nprisma.$queryRawTyped({ sql: "select 1" });\nvoid prisma.$extends({});',
       ),
       filename: kernelRepository,
+    },
+    {
+      name: 'tagged raw SQL and other client members in a kernel db file that is not a repository (final check D)',
+      code: withClient(
+        'prisma.$queryRaw`select 1`;\nprisma.$transaction(async (tx) => tx.$executeRaw`select 1`);\nprisma.$connect();\nprisma.$queryRawTyped({ sql: "select 1" });\nvoid prisma.$extends({});',
+      ),
+      filename: kernelDbSpec,
+    },
+    {
+      name: 'a callee object named like an Object.prototype member is not a reflective read (final check B)',
+      code: "const { hasOwnProperty } = Object.prototype;\nconst o = { a: 1 };\nvoid hasOwnProperty.call(o, 'a');\ndeclare const constructor: { make(x: number): number };\nvoid constructor.make(1);",
+      filename: bookingService,
     },
     {
       name: 'a member called review on something that is not the database client',
@@ -541,6 +560,22 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       filename: bookingRepository,
       errors: [reviewsFromBooking],
     },
+    {
+      name: 'an extended client inside an intersection keeps its delegates; the added parts are not delegates (final check A)',
+      code: withClient(
+        "declare const extended: ReturnType<import('@prisma/client').PrismaClient['$extends']>;\ndeclare const ext: typeof extended & { extra: number; $note: string };\next.review.findMany();\nvoid ext.extra;\nvoid ext.$note;",
+      ),
+      filename: bookingRepository,
+      errors: [reviewsFromBooking],
+    },
+    {
+      name: 'a type parameter constrained to an extended client inside an intersection (final check A)',
+      code: withClient(
+        "declare const extended: ReturnType<import('@prisma/client').PrismaClient['$extends']>;\nfunction f<E extends typeof extended & { extra: number }>(e: E) { return e.review.findMany(); }\nvoid f;",
+      ),
+      filename: bookingRepository,
+      errors: [reviewsFromBooking],
+    },
 
     // A call that reads every member of the client names none of them (Minor 6).
     {
@@ -564,10 +599,15 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
 
     // Who may reach a table, the two shapes the second review found untested (Minor 7).
     {
-      name: 'a spec file that is not a repository spec, on its own module’s table (Minor 7)',
-      code: withClient('prisma.enrollment.findMany();'),
-      filename: bookingServiceSpec,
-      errors: [enrollmentsOutsideARepository],
+      name: 'a spec file that is not a repository spec, on its own module’s table, inside platform/db too (Minor 7)',
+      code: withClient('prisma.idempotencyKey.findMany();'),
+      filename: kernelDbSpec,
+      errors: [
+        {
+          messageId: 'notRepository',
+          data: { delegate: 'idempotencyKey', table: 'idempotency_keys', owner: 'platform' },
+        },
+      ],
     },
     {
       name: 'the kernel’s repository under platform/db reading a module’s table (Minor 7)',

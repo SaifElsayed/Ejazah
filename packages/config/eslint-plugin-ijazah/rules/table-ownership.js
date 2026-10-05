@@ -34,6 +34,11 @@
 // adds beside the client (`typeof prisma & { extra: number }`) is not a delegate, and a name
 // without `$` whose every declaration is the project's own code (a method an `$extends` call adds)
 // is not one either; a `$` name an extension adds is still a client member, refused by default.
+// Since the final check of PR #27, when an intersection has a client part, its other parts
+// declared inside the client module are client parts too: `typeof extended & { extra: number }`
+// flattens the extended client and drops its alias, and the mapped part holding its delegates
+// carries no `$` member, so without this the delegates would be lost; the project's own part
+// (`extra`) still is not a client part.
 //
 // DECISION (T047, 2026-10-05) — a member is the same member by any spelling that reaches it: dot
 // access, computed access with a literal or literal-typed key (`prisma['review']`, `prisma[k]` with
@@ -122,11 +127,13 @@ const CLIENT_PATHS = [/\/@prisma\/client\//, /\/\.prisma\/client\//];
 // members, or some of them, under an alias of its own (the interactive transaction client is
 // `Omit<…>` of the client that opened it).
 const LIBRARY_WRAPPERS = new Set(['Omit', 'Pick', 'Readonly', 'Partial', 'Required']);
-// Calls that read every member of the value they are given, so no member name can be read.
-const REFLECTIVE_READS = {
-  Reflect: new Set(['get', 'ownKeys']),
-  Object: new Set(['values', 'entries', 'getOwnPropertyDescriptors']),
-};
+// Calls that read every member of the value they are given, so no member name can be read. A Map,
+// so a callee object named like an `Object.prototype` member (`hasOwnProperty.call(o, 'a')`) finds
+// nothing instead of an inherited function.
+const REFLECTIVE_READS = new Map([
+  ['Reflect', new Set(['get', 'ownKeys'])],
+  ['Object', new Set(['values', 'entries', 'getOwnPropertyDescriptors'])],
+]);
 
 function singular(word) {
   if (word.endsWith('ies')) return `${word.slice(0, -3)}y`;
@@ -218,11 +225,22 @@ function wrappedType(program, type) {
   return type.aliasTypeArguments?.[0] ?? null;
 }
 
+/** Whether a type, by its alias or its own symbol, is declared inside the client module. */
+function declaredInClientModule(type) {
+  return [type.aliasSymbol, type.getSymbol()].some((symbol) =>
+    (symbol?.declarations ?? []).some(insideClientModule),
+  );
+}
+
 /**
  * The parts of a type that are the database client by their own declaration: declared inside the
  * client module and carrying a `$` member, which a client returned by `$extends` does and a
  * delegate does not. Reached through a type parameter's constraint, a union, an intersection and
- * the standard library's wrappers; a module or namespace object is never one.
+ * the standard library's wrappers; a module or namespace object is never one. When an intersection
+ * has a client part, its other parts declared inside the client module are client parts too:
+ * intersecting an extended client (`typeof extended & { extra: number }`) flattens it and drops its
+ * alias, leaving the mapped part that holds its delegates beside the part carrying its `$` members.
+ * A part declared in the project's own code is never one, so `extra` stays outside the client.
  */
 function clientParts(program, type, found = []) {
   const { checker } = program;
@@ -235,17 +253,20 @@ function clientParts(program, type, found = []) {
   const wrapped = wrappedType(program, resolved);
   if (wrapped !== null) return clientParts(program, wrapped, found);
 
-  const declared = [resolved.aliasSymbol, resolved.getSymbol()].some((symbol) =>
-    (symbol?.declarations ?? []).some(insideClientModule),
-  );
   const carriesClientMember = () =>
     checker
       .getPropertiesOfType(resolved)
       .some((property) => property.name.startsWith(CLIENT_MEMBER_PREFIX));
-  if (declared && carriesClientMember()) {
+  if (declaredInClientModule(resolved) && carriesClientMember()) {
     found.push(resolved);
   } else if (resolved.isIntersection()) {
+    const before = found.length;
     for (const member of resolved.types) clientParts(program, member, found);
+    if (found.length > before) {
+      for (const member of resolved.types) {
+        if (!isModuleObject(member) && declaredInClientModule(member)) found.push(member);
+      }
+    }
   }
   return found;
 }
@@ -416,7 +437,7 @@ module.exports = defineRule({
         const [first] = node.arguments;
         if (callee.type !== 'MemberExpression' || callee.computed || first === undefined) return;
         if (callee.object.type !== 'Identifier' || callee.property.type !== 'Identifier') return;
-        if (REFLECTIVE_READS[callee.object.name]?.has(callee.property.name) !== true) return;
+        if (REFLECTIVE_READS.get(callee.object.name)?.has(callee.property.name) !== true) return;
         if (first.type === 'SpreadElement') return;
         if (isClientValue(program, checker.getNonNullableType(program.typeOf(first)))) {
           context.report({ node: first, messageId: 'unresolvedMember' });
