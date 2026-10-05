@@ -37,10 +37,14 @@
 // returns (`() => (): TeacherCard[] => []`) and the members of the object or instance it returns (a
 // factory). Those returned methods are judged by their own parameters, so a factory that takes the
 // requester's gender and returns methods that do not is refused: it fails closed, and the method
-// should take the gender itself. `private` and `#private` members are skipped, because nothing
-// outside the class can call them; a `protected` member is read and refused like a public one,
-// because a subclass can expose it (fails closed). Deliberately left: members are read one level
-// down, so a function inside an object inside an exported object is not.
+// should take the gender itself. The same holds for a returned teacher whose own method returns a
+// teacher (a gender-taking finder returning `TeacherView` with `withBio(): TeacherView`, or
+// `Page<TeacherCard>` with `next()`): that method takes no gender and is refused, which fails
+// closed too and costs nothing for a Prisma row, which carries no methods. `private` and
+// `#private` members are skipped, because nothing outside the class can call them; a `protected`
+// member is read and refused like a public one, because a subclass can expose it (fails closed).
+// Deliberately left: members are read one level down, so a function inside an object inside an
+// exported object is not.
 //
 // DECISION (T046, 2026-10-05) — "returns teachers" is a type-level fact, read exactly as the
 // contract's second note defines it. An object type whose name carries `Teacher` appears in the
