@@ -1,6 +1,6 @@
 # ADR 0007 — Direct gateway checkout with post-approval teacher payout configuration
 
-**Status:** accepted · **Date:** 2026-09-06 · **Supersedes:** ADR 0005 decision D1 (the off-platform direct-payment model) and the parts of ADR 0006 D1 that stated the visibility predicate without payout readiness.
+**Status:** accepted · **Date:** 2026-09-06 · **Supersedes:** ADR 0005 decision D1 (the off-platform direct-payment model) and the parts of ADR 0006 D1 that stated the visibility predicate without payout readiness. · **Amended by:** [ADR 0010](0010-database-refuses-double-booking.md), the hold timing of D4 (the slot hold outlives the gateway order by a grace).
 
 ## Context
 

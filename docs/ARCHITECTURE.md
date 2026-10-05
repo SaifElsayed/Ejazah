@@ -349,7 +349,7 @@ gateway POSTs a signed webhook  →  payments.webhook endpoint (raw body, outsid
 confirm-enrollment job (idempotent, double-run safe)
    │  if enrollment already confirmed → no-op
    │  if the hold was already released (late payment, ADR 0010 D5, FR-PAYG-19):
-   │     slot and both parties' times still free → re-acquire the hold, then continue below
+   │     no other hold on the slot, both parties' times free → continue below, no new hold
    │     otherwise → no sessions, enrollment stays cancelled,
    │                 moderation opens a compensation case, student notified — stop here
    │  booking.confirmEnrollment(id)  →  status = confirmed, confirmed_at, hold converted

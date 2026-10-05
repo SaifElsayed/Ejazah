@@ -135,8 +135,8 @@ them (constitution 2.3.1, PATCH, as 2.1.2 did for ADR 0009).
 
 An index predicate cannot use the current time, so an expired hold still blocks
 its slot until `released_at` is set. In the same transaction that creates a
-hold, the service first releases the expired holds on that slot and the expired
-holds of that student (D6), then inserts. The expiry job remains the sweep for
+hold, the service first releases the expired holds on that slot and the
+student's own active hold, if any (D6), then inserts. The expiry job remains the sweep for
 everything else. Two requests releasing the same expired hold do not conflict:
 the second `UPDATE` waits for the first and then matches no row, and the unique
 index decides which insert wins.
@@ -161,8 +161,11 @@ and FR-PAYG-18 offers Retry on the same hold while the hold is alive.
 
 The event is recorded and `confirm-enrollment` runs as for any paid event. If
 the slot is still free and neither the teacher nor the student has an
-overlapping session, the enrollment is confirmed as FR-PAYG-5 says: the hold is
-re-acquired and converted, and the sessions are generated. The enrollment moves
+overlapping session, the enrollment is confirmed as FR-PAYG-5 says, without
+re-acquiring a hold: in one transaction the step checks that no other student
+holds the slot, confirms the enrollment and generates the sessions, which the
+exclusion constraints guard (D1). Not taking a new hold keeps D6 out of the
+way when the student has meanwhile started another checkout. The enrollment moves
 from `cancelled` to `confirmed` through the same single write path (R-HONEST-1).
 Its `cancellation_reason` returns to NULL, since that column records why a
 cancelled enrollment was cancelled.
@@ -180,7 +183,11 @@ constraint (D1).
 
 `slot_holds` gets a second partial unique index, on `(student_user_id) WHERE
 released_at IS NULL`. A student is in at most one checkout at a time. This is a
-new business rule, approved by the owner, and stated as FR-BOOK-12.
+new business rule, approved by the owner, and stated as FR-BOOK-12. A new
+checkout by the same student first releases that student's own active hold in
+the same transaction: the student has chosen another slot, the "Choose another
+slot" action of the checkout screens. A payment that still completes on the
+released hold follows D5.
 
 ## What the database does not hold
 
@@ -233,14 +240,12 @@ new business rule, approved by the owner, and stated as FR-BOOK-12.
   the student or into the D5 branch (R-API-8). No task is added for it in
   001-foundations.
 - A student who leaves the gateway page without the gateway reporting a failure
-  keeps the hold until it expires, at most the TTL plus the grace. Under D6 they
-  cannot start another checkout before then; Retry on the same hold stays
-  available (FR-PAYG-18).
-- Two points are left for the phase that builds D5, which must raise them
-  rather than decide them at the keyboard (R-PROC-3). If the same student holds
-  another active checkout when a late payment arrives, D6 refuses the
-  re-acquired hold although the slot is free. And `notifications.type` has no
-  member for the notice the student receives under D5.
+  can start another checkout at once: the new hold releases the old one (D6).
+  Retry on the same hold stays available while it is alive (FR-PAYG-18). If the
+  abandoned order is still paid, D5 applies.
+- One point is left for the phase that builds D5, which must raise it rather
+  than decide it at the keyboard (R-PROC-3): `notifications.type` has no member
+  for the notice the student receives under D5.
 
 ## References
 
