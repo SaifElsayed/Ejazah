@@ -21,10 +21,16 @@
 // two names that reach a response without ever being a variable: an object-literal property whose
 // key is written out (not computed, not shorthand) and whose value's type is money, so
 // `({ price: price_piasters })` is refused on `price`; and a getter, in a class, an object literal
-// or an interface, read by its return type. A shorthand property repeats a name that was already
-// checked where it was declared. A reference is not a declaration: narrowing `candidate: number`
-// to an amount inside an `if` (as `packages/money/src/index.spec.ts` does) names nothing new and
-// stays silent. Function names are not checked — a function returning an amount is not a money
+// or an interface, read by its return type. Since the second review of PR #27 also an
+// auto-accessor field (`accessor price: Piasters`, abstract too); a setter, in the same three
+// places, read by the type of the value it takes, so `set price(v: Piasters)` is refused with or
+// without a getter (a getter-setter pair is refused once for each accessor); and the name an
+// export gives an amount, so `export { price_piasters as price }` is refused on `price`, unless
+// the export keeps the local name, already checked where it was declared, or is the module's
+// `default`, which is not a name. A shorthand property repeats a name that was already checked
+// where it was declared. A reference is not a declaration: narrowing `candidate: number` to an
+// amount inside an `if` (as `packages/money/src/index.spec.ts` does) names nothing new and stays
+// silent. Function names are not checked — a function returning an amount is not a money
 // variable. Not covered, deliberately: tuple labels (`[gross: Piasters, fee: Piasters]`) and index
 // signatures, which name a position or a key type rather than one amount.
 //
@@ -116,15 +122,29 @@ module.exports = defineRule({
       if (name !== null) check(node.key, name);
     }
 
-    /** A getter is named like a property and typed by what it returns, which is its key's type. */
-    function checkGetter(node) {
-      if (node.kind === 'get') checkProperty(node);
-    }
-
-    /** An object-literal member: a getter by its return type, a written-out key by its value's type. */
-    function checkLiteralMember(node) {
+    /**
+     * A getter or a setter is named like a property: a getter typed by what it returns, which is
+     * its key's type, a setter by the value it takes. `params` are the accessor's parameters.
+     */
+    function checkAccessor(node, params) {
       if (node.kind === 'get') {
         checkProperty(node);
+        return;
+      }
+      const [value] = params;
+      const name = propertyName(node);
+      if (node.kind === 'set' && value !== undefined && name !== null) check(node.key, name, value);
+    }
+
+    /** A class member: a method's own name is not checked, a getter's and a setter's are. */
+    function checkClassMethod(node) {
+      checkAccessor(node, node.value.params);
+    }
+
+    /** An object-literal member: an accessor by its type, a written-out key by its value's type. */
+    function checkLiteralMember(node) {
+      if (node.kind === 'get' || node.kind === 'set') {
+        checkAccessor(node, node.value.params);
         return;
       }
       if (node.kind !== 'init' || node.method || node.shorthand) return;
@@ -132,22 +152,34 @@ module.exports = defineRule({
       if (name !== null) check(node.key, name, node.value);
     }
 
+    /** `export { price_piasters as price }`: the name another file imports must carry it too. */
+    function checkExportedName(node) {
+      const { exported, local } = node;
+      const name = exported.type === 'Identifier' ? exported.name : String(exported.value);
+      const localName = local.type === 'Identifier' ? local.name : String(local.value);
+      if (name === localName || name === 'default') return;
+      check(exported, name, local);
+    }
+
     const listeners = {
       VariableDeclarator: (node) => checkBindings(node.id),
       PropertyDefinition: checkProperty,
       TSAbstractPropertyDefinition: checkProperty,
+      AccessorProperty: checkProperty,
+      TSAbstractAccessorProperty: checkProperty,
       TSPropertySignature: checkProperty,
-      MethodDefinition: checkGetter,
-      TSAbstractMethodDefinition: checkGetter,
+      MethodDefinition: checkClassMethod,
+      TSAbstractMethodDefinition: checkClassMethod,
       'ObjectExpression > Property': checkLiteralMember,
+      ExportSpecifier: checkExportedName,
     };
     for (const type of FUNCTION_LIKE) {
       listeners[type] = (node) => node.params.forEach(checkBindings);
     }
-    // An interface getter is a method signature: its parameters above, its own name here.
+    // An interface accessor is a method signature: its parameters above, its own name here.
     listeners.TSMethodSignature = (node) => {
       node.params.forEach(checkBindings);
-      checkGetter(node);
+      checkAccessor(node, node.params);
     };
     return listeners;
   },

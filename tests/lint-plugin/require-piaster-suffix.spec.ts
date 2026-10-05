@@ -9,8 +9,10 @@
 // camelCase `amountPiasters` is refused (note under T045 and T131), and so is a name that is the
 // suffix and nothing else. Since the reviews of PR #27 it also proves the two names that reach a
 // response without being a variable — an object-literal key holding an amount and a getter
-// returning one — and a type parameter constrained to the brand. Tuple labels and index
-// signatures are valid here on purpose: the rule header records them as not covered.
+// returning one — and a type parameter constrained to the brand. Since the second review it also
+// proves an auto-accessor field, a setter with no getter and an export that renames an amount, and
+// that an export keeping the suffix, the local name or `default` stays legal. Tuple labels and
+// index signatures are valid here on purpose: the rule header records them as not covered.
 
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
 
@@ -95,6 +97,13 @@ typeAwareRuleTester().run('money/require-piaster-suffix', loadRule('require-pias
       name: 'a suffixed destructured rename',
       code: withBrand(
         'declare const row: Record<"price", Piasters>;\nexport const { price: price_piasters } = row;',
+      ),
+      filename: feature,
+    },
+    {
+      name: 'an export that keeps the suffix, keeps the name or is the default export',
+      code: withBrand(
+        'declare const price_piasters: Piasters;\nexport { price_piasters as gross_piasters, price_piasters };\nexport { price_piasters as default };',
       ),
       filename: feature,
     },
@@ -236,6 +245,30 @@ typeAwareRuleTester().run('money/require-piaster-suffix', loadRule('require-pias
       code: withBrand('export const unwrap = (value: Piasters): number => value;'),
       filename: moneyPackage,
       errors: [{ messageId: 'missingSuffix', data: { name: 'value' } }],
+    },
+    {
+      name: 'an auto-accessor field holding an amount (second review, Nit 10)',
+      code: withBrand(
+        'declare const gross_piasters: Piasters;\nexport class Quote { accessor price: Piasters = gross_piasters; }',
+      ),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: 'price' } }],
+    },
+    {
+      name: 'a setter with no getter, read by the amount it takes (second review, Nit 10)',
+      code: withBrand(
+        'export class Quote { set price(value_piasters: Piasters) { void value_piasters; } }',
+      ),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: 'price' } }],
+    },
+    {
+      name: 'an export renaming an amount to a name without the suffix (second review, Nit 10)',
+      code: withBrand(
+        'declare const price_piasters: Piasters;\nexport { price_piasters as price };',
+      ),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: 'price' } }],
     },
   ],
 });
