@@ -18,29 +18,50 @@
 // to) — which covers a module-level client, a client passed as a parameter and the transaction
 // client (`Omit<PrismaClient, …>` keeps the member's declaration). A client returned by
 // `$extends` is the database client too, and its members are mapped, not declared on
-// `PrismaClient`, so a value is also the client when its type is declared inside that module and
-// carries a `$`-prefixed member; a delegate (`findMany`, `fields`) carries none, which keeps a
-// delegate's own members from being mistaken for delegates. A member is the same member by any
-// spelling that reaches it: dot access, computed access with a literal or literal-typed key
-// (`prisma['review']`, `prisma[k]` with `k` typed `'review'`), declaration destructuring with a
-// plain or computed key, nested and in a parameter, and assignment-expression destructuring
-// (`({ review: r } = prisma)`). Any read of the delegate counts, so handing it to a local first
-// is the same access. An access whose member cannot be resolved — a computed key that is not a
-// string literal type, `prisma[someString]` — is refused, because it may be any of them. Known
-// limits, deliberately left: a client retyped structurally
-// (`const db: { review: PrismaClient['review'] } = prisma`), which no longer is the client's type,
-// and the shape of a generated `$extends` result, which is modelled in the RuleTester table and
-// meets the real client when the schema has models (T055–T063).
+// `PrismaClient`, so a value is also the client when its type is declared inside that module (the
+// ambient module declaration counts as inside itself, as a generated file does) and carries a
+// `$`-prefixed member; a delegate (`findMany`, `fields`) carries none, which keeps a delegate's
+// own members from being mistaken for delegates.
 //
-// DECISION (T047, 2026-10-05) — which file may reach a table. Only a repository file — a file
-// named `<name>.repository.<extension>` — of the module, or of the platform kernel, that owns the
-// table (R-API-6: "the owning module's, or the kernel's, repository is the only access path").
+// DECISION (T047, 2026-10-05, second review of PR #27) — where that recognition looks, and where
+// it does not. It looks through a type parameter's constraint, a union, an intersection and the
+// standard library's `Omit`, `Pick`, `Readonly`, `Partial` and `Required` (an alias declared in a
+// default-library file), so the interactive transaction client of an extended client,
+// `Omit<ExtendedClient, '$transaction' | '$extends'>`, and `Readonly<typeof extended>` are the
+// client. A module or namespace object is never the client (`import * as db`, `Prisma`,
+// `$Enums`), although the generated module carries `$Enums`. A name is a member of the client
+// only when the part of the type that is the client carries it, so a property an intersection
+// adds beside the client (`typeof prisma & { extra: number }`) is not a delegate, and a name
+// without `$` whose every declaration is the project's own code (a method an `$extends` call adds)
+// is not one either; a `$` name an extension adds is still a client member, refused by default.
+//
+// DECISION (T047, 2026-10-05) — a member is the same member by any spelling that reaches it: dot
+// access, computed access with a literal or literal-typed key (`prisma['review']`, `prisma[k]` with
+// `k` typed `'review'`), declaration destructuring with a plain or computed key, nested and in a
+// parameter, and assignment-expression destructuring (`({ review: r } = prisma)`). Any read of the
+// delegate counts, so handing it to a local first is the same access. An access whose member cannot
+// be resolved — a computed key that is not a string literal type, `prisma[someString]` — is refused
+// (`unresolvedMember`), because it may be any of them; so, since the second review of PR #27, is
+// the client handed as the first argument to `Reflect.get`, `Reflect.ownKeys`, `Object.values`,
+// `Object.entries` or `Object.getOwnPropertyDescriptors`, which read members the rule cannot name.
+// Known limits, deliberately left: a client retyped structurally
+// (`const db: { review: PrismaClient['review'] } = prisma`), which no longer is the client's type;
+// a client cast to `any` (`(prisma as any).review`), which R-API-10 holds; a delegate handed
+// from the owner's repository to another file as a parameter or a return value, which is an
+// R-API-2 matter (only a repository reaches the client); and the shape of a generated `$extends`
+// result, which is modelled in the RuleTester table and meets the real client when the schema has
+// models (T055–T063).
+//
+// DECISION (T047, 2026-10-05) — which file may reach a table. Only a repository file — a file named
+// `<name>.repository.<extension>`, with a name in front (a file named exactly `.repository.ts` is
+// not one, since the second review of PR #27) — of the module, or of the platform kernel, that owns
+// the table (R-API-6: "the owning module's, or the kernel's, repository is the only access path").
 // A service querying its own module's table through an injected client imports nothing, so
 // `api/no-orm-outside-repository` (R-API-2) cannot see it; this rule refuses it. A file named
-// `<name>.repository.spec.<extension>` is a repository file of its module or of the kernel for
-// this rule, so the integration test ARCHITECTURE §13 asks for may read and write the tables its
-// own repository owns; it gains nothing else, and rows it needs in another owner's tables are set
-// up through helpers under `tests/`, outside `apps/api` and so outside this rule.
+// `<name>.repository.spec.<extension>` is a repository file of its module or of the kernel for this
+// rule, so the integration test ARCHITECTURE §13 asks for may read and write the tables its own
+// repository owns; it gains nothing else, and rows it needs in another owner's tables are set up
+// through helpers under `tests/`, outside `apps/api` and so outside this rule.
 //
 // DECISION (T047, 2026-10-05) — database client members are refused by default. The rule lists
 // what a module may use, `$transaction`, not what it may not: any member of the client whose name
@@ -97,6 +118,15 @@ const REPOSITORY_SUFFIXES = ['.repository', '.repository.spec'];
 const CLIENT_NAME = 'PrismaClient';
 const CLIENT_MODULE = '@prisma/client';
 const CLIENT_PATHS = [/\/@prisma\/client\//, /\/\.prisma\/client\//];
+// The standard library's wrappers a client type is handed out under; each keeps the client's
+// members, or some of them, under an alias of its own (the interactive transaction client is
+// `Omit<…>` of the client that opened it).
+const LIBRARY_WRAPPERS = new Set(['Omit', 'Pick', 'Readonly', 'Partial', 'Required']);
+// Calls that read every member of the value they are given, so no member name can be read.
+const REFLECTIVE_READS = {
+  Reflect: new Set(['get', 'ownKeys']),
+  Object: new Set(['values', 'entries', 'getOwnPropertyDescriptors']),
+};
 
 function singular(word) {
   if (word.endsWith('ies')) return `${word.slice(0, -3)}y`;
@@ -151,7 +181,7 @@ function ownerOf(segments) {
 }
 
 function insideClientModule(declaration) {
-  for (let node = declaration.parent; node !== undefined; node = node.parent) {
+  for (let node = declaration; node !== undefined; node = node.parent) {
     if (
       ts.isModuleDeclaration(node) &&
       ts.isStringLiteral(node.name) &&
@@ -173,38 +203,90 @@ function isClientSymbol(symbol) {
   return symbol !== undefined && (symbol.declarations ?? []).some(isClientMember);
 }
 
+/** A module or namespace object (`import * as db`, `Prisma`, `$Enums`): never the client. */
+function isModuleObject(type) {
+  const flags = type.getSymbol()?.flags ?? 0;
+  const module = (flags & ts.SymbolFlags.Module) !== 0;
+  return module && (flags & (ts.SymbolFlags.Class | ts.SymbolFlags.Interface)) === 0;
+}
+
+/** The `T` of the standard library's `Omit<T, …>`, `Pick<T, …>`, `Readonly<T>` and so on. */
+function wrappedType(program, type) {
+  const alias = type.aliasSymbol;
+  if (alias === undefined || !LIBRARY_WRAPPERS.has(alias.name)) return null;
+  if (!(alias.declarations ?? []).some(program.inDefaultLibrary)) return null;
+  return type.aliasTypeArguments?.[0] ?? null;
+}
+
 /**
- * Whether a type is the database client by its own declaration: declared inside the client module
- * and carrying a `$` member, which a client returned by `$extends` does and a delegate does not.
+ * The parts of a type that are the database client by their own declaration: declared inside the
+ * client module and carrying a `$` member, which a client returned by `$extends` does and a
+ * delegate does not. Reached through a type parameter's constraint, a union, an intersection and
+ * the standard library's wrappers; a module or namespace object is never one.
  */
-function isClientType(checker, type) {
+function clientParts(program, type, found = []) {
+  const { checker } = program;
   const resolved = checker.getBaseConstraintOfType(type) ?? type;
-  if (resolved.isUnion()) return resolved.types.some((member) => isClientType(checker, member));
+  if (isModuleObject(resolved)) return found;
+  if (resolved.isUnion()) {
+    for (const member of resolved.types) clientParts(program, member, found);
+    return found;
+  }
+  const wrapped = wrappedType(program, resolved);
+  if (wrapped !== null) return clientParts(program, wrapped, found);
 
   const declared = [resolved.aliasSymbol, resolved.getSymbol()].some((symbol) =>
     (symbol?.declarations ?? []).some(insideClientModule),
   );
-  if (declared) {
-    return checker
+  const carriesClientMember = () =>
+    checker
       .getPropertiesOfType(resolved)
       .some((property) => property.name.startsWith(CLIENT_MEMBER_PREFIX));
+  if (declared && carriesClientMember()) {
+    found.push(resolved);
+  } else if (resolved.isIntersection()) {
+    for (const member of resolved.types) clientParts(program, member, found);
   }
-  return (
-    resolved.isIntersection() && resolved.types.some((member) => isClientType(checker, member))
-  );
+  return found;
 }
 
 /** Whether a value is the database client at all, for an access that names no single member. */
-function isClientValue(checker, type) {
-  return isClientType(checker, type) || checker.getPropertiesOfType(type).some(isClientSymbol);
+function isClientValue(program, type) {
+  return (
+    clientParts(program, type).length > 0 ||
+    program.checker.getPropertiesOfType(type).some(isClientSymbol)
+  );
 }
 
+/**
+ * Whether `name` is a member of the database client on this value: declared on `PrismaClient`, or
+ * carried by a part of the type that is the client by its own declaration, so a property an
+ * intersection adds beside the client (`typeof prisma & { extra: number }`) is not one. A name
+ * without `$` whose every declaration is the project's own code (a method an `$extends` call adds
+ * to the client) is not a delegate either; a `$` name stays a client member wherever it is written.
+ */
+function isClientMemberOf(program, type, name) {
+  const { checker } = program;
+  const property = checker.getPropertyOfType(type, name);
+  if (property === undefined) return false;
+  if (isClientSymbol(property)) return true;
+  const declarations = property.declarations ?? [];
+  const ownCode = declarations.length > 0 && !declarations.some(insideClientModule);
+  if (ownCode && !name.startsWith(CLIENT_MEMBER_PREFIX)) return false;
+  return clientParts(program, type).some(
+    (part) => checker.getPropertyOfType(part, name) !== undefined,
+  );
+}
+
+/** `<name>.repository.<extension>` or `<name>.repository.spec.<extension>`, a name in front. */
 function isRepositoryFile(filename) {
   const basename = path.basename(filename);
   const withoutExtension = basename
     .slice(0, basename.length - path.extname(basename).length)
     .toLowerCase();
-  return REPOSITORY_SUFFIXES.some((suffix) => withoutExtension.endsWith(suffix));
+  return REPOSITORY_SUFFIXES.some(
+    (suffix) => withoutExtension.endsWith(suffix) && withoutExtension.length > suffix.length,
+  );
 }
 
 /** The member names a key of this type can only be, or null when it could be any. */
@@ -281,12 +363,7 @@ module.exports = defineRule({
 
     /** One named member read from a value, by whichever spelling reached it. */
     function checkMember(reportNode, valueType, name) {
-      const source = checker.getNonNullableType(valueType);
-      const onClient =
-        isClientSymbol(checker.getPropertyOfType(source, name)) ||
-        (isClientType(checker, source) &&
-          checker.getPropertiesOfType(source).some((property) => property.name === name));
-      if (!onClient) return;
+      if (!isClientMemberOf(program, checker.getNonNullableType(valueType), name)) return;
       if (name.startsWith(CLIENT_MEMBER_PREFIX)) checkClientMember(reportNode, name);
       else checkDelegate(reportNode, name);
     }
@@ -295,7 +372,7 @@ module.exports = defineRule({
     function checkKey(reportNode, valueType, names) {
       if (names !== null) {
         for (const name of names) checkMember(reportNode, valueType, name);
-      } else if (isClientValue(checker, checker.getNonNullableType(valueType))) {
+      } else if (isClientValue(program, checker.getNonNullableType(valueType))) {
         context.report({ node: reportNode, messageId: 'unresolvedMember' });
       }
     }
@@ -332,6 +409,18 @@ module.exports = defineRule({
         if (!node.computed && property.type !== 'Identifier') return;
         const names = node.computed ? literalNames(program.typeOf(property)) : [property.name];
         checkKey(property, program.typeOf(node.object), names);
+      },
+      // `Reflect.get(prisma, 'review')`, `Object.values(prisma)`: every member, none named.
+      CallExpression(node) {
+        const { callee } = node;
+        const [first] = node.arguments;
+        if (callee.type !== 'MemberExpression' || callee.computed || first === undefined) return;
+        if (callee.object.type !== 'Identifier' || callee.property.type !== 'Identifier') return;
+        if (REFLECTIVE_READS[callee.object.name]?.has(callee.property.name) !== true) return;
+        if (first.type === 'SpreadElement') return;
+        if (isClientValue(program, checker.getNonNullableType(program.typeOf(first)))) {
+          context.report({ node: first, messageId: 'unresolvedMember' });
+        }
       },
       ObjectPattern(node) {
         const source = destructuredType(node);
