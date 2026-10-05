@@ -93,7 +93,7 @@ module.exports = defineRule({
 
     function check(nameNode, name) {
       if (name.endsWith(SUFFIX)) return;
-      if (!isMoneyType(program.typeOf(nameNode))) return;
+      if (!isMoneyType(program.typeOf(nameNode), program.checker)) return;
       context.report({ node: nameNode, messageId: 'missingSuffix', data: { name } });
     }
 

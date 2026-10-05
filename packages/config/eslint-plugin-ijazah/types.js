@@ -17,6 +17,12 @@
 // `[piastersBrand]`; a union of that with `null` or `undefined` (an optional or nullable amount)
 // is money too. An array of amounts is not "a money value" and is not recognised here.
 //
+// DECISION (T044, 2026-10-05) — a type parameter is read through its constraint. `T extends
+// Piasters`, and `Row[K]` with `K extends 'gross_piasters'`, hold an amount under a type that is
+// not itself the intersection, so the brand test first resolves `getBaseConstraintOfType(type) ??
+// type`. Known limit, deliberately left: a union of an amount with a plain `number`
+// (`Piasters | number`) is not money, because every present constituent must carry the brand.
+//
 // DECISION (T046, 2026-10-05) — the requester's gender is recognised by where its brand is
 // declared, never by the name of its key. `RequesterGender` is the gender value of ERD §2 branded
 // with a `unique symbol` in the kernel file `apps/api/src/platform/guards/requester-gender.ts`
@@ -125,9 +131,12 @@ function isBrandedIntersection(type, isBrand, baseFlags) {
   return based && branded;
 }
 
-/** Whether a resolved type is a piaster amount, optionally nullable. */
-function isMoneyType(type) {
-  const present = presentConstituents(type);
+/**
+ * Whether a resolved type is a piaster amount, optionally nullable. A type parameter and an
+ * indexed access are read through their constraint.
+ */
+function isMoneyType(type, checker) {
+  const present = presentConstituents(checker.getBaseConstraintOfType(type) ?? type);
   return (
     present.length > 0 &&
     present.every((member) => isBrandedIntersection(member, isMoneyBrand, ts.TypeFlags.NumberLike))

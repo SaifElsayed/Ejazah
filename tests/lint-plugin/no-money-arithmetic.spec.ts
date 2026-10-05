@@ -6,7 +6,10 @@
 // must stay legal: a comparison between amounts, arithmetic and shifts on plain numbers, and any
 // arithmetic at all inside `packages/money`, which is the one place R-MONEY-5 allows it. Every
 // case declares the brand the way `packages/money/src/index.ts` does, so the rule is tested
-// against the real shape and not against a name.
+// against the real shape and not against a name. A type parameter constrained to the brand is read
+// through its constraint. One valid case pins the known limits the rule header records — an
+// amount widened to `number`, a template literal, `Math.max` and a `Piasters | number` union — so
+// that closing one of them is a visible change to this table.
 
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
 
@@ -56,6 +59,20 @@ typeAwareRuleTester().run(
       {
         name: 'a string concatenation with no amount in it',
         code: "export const label = (name: string): string => 'Teacher ' + name;",
+        filename: feature,
+      },
+      {
+        name: 'known limits: an amount widened to number, a template literal, Math.max, a union with number',
+        code: withBrand(
+          [
+            'export const cast = (price_piasters: Piasters): number => (price_piasters as number) * 2;',
+            'export const converted = (price_piasters: Piasters): number => Number(price_piasters) * 2;',
+            'export function assigned(price_piasters: Piasters): number { const plain: number = price_piasters; return plain * 2; }',
+            'export const label = (price_piasters: Piasters): string => `EGP ${price_piasters}`;',
+            'export const larger = (a_piasters: Piasters, b_piasters: Piasters): number => Math.max(a_piasters, b_piasters);',
+            'export const mixed = (amount: Piasters | number): number => amount * 2;',
+          ].join('\n'),
+        ),
         filename: feature,
       },
       {
@@ -152,6 +169,22 @@ typeAwareRuleTester().run(
         ),
         filename: feature,
         errors: [{ messageId: 'arithmetic', data: { operand: 'copy', operator: '*' } }],
+      },
+      {
+        name: 'a type parameter constrained to the brand is read through its constraint (Saif 11)',
+        code: withBrand(
+          'export function difference<T extends Piasters>(a_piasters: T, b_piasters: T): number { return a_piasters - b_piasters; }',
+        ),
+        filename: feature,
+        errors: [{ messageId: 'arithmetic', data: { operand: 'a_piasters', operator: '-' } }],
+      },
+      {
+        name: 'an amount read out of a row through a constrained key (Saif 11)',
+        code: withBrand(
+          "interface Row { readonly gross_piasters: Piasters; readonly net_piasters: Piasters }\nexport function twice<K extends 'gross_piasters' | 'net_piasters'>(row: Row, key: K): number { return row[key] * 2; }",
+        ),
+        filename: feature,
+        errors: [{ messageId: 'arithmetic', data: { operand: 'row[key]', operator: '*' } }],
       },
       {
         name: 'a right shift, which halves an amount',

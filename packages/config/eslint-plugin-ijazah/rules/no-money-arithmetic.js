@@ -26,12 +26,30 @@
 // DECISION (T044) — the brand, not the name, decides. "Carries the brand" is `isMoneyType` in
 // `../types.js`, shared with `money/require-piaster-suffix` (T045): the branded intersection
 // `number & { readonly [piastersBrand]: true }`, recognised by the declaration of its unique-symbol
-// key rather than by the alias name `Piasters`, optionally unioned with `null` or `undefined`.
+// key rather than by the alias name `Piasters`, optionally unioned with `null` or `undefined`. A
+// type parameter is read through its constraint (2026-10-05), so `a - b` with `T extends Piasters`
+// and `row[key] * 2` with `K extends 'gross_piasters'` are refused.
+//
+// DECISION (T044, 2026-10-05) — known limits, recorded so that none of them reads as an oversight
+// (reviews of PR #27); `tests/lint-plugin/no-money-arithmetic.spec.ts` pins each as a valid case.
+// The brand is an intersection with `number`, so an amount widens to a plain number without a
+// word from the compiler, and once it has, this rule has nothing left to recognise:
+// `(price_piasters as number) * 2`, `Number(price_piasters) * 2`, an amount assigned to a
+// `number` and then multiplied, and an amount inside a template literal are all silent.
+// `toPlainNumber` is the one greppable place that widening is meant to happen (note under T030).
+// Two things are not arithmetic and are legal by decision rather than by omission:
+// `Math.max(a_piasters, b_piasters)`, a call that picks one of its arguments, and a template
+// literal, which has no operator — although `'EGP ' + price_piasters` is refused, because that
+// one is the `+` R-MONEY-5 names. And a `Piasters | number` union is not money, because every
+// present constituent must carry the brand (`../types.js`).
 //
 // Files under `packages/money/` are exempt: that package is the one place R-MONEY-5 allows the
 // operation. The path is read as a run of segments through `segmentsOf`/`after` in
 // `../specifiers.js`, which handles Windows separators and the fixture tree alike (note under
-// T035).
+// T035). Known limit of that reading: the run `packages/money` exempts a file wherever it appears
+// in a path, so a folder of that name inside an application (`features/teacher/packages/money/`)
+// would be exempt too. No such folder exists; the reviewer of the pull request that adds one
+// holds it.
 const { defineRule } = require('../rule');
 const { after, segmentsOf } = require('../specifiers');
 const { isMoneyType, requireProgram } = require('../types');
@@ -74,7 +92,9 @@ module.exports = defineRule({
     if (insideMoneyPackage(context.filename)) return {};
 
     function check(node, operator, operands) {
-      const money = operands.find((operand) => isMoneyType(program.typeOf(operand)));
+      const money = operands.find((operand) =>
+        isMoneyType(program.typeOf(operand), program.checker),
+      );
       if (money === undefined) return;
       context.report({
         node,
