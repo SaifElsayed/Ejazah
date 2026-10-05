@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.3 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.2 · September 2026*
+*Version 1.3 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026*
 
 ## 0. How to read this
 

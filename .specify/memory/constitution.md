@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.2.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md) and [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md).
+Version 2.3.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md) and [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -197,7 +197,7 @@ they declare about themselves.
 | R-SEC-8 | **Never** let admin and user authentication share tables, tokens, or middleware. | `DB` - separate tables; `TYPE` - separate contexts |
 | R-SEC-9 | **Never** expose a stack trace, query, or internal path in a client-facing error. | `RT` global error filter |
 | R-SEC-10 | **Never** delete a leaked key's commit and call it handled. Rotate first, investigate second, per the runbook. | Runbook - process rule |
-| R-SEC-11 | **Never** disable TLS verification, even locally, even "temporarily." | `LINT` - `rejectUnauthorized: false` and equivalents banned |
+| R-SEC-11 | **Never** disable TLS verification or strict HTTP parsing, even locally, even "temporarily." | `LINT` - `rejectUnauthorized: false` and equivalents banned, and `insecureHTTPParser: true` with them |
 | R-SEC-12 | **Never** merge with a red Dependabot critical alert. | `CI` gate |
 
 ### VIII. Sessions and Attendance (R-SESS)
@@ -248,7 +248,7 @@ not skipped.
 | R-PROC-4 | **Never** push to `main` or `develop` directly, merge without one approving review, or merge red CI. Feature branches merge into `develop` by pull request; `develop` merges into `main` by release pull request (ADR 0005 D9). | `CI` - branch protection on both branches, mechanical |
 | R-PROC-5 | **Never** merge a service change without unit tests, or a gender or time change without its adversarial or DST tests updated. | `CI` - per-path coverage floors (research R-13) plus suite gates |
 | R-PROC-6 | **Never** add a feature in Phase 6. Hardening means hardening. | `REVIEW`, plus the phase gate itself |
-| R-PROC-7 | **Never** disable a lint rule inline without a justification comment and ticket. *(Type escape hatches: R-API-10.)* | `LINT` - `eslint-disable` requires description |
+| R-PROC-7 | **Never** disable a lint rule inline without a justification comment and ticket. *(Type escape hatches: R-API-10.)* | `LINT` - `eslint-disable` requires description; `CI` - the same check run again with inline configuration ignored, so that no comment can switch it off, and an unused directive is an error |
 | R-PROC-8 | **Never** commit commented-out code or a bare TODO. TODOs carry a ticket reference or do not exist. | `LINT` - `no-warning-comments` configured |
 | R-PROC-9 | **Never** edit a generated file (Prisma client, tRPC types, lockfiles by hand). | `CI` - generated-file diff check |
 | R-PROC-10 | **Never** lower the coverage floor, skip a failing test, or mark a test `.skip` to get green. Fix or raise it. | `LINT` - `.only` and `.skip` banned in CI; `REVIEW` |
@@ -284,7 +284,7 @@ Who holds which rules. This is also the build list for Phase 0
 | **TypeScript** (branded types, schemas, separate routers) | Throughout | R-MONEY-1, R-TIME-6, R-GENDER-4/6, R-API-7/11, R-SEC-8, R-SESS-1, R-HONEST-4/5 |
 | **Postgres** (constraints, uniques, revoked privileges) | Phase 0, workstream 2 | R-MONEY-8, R-TIME-3, R-DB-3/5/8, R-SEC-8, R-SESS-1, R-PROC-11, ERD section 15 |
 | **Runtime guards** (`platform/`) | Phase 0, workstream 3, then per module | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
-| **CI gates** | Phase 0, workstream 1 | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/9 |
+| **CI gates** | Phase 0, workstream 1 | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/7/9 |
 | **PR checklist** | Phase 0 | The twelve `REVIEW`-only rules |
 
 Roughly 88% of the active rules are held by machines (five R-MONEY rules are superseded and hold nothing). The checklist below is twelve
@@ -378,6 +378,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.3.0 | 2026-10-05 | MINOR (review of PR #29, T040): R-SEC-11 is expanded. It now names strict HTTP parsing beside TLS verification, so switching on a lenient HTTP parser is prohibited by the rule's own words, and the enforcement cell names `insecureHTTPParser: true` beside `rejectUnauthorized: false`. `sec/no-disabled-tls` has refused that option since PR #29, by the owner's recorded decision that a lenient parser is what request smuggling needs; this amendment gives that refusal its text. The enforcement cell of R-PROC-7, and with it the CI rows of the enforcement map and of the lint contract, gain a pipeline half (review of PR #31, T139 and T140): the suppression check is run a second time with inline configuration ignored, because a comment could switch the rule off in the first run, and an unused directive becomes an error. The prohibition of R-PROC-7 is unchanged. No prohibition removed or weakened, so no ADR. Follows 2.2.0. |
 | 2.2.0 | 2026-10-05 | MINOR (reviews of PR #27 and PR #30, T047): R-API-6 is expanded. The access path is the repository of the owning module or of the kernel. Runtime raw SQL is confined to the platform kernel (`apps/api/src/platform/db/`) and its string-taking `Unsafe` forms are written nowhere in the API; the enforcement cell names repository files, the refusal of database client members other than `$transaction` outside `platform/db/`, and review for what lint cannot see (a database driver used directly, `Prisma.raw`). R-API-2 gains an inline cross-reference to R-API-6 for a query through an injected client, as "One prohibition, one rule" requires. Rationale: a raw query names its table where the per-module allowlist cannot read it, so it was a way around the rule as written. No prohibition removed or weakened, so no ADR. Follows 2.1.3. |
 | 2.1.3 | 2026-09-27 | PATCH (PR #20, T035): the R-MOBILE-1 enforcement cell and the enforcement-map row name the six `boundaries/*` rules of `eslint-plugin-ijazah`, with wall data in `packages/config/eslint.boundaries.js`, instead of `eslint-plugin-boundaries`. No prohibition changed. Follows 2.1.2 (ADR 0009, PR #21). |
 | 2.1.2 | 2026-09-27 | ADR 0009. PATCH: R-DB-4 lists `sessions.scheduled_start_at` and `scheduled_end_at` among the declared caches, derived from the session's stored local time and zone and recomputed when time zone data changes. R-DB-4 already permitted a new cache through an ADR, so no prohibition changed. |
@@ -395,4 +396,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.2.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-05
+**Version**: 2.3.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-05

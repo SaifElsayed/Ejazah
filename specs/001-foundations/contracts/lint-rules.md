@@ -37,12 +37,12 @@ needed.
 | `mobile/no-manual-format` | Hand-written date, time or number formatting outside the shared layer | R-MOBILE-9 |
 | `mobile/no-insecure-storage` | Sensitive storage outside the secure storage layer | R-MOBILE-10 |
 | `mobile/no-direct-network` | Direct network call bypassing the shared client | R-MOBILE-11 |
-| `sec/no-disabled-tls` | Disabling transport security verification, in any environment | R-SEC-11 |
+| `sec/no-disabled-tls` | Disabling transport security verification or strict HTTP parsing, in any environment | R-SEC-11 |
 | `sec/no-body-logging` | Logger call receiving a raw request body | R-SEC-2 |
 | `db/no-weak-random` | Non-cryptographic randomness | R-DB-6 |
 | `api/no-push-outside-job` | Notification delivery reached outside the queued job | R-API-15 |
 | `api/require-escape-hatch-reason` | `any`, `as any` or `@ts-ignore` with no justification comment and ticket | R-API-10 |
-| `proc/require-suppression-reason` | An `eslint-disable` carrying no justification and ticket | R-PROC-7 |
+| `proc/require-suppression-reason` | An `eslint-disable` directive or an inline `eslint` configuration comment carrying no justification and ticket | R-PROC-7 |
 | `proc/no-focused-or-skipped-test` | A test marked exclusive or skipped | R-PROC-10 |
 | `proc/no-bare-marker` | A comment marker carrying no ticket reference, and a block of commented-out code | R-PROC-8 |
 
@@ -160,7 +160,7 @@ that appear to enforce something they cannot.
 | The database | R-MONEY-8, R-TIME-3, R-DB-3/5/8, R-SEC-8, R-SESS-1, R-PROC-11 |
 | Runtime guards | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
 | Superseded by ADR 0005 (ids retained, nothing to enforce) | R-MONEY-3/4/7/10/11 |
-| Pipeline gates | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/9 |
+| Pipeline gates | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/7/9 |
 | Human review alone | R-MOBILE-3, R-MOBILE-12, R-MOBILE-14, R-API-5, R-DB-2, R-DB-4, R-DB-9, R-SEC-7, R-SEC-10, R-PROC-2, R-PROC-3, R-PROC-6 |
 
 The twelve in the last row are the pull request template, and they are the only

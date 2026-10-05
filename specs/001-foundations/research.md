@@ -247,7 +247,7 @@ Rules split by what they need:
 imports, adapter imports, database-client imports outside repositories, raw
 colour and spacing literals, directional utility classes, raw platform controls,
 literal strings in view text positions, direct network calls, insecure storage
-imports, disabled TLS verification, non-cryptographic randomness, logger calls
+imports, disabled TLS verification or strict HTTP parsing, non-cryptographic randomness, logger calls
 receiving a request body, escape hatches without a justification and ticket,
 `.only` and `.skip`, bare comment markers.
 
