@@ -7,6 +7,7 @@
 // `enroll` carries more than twenty independent decisions, which is over any ceiling a reviewer
 // would defend. See the note in tests/violations/layers.spec.ts.
 // Refused by api/no-logic-in-router.
+import type { Piasters } from '@ijazah/money';
 
 interface EnrollInput {
   readonly requesterGender: string;
@@ -16,7 +17,7 @@ interface EnrollInput {
   readonly holdExpired: boolean;
   readonly holdOwnerId: string;
   readonly requesterId: string;
-  readonly packagePricePiasters: number;
+  readonly package_price_piasters: Piasters;
   readonly sessionCount: number;
   readonly locale: string;
   readonly slotTimezone: string;
@@ -54,7 +55,7 @@ export const bookingRouter = {
     if (input.holdOwnerId !== input.requesterId) {
       outcome = 'forbidden';
     }
-    if (input.packagePricePiasters <= 0) {
+    if (input.package_price_piasters <= 0) {
       outcome = 'invalid';
     }
     if (input.sessionCount <= 0) {
@@ -87,7 +88,7 @@ export const bookingRouter = {
     if (outcome === 'invalid_ar' && input.sessionCount === 0) {
       outcome = 'invalid_ar_empty';
     }
-    if (outcome === 'confirmed' && input.packagePricePiasters > 1_000_000) {
+    if (outcome === 'confirmed' && input.package_price_piasters > 1_000_000) {
       outcome = 'review_required';
     }
     if (outcome === 'review_required' && !input.teacherPayoutVerified) {
