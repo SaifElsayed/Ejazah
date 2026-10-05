@@ -26,7 +26,12 @@
 // have until something hands it to the project service. `typeAwareRuleTester` does that through
 // the same `projectService` the type-aware set uses (T043), with one difference: the code of each
 // case exists only in memory, under a virtual tree (`virtualFile`) below `tests/lint-plugin/virtual/`
-// that mirrors the real one. No tsconfig claims a file that is not on disk, so each case is opened
+// that mirrors the real one. One file under that tree does exist on disk, and stays:
+// `apps/api/src/platform/guards/requester-gender.ts`, the stub in which the specs of T046 declare
+// the requester's gender brand, because `gender/require-requester-gender` recognises the brand by
+// the path of the file that declares it and a case can only import a type the compiler can read
+// (contracts/lint-rules.md). It is a file of the root project like any other under `tests/`; no
+// case is ever opened at its path. No tsconfig claims a file that is not on disk, so each case is opened
 // in the project service's default project, whose compiler options are the root `tsconfig.json`'s
 // (strict, like the real code). The default project is allowed for the few folder shapes listed in
 // `virtualFolders` and nothing wider: typescript-eslint refuses a `**` glob there and caps the
@@ -70,7 +75,7 @@ export function typescriptRuleTester(): RuleTester {
   });
 }
 
-/** The in-memory tree the type-aware specs write to; nothing under it exists on disk. */
+/** The in-memory tree the type-aware specs write to; only the T046 brand stub under it exists on disk. */
 const virtualRoot = path.join(repositoryRoot, 'tests', 'lint-plugin', 'virtual');
 
 /** The folder shapes a virtual file may take, relative to `virtualRoot`. Kept narrow on purpose. */

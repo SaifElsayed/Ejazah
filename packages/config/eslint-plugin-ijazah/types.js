@@ -17,17 +17,24 @@
 // `[piastersBrand]`; a union of that with `null` or `undefined` (an optional or nullable amount)
 // is money too. An array of amounts is not "a money value" and is not recognised here.
 //
-// DECISION (T046, 2026-09-28) — the requester's gender is recognised the same way. `RequesterGender`
-// is `Gender & { readonly [requesterGenderBrand]: true }`, minted only by the request context
-// (T106) and exported from `packages/contracts`; the checker distributes it to a union of
-// `'male' & { … }` and `'female' & { … }`, so a type is the requester's gender when every present
-// constituent is an intersection of a string-like type with an object branded under the computed
-// key `[requesterGenderBrand]`. A plain `Gender` carries no brand and is not recognised — it could
-// be the teacher's or the client's, which is the whole point (R-GENDER-4).
+// DECISION (T046, 2026-10-05) — the requester's gender is recognised by where its brand is
+// declared, never by the name of its key. `RequesterGender` is the gender value of ERD §2 branded
+// with a `unique symbol` in the kernel file `apps/api/src/platform/guards/requester-gender.ts`
+// (T138); the checker distributes it to a union of `'male' & { … }` and `'female' & { … }`, so a
+// type is the requester's gender when every constituent is an intersection of a string-like type
+// with an object carrying a computed-key property declared in a file whose path ends, as a run of
+// segments, in that kernel path. A brand with the same key name declared in any other file is not
+// it, so it cannot be forged beside the method it is meant to guard; the specs declare theirs in
+// a stub on disk at the mirrored path under `tests/` (contracts/lint-rules.md). A nullable or
+// optional value is not the requester's gender either: `isRequesterGenderType` answers for the
+// type as written, `null` and `undefined` included, and the rule decides what an optional one
+// earns. A plain `Gender` carries no brand and is not recognised — it could be the teacher's or
+// the client's, which is the whole point (R-GENDER-4). Not machine-held, by decision: a cast to
+// `RequesterGender`, which review holds (contracts/lint-rules.md), and a cast to `Piasters`.
 //
 // DECISION (T044) — no `@typescript-eslint/utils`. It is not declared anywhere in the workspace
 // and adding it would be a dependency no task names. `@typescript-eslint/parser` already hands a
-// rule the program and the node map on `context.sourceCode.parserServices`, and `typescript` is a
+// rule the program and the node maps on `context.sourceCode.parserServices`, and `typescript` is a
 // declared dependency of this package, so `requireProgram` below does what that library's
 // `getParserServices` does: it refuses to run without a program, loudly and naming the rule, so a
 // type-aware rule wired into the fast set fails instead of silently reporting nothing.
@@ -36,14 +43,16 @@
 // part of the contract and changes there before it changes here.
 const ts = require('typescript');
 
+const { segmentsOf } = require('./specifiers');
+
 const MONEY_BRAND_KEY = 'piastersBrand';
-const REQUESTER_GENDER_BRAND_KEY = 'requesterGenderBrand';
+const REQUESTER_GENDER_FILE = ['apps', 'api', 'src', 'platform', 'guards', 'requester-gender.ts'];
 
 const NULLISH = ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void;
 
 /**
- * The program, its checker and a way from an ESTree node to its TypeScript node, or a thrown error
- * naming the rule when the parser was not given a project.
+ * The program, its checker and a way from an ESTree node to its TypeScript node and back, or a
+ * thrown error naming the rule when the parser was not given a project.
  */
 function requireProgram(context, ruleId) {
   const services = context.sourceCode.parserServices;
@@ -60,6 +69,7 @@ function requireProgram(context, ruleId) {
   return {
     checker,
     toTs,
+    toEs: (node) => services.tsNodeToESTreeNodeMap.get(node),
     typeOf: (node) => checker.getTypeAtLocation(toTs(node)),
   };
 }
@@ -74,46 +84,68 @@ function presentConstituents(type) {
   return type.types.filter((member) => !isNullish(member));
 }
 
-/** Whether a property is declared under the computed key `[<brandKey>]`, a private unique symbol. */
-function isBrandProperty(symbol, brandKey) {
+/** Whether a declaration is a property under a computed key, the shape of a brand. */
+function isComputedKey(declaration) {
+  return declaration.name !== undefined && ts.isComputedPropertyName(declaration.name);
+}
+
+/** Whether a property is declared under the computed key `[piastersBrand]`, a private unique symbol. */
+function isMoneyBrand(symbol) {
   return (symbol.declarations ?? []).some(
     (declaration) =>
-      declaration.name !== undefined &&
-      ts.isComputedPropertyName(declaration.name) &&
+      isComputedKey(declaration) &&
       ts.isIdentifier(declaration.name.expression) &&
-      declaration.name.expression.text === brandKey,
+      declaration.name.expression.text === MONEY_BRAND_KEY,
+  );
+}
+
+/** Whether a path ends in `tail` as a run of segments. */
+function endsWithSegments(filename, tail) {
+  const segments = segmentsOf(filename);
+  const offset = segments.length - tail.length;
+  return offset >= 0 && tail.every((part, index) => segments[offset + index] === part);
+}
+
+/** Whether a property is a brand declared in the kernel's requester-gender file, whatever its key is called. */
+function isRequesterGenderBrand(symbol) {
+  return (symbol.declarations ?? []).some(
+    (declaration) =>
+      isComputedKey(declaration) &&
+      endsWithSegments(declaration.getSourceFile().fileName, REQUESTER_GENDER_FILE),
   );
 }
 
 /** An intersection of a `baseFlags` type with an object carrying the brand property. */
-function isBrandedIntersection(type, brandKey, baseFlags) {
+function isBrandedIntersection(type, isBrand, baseFlags) {
   if (!type.isIntersection()) return false;
   const based = type.types.some((member) => (member.flags & baseFlags) !== 0);
   const branded = type.types.some(
-    (member) =>
-      (member.flags & ts.TypeFlags.Object) !== 0 &&
-      member.getProperties().some((property) => isBrandProperty(property, brandKey)),
+    (member) => (member.flags & ts.TypeFlags.Object) !== 0 && member.getProperties().some(isBrand),
   );
   return based && branded;
 }
 
-/** Whether every present constituent of a type is the branded intersection; nullable allowed. */
-function isBrandedType(type, brandKey, baseFlags) {
+/** Whether a resolved type is a piaster amount, optionally nullable. */
+function isMoneyType(type) {
   const present = presentConstituents(type);
   return (
     present.length > 0 &&
-    present.every((member) => isBrandedIntersection(member, brandKey, baseFlags))
+    present.every((member) => isBrandedIntersection(member, isMoneyBrand, ts.TypeFlags.NumberLike))
   );
 }
 
-/** Whether a resolved type is a piaster amount, optionally nullable. */
-function isMoneyType(type) {
-  return isBrandedType(type, MONEY_BRAND_KEY, ts.TypeFlags.NumberLike);
-}
-
-/** Whether a resolved type is the requester's gender from the request context, optionally nullable. */
+/** Whether a resolved type is the requester's gender itself: branded in the kernel file, not nullable. */
 function isRequesterGenderType(type) {
-  return isBrandedType(type, REQUESTER_GENDER_BRAND_KEY, ts.TypeFlags.StringLike);
+  const members = type.isUnion() ? type.types : [type];
+  return members.every((member) =>
+    isBrandedIntersection(member, isRequesterGenderBrand, ts.TypeFlags.StringLike),
+  );
 }
 
-module.exports = { isMoneyType, isRequesterGenderType, presentConstituents, requireProgram };
+module.exports = {
+  isMoneyType,
+  isNullish,
+  isRequesterGenderType,
+  presentConstituents,
+  requireProgram,
+};
