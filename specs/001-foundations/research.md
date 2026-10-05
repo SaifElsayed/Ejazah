@@ -151,9 +151,11 @@ cannot quietly drop one:
 | `REVOKE` / `GRANT` / default privileges | Not a schema-modelling concept | FR-025, FR-026 |
 | Partial unique indexes (`WHERE deleted_at IS NULL`) | Partial indexes are not expressible in the schema language | ERD §15.11 |
 | Partial index on scheduled sessions | Same | ERD §14 |
+| Partial unique indexes on active slot holds (`WHERE released_at IS NULL`, per slot and per student) | Same | ERD §15.17–18, ADR 0010 |
+| Exclusion constraints on `sessions` with `btree_gist` | Not expressible in the schema language | ERD §15.19, ADR 0010 |
 | Check constraints | Expressible only as raw SQL in this toolchain | FR-030, ERD §15 |
 
-**Rationale**: All four are load-bearing for a constitution rule, so "the ORM
+**Rationale**: All of them are load-bearing for a constitution rule, so "the ORM
 cannot express it" is not a reason to move the guarantee up into application
 code. Writing them in migrations keeps them in the immutable, checksum-verified
 history (FR-037).

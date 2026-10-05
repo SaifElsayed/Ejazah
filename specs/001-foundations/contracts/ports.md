@@ -43,7 +43,8 @@ OPEN-11 selects a gateway. Direct checkout, 0% commission, zero custody (ADR 000
 
 | Operation | Purpose |
 |---|---|
-| Create a checkout for an enrollment, given a gross amount and currency | Start a gateway order; returns the order reference and the hosted checkout location |
+| Create a checkout for an enrollment, given a gross amount, currency and the latest moment the order may be paid | Start a gateway order that expires no later than that moment, where the gateway lets it be set (ADR 0010 D4); returns the order reference and the hosted checkout location |
+| Cancel an unpaid checkout, given its gateway order id | End a student's earlier checkout before a new one (FR-BOOK-12, ADR 0010 D6); reports the order cancelled (also when it was already cancelled or expired), already paid, with a payment still in progress, or that the gateway cannot cancel. It cancels an order nobody has paid, so no money moves |
 | Verify and parse an inbound event from its raw body and headers | The only way a payment or recipient status becomes known; throws on a bad signature |
 | Register a payout recipient for a teacher | Post-approval payout onboarding (FR-PAYG-13) |
 | Report a recipient's verification status | Poll fallback for the gate (FR-PAYG-15) |

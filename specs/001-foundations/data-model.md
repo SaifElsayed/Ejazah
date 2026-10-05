@@ -56,17 +56,20 @@ Every convention in ERD §0 needs a machine behind it or it is a style guide.
 | Enums declared once, centrally | Schema check asserts no duplicate enum definition | ERD §0 |
 | Nothing that matters is hard-deleted | Revoked privilege — see §4 | R-DB-3 |
 | Secrets are `*_hash` or `*_encrypted`, never bare | Schema check asserts no column named `token`, `secret`, `password`, `code` without a suffix | R-DB-7, R-DB-8 |
-| Derived values are computed, except the caches R-DB-4 declares | Schema check compares cached columns against the allow-list of four: `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at`, `sessions.scheduled_end_at` (ADR 0009) | R-DB-4 |
+| Derived values are computed, except the caches R-DB-4 declares | Schema check compares cached columns against the allow-list of six: `teacher_profiles.average_rating`, `teacher_profiles.review_count`, `sessions.scheduled_start_at`, `sessions.scheduled_end_at` (ADR 0009), `sessions.teacher_user_id`, `sessions.student_user_id` (ADR 0010) | R-DB-4 |
 
 ---
 
 ## 3. The permitted cached values
 
-`teacher_profiles.average_rating` and `teacher_profiles.review_count`, and
+`teacher_profiles.average_rating` and `teacher_profiles.review_count`;
 `sessions.scheduled_start_at` and `sessions.scheduled_end_at`, which are derived
 from the session's stored local date, local start time and zone and recomputed
-when the time zone data changes (ADR 0009). Those four columns are the entire
-allow-list, and the schema check asserts that no other cached column exists.
+when the time zone data changes (ADR 0009); and `sessions.teacher_user_id` and
+`sessions.student_user_id`, copied from the enrollment at generation and never
+changed, so the exclusion constraints of rule 19 (§6) can refuse overlapping
+sessions (ADR 0010). Those six columns are the entire allow-list, and the schema
+check asserts that no other cached column exists.
 Another requires a recorded architectural decision *before* the column exists
 (R-DB-4).
 
@@ -171,9 +174,15 @@ application code (FR-030, R-DB-5).
 | 14 | One record per gateway order | Unique on `payments.gateway_order_id` and `gateway_transaction_id` |
 | 15 | `confirmed_at` has one write path | Service layer plus the CI test of R-HONEST-1; not expressible in the database without a trigger (research R-5) |
 | 16 | Client-retried mutations are idempotent | Unique on `idempotency_keys (scope, key)`; first outcome stored and replayed (ADR 0008) |
+| 17 | One active hold per slot | Partial unique index on `slot_holds (slot_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D1) |
+| 18 | One active hold per student | Partial unique index on `slot_holds (student_user_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D6) |
+| 19 | No overlapping sessions for one teacher, nor for one student | Two GiST exclusion constraints on `sessions`, `teacher_user_id WITH =` and `student_user_id WITH =`, each with `tstzrange(scheduled_start_at, scheduled_end_at) WITH &&`, `WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin'))`, `DEFERRABLE INITIALLY IMMEDIATE`, on `btree_gist`, raw SQL (ADR 0010 D1). Only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run (`SET CONSTRAINTS … DEFERRED`, raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another counted session of the same teacher or the same student, restores them to their previous instants and reports them to error tracking (FR-051), so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010) |
 
 Rules 5, 6 and 12 belonged to the managed-payment tables removed by ADR 0005 D1;
-their numbers are kept so old citations resolve.
+their numbers are kept so old citations resolve. Rules 17 to 19 replace a read
+followed by a write in the booking service, which two concurrent requests can
+both pass at Read Committed (ADR 0010). Like the partial uniques of §4, none of
+the three can be written in the schema language.
 
 ---
 
@@ -223,8 +232,9 @@ added later by someone who reads the enum as a list of equals.
 
 **Enrollment** — `pending_payment` gates session generation. It is released only
 by the `confirm-enrollment` job acting on a persisted, signature-verified `paid`
-event (FR-PAYG-5); `confirmed_at` has no other write path (R-HONEST-1). Order
-expiry or failure moves it to `cancelled` with a `cancellation_reason`.
+event (FR-PAYG-5); `confirmed_at` has no other write path (R-HONEST-1). A failed
+order leaves it pending on its hold; the release of its hold without conversion
+moves it to `cancelled` with a `cancellation_reason` (ADR 0010 D7).
 
 ---
 
