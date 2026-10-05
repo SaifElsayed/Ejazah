@@ -9,22 +9,31 @@
 //
 // DECISION (T045) — the suffix is the constitution's literal `_piasters`, snake_case and
 // case-sensitive, the spelling of the database columns (note under T045 and T131). `amountPiasters`
-// and a bare `piasters` are refused by this rule; `price_piasters` and `gross_piasters` pass.
+// and a bare `piasters` are refused by this rule; `price_piasters` and `gross_piasters` pass. A
+// name that is exactly `_piasters` is refused too (2026-10-05): a suffix needs something to be the
+// suffix of, and that name says nothing about which amount it holds.
 //
 // DECISION (T045) — which identifiers. Declared names only, each checked against its declared
 // type rather than a narrowed one: variable declarators (destructured bindings included),
 // parameters of every function, method, arrow, declared function and signature (destructured
 // bindings and constructor parameter properties included), class property definitions, and
-// interface and type-literal property signatures. A reference is not a declaration: narrowing
-// `candidate: number` to an amount inside an `if` (as `packages/money/src/index.spec.ts` does)
-// names nothing new and stays silent. Function names are not checked — a function returning an
-// amount is not a money variable.
+// interface and type-literal property signatures. Since 2026-10-05 (reviews of PR #27) also the
+// two names that reach a response without ever being a variable: an object-literal property whose
+// key is written out (not computed, not shorthand) and whose value's type is money, so
+// `({ price: price_piasters })` is refused on `price`; and a getter, in a class, an object literal
+// or an interface, read by its return type. A shorthand property repeats a name that was already
+// checked where it was declared. A reference is not a declaration: narrowing `candidate: number`
+// to an amount inside an `if` (as `packages/money/src/index.spec.ts` does) names nothing new and
+// stays silent. Function names are not checked — a function returning an amount is not a money
+// variable. Not covered, deliberately: tuple labels (`[gross: Piasters, fee: Piasters]`) and index
+// signatures, which name a position or a key type rather than one amount.
 //
 // DECISION (T045) — "a money variable" is one amount. A value is money when `isMoneyType` in
 // `../types.js` says so (the branded intersection, optionally nullable, recognised by its
-// unique-symbol key; shared with `money/no-arithmetic-outside-package`, T044). An array or other
-// collection of amounts is deliberately not in scope. The rule applies everywhere, `packages/money`
-// included, because the constitution names no exemption for R-MONEY-2.
+// unique-symbol key, a type parameter read through its constraint so `value: T` with `T extends
+// Piasters` is an amount; shared with `money/no-arithmetic-outside-package`, T044). An array or
+// other collection of amounts is deliberately not in scope. The rule applies everywhere,
+// `packages/money` included, because the constitution names no exemption for R-MONEY-2.
 const { defineRule } = require('../rule');
 const { isMoneyType, requireProgram } = require('../types');
 
@@ -91,9 +100,10 @@ module.exports = defineRule({
   create(context) {
     const program = requireProgram(context, RULE_ID);
 
-    function check(nameNode, name) {
-      if (name.endsWith(SUFFIX)) return;
-      if (!isMoneyType(program.typeOf(nameNode), program.checker)) return;
+    /** `nameNode` is what gets reported; `typedNode` is what holds the type, the name itself by default. */
+    function check(nameNode, name, typedNode = nameNode) {
+      if (name.endsWith(SUFFIX) && name.length > SUFFIX.length) return;
+      if (!isMoneyType(program.typeOf(typedNode), program.checker)) return;
       context.report({ node: nameNode, messageId: 'missingSuffix', data: { name } });
     }
 
@@ -106,15 +116,39 @@ module.exports = defineRule({
       if (name !== null) check(node.key, name);
     }
 
+    /** A getter is named like a property and typed by what it returns, which is its key's type. */
+    function checkGetter(node) {
+      if (node.kind === 'get') checkProperty(node);
+    }
+
+    /** An object-literal member: a getter by its return type, a written-out key by its value's type. */
+    function checkLiteralMember(node) {
+      if (node.kind === 'get') {
+        checkProperty(node);
+        return;
+      }
+      if (node.kind !== 'init' || node.method || node.shorthand) return;
+      const name = propertyName(node);
+      if (name !== null) check(node.key, name, node.value);
+    }
+
     const listeners = {
       VariableDeclarator: (node) => checkBindings(node.id),
       PropertyDefinition: checkProperty,
       TSAbstractPropertyDefinition: checkProperty,
       TSPropertySignature: checkProperty,
+      MethodDefinition: checkGetter,
+      TSAbstractMethodDefinition: checkGetter,
+      'ObjectExpression > Property': checkLiteralMember,
     };
     for (const type of FUNCTION_LIKE) {
       listeners[type] = (node) => node.params.forEach(checkBindings);
     }
+    // An interface getter is a method signature: its parameters above, its own name here.
+    listeners.TSMethodSignature = (node) => {
+      node.params.forEach(checkBindings);
+      checkGetter(node);
+    };
     return listeners;
   },
 });

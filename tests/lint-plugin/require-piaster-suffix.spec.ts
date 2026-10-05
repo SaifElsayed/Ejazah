@@ -6,7 +6,11 @@
 // carries the suffix, a `price` typed as a plain number (that is R-MONEY-1's business, T131), a
 // reference narrowed to an amount inside a guard (a reference names nothing new), and a function
 // whose return value is an amount. The suffix is the constitution's literal snake_case form, so a
-// camelCase `amountPiasters` is refused (note under T045 and T131).
+// camelCase `amountPiasters` is refused (note under T045 and T131), and so is a name that is the
+// suffix and nothing else. Since the reviews of PR #27 it also proves the two names that reach a
+// response without being a variable — an object-literal key holding an amount and a getter
+// returning one — and a type parameter constrained to the brand. Tuple labels and index
+// signatures are valid here on purpose: the rule header records them as not covered.
 
 import { loadRule, typeAwareRuleTester, virtualFile } from '../support/rule-tester';
 
@@ -57,6 +61,34 @@ typeAwareRuleTester().run('money/require-piaster-suffix', loadRule('require-pias
     {
       name: 'a nullable interface field carrying the suffix',
       code: withBrand('export interface Row { readonly gross_piasters: Piasters | null }'),
+      filename: feature,
+    },
+    {
+      name: 'an object-literal key carrying the suffix, a shorthand one and a computed one',
+      code: withBrand(
+        'declare const key: string;\nexport const view = (price_piasters: Piasters) => ({ gross_piasters: price_piasters, price_piasters, [key]: price_piasters });',
+      ),
+      filename: feature,
+    },
+    {
+      name: 'an object-literal key holding a function or a plain number',
+      code: withBrand(
+        'export const view = (price_piasters: Piasters) => ({ price: (): Piasters => price_piasters, count: 2, total(): Piasters { return price_piasters; } });',
+      ),
+      filename: feature,
+    },
+    {
+      name: 'a getter carrying the suffix',
+      code: withBrand(
+        'export class Quote { constructor(private readonly gross_piasters: Piasters) {} get net_piasters(): Piasters { return this.gross_piasters; } }',
+      ),
+      filename: feature,
+    },
+    {
+      name: 'tuple labels and an index signature are not covered',
+      code: withBrand(
+        'export type Split = [gross: Piasters, fee: Piasters];\nexport interface ByPackage { readonly [packageId: string]: Piasters }',
+      ),
       filename: feature,
     },
     {
@@ -145,6 +177,59 @@ typeAwareRuleTester().run('money/require-piaster-suffix', loadRule('require-pias
         { messageId: 'missingSuffix', data: { name: 'gross' } },
         { messageId: 'missingSuffix', data: { name: 'amount' } },
       ],
+    },
+    {
+      name: 'a name that is the suffix and nothing else (Saif 19)',
+      code: withBrand('export const show = (_piasters: Piasters): string => String(_piasters);'),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: '_piasters' } }],
+    },
+    {
+      name: 'an object-literal key holding an amount, which is what a router returns (Omar 7, Saif 13)',
+      code: withBrand(
+        'export const view = (price_piasters: Piasters) => ({ price: price_piasters });',
+      ),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: 'price' } }],
+    },
+    {
+      name: 'a quoted object-literal key and a nested one, holding a nullable amount',
+      code: withBrand(
+        "declare const fee_piasters: Piasters | null;\nexport const row = { 'fee': fee_piasters, nested: { net: fee_piasters } };",
+      ),
+      filename: feature,
+      errors: [
+        { messageId: 'missingSuffix', data: { name: 'fee' } },
+        { messageId: 'missingSuffix', data: { name: 'net' } },
+      ],
+    },
+    {
+      name: 'a class getter returning an amount (Omar 7, Saif 13)',
+      code: withBrand(
+        'export class Quote { constructor(private readonly gross_piasters: Piasters) {} get price(): Piasters { return this.gross_piasters; } }',
+      ),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: 'price' } }],
+    },
+    {
+      name: 'a getter in an object literal, an abstract class and an interface',
+      code: withBrand(
+        'declare const gross_piasters: Piasters;\nexport const quote = { get price() { return gross_piasters; } };\nexport abstract class Priced { abstract get amount(): Piasters; }\nexport interface Charged { get total(): Piasters }',
+      ),
+      filename: feature,
+      errors: [
+        { messageId: 'missingSuffix', data: { name: 'price' } },
+        { messageId: 'missingSuffix', data: { name: 'amount' } },
+        { messageId: 'missingSuffix', data: { name: 'total' } },
+      ],
+    },
+    {
+      name: 'a type parameter constrained to the brand is read through its constraint (Saif 11)',
+      code: withBrand(
+        'export const show = <T extends Piasters>(value: T): string => String(value);',
+      ),
+      filename: feature,
+      errors: [{ messageId: 'missingSuffix', data: { name: 'value' } }],
     },
     {
       name: 'packages/money is not exempt from R-MONEY-2',
