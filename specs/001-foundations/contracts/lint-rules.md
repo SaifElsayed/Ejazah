@@ -37,7 +37,7 @@ needed.
 | `mobile/no-manual-format` | Hand-written date, time or number formatting outside the shared layer | R-MOBILE-9 |
 | `mobile/no-insecure-storage` | Sensitive storage outside the secure storage layer | R-MOBILE-10 |
 | `mobile/no-direct-network` | Direct network call bypassing the shared client | R-MOBILE-11 |
-| `sec/no-disabled-tls` | Disabling transport security verification, in any environment | R-SEC-11 |
+| `sec/no-disabled-tls` | Disabling transport security verification or strict HTTP parsing, in any environment | R-SEC-11 |
 | `sec/no-body-logging` | Logger call receiving a raw request body | R-SEC-2 |
 | `db/no-weak-random` | Non-cryptographic randomness | R-DB-6 |
 | `api/no-push-outside-job` | Notification delivery reached outside the queued job | R-API-15 |

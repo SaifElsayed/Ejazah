@@ -331,7 +331,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-006**: The system MUST refuse at build time: a raw colour or spacing value in a feature file; a physical direction utility; a hardcoded user-facing string; a sentence assembled by concatenating translated fragments; a hand-written date, time or number format outside the shared formatting layer; a direct network call bypassing the shared client; and sensitive storage outside the secure storage layer (R-MOBILE-4 through R-MOBILE-11).
 - **FR-007**: The system MUST refuse at build time a component composed from raw platform controls rather than from the shared primitives (R-MOBILE-6).
 - **FR-008**: The system MUST refuse at build time an escape hatch — a suppressed type error or a disabled lint rule — carrying no justification comment and ticket reference (R-API-10, R-PROC-7).
-- **FR-009**: The system MUST refuse at build time any disabling of transport security verification, in every environment including local development (R-SEC-11).
+- **FR-009**: The system MUST refuse at build time any disabling of transport security verification or of strict HTTP parsing, in every environment including local development (R-SEC-11).
 - **FR-010**: The system MUST refuse at build time a logging call receiving a raw request body or another prohibited value (R-SEC-2).
 - **FR-071**: The system MUST refuse at build time a request procedure carrying a business rule rather than validating its input, calling one service method and returning (R-API-1).
 - **FR-011**: Every build-time refusal MUST name the rule identifier it enforces, so a failure is traceable to the constitution without a reviewer's interpretation.

@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.2.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md) and [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md).
+Version 2.3.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md) and [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -197,7 +197,7 @@ they declare about themselves.
 | R-SEC-8 | **Never** let admin and user authentication share tables, tokens, or middleware. | `DB` - separate tables; `TYPE` - separate contexts |
 | R-SEC-9 | **Never** expose a stack trace, query, or internal path in a client-facing error. | `RT` global error filter |
 | R-SEC-10 | **Never** delete a leaked key's commit and call it handled. Rotate first, investigate second, per the runbook. | Runbook - process rule |
-| R-SEC-11 | **Never** disable TLS verification, even locally, even "temporarily." | `LINT` - `rejectUnauthorized: false` and equivalents banned |
+| R-SEC-11 | **Never** disable TLS verification or strict HTTP parsing, even locally, even "temporarily." | `LINT` - `rejectUnauthorized: false` and equivalents banned, and `insecureHTTPParser: true` with them |
 | R-SEC-12 | **Never** merge with a red Dependabot critical alert. | `CI` gate |
 
 ### VIII. Sessions and Attendance (R-SESS)
@@ -378,6 +378,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.3.0 | 2026-10-05 | MINOR (review of PR #29, T040): R-SEC-11 is expanded. It now names strict HTTP parsing beside TLS verification, so switching on a lenient HTTP parser is prohibited by the rule's own words, and the enforcement cell names `insecureHTTPParser: true` beside `rejectUnauthorized: false`. `sec/no-disabled-tls` has refused that option since PR #29, by the owner's recorded decision that a lenient parser is what request smuggling needs; this amendment gives that refusal its text. |
 | 2.2.0 | 2026-10-05 | MINOR (reviews of PR #27 and PR #30, T047): R-API-6 is expanded. The access path is the repository of the owning module or of the kernel. Runtime raw SQL is confined to the platform kernel (`apps/api/src/platform/db/`) and its string-taking `Unsafe` forms are written nowhere in the API; the enforcement cell names repository files, the refusal of database client members other than `$transaction` outside `platform/db/`, and review for what lint cannot see (a database driver used directly, `Prisma.raw`). R-API-2 gains an inline cross-reference to R-API-6 for a query through an injected client, as "One prohibition, one rule" requires. Rationale: a raw query names its table where the per-module allowlist cannot read it, so it was a way around the rule as written. No prohibition removed or weakened, so no ADR. Follows 2.1.3. |
 | 2.1.3 | 2026-09-27 | PATCH (PR #20, T035): the R-MOBILE-1 enforcement cell and the enforcement-map row name the six `boundaries/*` rules of `eslint-plugin-ijazah`, with wall data in `packages/config/eslint.boundaries.js`, instead of `eslint-plugin-boundaries`. No prohibition changed. Follows 2.1.2 (ADR 0009, PR #21). |
 | 2.1.2 | 2026-09-27 | ADR 0009. PATCH: R-DB-4 lists `sessions.scheduled_start_at` and `scheduled_end_at` among the declared caches, derived from the session's stored local time and zone and recomputed when time zone data changes. R-DB-4 already permitted a new cache through an ADR, so no prohibition changed. |
@@ -395,4 +396,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.2.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-05
+**Version**: 2.3.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-05
