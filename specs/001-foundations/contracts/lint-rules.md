@@ -76,15 +76,16 @@ guards something the constitution treats as unrecoverable.
 | `money/no-arithmetic-outside-package` | Any arithmetic operand carrying the money brand, outside its package | `a + b` looks identical whatever the operands are | R-MONEY-5 |
 | `money/require-piaster-suffix` | An identifier whose resolved type is money but whose name lacks the suffix | The name alone cannot tell you the type | R-MONEY-2 |
 | `gender/require-requester-gender` | A repository method returning teachers whose signature does not require the requester's gender: a required parameter, or a required property of a required options parameter, that is not nullable and whose type is `RequesterGender` — the gender value branded in the kernel file `apps/api/src/platform/guards/requester-gender.ts`, which only the request context may mint. The brand is recognised by where it is declared, that file, never by the name of its key; a brand of the same name declared anywhere else is refused. A plain gender value, an optional one and a nullable one are refused alike | A filtered and an unfiltered method are syntactically identical, and a requester's gender and any other gender value are the same string | R-GENDER-5 |
-| `api/table-ownership` | Inside `apps/api`: database access to a table from any file other than a repository file (`*.repository.*`) of the module, or of the platform kernel, that owns it; any member of the database client whose name starts with `$`, other than `$transaction`, outside `apps/api/src/platform/db/`; and the string-taking raw forms `$queryRawUnsafe` and `$executeRawUnsafe` everywhere inside `apps/api`, the kernel included. The transaction client is the database client, and a member is the same member by any spelling that reaches it; an access whose member cannot be resolved is refused | Requires resolving the query target against the ownership manifest, and a raw query names its table where no rule can read it | R-API-6 |
+| `api/table-ownership` | Inside `apps/api`: database access to a table from any file other than a repository file (a file named `<name>.repository.<extension>`) of the module, or of the platform kernel, that owns it; any member of the database client whose name starts with `$`, other than `$transaction`, outside `apps/api/src/platform/db/`; and the string-taking raw forms `$queryRawUnsafe` and `$executeRawUnsafe` everywhere inside `apps/api`, the kernel included. The transaction client and a client returned by `$extends` are the database client, and a member is the same member by any spelling that reaches it; an access whose member cannot be resolved is refused | Requires resolving the query target against the ownership manifest, and a raw query names its table where no rule can read it | R-API-6 |
 
 Four notes on the last two rows, decided 2026-10-05 after the two reviews of
-PR #27 and the review of PR #30.
+PR #27 and the two reviews of PR #30.
 
-**Callers that are not a student.** `gender/require-requester-gender` accepts
+**Callers with no requester gender.** `gender/require-requester-gender` accepts
 `RequesterGender` and nothing else, so a teacher-returning repository method for
-an administrator or a background job cannot be written yet. That is deliberate:
-the rule fails closed. The first task that needs such a method adds, in this row
+an administrator, a background job or a public caller cannot be written yet; a
+teacher caller passes the gender its own request context carries. That is
+deliberate: the rule fails closed. The first task that needs such a method adds, in this row
 and in its own task line, a separate type minted only in that caller's own
 context, so that a student-facing path can never obtain it. R-GENDER-5's first
 sentence names the requester's gender and no other caller, so that task also
@@ -92,21 +93,33 @@ amends the constitution under its amendment procedure. No such type is designed
 here, because no task needs one yet (owner decision, 2026-10-05).
 
 **What the gender rule reads, and what stays with review.** A repository method
-is any function a `*.repository.*` file exposes to another file, whatever the
-form of the export: an exported function, a function bound to an exported name,
-a member of an exported object or class. It returns teachers when a type whose
-name carries `Teacher` appears in its resolved return type: directly, or inside
-a promise, an array or tuple, a union or intersection, the type arguments of a
-generic type, or a property, one level down, of an object type, named or
-unnamed. A named wrapper is read like an unnamed one because an interface around
-a list of teachers is the ordinary way to write a page of results. `RequesterGender`
-is declared in the kernel and not in `packages/contracts`: it is a server-only
-authorization type no client needs, and nothing published there may later be
-removed (R-API-9). Two things the rule does not see are held by review, the
-second mechanism R-GENDER-5 names: a teacher returned under a type whose name
-does not carry `Teacher` (the condition under T055 closes the generated payload
-case), and a cast to `RequesterGender` outside
-`apps/api/src/surfaces/context.ts`.
+is any function a file named `<name>.repository.<extension>` exposes to another
+file, whatever the form of the export: an exported function, a function bound to
+an exported name, a member of an exported object or class. It returns teachers
+when an object type whose name carries `Teacher` appears in its resolved return
+type: directly, or one property step down, through a property of an object type,
+named or unnamed. Promises, arrays, tuples, unions, intersections and the type
+arguments of a generic type are unwrapped before and after that step and do not
+count as one. Only an object type's name is read, so a branded identifier such
+as a teacher's id does not make the row that carries it a teacher. A named
+wrapper is read like an unnamed one because an interface around a list of
+teachers is the ordinary way to write a page of results. The same reading makes
+any module's method that returns a row carrying a teacher-typed property a
+teacher-returning method; for a caller with no requester gender it falls under
+the first note.
+
+`RequesterGender` is declared in the kernel and not in `packages/contracts`: it
+is a server-only authorization type no client needs, and nothing published there
+may later be removed (R-API-9). The file is matched as a run of path segments,
+like every other path in the plugin, so the specs of T046 declare the brand in a
+stub at the mirrored path under `tests/` until T138 lands.
+
+Three things the rule does not see are held by review, the second mechanism
+R-GENDER-5 names: a teacher more than one property step down; a teacher returned
+under a type whose name does not carry `Teacher` (the condition under T055
+closes the generated payload case); and a cast to `RequesterGender` outside
+`apps/api/src/surfaces/context.ts` in any file that is not a spec file. A spec
+may cast to build its input.
 
 **Database client members are refused by default.** `api/table-ownership` lists
 what a module may use (`$transaction`), not what it may not, so a raw-query
@@ -119,13 +132,16 @@ none will be needed. The first task that needs one writes it as a tagged query
 in a file under `apps/api/src/platform/db/` and names that file in its own task
 line.
 
-**Repository spec files.** A `*.repository.spec.*` file is a repository file of
-its module, or of the kernel, for this rule, so the integration test
+**Repository spec files.** A file named `<name>.repository.spec.<extension>` is a
+repository file of its module, or of the kernel, for this rule, so the
+integration test
 ARCHITECTURE §13 asks for may read and write the tables its own repository owns.
 It gains nothing else: rows it needs in another owner's tables are set up
 through helpers under `tests/`, which sit outside `apps/api` and so outside this
 rule, and the client's `$` members stay refused there as in any repository file
-(owner decision, 2026-10-05).
+(owner decision, 2026-10-05). R-API-2 is unchanged: a spec file never imports
+the client or its types; it takes the client from
+`apps/api/src/platform/db/prisma.repository.ts`.
 
 ---
 
