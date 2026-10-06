@@ -165,7 +165,7 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | requested_by_admin_id | FK → admin_users | |
 | reason | text | Mandatory |
 | status | enum open · satisfied · expired | Open request ⇒ account_status verification_required |
-| created_at / resolved_at | timestamptz | |
+| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
 
 ## 4. Catalog
 
@@ -373,7 +373,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| payment_id | FK → payments | |
+| payment_id | FK → payments, nullable | NULL exactly when `event_type` is `recipient_verified` or `recipient_rejected`: those report on a teacher's payout account, not a gateway order, and are recorded here so the unique `provider_event_id` makes their replay a no-op too (FR-PAYG-4, FR-PAYG-15, §15.20) |
 | provider_event_id | text, unique, NOT NULL | Idempotency — a replayed webhook cannot double-insert (FR-PAYG-4, R-MONEY-8) |
 | event_type | enum paid · failed · expired · refunded · recipient_verified · recipient_rejected | |
 | signature_verified_at | timestamptz | Set by the signature guard before the row is written (R-MONEY-9). A row cannot exist for an unverified event |
@@ -432,7 +432,7 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | comment | text, nullable | |
 | comment_removed_at | timestamptz, nullable | Moderation removes the comment; the star still counts (FR-REVIEW-5) |
 | moderated_by_admin_id | FK → admin_users, nullable | |
-| created_at | timestamptz | |
+| created_at / updated_at | timestamptz | `updated_at` because moderation changes the row (§0) |
 
 ## 10. Moderation
 
@@ -450,7 +450,7 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | resolution | enum upheld · re_marked · no_show_recorded · compensation_ordered · party_suspended · party_banned, nullable | `compensation_ordered` records the decision only; execution is by Platform Administration outside the code path and the outcome lands on `payments` when the gateway reports it (FR-DISPUTE-6) |
 | resolution_notes | text, nullable | Mandatory on resolve |
 | resolved_by_admin_id | FK → admin_users, nullable | |
-| created_at / resolved_at | timestamptz | |
+| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
 
 ### `gender_flags`
 
@@ -462,7 +462,7 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | status | enum open · corrected · fraud_ban · dismissed | Outcomes per FR-GENDER-6/7 |
 | resolution_notes | text, nullable | |
 | resolved_by_admin_id | FK → admin_users, nullable | |
-| created_at / resolved_at | timestamptz | |
+| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
 
 ### `user_reports`
 
@@ -478,7 +478,7 @@ FR-SESS-15 — report from any session or profile.
 | reason | text | |
 | status | enum open · actioned · dismissed | |
 | resolved_by_admin_id | FK → admin_users, nullable | |
-| created_at / resolved_at | timestamptz | |
+| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
 
 ## 11. Notifications
 
@@ -602,7 +602,7 @@ erDiagram
 ```mermaid
 erDiagram
     enrollments ||--o{ payments : "gateway orders"
-    payments ||--o{ payment_events : "signed events"
+    payments |o--o{ payment_events : "signed events"
     users ||--o| teacher_profiles : "payout readiness on"
 ```
 
@@ -664,12 +664,21 @@ Rules that must hold even if application code is buggy — so they live in the s
 17. `slot_holds (slot_id)` unique `WHERE released_at IS NULL` — one active hold per slot, so two students cannot hold the same slot at once (FR-BOOK-9, ADR 0010 D1). An expired hold still counts until `released_at` is set; the service releases the expired holds on the slot, and the student's own expired hold, in the same transaction before it inserts, then checks the existing sessions after the insert (ADR 0010 D3).
 18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time; a new checkout ends the student's own unexpired hold first, at once when no order on it is still payable (`created`) and otherwise only once the gateway has cancelled that order (FR-BOOK-12, ADR 0010 D6).
 19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a system termination (FR-NOSHOW-4, FR-SESS-16, FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run with `SET CONSTRAINTS … DEFERRED` (raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another session of the same teacher or the same student that these constraints count, restores them to their previous instants and reports them to error tracking (FR-051) for an operator, so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010).
+20. `payment_events`: `payment_id IS NULL` exactly when `event_type` is `recipient_verified` or `recipient_rejected` — check constraint. An order event always names its gateway order; a payout-recipient event never does (FR-PAYG-4, FR-PAYG-15, PR #39).
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
 *End of document. 33 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+
+## Changelog — v1.3 addendum (PR #39)
+
+| # | Change | Decision |
+|---|---|---|
+| 1 | §7 `payments.gateway`: the enum is declared with the single member `fake`, the recording stand-in; real members are added when a gateway is integrated. | Note under T059, owner's choice after review |
+| 2 | §7 `payment_events.payment_id` becomes nullable, NULL exactly for `recipient_verified` and `recipient_rejected`; §13.3 cardinality follows; §15 rule 20. | Note under T059, approved in the review of PR #39 |
+| 3 | §9 `reviews` lists `updated_at`; §3 and §10 mark the four `resolved_at` columns nullable. Wording only: the model already followed §0. | Review of PR #39 |
 
 ## Changelog — v1.3 addendum (ADR 0010)
 
