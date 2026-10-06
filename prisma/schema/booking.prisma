@@ -25,7 +25,7 @@ model SlotHold {
 
   slot       AvailabilitySlot @relation(fields: [slotId], references: [id])
   student    User             @relation(fields: [studentUserId], references: [id])
-  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id])
+  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
 
   @@map("slot_holds")
 }

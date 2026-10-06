@@ -127,15 +127,17 @@ in migrations and asserted by the schema check (research R-6).
 and a soft-deleted enrollment is absent from ordinary reads so nothing can
 review it. The plain unique constraint of ERD §15.3 is the whole rule.
 
-**A reference to an administrator never empties.** Every foreign key to
-`admin_users` is `ON DELETE RESTRICT`, stated in the schema as
-`onDelete: Restrict`, the optional ones included: `approved_by_admin_id`,
-`verified_by_admin_id`, `settled_by_admin_id`, `revoked_by_admin_id`,
-`lifted_by_admin_id`, `moderated_by_admin_id` and the three
-`resolved_by_admin_id`. Prisma's default for an optional relation is
-`SET NULL`, which would let the deletion of an administrator row erase, without
-an error, who revoked an ijazah or lifted a bar. An administrator leaves by
-`is_active = false` instead (PR #39 review, m1).
+**A reference never empties.** Every foreign key in the model is `ON DELETE RESTRICT`.
+A required relation gets it by default; every optional relation states
+`onDelete: Restrict` in the schema, because Prisma's default for an optional
+relation is `SET NULL`. A NULL there would not just lose a link, it would change
+what a row means. Deleting an administrator would erase who revoked an ijazah or
+lifted a bar; deleting a session would turn a session dispute into an
+enrollment-level compensation case (`disputes.session_id`); deleting a payment
+would turn an order event into a recipient event (`payment_events.payment_id`).
+An administrator leaves by `is_active = false`, and the parents of the other
+optional relations (`users`, `sessions`, `enrollments`) are never hard-deleted
+(PR #39 review, m1).
 
 ---
 
