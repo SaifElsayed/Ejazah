@@ -37,6 +37,17 @@ const wall = {
   moduleRoot: 'apps/api/src/modules',
   adminModule: 'admin',
 
+  // R-API-4 (upward half), T143 — the three composition files. They sit above every module, so
+  // importing admin's public entry from them is not upward: `main.ts` and `worker.ts` bind admin's
+  // `AuditWriter` and `SettingsReader` (T108, T113), and `admin.router.ts` mounts the module (T109).
+  // Matched as the whole trailing run of segments of the importing file, so a lookalike
+  // (`main.tsx`, `old/main.ts`, `admin.router.spec.ts`) is not one of them.
+  adminCompositionFiles: [
+    'apps/api/src/main.ts',
+    'apps/api/src/worker.ts',
+    'apps/api/src/surfaces/admin.router.ts',
+  ],
+
   // R-API-4 (adapter half) — the port tree. A vendor's name lives inside one port folder.
   portRoot: 'apps/api/src/platform/ports',
 
