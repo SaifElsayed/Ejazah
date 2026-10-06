@@ -121,6 +121,83 @@ describe('the declared redaction list (T095, FR-040)', () => {
   });
 });
 
+// Review of PR #35: the Major (plurals) and the minors fixed in the same round.
+describe('the list reads a name as the lint rule does (review of PR #35)', () => {
+  it('redacts a plural as its singular, as the rule does (M1)', () => {
+    for (const key of [
+      'tokens',
+      'cookies',
+      'secrets',
+      'credentials',
+      'otpCodes',
+      'gatewayEvents',
+    ]) {
+      expect(redact({ [key]: planted }), key).toEqual({ [key]: REDACTED });
+    }
+  });
+
+  it('removes a plural holding the value one level down, where no rule can see it (M1)', () => {
+    const out = capture();
+    const session = { tokens: { access: planted, refresh: planted }, cookies: { sid: planted } };
+    createLogger({ level: 'info', destination: out }).info(session);
+    expect(out.lines[0]).not.toContain(planted);
+  });
+
+  it('keeps a plural classification code', () => {
+    const kept = { errorCodes: ['INTERNAL'], statusCodes: [500] };
+    expect(redact(kept)).toEqual(kept);
+  });
+
+  it('redacts the one-word and numbered spellings (m4)', () => {
+    for (const key of [
+      'apikey',
+      'accesstoken',
+      'refreshtoken',
+      'sessionid',
+      'jwt',
+      'passphrase',
+      'pan',
+      'last4',
+      'token2',
+    ]) {
+      expect(redact({ [key]: planted }), key).toEqual({ [key]: REDACTED });
+    }
+  });
+});
+
+describe('values that are not plain objects (review of PR #35)', () => {
+  it('writes an Error with its type and cause chain, redacted (m1)', () => {
+    const out = capture();
+    const root = Object.assign(new Error('connect ECONNREFUSED'), { token: planted });
+    const failure = new Error('booking failed', { cause: root });
+    createLogger({ level: 'info', destination: out }).error({ err: failure }, 'unexpected');
+
+    expect(out.lines[0]).not.toContain(planted);
+    const [record] = out.records();
+    expect(record?.['err']).toMatchObject({
+      type: 'Error',
+      message: expect.stringContaining('booking failed'),
+      cause: { type: 'Error', message: 'connect ECONNREFUSED', token: REDACTED },
+    });
+  });
+
+  it('reads a value through its own toJSON before redacting it (m2)', () => {
+    const sneaky = { v: { toJSON: () => ({ token: planted, kept: 1 }) } };
+    expect(redact(sneaky)).toEqual({ v: { token: REDACTED, kept: 1 } });
+  });
+
+  it('writes a URL as its text, not as an empty object (m2)', () => {
+    expect(redact({ at: new URL('https://ijazah.example/health') })).toEqual({
+      at: 'https://ijazah.example/health',
+    });
+  });
+
+  it('writes the same object twice when it is reached twice side by side (m3)', () => {
+    const shared = { id: 'x' };
+    expect(redact({ a: shared, b: shared })).toEqual({ a: { id: 'x' }, b: { id: 'x' } });
+  });
+});
+
 describe('the correlation identifier (T095, FR-040)', () => {
   it('is on every record written through a request logger', () => {
     const out = capture();

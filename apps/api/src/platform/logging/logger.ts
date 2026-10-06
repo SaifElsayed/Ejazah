@@ -13,7 +13,8 @@
 //
 // THE WORDS are those `sec/no-body-logging` reads for R-SEC-2 (its header), so the lint rule and
 // this list name the same values: a key's words are compared whole, camelCase, snake_case and
-// kebab-case alike. On top of the rule's list, the four names its header hands to this one
+// kebab-case alike, and, as the rule's `wordSetOf` reads them, a plural as its singular (`tokens`,
+// `credentials`) and a word without its trailing number (`token2`). On top of the rule's list, the four names its header hands to this one
 // because they are too ambiguous to refuse at build time: a bare `code` (it may be the one-time
 // code itself), `card`, an `event` (the parsed gateway payload is a `GatewayEvent`) and a storage
 // key. A bare `body` is redacted too: whatever object carries it, a message body may hold a code.
@@ -84,6 +85,19 @@ export const redactedKeys: readonly (readonly string[])[] = [
     'key',
     kind,
   ]),
+  // The same values written as one word, which no camelCase or snake_case split can separate
+  // (review of PR #35, m4): beyond the rule's list, so this net is the wider of the two. `sessionid`
+  // is the cookie spelling of an authentication session; a teaching session is `sessionId`.
+  ['apikey'],
+  ['accesstoken'],
+  ['refreshtoken'],
+  ['idtoken'],
+  ['authtoken'],
+  ['sessionid'],
+  ['jwt'],
+  ['passphrase'],
+  ['pan'],
+  ['last4'],
 ];
 
 /**
@@ -107,6 +121,18 @@ function wordsOf(name: string): string[] {
     .filter((word) => word !== '');
 }
 
+/**
+ * The forms a word answers to, as the lint rule's `wordSetOf` reads them: the word, its singular
+ * (`tokens` is `token`), and the word without a trailing number (`token2` is `token`).
+ */
+function formsOf(word: string): string[] {
+  const forms = [word];
+  if (word.length > 1 && word.endsWith('s')) forms.push(word.slice(0, -1));
+  const unnumbered = word.replace(/[0-9]+$/, '');
+  if (unnumbered !== '' && unnumbered !== word) forms.push(unnumbered);
+  return forms;
+}
+
 /** Whether a key's value is one R-SEC-2 keeps out of a log. */
 export function isRedactedKey(name: string): boolean {
   const words = wordsOf(name);
@@ -115,39 +141,54 @@ export function isRedactedKey(name: string): boolean {
   if (first === undefined || last === undefined) return false;
   if (FACT_LAST_WORDS.has(last) || FACT_FIRST_WORDS.has(first)) return false;
 
-  const present = new Set(words);
-  // Every `code` in the name is a classification code: judge the name without them.
+  const present = new Set(words.flatMap(formsOf));
+  // Every `code` (or `codes`) in the name is a classification code: judge the name without it.
   const classified = words.every(
-    (word, index) => word !== 'code' || CLASSIFICATION_WORDS.has(words[index - 1] ?? ''),
+    (word, index) =>
+      !formsOf(word).includes('code') || CLASSIFICATION_WORDS.has(words[index - 1] ?? ''),
   );
   if (classified) present.delete('code');
 
-  if (redactedLastWords.includes(last)) return true;
+  if (formsOf(last).some((form) => redactedLastWords.includes(form))) return true;
   return redactedKeys.some((entry) => entry.every((word) => present.has(word)));
 }
 
-/** A copy of `value` with every redacted key's value replaced; the caller's object is untouched. */
+/**
+ * A copy of `value` with every redacted key's value replaced; the caller's object is untouched.
+ *
+ * An Error, under any key, is first written as pino writes one — type, message, stack and the
+ * `cause` chain — and then redacted, so the root cause of a failure survives. A value with its own
+ * `toJSON` (a `Date`, a `URL`, a library object) is read through it first, so what is redacted is
+ * what would be written. Only a reference back up the current path is `[circular]`; the same object
+ * reached twice side by side is written twice.
+ */
 export function redact(value: unknown): unknown {
-  return redactValue(value, new WeakSet());
+  return redactValue(value, new Set());
 }
 
-function redactValue(value: unknown, seen: WeakSet<object>): unknown {
+function redactValue(value: unknown, path: Set<object>): unknown {
   if (value === null || typeof value !== 'object') return value;
-  if (seen.has(value)) return '[circular]';
-  seen.add(value);
+  if (path.has(value)) return '[circular]';
 
-  if (Array.isArray(value)) return value.map((item) => redactValue(item, seen));
-
-  const out: Record<string, unknown> = {};
+  let readable: unknown = value;
   if (value instanceof Error) {
-    out['type'] = value.name;
-    out['message'] = value.message;
-    out['stack'] = value.stack;
+    readable = pino.stdSerializers.errWithCause(value);
+  } else if (typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+    readable = (value as { toJSON: () => unknown }).toJSON();
+    if (readable === null || typeof readable !== 'object') return readable;
   }
-  for (const [key, inner] of Object.entries(value)) {
-    out[key] = isRedactedKey(key) ? REDACTED : redactValue(inner, seen);
+
+  path.add(value);
+  try {
+    if (Array.isArray(readable)) return readable.map((item) => redactValue(item, path));
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(readable as object)) {
+      out[key] = isRedactedKey(key) ? REDACTED : redactValue(inner, path);
+    }
+    return out;
+  } finally {
+    path.delete(value);
   }
-  return out;
 }
 
 export interface LoggerOptions {
@@ -167,6 +208,9 @@ export function createLogger(options: LoggerOptions): Logger {
     {
       level: options.level,
       timestamp: pino.stdTimeFunctions.isoTime,
+      // `redact` has already written every Error, so pino must not serialize `err` a second time
+      // (it would read the plain object as an Error of type "Object" and drop the cause chain).
+      serializers: { err: (err: unknown) => err },
       formatters: {
         level: (label) => ({ level: label }),
         bindings: (bindings) => redact(bindings) as Record<string, unknown>,
