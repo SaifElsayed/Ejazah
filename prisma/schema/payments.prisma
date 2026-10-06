@@ -2,3 +2,57 @@
 // payments (one row per gateway order: gateway_order_id unique, gateway_transaction_id unique, gross/fee/net as reported),
 // payment_events (append-only signed events; provider_event_id unique NOT NULL). No balance column anywhere (FR-027).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// Records of what the gateway did, never a balance: the gateway settles the net to the teacher and
+// the platform holds no funds (FR-PAYG-1, ADR 0007). Amounts are stored as the gateway reports them,
+// never computed here (R-MONEY-5).
+
+// One row per gateway order. An enrollment may have several; at most one reaches `paid`, enforced by
+// the confirm step being idempotent on the enrollment, not by an index (ERD section 7).
+model Payment {
+  id                   String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId         String         @map("enrollment_id") @db.Uuid
+  // Which gateway took the order. Independent of the adapter config selects (R-API-4).
+  gateway              PaymentGateway
+  // Created by the platform on the gateway (FR-PAYG-2). One record per order (ERD section 15.14).
+  gatewayOrderId       String         @unique @map("gateway_order_id")
+  // Reported by the paid event. Unique where present: NULLs do not collide (ERD section 15.14).
+  gatewayTransactionId String?        @unique @map("gateway_transaction_id")
+  // The snapshot price charged.
+  grossPiasters        BigInt         @map("gross_piasters")
+  // Reported by the gateway on the paid event.
+  gatewayFeePiasters   BigInt?        @map("gateway_fee_piasters")
+  // Settled to the teacher, `gross - fee` as reported.
+  netPiasters          BigInt?        @map("net_piasters")
+  currency             String         @db.Char(3)
+  // `refunded` is learned from the gateway's signed event; the platform never initiates one (FR-PAYG-10).
+  status               PaymentStatus
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  events PaymentEvent[]
+
+  @@map("payments")
+}
+
+// Every signed inbound gateway event. Append-only: never updated.
+model PaymentEvent {
+  id                  String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  paymentId           String           @map("payment_id") @db.Uuid
+  // A replayed webhook cannot double-insert (FR-PAYG-4, R-MONEY-8, ERD section 15.13).
+  providerEventId     String           @unique @map("provider_event_id")
+  eventType           PaymentEventType @map("event_type")
+  // Set by the signature guard before the row is written; no row exists for an unverified event
+  // (R-MONEY-9).
+  signatureVerifiedAt DateTime         @map("signature_verified_at") @db.Timestamptz(6)
+  // A hash of the raw body, for audit; the body itself is never stored (R-SEC-2).
+  payloadHash         String           @map("payload_hash")
+  receivedAt          DateTime         @map("received_at") @db.Timestamptz(6)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@map("payment_events")
+}

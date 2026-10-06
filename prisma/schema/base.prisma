@@ -183,11 +183,16 @@ enum CancellationRequestStatus {
 
 // payments (ERD section 7, ADR 0007)
 
-// PaymentGateway is deliberately NOT declared here. The ERD allows one member per integrated gateway
-// and none is integrated (SRS OPEN-11); Prisma cannot declare an empty enum, and any member becomes
-// permanent (R-API-9). T059 declares it with the first real gateway and decides there whether the test
-// stand-in gets its own member. The PAYMENT_GATEWAY env value selects the adapter (R-API-4) and is
-// unrelated to this enum.
+// One member per gateway a `payments` row can name (T059, note under T059 in tasks.md). `fake` is the
+// recording stand-in, the port's second implementation from day one (ARCHITECTURE), so its rows exist
+// in development and tests; production refuses it in config, not here. A real gateway's member is
+// added when it is integrated (SRS OPEN-11). Members are permanent (R-API-9). The PAYMENT_GATEWAY env
+// value selects the adapter (R-API-4) and shares the name `fake`.
+enum PaymentGateway {
+  fake
+
+  @@map("payment_gateway")
+}
 
 enum PaymentStatus {
   created

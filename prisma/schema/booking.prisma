@@ -65,6 +65,7 @@ model Enrollment {
 
   slotHolds SlotHold[]
   sessions  Session[]
+  payments  Payment[]
 
   @@map("enrollments")
 }
