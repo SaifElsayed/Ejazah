@@ -27,7 +27,7 @@ model Dispute {
   enrollment      Enrollment @relation(fields: [enrollmentId], references: [id])
   session         Session?   @relation(fields: [sessionId], references: [id])
   raisedBy        User?      @relation(fields: [raisedByUserId], references: [id])
-  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id])
+  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("disputes")
 }
@@ -47,7 +47,7 @@ model GenderFlag {
 
   flaggedUser     User       @relation("GenderFlagFlagged", fields: [flaggedUserId], references: [id])
   raisedBy        User?      @relation("GenderFlagRaisedBy", fields: [raisedByUserId], references: [id])
-  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id])
+  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("gender_flags")
 }
@@ -70,7 +70,7 @@ model UserReport {
   reportedUser    User       @relation("UserReportReported", fields: [reportedUserId], references: [id])
   reporter        User       @relation("UserReportReporter", fields: [reporterUserId], references: [id])
   session         Session?   @relation(fields: [sessionId], references: [id])
-  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id])
+  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("user_reports")
 }

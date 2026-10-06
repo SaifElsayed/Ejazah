@@ -43,7 +43,7 @@ model Ijazah {
   student        User       @relation("IjazahStudent", fields: [studentUserId], references: [id])
   teacher        User       @relation("IjazahTeacher", fields: [teacherUserId], references: [id])
   subject        Subject    @relation(fields: [subjectId], references: [id])
-  revokedByAdmin AdminUser? @relation(fields: [revokedByAdminId], references: [id])
+  revokedByAdmin AdminUser? @relation(fields: [revokedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("ijazahs")
 }
@@ -63,8 +63,8 @@ model IjazahBar {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user          User       @relation(fields: [userId], references: [id])
-  barredByAdmin AdminUser  @relation("IjazahBarBarredBy", fields: [barredByAdminId], references: [id])
-  liftedByAdmin AdminUser? @relation("IjazahBarLiftedBy", fields: [liftedByAdminId], references: [id])
+  barredByAdmin AdminUser  @relation("IjazahBarBarredBy", fields: [barredByAdminId], references: [id], onDelete: Restrict)
+  liftedByAdmin AdminUser? @relation("IjazahBarLiftedBy", fields: [liftedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("ijazah_bars")
 }

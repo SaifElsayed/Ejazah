@@ -109,7 +109,7 @@ model TeacherProfile {
   updatedAt                   DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user            User       @relation(fields: [userId], references: [id])
-  approvedByAdmin AdminUser? @relation(fields: [approvedByAdminId], references: [id])
+  approvedByAdmin AdminUser? @relation(fields: [approvedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("teacher_profiles")
 }

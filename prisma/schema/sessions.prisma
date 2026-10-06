@@ -46,7 +46,7 @@ model Session {
   enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
   teacher        User       @relation("SessionTeacher", fields: [teacherUserId], references: [id])
   student        User       @relation("SessionStudent", fields: [studentUserId], references: [id])
-  settledByAdmin AdminUser? @relation(fields: [settledByAdminId], references: [id])
+  settledByAdmin AdminUser? @relation(fields: [settledByAdminId], references: [id], onDelete: Restrict)
 
   participantEvents    SessionParticipantEvent[]
   cancellationRequests CancellationRequest[]

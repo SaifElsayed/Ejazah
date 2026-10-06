@@ -24,7 +24,7 @@ model Review {
   enrollment       Enrollment @relation(fields: [enrollmentId], references: [id])
   student          User       @relation("ReviewStudent", fields: [studentUserId], references: [id])
   teacher          User       @relation("ReviewTeacher", fields: [teacherUserId], references: [id])
-  moderatedByAdmin AdminUser? @relation(fields: [moderatedByAdminId], references: [id])
+  moderatedByAdmin AdminUser? @relation(fields: [moderatedByAdminId], references: [id], onDelete: Restrict)
 
   @@map("reviews")
 }
