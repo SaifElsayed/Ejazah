@@ -1,11 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigError, loadConfig, loadConfigOrExit } from './config.module.js';
 import { envKeys } from './env.schema.js';
-
-it.todo('T093: a missing or malformed value exits naming it, before traffic is accepted (FR-039)');
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
@@ -292,4 +291,41 @@ describe('loadConfigOrExit (T015, FR-039)', () => {
     expect(exit).not.toHaveBeenCalled();
     expect(stderr).not.toHaveBeenCalled();
   });
+});
+
+// T093 — the two processes themselves (FR-039; contracts/kernel.md "Configuration"). Each entrypoint
+// is started as it is in production, with a configuration missing `ENCRYPTION_KEY` and carrying a
+// malformed `PORT`: it must exit 1 naming both keys, print neither value, and write nothing to
+// standard output, so nothing was logged as listening or started before the refusal. Red until the
+// entrypoints call `loadConfigOrExit` first (note under T015; batch K2).
+describe('the entrypoints refuse to start on an invalid configuration (T093, FR-039)', () => {
+  const malformedPort = 'not-a-port-7f3e';
+  const invalidEnv: Record<string, string> = {
+    ...without(validEnv, 'ENCRYPTION_KEY'),
+    PORT: malformedPort,
+  };
+  // Only what the operating system needs to start Node; nothing from the developer's own shell.
+  const system: Record<string, string> = {};
+  for (const key of ['PATH', 'Path', 'SystemRoot', 'TEMP', 'TMP', 'HOME', 'USERPROFILE']) {
+    const value = process.env[key];
+    if (value !== undefined) system[key] = value;
+  }
+
+  it.each(['apps/api/src/main.ts', 'apps/api/src/worker.ts'])(
+    '%s exits 1 naming the offending keys, before anything else',
+    (entrypoint) => {
+      const result = spawnSync(process.execPath, ['--import', 'tsx', entrypoint], {
+        cwd: repositoryRoot,
+        env: { ...system, ...invalidEnv },
+        encoding: 'utf8',
+        timeout: 60_000,
+      });
+
+      expect(result.status, result.stderr).toBe(1);
+      expect(result.stderr).toMatch(/ENCRYPTION_KEY/);
+      expect(result.stderr).toMatch(/PORT/);
+      expect(result.stderr).not.toContain(malformedPort);
+      expect(result.stdout).toBe('');
+    },
+  );
 });
