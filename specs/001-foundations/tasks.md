@@ -275,7 +275,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 ### Tests for User Story 4 ⚠️
 
 - [ ] T079 [P] [US4] Contract snapshot diff test in `tests/pipeline/contract-snapshot.spec.ts` — a removal or rename fails, an addition passes without comment (FR-063)
-- [ ] T080 [P] [US4] Secret-scanning test in `tests/pipeline/secret-scan.spec.ts` asserting the local check and the pipeline check each reject a planted secret independently, including one placed under `specs/` (SC-010)
+- [x] T080 [P] [US4] Secret-scanning test in `tests/pipeline/secret-scan.spec.ts` asserting the local check and the pipeline check each reject a planted secret independently, including one placed under `specs/` (SC-010) — done 2026-10-06
 - [ ] T139 [P] [US4] Suppression-gate test in `tests/pipeline/suppression-gate.spec.ts` asserting the gate refuses an unjustified suppression the ordinary lint run cannot see — a file whose inline configuration comment switches `proc/require-suppression-reason` off, in each spelling ESLint reads (`off`, `0`, `"off"`, `["off"]`, no spaces, tabs, a line break inside the comment, and switched off beside another rule in one comment) — still passes a justified inline configuration comment and a justified `eslint-disable`, that a justified `eslint-disable-next-line` naming a type-aware rule passes both `pnpm lint` and `pnpm lint:types`, and that an unused `eslint-disable` directive fails `pnpm lint:types` (FR-008, SC-003)
 
 ### Implementation for User Story 4
