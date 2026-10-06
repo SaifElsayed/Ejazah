@@ -15,6 +15,7 @@ model VerificationDocument {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("verification_documents")
 }
 
@@ -34,5 +35,7 @@ model VerificationRequest {
   user             User      @relation(fields: [userId], references: [id])
   requestedByAdmin AdminUser @relation(fields: [requestedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([userId])
+  @@index([requestedByAdminId])
   @@map("verification_requests")
 }

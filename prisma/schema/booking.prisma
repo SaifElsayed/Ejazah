@@ -27,6 +27,9 @@ model SlotHold {
   student    User             @relation(fields: [studentUserId], references: [id])
   enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
 
+  @@index([slotId])
+  @@index([studentUserId])
+  @@index([enrollmentId])
   @@map("slot_holds")
 }
 
@@ -71,5 +74,10 @@ model Enrollment {
   review       Review?
   disputes     Dispute[]
 
+  @@index([studentUserId])
+  @@index([teacherUserId])
+  @@index([packageId])
+  @@index([slotId])
+  @@index([snapshotSubjectId])
   @@map("enrollments")
 }

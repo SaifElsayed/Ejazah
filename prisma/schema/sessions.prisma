@@ -55,6 +55,9 @@ model Session {
 
   // Ordered session lists (ERD section 14).
   @@unique([enrollmentId, sequenceNumber])
+  @@index([teacherUserId])
+  @@index([studentUserId])
+  @@index([settledByAdminId])
   @@map("sessions")
 }
 
@@ -72,6 +75,8 @@ model SessionParticipantEvent {
   session Session @relation(fields: [sessionId], references: [id])
   user    User    @relation(fields: [userId], references: [id])
 
+  @@index([sessionId])
+  @@index([userId])
   @@map("session_participant_events")
 }
 
@@ -91,5 +96,7 @@ model CancellationRequest {
   session     Session @relation(fields: [sessionId], references: [id])
   requestedBy User    @relation(fields: [requestedByUserId], references: [id])
 
+  @@index([sessionId])
+  @@index([requestedByUserId])
   @@map("cancellation_requests")
 }

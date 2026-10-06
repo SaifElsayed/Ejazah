@@ -111,6 +111,7 @@ model TeacherProfile {
   user            User       @relation(fields: [userId], references: [id])
   approvedByAdmin AdminUser? @relation(fields: [approvedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([approvedByAdminId])
   @@map("teacher_profiles")
 }
 
@@ -147,6 +148,7 @@ model DevicePushToken {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("device_push_tokens")
 }
 
@@ -160,5 +162,6 @@ model TermsAcceptance {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("terms_acceptances")
 }

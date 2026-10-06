@@ -627,7 +627,7 @@ erDiagram
 
 ## 14. Indexes that matter
 
-Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking guards (ADR 0010):
+Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking guards (ADR 0010). The FK indexes are real, not assumed: PostgreSQL creates none, so every foreign-key column carries a plain index declared in the schema, unless a full unique or index already starts with it (FR-035). A partial index does not count, since it serves only the rows its predicate admits.
 
 | Index | Serves |
 |---|---|
@@ -679,6 +679,7 @@ Rule 10 treats `audit_logs` differently on purpose. Every other table on that li
 | 1 | §7 `payments.gateway`: the enum is declared with the single member `fake`, the recording stand-in; real members are added when a gateway is integrated. | Note under T059, owner's choice after review |
 | 2 | §7 `payment_events.payment_id` becomes nullable, NULL exactly for `recipient_verified` and `recipient_rejected`; §13.3 cardinality follows; §15 rule 20. | Note under T059, approved in the review of PR #39 |
 | 3 | §9 `reviews` lists `updated_at`; §3 and §10 mark the four `resolved_at` columns nullable. Wording only: the model already followed §0. | Review of PR #39 |
+| 4 | §14 states that the FK indexes exist and how they are declared. | Review of PR #39, FR-035 |
 
 ## Changelog — v1.3 addendum (ADR 0010)
 

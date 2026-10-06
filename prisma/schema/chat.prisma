@@ -26,5 +26,7 @@ model ChatMessage {
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
   sender     User       @relation(fields: [senderUserId], references: [id])
 
+  @@index([enrollmentId])
+  @@index([senderUserId])
   @@map("chat_messages")
 }

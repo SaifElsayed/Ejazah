@@ -34,6 +34,7 @@ model Payment {
 
   events PaymentEvent[]
 
+  @@index([enrollmentId])
   @@map("payments")
 }
 
@@ -60,5 +61,6 @@ model PaymentEvent {
   // recipient event (note under T059).
   payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
 
+  @@index([paymentId])
   @@map("payment_events")
 }

@@ -11,7 +11,10 @@
 // Primary keys are UUID v7 (ERD section 0). PostgreSQL 18 ships `uuidv7()` natively, so every
 // model declared by T055+ uses `id String @id @default(dbgenerated("uuidv7()")) @db.Uuid`.
 // Every timestamp is `@db.Timestamptz(6)` and ends `_at` (research R-7); local wall-clock columns end
-// `_local` beside a `timezone` column (R-TIME-3).
+// `_local` beside a `timezone` column (R-TIME-3). Every foreign key is ON DELETE RESTRICT, so an optional
+// relation states `onDelete: Restrict` (data-model.md section 4), and every foreign-key column carries an
+// `@@index` unless a full unique or index already starts with it: PostgreSQL creates none (ERD section 14,
+// FR-035).
 
 datasource db {
   provider = "postgresql"

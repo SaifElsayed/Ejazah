@@ -29,6 +29,10 @@ model Dispute {
   raisedBy        User?      @relation(fields: [raisedByUserId], references: [id], onDelete: Restrict)
   resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([enrollmentId])
+  @@index([sessionId])
+  @@index([raisedByUserId])
+  @@index([resolvedByAdminId])
   @@map("disputes")
 }
 
@@ -49,6 +53,9 @@ model GenderFlag {
   raisedBy        User?      @relation("GenderFlagRaisedBy", fields: [raisedByUserId], references: [id], onDelete: Restrict)
   resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([flaggedUserId])
+  @@index([raisedByUserId])
+  @@index([resolvedByAdminId])
   @@map("gender_flags")
 }
 
@@ -72,5 +79,9 @@ model UserReport {
   session         Session?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([reportedUserId])
+  @@index([reporterUserId])
+  @@index([sessionId])
+  @@index([resolvedByAdminId])
   @@map("user_reports")
 }

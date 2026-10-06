@@ -30,6 +30,7 @@ model TeacherSubject {
   subject Subject @relation(fields: [subjectId], references: [id])
 
   @@unique([teacherUserId, subjectId])
+  @@index([subjectId])
   @@map("teacher_subjects")
 }
 
@@ -54,6 +55,8 @@ model Package {
 
   enrollments Enrollment[]
 
+  @@index([teacherUserId])
+  @@index([subjectId])
   @@map("packages")
 }
 
@@ -78,6 +81,7 @@ model AvailabilitySlot {
   slotHolds   SlotHold[]
   enrollments Enrollment[]
 
+  @@index([teacherUserId])
   @@map("availability_slots")
 }
 
@@ -103,6 +107,8 @@ model IsnadEntry {
 
   // A chain cannot hold two names at one position (ERD section 15.7).
   @@unique([teacherUserId, subjectId, position])
+  @@index([subjectId])
+  @@index([verifiedByAdminId])
   @@map("isnad_entries")
 }
 

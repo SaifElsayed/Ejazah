@@ -52,6 +52,7 @@ model AuditLog {
 
   admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
 
+  @@index([adminId])
   @@map("audit_logs")
 }
 
@@ -66,5 +67,6 @@ model Setting {
 
   updatedByAdmin AdminUser @relation(fields: [updatedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([updatedByAdminId])
   @@map("settings")
 }

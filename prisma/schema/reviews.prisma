@@ -26,5 +26,8 @@ model Review {
   teacher          User       @relation("ReviewTeacher", fields: [teacherUserId], references: [id])
   moderatedByAdmin AdminUser? @relation(fields: [moderatedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([studentUserId])
+  @@index([teacherUserId])
+  @@index([moderatedByAdminId])
   @@map("reviews")
 }

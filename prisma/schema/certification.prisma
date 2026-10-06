@@ -45,6 +45,11 @@ model Ijazah {
   subject        Subject    @relation(fields: [subjectId], references: [id])
   revokedByAdmin AdminUser? @relation(fields: [revokedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([enrollmentId])
+  @@index([studentUserId])
+  @@index([teacherUserId])
+  @@index([subjectId])
+  @@index([revokedByAdminId])
   @@map("ijazahs")
 }
 
@@ -66,5 +71,8 @@ model IjazahBar {
   barredByAdmin AdminUser  @relation("IjazahBarBarredBy", fields: [barredByAdminId], references: [id], onDelete: Restrict)
   liftedByAdmin AdminUser? @relation("IjazahBarLiftedBy", fields: [liftedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([userId])
+  @@index([barredByAdminId])
+  @@index([liftedByAdminId])
   @@map("ijazah_bars")
 }
