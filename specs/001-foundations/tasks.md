@@ -310,7 +310,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 ### Tests for User Story 5 ⚠️
 
 - [ ] T093 [P] [US5] Configuration refusal test in `apps/api/src/platform/config/config.spec.ts` — a missing or malformed value exits naming it, before traffic is accepted (FR-039)
-- [ ] T094 [P] [US5] Error shape test in `apps/api/src/platform/errors/error-filter.spec.ts` — one shape out, no stack trace, query text or internal path, and a forbidden profile answering 404 rather than 403 (FR-041)
+- [x] T094 [P] [US5] Error shape test in `apps/api/src/platform/errors/error-filter.spec.ts` — one shape out, no stack trace, query text or internal path, and a forbidden profile answering 404 rather than 403 (FR-041) — done 2026-10-06
 - [x] T095 [P] [US5] Redaction test in `apps/api/src/platform/logging/logger.spec.ts` — a sensitive value nested inside a legitimately passed object is still absent from the record (FR-040) — done 2026-10-06
 - [ ] T096 [P] [US5] Idempotency test in `apps/api/src/platform/idempotency/idempotency.spec.ts` — a repeated operation returns the first outcome and does not repeat the effect (FR-042)
 - [ ] T097 [P] [US5] Sniffing test in `apps/api/src/platform/guards/upload.spec.ts` using a renamed image — content decides, the declaration is discarded rather than compared (FR-044)
