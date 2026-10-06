@@ -37,6 +37,11 @@ model User {
   termsAcceptances      TermsAcceptance[]
   verificationDocuments VerificationDocument[]
   verificationRequests  VerificationRequest[]
+  teacherSubjects       TeacherSubject[]
+  packages              Package[]
+  availabilitySlots     AvailabilitySlot[]
+  isnadEntries          IsnadEntry[]
+  teacherSignature      TeacherSignature?
 
   @@map("users")
 }

@@ -19,6 +19,7 @@ model AdminUser {
   settingsUpdated      Setting[]
   approvedProfiles     TeacherProfile[]
   verificationRequests VerificationRequest[]
+  verifiedIsnadEntries IsnadEntry[]
 
   @@map("admin_users")
 }

@@ -1,3 +1,115 @@
 // catalog domain (T056, ERD section 4). Owned by apps/api/src/modules/catalog.
 // subjects, teacher_subjects, packages, availability_slots, isnad_entries, teacher_signatures. Availability is local wall-clock beside an IANA zone column (R-TIME-3).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+
+// An administrator-managed list, named in both languages (FR-LOC-1).
+model Subject {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  nameAr    String   @map("name_ar")
+  nameEn    String   @map("name_en")
+  isActive  Boolean  @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacherSubjects TeacherSubject[]
+  packages        Package[]
+  isnadEntries    IsnadEntry[]
+
+  @@map("subjects")
+}
+
+model TeacherSubject {
+  id            String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId String   @map("teacher_user_id") @db.Uuid
+  subjectId     String   @map("subject_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  teacher User    @relation(fields: [teacherUserId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@unique([teacherUserId, subjectId])
+  @@map("teacher_subjects")
+}
+
+model Package {
+  id                     String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId          String   @map("teacher_user_id") @db.Uuid
+  // A foreign key, not an enum.
+  subjectId              String   @map("subject_id") @db.Uuid
+  sessionCount           Int      @map("session_count")
+  // Must equal the slot's duration at booking (FR-PROFILE-8).
+  sessionDurationMinutes Int      @map("session_duration_minutes")
+  // Integer piasters, charged in full through the gateway at checkout (FR-PAYG-1, R-MONEY-1).
+  pricePiasters          BigInt   @map("price_piasters")
+  currency               String   @default("EGP") @db.Char(3)
+  // Deactivation never touches existing enrollments (FR-PROFILE-3).
+  isActive               Boolean  @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacher User    @relation(fields: [teacherUserId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@map("packages")
+}
+
+// Recurring weekly: a local wall-clock time beside the zone it is read in, never UTC (R-TIME-3).
+model AvailabilitySlot {
+  id              String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId   String   @map("teacher_user_id") @db.Uuid
+  // 0-6 with 0 = Sunday, as Postgres EXTRACT(DOW).
+  dayOfWeek       Int      @map("day_of_week") @db.SmallInt
+  // `HH:MM:SS`, the time package's LocalTime (packages/time).
+  startTimeLocal  DateTime @map("start_time_local") @db.Time(0)
+  durationMinutes Int      @map("duration_minutes")
+  // The teacher's IANA zone at creation.
+  timezone        String
+  // Deactivation never affects generated sessions (FR-PROFILE-9).
+  isActive        Boolean  @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacher User @relation(fields: [teacherUserId], references: [id])
+
+  @@map("availability_slots")
+}
+
+// The chain of transmission: ordered names per teacher per subject, not a graph (FR-ISNAD-1..6).
+model IsnadEntry {
+  id                 String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId      String                  @map("teacher_user_id") @db.Uuid
+  subjectId          String                  @map("subject_id") @db.Uuid
+  // 1 is the teacher's own teacher, ascending toward the origin.
+  position           Int
+  // Free text, Arabic or English.
+  transmitterName    String                  @map("transmitter_name")
+  // Recorded by an administrator (FR-ISNAD-4); any edit reverts it to unverified (FR-ISNAD-6).
+  verificationStatus IsnadVerificationStatus @map("verification_status")
+  verifiedByAdminId  String?                 @map("verified_by_admin_id") @db.Uuid
+  verifiedAt         DateTime?               @map("verified_at") @db.Timestamptz(6)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacher         User       @relation(fields: [teacherUserId], references: [id])
+  subject         Subject    @relation(fields: [subjectId], references: [id])
+  verifiedByAdmin AdminUser? @relation(fields: [verifiedByAdminId], references: [id])
+
+  // A chain cannot hold two names at one position (ERD section 15.7).
+  @@unique([teacherUserId, subjectId, position])
+  @@map("isnad_entries")
+}
+
+// Required before a generated ijazah is granted (FR-IJAZAH-12).
+model TeacherSignature {
+  id            String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId String   @unique @map("teacher_user_id") @db.Uuid
+  // Storage key, served only through a signed URL.
+  storageKey    String   @map("storage_key")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacher User @relation(fields: [teacherUserId], references: [id])
+
+  @@map("teacher_signatures")
+}
