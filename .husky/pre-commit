@@ -1,5 +1,10 @@
 # Fast checks only (research R-10). Registered by T048 (fast lint) and T082 (Gitleaks).
 # Neither may be implemented as a call to the pipeline check. They are independent nets (SC-010).
 
+# T082 — Gitleaks over the staged change, first, because a secret must not wait on lint (FR-059).
+# A machine without Gitleaks cannot commit: a missing scanner is a missing net, not a pass.
+command -v gitleaks >/dev/null 2>&1 || { echo "pre-commit: gitleaks is not on the PATH; install it from https://github.com/gitleaks/gitleaks/releases — refusing to commit unscanned"; exit 1; }
+gitleaks git --pre-commit --staged --redact --verbose --no-banner
+
 # T048 — the fast, syntax-only rule set (eslint.config.js). The type-aware set runs in the pipeline only.
 pnpm lint
