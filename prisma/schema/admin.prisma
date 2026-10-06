@@ -17,6 +17,8 @@ model AdminUser {
 
   auditLogs            AuditLog[]
   settingsUpdated      Setting[]
+  approvedProfiles     TeacherProfile[]
+  verificationRequests VerificationRequest[]
 
   @@map("admin_users")
 }

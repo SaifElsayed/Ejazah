@@ -1,3 +1,140 @@
 // identity domain (T055, ERD section 2). Owned by apps/api/src/modules/identity.
 // users, user_roles, teacher_profiles, otp_codes, device_push_tokens, terms_acceptances. deleted_at on users. Encrypted and hashed columns per data-model.md section 7. teacher_profiles carries payout_account_ref_encrypted, payout_configured_at, payout_verified_at (FR-075, ADR 0007).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// Fields are camelCase in code and snake_case in the database (`@map`, ARCHITECTURE "Naming");
+// models are singular and map to the ERD's plural table names, so each delegate is the one
+// `api/table-ownership` derives from the manifest (note under T047). Every table carries
+// `created_at`, and a table whose rows change after insert carries `updated_at` (ERD section 0).
+// What the schema language cannot say lives in the migrations: the phone-or-email check (T064),
+// the partial uniques on phone and email (T066) and the revoked DELETE (T065).
+
+model User {
+  id                String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  // E.164. Unique only among rows not soft-deleted (T066, ERD section 15.11).
+  phone             String?
+  // citext, so two spellings of one address are one address. Partially unique as `phone` (T066).
+  email             String?       @db.Citext
+  // Null for an account that signs in by one-time code only.
+  passwordHash      String?       @map("password_hash")
+  // Self-declared (FR-AUTH-3); changed only through an administrator (FR-GENDER-5).
+  gender            Gender
+  // Minor status is derived from this on read, never stored (R-DB-4).
+  dateOfBirth       DateTime      @map("date_of_birth") @db.Date
+  displayName       String        @map("display_name")
+  preferredLanguage Language      @map("preferred_language")
+  // IANA zone, device-reported with a manual override (FR-AUTH-10).
+  timezone          String
+  accountStatus     AccountStatus @map("account_status")
+  // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
+  deletedAt         DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  roles                 UserRole[]
+  teacherProfile        TeacherProfile?
+  devicePushTokens      DevicePushToken[]
+  termsAcceptances      TermsAcceptance[]
+  verificationDocuments VerificationDocument[]
+  verificationRequests  VerificationRequest[]
+
+  @@map("users")
+}
+
+// Roles are a set: one user may hold both (SRS section 2.2).
+model UserRole {
+  id        String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  role      Role
+  // Per-role suspension, independent of the account's status.
+  status    RoleStatus
+  grantedAt DateTime   @default(now()) @map("granted_at") @db.Timestamptz(6)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+// Exists only for a user holding the teacher role, 1:1 with it.
+model TeacherProfile {
+  id                          String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId                      String                    @unique @map("user_id") @db.Uuid
+  bio                         String
+  // Storage key, served only through a signed URL.
+  photoKey                    String?                   @map("photo_key")
+  qualificationSummary        String                    @map("qualification_summary")
+  verificationStatus          TeacherVerificationStatus @map("verification_status")
+  // The gate on approval (FR-VERIFY-5).
+  verificationCallCompletedAt DateTime?                 @map("verification_call_completed_at") @db.Timestamptz(6)
+  verificationCallNotes       String?                   @map("verification_call_notes")
+  approvedByAdminId           String?                   @map("approved_by_admin_id") @db.Uuid
+  approvedAt                  DateTime?                 @map("approved_at") @db.Timestamptz(6)
+  // The gateway's recipient reference, encrypted above the database (R-DB-8, FR-075). Never a raw
+  // account number. Set by payout setup after approval (FR-PAYG-13).
+  payoutAccountRefEncrypted   Bytes?                    @map("payout_account_ref_encrypted")
+  payoutConfiguredAt          DateTime?                 @map("payout_configured_at") @db.Timestamptz(6)
+  // NULL: not discoverable, not bookable, cannot publish (FR-PAYG-14, SRS section 3.7.1).
+  payoutVerifiedAt            DateTime?                 @map("payout_verified_at") @db.Timestamptz(6)
+  // Cached exception with `review_count`, recomputed on every review write (R-DB-4).
+  averageRating               Decimal?                  @map("average_rating") @db.Decimal(3, 2)
+  reviewCount                 Int                       @default(0) @map("review_count")
+  createdAt                   DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user            User       @relation(fields: [userId], references: [id])
+  approvedByAdmin AdminUser? @relation(fields: [approvedByAdminId], references: [id])
+
+  @@map("teacher_profiles")
+}
+
+// Signup verification, sign-in and password reset (FR-AUTH-1/6).
+model OtpCode {
+  id           String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  // A phone number or an email address.
+  destination  String
+  // Memory-hard hash; the code is never stored plain (R-DB-7, data-model.md section 7).
+  codeHash     String     @map("code_hash")
+  purpose      OtpPurpose
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz(6)
+  // Single use.
+  consumedAt   DateTime?  @map("consumed_at") @db.Timestamptz(6)
+  attemptCount Int        @default(0) @map("attempt_count")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("otp_codes")
+}
+
+// Push targets for FR-NOTIF-1.
+model DevicePushToken {
+  id             String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  // Must be presented to the provider, so encrypted rather than hashed (R-DB-8).
+  tokenEncrypted Bytes          @map("token_encrypted")
+  // Deduplication and lookup without decrypting.
+  tokenHash      String         @unique @map("token_hash")
+  platform       DevicePlatform
+  lastSeenAt     DateTime       @map("last_seen_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("device_push_tokens")
+}
+
+// Versioned, so re-acceptance after a change to the Terms is provable (FR-AUTH-11). Never updated.
+model TermsAcceptance {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  termsVersion String   @map("terms_version")
+  acceptedAt   DateTime @default(now()) @map("accepted_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("terms_acceptances")
+}
