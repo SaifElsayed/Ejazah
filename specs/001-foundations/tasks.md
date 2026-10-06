@@ -207,7 +207,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T049 [P] [US2] Create the integrity-probe harness in `tests/db-integrity/harness.ts` that connects **as the application role**, not the owner
+- [x] T049 [P] [US2] Create the integrity-probe harness in `tests/db-integrity/harness.ts` that connects **as the application role**, not the owner — done 2026-10-06
 - [ ] T050 [P] [US2] Privilege probes in `tests/db-integrity/privileges.spec.ts`: delete on users, sessions, enrollments, ijazahs and audit logs — all refused (SC-004)
 - [ ] T051 [P] [US2] Constraint probes in `tests/db-integrity/constraints.spec.ts` covering all nine original integrity rules of the model (SC-007)
 - [ ] T052 [P] [US2] Replay probes in `tests/db-integrity/replay.spec.ts`: a duplicate `provider_event_id` on `session_participant_events` and on `payment_events` refused as unique, a NULL `payment_events.provider_event_id` refused as not-null, a duplicate `payments.gateway_order_id` refused (FR-036, FR-073, ERD §15.4/13/14)
