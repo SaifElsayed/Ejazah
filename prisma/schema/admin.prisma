@@ -21,6 +21,9 @@ model AdminUser {
   verificationRequests VerificationRequest[]
   verifiedIsnadEntries IsnadEntry[]
   settledSessions      Session[]
+  revokedIjazahs       Ijazah[]
+  ijazahBarsImposed    IjazahBar[]           @relation("IjazahBarBarredBy")
+  ijazahBarsLifted     IjazahBar[]           @relation("IjazahBarLiftedBy")
 
   @@map("admin_users")
 }

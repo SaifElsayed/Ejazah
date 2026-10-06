@@ -15,6 +15,7 @@ model Subject {
   packages        Package[]
   isnadEntries    IsnadEntry[]
   enrollments     Enrollment[]
+  ijazahs         Ijazah[]
 
   @@map("subjects")
 }
