@@ -23,7 +23,7 @@ needed.
 | `boundaries/no-role-import-in-shared` | Shared tree importing either role tree | R-MOBILE-2 |
 | `boundaries/no-deep-module-import` | Importing a module below its public entry | R-API-3 |
 | `boundaries/no-adapter-import` | Importing a concrete provider implementation outside its port folder | R-API-4 |
-| `boundaries/no-upward-admin-import` | Importing upward into the administrative module | R-API-4 |
+| `boundaries/no-upward-admin-import` | Importing upward into the administrative module, from any file outside it except the three composition files `apps/api/src/main.ts`, `apps/api/src/worker.ts` and `apps/api/src/surfaces/admin.router.ts`, which may import its public entry (T143) | R-API-4 |
 | `boundaries/no-money-vocabulary` | Wallet, ledger, balance, escrow or platform-held-funds vocabulary anywhere; and gateway order, gross, fee or net amounts referenced outside `modules/payments` and `platform/ports/payment` (redefined by ADR 0007) | R-MONEY-6 |
 | `api/no-logic-in-router` | A router file exceeding the complexity ceiling, which is how a business rule shows up there | R-API-1 |
 | `api/no-orm-outside-repository` | Database client imported outside a repository file | R-API-2 |
