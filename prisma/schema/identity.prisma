@@ -42,6 +42,7 @@ model User {
   availabilitySlots     AvailabilitySlot[]
   isnadEntries          IsnadEntry[]
   teacherSignature      TeacherSignature?
+  notifications         Notification[]
 
   @@map("users")
 }

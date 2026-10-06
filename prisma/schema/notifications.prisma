@@ -1,3 +1,27 @@
 // notifications domain (T062, ERD section 11). Owned by apps/api/src/modules/notifications.
 // notifications.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+
+// Backs both push delivery and the notification centre (FR-NOTIF-1/2).
+model Notification {
+  id        String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  // i18n keys, rendered in the user's language at display time (FR-NOTIF-3).
+  titleKey  String           @map("title_key")
+  bodyKey   String           @map("body_key")
+  // Deep-link data (enrollment_id, session_id, ...).
+  payload   Json
+  // Unread state for the centre.
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(6)
+  // Set by the delivery job (FR-NOTIF-4).
+  pushedAt  DateTime?        @map("pushed_at") @db.Timestamptz(6)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  // The notification centre badge (ERD section 14).
+  @@index([userId, readAt])
+  @@map("notifications")
+}

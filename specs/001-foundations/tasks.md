@@ -227,7 +227,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T059 [P] [US2] Model the payments domain in `prisma/schema/payments.prisma` per ERD §7 — `payments` and `payment_events`, unique gateway identifiers, unique NOT NULL provider event id, and no balance column anywhere (FR-027, FR-073; reinstated by ADR 0007 after ADR 0005 retired the escrow version). Also declares the `PaymentGateway` enum deferred from T013 (see its note) and settles the two decisions recorded there.
 - [ ] T060 [P] [US2] Model the certification domain in `prisma/schema/certification.prisma` per ERD §8, with the hashed verification token and `deleted_at` on ijazahs
 - [ ] T061 [P] [US2] Model the community and moderation domains in `prisma/schema/reviews.prisma` and `moderation.prisma` per ERD §9–10
-- [ ] T062 [P] [US2] Model the notification domain in `prisma/schema/notifications.prisma` per ERD §11
+- [x] T062 [P] [US2] Model the notification domain in `prisma/schema/notifications.prisma` per ERD §11 — done 2026-10-06
 - [x] T063 [P] [US2] Model the admin domain in `prisma/schema/admin.prisma` per ERD §12 — administrator identity sharing no table with users, and audit logs with no deletion column — done 2026-10-06
 - [x] T134 [P] [US2] Model the platform kernel domain in `prisma/schema/platform.prisma` per ERD §12 — `idempotency_keys` with unique `(scope, key)`, `request_hash`, `response`, `status`, `expires_at` (FR-042, ADR 0008 D2) — done 2026-10-06
 - [ ] T064 [US2] Create the initial migration from the schema, then extend it by hand with the check constraints of data-model.md §6 that the schema language cannot express (research R-6)
