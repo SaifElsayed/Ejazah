@@ -63,9 +63,10 @@ model Enrollment {
   slot            AvailabilitySlot @relation(fields: [slotId], references: [id])
   snapshotSubject Subject          @relation(fields: [snapshotSubjectId], references: [id])
 
-  slotHolds SlotHold[]
-  sessions  Session[]
-  payments  Payment[]
+  slotHolds    SlotHold[]
+  sessions     Session[]
+  payments     Payment[]
+  chatMessages ChatMessage[]
 
   @@map("enrollments")
 }

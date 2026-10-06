@@ -50,6 +50,7 @@ model User {
   sessionsAsStudent     Session[]                 @relation("SessionStudent")
   participantEvents     SessionParticipantEvent[]
   cancellationRequests  CancellationRequest[]
+  chatMessages          ChatMessage[]
 
   @@map("users")
 }
