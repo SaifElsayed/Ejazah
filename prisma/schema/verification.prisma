@@ -1,3 +1,38 @@
 // verification domain (T055, ERD section 3). Owned by apps/api/src/modules/verification.
 // verification_documents, verification_requests.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+
+// Uploaded identity and credential documents (FR-VERIFY-1). An administrator views, never modifies.
+model VerificationDocument {
+  id                  String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  // A teacher applicant, or any user under an FR-VERIFY-10 request.
+  userId              String                   @map("user_id") @db.Uuid
+  documentType        VerificationDocumentType @map("document_type")
+  // An identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only.
+  storageKeyEncrypted Bytes                    @map("storage_key_encrypted")
+  uploadedAt          DateTime                 @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("verification_documents")
+}
+
+// An administrator's "provide ID" demand (FR-VERIFY-10), distinct from the teacher application.
+model VerificationRequest {
+  id                 String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId             String                    @map("user_id") @db.Uuid
+  requestedByAdminId String                    @map("requested_by_admin_id") @db.Uuid
+  // Mandatory.
+  reason             String
+  // An open request puts the account in `verification_required`.
+  status             VerificationRequestStatus
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt         DateTime?                 @map("resolved_at") @db.Timestamptz(6)
+  updatedAt          DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user             User      @relation(fields: [userId], references: [id])
+  requestedByAdmin AdminUser @relation(fields: [requestedByAdminId], references: [id])
+
+  @@map("verification_requests")
+}
