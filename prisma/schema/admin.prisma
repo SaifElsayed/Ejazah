@@ -1,3 +1,59 @@
 // admin domain (T063, ERD section 12). Owned by apps/api/src/modules/admin.
 // admin_users, audit_logs, settings. Administrator identity shares no table with users (R-SEC-8). audit_logs has no deleted_at.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+
+// Separate from `users` entirely (FR-ADMIN-1): its own table, credentials and MFA, no foreign key
+// to or from `users`.
+model AdminUser {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email              String   @unique
+  passwordHash       String   @map("password_hash")
+  // MFA is mandatory (NFR-SEC-6); the secret is recoverable, so encrypted, not hashed (R-DB-8).
+  mfaSecretEncrypted Bytes    @map("mfa_secret_encrypted")
+  displayName        String   @map("display_name")
+  isActive           Boolean  @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  auditLogs            AuditLog[]
+  settingsUpdated      Setting[]
+
+  @@map("admin_users")
+}
+
+// Every administrator action (FR-ADMIN-17). Strictly append-only: no `deleted_at`, no
+// `updated_at`, and DELETE revoked from the application role (T065, ERD section 15.10).
+model AuditLog {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  adminId    String   @map("admin_id") @db.Uuid
+  // A stable machine string.
+  action     String
+  // A polymorphic reference to what the action touched.
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id") @db.Uuid
+  // Mandatory for destructive actions.
+  reason     String?
+  // State snapshots.
+  before     Json?
+  after      Json?
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  admin AdminUser @relation(fields: [adminId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Every operational number (SRS section 3.14); changes are prospective-only and audit-logged.
+model Setting {
+  // e.g. attendance_threshold_pct, join_window_minutes, slot_hold_ttl_minutes.
+  key              String   @id
+  value            Json
+  updatedByAdminId String   @map("updated_by_admin_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedByAdmin AdminUser @relation(fields: [updatedByAdminId], references: [id])
+
+  @@map("settings")
+}

@@ -227,7 +227,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T060 [P] [US2] Model the certification domain in `prisma/schema/certification.prisma` per ERD §8, with the hashed verification token and `deleted_at` on ijazahs
 - [ ] T061 [P] [US2] Model the community and moderation domains in `prisma/schema/reviews.prisma` and `moderation.prisma` per ERD §9–10
 - [ ] T062 [P] [US2] Model the notification domain in `prisma/schema/notifications.prisma` per ERD §11
-- [ ] T063 [P] [US2] Model the admin domain in `prisma/schema/admin.prisma` per ERD §12 — administrator identity sharing no table with users, and audit logs with no deletion column
+- [x] T063 [P] [US2] Model the admin domain in `prisma/schema/admin.prisma` per ERD §12 — administrator identity sharing no table with users, and audit logs with no deletion column — done 2026-10-06
 - [ ] T134 [P] [US2] Model the platform kernel domain in `prisma/schema/platform.prisma` per ERD §12 — `idempotency_keys` with unique `(scope, key)`, `request_hash`, `response`, `status`, `expires_at` (FR-042, ADR 0008 D2)
 - [ ] T064 [US2] Create the initial migration from the schema, then extend it by hand with the check constraints of data-model.md §6 that the schema language cannot express (research R-6)
 - [ ] T065 [US2] Add the role and privilege migration in `prisma/migrations/` — create both roles, revoke delete on the five tables (users, sessions, enrollments, ijazahs, audit_logs), and set default privileges so the next migration cannot silently reopen the door (FR-025, FR-026)
