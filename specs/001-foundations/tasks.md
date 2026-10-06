@@ -208,7 +208,8 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 ### Tests for User Story 2 ⚠️
 
 - [x] T049 [P] [US2] Create the integrity-probe harness in `tests/db-integrity/harness.ts` that connects **as the application role**, not the owner — done 2026-10-06
-- [ ] T050 [P] [US2] Privilege probes in `tests/db-integrity/privileges.spec.ts`: delete on users, sessions, enrollments, ijazahs and audit logs — all refused (SC-004)
+- [x] T050 [P] [US2] Privilege probes in `tests/db-integrity/privileges.spec.ts`: delete on users, sessions, enrollments, ijazahs and audit logs — all refused (SC-004) — done 2026-10-06
+  > **Note under T050 (PR #38, 2026-10-06).** The probes refuse TRUNCATE as well as DELETE on the five tables: TRUNCATE is a separate privilege that removes every row without a DELETE, so T065 must not grant it to the application role (or must revoke it with DELETE), or SC-004 has a way round.
 - [ ] T051 [P] [US2] Constraint probes in `tests/db-integrity/constraints.spec.ts` covering all nine original integrity rules of the model (SC-007)
 - [ ] T052 [P] [US2] Replay probes in `tests/db-integrity/replay.spec.ts`: a duplicate `provider_event_id` on `session_participant_events` and on `payment_events` refused as unique, a NULL `payment_events.provider_event_id` refused as not-null, a duplicate `payments.gateway_order_id` refused (FR-036, FR-073, ERD §15.4/13/14)
 - [ ] T053 [P] [US2] Soft-deletion behaviour in `tests/db-integrity/soft-delete.spec.ts`: marked rows absent from reads and counts, a deleted user's phone number reusable, a soft-deleted enrollment absent from reads and not reviewable (ADR 0006)
