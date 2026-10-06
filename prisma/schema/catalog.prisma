@@ -14,6 +14,7 @@ model Subject {
   teacherSubjects TeacherSubject[]
   packages        Package[]
   isnadEntries    IsnadEntry[]
+  enrollments     Enrollment[]
 
   @@map("subjects")
 }
@@ -50,6 +51,8 @@ model Package {
   teacher User    @relation(fields: [teacherUserId], references: [id])
   subject Subject @relation(fields: [subjectId], references: [id])
 
+  enrollments Enrollment[]
+
   @@map("packages")
 }
 
@@ -70,6 +73,9 @@ model AvailabilitySlot {
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   teacher User @relation(fields: [teacherUserId], references: [id])
+
+  slotHolds   SlotHold[]
+  enrollments Enrollment[]
 
   @@map("availability_slots")
 }

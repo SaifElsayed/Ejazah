@@ -139,6 +139,10 @@ enum CancellationReason {
   admin
   gender_correction
   teacher_suspended
+  // Paid, but the database refused its confirmation (FR-PAYG-19, ADR 0010 D7).
+  slot_unavailable
+  // Its hold was released by the student's own new checkout (FR-BOOK-12, ADR 0010 D7).
+  checkout_abandoned
 
   @@map("cancellation_reason")
 }

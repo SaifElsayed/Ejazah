@@ -43,6 +43,13 @@ model User {
   isnadEntries          IsnadEntry[]
   teacherSignature      TeacherSignature?
   notifications         Notification[]
+  slotHolds             SlotHold[]
+  enrollmentsAsStudent  Enrollment[]              @relation("EnrollmentStudent")
+  enrollmentsAsTeacher  Enrollment[]              @relation("EnrollmentTeacher")
+  sessionsAsTeacher     Session[]                 @relation("SessionTeacher")
+  sessionsAsStudent     Session[]                 @relation("SessionStudent")
+  participantEvents     SessionParticipantEvent[]
+  cancellationRequests  CancellationRequest[]
 
   @@map("users")
 }

@@ -1,3 +1,93 @@
 // sessions domain (T057, ERD section 5). Owned by apps/api/src/modules/sessions (ADR 0005 D2).
 // sessions (deleted_at; UTC instants resolved at generation), session_participant_events (provider_event_id unique; no client-writable field), cancellation_requests.
 // Every timestamp is timestamptz and ends _at (ERD section 0).
+//
+// No attendance field is client-writable: attendance is raw provider evidence in
+// `session_participant_events`, and `simultaneous_connected_seconds`, `evaluated_at` and `status`
+// are settled by the worker or an administrator (Architecture section 11). What the schema language
+// cannot say lives in the migrations: the two overlap exclusions (T141, ERD section 15.19), the
+// partial index on scheduled sessions (T067) and the revoked DELETE (T065, section 15.10).
+
+// One scheduled occurrence. The local date, local start time and zone are the schedule; the UTC
+// instants are derived from them (ADR 0009).
+model Session {
+  id                           String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId                 String        @map("enrollment_id") @db.Uuid
+  // Cached exception #3 with `student_user_id` (ADR 0010 D2, R-DB-4): copied from the enrollment
+  // at generation, never changed, so the database can refuse overlapping sessions (T141).
+  teacherUserId                String        @map("teacher_user_id") @db.Uuid
+  studentUserId                String        @map("student_user_id") @db.Uuid
+  // 1 and up.
+  sequenceNumber               Int           @map("sequence_number")
+  // What was asked for, never where a DST gap moved it (ADR 0009 D1).
+  scheduledDateLocal           DateTime      @map("scheduled_date_local") @db.Date
+  // The slot's `start_time_local`, `HH:MM:SS`.
+  scheduledStartTimeLocal      DateTime      @map("scheduled_start_time_local") @db.Time(0)
+  // IANA zone of the local fields: the enrollment's `snapshot_slot_timezone`.
+  timezone                     String
+  // Cached exception #2 (ADR 0009 D2, R-DB-4): recomputed when the time zone data changes.
+  scheduledStartAt             DateTime      @map("scheduled_start_at") @db.Timestamptz(6)
+  scheduledEndAt               DateTime      @map("scheduled_end_at") @db.Timestamptz(6)
+  // The full machine, SRS sections 3.7.5 and 3.8.
+  status                       SessionStatus
+  // Accumulated across reconnections from provider events (FR-SESS-18).
+  simultaneousConnectedSeconds Int           @default(0) @map("simultaneous_connected_seconds")
+  // The video provider's reference.
+  providerRoomId               String?       @map("provider_room_id")
+  // When the worker settled it.
+  evaluatedAt                  DateTime?     @map("evaluated_at") @db.Timestamptz(6)
+  // For review-queue resolutions (FR-SESS-19).
+  settledByAdminId             String?       @map("settled_by_admin_id") @db.Uuid
+  // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
+  deletedAt                    DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
+  teacher        User       @relation("SessionTeacher", fields: [teacherUserId], references: [id])
+  student        User       @relation("SessionStudent", fields: [studentUserId], references: [id])
+  settledByAdmin AdminUser? @relation(fields: [settledByAdminId], references: [id])
+
+  participantEvents    SessionParticipantEvent[]
+  cancellationRequests CancellationRequest[]
+
+  // Ordered session lists (ERD section 14).
+  @@unique([enrollmentId, sequenceNumber])
+  @@map("sessions")
+}
+
+// Raw attendance evidence, from provider webhooks only, never the client. Never updated.
+model SessionParticipantEvent {
+  id              String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sessionId       String               @map("session_id") @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  eventType       ParticipantEventType @map("event_type")
+  occurredAt      DateTime             @map("occurred_at") @db.Timestamptz(6)
+  // A replayed webhook cannot double-insert (ERD section 15.4).
+  providerEventId String               @unique @map("provider_event_id")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("session_participant_events")
+}
+
+// The mutual-agreement flow, either direction (FR-CANCEL-1..5).
+model CancellationRequest {
+  id                String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sessionId         String                    @map("session_id") @db.Uuid
+  // The student or the teacher.
+  requestedByUserId String                    @map("requested_by_user_id") @db.Uuid
+  reason            String
+  // Expires at the scheduled start (FR-CANCEL-4).
+  status            CancellationRequestStatus
+  respondedAt       DateTime?                 @map("responded_at") @db.Timestamptz(6)
+  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session     Session @relation(fields: [sessionId], references: [id])
+  requestedBy User    @relation(fields: [requestedByUserId], references: [id])
+
+  @@map("cancellation_requests")
+}
