@@ -28,7 +28,7 @@ describe('the declared redaction list (T095, FR-040)', () => {
       'body',
       'otp',
       'token',
-      'sessionId',
+      'authSessionId',
       'documentUrl',
       'payoutAccountRef',
       'paymentPayload',
@@ -36,10 +36,31 @@ describe('the declared redaction list (T095, FR-040)', () => {
       'apiKey',
       'password',
       'authorization',
+      'code',
+      'storageKey',
+      'card',
+      'gatewayEvent',
     ]) {
       expect(redact({ [key]: planted }), key).toEqual({ [key]: REDACTED });
     }
     expect(redactedKeys.length).toBeGreaterThan(0);
+  });
+
+  // The words are the ones `sec/no-body-logging` reads (its header, "DOMAIN VOCABULARY" and
+  // "AMBIGUOUS NAMES"): a teaching session's id, a classification code and a name that says when or
+  // whether are what a log line is for, and stay.
+  it('keeps the names the lint rule marks as loggable', () => {
+    const kept = {
+      sessionId: 's-1',
+      errorCode: 'INTERNAL',
+      statusCode: 500,
+      tokenExpiresAt: '2026-10-06T10:00:00Z',
+      otpAttempts: 2,
+      hasToken: true,
+      idempotencyKey: 'k-1',
+      eventType: 'payment.succeeded',
+    };
+    expect(redact(kept)).toEqual(kept);
   });
 
   it('removes a sensitive value nested three levels inside a legitimately passed object', () => {
@@ -79,7 +100,7 @@ describe('the declared redaction list (T095, FR-040)', () => {
     const out = capture();
     const logger = createLogger({ level: 'info', destination: out });
 
-    const bound = { session: { sessionId: planted } };
+    const bound = { session: { authSessionId: planted } };
     logger.child(bound).info('joined');
 
     expect(out.lines[0]).not.toContain(planted);
@@ -116,8 +137,12 @@ describe('the correlation identifier (T095, FR-040)', () => {
 
   it('writes structured JSON with a level and a message', () => {
     const out = capture();
-    createLogger({ level: 'info', destination: out }).error({ code: 'INTERNAL' }, 'failed');
-    expect(out.records()[0]).toMatchObject({ level: 'error', msg: 'failed', code: 'INTERNAL' });
+    createLogger({ level: 'info', destination: out }).error({ errorCode: 'INTERNAL' }, 'failed');
+    expect(out.records()[0]).toMatchObject({
+      level: 'error',
+      msg: 'failed',
+      errorCode: 'INTERNAL',
+    });
   });
 
   it('honours the configured level', () => {
