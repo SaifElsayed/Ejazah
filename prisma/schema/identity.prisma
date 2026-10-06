@@ -54,6 +54,13 @@ model User {
   ijazahsAsStudent      Ijazah[]                  @relation("IjazahStudent")
   ijazahsAsTeacher      Ijazah[]                  @relation("IjazahTeacher")
   ijazahBars            IjazahBar[]
+  reviewsWritten        Review[]                  @relation("ReviewStudent")
+  reviewsReceived       Review[]                  @relation("ReviewTeacher")
+  disputesRaised        Dispute[]
+  genderFlagsReceived   GenderFlag[]              @relation("GenderFlagFlagged")
+  genderFlagsRaised     GenderFlag[]              @relation("GenderFlagRaisedBy")
+  reportsReceived       UserReport[]              @relation("UserReportReported")
+  reportsFiled          UserReport[]              @relation("UserReportReporter")
 
   @@map("users")
 }

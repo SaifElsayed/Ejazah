@@ -1,3 +1,76 @@
 // moderation domain (T061, ERD section 10). Owned by apps/api/src/modules/moderation.
 // disputes, gender_flags, user_reports.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+
+// The moderation case table (ADR 0007 D5). Every case belongs to one enrollment.
+model Dispute {
+  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId      String             @map("enrollment_id") @db.Uuid
+  // Set for a session dispute; NULL for an enrollment-level compensation case (FR-DISPUTE-5).
+  sessionId         String?            @map("session_id") @db.Uuid
+  // `compensation_case` rows are opened automatically by termination flows (FR-DISPUTE-5).
+  kind              DisputeKind
+  // Within the dispute window only (FR-DISPUTE-1); NULL when opened by the system.
+  raisedByUserId    String?            @map("raised_by_user_id") @db.Uuid
+  reason            String
+  // An open session dispute freezes the session's outcome (FR-DISPUTE-4).
+  status            DisputeStatus
+  // `compensation_ordered` records the decision only; execution is outside the code path (FR-DISPUTE-6).
+  resolution        DisputeResolution?
+  // Mandatory on resolve.
+  resolutionNotes   String?            @map("resolution_notes")
+  resolvedByAdminId String?            @map("resolved_by_admin_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt        DateTime?          @map("resolved_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment      Enrollment @relation(fields: [enrollmentId], references: [id])
+  session         Session?   @relation(fields: [sessionId], references: [id])
+  raisedBy        User?      @relation(fields: [raisedByUserId], references: [id])
+  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id])
+
+  @@map("disputes")
+}
+
+model GenderFlag {
+  id                String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  flaggedUserId     String           @map("flagged_user_id") @db.Uuid
+  // NULL when an administrator raised it (FR-GENDER-3).
+  raisedByUserId    String?          @map("raised_by_user_id") @db.Uuid
+  // Outcomes per FR-GENDER-6/7.
+  status            GenderFlagStatus
+  resolutionNotes   String?          @map("resolution_notes")
+  resolvedByAdminId String?          @map("resolved_by_admin_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt        DateTime?        @map("resolved_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  flaggedUser     User       @relation("GenderFlagFlagged", fields: [flaggedUserId], references: [id])
+  raisedBy        User?      @relation("GenderFlagRaisedBy", fields: [raisedByUserId], references: [id])
+  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id])
+
+  @@map("gender_flags")
+}
+
+// A report from any session or profile (FR-SESS-15).
+model UserReport {
+  id                String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  reportedUserId    String            @map("reported_user_id") @db.Uuid
+  reporterUserId    String            @map("reporter_user_id") @db.Uuid
+  context           UserReportContext
+  // Extends chat retention while open (FR-SESS-13).
+  sessionId         String?           @map("session_id") @db.Uuid
+  reason            String
+  status            UserReportStatus
+  resolvedByAdminId String?           @map("resolved_by_admin_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt        DateTime?         @map("resolved_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reportedUser    User       @relation("UserReportReported", fields: [reportedUserId], references: [id])
+  reporter        User       @relation("UserReportReporter", fields: [reporterUserId], references: [id])
+  session         Session?   @relation(fields: [sessionId], references: [id])
+  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id])
+
+  @@map("user_reports")
+}

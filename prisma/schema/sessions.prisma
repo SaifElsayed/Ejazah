@@ -50,6 +50,8 @@ model Session {
 
   participantEvents    SessionParticipantEvent[]
   cancellationRequests CancellationRequest[]
+  disputes             Dispute[]
+  userReports          UserReport[]
 
   // Ordered session lists (ERD section 14).
   @@unique([enrollmentId, sequenceNumber])

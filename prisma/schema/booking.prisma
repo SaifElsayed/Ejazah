@@ -68,6 +68,8 @@ model Enrollment {
   payments     Payment[]
   chatMessages ChatMessage[]
   ijazahs      Ijazah[]
+  review       Review?
+  disputes     Dispute[]
 
   @@map("enrollments")
 }

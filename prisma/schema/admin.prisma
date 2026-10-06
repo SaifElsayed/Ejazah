@@ -24,6 +24,10 @@ model AdminUser {
   revokedIjazahs       Ijazah[]
   ijazahBarsImposed    IjazahBar[]           @relation("IjazahBarBarredBy")
   ijazahBarsLifted     IjazahBar[]           @relation("IjazahBarLiftedBy")
+  moderatedReviews     Review[]
+  resolvedDisputes     Dispute[]
+  resolvedGenderFlags  GenderFlag[]
+  resolvedUserReports  UserReport[]
 
   @@map("admin_users")
 }

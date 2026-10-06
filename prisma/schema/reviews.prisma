@@ -2,3 +2,29 @@
 // reviews. Rating 1..5 by check constraint; one per enrollment by a plain unique on
 // enrollment_id, never partial: reviews carries no deleted_at (ERD section 15.3, 15.11, ADR 0006 D3).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// The 1-5 rating check cannot be said in the schema language; it lives in the initial migration
+// (T064, ERD section 15.9).
+
+// One per enrollment, after a terminal status and at least one delivered session (FR-REVIEW-1/2).
+model Review {
+  id                 String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  // The one-review rule at the database level (ERD section 15.3).
+  enrollmentId       String    @unique @map("enrollment_id") @db.Uuid
+  studentUserId      String    @map("student_user_id") @db.Uuid
+  teacherUserId      String    @map("teacher_user_id") @db.Uuid
+  rating             Int       @db.SmallInt
+  comment            String?
+  // Moderation removes the comment; the star still counts (FR-REVIEW-5).
+  commentRemovedAt   DateTime? @map("comment_removed_at") @db.Timestamptz(6)
+  moderatedByAdminId String?   @map("moderated_by_admin_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment       Enrollment @relation(fields: [enrollmentId], references: [id])
+  student          User       @relation("ReviewStudent", fields: [studentUserId], references: [id])
+  teacher          User       @relation("ReviewTeacher", fields: [teacherUserId], references: [id])
+  moderatedByAdmin AdminUser? @relation(fields: [moderatedByAdminId], references: [id])
+
+  @@map("reviews")
+}
