@@ -53,8 +53,8 @@ function jobBlock(workflow: string, name: string): string {
 }
 
 /** A command with no quoting, pipes or variables, split on spaces; anything else is refused. */
-function argv(command: string): string[] {
-  const trimmed = command.trim();
+function argv(command: string | undefined): string[] {
+  const trimmed = (command ?? '').trim();
   expect(trimmed, 'a plain command the test can run exactly').toMatch(
     /^[\w./=-]+(?:\s+[\w./=-]+)*$/,
   );
@@ -97,6 +97,7 @@ function write(dir: string, file: string, content: string): void {
 
 function run(command: string[], cwd: string): { status: number | null; output: string } {
   const [program, ...args] = command;
+  if (program === undefined) throw new Error('an empty command');
   const result = spawnSync(program, args, { cwd, encoding: 'utf8', timeout: 60_000 });
   if (result.error) throw result.error;
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
