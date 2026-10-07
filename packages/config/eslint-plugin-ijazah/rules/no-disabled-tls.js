@@ -98,6 +98,14 @@
 // configured in a port adapter, a script and a test alike. The interface member
 // `rejectUnauthorized: boolean` is a type, not a value, and is not refused.
 //
+// A TEMPLATE LITERAL TYPE (a type written as a template, `${K}.x` in `type Path<K>`) is not read
+// (2026-10-07, found by batch K2, where it crashed the rule). Its text sits in the same
+// `TemplateElement` nodes as a template literal's, but its parent is a `TSTemplateLiteralType`
+// whose holes are `types`, not `expressions`. A type carries no value at run time, so nothing in
+// it can switch verification off; judging its text would only refuse code that cannot do what
+// the rule forbids. The rule reads a `TemplateElement` only when its parent is a
+// `TemplateLiteral`.
+//
 // WHAT IS NOT SEEN, and is review's. An option reached through a variable or a spread
 // (`const off = { rejectUnauthorized: false }` IS seen, at the literal; `{ ...optionsFromEnv }`
 // is not). A name built at run time. A `checkServerIdentity` assigned from a variable. Flags
@@ -311,6 +319,8 @@ module.exports = defineRule({
         checkText(node, node.value, false);
       },
       TemplateElement(node) {
+        // A template literal type is a type, not a run-time string (header).
+        if (node.parent.type !== 'TemplateLiteral') return;
         if (node.parent.expressions.length === 0) checkEnvironmentName(node, node.value.cooked);
         checkText(node, node.value.cooked, !node.tail);
       },
