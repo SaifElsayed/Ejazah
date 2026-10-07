@@ -103,6 +103,17 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     });
   }
 
+  // The stand-in confirms whatever it is told to, so a production deployment running it would take
+  // bookings that nobody paid for (R-HONEST-1, T146). Refused here, not in the schema's enum: its
+  // rows are real in development and tests (note under T059).
+  if (env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY === 'fake') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['PAYMENT_GATEWAY'],
+      message: 'the stand-in gateway is refused in production (R-HONEST-1)',
+    });
+  }
+
   if (env.STORAGE_DRIVER !== 's3') return;
   for (const key of s3Keys) {
     if (env[key] === undefined) {

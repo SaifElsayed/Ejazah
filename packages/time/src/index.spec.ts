@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  addSeconds,
   assertLocalDate,
   resolveLocalDateTime,
   resolveOccurrences,
@@ -299,5 +300,28 @@ describe('T032 what the package refuses', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe('TimeError');
     expect(assertLocalDate('localDate', FRIDAY)).toBe(FRIDAY);
+  });
+});
+
+describe('T116 addSeconds: a lifetime counted from an instant (R-TIME-1)', () => {
+  it('adds whole seconds and answers in canonical UTC, fractions of a second dropped', () => {
+    expect(addSeconds(new Date('2026-10-07T10:00:00.900Z'), 600)).toBe('2026-10-07T10:10:00Z');
+    expect(addSeconds(new Date('2026-10-07T23:59:59Z'), 604_800)).toBe('2026-10-14T23:59:59Z');
+    expect(addSeconds(new Date('2026-10-07T10:00:00Z'), 0)).toBe('2026-10-07T10:00:00Z');
+  });
+
+  it.each([1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'refuses %s seconds, naming the field',
+    (seconds) => {
+      expect(() => addSeconds(new Date('2026-10-07T10:00:00Z'), seconds)).toThrow(
+        expect.objectContaining({ name: 'TimeError', offendingField: 'seconds' }),
+      );
+    },
+  );
+
+  it('refuses a Date that holds no instant', () => {
+    expect(() => addSeconds(new Date('not a date'), 1)).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'from' }),
+    );
   });
 });
