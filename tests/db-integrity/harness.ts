@@ -12,12 +12,14 @@
 // (`inRollback`), and a statement expected to fail runs under a savepoint (`attempt`), so the
 // transaction stays usable after the refusal and the probe can go on to the next statement. A
 // refusal is identified by its SQLSTATE, never by message text: 42501 insufficient privilege,
-// 23514 check violation, 23505 unique violation, 42703 undefined column.
+// 23514 check violation, 23505 unique violation, 23502 not-null violation, 23P01 exclusion
+// violation, 42703 undefined column.
 //
 // HOW ROWS ARE BUILT. `insertRow` writes one row by column name and returns its id. Columns are the
 // ERD's (docs/ERD.md), snake_case as in the database. A Prisma `@updatedAt` column has no database
 // default, so when the table has an `updated_at` without a default and the probe gave none, the
-// harness sets it to `now()`. The builders below create the smallest valid parent rows a probe
+// harness sets it to `now()`; a required number column the probe left out is set to 0, so a probe
+// names only the columns its rule is about. The builders below create the smallest valid parent rows a probe
 // needs; tables a later schema task models (T057–T061) are written from the ERD and meet the real
 // columns once those tasks land — until then, and until the migrations of T064–T066 exist, every
 // probe is red by design (batch plan: red from S3a until S4).
@@ -31,6 +33,8 @@ export const SQLSTATE = {
   insufficientPrivilege: '42501',
   checkViolation: '23514',
   uniqueViolation: '23505',
+  notNullViolation: '23502',
+  exclusionViolation: '23P01',
   undefinedColumn: '42703',
 } as const;
 
@@ -111,23 +115,43 @@ export async function attempt(
   }
 }
 
-const updatedAtWithoutDefault = new Map<string, boolean>();
-
-async function needsUpdatedAt(db: Db, table: string): Promise<boolean> {
-  const known = updatedAtWithoutDefault.get(table);
-  if (known !== undefined) return known;
-  const { rows } = await db.query(
-    `SELECT 1 FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'updated_at'
-        AND column_default IS NULL`,
-    [table],
-  );
-  const needed = rows.length > 0;
-  updatedAtWithoutDefault.set(table, needed);
-  return needed;
+/** Per table, the columns the harness fills when a probe leaves them out. */
+interface Fillable {
+  /** An `updated_at` with no database default (Prisma's `@updatedAt`). */
+  readonly updatedAt: boolean;
+  /** NOT NULL number columns with no default. */
+  readonly numbers: readonly string[];
 }
 
-/** The INSERT statement and parameters for one row, `updated_at` filled when the table needs it. */
+const fillableByTable = new Map<string, Fillable>();
+
+async function fillableOf(db: Db, table: string): Promise<Fillable> {
+  const known = fillableByTable.get(table);
+  if (known !== undefined) return known;
+  const { rows } = await db.query<{ column_name: string; data_type: string; is_nullable: string }>(
+    `SELECT column_name, data_type, is_nullable FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1 AND column_default IS NULL`,
+    [table],
+  );
+  const fillable: Fillable = {
+    updatedAt: rows.some((row) => row.column_name === 'updated_at'),
+    numbers: rows
+      .filter(
+        (row) =>
+          row.is_nullable === 'NO' && ['smallint', 'integer', 'bigint'].includes(row.data_type),
+      )
+      .map((row) => row.column_name),
+  };
+  fillableByTable.set(table, fillable);
+  return fillable;
+}
+
+/**
+ * The INSERT statement and parameters for one row. `updated_at` is set to `now()` when the table
+ * needs it, and a required number column the probe left out is set to 0. A probe names only the
+ * columns its rule is about; in particular a probe of a gateway order never names its amount,
+ * which R-MONEY-6 confines to the payments module and the payment port.
+ */
 export async function insertStatement(
   db: Db,
   table: string,
@@ -136,9 +160,15 @@ export async function insertStatement(
   const row: Record<string, unknown> = { ...values };
   const columns = Object.keys(row);
   const placeholders = columns.map((_, index) => `$${index + 1}`);
-  if (!('updated_at' in row) && (await needsUpdatedAt(db, table))) {
+  const fillable = await fillableOf(db, table);
+  if (!('updated_at' in row) && fillable.updatedAt) {
     columns.push('updated_at');
     placeholders.push('now()');
+  }
+  for (const column of fillable.numbers) {
+    if (column in row) continue;
+    columns.push(column);
+    placeholders.push('0');
   }
   const quoted = columns.map((column) => `"${column}"`).join(', ');
   return {
