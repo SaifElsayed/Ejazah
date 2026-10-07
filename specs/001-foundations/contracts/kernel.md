@@ -118,6 +118,7 @@ a token. Neither mechanism is sufficient alone, which is why R-SEC-2 gets both.
 |---|---|---|
 | Rate limiting | Authentication, one-time-code, search and payment-initiation paths, available to any endpoint | R-SEC-6, NFR-SEC-10 |
 | Content sniffing | Every upload; the declared type is discarded, not compared | R-SEC-4 |
+| Request body limit | Both request surfaces, from configuration; an oversized body answers 413 in the one error shape. Uploads keep their own limit | FR-077, NFR-SEC-9 |
 | Webhook signature verification | Every inbound gateway or provider event, on the raw body, before any handler; unsigned or invalid requests are rejected and no row is written | R-MONEY-9, R-SEC-12 |
 | Cryptographic identifier generation | Certificate numbers, verification tokens | R-DB-6 |
 | Column encryption and hashing | Per the data model's three-regime split | R-DB-7, R-DB-8 |

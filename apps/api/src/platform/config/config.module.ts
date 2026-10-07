@@ -50,8 +50,7 @@ export function loadConfig(source: EnvSource = process.env): Config {
   return config;
 }
 
-// Meant to be the first call in main.ts and worker.ts, so nothing listens until it returns. Neither
-// entrypoint calls it yet; the owner is named in the note under T015 in specs/001-foundations/tasks.md.
+// The first call in main.ts and worker.ts (T149, note under T015), so nothing listens until it returns.
 export function loadConfigOrExit(source: EnvSource = process.env): Config {
   try {
     return loadConfig(source);

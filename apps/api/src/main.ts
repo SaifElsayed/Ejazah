@@ -1,2 +1,24 @@
-// Request process entrypoint (T008). HTTP only. Refuses traffic until configuration validates (FR-039).
-export {};
+// Request process entrypoint (T008, T149). HTTP only. Refuses traffic until configuration validates
+// (FR-039).
+//
+// `loadConfigOrExit` is the first call (note under T015): on an invalid configuration the process
+// exits 1 naming the offending keys before anything is built, logged or listening (T093). Everything
+// else is loaded only after it returns, so a refusal loads nothing but the configuration schema and
+// stays quick. Then reporting is started (T111), the logger created (T100), and the application
+// with both surfaces mounted (T149) made to listen.
+import { loadConfigOrExit } from './platform/config/config.module.js';
+
+const config = loadConfigOrExit();
+
+const [{ initReporting }, { createLogger }, { createApplication }] = await Promise.all([
+  import('./platform/errors/reporting.js'),
+  import('./platform/logging/logger.js'),
+  import('./app.module.js'),
+]);
+
+initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
+const log = createLogger({ level: config.LOG_LEVEL });
+
+const application = await createApplication({ log });
+await application.listen(config.PORT);
+log.info({ port: config.PORT }, 'Listening');
