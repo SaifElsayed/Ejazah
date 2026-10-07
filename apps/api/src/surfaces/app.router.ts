@@ -2,10 +2,11 @@
 // surfaces", ARCHITECTURE §7.2).
 //
 // Built only from the user surface's caller kinds (`publicProcedure`, `studentProcedure`,
-// `teacherProcedure`), so no administrative capability can be part of it: the administrator kind
-// belongs to the other tRPC instance, and T098 refuses one mounted here, in the type and at
-// runtime. Mounted on its own path by the HTTP application (T149), apart from the administrator
-// surface. Each module's router joins this record as the module gains procedures.
+// `teacherProcedure`), so no administrative capability can be part of it: `createAppRouter`
+// accepts user-surface procedures only, so an administrator procedure does not compile here
+// (T107), and T098 checks the same at runtime. Mounted on its own path by the HTTP application
+// (T149), apart from the administrator surface. Each module's router joins this record as the
+// module gains procedures.
 import { createAppRouter } from './procedures.js';
 
 export const appRouter = createAppRouter({});

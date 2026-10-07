@@ -14,7 +14,9 @@
 // TWO tRPC INSTANCES, one per surface, because the two contexts are separate types (R-SEC-8). Each
 // stamps its procedures with the surface's meta, in the type and at runtime, so an administrative
 // capability is recognisable wherever it is mounted (T098): `{ surface: 'admin' }` exists only on
-// the administrator instance, and the user instance's meta type cannot express it.
+// the administrator instance, and the user instance's meta type cannot express it. Each surface's
+// router accepts only its own surface's procedures (`SurfaceRecord`), so a procedure of the other
+// surface, or one built on any other tRPC instance, does not compile where it is mounted.
 //
 // THE ADMINISTRATOR KIND FAILS CLOSED until T108 gives it its audit record (R-API-12): after
 // authenticating the administrator it refuses before any handler runs, so no administrative action
@@ -26,7 +28,14 @@
 // The teacher kind admits a caller holding the teacher role, as the kernel contract words it.
 // Whether an unapproved teacher's role counts as active is the session's to say when identity
 // resolves sessions.
-import { initTRPC, TRPCError, type TRPCProcedureBuilder, type TRPCUnsetMarker } from '@trpc/server';
+import {
+  type AnyTRPCProcedure,
+  type AnyTRPCRouter,
+  initTRPC,
+  TRPCError,
+  type TRPCProcedureBuilder,
+  type TRPCUnsetMarker,
+} from '@trpc/server';
 import type { z } from 'zod';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
@@ -81,11 +90,28 @@ const admin = initTRPC
   .meta<AdminMeta>()
   .create({ ...formatter, defaultMeta: { surface: 'admin' }, isServer: true });
 
-/** Builds the user surface's router (T109). */
-export const createAppRouter = app.router;
+/**
+ * What a surface's router may hold, at any depth: procedures whose meta is that surface's, plain
+ * records of them, and routers built for that surface. A procedure of the other surface, or one
+ * built on any other tRPC instance (whose meta is not the surface's), is a compile error where it
+ * is mounted (R-API-11, R-API-7); T098 checks the same at runtime.
+ */
+export type SurfaceRecord<TMeta> = {
+  readonly [key: string]:
+    | (AnyTRPCProcedure & { readonly meta: TMeta })
+    | (AnyTRPCRouter & { readonly _def: { readonly _config: { $types: { meta: TMeta } } } })
+    | SurfaceRecord<TMeta>;
+};
 
-/** Builds the administrator surface's router (T109). */
-export const createAdminRouter = admin.router;
+/** Builds the user surface's router (T109); it accepts user-surface procedures only. */
+export function createAppRouter<TRecord extends SurfaceRecord<AppMeta>>(record: TRecord) {
+  return app.router(record);
+}
+
+/** Builds the administrator surface's router (T109); it accepts administrator procedures only. */
+export function createAdminRouter<TRecord extends SurfaceRecord<AdminMeta>>(record: TRecord) {
+  return admin.router(record);
+}
 
 /** Calls a user-surface router in process, through the same middleware as over HTTP. */
 export const createAppCallerFactory = app.createCallerFactory;

@@ -2,21 +2,28 @@
 // capability (FR-048, SC-012, R-API-11; contracts/kernel.md "Two surfaces").
 //
 // An administrative capability is a procedure built with the administrator caller kind: its meta
-// is `{ surface: 'admin' }`, in the procedure's type and at runtime (T107). Two checks read it:
+// is `{ surface: 'admin' }`, in the procedure's type and at runtime (T107). Three checks read it:
 //
-//   in the type   `ProceduresOfSurface` collects the procedures of a router's type whose meta names
-//                 a surface, so the user surface's type is asserted to hold no administrator one.
-//                 That is the one that matters: a capability in the user surface's type has leaked
-//                 into the mobile bundle's vocabulary even if no screen calls it.
-//   at runtime    every procedure mounted on a surface is read, so an administrator procedure on the
-//                 user surface, a user procedure on the administrator surface, and one procedure
-//                 mounted on both are each reported.
+//   where mounted  `createAppRouter` and `createAdminRouter` accept only their own surface's
+//                  procedures (T107's `SurfaceRecord`), so a procedure of the other surface, or one
+//                  built on any other tRPC instance, does not compile where it is mounted. The leak
+//                  fixtures below each carry the `@ts-expect-error` that proves it.
+//   in the type    `ProceduresOfSurface` collects the procedures of a router's type whose meta names
+//                  a surface, so the user surface's type is asserted to hold no administrator one:
+//                  a capability in that type has leaked into the mobile bundle's vocabulary even if
+//                  no screen calls it.
+//   at runtime     every procedure mounted on a surface is read, so a procedure not built for the
+//                  surface, and one procedure mounted on both, are each reported.
 //
-// The real routers are empty until modules gain procedures, so on them both checks pass without
+// The two type checks are enforced by `pnpm typecheck` (CI stage 1), not by vitest: `expectTypeOf`
+// and `@ts-expect-error` do nothing at runtime, so this file passes under vitest even with a type
+// check broken, and fails `tsc`.
+//
+// The real routers are empty until modules gain procedures, so on them the checks pass without
 // proving anything. The fixtures below therefore build routers holding a real procedure of each
 // kind: a pair that keeps the surfaces apart, which passes, and routers that leak, which fail, so
 // the checks are shown to bite before the real routers give them anything to read.
-import type { AnyProcedure, AnyRouter } from '@trpc/server';
+import { type AnyProcedure, type AnyRouter, initTRPC } from '@trpc/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import { type AdminRouter, adminRouter } from './admin.router.js';
@@ -61,18 +68,18 @@ function separation(
   user: AnyRouter,
   administrator: AnyRouter,
 ): {
-  administrativeOnUser: string[];
-  userOnAdministrator: string[];
+  notOfUserSurface: string[];
+  notOfAdministratorSurface: string[];
   mountedOnBoth: string[];
 } {
   const userProcedures = proceduresOf(user);
   const adminProcedures = proceduresOf(administrator);
   const adminSet = new Set(adminProcedures.values());
   return {
-    administrativeOnUser: [...userProcedures]
+    notOfUserSurface: [...userProcedures]
       .filter(([, procedure]) => surfaceOf(procedure) !== 'app')
       .map(([path]) => path),
-    userOnAdministrator: [...adminProcedures]
+    notOfAdministratorSurface: [...adminProcedures]
       .filter(([, procedure]) => surfaceOf(procedure) !== 'admin')
       .map(([path]) => path),
     mountedOnBoth: [...userProcedures]
@@ -81,13 +88,15 @@ function separation(
   };
 }
 
-const kept = { administrativeOnUser: [], userOnAdministrator: [], mountedOnBoth: [] };
+const kept = { notOfUserSurface: [], notOfAdministratorSurface: [], mountedOnBoth: [] };
 
 // A real procedure of each kind, as a module would declare them.
 const catalogue = publicProcedure(z.void()).query(() => 'subjects');
 const booking = studentProcedure(z.object({ slotId: z.string() })).mutation(() => 'held');
 const availability = teacherProcedure(z.void()).query(() => 'slots');
 const approval = adminProcedure(z.object({ teacherId: z.string() })).mutation(() => 'approved');
+// A procedure built around the caller kinds, on a tRPC instance of its own.
+const stray = initTRPC.create().procedure.query(() => 'stray');
 
 describe('the two surfaces share nothing (T098)', () => {
   it('the real surfaces: no administrative capability in the user surface, in its type or mounted', () => {
@@ -98,7 +107,8 @@ describe('the two surfaces share nothing (T098)', () => {
 
   it('surfaces built from each kind keep apart: the checks read real procedures and pass', () => {
     const user = createAppRouter({
-      catalogue: { list: catalogue },
+      // A module's own router, built for the same surface, mounts like a procedure.
+      catalogue: createAppRouter({ list: catalogue }),
       booking,
       availability,
     });
@@ -114,35 +124,59 @@ describe('the two surfaces share nothing (T098)', () => {
     expect(separation(user, administrator)).toEqual(kept);
   });
 
-  it('an administrator procedure mounted on the user surface is found in the type and at runtime', () => {
+  it('the type collector finds a procedure of the named surface at any depth', () => {
+    type Leaky = {
+      catalogue: { list: typeof catalogue };
+      moderation: { approve: typeof approval };
+    };
+    expectTypeOf<ProceduresIn<Leaky, 'admin'>>().toEqualTypeOf<typeof approval>();
+    expectTypeOf<ProceduresIn<Leaky, 'app'>>().toEqualTypeOf<typeof catalogue>();
+  });
+
+  it('an administrator procedure mounted on the user surface does not compile, and is found at runtime', () => {
     const leaky = createAppRouter({
       catalogue: { list: catalogue },
+      // @ts-expect-error -- T098: an administrator procedure cannot be mounted on the user surface
       moderation: { approveTeacher: approval },
     });
     const administrator = createAdminRouter({ teachers: { approve: approval } });
 
-    expectTypeOf<ProceduresOfSurface<typeof leaky, 'admin'>>().toEqualTypeOf<typeof approval>();
     expect(separation(leaky, administrator)).toEqual({
       ...kept,
-      administrativeOnUser: ['moderation.approveTeacher'],
+      notOfUserSurface: ['moderation.approveTeacher'],
       mountedOnBoth: ['moderation.approveTeacher'],
     });
   });
 
-  it('a user procedure mounted on the administrator surface is found in the type and at runtime', () => {
+  it('a user procedure mounted on the administrator surface does not compile, and is found at runtime', () => {
     const user = createAppRouter({ catalogue: { list: catalogue } });
     const administrator = createAdminRouter({
       teachers: { approve: approval },
+      // @ts-expect-error -- T098: a user procedure cannot be mounted on the administrator surface
       catalogue: { list: catalogue },
     });
 
-    expectTypeOf<ProceduresOfSurface<typeof administrator, 'app'>>().toEqualTypeOf<
-      typeof catalogue
-    >();
     expect(separation(user, administrator)).toEqual({
       ...kept,
-      userOnAdministrator: ['catalogue.list'],
+      notOfAdministratorSurface: ['catalogue.list'],
       mountedOnBoth: ['catalogue.list'],
+    });
+  });
+
+  it('a procedure built on another tRPC instance does not compile on either surface, and is found at runtime', () => {
+    const user = createAppRouter({
+      // @ts-expect-error -- T098: not built by a user caller kind
+      stray,
+    });
+    const administrator = createAdminRouter({
+      // @ts-expect-error -- T098: not built by the administrator caller kind
+      stray,
+    });
+
+    expect(separation(user, administrator)).toEqual({
+      notOfUserSurface: ['stray'],
+      notOfAdministratorSurface: ['stray'],
+      mountedOnBoth: ['stray'],
     });
   });
 });
