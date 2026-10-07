@@ -63,6 +63,21 @@ describe('env.schema (T015, FR-039)', () => {
     expect(configError.message).toContain('PAYMENT_GATEWAY');
     expect(configError.message).not.toContain(unknown);
   });
+
+  it('refuses the payment stand-in in production only, naming PAYMENT_GATEWAY (T146, R-HONEST-1)', () => {
+    let failure: unknown;
+    try {
+      loadConfig({ ...validEnv, NODE_ENV: 'production' });
+    } catch (error: unknown) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(ConfigError);
+    expect((failure as ConfigError).offendingKeys).toEqual(['PAYMENT_GATEWAY']);
+
+    for (const nodeEnv of ['development', 'test']) {
+      expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).PAYMENT_GATEWAY).toBe('fake');
+    }
+  });
 });
 
 describe('loadConfig (T015, FR-039)', () => {
