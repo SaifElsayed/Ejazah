@@ -5,7 +5,7 @@
   "description": "Backend: tRPC over Nest. Two separately mounted surfaces (user, administrator). The queue worker is a second process of this app, not a fourth application.",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsc-watch -p tsconfig.json --onSuccess \"node --env-file-if-exists=../../.env dist/main.js\"",
     "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
@@ -17,9 +17,17 @@
     "@ijazah/contracts": "workspace:*",
     "@ijazah/money": "workspace:*",
     "@ijazah/time": "workspace:*",
+    "@nestjs/common": "12.1.2",
+    "@nestjs/core": "12.1.2",
+    "@nestjs/platform-express": "12.1.2",
     "@sentry/node": "11.4.0",
     "@trpc/server": "11.19.0",
     "pino": "10.4.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
     "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "tsc-watch": "7.2.1"
   }
 }
