@@ -228,4 +228,23 @@ export function resolveLocalDateTime(input: {
   };
 }
 
+/**
+ * The instant `seconds` whole seconds after `from`, in canonical UTC, fractions of a second
+ * dropped. R-TIME-1 keeps arithmetic on an instant inside this package, so a lifetime counted in
+ * seconds, such as a signed link's (T116), is added here rather than beside its caller. A lesson's
+ * time is never computed this way: it is resolved from its wall clock (`resolveLocalDateTime`).
+ */
+export function addSeconds(from: Date, seconds: number): UtcInstant {
+  if (!Number.isSafeInteger(seconds)) {
+    throw new TimeError('seconds', String(seconds), 'expected a whole number of seconds');
+  }
+  const epochMilliseconds = from.getTime();
+  if (Number.isNaN(epochMilliseconds)) {
+    throw new TimeError('from', String(from), 'not an instant');
+  }
+  return Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
+    .add({ seconds })
+    .toString({ smallestUnit: 'second' });
+}
+
 export * from './resolve.js';
