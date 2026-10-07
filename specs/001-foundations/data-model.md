@@ -155,12 +155,16 @@ Applied by the owner in migration SQL:
 ```
 REVOKE DELETE ON users, sessions, enrollments, ijazahs, audit_logs FROM application;
 REVOKE UPDATE, DELETE, TRUNCATE ON audit_logs, payment_events, session_participant_events FROM application;  -- T147, ERD §15.21
-ALTER DEFAULT PRIVILEGES FOR ROLE owner IN SCHEMA public GRANT ... TO application;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO application;  -- binds to the role running it, the owner (FR-025)
 ```
 
 The default-privileges statement is the one most easily forgotten and the most
-consequential: without it, the next migration that creates a table grants the
-application role everything, and the closed door reopens one migration later.
+consequential: PostgreSQL grants a new table to nobody, so without it the
+application role gets nothing on the next table a migration creates, and the
+tempting repair, a broad `GRANT ALL`, hands it TRUNCATE and reopens the
+revocations above. Default privileges apply only to tables created afterwards, so
+they never reopen a revocation already made. A later table that must refuse DELETE
+revokes it in its own migration.
 
 ---
 
@@ -191,7 +195,7 @@ application code (FR-030, R-DB-5).
 | 18 | One active hold per student | Partial unique index on `slot_holds (student_user_id) WHERE released_at IS NULL`, raw SQL (ADR 0010 D6) |
 | 19 | No overlapping sessions for one teacher, nor for one student | Two GiST exclusion constraints on `sessions`, `teacher_user_id WITH =` and `student_user_id WITH =`, each with `tstzrange(scheduled_start_at, scheduled_end_at) WITH &&`, `WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin'))`, `DEFERRABLE INITIALLY IMMEDIATE`, on `btree_gist`, raw SQL (ADR 0010 D1). Only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run (`SET CONSTRAINTS … DEFERRED`, raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another counted session of the same teacher or the same student, restores them to their previous instants and reports them to error tracking (FR-051), so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010) |
 | 20 | `payment_events`: a payment exactly for order events | Check constraint: `payment_id IS NULL` exactly when `event_type` is `recipient_verified` or `recipient_rejected` (PR #39, note under T059) |
-| 21 | Append-only tables are never rewritten | Revoked UPDATE and DELETE on `audit_logs`, `payment_events`, `session_participant_events` (§5, T147) |
+| 21 | Append-only tables are never rewritten | Revoked UPDATE, DELETE and TRUNCATE on `audit_logs`, `payment_events`, `session_participant_events` (§5, T147) |
 
 Rules 5, 6 and 12 belonged to the managed-payment tables removed by ADR 0005 D1;
 their numbers are kept so old citations resolve. Rules 17 to 19 replace a read

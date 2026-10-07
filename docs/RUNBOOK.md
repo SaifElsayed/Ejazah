@@ -33,7 +33,11 @@ password. Before the first `pnpm db:migrate`, create the application role
 store, or let the T065 migration create it without one and set it afterwards
 with `ALTER ROLE ijazah_app PASSWORD '…'`. The owner role runs the migrations;
 if the migration is to create the application role, the owner needs
-`CREATEROLE`. Never give the application role ownership of anything or
+`CREATEROLE`. The owner must also own the database, so that it owns schema
+`public` through `pg_database_owner` and holds CREATE on the database: the
+migrations grant usage on `public` and create the trusted extensions `citext`
+and `btree_gist`, and both fail otherwise. In development the owner is the
+container's superuser, so neither requirement shows there. Never give the application role ownership of anything or
 membership in the owner role.
 
 **Switch a port's adapter** — set the driver value in `.env` (for example

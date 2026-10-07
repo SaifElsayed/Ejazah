@@ -252,7 +252,10 @@ describe('two transactions (T142)', () => {
   afterAll(async () => {
     await Promise.all([setup, first, second, watcher].map((db) => db?.end()));
     if (users.length === 0 && subjects.length === 0) return;
-    const owner = new pg.Client({ connectionString: process.env['DATABASE_URL_OWNER'] });
+    const owner = new pg.Client({
+      connectionString: process.env['DATABASE_URL_OWNER'],
+      connectionTimeoutMillis: 5_000,
+    });
     await owner.connect();
     try {
       await owner.query('BEGIN');
