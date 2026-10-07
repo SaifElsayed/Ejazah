@@ -5,8 +5,10 @@
 // HOW IT KNOWS THE ROLE. The connection string is `DATABASE_URL` from the environment or the
 // repository's `.env` (quickstart §1), the same value the API uses. After connecting, the harness
 // refuses to go on unless the session role is not a superuser, owns no relation in the `public`
-// schema, and is not the role `DATABASE_URL_OWNER` names. A misconfigured `.env` that points the
-// probes at the owner therefore fails every probe instead of passing them all for the wrong reason.
+// schema, and is neither the role `DATABASE_URL_OWNER` names nor a member of it (a member inherits
+// the owner's rights). A misconfigured `.env` that points the probes at the owner therefore fails
+// every probe instead of passing them all for the wrong reason. Without `DATABASE_URL_OWNER` the
+// last two checks cannot run, so the harness says so once on stderr.
 //
 // HOW A PROBE LEAVES NO TRACE. Every probe runs inside one transaction that is always rolled back
 // (`inRollback`), and a statement expected to fail runs under a savepoint (`attempt`), so the
@@ -18,8 +20,9 @@
 // HOW ROWS ARE BUILT. `insertRow` writes one row by column name and returns its id. Columns are the
 // ERD's (docs/ERD.md), snake_case as in the database. A Prisma `@updatedAt` column has no database
 // default, so when the table has an `updated_at` without a default and the probe gave none, the
-// harness sets it to `now()`; a required number column the probe left out is set to 0, so a probe
-// names only the columns its rule is about. The builders below create the smallest valid parent rows a probe
+// harness sets it to `now()`; a required amount column (`*_piasters`) the probe left out is set to
+// 0, so a probe of a gateway order never names its amount. Any other omitted column is the
+// database's to refuse. The builders below create the smallest valid parent rows a probe
 // needs; tables a later schema task models (T057–T061) are written from the ERD and meet the real
 // columns once those tasks land — until then, and until the migrations of T064–T066 exist, every
 // probe is red by design (batch plan: red from S3a until S4).
@@ -52,9 +55,15 @@ function roleOf(url: string): string {
   return decodeURIComponent(new URL(url).username);
 }
 
+let warnedOwnerUnset = false;
+
 /** A client connected as the application role, after proving it is not the owner. */
 export async function connectAsApplication(): Promise<Db> {
-  const db = new pg.Client({ connectionString: required('DATABASE_URL') });
+  // A database that is not there fails the suite in seconds rather than at the test timeout.
+  const db = new pg.Client({
+    connectionString: required('DATABASE_URL'),
+    connectionTimeoutMillis: 5_000,
+  });
   await db.connect();
   try {
     const { rows } = await db.query<{ role: string; superuser: boolean; owned: string }>(
@@ -65,7 +74,6 @@ export async function connectAsApplication(): Promise<Db> {
     );
     const [session] = rows;
     if (session === undefined) throw new Error('could not read the session role');
-    const owner = process.env['DATABASE_URL_OWNER'];
     if (session.superuser)
       throw new Error(`the probes are connected as a superuser (${session.role})`);
     if (session.owned !== '0') {
@@ -73,8 +81,28 @@ export async function connectAsApplication(): Promise<Db> {
         `the probes are connected as ${session.role}, which owns ${session.owned} relations`,
       );
     }
-    if (owner !== undefined && owner !== '' && roleOf(owner) === session.role) {
+    const owner = process.env['DATABASE_URL_OWNER'];
+    if (owner === undefined || owner === '') {
+      if (!warnedOwnerUnset) {
+        warnedOwnerUnset = true;
+        process.stderr.write(
+          'DATABASE_URL_OWNER is not set: the probes cannot prove they are not the owner role\n',
+        );
+      }
+      return db;
+    }
+    const ownerRole = roleOf(owner);
+    if (ownerRole === session.role) {
       throw new Error(`the probes are connected as the owner role ${session.role}`);
+    }
+    const membership = await db.query<{ member: boolean }>(
+      // CASE, not AND: pg_has_role raises on an unknown role, and AND does not promise its order.
+      `SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)
+                   THEN pg_has_role(current_user, $1, 'MEMBER') ELSE false END AS member`,
+      [ownerRole],
+    );
+    if (membership.rows[0]?.member === true) {
+      throw new Error(`the probes are connected as ${session.role}, a member of the owner role`);
     }
     return db;
   } catch (error: unknown) {
@@ -83,14 +111,21 @@ export async function connectAsApplication(): Promise<Db> {
   }
 }
 
-/** Runs `probe` inside a transaction that is always rolled back. */
+/**
+ * Runs `probe` inside a transaction that is always rolled back. When the probe failed and the
+ * ROLLBACK fails too, the probe's error is the one reported: it is the cause.
+ */
 export async function inRollback<T>(db: Db, probe: (db: Db) => Promise<T>): Promise<T> {
   await db.query('BEGIN');
+  let result: T;
   try {
-    return await probe(db);
-  } finally {
-    await db.query('ROLLBACK');
+    result = await probe(db);
+  } catch (error: unknown) {
+    await db.query('ROLLBACK').catch(() => undefined);
+    throw error;
   }
+  await db.query('ROLLBACK');
+  return result;
 }
 
 /**
@@ -119,8 +154,8 @@ export async function attempt(
 interface Fillable {
   /** An `updated_at` with no database default (Prisma's `@updatedAt`). */
   readonly updatedAt: boolean;
-  /** NOT NULL number columns with no default. */
-  readonly numbers: readonly string[];
+  /** NOT NULL amount columns (`*_piasters`) with no default. */
+  readonly amounts: readonly string[];
 }
 
 const fillableByTable = new Map<string, Fillable>();
@@ -128,18 +163,17 @@ const fillableByTable = new Map<string, Fillable>();
 async function fillableOf(db: Db, table: string): Promise<Fillable> {
   const known = fillableByTable.get(table);
   if (known !== undefined) return known;
-  const { rows } = await db.query<{ column_name: string; data_type: string; is_nullable: string }>(
-    `SELECT column_name, data_type, is_nullable FROM information_schema.columns
+  const { rows } = await db.query<{ column_name: string; is_nullable: string }>(
+    `SELECT column_name, is_nullable FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = $1 AND column_default IS NULL`,
     [table],
   );
   const fillable: Fillable = {
     updatedAt: rows.some((row) => row.column_name === 'updated_at'),
-    numbers: rows
-      .filter(
-        (row) =>
-          row.is_nullable === 'NO' && ['smallint', 'integer', 'bigint'].includes(row.data_type),
-      )
+    // Only the amount suffix: an omitted `sequence_number`, `rating` or `position` must fail
+    // loudly, not pass as 0 (review of PR #40, m2).
+    amounts: rows
+      .filter((row) => row.is_nullable === 'NO' && row.column_name.endsWith('_piasters'))
       .map((row) => row.column_name),
   };
   fillableByTable.set(table, fillable);
@@ -148,9 +182,9 @@ async function fillableOf(db: Db, table: string): Promise<Fillable> {
 
 /**
  * The INSERT statement and parameters for one row. `updated_at` is set to `now()` when the table
- * needs it, and a required number column the probe left out is set to 0. A probe names only the
- * columns its rule is about; in particular a probe of a gateway order never names its amount,
- * which R-MONEY-6 confines to the payments module and the payment port.
+ * needs it, and a required amount column the probe left out is set to 0: a probe of a gateway
+ * order never names its amount, which R-MONEY-6 confines to the payments module and the payment
+ * port. Identifiers are quoted by `pg.escapeIdentifier`, never by hand.
  */
 export async function insertStatement(
   db: Db,
@@ -165,14 +199,14 @@ export async function insertStatement(
     columns.push('updated_at');
     placeholders.push('now()');
   }
-  for (const column of fillable.numbers) {
+  for (const column of fillable.amounts) {
     if (column in row) continue;
     columns.push(column);
     placeholders.push('0');
   }
-  const quoted = columns.map((column) => `"${column}"`).join(', ');
+  const quoted = columns.map((column) => pg.escapeIdentifier(column)).join(', ');
   return {
-    sql: `INSERT INTO "${table}" (${quoted}) VALUES (${placeholders.join(', ')}) RETURNING id`,
+    sql: `INSERT INTO ${pg.escapeIdentifier(table)} (${quoted}) VALUES (${placeholders.join(', ')}) RETURNING id`,
     params: Object.values(row),
   };
 }

@@ -39,10 +39,13 @@ describe('DELETE is refused to the application role (T050, SC-004)', () => {
     });
   });
 
-  it('the role can still read and write an unprotected table, so the refusals are not a dead connection', async () => {
+  // The control is a table whose DELETE is a feature: stale push tokens are pruned (ERD section 2).
+  // A table merely left unprotected today could be revoked by a later migration and fail this
+  // control for a reason that is not a dead connection.
+  it('the role can still read and delete where deletion is a feature, so the refusals are not a dead connection', async () => {
     await inRollback(db, async () => {
-      expect(await attempt(db, 'SELECT count(*) FROM "subjects"')).toBeNull();
-      expect(await attempt(db, 'DELETE FROM "subjects" WHERE false')).toBeNull();
+      expect(await attempt(db, 'SELECT count(*) FROM "device_push_tokens"')).toBeNull();
+      expect(await attempt(db, 'DELETE FROM "device_push_tokens" WHERE false')).toBeNull();
     });
   });
 });
