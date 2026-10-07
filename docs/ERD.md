@@ -342,7 +342,7 @@ Scoped to the enrollment (FR-SESS-6). Persisted; admin-readable only under open 
 | sent_at | timestamptz | |
 | purged_at | timestamptz, nullable | Retention marker; body/attachment nulled, row kept for counts |
 
-Check constraint: at least one of `body` / `attachment_key`.
+Check constraint: at least one of `body` / `attachment_key`, unless `purged_at` is set: the retention purge nulls both and keeps the row (note under T051).
 
 ## 7. Payments
 
@@ -652,7 +652,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 5. *Retired (ADR 0005 D1).* Was `ledger_entries.idempotency_key` unique. Number kept so old citations resolve.
 6. *Retired (ADR 0005 D1).* Was UPDATE/DELETE revoked on `ledger_entries`. Number kept so old citations resolve.
 7. `isnad_entries (teacher, subject, position)` unique — a chain cannot have two names at one position.
-8. `chat_messages`: body or attachment — check constraint.
+8. `chat_messages`: body or attachment, or a purged row — check constraint (FR-SESS-13).
 9. `reviews.rating` between 1 and 5 — check constraint.
 10. `users`, `sessions`, `enrollments`, `ijazahs`, `audit_logs`: no DELETE — revoked at the Postgres role level (R-DB-3). For the first four, removal is `deleted_at` and the row survives. `audit_logs` has no `deleted_at` either: it is strictly append-only, with no removal path at all. The app's DB user physically cannot destroy a person, a lesson, a purchase, a certificate, or any record of what an administrator did.
 11. Unique constraints that a soft-deleted row would otherwise keep occupying are partial, `WHERE deleted_at IS NULL`: `users.phone`, `users.email`. A deleted account releases its phone number so the person can sign up again. `reviews.enrollment_id` is **not** partial: `reviews` carries no `deleted_at`, and a soft-deleted enrollment is absent from ordinary reads so it cannot be reviewed at all — rule 3 stands unconditionally (ADR 0006 D3).
@@ -682,6 +682,7 @@ Rule 10 treats `audit_logs` differently on purpose. Every other table on that li
 | 3 | §9 `reviews` lists `updated_at`; §3 and §10 mark the four `resolved_at` columns nullable. Wording only: the model already followed §0. | Review of PR #39 |
 | 4 | §14 states that the FK indexes exist and how they are declared. | Review of PR #39, FR-035 |
 | 5 | §15 rule 21: UPDATE and DELETE revoked on the three append-only tables. | Review of PR #39, task T147 |
+| 6 | §6 and §15 rule 8: the chat check also accepts a purged row, as the retention purge requires. | Note under T051, T064 |
 
 ## Changelog — v1.3 addendum (ADR 0010)
 

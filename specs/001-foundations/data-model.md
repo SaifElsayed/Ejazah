@@ -178,7 +178,7 @@ application code (FR-030, R-DB-5).
 | 5 | *Retired (ADR 0005)* | — |
 | 6 | *Retired (ADR 0005)* | — |
 | 7 | One chain name per position | Composite unique |
-| 8 | `chat_messages`: body or attachment | Check constraint |
+| 8 | `chat_messages`: body or attachment, or a purged row | Check constraint |
 | 9 | `reviews.rating` between 1 and 5 | Check constraint |
 | 10 | No hard delete on five tables | Revoked privilege (§5) |
 | 11 | Partial uniques over soft-deleted rows | Partial unique indexes (§4) |
