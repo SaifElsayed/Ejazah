@@ -142,6 +142,13 @@ typescriptRuleTester().run('sec/no-disabled-tls', loadRule('no-disabled-tls.js')
       code: 'export const ca = process.env.NODE_EXTRA_CA_CERTS;',
       filename: adapter,
     },
+    {
+      // A template literal TYPE holds its holes in `types`, not `expressions`; the rule judges
+      // run-time strings only and leaves it alone (found 2026-10-07 by batch K2).
+      name: 'a template literal type, with and without a hole',
+      code: 'export type Path<K extends string> = `${K}.x`;\nexport type Fixed = `a.x`;',
+      filename: adapter,
+    },
   ],
   invalid: [
     {
