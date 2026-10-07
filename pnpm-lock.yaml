@@ -72,6 +72,9 @@ importers:
       '@sentry/node':
         specifier: 11.4.0
         version: 11.4.0
+      '@trpc/server':
+        specifier: 11.19.0
+        version: 11.19.0(typescript@5.9.3)
       pino:
         specifier: 10.4.0
         version: 10.4.0
@@ -764,6 +767,12 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@trpc/server@11.19.0':
+    resolution: {integrity: sha512-7C1goiDurz82yFKtZUbEzjXd0Rg/jyisaIZQhdvus+1l7E6mwcEYZXjZ1US/HF8kOyz1LERL8UN3bcboJtjcyQ==}
+    hasBin: true
+    peerDependencies:
+      typescript: '>=5.7.2'
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -2453,6 +2462,10 @@ snapshots:
       '@sentry/core': 11.4.0
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@trpc/server@11.19.0(typescript@5.9.3)':
+    dependencies:
+      typescript: 5.9.3
 
   '@types/chai@5.2.3':
     dependencies:
