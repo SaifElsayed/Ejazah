@@ -231,18 +231,31 @@ describe('two transactions (T142)', () => {
         'DATABASE_URL_OWNER is not set: these probes commit rows, and only the owner role can remove them',
       );
     }
-    [setup, first, second, watcher] = await Promise.all([
+    const connected = await Promise.allSettled([
       connectAsApplication(),
       connectAsApplication(),
       connectAsApplication(),
       connectAsApplication(),
     ]);
+    const clients = connected.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    const failed = connected.find((result) => result.status === 'rejected');
+    if (failed !== undefined) {
+      // End the ones that did connect, or they hold the process open.
+      await Promise.all(clients.map((db) => db.end()));
+      throw failed.reason;
+    }
+    [setup, first, second, watcher] = clients as [Db, Db, Db, Db];
   });
 
   afterAll(async () => {
     await Promise.all([setup, first, second, watcher].map((db) => db?.end()));
     if (users.length === 0 && subjects.length === 0) return;
-    const owner = new pg.Client({ connectionString: process.env['DATABASE_URL_OWNER'] });
+    const owner = new pg.Client({
+      connectionString: process.env['DATABASE_URL_OWNER'],
+      connectionTimeoutMillis: 5_000,
+    });
     await owner.connect();
     try {
       await owner.query('BEGIN');
@@ -282,9 +295,15 @@ describe('two transactions (T142)', () => {
     return id;
   }
 
-  /** Resolves once the backend `pid` is waiting on a lock; fails after about five seconds. */
+  /**
+   * Resolves once the backend `pid` is waiting on a lock; fails after about two seconds, inside
+   * vitest's five-second test timeout, so a missing guard is reported as "never waited" rather
+   * than as a timeout. The watcher can read `wait_event_type` of `second` only because both are
+   * the same role: PostgreSQL hides those columns of another role's session from a non-superuser,
+   * so making either connection the owner would make every race fail here.
+   */
   async function seenWaiting(pid: number): Promise<void> {
-    for (let look = 0; look < 250; look += 1) {
+    for (let look = 0; look < 100; look += 1) {
       const { rows } = await watcher.query<{ waiting: boolean }>(
         `SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = $1`,
         [pid],
@@ -312,6 +331,7 @@ describe('two transactions (T142)', () => {
     secondWrite: (db: Db) => Promise<unknown>,
   ): Promise<string | null> {
     const secondPid = await pidOf(second);
+    let firstCommitted = false;
     await first.query('BEGIN');
     await second.query('BEGIN');
     try {
@@ -319,9 +339,11 @@ describe('two transactions (T142)', () => {
       const ended = outcome(secondWrite(second));
       await seenWaiting(secondPid);
       await first.query('COMMIT');
+      firstCommitted = true;
       return await ended;
     } finally {
-      await first.query('ROLLBACK');
+      // A ROLLBACK after a successful COMMIT only draws a "no transaction in progress" warning.
+      if (!firstCommitted) await first.query('ROLLBACK');
       await second.query('ROLLBACK');
     }
   }
@@ -403,6 +425,22 @@ describe('two transactions (T142)', () => {
     const { rows } = await setup.query<{ count: string }>(
       'SELECT count(*) AS count FROM "sessions" WHERE teacher_user_id = $1',
       [offer.teacherId],
+    );
+    expect(Number(rows[0]?.count)).toBe(1);
+  });
+
+  it('two transactions writing overlapping sessions for one student: exactly one commits', async () => {
+    const student = await committedStudent();
+    const enrollmentOne = await enroll(setup, await committedOffer(), student);
+    const enrollmentTwo = await enroll(setup, await committedOffer(), student);
+    const refused = await race(
+      (db) => insertWith(db, 'sessions', sessionValues(enrollmentOne, 1, 0, 60)),
+      (db) => insertWith(db, 'sessions', sessionValues(enrollmentTwo, 1, 30, 90)),
+    );
+    expect(refused).toBe(SQLSTATE.exclusionViolation);
+    const { rows } = await setup.query<{ count: string }>(
+      'SELECT count(*) AS count FROM "sessions" WHERE student_user_id = $1',
+      [student],
     );
     expect(Number(rows[0]?.count)).toBe(1);
   });

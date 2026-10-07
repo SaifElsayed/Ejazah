@@ -11,6 +11,12 @@ pnpm db:seed
 pnpm dev               # api (request + worker processes), admin, mobile
 ```
 
+The database has two roles (research R-5). Migrations run as the owner
+(`DATABASE_URL_OWNER`); everything else connects as the application role
+(`DATABASE_URL`). On a new volume, `docker/initdb` creates the application role
+with its development password. A volume created before that script existed
+needs `docker compose down -v` once.
+
 ## Common operations
 
 **Add a module** — create the folder under `apps/api/src/modules/`, add the six
@@ -20,6 +26,19 @@ in `app.module.ts`.
 **Add a migration** — edit the right file in `prisma/schema/`, run
 `pnpm db:migrate`, read the generated SQL before committing. Never edit a
 migration that has been merged.
+
+**Provision the database roles in production** — migrations carry no
+password. Before the first `pnpm db:migrate`, create the application role
+(`CREATE ROLE ijazah_app LOGIN PASSWORD '…'`) with a password from the secret
+store, or let the T065 migration create it without one and set it afterwards
+with `ALTER ROLE ijazah_app PASSWORD '…'`. The owner role runs the migrations;
+if the migration is to create the application role, the owner needs
+`CREATEROLE`. The owner must also own the database, so that it owns schema
+`public` through `pg_database_owner` and holds CREATE on the database: the
+migrations grant usage on `public` and create the trusted extensions `citext`
+and `btree_gist`, and both fail otherwise. In development the owner is the
+container's superuser, so neither requirement shows there. Never give the application role ownership of anything or
+membership in the owner role.
 
 **Switch a port's adapter** — set the driver value in `.env` (for example
 `STORAGE_DRIVER=s3`) and restart. No code change; every adapter is chosen in

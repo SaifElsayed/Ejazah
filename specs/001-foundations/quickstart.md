@@ -34,6 +34,14 @@ pnpm dev
 
 **Expected**: every application starts. No step asks for a secret beyond the one locally generated encryption key.
 
+**A database volume created before T065** lacks the application role, which `docker/initdb` creates only when a volume is new. Recreate it once, then migrate again:
+
+```bash
+docker compose down -v
+pnpm infra:up
+pnpm db:migrate
+```
+
 **The check that matters** — the seed is identical everywhere:
 
 ```bash

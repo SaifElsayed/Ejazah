@@ -12,6 +12,9 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
+      # Runs once, on a new volume: creates the application role with its development password
+      # (T065; the migrations never carry a password).
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ijazah_owner -d ijazah"]
       interval: 5s
