@@ -15,6 +15,7 @@ Each section maps to success criteria in [spec.md](./spec.md).
 ## Prerequisites
 
 - The runtime and package manager versions pinned in the repository
+- Node 24.7 or later within 24 (`engines` in `package.json`): Argon2id is `node:crypto`'s own from 24.7 (T069). pnpm only warns on an older Node, so check `node --version`
 - A container runtime, for the local database and cache
 - No third-party credentials. Deliberately — see [§5](#5-no-credentials-required)
 
