@@ -11,7 +11,10 @@
 // Primary keys are UUID v7 (ERD section 0). PostgreSQL 18 ships `uuidv7()` natively, so every
 // model declared by T055+ uses `id String @id @default(dbgenerated("uuidv7()")) @db.Uuid`.
 // Every timestamp is `@db.Timestamptz(6)` and ends `_at` (research R-7); local wall-clock columns end
-// `_local` beside a `timezone` column (R-TIME-3).
+// `_local` beside a `timezone` column (R-TIME-3). Every foreign key is ON DELETE RESTRICT, so an optional
+// relation states `onDelete: Restrict` (data-model.md section 4), and every foreign-key column carries an
+// `@@index` unless a full unique or index already starts with it: PostgreSQL creates none (ERD section 14,
+// FR-035).
 
 datasource db {
   provider = "postgresql"
@@ -139,6 +142,10 @@ enum CancellationReason {
   admin
   gender_correction
   teacher_suspended
+  // Paid, but the database refused its confirmation (FR-PAYG-19, ADR 0010 D7).
+  slot_unavailable
+  // Its hold was released by the student's own new checkout (FR-BOOK-12, ADR 0010 D7).
+  checkout_abandoned
 
   @@map("cancellation_reason")
 }
@@ -179,11 +186,16 @@ enum CancellationRequestStatus {
 
 // payments (ERD section 7, ADR 0007)
 
-// PaymentGateway is deliberately NOT declared here. The ERD allows one member per integrated gateway
-// and none is integrated (SRS OPEN-11); Prisma cannot declare an empty enum, and any member becomes
-// permanent (R-API-9). T059 declares it with the first real gateway and decides there whether the test
-// stand-in gets its own member. The PAYMENT_GATEWAY env value selects the adapter (R-API-4) and is
-// unrelated to this enum.
+// One member per gateway a `payments` row can name (T059, note under T059 in tasks.md). `fake` is the
+// recording stand-in, the port's second implementation from day one (ARCHITECTURE), so its rows exist
+// in development and tests; production refuses it in config, not here. A real gateway's member is
+// added when it is integrated (SRS OPEN-11). Members are permanent (R-API-9). The PAYMENT_GATEWAY env
+// value selects the adapter (R-API-4) and shares the name `fake`.
+enum PaymentGateway {
+  fake
+
+  @@map("payment_gateway")
+}
 
 enum PaymentStatus {
   created

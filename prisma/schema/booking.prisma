@@ -1,3 +1,83 @@
 // booking domain (T057, ERD section 5). Owned by apps/api/src/modules/booking.
 // slot_holds, enrollments. enrollments: deleted_at, status (pending_payment · confirmed · completed · terminated_no_show · cancelled), confirmed_at (one write path, FR-PAYG-5), cancellation_reason. Sessions tables live in sessions.prisma (ADR 0005 D2); payment records in payments.prisma (ADR 0007).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// What the schema language cannot say lives in the migrations: the student-is-not-teacher check
+// (T064, ERD section 15.2), the two partial uniques on active holds (T066, section 15.17-18) and the
+// revoked DELETE on enrollments (T065, section 15.10).
+
+// A checkout reservation with a TTL (FR-BOOK-9). NULL `released_at` means active, even past
+// `expires_at`: at most one active hold per slot and per student (T066, ADR 0010 D1, D6).
+model SlotHold {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  slotId        String    @map("slot_id") @db.Uuid
+  studentUserId String    @map("student_user_id") @db.Uuid
+  // Set in the transaction that creates the enrollment at Pay; NULL while the student is in
+  // checkout before Pay (ADR 0010 D2).
+  enrollmentId  String?   @map("enrollment_id") @db.Uuid
+  // Gateway checkout TTL plus the hold grace, counted from placement (FR-BOOK-9, ADR 0010 D4).
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  // Never set by a failed gateway event (ADR 0010 D4). A release without conversion cancels the
+  // linked enrollment in the same transaction (ADR 0010 D7).
+  releasedAt    DateTime? @map("released_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  slot       AvailabilitySlot @relation(fields: [slotId], references: [id])
+  student    User             @relation(fields: [studentUserId], references: [id])
+  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+
+  @@index([slotId])
+  @@index([studentUserId])
+  @@index([enrollmentId])
+  @@map("slot_holds")
+}
+
+// One student's purchase of one package. Snapshots everything a mutable parent could change
+// (FR-PROFILE-3); `sessions_remaining` is derived, never stored (R-DB-4).
+model Enrollment {
+  id                      String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  studentUserId           String              @map("student_user_id") @db.Uuid
+  // Denormalised for query sanity; never the student (T064, FR-BOOK-11).
+  teacherUserId           String              @map("teacher_user_id") @db.Uuid
+  packageId               String              @map("package_id") @db.Uuid
+  slotId                  String              @map("slot_id") @db.Uuid
+  snapshotPricePiasters   BigInt              @map("snapshot_price_piasters")
+  snapshotSessionCount    Int                 @map("snapshot_session_count")
+  snapshotDurationMinutes Int                 @map("snapshot_duration_minutes")
+  snapshotSubjectId       String              @map("snapshot_subject_id") @db.Uuid
+  // The zone frozen at purchase; DST arithmetic uses this.
+  snapshotSlotTimezone    String              @map("snapshot_slot_timezone")
+  // `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5).
+  status                  EnrollmentStatus
+  // Set once, by the confirm-enrollment job. There is no other write path (R-HONEST-1).
+  confirmedAt             DateTime?           @map("confirmed_at") @db.Timestamptz(6)
+  // Why a `cancelled` enrollment was cancelled (ADR 0010 D7).
+  cancellationReason      CancellationReason? @map("cancellation_reason")
+  // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
+  deletedAt               DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  purchasedAt             DateTime            @map("purchased_at") @db.Timestamptz(6)
+  createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student         User             @relation("EnrollmentStudent", fields: [studentUserId], references: [id])
+  teacher         User             @relation("EnrollmentTeacher", fields: [teacherUserId], references: [id])
+  package         Package          @relation(fields: [packageId], references: [id])
+  slot            AvailabilitySlot @relation(fields: [slotId], references: [id])
+  snapshotSubject Subject          @relation(fields: [snapshotSubjectId], references: [id])
+
+  slotHolds    SlotHold[]
+  sessions     Session[]
+  payments     Payment[]
+  chatMessages ChatMessage[]
+  ijazahs      Ijazah[]
+  review       Review?
+  disputes     Dispute[]
+
+  @@index([studentUserId])
+  @@index([teacherUserId])
+  @@index([packageId])
+  @@index([slotId])
+  @@index([snapshotSubjectId])
+  @@map("enrollments")
+}

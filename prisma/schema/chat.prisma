@@ -1,3 +1,32 @@
 // chat domain (T058, ERD section 6). Owned by apps/api/src/modules/chat.
 // chat_messages. Body or attachment present (check constraint).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// The body-or-attachment check (ERD section 15.8) cannot be said in the schema language; it lives in
+// the initial migration (T064), which must also accept a row the retention job purged.
+
+// Scoped to the enrollment (FR-SESS-6). Admin-readable only under an open dispute or report;
+// purged by the retention job (FR-SESS-13).
+model ChatMessage {
+  id                 String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId       String    @map("enrollment_id") @db.Uuid
+  senderUserId       String    @map("sender_user_id") @db.Uuid
+  body               String?
+  // A PDF or document only; images are rejected by content sniffing (FR-SESS-8).
+  attachmentKey      String?   @map("attachment_key")
+  attachmentFilename String?   @map("attachment_filename")
+  // Verified server-side, never trusted from the client.
+  attachmentMime     String?   @map("attachment_mime")
+  sentAt             DateTime  @map("sent_at") @db.Timestamptz(6)
+  // Retention marker: body and attachment nulled, the row kept for counts.
+  purgedAt           DateTime? @map("purged_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  sender     User       @relation(fields: [senderUserId], references: [id])
+
+  @@index([enrollmentId])
+  @@index([senderUserId])
+  @@map("chat_messages")
+}

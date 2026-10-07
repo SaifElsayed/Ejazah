@@ -14,6 +14,8 @@ model Subject {
   teacherSubjects TeacherSubject[]
   packages        Package[]
   isnadEntries    IsnadEntry[]
+  enrollments     Enrollment[]
+  ijazahs         Ijazah[]
 
   @@map("subjects")
 }
@@ -28,6 +30,7 @@ model TeacherSubject {
   subject Subject @relation(fields: [subjectId], references: [id])
 
   @@unique([teacherUserId, subjectId])
+  @@index([subjectId])
   @@map("teacher_subjects")
 }
 
@@ -50,6 +53,10 @@ model Package {
   teacher User    @relation(fields: [teacherUserId], references: [id])
   subject Subject @relation(fields: [subjectId], references: [id])
 
+  enrollments Enrollment[]
+
+  @@index([teacherUserId])
+  @@index([subjectId])
   @@map("packages")
 }
 
@@ -71,6 +78,10 @@ model AvailabilitySlot {
 
   teacher User @relation(fields: [teacherUserId], references: [id])
 
+  slotHolds   SlotHold[]
+  enrollments Enrollment[]
+
+  @@index([teacherUserId])
   @@map("availability_slots")
 }
 
@@ -92,10 +103,12 @@ model IsnadEntry {
 
   teacher         User       @relation(fields: [teacherUserId], references: [id])
   subject         Subject    @relation(fields: [subjectId], references: [id])
-  verifiedByAdmin AdminUser? @relation(fields: [verifiedByAdminId], references: [id])
+  verifiedByAdmin AdminUser? @relation(fields: [verifiedByAdminId], references: [id], onDelete: Restrict)
 
   // A chain cannot hold two names at one position (ERD section 15.7).
   @@unique([teacherUserId, subjectId, position])
+  @@index([subjectId])
+  @@index([verifiedByAdminId])
   @@map("isnad_entries")
 }
 

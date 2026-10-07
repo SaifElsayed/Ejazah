@@ -1,3 +1,78 @@
 // certification domain (T060, ERD section 8). Owned by apps/api/src/modules/certification.
 // ijazahs, ijazah_bars. Hashed verification token; deleted_at on ijazahs.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// What the schema language cannot say lives in the migrations: the revoked DELETE on ijazahs (T065,
+// ERD section 15.10).
+
+model Ijazah {
+  id                    String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  // Non-sequential and non-guessable.
+  certificateNumber     String     @unique @map("certificate_number")
+  enrollmentId          String     @map("enrollment_id") @db.Uuid
+  // Denormalised for rendering.
+  studentUserId         String     @map("student_user_id") @db.Uuid
+  teacherUserId         String     @map("teacher_user_id") @db.Uuid
+  subjectId             String     @map("subject_id") @db.Uuid
+  // FR-IJAZAH-2, DEC-42.
+  mode                  IjazahMode
+  // The Mode A template language (FR-LOC-4).
+  language              Language
+  // Ordered names at grant time, the teacher appended (FR-ISNAD-7). Immutable. Mode A only.
+  chainSnapshot         Json?      @map("chain_snapshot")
+  // The generated PDF or the uploaded scan, served only through a signed URL.
+  certificateStorageKey String     @map("certificate_storage_key")
+  // Informational (FR-IJAZAH-5).
+  paperCopyIntended     Boolean    @map("paper_copy_intended")
+  // Backs the public QR page (FR-IJAZAH-10). The QR carries the plaintext token; only its hash is
+  // stored and looked up (R-DB-7).
+  verificationTokenHash String     @unique @map("verification_token_hash")
+  grantedAt             DateTime   @map("granted_at") @db.Timestamptz(6)
+  // Revocation, not deletion: a revoked ijazah is never shown as valid (FR-IJAZAH-8).
+  revokedAt             DateTime?  @map("revoked_at") @db.Timestamptz(6)
+  // Mandatory when revoked.
+  revokedReason         String?    @map("revoked_reason")
+  revokedByAdminId      String?    @map("revoked_by_admin_id") @db.Uuid
+  // Soft deletion, distinct from revocation: DELETE is revoked from the application role (T065,
+  // ERD section 15.10).
+  deletedAt             DateTime?  @map("deleted_at") @db.Timestamptz(6)
+  createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
+  student        User       @relation("IjazahStudent", fields: [studentUserId], references: [id])
+  teacher        User       @relation("IjazahTeacher", fields: [teacherUserId], references: [id])
+  subject        Subject    @relation(fields: [subjectId], references: [id])
+  revokedByAdmin AdminUser? @relation(fields: [revokedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([enrollmentId])
+  @@index([studentUserId])
+  @@index([teacherUserId])
+  @@index([subjectId])
+  @@index([revokedByAdminId])
+  @@map("ijazahs")
+}
+
+// Barring is explicit, reasoned and reversible with history (FR-IJAZAH-9). Current bar state is read
+// from here, never mirrored onto `users`.
+model IjazahBar {
+  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  // Mandatory.
+  reason          String
+  barredByAdminId String    @map("barred_by_admin_id") @db.Uuid
+  barredAt        DateTime  @map("barred_at") @db.Timestamptz(6)
+  liftedAt        DateTime? @map("lifted_at") @db.Timestamptz(6)
+  liftedByAdminId String?   @map("lifted_by_admin_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User       @relation(fields: [userId], references: [id])
+  barredByAdmin AdminUser  @relation("IjazahBarBarredBy", fields: [barredByAdminId], references: [id], onDelete: Restrict)
+  liftedByAdmin AdminUser? @relation("IjazahBarLiftedBy", fields: [liftedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([barredByAdminId])
+  @@index([liftedByAdminId])
+  @@map("ijazah_bars")
+}

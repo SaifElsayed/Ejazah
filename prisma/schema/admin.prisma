@@ -20,6 +20,14 @@ model AdminUser {
   approvedProfiles     TeacherProfile[]
   verificationRequests VerificationRequest[]
   verifiedIsnadEntries IsnadEntry[]
+  settledSessions      Session[]
+  revokedIjazahs       Ijazah[]
+  ijazahBarsImposed    IjazahBar[]           @relation("IjazahBarBarredBy")
+  ijazahBarsLifted     IjazahBar[]           @relation("IjazahBarLiftedBy")
+  moderatedReviews     Review[]
+  resolvedDisputes     Dispute[]
+  resolvedGenderFlags  GenderFlag[]
+  resolvedUserReports  UserReport[]
 
   @@map("admin_users")
 }
@@ -42,8 +50,9 @@ model AuditLog {
   occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  admin AdminUser @relation(fields: [adminId], references: [id])
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
 
+  @@index([adminId])
   @@map("audit_logs")
 }
 
@@ -56,7 +65,8 @@ model Setting {
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  updatedByAdmin AdminUser @relation(fields: [updatedByAdminId], references: [id])
+  updatedByAdmin AdminUser @relation(fields: [updatedByAdminId], references: [id], onDelete: Restrict)
 
+  @@index([updatedByAdminId])
   @@map("settings")
 }
