@@ -388,7 +388,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
   > **Note under T146 (batch U1, 2026-10-07).** The refusal is an object-level check in `envSchema`, beside the owner-role check, and names only `PAYMENT_GATEWAY`. While `fake` is the enum's only member, **no production configuration loads at all** until a real gateway's member is added (OPEN-11). That is intended (R-HONEST-1). **For T135 (K5):** its test cannot obtain a production configuration through `loadConfig`. It must hand the production mode to the headers middleware directly, to assert Strict-Transport-Security in production only.
 - [ ] T118 [P] [US6] Define the video port and its stand-in in `apps/api/src/platform/ports/video/`, with a join token bound to one session **and** one participant so an unbound token is unrepresentable (R-GENDER-7)
 - [ ] T119 [P] [US6] Define the push port and its stand-in in `apps/api/src/platform/ports/push/`, with payloads carrying identifiers for deep-linking only (R-HONEST-5)
-- [ ] T120 [P] [US6] Define the messaging port and its stand-in in `apps/api/src/platform/ports/sms/` (contracts/ports.md)
+- [x] T120 [P] [US6] Define the messaging port and its stand-in in `apps/api/src/platform/ports/sms/` (contracts/ports.md) — done 2026-10-07
 - [ ] T121 [US6] Implement provider selection at startup in `apps/api/src/platform/ports/ports.module.ts`, so switching is configuration and no calling module branches on which provider is active (FR-056)
 - [ ] T122 [US6] Make each stand-in record what it was asked to do and support induced failure, so failure paths are exercised without a network (contracts/ports.md)
 
