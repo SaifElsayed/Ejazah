@@ -26,6 +26,10 @@
 // throws before anything runs (FR-034). It is read before the transaction opens, so no transaction
 // holds its connection while another query reads the setting. A row past its `expires_at` counts as
 // unused and is replaced; the `expire-idempotency-keys` job deletes the rest.
+//
+// THE EFFECT runs inside the one interactive transaction, under Prisma's default limit (5 s), and
+// holds a database connection for as long as it runs. So an effect writes rows and does nothing
+// slow: a consumer keeps a gateway or any other network call outside it (ARCHITECTURE §8.1).
 import { createHash } from 'node:crypto';
 import { addSeconds } from '@ijazah/time';
 import { z } from 'zod';

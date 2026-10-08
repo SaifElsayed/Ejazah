@@ -71,8 +71,10 @@ export class IdempotencyRepository implements IdempotencyStore<Transaction> {
     });
   }
 
+  // `deleteMany`, not `delete`: a concurrent caller may have removed the same expired row first, and
+  // the claim that follows, not this removal, decides who runs (PR #47 review, n2).
   async remove(tx: Transaction, id: string): Promise<void> {
-    await tx.idempotencyKey.delete({ where: { id } });
+    await tx.idempotencyKey.deleteMany({ where: { id } });
   }
 
   async removeExpired(now: Date): Promise<number> {
