@@ -101,19 +101,21 @@ async function inClientRollback(probe: (tx: Transaction) => Promise<void>): Prom
 
 const DELETED_AT = '2026-10-08T00:00:00Z';
 
+/** The columns of one live user, for the client's `create`. */
+function userData() {
+  return {
+    phone: phoneNumber(),
+    gender: 'male',
+    dateOfBirth: '1990-01-01T00:00:00Z',
+    displayName: 'Probe user',
+    preferredLanguage: 'ar',
+    timezone: 'Africa/Cairo',
+    accountStatus: 'active',
+  } as const;
+}
+
 function newUser(tx: Transaction): Promise<{ id: string }> {
-  return tx.user.create({
-    data: {
-      phone: phoneNumber(),
-      gender: 'male',
-      dateOfBirth: '1990-01-01T00:00:00Z',
-      displayName: 'Probe user',
-      preferredLanguage: 'ar',
-      timezone: 'Africa/Cairo',
-      accountStatus: 'active',
-    },
-    select: { id: true },
-  });
+  return tx.user.create({ data: userData(), select: { id: true } });
 }
 
 /** A teacher's subject, package and slot, then `count` enrollments of one student on them. */
@@ -370,6 +372,50 @@ describe('soft-deleted rows, through the client extended by T148 (T053)', () => 
         tx.user.update({ where: { id: gone.id }, data: { displayName: 'Renamed' } }),
       ).rejects.toMatchObject({ code: 'P2025' });
     });
+  });
+
+  // `id` is the only Prisma `@unique` a user carries: phone and email are unique through the
+  // partial indexes of T066, raw SQL the schema language cannot state, so neither can be an
+  // upsert's `where`. Matching no soft-deleted row, the upsert takes its `create` branch, and
+  // that row may carry the deleted user's phone and email, which T066 released.
+  it('creates a new row on upsert over a soft-deleted one, which stays as it was', async () => {
+    await inClientRollback(async (tx) => {
+      const deletedUser = userData();
+      const gone = await tx.user.create({ data: deletedUser, select: { id: true } });
+      await tx.user.update({ where: { id: gone.id }, data: { deletedAt: DELETED_AT } });
+
+      const upserted = await tx.user.upsert({
+        where: { id: gone.id },
+        create: { ...userData(), phone: deletedUser.phone, displayName: 'Signed up again' },
+        update: { displayName: 'Renamed' },
+        select: { id: true, phone: true, displayName: true },
+      });
+      expect(upserted.id).not.toBe(gone.id);
+      expect(upserted).toMatchObject({ phone: deletedUser.phone, displayName: 'Signed up again' });
+
+      const [stored] = await tx.$queryRaw<{ display_name: string; deleted: boolean }[]>`
+        SELECT display_name, deleted_at IS NOT NULL AS deleted FROM users WHERE id = ${gone.id}::uuid`;
+      expect(stored).toEqual({ display_name: deletedUser.displayName, deleted: true });
+    });
+  });
+
+  it('reads soft-deleted rows through the named opt-in includeDeleted only (data-model.md §4, PR #41 review n3)', async () => {
+    try {
+      await database.includeDeleted.$transaction(
+        async (raw) => {
+          const live = await raw.user.create({ data: userData(), select: { id: true } });
+          const gone = await raw.user.create({ data: userData(), select: { id: true } });
+          await raw.user.update({ where: { id: gone.id }, data: { deletedAt: DELETED_AT } });
+          const both = { id: { in: [live.id, gone.id] } };
+          expect(await raw.user.count({ where: both })).toBe(2);
+          expect(await raw.user.findUnique({ where: { id: gone.id } })).not.toBeNull();
+          throw ROLLBACK;
+        },
+        { timeout: 30_000 },
+      );
+    } catch (error: unknown) {
+      if (error !== ROLLBACK) throw error;
+    }
   });
 
   it('refuses a hard delete on each of the four tables, naming soft deletion (PR #41 review, n1)', async () => {
