@@ -14,6 +14,8 @@ Be imported by any other module (R-API-4). Expose a procedure on the user surfac
 
 `admin.service.ts` holds every rule. `admin.repository.ts` holds every query. `admin.router.ts` is thin: validate, call one service method, return. `index.ts` is the only import path. Arrives with the phase that first needs it (see PLAN.md).
 
+`settings.service.ts` and `settings.repository.ts` implement the kernel's `SettingsReader` (`platform/settings/settings-reader.ts`, T113). `index.ts` exports it as `createSettingsReader`, and `main.ts` and `worker.ts` bind it (T143). A missing or invalid key throws `SettingError` and is never replaced by a constant.
+
 ## Requirement ids
 
-_Filled as SRS requirements land in this module._
+- FR-034: settings reading behind `SettingsReader` (T113).
