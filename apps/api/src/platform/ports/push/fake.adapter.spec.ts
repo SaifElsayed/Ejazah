@@ -4,8 +4,8 @@
 // no longer accepts. The payload carries identifiers for deep-linking only: the notification's id
 // and, where it concerns one, the enrollment's and the session's. A name or a message's text has no
 // field to go in (`tsc`), and a value that is not an identifier, or a key that is not one of those
-// three, is refused before anything is sent. The content is rendered in the application. Recording
-// calls and induced failure are T122's.
+// three, is refused before anything is sent. The content is rendered in the application. The
+// stand-in records what it was asked and fails an operation when told (T122).
 //
 // The type checks are enforced by `pnpm typecheck` (CI stage 1), not by vitest.
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -80,5 +80,30 @@ describe('the push stand-in (T119, R-HONEST-5)', () => {
 
     expect(await push.findStaleTargets([phone, tablet])).toEqual([tablet]);
     expect(await push.findStaleTargets([phone])).toEqual([]);
+  });
+});
+
+describe('the push stand-in: records and induced failure (T122)', () => {
+  it('records each delivery and stale-target question it was asked', async () => {
+    const push = new FakePushAdapter();
+    await push.deliver(phone, { notificationId: NOTIFICATION });
+    await push.findStaleTargets([phone, tablet]);
+
+    expect(push.calls).toEqual([
+      { operation: 'deliver', args: [phone, { notificationId: NOTIFICATION }] },
+      { operation: 'findStaleTargets', args: [[phone, tablet]] },
+    ]);
+  });
+
+  it.each(['deliver', 'findStaleTargets'] as const)('fails %s when told', async (operation) => {
+    const push = new FakePushAdapter();
+    push.failNext(operation, new Error('provider unavailable'));
+
+    const call =
+      operation === 'deliver'
+        ? push.deliver(phone, { notificationId: NOTIFICATION })
+        : push.findStaleTargets([phone]);
+
+    await expect(call).rejects.toThrow('provider unavailable');
   });
 });

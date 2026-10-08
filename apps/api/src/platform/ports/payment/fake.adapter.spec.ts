@@ -3,14 +3,21 @@
 // The port's operations are exactly five, and none reads a balance, moves funds or issues a refund:
 // the type check below fails the moment a sixth appears. The stand-in keeps orders and recipients in
 // memory and can produce a correctly and an incorrectly signed event for any order or recipient it
-// created, so the signature guard of FR-074 (T133) is testable without a network. Recording calls
-// and induced failure are T122's.
+// created, so the signature guard of FR-074 (T133) is testable without a network. It records every
+// operation it was asked to do and fails one when told (T122).
 //
 // The type check is enforced by `pnpm typecheck` (CI stage 1), not by vitest.
+import { createHmac } from 'node:crypto';
 import { piasters } from '@ijazah/money';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { FakePaymentAdapter } from './fake.adapter.js';
-import { EventSignatureError, type GatewayEvent, type PaymentPort } from './payment.port.js';
+import { StandInFailure } from '../stand-in.js';
+import {
+  EventSignatureError,
+  MalformedEventError,
+  type GatewayEvent,
+  type PaymentPort,
+} from './payment.port.js';
 
 const SECRET = 'stand-in-webhook-secret';
 const PAY_BY = new Date('2026-10-07T10:30:00Z');
@@ -262,4 +269,90 @@ describe('the payment stand-in: payout recipients (T117, FR-PAYG-13, FR-PAYG-15)
       'unknown recipient',
     );
   });
+});
+
+describe('the payment stand-in: records and induced failure (T122)', () => {
+  it('records every operation it was asked to do, with its arguments', async () => {
+    const payments = gateway();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY);
+    await payments.cancelCheckout(gatewayOrderId);
+
+    expect(payments.calls).toEqual([
+      { operation: 'createCheckout', args: ['enr-1', 100, 'EGP', PAY_BY] },
+      { operation: 'cancelCheckout', args: [gatewayOrderId] },
+    ]);
+  });
+
+  it('fails a checkout when told, creating no order', async () => {
+    const payments = gateway();
+    payments.failNext('createCheckout');
+
+    await expect(payments.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY)).rejects.toThrow(
+      StandInFailure,
+    );
+    expect(payments.calls).toHaveLength(1);
+    await expect(
+      payments.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY),
+    ).resolves.toHaveProperty('gatewayOrderId');
+  });
+
+  it('fails a cancellation when told, leaving the order payable', async () => {
+    const payments = gateway();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+    payments.failNext('cancelCheckout', new Error('gateway unreachable'));
+
+    await expect(payments.cancelCheckout(gatewayOrderId)).rejects.toThrow('gateway unreachable');
+    const { rawBody, headers } = payments.orderEvent(gatewayOrderId, 'paid');
+    await expect(payments.verifyAndParseEvent(rawBody, headers)).resolves.toMatchObject({
+      type: 'paid',
+    });
+  });
+
+  it.each(['verifyAndParseEvent', 'registerPayoutRecipient', 'getRecipientStatus'] as const)(
+    'fails %s when told',
+    async (operation) => {
+      const payments = gateway();
+      const recipientRef = await payments.registerPayoutRecipient('teacher-1', {
+        holderName: 'Teacher Name',
+        method: 'bank_account',
+        accountNumber: '0001',
+      });
+      const { rawBody, headers } = payments.recipientEvent(recipientRef, 'recipient_verified');
+      payments.failNext(operation);
+
+      const calls = {
+        verifyAndParseEvent: () => payments.verifyAndParseEvent(rawBody, headers),
+        registerPayoutRecipient: () =>
+          payments.registerPayoutRecipient('teacher-2', {
+            holderName: 'Teacher Name',
+            method: 'mobile_wallet',
+            accountNumber: '01000000000',
+          }),
+        getRecipientStatus: () => payments.getRecipientStatus(recipientRef),
+      };
+      await expect(calls[operation]()).rejects.toThrow(StandInFailure);
+    },
+  );
+});
+
+describe('the payment stand-in: a signed body it cannot read (T122, review of PR #45 m1)', () => {
+  it.each([
+    ['not JSON', 'student 01000000000 paid'],
+    ['JSON of no known shape', '{"type":"chargeback","card":"4111111111111111"}'],
+  ])(
+    'rejects, never throws, a signed body that is %s, quoting nothing of it',
+    async (_case, text) => {
+      const rawBody = Buffer.from(text);
+      const headers = {
+        'x-fake-signature': createHmac('sha256', SECRET).update(rawBody).digest('hex'),
+      };
+      let refusal: Promise<unknown> | undefined;
+
+      expect(() => {
+        refusal = gateway().verifyAndParseEvent(rawBody, headers);
+      }).not.toThrow();
+      await expect(refusal).rejects.toThrow(MalformedEventError);
+      await expect(refusal).rejects.not.toThrow(/01000000000|4111/);
+    },
+  );
 });

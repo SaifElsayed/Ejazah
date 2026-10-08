@@ -2,10 +2,12 @@
 // and an incorrectly signed participant event for any room it created, so attendance evidence and
 // the webhook signature guard (FR-074, T133) are exercised without a network: a body signed with
 // HMAC-SHA256 under the webhook secret in the `x-fake-signature` header, or under a random secret
-// for the incorrect one. Recording calls and induced failure are T122's.
+// for the incorrect one. T122: it records each operation it was asked to do and fails one when told,
+// before anything changes.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
+import { StandIn } from '../stand-in.js';
 import {
   bindJoinToken,
   type JoinToken,
@@ -46,15 +48,18 @@ const eventBody = z.object({
 
 type EventBody = z.infer<typeof eventBody>;
 
-export class FakeVideoAdapter implements VideoPort {
+export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
   readonly #webhookSecret: string;
   readonly #rooms = new Map<string, Room>();
 
   constructor(options: { readonly webhookSecret: string }) {
+    super();
     this.#webhookSecret = options.webhookSecret;
   }
 
   createRoom(sessionId: string): Promise<string> {
+    const failure = this.attempt('createRoom', [sessionId]);
+    if (failure !== undefined) return Promise.reject(failure);
     if (sessionId.length === 0) return Promise.reject(new RangeError('A room is for a session.'));
     const existing = this.#rooms.get(sessionId);
     if (existing !== undefined && !existing.ended) return Promise.resolve(existing.providerRoomId);
@@ -64,6 +69,8 @@ export class FakeVideoAdapter implements VideoPort {
   }
 
   createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken> {
+    const failure = this.attempt('createSessionToken', [sessionId, participantUserId]);
+    if (failure !== undefined) return Promise.reject(failure);
     try {
       this.#openRoom(sessionId);
       return Promise.resolve(
@@ -78,6 +85,8 @@ export class FakeVideoAdapter implements VideoPort {
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,
   ): Promise<ParticipantEvent> {
+    const failure = this.attempt('verifyAndParseParticipantEvent', [rawBody, headers]);
+    if (failure !== undefined) return Promise.reject(failure);
     const signature = Object.entries(headers).find(
       ([name]) => name.toLowerCase() === SIGNATURE_HEADER,
     )?.[1];
@@ -103,6 +112,8 @@ export class FakeVideoAdapter implements VideoPort {
   }
 
   endRoom(sessionId: string): Promise<void> {
+    const failure = this.attempt('endRoom', [sessionId]);
+    if (failure !== undefined) return Promise.reject(failure);
     const room = this.#rooms.get(sessionId);
     if (room === undefined)
       return Promise.reject(new Error('unknown room: the stand-in did not create it.'));

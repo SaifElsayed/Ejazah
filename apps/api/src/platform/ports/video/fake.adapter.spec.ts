@@ -5,11 +5,12 @@
 // participant together, and the token itself carries both, so a token bound to a session alone
 // cannot be written. The stand-in keeps rooms in memory and can produce a correctly and an
 // incorrectly signed participant event for any room it created, so attendance evidence is testable
-// without a network. Recording calls and induced failure are T122's.
+// without a network. It records what it was asked and fails an operation when told (T122).
 //
 // The type checks are enforced by `pnpm typecheck` (CI stage 1), not by vitest.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
+import { StandInFailure } from '../stand-in.js';
 import { FakeVideoAdapter } from './fake.adapter.js';
 import {
   bindJoinToken,
@@ -186,5 +187,46 @@ describe('the video stand-in: participant events (T118, R-SESS-1, FR-074)', () =
 
   it('produces events only for a room it created', () => {
     expect(() => video().participantEvent(SESSION, STUDENT, 'joined')).toThrow('unknown room');
+  });
+});
+
+describe('the video stand-in: records and induced failure (T122)', () => {
+  it('records every operation it was asked to do, with its arguments', async () => {
+    const rooms = video();
+    await rooms.createRoom(SESSION);
+    await rooms.createSessionToken(SESSION, STUDENT);
+    await rooms.endRoom(SESSION);
+
+    expect(rooms.calls).toEqual([
+      { operation: 'createRoom', args: [SESSION] },
+      { operation: 'createSessionToken', args: [SESSION, STUDENT] },
+      { operation: 'endRoom', args: [SESSION] },
+    ]);
+  });
+
+  it('fails a room when told, creating none', async () => {
+    const rooms = video();
+    rooms.failNext('createRoom');
+
+    await expect(rooms.createRoom(SESSION)).rejects.toThrow(StandInFailure);
+    await expect(rooms.createSessionToken(SESSION, STUDENT)).rejects.toThrow('unknown room');
+  });
+
+  it('fails a token, an event and an end when told, leaving the room open', async () => {
+    const rooms = video();
+    await rooms.createRoom(SESSION);
+    const { rawBody, headers } = rooms.participantEvent(SESSION, STUDENT, 'joined');
+    rooms.failNext('createSessionToken');
+    rooms.failNext('verifyAndParseParticipantEvent');
+    rooms.failNext('endRoom');
+
+    await expect(rooms.createSessionToken(SESSION, STUDENT)).rejects.toThrow(StandInFailure);
+    await expect(rooms.verifyAndParseParticipantEvent(rawBody, headers)).rejects.toThrow(
+      StandInFailure,
+    );
+    await expect(rooms.endRoom(SESSION)).rejects.toThrow(StandInFailure);
+    await expect(rooms.createSessionToken(SESSION, STUDENT)).resolves.toMatchObject({
+      participantUserId: STUDENT,
+    });
   });
 });
