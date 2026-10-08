@@ -4,9 +4,17 @@
   "private": true,
   "description": "Wall-clock-in-a-zone to UTC instant, per occurrence, DST-safe. The only place a domain datetime is constructed (R-TIME-1). Temporal is confined here (research R-4).",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "@ijazah/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
