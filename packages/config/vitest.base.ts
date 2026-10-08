@@ -4,6 +4,13 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // The 80% floor covers packages/money, packages/time and the kernel's guard and error paths (T086).
 // A floor is never lowered (R-PROC-10); the covered surface only widens as modules arrive.
 export default defineConfig({
+  // T151: `@ijazah/time` and `@ijazah/money` publish built JavaScript to Node, and their TypeScript
+  // source under the custom export condition `@ijazah/source`, so a test runs against the source
+  // with no build first. Vitest resolves a workspace package through Vite's server environment,
+  // whose conditions are `ssr.resolve.conditions`; `resolve.conditions` is not read there (tried).
+  // Naming Vite's server defaults beside ours (`module` among them) sent `@aws-sdk` to its
+  // extensionless `dist-es` build, so only the one condition is named.
+  ssr: { resolve: { conditions: ['@ijazah/source'] } },
   test: {
     environment: 'node',
     // Vitest 4's defaults are `node_modules` and `.git` only — `dist` was dropped from them. Every

@@ -63,7 +63,19 @@
 // teacher data, and so is any module's row carrying a teacher-typed property. Held by review, not
 // by this rule (R-GENDER-5's second mechanism): a teacher more than one property step down or
 // behind an index signature, and a teacher returned under a type whose name does not carry
-// `Teacher` (the condition under T055 closes the generated payload case).
+// `Teacher` and that is built from no teacher type (the condition under T055 closes the generated
+// payload case, DECISION (T152) below the mapped-type case).
+//
+// DECISION (T152, PR #47 review n1, 2026-10-08) — a mapped type is read through the types it was
+// built from. `type Card = Pick<TeacherProfile, 'id'>` takes the alias name `Card` and loses the
+// type arguments of `Pick`, so the unwrapping above never reached `TeacherProfile`; the same held
+// for `Omit` and for a key-mapped `{ [K in 'id' | 'bio']: TeacherProfile[K] }`, over the generated
+// model and over a plain `Teacher…` interface alike. A mapped type's sources are now read like the
+// type itself, by name or by model: the arguments of its instantiation, through the checker's
+// unpublished `mapper` as for a payload (TypeScript is pinned at 5.9.3, and the cases fail if it
+// moves), and the object type of its template when the template is an indexed access. A source
+// is unwrapped, never stepped into, so a settings payload, whose instantiation carries the
+// client's type map, is still not a teacher.
 //
 // DECISION (T102, the condition under T055, 2026-10-08) — the generated client's payloads. Prisma
 // resolves a model's row type — `TeacherProfile` itself, `Prisma.TeacherProfileGetPayload<…>`, and
@@ -84,9 +96,19 @@
 // would read as teachers, and `platform/db/prisma.repository.ts`, which T036 made a repository
 // file so it may name the client, would be refused for returning it. A type carrying a `$` member
 // declared in the generated client (the client, a transaction client, an extended client) is
-// therefore never stepped into. Teacher rows are still caught where they are read: in the
-// repository of the module that owns the table (R-API-6), whose methods return what the delegate
-// returns. Handing the client itself to another file is R-API-2's and R-API-6's, not this rule's.
+// therefore not stepped into through the members the client declares. Teacher rows are still
+// caught where they are read: in the repository of the module that owns the table (R-API-6),
+// whose methods return what the delegate returns. Handing the client itself to another file is
+// R-API-2's and R-API-6's, not this rule's.
+//
+// DECISION (T152, PR #47 review n3, 2026-10-08) — the exemption covers the client's own
+// declarations only. A class that extends `PrismaClient` inherits its `$` members, so until T152 it
+// was exempt whole, and a teacher property it added was never read. Now a member of a client type
+// is skipped only when every one of its declarations sits in the generated client; any other
+// member — a subclass's property, an intersection's, an extension's `client` member — is read like
+// a property of any object, and a member with no declaration is read too, which fails closed. The
+// one client of `prisma.repository.ts`, extended by T148, stays exempt by this test: its delegates
+// are the client's declarations, and its `includeDeleted` member is itself a client, not a teacher.
 //
 // DECISION (T046, 2026-10-05) — "takes the requester's gender" is a type-level fact too. The
 // signature must have a required parameter, or a required property of a required options parameter,
@@ -257,12 +279,43 @@ function isDatabaseClient(type) {
     );
 }
 
-function teacherNamed(types) {
+/**
+ * A member the generated client declares itself, such as a model delegate, an extended client's
+ * included (DECISION (T152)). A member with no declaration is read, which fails closed.
+ */
+function clientOwn(property) {
+  const declarations = property.declarations ?? [];
+  return declarations.length > 0 && declarations.every(inClient);
+}
+
+/**
+ * The types a mapped type was built from (DECISION (T152)): the arguments of its instantiation,
+ * `TeacherProfile` in `Pick<TeacherProfile, 'id'>`, read through the checker's mapper as for a
+ * payload; and the object of its template's indexed access, `TeacherProfile` in
+ * `{ [K in 'id']: TeacherProfile[K] }`.
+ */
+function mappedSources(checker, type) {
+  if (!isObjectType(type) || (type.objectFlags & ts.ObjectFlags.Mapped) === 0) return [];
+  const sources = mapperTargets(type.mapper);
+  for (const declaration of type.getSymbol()?.declarations ?? []) {
+    if (!ts.isMappedTypeNode(declaration) || declaration.type === undefined) continue;
+    const template = checker.getTypeFromTypeNode(declaration.type);
+    if ((template.flags & ts.TypeFlags.IndexedAccess) !== 0) sources.push(template.objectType);
+  }
+  return sources;
+}
+
+function teacherNamed(checker, types, seen = new Set()) {
   for (const type of types) {
+    if (seen.has(type)) continue;
+    seen.add(type);
     const named = readableNames(type).find((name) => TEACHER.test(name));
     if (named !== undefined) return named;
     const model = generatedModel(type);
     if (model !== null && TEACHER.test(model)) return model;
+    const sources = mappedSources(checker, type).flatMap((source) => [...unwrap(checker, source)]);
+    const fromSource = teacherNamed(checker, sources, seen);
+    if (fromSource !== null) return fromSource;
   }
   return null;
 }
@@ -270,7 +323,7 @@ function teacherNamed(types) {
 /** The name of the teacher type a return type delivers, directly or one property step down, or null. */
 function teacherIn(checker, type) {
   const direct = unwrap(checker, type);
-  const found = teacherNamed(direct);
+  const found = teacherNamed(checker, direct);
   if (found !== null) return found;
 
   for (const holder of direct) {
@@ -278,10 +331,12 @@ function teacherIn(checker, type) {
     if (!isObjectType(holder) || checker.isArrayType(holder) || checker.isTupleType(holder)) {
       continue;
     }
-    // The client's delegates are accessors, not rows (DECISION (T102) above).
-    if (isDatabaseClient(holder)) continue;
+    // The client's delegates are accessors, not rows (DECISION (T102) above); a member added to
+    // the client is read like any other (DECISION (T152)).
+    const client = isDatabaseClient(holder);
     for (const property of checker.getPropertiesOfType(holder)) {
-      const below = teacherNamed(unwrap(checker, checker.getTypeOfSymbol(property)));
+      if (client && clientOwn(property)) continue;
+      const below = teacherNamed(checker, unwrap(checker, checker.getTypeOfSymbol(property)));
       if (below !== null) return below;
     }
   }

@@ -230,6 +230,50 @@ typeAwareRuleTester().run(
         ),
         filename: repository,
       },
+      // T152: the client's exemption covers the client's own declarations only, and still covers
+      // every client the note under T102 accepts, the extended one of T148 included.
+      {
+        name: 'a client extended with no extension, and one carrying a second client as a member, as T148 builds it (T152)',
+        code: withShapes(
+          [
+            "import { PrismaClient } from '@prisma/client';",
+            'declare const base: PrismaClient;',
+            'export function extended() {',
+            '  return base.$extends({});',
+            '}',
+            'export function withOptIn() {',
+            '  return base.$extends({ client: { includeDeleted: base } });',
+            '}',
+          ].join('\n'),
+        ),
+        filename: repository,
+      },
+      {
+        name: 'user rows, picked and omitted under aliases that name no teacher (T152)',
+        code: withShapes(
+          [
+            "import type { User } from '@prisma/client';",
+            "type Account = Pick<User, 'id' | 'displayName'>;",
+            "type Contact = Omit<User, 'passwordHash'>;",
+            "type Names = { [K in 'id' | 'displayName']: User[K] };",
+            'export declare function findAccount(id: string): Promise<Account | null>;',
+            'export declare function findContact(id: string): Promise<Contact | null>;',
+            'export declare function findNames(id: string): Promise<Names | null>;',
+          ].join('\n'),
+        ),
+        filename: repository,
+      },
+      {
+        name: 'a picked teacher returned by a method that takes the requester’s gender (T152)',
+        code: withShapes(
+          [
+            "import type { TeacherProfile } from '@prisma/client';",
+            "type Card = Pick<TeacherProfile, 'id' | 'bio'>;",
+            'export declare function findCard(who: RequesterGender, id: string): Promise<Card | null>;',
+          ].join('\n'),
+        ),
+        filename: repository,
+      },
     ],
     invalid: [
       refused({
@@ -621,6 +665,90 @@ typeAwareRuleTester().run(
         code: "export declare function findProfile(id: string): Promise<import('@prisma/client').TeacherProfile | null>;",
         method: 'findProfile',
         teacher: 'TeacherProfile',
+      }),
+
+      // T152: a teacher narrowed by a standard-library mapped type is read through the types the
+      // alias was instantiated from, whatever the alias is called (PR #47 review n1); and the
+      // client's exemption covers its own declarations only, so a member added to it is read
+      // like any other (n3).
+      refused({
+        name: 'the generated TeacherProfile narrowed by Pick under an alias that names no teacher (T152, PR #47 n1)',
+        code: [
+          "import type { TeacherProfile } from '@prisma/client';",
+          "type Card = Pick<TeacherProfile, 'id'>;",
+          'export declare function findCard(id: string): Promise<Card | null>;',
+        ].join('\n'),
+        method: 'findCard',
+        teacher: 'TeacherProfile',
+      }),
+      refused({
+        name: 'a plain Teacher interface narrowed by Pick under an alias that names no teacher (T152, PR #47 n1)',
+        code: [
+          'interface TeacherRecord { readonly id: string; readonly bio: string }',
+          "type Card = Pick<TeacherRecord, 'id'>;",
+          'export declare function findCard(id: string): Promise<Card[]>;',
+        ].join('\n'),
+        method: 'findCard',
+        teacher: 'TeacherRecord',
+      }),
+      refused({
+        name: 'the generated TeacherProfile narrowed by Omit under an alias that names no teacher (T152, PR #47 n1)',
+        code: [
+          "import type { TeacherProfile } from '@prisma/client';",
+          "type Card = Omit<TeacherProfile, 'id'>;",
+          'export declare function findCard(id: string): Promise<Card | null>;',
+        ].join('\n'),
+        method: 'findCard',
+        teacher: 'TeacherProfile',
+      }),
+      refused({
+        name: 'a plain Teacher interface narrowed by Omit under an alias that names no teacher (T152, PR #47 n1)',
+        code: [
+          'interface TeacherRecord { readonly id: string; readonly bio: string }',
+          "type Card = Omit<TeacherRecord, 'id'>;",
+          'export declare function findCard(id: string): Promise<Card[]>;',
+        ].join('\n'),
+        method: 'findCard',
+        teacher: 'TeacherRecord',
+      }),
+      refused({
+        name: 'the generated TeacherProfile narrowed by a key-mapped type under an alias that names no teacher (T152, PR #47 n1)',
+        code: [
+          "import type { TeacherProfile } from '@prisma/client';",
+          "type Card = { [K in 'id' | 'bio']: TeacherProfile[K] };",
+          'export declare function findCard(id: string): Promise<Card | null>;',
+        ].join('\n'),
+        method: 'findCard',
+        teacher: 'TeacherProfile',
+      }),
+      refused({
+        name: 'a plain Teacher interface narrowed by a key-mapped type under an alias that names no teacher (T152, PR #47 n1)',
+        code: [
+          'interface TeacherRecord { readonly id: string; readonly bio: string }',
+          "type Card = { [K in 'id' | 'bio']: TeacherRecord[K] };",
+          'export declare function findCard(id: string): Promise<Card[]>;',
+        ].join('\n'),
+        method: 'findCard',
+        teacher: 'TeacherRecord',
+      }),
+      refused({
+        name: 'a class extending the generated client that carries a teacher, returned under a name that carries none (T152, PR #47 n3)',
+        code: [
+          "import { PrismaClient } from '@prisma/client';",
+          'export declare class Store extends PrismaClient {',
+          '  readonly card: TeacherCard;',
+          '}',
+          'export declare function openStore(): Store;',
+        ].join('\n'),
+        method: 'openStore',
+      }),
+      refused({
+        name: 'the client joined to a teacher by an intersection (T152, PR #47 n3)',
+        code: [
+          "import type { PrismaClient } from '@prisma/client';",
+          'export declare function openStore(): PrismaClient & { readonly card: TeacherCard };',
+        ].join('\n'),
+        method: 'openStore',
       }),
     ],
   },
