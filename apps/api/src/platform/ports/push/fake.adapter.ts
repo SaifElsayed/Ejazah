@@ -1,2 +1,33 @@
-// T119/T122: push stand-in. Records calls; supports induced failure.
-export {};
+// T119: the push stand-in. It checks what it is handed and sends nothing; the provider's view of
+// which devices it no longer accepts is set by `markStale`, as the provider would learn it. Recording
+// calls and induced failure are T122's.
+import {
+  assertPushPayload,
+  assertPushTarget,
+  type PushPayload,
+  type PushPort,
+  type PushTarget,
+} from './push.port.js';
+
+export class FakePushAdapter implements PushPort {
+  readonly #stale = new Set<string>();
+
+  deliver(target: PushTarget, payload: PushPayload): Promise<void> {
+    try {
+      assertPushTarget(target);
+      assertPushPayload(payload);
+    } catch (error: unknown) {
+      return Promise.reject(error as Error);
+    }
+    return Promise.resolve();
+  }
+
+  findStaleTargets(targets: readonly PushTarget[]): Promise<readonly PushTarget[]> {
+    return Promise.resolve(targets.filter((target) => this.#stale.has(target.token)));
+  }
+
+  /** The provider stops accepting this device token. */
+  markStale(token: string): void {
+    this.#stale.add(token);
+  }
+}
