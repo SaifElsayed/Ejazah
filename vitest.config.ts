@@ -11,6 +11,8 @@ export default mergeConfig(
       // one passes and the `.skip` one reports skipped, and in CI Vitest refuses a `.only`
       // outright (`allowOnly`), failing the run.
       exclude: [...configDefaults.exclude, 'tests/violations/fixtures/**'],
+      // T114 (PR #49 review m1): every run starts with no provider key (SC-005).
+      setupFiles: ['tests/support/no-provider-keys.setup.ts'],
     },
   }),
 );

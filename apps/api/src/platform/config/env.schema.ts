@@ -80,6 +80,53 @@ const envObject = z.object({
 
 export const envKeys: readonly string[] = Object.keys(envObject.shape);
 
+// T114 (PR #49 review m1): every key is classified once, here. A provider key is a third-party
+// service's credential or location; a platform key is the process's own, its database and queue,
+// and which adapter serves a port. `satisfies` makes `tsc` refuse a key of the schema left out, or
+// one named that the schema does not have, so a new key cannot arrive unclassified. The test runs
+// remove every provider key before any test file loads (`tests/support/no-provider-keys.setup.ts`),
+// so the suite never sees one (SC-005).
+const envKeyKinds = {
+  NODE_ENV: 'platform',
+  PORT: 'platform',
+  LOG_LEVEL: 'platform',
+  DATABASE_URL_OWNER: 'platform',
+  DATABASE_URL: 'platform',
+  REDIS_URL: 'platform',
+  ENCRYPTION_KEY: 'platform',
+  STORAGE_DRIVER: 'platform',
+  STORAGE_LOCAL_ROOT: 'platform',
+  S3_ENDPOINT: 'provider',
+  S3_BUCKET: 'provider',
+  S3_REGION: 'provider',
+  S3_ACCESS_KEY_ID: 'provider',
+  S3_SECRET_ACCESS_KEY: 'provider',
+  PAYMENT_GATEWAY: 'platform',
+  PAYMENT_GATEWAY_API_KEY: 'provider',
+  PAYMENT_GATEWAY_WEBHOOK_SECRET: 'provider',
+  VIDEO_PROVIDER: 'platform',
+  PUSH_PROVIDER: 'platform',
+  SMS_PROVIDER: 'platform',
+  DAILY_API_KEY: 'provider',
+  DAILY_WEBHOOK_SECRET: 'provider',
+  SMS_PROVIDER_KEY: 'provider',
+  EXPO_ACCESS_TOKEN: 'provider',
+  PUBLIC_WEBHOOK_ORIGIN: 'provider',
+  SENTRY_DSN: 'provider',
+} as const satisfies Record<keyof typeof envObject.shape, 'provider' | 'platform'>;
+
+type EnvKey = keyof typeof envKeyKinds;
+
+function keysOfKind(kind: 'provider' | 'platform'): readonly EnvKey[] {
+  return (Object.keys(envKeyKinds) as EnvKey[]).filter((key) => envKeyKinds[key] === kind);
+}
+
+/** Credentials and locations of third-party services: what no test run may hold (SC-005). */
+export const providerKeys: readonly EnvKey[] = keysOfKind('provider');
+
+/** The platform's own values. */
+export const platformKeys: readonly EnvKey[] = keysOfKind('platform');
+
 // Total: object-level checks keep running after a failed URL check, so the input may be unparseable.
 // Undefined means "cannot compare"; the base z.url() check already reports the malformed key.
 function username(url: string): string | undefined {

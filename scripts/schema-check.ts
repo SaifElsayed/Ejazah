@@ -21,9 +21,19 @@
 // transaction that made a violation. Run as a command, it connects with DATABASE_URL, takes the
 // application role from that URL's user, prints one line per violation and exits 1, or 2 when it
 // cannot connect or read; a clean schema exits 0.
-import 'dotenv/config';
+import { config as readDotenv } from 'dotenv';
 import { basename } from 'node:path';
 import pg from 'pg';
+
+// Only DATABASE_URL is taken from `.env`, into a scratch object, and only when the environment does
+// not carry it: a spec imports this file (tests/db-integrity/schema-check.spec.ts), and loading the
+// whole file would bring back a provider key the test setup removed (T114, PR #49 review m1).
+const fromDotenv: Record<string, string> = {};
+readDotenv({ processEnv: fromDotenv, quiet: true });
+for (const key of ['DATABASE_URL'] as const) {
+  const value = fromDotenv[key];
+  if (process.env[key] === undefined && value !== undefined) process.env[key] = value;
+}
 
 export interface Violation {
   readonly rule: string;
