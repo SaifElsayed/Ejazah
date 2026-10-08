@@ -18,12 +18,16 @@
 // redaction list like every other. Nest's body parser is off: tRPC reads its own body, and the
 // signed-webhook endpoint (T133) must receive the raw body untouched.
 //
+// HEALTH. `GET /health` and `GET /ready` (T110) are the one Nest controller, outside both surfaces
+// and answering for themselves, so a failed readiness check never comes through the filter above.
+//
 // `main.ts` builds this application after the configuration validated and is the only caller in
 // production; a spec passes fixture routers in place of the real ones.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   type ArgumentsHost,
   Catch,
+  type DynamicModule,
   type ExceptionFilter,
   HttpException,
   type INestApplication,
@@ -36,6 +40,11 @@ import { createHTTPHandler } from '@trpc/server/adapters/standalone';
 import { DomainError, type ErrorCode } from './platform/errors/domain-error.js';
 import { mapError, type MappedError } from './platform/errors/error-filter.js';
 import { reportError } from './platform/errors/reporting.js';
+import {
+  HealthController,
+  READINESS,
+  type Readiness,
+} from './platform/health/health.controller.js';
 import type { Logger } from './platform/logging/logger.js';
 import { adminRouter } from './surfaces/admin.router.js';
 import { appRouter } from './surfaces/app.router.js';
@@ -47,9 +56,21 @@ import {
 } from './surfaces/context.js';
 import { toErrorShape } from './surfaces/procedures.js';
 
-/** The root module. Each module registers here as it gains a controller or a provider. */
+/**
+ * The root module. Each module registers here as it gains a controller or a provider. Its
+ * providers are values the process built at start (the readiness check, T110), so it is created
+ * with them rather than declared once.
+ */
 @Module({})
-export class AppModule {}
+export class AppModule {
+  static with({ readiness }: { readonly readiness: Readiness }): DynamicModule {
+    return {
+      module: AppModule,
+      controllers: [HealthController],
+      providers: [{ provide: READINESS, useValue: readiness }],
+    };
+  }
+}
 
 /** Where each surface is served. */
 export const surfacePaths = { app: '/trpc', admin: '/admin/trpc' } as const;
@@ -67,6 +88,8 @@ export interface Surfaces {
 export interface ApplicationOptions {
   /** The process's logger (T100). */
   readonly log: Logger;
+  /** What `GET /ready` asks of the database (T110). */
+  readonly readiness: Readiness;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
 }
@@ -168,9 +191,10 @@ function surfaceHandler<TContext extends Correlated>(
 /** The HTTP application with both surfaces mounted, not yet listening. */
 export async function createApplication({
   log,
+  readiness,
   surfaces = { app: appRouter, admin: adminRouter },
 }: ApplicationOptions): Promise<INestApplication> {
-  const application = await NestFactory.create(AppModule, {
+  const application = await NestFactory.create(AppModule.with({ readiness }), {
     bodyParser: false,
     logger: new KernelLoggerForNest(log),
     abortOnError: false,

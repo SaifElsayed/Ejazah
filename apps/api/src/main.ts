@@ -6,7 +6,7 @@
 // else is loaded only after it returns, so a refusal loads nothing but the configuration schema and
 // stays quick. Then reporting is started (T111), the logger created (T100), the database client
 // opened (T102), the admin module's settings reader bound (T113), and the application with both
-// surfaces mounted (T149) made to listen.
+// surfaces mounted (T149) and the health routes registered (T110) made to listen.
 import { loadConfigOrExit } from './platform/config/config.module.js';
 
 const config = loadConfigOrExit();
@@ -15,6 +15,7 @@ const [
   { initReporting },
   { createLogger },
   { openDatabase },
+  { ReadinessRepository },
   { requireSettingsReader },
   { createSettingsReader },
   { createApplication },
@@ -22,6 +23,7 @@ const [
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
   import('./platform/db/prisma.repository.js'),
+  import('./platform/db/readiness.repository.js'),
   import('./platform/settings/settings-reader.js'),
   import('./modules/admin/index.js'),
   import('./app.module.js'),
@@ -37,6 +39,9 @@ const database = openDatabase(config.DATABASE_URL);
 // until the seed (T074), and an empty store must not stop the process booting.
 const settings = requireSettingsReader(createSettingsReader(database));
 
-const application = await createApplication({ log });
+const application = await createApplication({
+  log,
+  readiness: new ReadinessRepository(database),
+});
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
