@@ -60,6 +60,13 @@ const envObject = z.object({
   PAYMENT_GATEWAY_API_KEY: nonEmpty.optional(),
   PAYMENT_GATEWAY_WEBHOOK_SECRET: nonEmpty.optional(),
 
+  // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
+  // stand-in until the phase that first calls the port adds its real member (FR-054), so each
+  // defaults to it. A production refusal like PAYMENT_GATEWAY's is not made here (follow-up of T121).
+  VIDEO_PROVIDER: z.enum(['fake']).default('fake'),
+  PUSH_PROVIDER: z.enum(['fake']).default('fake'),
+  SMS_PROVIDER: z.enum(['fake']).default('fake'),
+
   // Provider credentials are optional: the suite passes with every one unset (FR-054).
   DAILY_API_KEY: nonEmpty.optional(),
   DAILY_WEBHOOK_SECRET: nonEmpty.optional(),

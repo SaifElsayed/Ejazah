@@ -3,6 +3,18 @@
 // it in one operation; when that fails it rejects with one of the two errors below, and the webhook
 // signature guard (T133) answers each with its own status. Neither error carries the body, a header
 // or the parser's own message, which can quote the body (R-SEC-2).
+//
+// `deriveStandInSecret` (T121) gives a stand-in that signs its own events a secret when no webhook
+// secret is configured: HKDF over the column encryption key under a label of the stand-in's own,
+// with only `node:crypto` (R-SEC-7), as the local storage link key is derived (note under T116).
+import { hkdfSync } from 'node:crypto';
+
+/** A stand-in's webhook secret, derived from `ENCRYPTION_KEY` under its own label. */
+export function deriveStandInSecret(encryptionKey: string, label: string): string {
+  return Buffer.from(
+    hkdfSync('sha256', Buffer.from(encryptionKey, 'base64'), Buffer.alloc(0), label, 32),
+  ).toString('hex');
+}
 
 /** An inbound event whose signature is absent or does not hold. The webhook answers 401. */
 export class EventSignatureError extends Error {

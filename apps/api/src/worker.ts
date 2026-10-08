@@ -4,8 +4,9 @@
 // `loadConfigOrExit` is the first call (note under T015), so the worker refuses an invalid
 // configuration exactly as the request process does (T093). Everything else is loaded only after it
 // returns. Then reporting is started (T111), the logger created (T100), the database client opened
-// (T102), the admin module's settings reader bound (T113), every sweep registered on its schedule,
-// and the queue's deliveries run through the registered jobs (T112).
+// (T102), the admin module's settings reader bound (T113), each port's provider selected (T121),
+// every sweep registered on its schedule, and the queue's deliveries run through the registered jobs
+// (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
 // injection, so each is handed what it needs here, and `dev:worker` runs this file under `tsx`.
@@ -23,6 +24,7 @@ const [
   { IdempotencyService },
   { IdempotencyRepository },
   { expireIdempotencyKeys },
+  { selectPorts, selectPushPort },
   queueing,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
@@ -33,6 +35,7 @@ const [
   import('./platform/idempotency/idempotency.service.js'),
   import('./platform/idempotency/idempotency.repository.js'),
   import('./jobs/expire-idempotency-keys.js'),
+  import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
 ]);
 
@@ -43,6 +46,11 @@ const database = openDatabase(config.DATABASE_URL);
 // Every operational number a job reads comes through this reader (FR-034); the worker refuses to
 // start without one. No key is read here: the store is empty until the seed (T074).
 const settings = requireSettingsReader(createSettingsReader(database));
+
+// Each port's provider is chosen here, once, from the configuration (T121, FR-056), and handed to
+// each job as it arrives. Push is the notification delivery job's alone (R-API-15).
+const ports = selectPorts(config);
+const push = selectPushPort(config);
 
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
