@@ -24,6 +24,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # T102 — the database client is generated, never committed; the typecheck reads its types.
+      - run: pnpm db:generate
       - run: echo "T081 - typecheck, in parallel with the fast lint below"
       # T048 — the fast, syntax-only rule set, the same one the pre-commit hook runs.
       - run: pnpm lint
@@ -46,6 +48,9 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # T102 — the type-aware rules resolve the generated client's types (api/table-ownership,
+      # gender/require-requester-gender); without it the client is an empty stand-in.
+      - run: pnpm db:generate
       # T048 — the type-aware set (eslint.types.config.js), which only the pipeline runs (research R-10).
       - run: pnpm lint:types
       - run: echo "T071/T081 - schema check, contract snapshot diff"

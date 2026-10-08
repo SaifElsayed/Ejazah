@@ -42,7 +42,13 @@ let origin: string;
 
 beforeAll(async () => {
   const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });
-  application = await createApplication({ log, surfaces: { app: user, admin: administrator } });
+  // The readiness check is T110's and is tested in platform/health; here the database is not asked.
+  const readiness = { databaseReachable: async () => {} };
+  application = await createApplication({
+    log,
+    readiness,
+    surfaces: { app: user, admin: administrator },
+  });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');
 });

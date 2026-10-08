@@ -20,9 +20,11 @@ datasource db {
   provider = "postgresql"
 }
 
+// `prisma-client-js` writes the client beside the `@prisma/client` package that `prisma generate`
+// resolves (`pnpm db:generate`, T102), so `import { PrismaClient } from '@prisma/client'` reaches it
+// in `apps/api` and in the root alike: both resolve one store copy, whose peers are the root's.
 generator client {
-  provider = "prisma-client"
-  output   = "../../node_modules/.prisma/client"
+  provider = "prisma-client-js"
 }
 
 // ---------------------------------------------------------------------------------------------

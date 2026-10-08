@@ -204,6 +204,32 @@ typeAwareRuleTester().run(
         code: withShapes('export declare function listTeachers(): Promise<TeacherCard[]>;'),
         filename: service,
       },
+      {
+        name: 'the generated payload of a model that is not a teacher, as a settings read returns (condition under T055)',
+        code: withShapes(
+          [
+            "import type { Prisma, PrismaClient } from '@prisma/client';",
+            'declare const prisma: PrismaClient;',
+            'type SettingRow = Prisma.SettingGetPayload<{ select: { value: true } }>;',
+            'export declare function valueOf(key: string): Promise<SettingRow | null>;',
+            'export async function read(key: string) {',
+            '  return prisma.setting.findUnique({ where: { key }, select: { value: true } });',
+            '}',
+          ].join('\n'),
+        ),
+        filename: repository,
+      },
+      {
+        name: 'the database client and a transaction client, whose teacher delegates are accessors, not rows (DECISION (T102))',
+        code: withShapes(
+          [
+            "import type { Prisma, PrismaClient } from '@prisma/client';",
+            'export declare function openDatabase(url: string): PrismaClient;',
+            'export declare function transactionOf(database: PrismaClient): Prisma.TransactionClient;',
+          ].join('\n'),
+        ),
+        filename: repository,
+      },
     ],
     invalid: [
       refused({
@@ -550,6 +576,51 @@ typeAwareRuleTester().run(
         name: 'a curried function whose returned function returns teachers (Minor 4)',
         code: 'export const list = () => (): TeacherCard[] => [];',
         method: 'list',
+      }),
+
+      // The condition under T055, met with T102 once the real client is generated. Prisma resolves
+      // every row type of a model to a nameless type, so these are refused by the model the type
+      // was built from, never by a name in the code: the first alias deliberately avoids
+      // `Teacher…`, which the rule would otherwise match by its name alone.
+      refused({
+        name: 'the generated teacher_profiles payload under an alias that does not name a teacher (condition under T055)',
+        code: [
+          "import type { Prisma } from '@prisma/client';",
+          'type ProfileCard = Prisma.TeacherProfileGetPayload<{ select: { id: true; bio: true } }>;',
+          'export declare function findProfile(id: string): Promise<ProfileCard | null>;',
+        ].join('\n'),
+        method: 'findProfile',
+        teacher: 'TeacherProfile',
+      }),
+      refused({
+        name: 'the generated teacher_profiles payload of a select, inferred with no annotation at all (condition under T055)',
+        code: [
+          "import type { PrismaClient } from '@prisma/client';",
+          'declare const prisma: PrismaClient;',
+          'export async function findProfile(id: string) {',
+          '  return prisma.teacherProfile.findUnique({ where: { id }, select: { id: true, bio: true } });',
+          '}',
+        ].join('\n'),
+        method: 'findProfile',
+        teacher: 'TeacherProfile',
+      }),
+      refused({
+        name: 'the generated teacher_profiles rows of a findMany with no select, inferred with no annotation (condition under T055)',
+        code: [
+          "import type { PrismaClient } from '@prisma/client';",
+          'declare const prisma: PrismaClient;',
+          'export async function listProfiles() {',
+          '  return prisma.teacherProfile.findMany();',
+          '}',
+        ].join('\n'),
+        method: 'listProfiles',
+        teacher: 'TeacherProfile',
+      }),
+      refused({
+        name: 'the generated TeacherProfile model type, whose name Prisma does not keep (condition under T055)',
+        code: "export declare function findProfile(id: string): Promise<import('@prisma/client').TeacherProfile | null>;",
+        method: 'findProfile',
+        teacher: 'TeacherProfile',
       }),
     ],
   },
