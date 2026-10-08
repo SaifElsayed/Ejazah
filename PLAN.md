@@ -1,16 +1,34 @@
 # Ijazah — Phase Plan
 
-One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by ADR 0005 (managed escrow retired) and ADR 0007 (direct gateway checkout, 0% commission, zero custody).
+One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3 and constitution v2.3.1. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change) and ADR 0010 (the database refuses double booking). The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
 
-| Phase | Spec | Weeks | Depends on |
-|---|---|---|---|
-| 0 — Foundations | `specs/001-foundations/` | 1–2 | — |
-| 1 — Identity and teacher onboarding | `specs/002-identity/` | 3–5 | 0 |
-| 2 — Catalog, discovery, booking | `specs/003-booking/` | 5–8 | 1 |
-| 3 — Live sessions | `specs/004-sessions/` | 8–13 | 2 |
-| 4 — Certification, reviews, notifications | `specs/005-certification/` | 12–15 | 2 |
-| 5 — Retired (managed payments, ADR 0005) | — | — | — |
-| 6 — Hardening and store submission | `specs/007-submission/` | 15–17 | all |
+| Phase | Spec | Working days | Day numbers | Depends on |
+|---|---|---|---|---|
+| 0 — Foundations | `specs/001-foundations/` | 2 remaining (of 5, started 2026-10-06) | — | — |
+| 1 — Identity and teacher onboarding | `specs/002-identity/` | 7 | 1–7 | 0 |
+| 2 — Catalog, discovery, booking | `specs/003-booking/` | 8 | 8–15 | 1 |
+| 3 — Live sessions | `specs/004-sessions/` | 7 | 16–22 | 2 |
+| 4 — Certification, reviews, notifications | `specs/005-certification/` | 5 | 23–27 | 2 |
+| 5 — Retired (managed payments, ADR 0005) | — | — | — | — |
+| 6 — Hardening and store submission | `specs/007-submission/` | 3 | 28–30 | all |
+
+Day numbers count working days after Phase 0 closes; the calendar is the owner's (five working days a week). The original week table assumed a team of three over seventeen weeks and is superseded.
+
+## Schedule and working method (revised 2026-10-08)
+
+**The commitment.** Thirty working days after Phase 0 closes, the whole MVP — Phases 1, 2, 3, 4 and 6 — is complete and submitted. Time after day 30 is for improvement and is not planned here.
+
+**How a phase is sized.** Each phase's days above were set from its share of SRS requirement ids (44 for Phase 1, 38 for Phase 2, 39 for Phase 3, 29 for Phase 4) and from its weight: Phase 1 carries the first mobile surface (design tokens, RTL, the three feature trees, the admin shell); Phase 2 carries the real gateway, the webhooks, the two-axis booking guards and Cairo DST; Phase 3 carries the session state machine and the video adapter; Phase 4 carries the certificate itself; Phase 6 is proving and packaging, and most of its hands-on steps are the owner's (store accounts, hosting, two physical devices, the restore drill).
+
+**One Spec Kit cycle per phase.** Every phase gets its own `specs/<nnn>-<name>/` written with the same cycle as Phase 0, in this order: `/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`. The cycle reads this file, the SRS, ARCHITECTURE, the ERD, the ADRs and the constitution, so this file is kept current before each cycle runs. The cycle for Phase 1 runs at the opening of Phase 1 and is counted inside its seven days. For every later phase the cycle runs on the last day of the phase before it and is counted inside that earlier phase's days, so implementation starts on the phase's first day.
+
+**How a phase is run.** The working method of Phase 0's final week continues unchanged: the tasks of a phase are grouped into batches of at most six tasks, in dependency order, tests written before implementation; a batch is one branch cut from `develop`, one pull request, one review; two batches in flight never write the same file or mark adjacent lines of `tasks.md`; only Critical and Major findings block a merge, the rest are recorded as follow-ups, at most two review rounds, strict on security. A batch may exceed six tasks only when there is a real need, and a new task goes where it belongs, never into a batch because it has room.
+
+**Extending a phase.** A phase may take one or two days more than its number above only when the plan or tasks cycle, or implementation, uncovers a real need — the video spike's outcome enlarging Phase 3, for example — and only if the extension is stated at that moment with its cause. No phase carries a reserve from the start; the thirty days are the plan, not an estimate.
+
+**When a phase slips anyway.** The descope ladder at the end of this file is applied in its order, cut by cut, before any later phase gives up days. Nothing under "Never cut" is touched.
+
+**Order between Phases 3 and 4.** Both depend only on Phase 2. The plan runs 3 before 4. If the video baseline spike (Phase 0, T123) is still open or concludes against the assumed approach when Phase 2 closes, Phase 4 runs first and Phase 3 is specified once the spike has an outcome.
 
 ---
 
@@ -80,6 +98,12 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Verification queue: approve, reject, request more, ban
 - Post-approval payout setup in-app via the payment port; recipient reference stored encrypted; teacher invisible and unbookable until the gateway verifies it (ADR 0007 D3)
 
+**Decisions since this plan was written, carried out here**
+
+- Payout setup is the first consumer of the gateway's `recipient_verified` and `recipient_rejected` events, so this phase decides, as an ERD change before that work, how such an event is routed to its teacher: a hash column beside `teacher_profiles.payout_account_ref_encrypted`, or a nullable `teacher_user_id` on `payment_events` (note under T117 in `specs/001-foundations/tasks.md`). The stand-in's `PayoutDetails` fields are provisional until the gateway is selected (OPEN-11).
+- No identity caller verifies a password or a one-time code before the Phase 0 rate limits (T103) are in place, and identity validation caps password length (NIST 800-63B); both recorded from the review of PR #46.
+- Every setting an identity flow reads (OTP expiry, attempt limits, terms version) comes through the kernel's `SettingsReader` from the `settings` table seeded in Phase 0, never a constant.
+
 **Definition of done**
 
 - A teacher applies end to end on a physical device
@@ -116,6 +140,19 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Real gateway adapter (OPEN-11)
 - Admin payments monitor, read-only
 
+**Decisions since this plan was written, carried out here**
+
+- Checkout experience is driven by server state (ADR 0008 D1, FR-PAYG-17/18): Checkout → hosted checkout → Processing, subscribed to the enrollment's status → success only when the server reports Confirmed; after the configurable confirmation timeout the student is released with a Confirming badge, resolved by the payment-confirmed push.
+- Client-retried mutations are made safe through the `idempotency_keys` table and kernel built in Phase 0 (ADR 0008 D2, FR-042); webhook replay safety stays on the provider event id of `payment_events`.
+- The database refuses double booking on both axes (ADR 0010 D1–D3, FR-BOOK-5): a hold is written first and then checked, through the exclusion constraints modelled in Phase 0 (T141).
+- A slot hold outlives the gateway order by an admin-configurable grace, and a failed order keeps it (ADR 0010 D4, FR-BOOK-9, FR-PAYG-6).
+- Every paid event is recorded and `confirm-enrollment` runs for it; where the guards refuse the confirmation, a compensation case opens on the enrollment (`disputes.kind = compensation_case`) and nothing is confirmed (ADR 0010 D5, FR-PAYG-19, FR-DISPUTE-5).
+- A student is in at most one checkout at a time, and a new checkout ends the old hold (ADR 0010 D6, FR-BOOK-12).
+- Any release of a hold without conversion cancels its enrollment in the same transaction, with the reason the table in ADR 0010 D7 gives (`payment_expired`, `payment_failed`, `checkout_abandoned`, `slot_unavailable`).
+- Session generation writes a session's local date, local start and IANA zone as the fact and its UTC instants as a declared cache, and the worker's `tzdata-reresolve` job recomputes the cache for scheduled sessions when the runtime's time zone data changes (ADR 0009 D1–D3, FR-SESS-20). Wherever a session's time is shown, it appears in the teacher's zone and in the viewer's (ADR 0009 D5).
+- The real gateway adapter adds its member to `PaymentGateway`; production already refuses the `fake` stand-in through configuration (Phase 0, T146).
+- The gender-enforcement suite was wired as a blocking gate in Phase 0; its case coverage grows here, where teacher data exists to attack.
+
 **Definition of done**
 
 - A student finds a teacher, holds a slot, pays on the gateway sandbox, and the signed webhook confirms the enrollment and generates sessions with no human step
@@ -151,6 +188,12 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Cancellation by mutual agreement
 - Admin review queues for under-threshold and outage
 
+**Decisions since this plan was written, carried out here**
+
+- Compensation is an administrative matter outside the code path (FR-DISPUTE-5/6, OPEN-10 resolved): every enrollment-level termination that leaves paid sessions undelivered opens a compensation case, and the admin's binding resolution records what Platform Administration did outside the platform. No refund, wallet or balance exists in code.
+- The session screens show every time twice, in the session's own zone and in the viewer's (ADR 0009 D5).
+- The size of this phase depends on the Phase 0 video baseline spike (T123); if the spike concludes against the assumed approach, this phase is re-planned before its Spec Kit cycle, and Phase 4 may run first (see the schedule section).
+
 **Definition of done**
 
 - A session runs on two physical devices over mobile data
@@ -183,6 +226,13 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Delivery job with retry
 - User reports and block
 - Admin settings surface
+
+**Decisions since this plan was written, carried out here**
+
+- Uploaded (Mode B) certificates are content-sniffed, size-limited and stored under the encrypted, signed-URL regime of verification documents, and the public verification page says plainly that such a certificate was uploaded by the teacher and is not platform-generated (FR-IJAZAH-13/14).
+- The certificate number is sixteen Crockford base32 symbols stored without separators and displayed as 4-4-4-4; the verification token is 32 random bytes in base64url — both minted by the Phase 0 identifiers module (T105).
+- The Arabic RTL PDF spike (Phase 0, T124) decides the rendering approach for the 25-entry chain before this phase's Spec Kit cycle.
+- Reminder jobs keyed to a session's start are rescheduled when the session's instants are recomputed (ADR 0009 D3, `reminder_offsets`).
 
 **Definition of done**
 
@@ -224,6 +274,11 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
 - Age rating and data-safety declarations
 - Demo account seeded for reviewers
 
+**Decisions since this plan was written, carried out here**
+
+- Most hands-on steps of this phase are the owner's, not the implementer's: store accounts and submissions, the hosted environment, operating the staging dataset, the walk-through on two physical devices and the restore drill. The implementer's three days cover the adversarial suite, the manual pass on the gender rules, the performance verification, the store copy in both languages and the reviewer account.
+- The full-codebase review that the Phase 0 schedule planned as a separate week is not inside the thirty days: it runs after day 30, in the improvement time, once the MVP is complete. Within the thirty days every batch still gets its own review.
+
 **Why separate this**
 
 Because no new features are added here, and every team that breaks that rule resubmits in month five.
@@ -238,14 +293,14 @@ Because no new features are added here, and every team that breaks that rule res
 
 ## Descope ladder
 
-Cut in this order if a gate slips.
+Cut in this order if a gate slips. The phase each cut belongs to is in brackets, so a slipping phase knows which of its own deliverables go first.
 
-- Reviews and ratings
-- In-session file sharing, keeping text chat
-- Public certificate verification page
-- Uploaded certificates, shipping generated only
-- Notification breadth
-- Admin settings UI
-- One store first
+- Reviews and ratings (Phase 4)
+- In-session file sharing, keeping text chat (Phase 3)
+- Public certificate verification page (Phase 4)
+- Uploaded certificates, shipping generated only (Phase 4)
+- Notification breadth (Phase 4)
+- Admin settings UI (Phase 4)
+- One store first (Phase 6)
 
 **Never cut:** gender enforcement, product honesty about payment (R-HONEST-1), timezone handling, the security baseline.
