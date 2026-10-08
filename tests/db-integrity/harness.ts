@@ -26,9 +26,20 @@
 // needs; tables a later schema task models (T057–T061) are written from the ERD and meet the real
 // columns once those tasks land — until then, and until the migrations of T064–T066 exist, every
 // probe is red by design (batch plan: red from S3a until S4).
-import 'dotenv/config';
+import { config as readDotenv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
+
+// `.env` is read into a scratch object, and only the two database URLs are taken from it, each only
+// when the environment does not already carry it. Loading the whole file into `process.env` would
+// bring back a provider key the test setup removed (tests/support/no-provider-keys.setup.ts; T114,
+// PR #49 review m1, SC-005).
+const fromDotenv: Record<string, string> = {};
+readDotenv({ processEnv: fromDotenv, quiet: true });
+for (const key of ['DATABASE_URL', 'DATABASE_URL_OWNER'] as const) {
+  const value = fromDotenv[key];
+  if (process.env[key] === undefined && value !== undefined) process.env[key] = value;
+}
 
 export type Db = pg.Client;
 

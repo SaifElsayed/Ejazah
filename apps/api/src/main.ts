@@ -5,8 +5,9 @@
 // exits 1 naming the offending keys before anything is built, logged or listening (T093). Everything
 // else is loaded only after it returns, so a refusal loads nothing but the configuration schema and
 // stays quick. Then reporting is started (T111), the logger created (T100), the database client
-// opened (T102), the admin module's settings reader bound (T113), and the application with both
-// surfaces mounted (T149) and the health routes registered (T110) made to listen.
+// opened (T102), the admin module's settings reader bound (T113), each port's provider selected
+// (T121), and the application with both surfaces mounted (T149) and the health routes registered
+// (T110) made to listen.
 import { loadConfigOrExit } from './platform/config/config.module.js';
 
 const config = loadConfigOrExit();
@@ -18,6 +19,7 @@ const [
   { ReadinessRepository },
   { requireSettingsReader },
   { createSettingsReader },
+  { selectPorts },
   { createApplication },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
@@ -26,6 +28,7 @@ const [
   import('./platform/db/readiness.repository.js'),
   import('./platform/settings/settings-reader.js'),
   import('./modules/admin/index.js'),
+  import('./platform/ports/ports.module.js'),
   import('./app.module.js'),
 ]);
 
@@ -38,6 +41,11 @@ const database = openDatabase(config.DATABASE_URL);
 // rate limits, the idempotent procedures of the surfaces). No key is read here: the store is empty
 // until the seed (T074), and an empty store must not stop the process booting.
 const settings = requireSettingsReader(createSettingsReader(database));
+
+// Each port's provider is chosen here, once, from the configuration (T121, FR-056), and handed to
+// each module as its first consumer arrives. The request process never holds the push port
+// (R-API-15).
+const ports = selectPorts(config);
 
 const application = await createApplication({
   log,

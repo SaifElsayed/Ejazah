@@ -1,4 +1,5 @@
-// T115: the storage contract (FR-055, R-SEC-3), run against both real implementations of T116.
+// T115: the storage contract (FR-055, R-SEC-3), run against both real implementations of T116, and,
+// since T122, against the in-memory stand-in, which must keep the same contract as what it stands in for.
 //
 // "No durable public path" is held twice. The port's operations are exactly four, and the type
 // check below fails the moment a fifth appears; at run time the only operation that returns text
@@ -22,6 +23,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { addSeconds } from '@ijazah/time';
 import { afterAll, describe, expect, expectTypeOf, it } from 'vitest';
+import { InMemoryStorageAdapter } from './in-memory.adapter.js';
 import { deriveLinkKey, LocalStorageAdapter } from './local.adapter.js';
 import { S3StorageAdapter } from './s3.adapter.js';
 import { MAX_LINK_SECONDS, type StoragePort } from './storage.port.js';
@@ -49,6 +51,21 @@ function local(): Subject {
     linkKey: deriveLinkKey(ENCRYPTION_KEY),
     now: () => now,
   });
+  return {
+    storage,
+    honouredAfter: (link, seconds) => {
+      now = new Date(addSeconds(ISSUED, seconds));
+      const honoured = storage.verifyLink(link) !== undefined;
+      now = ISSUED;
+      return honoured;
+    },
+  };
+}
+
+/** The stand-in (T122), on the same fixed clock as the local implementation. */
+function memory(): Subject {
+  let now = ISSUED;
+  const storage = new InMemoryStorageAdapter({ now: () => now });
   return {
     storage,
     honouredAfter: (link, seconds) => {
@@ -115,6 +132,7 @@ describe('the storage port (T115, FR-055, R-SEC-3)', () => {
 describe.each([
   { name: 'local', make: local },
   { name: 'remote', make: remote },
+  { name: 'in-memory stand-in', make: memory },
 ])('the $name storage (T115, FR-055, R-SEC-3)', ({ make }) => {
   it('stores, reports and removes an object, and returns no path for it', async () => {
     const { storage } = make();

@@ -5,12 +5,17 @@
 // T133) is exercised without a network: a body signed with HMAC-SHA256 under the webhook secret in
 // the `x-fake-signature` header, or under a random secret for the incorrect one. Producing a
 // correctly signed event is the gateway acting, so the order or recipient takes its new state; an
-// incorrectly signed one changes nothing. Recording calls and induced failure are T122's.
+// incorrectly signed one changes nothing. T122: it records each operation it was asked to do and
+// fails one when told, before anything changes; a signed body it cannot read is a rejection with
+// `MalformedEventError`, never a synchronous throw, and quotes nothing of the body (review of
+// PR #45, m1; R-SEC-2).
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { piasters, type Piasters } from '@ijazah/money';
 import { z } from 'zod';
+import { StandIn } from '../stand-in.js';
 import {
   EventSignatureError,
+  MalformedEventError,
   type CancelOutcome,
   type Checkout,
   type GatewayEvent,
@@ -74,21 +79,29 @@ const eventBody = z.discriminatedUnion('type', [
 
 type EventBody = z.input<typeof eventBody>;
 
-export class FakePaymentAdapter implements PaymentPort {
+export class FakePaymentAdapter extends StandIn<PaymentPort> implements PaymentPort {
   readonly #webhookSecret: string;
   readonly #orders = new Map<string, Order>();
   readonly #recipients = new Map<string, RecipientStatus>();
 
   constructor(options: { readonly webhookSecret: string }) {
+    super();
     this.#webhookSecret = options.webhookSecret;
   }
 
   createCheckout(
-    _enrollmentId: string,
+    enrollmentId: string,
     gross_piasters: Piasters,
     currency: string,
-    _latestExpiry: Date,
+    latestExpiry: Date,
   ): Promise<Checkout> {
+    const failure = this.attempt('createCheckout', [
+      enrollmentId,
+      gross_piasters,
+      currency,
+      latestExpiry,
+    ]);
+    if (failure !== undefined) return Promise.reject(failure);
     if (!/^[A-Z]{3}$/.test(currency)) {
       return Promise.reject(new RangeError('A currency is three capital letters (ISO 4217).'));
     }
@@ -101,8 +114,11 @@ export class FakePaymentAdapter implements PaymentPort {
   }
 
   cancelCheckout(gatewayOrderId: string): Promise<CancelOutcome> {
+    const failure = this.attempt('cancelCheckout', [gatewayOrderId]);
+    if (failure !== undefined) return Promise.reject(failure);
     const order = this.#orders.get(gatewayOrderId);
-    if (order === undefined) return Promise.reject(new Error('unknown order: the stand-in did not create it.'));
+    if (order === undefined)
+      return Promise.reject(new Error('unknown order: the stand-in did not create it.'));
     if (order.status === 'paid' || order.status === 'refunded') return Promise.resolve('paid');
     order.status = order.status === 'created' ? 'cancelled' : order.status;
     return Promise.resolve('cancelled');
@@ -112,6 +128,8 @@ export class FakePaymentAdapter implements PaymentPort {
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,
   ): Promise<GatewayEvent> {
+    const failure = this.attempt('verifyAndParseEvent', [rawBody, headers]);
+    if (failure !== undefined) return Promise.reject(failure);
     const signature = Object.entries(headers).find(
       ([name]) => name.toLowerCase() === SIGNATURE_HEADER,
     )?.[1];
@@ -120,7 +138,13 @@ export class FakePaymentAdapter implements PaymentPort {
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
       return Promise.reject(new EventSignatureError());
     }
-    const body = eventBody.parse(JSON.parse(rawBody.toString('utf8')));
+    let body: z.output<typeof eventBody>;
+    try {
+      body = eventBody.parse(JSON.parse(rawBody.toString('utf8')));
+    } catch {
+      // The parser's message can quote the body; the refusal carries none of it (R-SEC-2).
+      return Promise.reject(new MalformedEventError());
+    }
     switch (body.type) {
       case 'paid':
         return Promise.resolve({
@@ -151,13 +175,17 @@ export class FakePaymentAdapter implements PaymentPort {
     }
   }
 
-  registerPayoutRecipient(_teacherUserId: string, _details: PayoutDetails): Promise<string> {
+  registerPayoutRecipient(teacherUserId: string, details: PayoutDetails): Promise<string> {
+    const failure = this.attempt('registerPayoutRecipient', [teacherUserId, details]);
+    if (failure !== undefined) return Promise.reject(failure);
     const recipientRef = `fake_rcp_${randomUUID()}`;
     this.#recipients.set(recipientRef, 'pending');
     return Promise.resolve(recipientRef);
   }
 
   getRecipientStatus(recipientRef: string): Promise<RecipientStatus> {
+    const failure = this.attempt('getRecipientStatus', [recipientRef]);
+    if (failure !== undefined) return Promise.reject(failure);
     const status = this.#recipients.get(recipientRef);
     if (status === undefined) {
       return Promise.reject(new Error('unknown recipient: the stand-in did not register it.'));

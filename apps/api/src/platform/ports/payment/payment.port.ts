@@ -61,13 +61,8 @@ export type GatewayEvent =
       readonly recipientRef: string;
     };
 
-/** An inbound event whose signature is absent or does not hold. The webhook answers 401. */
-export class EventSignatureError extends Error {
-  constructor() {
-    super('The event signature is absent or invalid.');
-    this.name = 'EventSignatureError';
-  }
-}
+// The refusals of an inbound event, shared with the video port since T118.
+export { EventSignatureError, MalformedEventError } from '../inbound-event.js';
 
 export interface PaymentPort {
   /** An order for `gross_piasters` that expires no later than `latestExpiry`, where the gateway lets it be set (ADR 0010 D4). */
@@ -79,7 +74,10 @@ export interface PaymentPort {
   ): Promise<Checkout>;
   /** End an unpaid order before a new checkout (FR-BOOK-12, ADR 0010 D6). Moves no money. */
   cancelCheckout(gatewayOrderId: string): Promise<CancelOutcome>;
-  /** The only way a payment or recipient status becomes known. Throws `EventSignatureError`. */
+  /**
+   * The only way a payment or recipient status becomes known. Rejects with `EventSignatureError` on an
+   * absent or invalid signature, and `MalformedEventError` on a signed body it cannot read.
+   */
   verifyAndParseEvent(
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,
