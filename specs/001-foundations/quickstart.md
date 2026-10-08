@@ -25,6 +25,7 @@ Each section maps to success criteria in [spec.md](./spec.md).
 
 ```bash
 pnpm install
+pnpm db:generate          # the database client is generated from prisma/schema, never committed; rerun after a schema change
 cp .env.example .env
 openssl rand -base64 32   # paste the output into ENCRYPTION_KEY in .env; it is required in every environment
 pnpm infra:up

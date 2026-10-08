@@ -65,6 +65,29 @@
 // behind an index signature, and a teacher returned under a type whose name does not carry
 // `Teacher` (the condition under T055 closes the generated payload case).
 //
+// DECISION (T102, the condition under T055, 2026-10-08) — the generated client's payloads. Prisma
+// resolves a model's row type — `TeacherProfile` itself, `Prisma.TeacherProfileGetPayload<…>`, and
+// the type a `findUnique({ select })` returns, annotated or inferred — to an anonymous mapped type
+// declared in its runtime, which carries no name at all: the name test above never sees
+// `TeacherProfile`, even where the code writes it. Such a type is read as the model it was built
+// from, the `$<Model>Payload` type the generated client declares, found in one of two places: the
+// type arguments its instantiation was made with (a `select` row, whose properties are synthetic),
+// or the declarations of its properties (a full row's are declared in that payload type). The
+// first is read through the checker's `mapper`, which the TypeScript API does not publish;
+// TypeScript is pinned, and the RuleTester cases of this condition fail if it moves. A payload of a
+// model whose name carries `Teacher` is a teacher, reported under the model's name; a payload of
+// any other model, such as a settings row, is not. Only a type declared inside the generated
+// client (`@prisma/client` or `.prisma/client`) is read this way.
+//
+// DECISION (T102, 2026-10-08) — the database client is not teacher data. The client carries a
+// delegate per model (`teacherProfile: TeacherProfileDelegate`), so one property step down it
+// would read as teachers, and `platform/db/prisma.repository.ts`, which T036 made a repository
+// file so it may name the client, would be refused for returning it. A type carrying a `$` member
+// declared in the generated client (the client, a transaction client, an extended client) is
+// therefore never stepped into. Teacher rows are still caught where they are read: in the
+// repository of the module that owns the table (R-API-6), whose methods return what the delegate
+// returns. Handing the client itself to another file is R-API-2's and R-API-6's, not this rule's.
+//
 // DECISION (T046, 2026-10-05) — "takes the requester's gender" is a type-level fact too. The
 // signature must have a required parameter, or a required property of a required options parameter,
 // that is not nullable and whose type is `RequesterGender`: the gender value branded in the kernel
@@ -166,10 +189,80 @@ function unwrap(checker, type, reached = new Set()) {
   return reached;
 }
 
+// The generated client's files: the package and the output it generates beside it.
+const CLIENT_FILE = /(^|\/)(@prisma\/client|\.prisma\/client)\//;
+// The payload type the generated client declares for each model: `$TeacherProfilePayload`.
+const PAYLOAD = /^\$(\w+)Payload$/;
+// How far a chain of the checker's mappers is followed; a composite mapper holds two at each level.
+const MAPPER_DEPTH = 8;
+
+function inClient(declaration) {
+  return CLIENT_FILE.test(declaration.getSourceFile().fileName.split(path.sep).join('/'));
+}
+
+/** The model a `$<Model>Payload` alias of the generated client names, or null. */
+function payloadModelOf(symbol) {
+  const match = symbol === undefined ? null : PAYLOAD.exec(symbol.name);
+  if (match === null || !(symbol.declarations ?? []).some(inClient)) return null;
+  return match[1];
+}
+
+/** The types an instantiation was made with, read from the checker's (unpublished) mapper. */
+function mapperTargets(mapper, depth = 0, found = []) {
+  if (mapper === undefined || mapper === null || depth > MAPPER_DEPTH) return found;
+  const targets = [mapper.target, ...(Array.isArray(mapper.targets) ? mapper.targets : [])];
+  for (const target of targets) {
+    if (target !== null && typeof target === 'object' && typeof target.flags === 'number') {
+      found.push(target);
+    }
+  }
+  mapperTargets(mapper.mapper1, depth + 1, found);
+  mapperTargets(mapper.mapper2, depth + 1, found);
+  return found;
+}
+
+/** The model of the payload alias a property was declared in, walking up from its declaration. */
+function declaringPayload(declaration) {
+  for (let node = declaration; node !== undefined; node = node.parent) {
+    if (ts.isTypeAliasDeclaration(node)) {
+      const match = PAYLOAD.exec(node.name.text);
+      return match !== null && inClient(node) ? match[1] : null;
+    }
+  }
+  return null;
+}
+
+/** The model a row type of the generated client was built from, or null. */
+function generatedModel(type) {
+  if (!isObjectType(type) || !(type.getSymbol()?.declarations ?? []).some(inClient)) return null;
+  for (const target of mapperTargets(type.mapper)) {
+    const model = payloadModelOf(target.aliasSymbol);
+    if (model !== null) return model;
+  }
+  for (const property of type.getProperties()) {
+    for (const declaration of property.declarations ?? []) {
+      const model = declaringPayload(declaration);
+      if (model !== null) return model;
+    }
+  }
+  return null;
+}
+
+/** The database client, or a transaction or extended client: it carries a `$` member of the client. */
+function isDatabaseClient(type) {
+  return type
+    .getProperties()
+    .some(
+      (property) => property.name.startsWith('$') && (property.declarations ?? []).some(inClient),
+    );
+}
+
 function teacherNamed(types) {
   for (const type of types) {
     const named = readableNames(type).find((name) => TEACHER.test(name));
     if (named !== undefined) return named;
+    const model = generatedModel(type);
+    if (model !== null && TEACHER.test(model)) return model;
   }
   return null;
 }
@@ -185,6 +278,8 @@ function teacherIn(checker, type) {
     if (!isObjectType(holder) || checker.isArrayType(holder) || checker.isTupleType(holder)) {
       continue;
     }
+    // The client's delegates are accessors, not rows (DECISION (T102) above).
+    if (isDatabaseClient(holder)) continue;
     for (const property of checker.getPropertiesOfType(holder)) {
       const below = teacherNamed(unwrap(checker, checker.getTypeOfSymbol(property)));
       if (below !== null) return below;
