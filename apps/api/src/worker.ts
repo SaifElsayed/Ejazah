@@ -3,8 +3,9 @@
 //
 // `loadConfigOrExit` is the first call (note under T015), so the worker refuses an invalid
 // configuration exactly as the request process does (T093). Everything else is loaded only after it
-// returns. Then reporting is started (T111), the logger created (T100), every sweep registered on
-// its schedule, and the queue's deliveries run through the registered jobs (T112).
+// returns. Then reporting is started (T111), the logger created (T100), the database client opened
+// (T102), the admin module's settings reader bound (T113), every sweep registered on its schedule,
+// and the queue's deliveries run through the registered jobs (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
 // injection, so each is handed what it needs here, and `dev:worker` runs this file under `tsx`.
@@ -13,16 +14,31 @@ import type { Job } from './jobs/job.js';
 
 const config = loadConfigOrExit();
 
-const [{ initReporting }, { createLogger }, queueing] = await Promise.all([
+const [
+  { initReporting },
+  { createLogger },
+  { closeDatabase, openDatabase },
+  { requireSettingsReader },
+  { createSettingsReader },
+  queueing,
+] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
+  import('./platform/db/prisma.repository.js'),
+  import('./platform/settings/settings-reader.js'),
+  import('./modules/admin/index.js'),
   import('./jobs/queue.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
 const log = createLogger({ level: config.LOG_LEVEL });
+const database = openDatabase(config.DATABASE_URL);
 
-// Every job the worker runs. A job is added here by the task that writes it.
+// Every operational number a job reads comes through this reader (FR-034); the worker refuses to
+// start without one. No key is read here: the store is empty until the seed (T074).
+const settings = requireSettingsReader(createSettingsReader(database));
+
+// Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [];
 
 const connection = queueing.connectionFor(config.REDIS_URL);
@@ -37,6 +53,7 @@ async function stop(signal: NodeJS.Signals): Promise<void> {
   log.info({ signal }, 'Worker stopping');
   await worker.close();
   await queue.close();
+  await closeDatabase(database);
   process.exit(0);
 }
 
