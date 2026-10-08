@@ -20,6 +20,9 @@ const [
   { closeDatabase, openDatabase },
   { requireSettingsReader },
   { createSettingsReader },
+  { IdempotencyService },
+  { IdempotencyRepository },
+  { expireIdempotencyKeys },
   queueing,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
@@ -27,6 +30,9 @@ const [
   import('./platform/db/prisma.repository.js'),
   import('./platform/settings/settings-reader.js'),
   import('./modules/admin/index.js'),
+  import('./platform/idempotency/idempotency.service.js'),
+  import('./platform/idempotency/idempotency.repository.js'),
+  import('./jobs/expire-idempotency-keys.js'),
   import('./jobs/queue.js'),
 ]);
 
@@ -38,8 +44,13 @@ const database = openDatabase(config.DATABASE_URL);
 // start without one. No key is read here: the store is empty until the seed (T074).
 const settings = requireSettingsReader(createSettingsReader(database));
 
+const idempotency = new IdempotencyService({
+  store: new IdempotencyRepository(database),
+  settings,
+});
+
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
-const jobs: readonly Job[] = [];
+const jobs: readonly Job[] = [expireIdempotencyKeys(idempotency)];
 
 const connection = queueing.connectionFor(config.REDIS_URL);
 const queue = queueing.openQueue(connection);
