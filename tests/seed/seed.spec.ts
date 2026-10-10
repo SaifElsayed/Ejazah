@@ -16,7 +16,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import { verifyPassword } from '../../apps/api/src/platform/crypto/hashing.js';
-import * as seedModule from '../../prisma/seed';
+import { seed } from '../../prisma/seed';
 import {
   MIGRATE_TIMEOUT_MILLISECONDS,
   connect,
@@ -24,14 +24,6 @@ import {
   migrate,
   type FreshDatabase,
 } from './fresh-database';
-
-interface Queryable {
-  query(text: string, values?: readonly unknown[]): Promise<unknown>;
-}
-interface SeedApi {
-  seed(db: Queryable, options: { readonly encryptionKey: string }): Promise<void>;
-}
-const { seed } = seedModule as unknown as SeedApi;
 
 const ADMINISTRATOR_ID = '01a1231c-0000-7000-8000-000000000001';
 

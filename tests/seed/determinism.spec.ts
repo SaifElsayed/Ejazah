@@ -15,14 +15,13 @@
 // A checksum that never changes would pass every comparison above, so the last case shows it does:
 // one setting changed, inside a transaction rolled back, gives another checksum.
 //
-// The seed and the checksum are imported as namespaces and cast to the API declared here until
-// T074 and T075 export them: a named import from a module that still reads `export {}` would fail
-// `pnpm typecheck` rather than this spec.
+// Written before T074 and T075, it imported the two as namespaces cast to a declared API, so
+// `pnpm typecheck` stayed green while it was red; since T075 it imports them by name.
 import { randomBytes } from 'node:crypto';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import * as seedModule from '../../prisma/seed';
-import * as checksumModule from '../../scripts/seed-checksum';
+import { seed } from '../../prisma/seed';
+import { seedChecksum } from '../../scripts/seed-checksum';
 import {
   MIGRATE_TIMEOUT_MILLISECONDS,
   connect,
@@ -30,18 +29,6 @@ import {
   migrate,
   type FreshDatabase,
 } from './fresh-database';
-
-interface Queryable {
-  query(text: string, values?: readonly unknown[]): Promise<unknown>;
-}
-interface SeedApi {
-  seed(db: Queryable, options: { readonly encryptionKey: string }): Promise<void>;
-}
-interface ChecksumApi {
-  seedChecksum(db: Queryable): Promise<string>;
-}
-const { seed } = seedModule as unknown as SeedApi;
-const { seedChecksum } = checksumModule as unknown as ChecksumApi;
 
 /** A zone fourteen hours ahead of UTC, so its calendar date is another day for most of the day. */
 const SHIFTED_ZONE = 'Pacific/Kiritimati';
