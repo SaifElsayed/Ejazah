@@ -288,7 +288,8 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T072 [P] [US3] Determinism test in `tests/seed/determinism.spec.ts` — seeding twice produces an identical checksum, and seeding under a shifted clock and timezone produces the same one
+- [x] T072 [P] [US3] Determinism test in `tests/seed/determinism.spec.ts` — seeding twice produces an identical checksum, and seeding under a shifted clock and timezone produces the same one — done 2026-10-10
+  > **Note under T072 (batch D, 2026-10-10).** The spec migrates two empty databases of its own, created beside the one `DATABASE_URL_OWNER` names (so that role must be allowed to CREATE DATABASE, as the development image's owner is) and dropped after; the shared helper is `tests/seed/fresh-database.ts`, outside the task's path, also used by T073. The seed and the checksum run as the application role. The first database is seeded twice; the second is seeded with the process clock moved to 2031, the process zone and the database session's zone moved to `Pacific/Kiritimati` (UTC+14), and later in real time, so a column left to the server's `now()` would differ as well; each run has an `ENCRYPTION_KEY` of its own. All three checksums must be equal, and a last case shows the checksum changes when one setting does, so the equalities can fail. Red until T074 and T075 export `seed` and `seedChecksum`.
 - [ ] T073 [P] [US3] Clean-migrate test in `tests/seed/migrate-from-empty.spec.ts` — the full history applies to an empty database in one run and yields every table in the model and none outside it (SC-006)
 
 ### Implementation for User Story 3
