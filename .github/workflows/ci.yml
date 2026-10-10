@@ -362,3 +362,28 @@ jobs:
             exit 1
           fi
           echo "R-SEC-12: no open critical Dependabot alert"
+      # T158 — every answer to a request made with the token carries its expiry date in the
+      # GitHub-Authentication-Token-Expiration header. From fourteen days before that date, every run
+      # warns, so the step above never fails closed by surprise. This step only warns; once the token
+      # has expired, the step above fails closed on its own.
+      - name: DEPENDABOT_ALERTS_TOKEN is not about to expire (R-SEC-12)
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          headers="$(gh api --include --method GET "repos/$REPOSITORY/dependabot/alerts?per_page=1" 2>/dev/null | tr -d '\r' | sed '/^$/q')" || true
+          expiry="$(printf '%s\n' "$headers" | grep --ignore-case '^github-authentication-token-expiration:' | cut --delimiter=' ' --fields=2-)" || true
+          if [ -z "$expiry" ]; then
+            echo "::warning::R-SEC-12: GitHub returned no expiry date for DEPENDABOT_ALERTS_TOKEN; check it in the repository owner's fine-grained tokens"
+            exit 0
+          fi
+          if ! expires_at="$(date --utc --date "$expiry" +%s 2>/dev/null)"; then
+            echo "::warning::R-SEC-12: the expiry date of DEPENDABOT_ALERTS_TOKEN could not be read: $expiry"
+            exit 0
+          fi
+          days_left=$(( (expires_at - $(date --utc +%s)) / 86400 ))
+          if [ "$days_left" -lt 14 ]; then
+            echo "::warning::R-SEC-12: DEPENDABOT_ALERTS_TOKEN expires on $expiry ($days_left days left); renew it (docs/RUNBOOK.md, GitHub tokens) before the dependency-alerts job fails closed"
+          else
+            echo "DEPENDABOT_ALERTS_TOKEN expires on $expiry ($days_left days left)"
+          fi
