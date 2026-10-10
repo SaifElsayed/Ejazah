@@ -58,10 +58,29 @@ Four, and the way an endpoint declares who may call it:
 | Teacher | A caller holding the teacher role |
 | Administrator | An authenticated administrator |
 
-**The administrator kind writes its own audit record** before the handler
-returns (R-API-12, FR-049). There is no administrative route that bypasses
-auditing, because auditing is not something the handler does — it is something
-the caller kind does around the handler.
+**The administrator kind writes its own audit record** after the handler
+returns and before the call commits (R-API-12, FR-049). There is no
+administrative route that bypasses auditing, because auditing is not something
+the handler does — it is something the caller kind does around the handler. It
+opens one transaction per call, hands it to the handler as `ctx.tx`, and writes
+the records the handler described on `ctx.audit` in that same transaction, so
+the action's writes and its audit records commit or roll back together.
+
+**Every write goes through the call's transaction.** A write made through the
+process's database client instead of `ctx.tx` is outside the transaction: it
+survives a call that is refused and rolled back, so part of an action is kept
+with no audit record. So every
+write method of a module repository takes the transaction it writes in
+(`tx: Transaction`, from `apps/api/src/platform/db/`) rather than writing through
+the client the repository was built over, and an administrator handler reaches
+a module only through a function that takes `ctx.tx`.
+
+**An administrator handler awaits no outside provider.** It makes no SMS, video
+or push call through a port inside the call. The transaction has a time limit
+(Prisma's interactive transactions default to 5 seconds), and a provider that is
+slow would roll back the action and its audit record with it. Heavy work and
+notifications are already kept out of a request handler and queued (R-API-13,
+R-API-15).
 
 **Administrator identity is separate throughout** (R-SEC-8): different table,
 different token, different middleware. It is not a role on a user; it is a
