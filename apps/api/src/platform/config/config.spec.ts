@@ -72,12 +72,40 @@ describe('env.schema (T015, FR-039)', () => {
       failure = error;
     }
     expect(failure).toBeInstanceOf(ConfigError);
-    expect((failure as ConfigError).offendingKeys).toEqual(['PAYMENT_GATEWAY']);
+    // Beside the other stand-ins' keys (T153), which a production configuration also refuses.
+    expect((failure as ConfigError).offendingKeys).toContain('PAYMENT_GATEWAY');
+    expect((failure as ConfigError).message).toMatch(/PAYMENT_GATEWAY \(the stand-in gateway/);
 
     for (const nodeEnv of ['development', 'test']) {
       expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).PAYMENT_GATEWAY).toBe('fake');
     }
   });
+
+  // T153 (FR-056): the video, push and messaging stand-ins are refused in production as the payment
+  // one is (T146), each on its own key. While every key's only member is `fake`, a production
+  // configuration also carries PAYMENT_GATEWAY's refusal, so each case asserts its key is among the
+  // offending ones; development and test accept every stand-in.
+  it.each(['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SMS_PROVIDER'])(
+    'refuses %s=fake in production only, naming the key (T153)',
+    (key) => {
+      for (const value of [{ [key]: 'fake' }, {}]) {
+        let failure: unknown;
+        try {
+          loadConfig({ ...validEnv, NODE_ENV: 'production', ...value });
+        } catch (error: unknown) {
+          failure = error;
+        }
+        expect(failure).toBeInstanceOf(ConfigError);
+        expect((failure as ConfigError).offendingKeys).toContain(key);
+        expect((failure as ConfigError).message).toMatch(new RegExp(`${key} \\(the stand-in`));
+      }
+
+      for (const nodeEnv of ['development', 'test']) {
+        const config = loadConfig({ ...validEnv, NODE_ENV: nodeEnv, [key]: 'fake' });
+        expect(config[key as 'VIDEO_PROVIDER' | 'PUSH_PROVIDER' | 'SMS_PROVIDER']).toBe('fake');
+      }
+    },
+  );
 });
 
 describe('loadConfig (T015, FR-039)', () => {
@@ -261,6 +289,18 @@ describe('loadConfig (T015, FR-039)', () => {
     expect(() => loadConfig({ ...validEnv, PUBLIC_WEBHOOK_ORIGIN: 'x.example' })).toThrow(
       /PUBLIC_WEBHOOK_ORIGIN/,
     );
+  });
+
+  it('limits a request body to 1 MiB by default, and refuses a limit that is not a positive integer (T150)', () => {
+    expect(loadConfig(validEnv).MAX_REQUEST_BODY_BYTES).toBe(1_048_576);
+    expect(loadConfig({ ...validEnv, MAX_REQUEST_BODY_BYTES: '2048' }).MAX_REQUEST_BODY_BYTES).toBe(
+      2048,
+    );
+    for (const value of ['0', '-1', '1.5', 'one megabyte']) {
+      expect(() => loadConfig({ ...validEnv, MAX_REQUEST_BODY_BYTES: value })).toThrow(
+        /MAX_REQUEST_BODY_BYTES/,
+      );
+    }
   });
 
   it('reports every offending key at once, and never a value (R-SEC-2)', () => {

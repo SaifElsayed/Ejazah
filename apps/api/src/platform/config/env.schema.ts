@@ -23,6 +23,27 @@ const origin = httpUrl.refine((value) => URL.canParse(value) && new URL(value).o
   error: 'must be a bare origin: scheme and host, no path, no trailing slash',
 });
 
+// T136 (FR-076, NFR-SEC-11): the origins a browser may call the API from, as a comma-separated
+// list of bare origins; empty or absent is none. A wildcard is refused here, in the schema itself,
+// so no configuration can express one: `*`, or `*` inside an origin, which a URL parser accepts as
+// a host. Checked before the origin check, so the refusal says why.
+const allowedOrigins = z
+  .string()
+  .transform((value) => value.split(',').map((entry) => entry.trim()))
+  .pipe(
+    z.array(
+      z
+        .string()
+        .refine((entry) => !entry.includes('*'), {
+          error: 'a wildcard origin is refused; list each origin (NFR-SEC-11)',
+          abort: true,
+        })
+        .pipe(origin),
+    ),
+  );
+
+const standInProviderKeys = ['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SMS_PROVIDER'] as const;
+
 const s3Keys = [
   'S3_ENDPOINT',
   'S3_BUCKET',
@@ -35,6 +56,10 @@ const envObject = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // T150 (FR-077): the largest request body either tRPC surface reads; a larger one answers 413.
+  // 1 MiB by default. Uploads keep their own limit (NFR-SEC-9).
+  MAX_REQUEST_BODY_BYTES: z.coerce.number().int().positive().default(1_048_576),
 
   // Two roles, two connection strings (research R-5). The owner URL is accepted so a copied .env parses,
   // but the runtime never carries it: config.module.ts strips it from the loaded configuration.
@@ -62,7 +87,7 @@ const envObject = z.object({
 
   // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
   // stand-in until the phase that first calls the port adds its real member (FR-054), so each
-  // defaults to it. A production refusal like PAYMENT_GATEWAY's is not made here (follow-up of T121).
+  // defaults to it. Production refuses each stand-in below, as it refuses PAYMENT_GATEWAY's (T153).
   VIDEO_PROVIDER: z.enum(['fake']).default('fake'),
   PUSH_PROVIDER: z.enum(['fake']).default('fake'),
   SMS_PROVIDER: z.enum(['fake']).default('fake'),
@@ -74,6 +99,8 @@ const envObject = z.object({
   EXPO_ACCESS_TOKEN: nonEmpty.optional(),
 
   PUBLIC_WEBHOOK_ORIGIN: origin.optional(),
+
+  ADMIN_ALLOWED_ORIGINS: allowedOrigins.default([]),
 
   SENTRY_DSN: httpUrl.optional(),
 });
@@ -90,6 +117,7 @@ const envKeyKinds = {
   NODE_ENV: 'platform',
   PORT: 'platform',
   LOG_LEVEL: 'platform',
+  MAX_REQUEST_BODY_BYTES: 'platform',
   DATABASE_URL_OWNER: 'platform',
   DATABASE_URL: 'platform',
   REDIS_URL: 'platform',
@@ -112,6 +140,7 @@ const envKeyKinds = {
   SMS_PROVIDER_KEY: 'provider',
   EXPO_ACCESS_TOKEN: 'provider',
   PUBLIC_WEBHOOK_ORIGIN: 'provider',
+  ADMIN_ALLOWED_ORIGINS: 'platform',
   SENTRY_DSN: 'provider',
 } as const satisfies Record<keyof typeof envObject.shape, 'provider' | 'platform'>;
 
@@ -166,6 +195,21 @@ export const envSchema = envObject.superRefine((env, ctx) => {
       path: ['PAYMENT_GATEWAY'],
       message: 'the stand-in gateway is refused in production (R-HONEST-1)',
     });
+  }
+
+  // The same for the video, push and messaging stand-ins (T153, FR-056): each answers without
+  // reaching anyone, so production would hold no lesson, send no notification and deliver no
+  // one-time code while reporting success. Each is refused on its own key.
+  if (env.NODE_ENV === 'production') {
+    for (const key of standInProviderKeys) {
+      if (env[key] === 'fake') {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'the stand-in is refused in production (FR-056)',
+        });
+      }
+    }
   }
 
   if (env.STORAGE_DRIVER !== 's3') return;

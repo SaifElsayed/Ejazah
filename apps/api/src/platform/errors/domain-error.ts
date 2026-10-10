@@ -26,6 +26,7 @@ export const errorCodes = {
   FORBIDDEN: { status: 403, message: 'This action is not allowed.' },
   NOT_FOUND: { status: 404, message: 'Not found.' },
   CONFLICT: { status: 409, message: 'The request conflicts with the current state.' },
+  PAYLOAD_TOO_LARGE: { status: 413, message: 'The request is too large.' },
   RATE_LIMITED: { status: 429, message: 'Too many requests. Try again later.' },
   INTERNAL: { status: 500, message: 'Something went wrong. Try again later.' },
 } as const satisfies Record<string, { status: number; message: string }>;
