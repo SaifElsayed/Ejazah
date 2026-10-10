@@ -62,6 +62,8 @@ pnpm db:seed:checksum     # must match a teammate's again
 `pnpm db:reset` (`prisma migrate reset --force`, run as the owner) rebuilds in
 place without recreating the volume: it empties the database and applies every
 migration again. It does not run the seed, so run `pnpm db:seed` after it.
+Before running it, check that `DATABASE_URL_OWNER` in `.env` points at your
+local database: `--force` asks nothing, and every row there is deleted.
 
 How to tell that a database has diverged: `pnpm db:seed:checksum` differs from
 a teammate's on a database that holds only the seed. `prisma migrate status` is
