@@ -24,6 +24,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # T091 — R-PROC-1: the branch is named for its specs/NNN-* folder and task ids and targets develop.
+      - run: pnpm check:branch
       # T102 — the database client is generated, never committed; the typecheck reads its types.
       - run: pnpm db:generate
       - run: echo "T081 - typecheck, in parallel with the fast lint below"
