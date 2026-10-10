@@ -27,6 +27,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   defaultRateLimits,
+  createRateLimiter,
   type RateLimitCounter,
   RateLimiter,
   RedisRateLimitCounter,
@@ -344,5 +345,19 @@ describe('the Redis counter (T103)', () => {
     const counter = new RedisRateLimitCounter(client('OK'));
 
     await expect(counter.hit('rate-limit:rate_limit_search:abc', 60)).rejects.toThrow(TypeError);
+  });
+});
+
+describe("the process's limiter (T103)", () => {
+  it('refuses the call, and logs, when its Redis cannot be reached', async () => {
+    const lines: string[] = [];
+    const log = createLogger({ level: 'info', destination: { write: (line) => lines.push(line) } });
+    const settings = new FakeSettings();
+    settings.values.set(defaultRateLimits.search, { limit: 5, window_seconds: 60 });
+    // Port 1 on the loopback address: nothing listens there.
+    const limiter = createRateLimiter({ redisUrl: 'redis://127.0.0.1:1', settings, log });
+
+    await expect(limiter.check(defaultRateLimits.search, 'someone')).rejects.toThrow();
+    expect(lines.some((line) => line.includes('Rate-limit counter unreachable'))).toBe(true);
   });
 });
