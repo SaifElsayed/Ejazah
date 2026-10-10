@@ -20,10 +20,9 @@
 // 1 on the loopback address, where nothing listens. Every key of `.env.example` is removed from the
 // inherited environment first, so a developer's own values never decide the outcome.
 //
-// IN THE PIPELINE. Stage 2 of `.github/workflows/ci.yml` (tests) and stage 5 (build) are
-// placeholders until T081, so today this spec runs where `pnpm test` runs locally. Once T081 runs
-// the tests in CI, this spec builds for itself and needs only the generated client
-// (`pnpm db:generate`), which the API's build reads; it needs no database and no Redis.
+// IN THE PIPELINE. Stage 2 of `.github/workflows/ci.yml` runs this spec with the rest of the suite
+// (T081). It builds for itself and needs only the generated client (`pnpm db:generate`), which the
+// API's build reads; it needs no database and no Redis.
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -38,6 +37,9 @@ const api = join(root, 'apps', 'api');
 
 const NOBODY_LISTENS = '127.0.0.1:1';
 const STARTUP_TIMEOUT_MILLISECONDS = 30_000;
+// Each case waits up to STARTUP_TIMEOUT_MILLISECONDS for its process, so its own timeout is longer,
+// or Vitest's 5-second default would cut that wait short (T081, owner's decision on PR #56).
+const CASE_TIMEOUT_MILLISECONDS = 40_000;
 
 /** Required values `.env.example` leaves empty on purpose: generated here, never a real secret. */
 const REQUIRED_WITHOUT_EXAMPLE: Readonly<Record<string, () => string>> = {
@@ -145,15 +147,28 @@ afterAll(() => {
 });
 
 describe('the built entrypoints (T151)', () => {
-  it('main.js loads every module and listens, with an unreachable database', async () => {
-    const startup = await start('main.js', /"msg":"Listening"/, await freePort(), workingDirectory);
-    expect(startup.output).not.toContain('ERR_MODULE_NOT_FOUND');
-    expect(startup.reached, startup.output).toBe(true);
-  });
+  it(
+    'main.js loads every module and listens, with an unreachable database',
+    async () => {
+      const startup = await start(
+        'main.js',
+        /"msg":"Listening"/,
+        await freePort(),
+        workingDirectory,
+      );
+      expect(startup.output).not.toContain('ERR_MODULE_NOT_FOUND');
+      expect(startup.reached, startup.output).toBe(true);
+    },
+    CASE_TIMEOUT_MILLISECONDS,
+  );
 
-  it('worker.js loads every module and reaches the queue, with an unreachable database', async () => {
-    const startup = await start('worker.js', /ECONNREFUSED/, await freePort(), workingDirectory);
-    expect(startup.output).not.toContain('ERR_MODULE_NOT_FOUND');
-    expect(startup.reached, startup.output).toBe(true);
-  });
+  it(
+    'worker.js loads every module and reaches the queue, with an unreachable database',
+    async () => {
+      const startup = await start('worker.js', /ECONNREFUSED/, await freePort(), workingDirectory);
+      expect(startup.output).not.toContain('ERR_MODULE_NOT_FOUND');
+      expect(startup.reached, startup.output).toBe(true);
+    },
+    CASE_TIMEOUT_MILLISECONDS,
+  );
 });

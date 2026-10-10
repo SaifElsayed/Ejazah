@@ -95,10 +95,23 @@ export function virtualFile(relativePath: string): string {
   return path.join(virtualRoot, relativePath);
 }
 
+/**
+ * How long one type-aware lint case may take. A case that builds a TypeScript program takes
+ * seconds on its own, and under the coverage run of CI stage 2, beside every other spec, it ran
+ * past Vitest's 5-second default (note under T086). The longer limit is for these cases only, so
+ * a slow syntax-only case still fails at the default (T081).
+ */
+export const TYPE_AWARE_LINT_TIMEOUT_MILLISECONDS = 60_000;
+
+/** `RuleTester.run` registers each case through `this.constructor.it`, so a subclass can set it. */
+class TypeAwareRuleTester extends RuleTester {}
+TypeAwareRuleTester.it = (name: string, test: () => void) =>
+  it(name, test, TYPE_AWARE_LINT_TIMEOUT_MILLISECONDS);
+
 /** A tester whose cases are type-checked, for the four rules that need the program (T044–T047). */
 export function typeAwareRuleTester(): RuleTester {
   const virtualPrefix = path.relative(repositoryRoot, virtualRoot).split(path.sep).join('/');
-  return new RuleTester({
+  return new TypeAwareRuleTester({
     languageOptions: {
       parser: configRequire('@typescript-eslint/parser') as never,
       ecmaVersion: 'latest',

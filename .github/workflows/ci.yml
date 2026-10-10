@@ -1,4 +1,5 @@
-# Pipeline stages ordered by how fast they fail (research R-13). Each stage is a placeholder until its task lands.
+# Pipeline stages ordered by how fast they fail (research R-13): typecheck and fast lint, then tests,
+# then type-aware lint with the schema and snapshot checks, then the database probes, then the build.
 name: ci
 
 # The token gets read access only (GitHub Actions hardening guide, OpenSSF Scorecard Token-Permissions).
@@ -28,20 +29,120 @@ jobs:
       - run: pnpm check:branch
       # T102 — the database client is generated, never committed; the typecheck reads its types.
       - run: pnpm db:generate
-      - run: echo "T081 - typecheck, in parallel with the fast lint below"
-      # T048 — the fast, syntax-only rule set, the same one the pre-commit hook runs.
-      - run: pnpm lint
+      # T081 — the typecheck and the fast lint run side by side (research R-13), each to its own log,
+      # printed after both end, so a lint failure is reported even when the typecheck fails too.
+      # T048 — `pnpm lint` is the fast, syntax-only rule set, the same one the pre-commit hook runs.
+      - name: Typecheck and fast lint, in parallel (research R-13)
+        run: |
+          pnpm typecheck > "$RUNNER_TEMP/typecheck.log" 2>&1 &
+          typecheck_pid=$!
+          pnpm lint > "$RUNNER_TEMP/lint.log" 2>&1 &
+          lint_pid=$!
+          typecheck_status=0
+          wait "$typecheck_pid" || typecheck_status=$?
+          lint_status=0
+          wait "$lint_pid" || lint_status=$?
+          printf '== pnpm typecheck (exit %s)\n' "$typecheck_status"
+          cat "$RUNNER_TEMP/typecheck.log"
+          printf '\n== pnpm lint (exit %s)\n' "$lint_status"
+          cat "$RUNNER_TEMP/lint.log"
+          test "$typecheck_status" -eq 0 && test "$lint_status" -eq 0
 
   stage-2-unit-and-property-tests:
     runs-on: ubuntu-latest
     needs: stage-1-typecheck-and-fast-lint
+    # T081 — the suite reads a migrated database, and its seed specs create databases of their own
+    # (tests/seed), so it gets the PostgreSQL and Redis of docker-compose.yml, with the same roles.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: ijazah
+          POSTGRES_USER: ijazah_owner
+          POSTGRES_PASSWORD: owner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ijazah_owner -d ijazah"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    # The development values of .env.example: throwaway credentials of a database that lives only
+    # for this job, never a secret (R-SEC-1).
+    env:
+      DATABASE_URL_OWNER: postgresql://ijazah_owner:owner@localhost:5432/ijazah
+      DATABASE_URL: postgresql://ijazah_app:app@localhost:5432/ijazah
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - run: echo "T081/T086 - unit and property tests with the scoped coverage floor"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # T102 — `apps/api/src/platform/db/prisma.repository.spec.ts` fails by design on the empty stand-in.
+      - run: pnpm db:generate
+      # T065 — a service container starts before the checkout, so it cannot mount docker/initdb as
+      # docker-compose.yml does; the same file is run here, through the image's own psql.
+      - name: Create the application role, as docker/initdb does locally (T065)
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec --interactive "$POSTGRES_CONTAINER"
+          psql --set ON_ERROR_STOP=1 --username ijazah_owner --dbname ijazah
+          < docker/initdb/01-application-role.sql
+      - run: pnpm db:migrate
+      # T083 — the same pinned, checksum-verified binary as the secret-scan job: each job runs on its
+      # own machine, and tests/pipeline/secret-scan.spec.ts (T080) fails by design without it.
+      - name: Install Gitleaks 8.30.1
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar --extract --gzip --file "$RUNNER_TEMP/$archive" --directory "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+      # T086 — the whole suite with coverage, because a run over some specs only would fail the
+      # floor of a path it never loaded. The integrity probes run once, in stage 4, as the
+      # application role; leaving them out here changes no covered path.
+      - name: Unit and property tests with the 80% coverage floor (R-PROC-5)
+        run: pnpm test -- --coverage --exclude 'tests/db-integrity/**'
 
   stage-3-type-aware-lint-schema-snapshot:
     runs-on: ubuntu-latest
     needs: stage-2-unit-and-property-tests
+    # The schema check reads the live catalogue of a migrated database (T070).
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: ijazah
+          POSTGRES_USER: ijazah_owner
+          POSTGRES_PASSWORD: owner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ijazah_owner -d ijazah"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL_OWNER: postgresql://ijazah_owner:owner@localhost:5432/ijazah
+      DATABASE_URL: postgresql://ijazah_app:app@localhost:5432/ijazah
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -51,25 +152,107 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # T102 — the type-aware rules resolve the generated client's types (api/table-ownership,
-      # gender/require-requester-gender); without it the client is an empty stand-in.
+      # gender/require-requester-gender); without it the client is an empty stand-in. The contract
+      # snapshot reads the client's enums too (T084).
       - run: pnpm db:generate
       # T048 — the type-aware set (eslint.types.config.js), which only the pipeline runs (research R-10).
       - run: pnpm lint:types
-      - run: echo "T071/T081 - schema check, contract snapshot diff"
+      - name: Create the application role, as docker/initdb does locally (T065)
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec --interactive "$POSTGRES_CONTAINER"
+          psql --set ON_ERROR_STOP=1 --username ijazah_owner --dbname ijazah
+          < docker/initdb/01-application-role.sql
+      - run: pnpm db:migrate
+      # T070 — called through tsx rather than `pnpm db:schema:check`, which folds exit 2 into 1, so
+      # the log says whether the schema broke a convention or the check could not read it.
+      - name: Schema check against the migrated catalogue (ERD §0)
+        run: |
+          status=0
+          pnpm exec tsx scripts/schema-check.ts || status=$?
+          case "$status" in
+            0) ;;
+            1) echo "::error::schema check: the migrated schema breaks the ERD §0 conventions listed above"; exit 1 ;;
+            *) echo "::error::schema check: could not connect to or read the catalogue (exit $status); no schema was judged"; exit "$status" ;;
+          esac
+      # T084 — the checkout holds one commit, so the base the change is compared with is fetched:
+      # a pull request's target branch, or for a push to develop or main the commit before the push.
+      - name: Fetch the base the change is compared with
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+            echo "COMPARE_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          else
+            git fetch --no-tags --depth=1 origin "$BEFORE_SHA"
+            echo "COMPARE_BASE=$BEFORE_SHA" >> "$GITHUB_ENV"
+          fi
+      - name: Contract snapshot diff against the base (R-API-9)
+        run: pnpm contract:snapshot --check --base "$COMPARE_BASE"
+      # T085 — after `pnpm db:generate`, since regenerating the snapshot reads the client's enums.
+      - name: Generated-file drift check (R-PROC-9)
+        run: pnpm check:generated
 
   stage-4-database-integrity-probes:
     runs-on: ubuntu-latest
     needs: stage-3-type-aware-lint-schema-snapshot
+    # The probes connect as the application role and clean up as the owner, so both URLs are set
+    # (notes under T142 and T065); they open no Redis connection.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: ijazah
+          POSTGRES_USER: ijazah_owner
+          POSTGRES_PASSWORD: owner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ijazah_owner -d ijazah"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL_OWNER: postgresql://ijazah_owner:owner@localhost:5432/ijazah
+      DATABASE_URL: postgresql://ijazah_app:app@localhost:5432/ijazah
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - run: echo "T081 - integrity probes as the application role against a live database"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The probes load repository code that imports the generated client (T102).
+      - run: pnpm db:generate
+      - name: Create the application role, as docker/initdb does locally (T065)
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec --interactive "$POSTGRES_CONTAINER"
+          psql --set ON_ERROR_STOP=1 --username ijazah_owner --dbname ijazah
+          < docker/initdb/01-application-role.sql
+      - run: pnpm db:migrate
+      - name: Integrity probes as the application role against the migrated database
+        run: pnpm test:db-integrity
 
   stage-5-build:
     runs-on: ubuntu-latest
     needs: stage-4-database-integrity-probes
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - run: echo "T081 - build"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The API's build compiles against the generated client's types (T102).
+      - run: pnpm db:generate
+      - run: pnpm build
 
   secret-scan:
     # Independent of the pre-commit hook on purpose (SC-010). Scans full history including specs/.

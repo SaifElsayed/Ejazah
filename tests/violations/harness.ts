@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
+import { TYPE_AWARE_LINT_TIMEOUT_MILLISECONDS } from '../support/rule-tester';
+
 const harnessDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(harnessDirectory, '..', '..');
 
@@ -180,9 +182,15 @@ export function describeViolations(title: string, cases: readonly ViolationCase[
 
   describe(title, () => {
     for (const violation of cases) {
-      it(`refuses ${violation.refuses} — ${violation.ruleId} names ${violation.constitutionId}`, async () => {
-        await assertRefused(violation);
-      });
+      it(
+        `refuses ${violation.refuses} — ${violation.ruleId} names ${violation.constitutionId}`,
+        async () => {
+          await assertRefused(violation);
+        },
+        // A type-aware case builds a TypeScript program first; under the coverage run of CI
+        // stage 2 that outlasted Vitest's 5-second default (T081). Syntax-only cases keep it.
+        violation.ruleSet === 'typeAware' ? TYPE_AWARE_LINT_TIMEOUT_MILLISECONDS : undefined,
+      );
     }
   });
 }
