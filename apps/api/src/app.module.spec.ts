@@ -25,6 +25,15 @@ import {
   studentProcedure,
 } from './surfaces/procedures.js';
 
+// No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
+// it. Each part refuses if it is ever reached.
+const administration = {
+  transactions: { run: () => Promise.reject(new Error('no administrative call is expected here')) },
+  auditWriter: {
+    write: () => Promise.reject(new Error('no administrative call is expected here')),
+  },
+};
+
 const secret = 'SELECT password_hash FROM admin_users -- 7f3e';
 
 const user = createAppRouter({
@@ -58,6 +67,7 @@ beforeAll(async () => {
     // The headers and the origin allowlist are T136's, tested in platform/guards.
     securityHeaders: { allowedOrigins: [], mode: 'test' },
     maxRequestBodyBytes: BODY_LIMIT,
+    administration,
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');
@@ -166,6 +176,7 @@ describe('the request body limit (T150, FR-077)', () => {
       readiness: { databaseReachable: async () => {} },
       securityHeaders: { allowedOrigins: [], mode: 'test' },
       maxRequestBodyBytes: BODY_LIMIT,
+      administration,
       surfaces: { app: user, admin: readsFirst },
     });
     await wired.listen(0, '127.0.0.1');

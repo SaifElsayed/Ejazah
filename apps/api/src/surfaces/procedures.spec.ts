@@ -3,8 +3,8 @@
 // the 403 branch and the administrator kind's refusal cannot be reached over HTTP until sessions
 // are resolved, so they are reached here with a fixture session handed to the context factory.
 //
-// The administrator case holds only until T108: that task replaces the refusal with the audit
-// write, and this case with T099's.
+// The administrator kind's audited call is T099's, in admin-procedure.spec.ts (T108 replaced the
+// refusal this file held until then); here only its 401 is reached.
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -44,6 +44,11 @@ const user = createAppRouter({
 });
 
 const approved = vi.fn(() => 'approved');
+// An anonymous call is refused before a transaction is opened, so neither part is reached.
+const administration = {
+  transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },
+  auditWriter: { write: () => Promise.reject(new Error('no audit write is expected here')) },
+};
 const administrator = createAdminRouter({
   approve: adminProcedure(z.object({ teacherId: z.string() })).mutation(approved),
 });
@@ -101,18 +106,10 @@ describe('the caller kinds (T107)', () => {
   });
 
   it('the administrator kind refuses an anonymous request with 401', async () => {
-    const anonymous = callAdministrator(createAdminContext({ session: null, log }));
+    const anonymous = callAdministrator(createAdminContext({ session: null, log, administration }));
     expect(await refusal(() => anonymous.approve({ teacherId: 't1' }))).toEqual({
       status: 401,
       code: 'UNAUTHENTICATED',
-    });
-  });
-
-  it('the administrator kind refuses an authenticated administrator before the handler, until T108', async () => {
-    const caller = callAdministrator(createAdminContext({ session: { adminId: 'admin-1' }, log }));
-    expect(await refusal(() => caller.approve({ teacherId: 't1' }))).toEqual({
-      status: 500,
-      code: 'INTERNAL',
     });
     expect(approved).not.toHaveBeenCalled();
   });

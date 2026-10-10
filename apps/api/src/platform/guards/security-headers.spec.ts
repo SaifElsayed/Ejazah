@@ -23,6 +23,15 @@ import {
 import { ConfigError, loadConfig } from '../config/config.module.js';
 import { createLogger } from '../logging/logger.js';
 
+// No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
+// it. Each part refuses if it is ever reached.
+const administration = {
+  transactions: { run: () => Promise.reject(new Error('no administrative call is expected here')) },
+  auditWriter: {
+    write: () => Promise.reject(new Error('no administrative call is expected here')),
+  },
+};
+
 const ADMIN = 'https://admin.ijazah.example';
 const OTHER_ADMIN = 'https://ops.ijazah.example';
 const STRANGER = 'https://attacker.example';
@@ -44,6 +53,7 @@ async function start(mode: Mode): Promise<{ application: INestApplication; origi
     surfaces,
     securityHeaders: { allowedOrigins: [ADMIN, OTHER_ADMIN], mode },
     maxRequestBodyBytes: 1_048_576,
+    administration,
   });
   await application.listen(0, '127.0.0.1');
   const origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

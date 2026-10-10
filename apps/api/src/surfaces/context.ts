@@ -15,9 +15,16 @@
 // authenticates the request; until the identity work exists, the HTTP application (T149) resolves
 // none, so every request arrives anonymous.
 //
+// THE ADMINISTRATOR CONTEXT CARRIES WHAT AUDITING NEEDS (T108): the transactions of the process's
+// client and the bound audit writer, so the administrator caller kind can run each call in one
+// transaction and write its audit record there (FR-049). Both are handed in by the HTTP application,
+// which `main.ts` builds with the admin module's writer.
+//
 // `RequesterGender` is minted here and nowhere else outside a spec file (R-GENDER-5): from the
 // session's gender, never from input. A caller kind narrows this context; it never mints (T107).
 import { randomUUID } from 'node:crypto';
+import type { AuditWriter } from '../platform/audit/audit-writer.js';
+import type { Transactions } from '../platform/db/transaction.repository.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 
@@ -64,6 +71,14 @@ export interface AppContext {
   readonly log: Logger;
 }
 
+/** What the administrator caller kind needs to audit every call (T108). */
+export interface Administration {
+  /** Opens the one transaction each administrative call runs in. */
+  readonly transactions: Transactions;
+  /** Writes the call's audit records on that transaction; the admin module's, bound in main.ts. */
+  readonly auditWriter: AuditWriter;
+}
+
 /**
  * The context of the administrator surface. No locale: the admin application is English only
  * (ARCHITECTURE §6.5). `administrator` is null for an unauthenticated request.
@@ -72,6 +87,7 @@ export interface AdminContext {
   readonly administrator: AdministratorCaller | null;
   readonly correlationId: string;
   readonly log: Logger;
+  readonly administration: Administration;
 }
 
 export interface ContextSource<TSession> {
@@ -104,10 +120,19 @@ export function createAppContext({ session, log }: ContextSource<UserSession>): 
   };
 }
 
+export interface AdminContextSource extends ContextSource<AdminSession> {
+  readonly administration: Administration;
+}
+
 /** The administrator surface's context for one request. */
-export function createAdminContext({ session, log }: ContextSource<AdminSession>): AdminContext {
+export function createAdminContext({
+  session,
+  log,
+  administration,
+}: AdminContextSource): AdminContext {
   return {
     administrator: session === null ? null : { adminId: session.adminId },
     ...correlated(log),
+    administration,
   };
 }
