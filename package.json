@@ -7,7 +7,7 @@
     "pnpm": ">=9"
   },
   "scripts": {
-    "dev": "pnpm --parallel --recursive --filter \"./apps/**\" run dev",
+    "dev": "pnpm --parallel --recursive --filter \"./apps/**\" --filter \"!@ijazah/mobile\" run \"/^dev(:worker)?$/\"",
     "build": "pnpm --recursive run build",
     "typecheck": "tsc --build",
     "lint": "eslint .",
