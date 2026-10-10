@@ -60,6 +60,7 @@ const transportCodes: Partial<Record<TRPCError['code'], ErrorCode>> = {
   NOT_FOUND: 'NOT_FOUND',
   METHOD_NOT_SUPPORTED: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   TOO_MANY_REQUESTS: 'RATE_LIMITED',
 };
 

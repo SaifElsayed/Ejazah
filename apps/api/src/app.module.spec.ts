@@ -8,10 +8,14 @@
 // answer 401 and 400 through the transport, an unexpected failure leaves as the internal error with
 // nothing of its text, and a path outside both surfaces gets the same shape rather than the
 // framework's own.
+//
+// T150 adds the request body limit (FR-077): the application is built with a small limit, so a
+// body one byte over it is refused with 413 `PAYLOAD_TOO_LARGE` on each surface before its
+// procedure runs, a body exactly at it is read, and a refusal is not logged as unexpected.
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createApplication, surfacePaths } from './app.module.js';
+import { createApplication, type Surfaces, surfacePaths } from './app.module.js';
 import { createLogger } from './platform/logging/logger.js';
 import {
   adminProcedure,
@@ -30,11 +34,15 @@ const user = createAppRouter({
     throw new Error(secret);
   }),
   me: studentProcedure(z.void()).query(({ ctx }) => ctx.caller.userId),
+  pad: publicProcedure(z.object({ pad: z.string() })).mutation(({ input }) => input.pad.length),
 });
 
 const administrator = createAdminRouter({
   approve: adminProcedure(z.object({ teacherId: z.string() })).mutation(() => 'approved'),
 });
+
+// The limit the application is built with here; production reads MAX_REQUEST_BODY_BYTES (T150).
+const BODY_LIMIT = 1024;
 
 const records: string[] = [];
 let application: INestApplication;
@@ -49,6 +57,7 @@ beforeAll(async () => {
     readiness,
     // The headers and the origin allowlist are T136's, tested in platform/guards.
     securityHeaders: { allowedOrigins: [], mode: 'test' },
+    maxRequestBodyBytes: BODY_LIMIT,
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');
@@ -134,5 +143,98 @@ describe('the HTTP application (T149)', () => {
 
   it('answers a path outside both surfaces with the same shape, not the framework one', async () => {
     expect(await query('/elsewhere')).toEqual({ status: 404, body: notFound });
+  });
+});
+
+describe('the request body limit (T150, FR-077)', () => {
+  // tRPC reads a body only when a procedure asks for its input, and the administrator caller kind
+  // refuses an anonymous caller before that; no administrator session is resolved yet, so no
+  // request reads a body on the real administrator surface. To show that surface's handler carries
+  // the limit, a second application mounts there a router whose procedure reads its input first:
+  // a user-surface router, which the types refuse on that mount and only a spec can put there.
+  const readsFirst = createAppRouter({
+    approve: publicProcedure(z.object({ pad: z.string() })).mutation(
+      ({ input }) => input.pad.length,
+    ),
+  }) as unknown as Surfaces['admin'];
+  let wired: INestApplication;
+  let wiredOrigin: string;
+
+  beforeAll(async () => {
+    wired = await createApplication({
+      log: createLogger({ level: 'info', destination: { write: (line) => records.push(line) } }),
+      readiness: { databaseReachable: async () => {} },
+      securityHeaders: { allowedOrigins: [], mode: 'test' },
+      maxRequestBodyBytes: BODY_LIMIT,
+      surfaces: { app: user, admin: readsFirst },
+    });
+    await wired.listen(0, '127.0.0.1');
+    wiredOrigin = (await wired.getUrl()).replace('[::1]', '127.0.0.1');
+  });
+
+  afterAll(async () => {
+    await wired?.close();
+  });
+
+  /** A JSON body `{"pad":"xx…"}` of exactly `size` bytes. */
+  function bodyOf(size: number): string {
+    const body = `{"pad":"${'x'.repeat(size - 10)}"}`;
+    expect(Buffer.byteLength(body)).toBe(size);
+    return body;
+  }
+
+  async function post(url: string, body: string): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+    return { status: response.status, body: await response.json() };
+  }
+
+  const tooLarge = {
+    status: 413,
+    body: { error: { code: 'PAYLOAD_TOO_LARGE', message: 'The request is too large.' } },
+  };
+
+  function errorRecords(): number {
+    return records
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((record) => record['level'] === 'error').length;
+  }
+
+  it('refuses a body one byte over the limit on the user surface with 413', async () => {
+    expect(await post(`${origin}${surfacePaths.app}/pad`, bodyOf(BODY_LIMIT + 1))).toEqual(
+      tooLarge,
+    );
+  });
+
+  it('refuses a body one byte over the limit on the administrator surface with 413', async () => {
+    expect(
+      await post(`${wiredOrigin}${surfacePaths.admin}/approve`, bodyOf(BODY_LIMIT + 1)),
+    ).toEqual(tooLarge);
+  });
+
+  it('reads a body exactly at the limit, on either surface', async () => {
+    const accepted = { status: 200, body: { result: { data: BODY_LIMIT - 10 } } };
+    expect(await post(`${origin}${surfacePaths.app}/pad`, bodyOf(BODY_LIMIT))).toEqual(accepted);
+    expect(await post(`${wiredOrigin}${surfacePaths.admin}/approve`, bodyOf(BODY_LIMIT))).toEqual(
+      accepted,
+    );
+  });
+
+  it('refuses an anonymous administrator call before reading its body at all', async () => {
+    expect(
+      (await post(`${origin}${surfacePaths.admin}/approve`, bodyOf(BODY_LIMIT + 1))).status,
+    ).toBe(401);
+  });
+
+  it('logs nothing as unexpected for a refused body, so it is never reported', async () => {
+    const before = errorRecords();
+
+    await post(`${origin}${surfacePaths.app}/pad`, bodyOf(BODY_LIMIT + 1));
+    await post(`${wiredOrigin}${surfacePaths.admin}/approve`, bodyOf(BODY_LIMIT + 1));
+
+    expect(errorRecords()).toBe(before);
   });
 });

@@ -263,6 +263,18 @@ describe('loadConfig (T015, FR-039)', () => {
     );
   });
 
+  it('limits a request body to 1 MiB by default, and refuses a limit that is not a positive integer (T150)', () => {
+    expect(loadConfig(validEnv).MAX_REQUEST_BODY_BYTES).toBe(1_048_576);
+    expect(loadConfig({ ...validEnv, MAX_REQUEST_BODY_BYTES: '2048' }).MAX_REQUEST_BODY_BYTES).toBe(
+      2048,
+    );
+    for (const value of ['0', '-1', '1.5', 'one megabyte']) {
+      expect(() => loadConfig({ ...validEnv, MAX_REQUEST_BODY_BYTES: value })).toThrow(
+        /MAX_REQUEST_BODY_BYTES/,
+      );
+    }
+  });
+
   it('reports every offending key at once, and never a value (R-SEC-2)', () => {
     const env = without({ ...validEnv, PORT: 'abc', REDIS_URL: 'mysql://nope' }, 'ENCRYPTION_KEY');
 

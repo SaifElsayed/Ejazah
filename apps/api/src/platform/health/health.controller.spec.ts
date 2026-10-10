@@ -31,6 +31,7 @@ beforeAll(async () => {
     log,
     readiness,
     securityHeaders: { allowedOrigins: [], mode: 'test' },
+    maxRequestBodyBytes: 1_048_576,
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

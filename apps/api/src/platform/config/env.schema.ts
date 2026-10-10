@@ -55,6 +55,10 @@ const envObject = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
+  // T150 (FR-077): the largest request body either tRPC surface reads; a larger one answers 413.
+  // 1 MiB by default. Uploads keep their own limit (NFR-SEC-9).
+  MAX_REQUEST_BODY_BYTES: z.coerce.number().int().positive().default(1_048_576),
+
   // Two roles, two connection strings (research R-5). The owner URL is accepted so a copied .env parses,
   // but the runtime never carries it: config.module.ts strips it from the loaded configuration.
   DATABASE_URL_OWNER: postgresUrl.optional(),
@@ -111,6 +115,7 @@ const envKeyKinds = {
   NODE_ENV: 'platform',
   PORT: 'platform',
   LOG_LEVEL: 'platform',
+  MAX_REQUEST_BODY_BYTES: 'platform',
   DATABASE_URL_OWNER: 'platform',
   DATABASE_URL: 'platform',
   REDIS_URL: 'platform',

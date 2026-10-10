@@ -43,6 +43,7 @@ async function start(mode: Mode): Promise<{ application: INestApplication; origi
     readiness: { databaseReachable: async () => {} },
     surfaces,
     securityHeaders: { allowedOrigins: [ADMIN, OTHER_ADMIN], mode },
+    maxRequestBodyBytes: 1_048_576,
   });
   await application.listen(0, '127.0.0.1');
   const origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');
