@@ -86,7 +86,7 @@ be wrong. If the update is deployed late, a session whose stale instant has just
 passed may still be ahead in real time, and filtering on that instant would skip
 it. The job recomputes from D1's three columns, never from the old instant. Any
 delayed job keyed to a session's start, such as reminders (FR-NOTIF-1,
-`reminder_offsets`), is rescheduled from the new instant in the same run.
+`reminder_offsets_minutes`), is rescheduled from the new instant in the same run.
 Sessions in any other status have been held or settled, and keep their instants.
 
 The job is keyed in `idempotency_keys` (ADR 0008 D2) under the scope

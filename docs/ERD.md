@@ -533,7 +533,7 @@ Backs SRS §3.14. Changes are prospective-only and audit-logged.
 
 | Column | Type | Notes |
 |---|---|---|
-| key | text | PK — e.g. `attendance_threshold_pct`, `join_window_minutes`, `dispute_window_hours`, `slot_hold_ttl_minutes`, `reminder_offsets`, `chat_retention_days` |
+| key | text | PK — e.g. `attendance_threshold_pct`, `join_window_minutes`, `dispute_window_hours`, `slot_hold_ttl_minutes`, `reminder_offsets_minutes`, `chat_retention_days` |
 | value | jsonb | |
 | updated_by_admin_id | FK → admin_users | |
 | updated_at | timestamptz | |
