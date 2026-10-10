@@ -86,6 +86,14 @@ const typeAware = [
     plugins: { ijazah },
     rules: ijazah.configs.typeAware.rules,
   },
+  {
+    // T140 (R-PROC-7, FR-008): a suppression that no longer suppresses anything fails the build
+    // instead of outliving its ticket. No `files` key, so .js files are held too (PR #31, N1).
+    // Here only, where every rule runs: in the fast set the four type-aware rules never run, so a
+    // justified directive naming one of them is unused there by necessity, and `pnpm lint` and the
+    // pre-commit hook keep ESLint's default warning (second review of PR #31, B1).
+    linterOptions: { reportUnusedDisableDirectives: 'error' },
+  },
 ];
 
 module.exports = { fast, typeAware };

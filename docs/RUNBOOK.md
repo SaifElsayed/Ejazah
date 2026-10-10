@@ -132,8 +132,10 @@ name order. They run as the owner role: `prisma.config.ts` connects with
 6. **Review.** The reviewer reads every statement, generated and hand-written,
    against the ERD.
 7. **Merge, then never touch it.** A mistake found later is fixed by a new
-   migration (R-DB-1). The pipeline's migration checksum check is T071, still
-   open; until it lands, review holds this rule.
+   migration (R-DB-1). Stage 3 of the pipeline holds this rule
+   (`pnpm check:migrations`, T071): it compares the migrations with the base
+   branch. It refuses a merged migration that was edited, deleted or renamed,
+   and a new one whose name sorts before the base's last, naming R-DB-1.
 
 **Why editing a generated migration is not editing a generated file.** R-PROC-9
 forbids editing a generated file: the Prisma client, tRPC types, a lockfile by
@@ -315,8 +317,14 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   then disable the old one.
 - **`REDIS_URL`**, when it carries a password. Changed at the Redis host (R-18).
 - **GitHub tokens.** A personal access token or a `gh` login token is revoked
-  in the owner's GitHub settings and replaced. The workflows hold no stored
-  secret; each job gets GitHub's own short-lived token, read-only.
+  in the owner's GitHub settings and replaced. The workflows hold one stored
+  secret, `DEPENDABOT_ALERTS_TOKEN` (T090): a fine-grained token of the
+  repository owner's account, for this repository only, with the single
+  permission "Dependabot alerts: Read-only". To rotate it, generate a new token
+  with that same permission and replace the repository secret (Settings,
+  Secrets and variables, Actions), then delete the old token. It also has an
+  expiry date: when it expires, the `dependency-alerts` job fails until it is
+  replaced. Every other job uses GitHub's own short-lived, read-only token.
 
 **The nets that catch a secret before it leaks** (research R-15):
 
@@ -328,7 +336,13 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   fetched branch and tag, `specs/` included. When it fails, the value is already
   on GitHub: it is leaked, so rotate first.
 - Both run Gitleaks with `--redact`, so their output does not repeat the value.
-- GitHub push protection is the third net; enabling it is T090, still open.
+- GitHub push protection is not available to this repository (owner's
+  decision, note under T090). The repository is private and owned by a personal
+  account, and repository push protection needs a public repository or an
+  organisation with GitHub Secret Protection. The account-level setting covers
+  public repositories only. The two Gitleaks nets above are therefore the whole
+  protection. Revisit this if the repository moves to an organisation or becomes
+  public.
 
 ## Incidents
 
