@@ -23,6 +23,25 @@ const origin = httpUrl.refine((value) => URL.canParse(value) && new URL(value).o
   error: 'must be a bare origin: scheme and host, no path, no trailing slash',
 });
 
+// T136 (FR-076, NFR-SEC-11): the origins a browser may call the API from, as a comma-separated
+// list of bare origins; empty or absent is none. A wildcard is refused here, in the schema itself,
+// so no configuration can express one: `*`, or `*` inside an origin, which a URL parser accepts as
+// a host. Checked before the origin check, so the refusal says why.
+const allowedOrigins = z
+  .string()
+  .transform((value) => value.split(',').map((entry) => entry.trim()))
+  .pipe(
+    z.array(
+      z
+        .string()
+        .refine((entry) => !entry.includes('*'), {
+          error: 'a wildcard origin is refused; list each origin (NFR-SEC-11)',
+          abort: true,
+        })
+        .pipe(origin),
+    ),
+  );
+
 const s3Keys = [
   'S3_ENDPOINT',
   'S3_BUCKET',
@@ -75,6 +94,8 @@ const envObject = z.object({
 
   PUBLIC_WEBHOOK_ORIGIN: origin.optional(),
 
+  ADMIN_ALLOWED_ORIGINS: allowedOrigins.default([]),
+
   SENTRY_DSN: httpUrl.optional(),
 });
 
@@ -112,6 +133,7 @@ const envKeyKinds = {
   SMS_PROVIDER_KEY: 'provider',
   EXPO_ACCESS_TOKEN: 'provider',
   PUBLIC_WEBHOOK_ORIGIN: 'provider',
+  ADMIN_ALLOWED_ORIGINS: 'platform',
   SENTRY_DSN: 'provider',
 } as const satisfies Record<keyof typeof envObject.shape, 'provider' | 'platform'>;
 

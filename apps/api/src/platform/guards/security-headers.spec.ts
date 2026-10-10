@@ -126,10 +126,11 @@ describe('the CORS origin allowlist (T135, FR-076)', () => {
     }
   });
 
+  // The refusal is the absent Access-Control-Allow-Origin: without it the browser withholds the
+  // answer, whatever else the preflight lists (the Fetch standard's CORS check).
   it('refuses an unlisted origin: no response grants it access', async () => {
     const answer = await preflight(STRANGER);
     expect(answer.headers.get('access-control-allow-origin')).toBeNull();
-    expect(answer.headers.get('access-control-allow-methods')).toBeNull();
 
     const request = await fetch(`${development}${surfacePaths.app}/ping`, {
       headers: { origin: STRANGER },

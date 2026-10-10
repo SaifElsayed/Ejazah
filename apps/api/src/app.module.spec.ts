@@ -47,6 +47,8 @@ beforeAll(async () => {
   application = await createApplication({
     log,
     readiness,
+    // The headers and the origin allowlist are T136's, tested in platform/guards.
+    securityHeaders: { allowedOrigins: [], mode: 'test' },
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');

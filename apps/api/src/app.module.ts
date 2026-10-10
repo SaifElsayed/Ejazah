@@ -21,6 +21,9 @@
 // HEALTH. `GET /health` and `GET /ready` (T110) are the one Nest controller, outside both surfaces
 // and answering for themselves, so a failed readiness check never comes through the filter above.
 //
+// BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
+// any route, so every response carries them, on either surface, on the health routes or elsewhere.
+//
 // `main.ts` builds this application after the configuration validated and is the only caller in
 // production; a spec passes fixture routers in place of the real ones.
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -40,6 +43,10 @@ import { createHTTPHandler } from '@trpc/server/adapters/standalone';
 import { DomainError, type ErrorCode } from './platform/errors/domain-error.js';
 import { mapError, type MappedError } from './platform/errors/error-filter.js';
 import { reportError } from './platform/errors/reporting.js';
+import {
+  applySecurityHeaders,
+  type SecurityHeadersOptions,
+} from './platform/guards/security-headers.middleware.js';
 import {
   HealthController,
   READINESS,
@@ -90,6 +97,8 @@ export interface ApplicationOptions {
   readonly log: Logger;
   /** What `GET /ready` asks of the database (T110). */
   readonly readiness: Readiness;
+  /** The browser security headers and the origin allowlist, from the configuration (T136). */
+  readonly securityHeaders: SecurityHeadersOptions;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
 }
@@ -180,10 +189,13 @@ function surfaceHandler<TContext extends Correlated>(
     },
     // tRPC answers 500 for every error a procedure throws; the status follows the kernel's mapping
     // instead. A batch keeps tRPC's own status, since its calls may have failed differently.
+    // tRPC also sets its own `Vary`, replacing the `Vary: Origin` of the CORS middleware (T136), so
+    // `Origin` is appended back: a cache must not serve one origin's answer to another.
     responseMeta: ({ errors, info }) => {
+      const headers = { vary: ['Origin'] };
       const [first] = errors;
-      if (first === undefined || info?.isBatchCall === true) return {};
-      return { status: toErrorShape(first).status };
+      if (first === undefined || info?.isBatchCall === true) return { headers };
+      return { status: toErrorShape(first).status, headers };
     },
   });
 }
@@ -192,6 +204,7 @@ function surfaceHandler<TContext extends Correlated>(
 export async function createApplication({
   log,
   readiness,
+  securityHeaders,
   surfaces = { app: appRouter, admin: adminRouter },
 }: ApplicationOptions): Promise<INestApplication> {
   const application = await NestFactory.create(AppModule.with({ readiness }), {
@@ -199,6 +212,8 @@ export async function createApplication({
     logger: new KernelLoggerForNest(log),
     abortOnError: false,
   });
+  // Ahead of every route, so each response carries the headers and the allowlist (T136).
+  applySecurityHeaders(application, securityHeaders);
   application.useGlobalFilters(new OneErrorShape(log));
   application.use(
     surfacePaths.app,

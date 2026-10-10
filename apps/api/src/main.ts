@@ -57,6 +57,7 @@ const ports = selectPorts(config);
 const application = await createApplication({
   log,
   readiness: new ReadinessRepository(database),
+  securityHeaders: { allowedOrigins: config.ADMIN_ALLOWED_ORIGINS, mode: config.NODE_ENV },
 });
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
