@@ -190,6 +190,92 @@ identity procedure that verifies: sign-in, the one-time-code check and password
 reset. A verifying procedure without its limit lets one client take a whole
 process.
 
+## Leaked credential
+
+**Rotate first, investigate second (R-SEC-10, FR-067).** A credential is
+leaked once it has been anywhere outside `.env` and the secret store: a commit
+pushed to GitHub, a chat, Jira, a screenshot, a log, a Spec Kit file (R-SEC-1).
+Deleting the commit or the message does not handle it. Whoever saw the value
+may have copied it, and Git history, forks and caches keep it.
+
+1. **Rotate, now.** Issue a new value at its source, install it, restart the API
+   and the worker (both read their configuration only at start), then revoke
+   the old value. If the new value cannot be installed quickly, revoke the old
+   one anyway: an outage costs less than an open credential.
+2. **Investigate, after.** How it leaked, where it went, what it could reach,
+   and what the provider's own records show was done with it between the leak
+   and the revocation.
+3. **Clean up last.** Removing the value from Git history rewrites shared
+   branches, so it needs the team's agreement. It is housekeeping and never
+   replaces step 1.
+
+Deployed values live in the host's secret store, injected at runtime
+(ARCHITECTURE §14). The host is research R-18, still open, so no deployed
+environment exists yet; until it does, "install" means a developer's `.env`.
+
+**What each credential is and how it is rotated** (the keys of `.env.example`):
+
+- **`DATABASE_URL`**, the application role's password. Set a new value from the
+  secret store with `ALTER ROLE ijazah_app PASSWORD '…'`, as the role that set
+  it before (see "Provision the database roles in production"), update
+  `DATABASE_URL`, then restart the API and the worker so their connections
+  reopen with it.
+- **`DATABASE_URL_OWNER`**, the owner role's password. The owner can change its
+  own with `ALTER ROLE ijazah_owner PASSWORD '…'`, or the database host's console
+  can; then update the value wherever migrations run. The development values
+  (`owner` and `app`, in `.env.example` and `docker/initdb`) are public on
+  purpose and protect only a container on 127.0.0.1; a deployed environment
+  never uses them.
+- **`ENCRYPTION_KEY`**. Every key derived from it changes with it: the column
+  key, the one-time-code pepper, the local storage link signature, and the
+  webhook secrets of the payment stand-in (when
+  `PAYMENT_GATEWAY_WEBHOOK_SECRET` is empty) and the video stand-in.
+  After a change, every `*_encrypted` value written under the old key fails to
+  decrypt: `admin_users.mfa_secret_encrypted`,
+  `teacher_profiles.payout_account_ref_encrypted`,
+  `device_push_tokens.token_encrypted` and
+  `verification_documents.storage_key_encrypted`. Codes already sent stop
+  verifying, and local links already issued stop working. There is no
+  re-encryption step yet. In development, generate a new key and rebuild the
+  database (see "Reset the local database"). In a deployed environment that
+  holds encrypted rows, rotating today loses those values, so stop and raise it
+  with the team at once; the re-encryption step must exist before the first
+  such environment does.
+- **`PAYMENT_GATEWAY_API_KEY`** and **`PAYMENT_GATEWAY_WEBHOOK_SECRET`**. Issued
+  in the gateway's dashboard. The gateway is not chosen yet (SRS OPEN-11), so
+  its own steps are written here when its adapter lands. Once the webhook
+  secret changes, an event signed with the old one is refused with 401; replay
+  it from the gateway's dashboard. A replay is safe, because
+  `payment_events.provider_event_id` is unique (R-MONEY-8).
+- **`DAILY_API_KEY`** and **`DAILY_WEBHOOK_SECRET`**. Issued in the video
+  provider's dashboard; the stand-in serves the port until the phase that
+  calls it adds the provider. Replaying an attendance webhook is safe for the
+  same reason (`session_participant_events.provider_event_id`).
+- **`SMS_PROVIDER_KEY`** and **`EXPO_ACCESS_TOKEN`**. Issued by the SMS provider
+  (not chosen yet) and in the Expo account's access tokens.
+- **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage
+  provider. Links already signed with the old pair stop working when it is
+  deleted; they are short-lived anyway.
+- **`SENTRY_DSN`**. Not a password, but it lets anyone send events into the
+  project. Create a new client key in the Sentry project's settings, install it,
+  then disable the old one.
+- **`REDIS_URL`**, when it carries a password. Changed at the Redis host (R-18).
+- **GitHub tokens.** A personal access token or a `gh` login token is revoked
+  in the owner's GitHub settings and replaced. The workflows hold no stored
+  secret; each job gets GitHub's own short-lived token, read-only.
+
+**The nets that catch a secret before it leaks** (research R-15):
+
+- `.husky/pre-commit` runs Gitleaks over the staged change before anything else,
+  and refuses to commit on a machine without Gitleaks. When it refuses, the value
+  has not left your machine: take it out of the change and keep it in `.env`.
+  Never commit with `--no-verify` to get past it.
+- The `secret-scan` job in `.github/workflows/ci.yml` scans every commit of every
+  fetched branch and tag, `specs/` included. When it fails, the value is already
+  on GitHub: it is leaked, so rotate first.
+- Both run Gitleaks with `--redact`, so their output does not repeat the value.
+- GitHub push protection is the third net; enabling it is T090, still open.
+
 ## Incidents
 
 **Redis is down** — Redis holds only the queue and the rate-limit counts, so
