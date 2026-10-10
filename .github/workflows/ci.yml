@@ -47,6 +47,10 @@ jobs:
           printf '\n== pnpm lint (exit %s)\n' "$lint_status"
           cat "$RUNNER_TEMP/lint.log"
           test "$typecheck_status" -eq 0 && test "$lint_status" -eq 0
+      # T140 — the suppression rule run again over the files `pnpm lint` reads, with inline
+      # configuration off, so no comment can switch it off (FR-008).
+      - name: Suppression gate, inline configuration off (R-PROC-7)
+        run: pnpm check:suppressions
 
   stage-2-unit-and-property-tests:
     runs-on: ubuntu-latest

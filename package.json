@@ -28,6 +28,7 @@
     "check:generated": "tsx scripts/generated-file-check.ts",
     "check:branch": "tsx scripts/branch-spec-check.ts",
     "check:migrations": "tsx scripts/migration-check.ts",
+    "check:suppressions": "tsx scripts/suppression-gate.ts",
     "prepare": "husky"
   },
   "devDependencies": {
