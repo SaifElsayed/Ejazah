@@ -8,7 +8,7 @@ cp .env.example .env
 pnpm infra:up          # postgres + redis
 pnpm db:migrate
 pnpm db:seed
-pnpm dev               # api (request + worker processes), admin, mobile
+pnpm dev               # api (request + worker processes) and admin; mobile joins when the first task importing Expo declares it (note under T076)
 ```
 
 The database has two roles (research R-5). Migrations run as the owner

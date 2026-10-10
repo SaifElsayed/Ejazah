@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsc-watch -p tsconfig.json --onSuccess \"node --env-file-if-exists=../../.env dist/main.js\"",
-    "dev:worker": "tsx watch --conditions=@ijazah/source src/worker.ts",
+    "dev:worker": "tsx watch --env-file-if-exists=../../.env --conditions=@ijazah/source src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:worker": "node dist/worker.js",

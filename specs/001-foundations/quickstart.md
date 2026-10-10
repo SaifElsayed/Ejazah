@@ -34,7 +34,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-**Expected**: every application starts. No step asks for a secret beyond the one locally generated encryption key.
+**Expected**: `pnpm dev` starts the API (request and worker processes) and admin; mobile joins when the first task that imports Expo declares it (note under T076 in tasks.md). No step asks for a secret beyond the one locally generated encryption key.
 
 **A database volume created before T065** lacks the application role, which `docker/initdb` creates only when a volume is new. Recreate it once, then migrate again:
 
