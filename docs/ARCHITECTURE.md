@@ -474,7 +474,7 @@ Hosting becomes mandatory at Week 14 — store reviewers open your app from thei
 
 ```
 pnpm infra:up        # postgres · redis (docker compose)
-pnpm dev             # api (request + worker processes), admin, mobile — hot reload
+pnpm dev             # api (request + worker processes) and admin — hot reload; mobile joins when the first task importing Expo declares it (tasks.md, note under T076)
 ```
 
 ## 16. Conventions
