@@ -24,6 +24,11 @@
 // BODY LIMIT. Each surface reads at most `MAX_REQUEST_BODY_BYTES` of a request body (T150, FR-077);
 // a larger one is refused with 413 `PAYLOAD_TOO_LARGE` before it is read whole.
 //
+// AUDITING. The administrator surface's context carries the transactions and the bound audit writer
+// (T108), so every administrative call runs in one transaction with its audit record written there.
+// They are a required option: the application cannot be built with an administrator surface and no
+// writer.
+//
 // BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
 // any route, so every response carries them, on either surface, on the health routes or elsewhere.
 //
@@ -61,6 +66,7 @@ import { appRouter } from './surfaces/app.router.js';
 import {
   type AdminContext,
   type AppContext,
+  type Administration,
   createAdminContext,
   createAppContext,
 } from './surfaces/context.js';
@@ -104,6 +110,8 @@ export interface ApplicationOptions {
   readonly securityHeaders: SecurityHeadersOptions;
   /** `MAX_REQUEST_BODY_BYTES`: the largest body either surface reads (T150). */
   readonly maxRequestBodyBytes: number;
+  /** The transactions and the bound audit writer every administrative call runs with (T108). */
+  readonly administration: Administration;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
 }
@@ -215,6 +223,7 @@ export async function createApplication({
   readiness,
   securityHeaders,
   maxRequestBodyBytes,
+  administration,
   surfaces = { app: appRouter, admin: adminRouter },
 }: ApplicationOptions): Promise<INestApplication> {
   const application = await NestFactory.create(AppModule.with({ readiness }), {
@@ -238,7 +247,7 @@ export async function createApplication({
     surfacePaths.admin,
     surfaceHandler(
       surfaces.admin,
-      () => createAdminContext({ session: null, log }),
+      () => createAdminContext({ session: null, log, administration }),
       log,
       maxRequestBodyBytes,
     ),

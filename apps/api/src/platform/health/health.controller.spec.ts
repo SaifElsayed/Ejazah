@@ -12,6 +12,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApplication, surfacePaths } from '../../app.module.js';
 import { createLogger } from '../logging/logger.js';
 
+// No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
+// it. Each part refuses if it is ever reached.
+const administration = {
+  transactions: { run: () => Promise.reject(new Error('no administrative call is expected here')) },
+  auditWriter: {
+    write: () => Promise.reject(new Error('no administrative call is expected here')),
+  },
+};
+
 const secret = 'connect ECONNREFUSED 10.0.4.17:5432 (ijazah_app@db-primary)';
 
 let reachable = true;
@@ -32,6 +41,7 @@ beforeAll(async () => {
     readiness,
     securityHeaders: { allowedOrigins: [], mode: 'test' },
     maxRequestBodyBytes: 1_048_576,
+    administration,
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

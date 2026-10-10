@@ -16,6 +16,9 @@ Be imported by any other module (R-API-4). Expose a procedure on the user surfac
 
 `settings.service.ts` and `settings.repository.ts` implement the kernel's `SettingsReader` (`platform/settings/settings-reader.ts`, T113). `index.ts` exports it as `createSettingsReader`, and `main.ts` and `worker.ts` bind it (T143). A missing or invalid key throws `SettingError` and is never replaced by a constant.
 
+`audit.repository.ts` implements the kernel's `AuditWriter` (`platform/audit/audit-writer.ts`, T108): it inserts one `audit_logs` row on the transaction it is handed, the administrative action's own. `index.ts` exports it as `createAuditWriter`, and `main.ts` binds it. The administrator caller kind writes through it; no handler does.
+
 ## Requirement ids
 
 - FR-034: settings reading behind `SettingsReader` (T113).
+- FR-049: the audit record of every administrative action behind `AuditWriter` (T108).

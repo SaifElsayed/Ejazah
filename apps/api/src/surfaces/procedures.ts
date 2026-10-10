@@ -18,9 +18,16 @@
 // router accepts only its own surface's procedures (`SurfaceRecord`), so a procedure of the other
 // surface, or one built on any other tRPC instance, does not compile where it is mounted.
 //
-// THE ADMINISTRATOR KIND FAILS CLOSED until T108 gives it its audit record (R-API-12): after
-// authenticating the administrator it refuses before any handler runs, so no administrative action
-// exists, even for a moment, without the audit write around it.
+// THE ADMINISTRATOR KIND WRITES ITS OWN AUDIT RECORD (T108, FR-049, R-API-12). After authenticating
+// the administrator and validating the input, it opens one transaction through `platform/db/` and
+// hands it to the handler as `ctx.tx`, with `ctx.audit` on which the handler records what its
+// action touched. When the handler returns, the kind writes those records through the bound
+// `AuditWriter` on the same transaction, then commits; the actor is the session's administrator.
+// So the action's writes and its audit rows commit or roll back together: a handler that fails, a
+// call that recorded nothing and an audit write that fails each leave nothing behind. A read is an
+// administrative call like any other and is audited the same way. This file neither imports
+// `modules/admin` nor queries `audit_logs` (R-API-4, R-API-6): the writer is the admin module's,
+// reached through the context.
 //
 // ONE ERROR FORMATTER on both instances: `toErrorShape`, which sends T101's `mapError` result and
 // nothing else, so a tRPC error carries no stack, path or default shape (FR-041, R-API-8).
@@ -37,6 +44,8 @@ import {
   type TRPCUnsetMarker,
 } from '@trpc/server';
 import type { z } from 'zod';
+import type { AuditEntry, AuditTrail } from '../platform/audit/audit-writer.js';
+import type { Transaction } from '../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
 import type { AdminContext, AdministratorCaller, AppContext, Role, UserCaller } from './context.js';
@@ -150,13 +159,6 @@ const requireAdministrator = admin.middleware(({ ctx, next }) => {
   return next({ ctx: { administrator: ctx.administrator } });
 });
 
-// Until T108: an administrative action without its audit record must not run (R-API-12).
-const refuseUntilAudited = admin.middleware(() => {
-  throw new Error(
-    'The administrator caller kind has no audit writer yet (T108); refusing before the handler runs (R-API-12).',
-  );
-});
-
 /** Anyone, authenticated or not. */
 export function publicProcedure<TIn, TOut>(
   input: z.ZodType<TOut, TIn>,
@@ -178,9 +180,42 @@ export function teacherProcedure<TIn, TOut>(
   return app.procedure.use(requireRole('teacher')).input(input);
 }
 
-/** An authenticated administrator. Exists on the administrator surface only (R-API-11). */
+/** What an administrator handler receives beyond the surface's context (T108). */
+export interface AuditedCall {
+  readonly administrator: AdministratorCaller;
+  /** The call's one transaction: every write of the action goes through it. */
+  readonly tx: Transaction;
+  /** Where the action records what it touched; at least one record, or the call is refused. */
+  readonly audit: AuditTrail;
+}
+
+/**
+ * An authenticated administrator, every call audited in its own transaction (FR-049, R-API-12).
+ * Exists on the administrator surface only (R-API-11).
+ */
 export function adminProcedure<TIn, TOut>(
   input: z.ZodType<TOut, TIn>,
-): CallerKind<AdminContext, AdminMeta, { administrator: AdministratorCaller }, TIn, TOut> {
-  return admin.procedure.use(requireAdministrator).use(refuseUntilAudited).input(input);
+): CallerKind<AdminContext, AdminMeta, AuditedCall, TIn, TOut> {
+  return admin.procedure
+    .use(requireAdministrator)
+    .input(input)
+    .use(({ ctx, next }) => {
+      const { transactions, auditWriter } = ctx.administration;
+      return transactions.run(async (tx) => {
+        const entries: AuditEntry[] = [];
+        const audit: AuditTrail = { record: (entry) => void entries.push(entry) };
+        const result = await next({ ctx: { tx, audit } });
+        // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
+        if (!result.ok) throw result.error;
+        if (entries.length === 0) {
+          throw new Error(
+            'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
+          );
+        }
+        for (const entry of entries) {
+          await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
+        }
+        return result;
+      });
+    });
 }

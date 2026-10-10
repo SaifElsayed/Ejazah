@@ -6,7 +6,7 @@
 // else is loaded only after it returns, so a refusal loads nothing but the configuration schema and
 // stays quick. Then reporting is started (T111), the logger created (T100), the database client
 // opened (T102), the admin module's settings reader bound (T113), the rate limiter built over it
-// (T103), each port's provider selected (T121), and the application with both surfaces mounted (T149) and the health routes registered
+// (T103), the admin module's audit writer bound (T108), each port's provider selected (T121), and the application with both surfaces mounted (T149) and the health routes registered
 // (T110) made to listen.
 import { loadConfigOrExit } from './platform/config/config.module.js';
 
@@ -19,7 +19,9 @@ const [
   { ReadinessRepository },
   { requireSettingsReader },
   { createRateLimiter },
-  { createSettingsReader },
+  { transactionsOver },
+  { requireAuditWriter },
+  { createAuditWriter, createSettingsReader },
   { selectPorts },
   { createApplication },
 ] = await Promise.all([
@@ -29,6 +31,8 @@ const [
   import('./platform/db/readiness.repository.js'),
   import('./platform/settings/settings-reader.js'),
   import('./platform/guards/rate-limit.guard.js'),
+  import('./platform/db/transaction.repository.js'),
+  import('./platform/audit/audit-writer.js'),
   import('./modules/admin/index.js'),
   import('./platform/ports/ports.module.js'),
   import('./app.module.js'),
@@ -49,6 +53,14 @@ const settings = requireSettingsReader(createSettingsReader(database));
 // payment-initiation procedures as their modules arrive, and connects to Redis on its first count.
 const rateLimiter = createRateLimiter({ redisUrl: config.REDIS_URL, settings, log });
 
+// Every administrative call runs in one transaction and writes its audit record there, through the
+// admin module's writer (T108, FR-049); the process refuses to start without one, so no
+// administrative route exists around it.
+const administration = {
+  transactions: transactionsOver(database),
+  auditWriter: requireAuditWriter(createAuditWriter()),
+};
+
 // Each port's provider is chosen here, once, from the configuration (T121, FR-056), and handed to
 // each module as its first consumer arrives. The request process never holds the push port
 // (R-API-15).
@@ -59,6 +71,7 @@ const application = await createApplication({
   readiness: new ReadinessRepository(database),
   securityHeaders: { allowedOrigins: config.ADMIN_ALLOWED_ORIGINS, mode: config.NODE_ENV },
   maxRequestBodyBytes: config.MAX_REQUEST_BODY_BYTES,
+  administration,
 });
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
