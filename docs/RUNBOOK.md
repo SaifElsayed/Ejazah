@@ -144,11 +144,63 @@ the same file at the same time: R-PROC-9 governs the generated client, which
 `pnpm db:generate` rebuilds and nobody edits or commits, and R-DB-1 governs the
 migration.
 
-## Common operations
+## Add a module
 
-**Add a module** — create the folder under `apps/api/src/modules/`, add the six
-files, write the README Owns and Never sections first, then register the module
-in `app.module.ts`.
+A backend module arrives with two things before any code: its **ownership
+statement** (the README's Owns and Never) and its **manifest entry**
+(`packages/config/module-tables.json`). The lint rules read the manifest and
+reviewers read the README, so a module without them is a module nothing checks.
+
+The twelve modules are the ERD's twelve domains (ERD §1, ARCHITECTURE §4). A new
+module, or a table moving between modules, changes those documents first,
+through an ADR as ADR 0005 D2 and ADR 0007 D4 did, and only then the code
+(R-PROC-2). A capability that would own no table is a service inside the
+module whose tables it reads, as discovery is inside `catalog`.
+
+1. **Manifest entry.** Add the module to `packages/config/module-tables.json`,
+   keyed by its folder name, listing exactly the tables the ERD gives it. Each
+   table belongs to exactly one key: `api/table-ownership` (R-API-6) refuses to
+   load when a table has two owners, reports a database delegate whose table is
+   in no entry, and refuses a repository that reaches a table its module does
+   not own. `tests/seed/migrate-from-empty.spec.ts` also compares the migrated
+   database's tables with the manifest, so a table missing from it fails there
+   too.
+2. **Folder and ownership statement.** Create `apps/api/src/modules/<name>/`
+   with a `README.md` written before any code, in the shape the existing ones
+   share (for example `apps/api/src/modules/booking/README.md`):
+   - **Owns**: the manifest's tables for this module, and the line saying they
+     are listed in `packages/config/module-tables.json`.
+   - **Never**: what the module must not do, each prohibition with its rule id:
+     whose tables it never writes, which module's internals it never reaches,
+     which money, gender or time rule binds it.
+   - **Shape**: which file holds the rules, which the queries, which the
+     procedures, and what `index.ts` exports.
+   - **Requirement ids**: the SRS and spec ids it implements, filled as they
+     land.
+3. **Public entry.** Add `index.ts`. It starts as `export {};` and is the only
+   path into the module: `boundaries/no-deep-module-import` (R-API-3) refuses
+   any import of a file below it from outside the module. What another module
+   needs is exported here, with its own test.
+4. **Code, as it is needed.** Rules go in a `*.service.ts`, queries in a
+   `*.repository.ts` (the only kind of file that may import the database client,
+   `api/no-orm-outside-repository`, R-API-2), procedures in a thin `*.router.ts`
+   (`api/no-logic-in-router`, R-API-1), each spec beside its file. Files are
+   named after the module, or after the aggregate when a module has several, as
+   `modules/admin` does with `settings.service.ts` and `audit.repository.ts`. A
+   file arrives with the task that first needs it, not as an empty shell.
+5. **Wiring.** There is no registration in `app.module.ts`. A module's router
+   joins the record in `apps/api/src/surfaces/app.router.ts` (the user surface)
+   or `apps/api/src/surfaces/admin.router.ts` (the administrator surface, admin
+   only, R-API-11), and its services are built where they are used, in
+   `apps/api/src/main.ts` or `apps/api/src/worker.ts`. Outside the admin module,
+   nothing imports `modules/admin` except those two entry points and
+   `surfaces/admin.router.ts` (`boundaries/no-upward-admin-import`, R-API-4).
+6. **Schema and coverage.** Its tables live in `prisma/schema/<name>.prisma` and
+   reach the database through the migration workflow above. It joins the
+   per-path coverage floor when it is created (ARCHITECTURE §13); the floors are
+   configured by T086, still open.
+
+## Common operations
 
 **Provision the database roles in production** — migrations carry no
 password. Before the first `pnpm db:migrate`, create the application role
