@@ -4,7 +4,7 @@ One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3 
 
 | Phase | Spec | Working days | Day numbers | Depends on |
 |---|---|---|---|---|
-| 0 — Foundations | `specs/001-foundations/` | 2 remaining (of 5, started 2026-10-06) | — | — |
+| 0 — Foundations | `specs/001-foundations/` | Closes with the five-day batch plan of 2026-10-06; two days remained on 2026-10-08 | — | — |
 | 1 — Identity and teacher onboarding | `specs/002-identity/` | 7 | 1–7 | 0 |
 | 2 — Catalog, discovery, booking | `specs/003-booking/` | 8 | 8–15 | 1 |
 | 3 — Live sessions | `specs/004-sessions/` | 7 | 16–22 | 2 |
@@ -232,7 +232,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Uploaded (Mode B) certificates are content-sniffed, size-limited and stored under the encrypted, signed-URL regime of verification documents, and the public verification page says plainly that such a certificate was uploaded by the teacher and is not platform-generated (FR-IJAZAH-13/14).
 - The certificate number is sixteen Crockford base32 symbols stored without separators and displayed as 4-4-4-4; the verification token is 32 random bytes in base64url — both minted by the Phase 0 identifiers module (T105).
 - The Arabic RTL PDF spike (Phase 0, T124) decides the rendering approach for the 25-entry chain before this phase's Spec Kit cycle.
-- Reminder jobs keyed to a session's start are rescheduled when the session's instants are recomputed (ADR 0009 D3, `reminder_offsets`).
+- Reminder jobs keyed to a session's start are rescheduled when the session's instants are recomputed (ADR 0009 D3, `reminder_offsets_minutes`, the key T074 seeds).
 
 **Definition of done**
 
