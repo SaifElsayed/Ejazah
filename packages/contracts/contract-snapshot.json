@@ -1,0 +1,92 @@
+{
+  "enums": {
+    "contracts": {},
+    "prisma": {
+      "AccountStatus": ["active", "banned", "suspended", "verification_required"],
+      "CancellationReason": [
+        "admin",
+        "checkout_abandoned",
+        "gender_correction",
+        "payment_expired",
+        "payment_failed",
+        "slot_unavailable",
+        "teacher_suspended"
+      ],
+      "CancellationRequestStatus": ["accepted", "declined", "expired", "pending"],
+      "DevicePlatform": ["android", "ios"],
+      "DisputeKind": ["compensation_case", "session_dispute"],
+      "DisputeResolution": [
+        "compensation_ordered",
+        "no_show_recorded",
+        "party_banned",
+        "party_suspended",
+        "re_marked",
+        "upheld"
+      ],
+      "DisputeStatus": ["dismissed", "open", "resolved"],
+      "EnrollmentStatus": [
+        "cancelled",
+        "completed",
+        "confirmed",
+        "pending_payment",
+        "terminated_no_show"
+      ],
+      "Gender": ["female", "male"],
+      "GenderFlagStatus": ["corrected", "dismissed", "fraud_ban", "open"],
+      "IdempotencyKeyStatus": ["completed", "in_progress"],
+      "IjazahMode": ["generated", "uploaded"],
+      "IsnadVerificationStatus": ["unverified", "verified"],
+      "Language": ["ar", "en"],
+      "NotificationType": [
+        "cancellation_request_accepted",
+        "cancellation_request_declined",
+        "cancellation_requested",
+        "dispute_resolved",
+        "gender_flag_resolved",
+        "ijazah_granted",
+        "ijazah_revoked",
+        "new_booking",
+        "new_review",
+        "no_show_recorded",
+        "payment_confirmed",
+        "payment_expired",
+        "payment_failed",
+        "payout_account_verified",
+        "session_reminder",
+        "teacher_application_status_changed"
+      ],
+      "OtpPurpose": ["login", "password_reset", "signup"],
+      "ParticipantEventType": ["joined", "left"],
+      "PaymentEventType": [
+        "expired",
+        "failed",
+        "paid",
+        "recipient_rejected",
+        "recipient_verified",
+        "refunded"
+      ],
+      "PaymentGateway": ["fake"],
+      "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
+      "Role": ["student", "teacher"],
+      "RoleStatus": ["active", "suspended"],
+      "SessionStatus": [
+        "both_no_show",
+        "cancelled_by_admin",
+        "cancelled_by_agreement",
+        "disputed",
+        "done",
+        "provider_outage",
+        "scheduled",
+        "student_no_show",
+        "teacher_no_show",
+        "under_threshold"
+      ],
+      "TeacherVerificationStatus": ["approved", "banned", "pending", "rejected", "suspended"],
+      "UserReportContext": ["chat", "profile", "session"],
+      "UserReportStatus": ["actioned", "dismissed", "open"],
+      "VerificationDocumentType": ["credential", "national_id", "other", "passport"],
+      "VerificationRequestStatus": ["expired", "open", "satisfied"]
+    }
+  },
+  "procedures": { "admin": {}, "app": {} }
+}
