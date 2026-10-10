@@ -68,15 +68,87 @@ a teammate's on a database that holds only the seed. `prisma migrate status` is
 not the test: it reads only the migration history, so it still reports
 "Database schema is up to date!" after a column is added by hand.
 
+## Migration workflow
+
+A migration is **generated, extended by hand, reviewed, merged, then never
+touched** (research R-6, R-DB-1). The schema is one file per module under
+`prisma/schema/` (`base.prisma` holds the datasource, the generator and every
+enum), and the migrations are folders under `prisma/migrations/`, applied in
+name order. They run as the owner role: `prisma.config.ts` connects with
+`DATABASE_URL_OWNER`, never the application role.
+
+1. **Start from a clean database.** It must hold exactly the migrations on your
+   branch, all applied (`pnpm db:migrate`), and nothing else; rebuild it if it
+   diverged (above).
+2. **Change the schema.** Edit the module's file in `prisma/schema/`. A new
+   table must first exist in the ERD and in `packages/config/module-tables.json`
+   (ERD §0).
+3. **Generate the SQL** into a new folder, named with the UTC time and what the
+   migration does, as the existing ones are:
+
+   ```bash
+   pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema --script \
+     --output prisma/migrations/<YYYYMMDDHHMMSS>_<what_it_does>/migration.sql
+   ```
+
+   This compares the database `DATABASE_URL_OWNER` names with the schema and
+   writes no database. `--from-migrations` would need a shadow database, which
+   `prisma.config.ts` does not configure. The initial migration was generated
+   the same way, from empty; its header names the command.
+
+4. **Extend it by hand** with what the schema language cannot express, each
+   statement under a `-- Hand-written` comment naming the rule it serves, as in
+   `20261007000000_init`. The existing migrations show every kind: the `citext`
+   extension and the check constraints of data-model.md §6
+   (`20261007000000_init`); the two roles, their grants, `REVOKE DELETE` on the
+   five tables and the default privileges
+   (`20261007000100_roles_and_privileges`); partial unique indexes
+   (`20261007000200_partial_unique_indexes`); the partial index on scheduled
+   sessions (`20261007000300_scheduled_sessions_index`); the `btree_gist`
+   extension and the two exclusion constraints on `sessions`
+   (`20261007000400_booking_overlap`); and `REVOKE UPDATE, DELETE, TRUNCATE` on
+   the append-only tables (`20261007000500_append_only_tables`). A migration
+   that is only hand-written SQL, like the last five, is a folder you create and
+   write yourself. A new table receives SELECT, INSERT, UPDATE and DELETE for
+   the application role from the default privileges, so its migration revokes
+   DELETE when the table carries `deleted_at`, and UPDATE, DELETE and TRUNCATE
+   when it is append-only. Migrations carry no password (see the production
+   roles below).
+5. **Apply and check it:**
+
+   ```bash
+   pnpm db:migrate
+   pnpm db:schema:check     # the ERD conventions, read from the live catalogue
+   pnpm db:generate         # the client follows the schema
+   pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema --script
+   ```
+
+   The last command must print `-- This is an empty migration.`: the schema and
+   the migrations now describe the same database. Run `pnpm test:db-integrity`
+   when the migration touches a constraint or a privilege.
+
+6. **Review.** The reviewer reads every statement, generated and hand-written,
+   against the ERD.
+7. **Merge, then never touch it.** A mistake found later is fixed by a new
+   migration (R-DB-1). The pipeline's migration checksum check is T071, still
+   open; until it lands, review holds this rule.
+
+**Why editing a generated migration is not editing a generated file.** R-PROC-9
+forbids editing a generated file: the Prisma client, tRPC types, a lockfile by
+hand. Those are rebuilt from a source of truth, so a hand edit is lost on the
+next rebuild or leaves the copy disagreeing with its source. A migration is
+generated once, as a draft. From the moment its folder exists, it is the source
+of truth for the database: nothing regenerates it, and step 4 writes into that
+source. Once merged, R-DB-1 makes it immutable. So the two rules never apply to
+the same file at the same time: R-PROC-9 governs the generated client, which
+`pnpm db:generate` rebuilds and nobody edits or commits, and R-DB-1 governs the
+migration.
+
 ## Common operations
 
 **Add a module** — create the folder under `apps/api/src/modules/`, add the six
 files, write the README Owns and Never sections first, then register the module
 in `app.module.ts`.
-
-**Add a migration** — edit the right file in `prisma/schema/`, run
-`pnpm db:migrate`, read the generated SQL before committing. Never edit a
-migration that has been merged.
 
 **Provision the database roles in production** — migrations carry no
 password. Before the first `pnpm db:migrate`, create the application role
