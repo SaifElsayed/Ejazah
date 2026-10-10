@@ -42,6 +42,8 @@ const allowedOrigins = z
     ),
   );
 
+const standInProviderKeys = ['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SMS_PROVIDER'] as const;
+
 const s3Keys = [
   'S3_ENDPOINT',
   'S3_BUCKET',
@@ -85,7 +87,7 @@ const envObject = z.object({
 
   // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
   // stand-in until the phase that first calls the port adds its real member (FR-054), so each
-  // defaults to it. A production refusal like PAYMENT_GATEWAY's is not made here (follow-up of T121).
+  // defaults to it. Production refuses each stand-in below, as it refuses PAYMENT_GATEWAY's (T153).
   VIDEO_PROVIDER: z.enum(['fake']).default('fake'),
   PUSH_PROVIDER: z.enum(['fake']).default('fake'),
   SMS_PROVIDER: z.enum(['fake']).default('fake'),
@@ -193,6 +195,21 @@ export const envSchema = envObject.superRefine((env, ctx) => {
       path: ['PAYMENT_GATEWAY'],
       message: 'the stand-in gateway is refused in production (R-HONEST-1)',
     });
+  }
+
+  // The same for the video, push and messaging stand-ins (T153, FR-056): each answers without
+  // reaching anyone, so production would hold no lesson, send no notification and deliver no
+  // one-time code while reporting success. Each is refused on its own key.
+  if (env.NODE_ENV === 'production') {
+    for (const key of standInProviderKeys) {
+      if (env[key] === 'fake') {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'the stand-in is refused in production (FR-056)',
+        });
+      }
+    }
   }
 
   if (env.STORAGE_DRIVER !== 's3') return;
