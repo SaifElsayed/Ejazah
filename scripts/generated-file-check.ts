@@ -87,6 +87,10 @@ function pnpm(cwd: string, args: readonly string[]): { ok: boolean; output: stri
       : spawnSync('pnpm', [...args], {
           cwd,
           encoding: 'utf8',
+          // Windows only: `pnpm` is the `pnpm.cmd` shim there, which Node starts only through a
+          // shell (since Node's CVE-2024-27980 fix). The shell reads `args` as a command line, so
+          // every caller passes fixed strings and nothing else; never pass a path, a file name or
+          // any read value here. `cwd` is safe, because it is not part of that line.
           shell: process.platform === 'win32',
         });
   return { ok: result.status === 0, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
