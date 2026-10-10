@@ -437,6 +437,8 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
 - [ ] T128 [P] Add the module authoring guide to `docs/RUNBOOK.md`, so a new module arrives with its ownership statement and its manifest entry rather than without them
 - [ ] T129 Run the full `quickstart.md` validation end to end, including the checks that must fail
 - [ ] T130 Confirm every rule in `.specify/memory/constitution.md` with a machine tier has a proven failing case, and that the count of unproven ones is zero (SC-003)
+- [x] T156 [P] Record in `PLAN.md` the thirty-working-day schedule for Phases 1 to 6 after Foundations (7 + 8 + 7 + 5 + 3 days, a team of one), how a phase is sized, specified, run and extended, and, under each phase, the decisions taken since ADR 0007 that the phase carries out (ADR 0008, 0009, 0010 and the review follow-ups); no objective, deliverable or definition of done removed or reworded — done 2026-10-08
+  > **Note under T156 (2026-10-10, owner's decision).** The schedule was written on 2026-10-08 on a branch with no task id. T091 (batch P2) makes the pipeline refuse a branch that is not `Ejazah_app/<specs folder>/<task ids>`, so the owner opened this line and the branch was renamed `Ejazah_app/001-foundations/T156`. The line sits in Phase 10 because the schedule is a cross-cutting record for the phases that follow 001-foundations, not a user story of this one. Its commit subject, `Ejazah_app(PLAN): …`, predates the line and is left as written.
 
 ---
 
