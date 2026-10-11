@@ -161,6 +161,10 @@ jobs:
       - run: pnpm db:generate
       # T048 — the type-aware set (eslint.types.config.js), which only the pipeline runs (research R-10).
       - run: pnpm lint:types
+      # T157 — every numeric literal other than 0 and 1 under apps/api/src/modules/, specs excluded,
+      # read from the syntax tree so comments and strings are never read (FR-034).
+      - name: Magic-number gate over the modules (R-MONEY-12)
+        run: pnpm check:magic-numbers
       # T084 — the checkout holds one commit, so the base the change is compared with is fetched:
       # a pull request's target branch, or for a push to develop or main the commit before the push.
       - name: Fetch the base the change is compared with

@@ -29,6 +29,7 @@
     "check:branch": "tsx scripts/branch-spec-check.ts",
     "check:migrations": "tsx scripts/migration-check.ts",
     "check:suppressions": "tsx scripts/suppression-gate.ts",
+    "check:magic-numbers": "tsx scripts/magic-number-gate.ts",
     "prepare": "husky"
   },
   "devDependencies": {
