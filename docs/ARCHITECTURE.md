@@ -189,7 +189,7 @@ ijazah/
 │   │   │       └── README.md                owns / never / SRS IDs
 │   │   └── jobs/               expire-holds · expire-pending-payments · confirm-enrollment · expire-idempotency-keys
 │   │                           evaluate-session · send-reminder · render-certificate
-│   │                           purge-chat · deliver-notification
+│   │                           purge-chat · deliver-notification · reencrypt-columns
 │   ├── mobile/             §6
 │   └── admin/              §6.5
 │

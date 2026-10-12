@@ -24,7 +24,7 @@ const [
   admin,
   identity,
   verification,
-  { ColumnCipher },
+  { createColumnCipher },
   { IdempotencyService },
   { IdempotencyRepository },
   { expireIdempotencyKeys },
@@ -68,7 +68,7 @@ const idempotency = new IdempotencyService({
 
 // The column cipher holds ENCRYPTION_KEY_PREVIOUS only while a rotation runs (T155); every
 // `_encrypted` column comes from the module that owns its table (R-API-6).
-const cipher = new ColumnCipher(config.ENCRYPTION_KEY, config.ENCRYPTION_KEY_PREVIOUS);
+const cipher = createColumnCipher(config);
 const encryptedColumns = [
   ...admin.createEncryptedColumns(database),
   ...identity.createEncryptedColumns(database),

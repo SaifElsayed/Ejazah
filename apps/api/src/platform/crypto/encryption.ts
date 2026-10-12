@@ -19,7 +19,12 @@
 // `reencrypt-columns` job (jobs/) turns every old value into a current one, so the previous key can
 // then be retired. Two keys share an id about once in 256, so a previous key that shares the
 // current key's id is refused, and a new key is generated instead. A value under a third key whose id
-// matches one of the two still fails the tag, as a value under any other key does.
+// matches one of the two still fails the tag, as a value under any other key does, and `reencrypt`
+// decrypts a value that names the current key too, so the sweep counts such a value instead of
+// passing it over as current (PR #61 review, n1).
+//
+// Every process builds its cipher with `createColumnCipher(config)`, so none holds the current key
+// alone while a rotation runs and fails to read values still under the previous one (n4).
 //
 // The key is not ENCRYPTION_KEY itself but a subkey derived from it by HKDF-SHA256 under a label of
 // its own. Every label derived from ENCRYPTION_KEY is listed here, so none is used twice:
@@ -32,6 +37,7 @@
 // Only the column key protects a stored value; the rest protect short-lived values, so a rotation
 // re-encrypts the columns alone (T155).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import type { Config } from '../config/config.module.js';
 
 export const COLUMN_KEY_LABEL = 'ijazah:column-encryption:v1';
 export const COLUMN_KEY_ID_LABEL = 'ijazah:column-key-id:v1';
@@ -159,11 +165,19 @@ export class ColumnCipher {
   }
 
   /**
-   * The value to store in place of `stored` so it is under the current key, or undefined when it
-   * already names the current key. `DecryptionError` when neither key reads it for `column`.
+   * The value to store in place of `stored` so it is under the current key, or undefined when the
+   * current key already reads it. `DecryptionError` when neither key reads it for `column`, a value
+   * naming the current key's id included: the id alone does not prove which key wrote it.
    */
   reencrypt(stored: Uint8Array, column: string): Buffer | undefined {
-    if (stored[0] === this.#currentId) return undefined;
-    return this.encrypt(this.decrypt(stored, column), column);
+    const plaintext = this.decrypt(stored, column);
+    return stored[0] === this.#currentId ? undefined : this.encrypt(plaintext, column);
   }
+}
+
+/** The column cipher a process reads and writes with: the current key, and the previous one while a rotation runs. */
+export function createColumnCipher(
+  config: Pick<Config, 'ENCRYPTION_KEY' | 'ENCRYPTION_KEY_PREVIOUS'>,
+): ColumnCipher {
+  return new ColumnCipher(config.ENCRYPTION_KEY, config.ENCRYPTION_KEY_PREVIOUS);
 }

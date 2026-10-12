@@ -12,6 +12,7 @@ import {
   COLUMN_KEY_LABEL,
   ColumnCipher,
   columnKeyId,
+  createColumnCipher,
   DecryptionError,
   deriveColumnKey,
   SharedKeyIdError,
@@ -163,6 +164,22 @@ describe('rotating ENCRYPTION_KEY (T155, FR-031, R-DB-8, R-SEC-10)', () => {
     const lost = new ColumnCipher(THIRD_KEY).encrypt('lost', PAYOUT);
     expect(() => rotating.reencrypt(lost, PAYOUT)).toThrow(DecryptionError);
     expect(() => rotating.reencrypt(old, MFA)).toThrow(DecryptionError);
+  });
+
+  it('refuses a value that names the current key’s id but was written under another key (PR #61 review, n1)', () => {
+    const impostor = new ColumnCipher(keySharingIdWith(OTHER_KEY)).encrypt('lost', PAYOUT);
+    expect(impostor[0]).toBe(columnKeyId(OTHER_KEY));
+    expect(() => rotating.reencrypt(impostor, PAYOUT)).toThrow(DecryptionError);
+    expect(() => rotating.reencrypt(rotating.encrypt('current', PAYOUT), MFA)).toThrow(
+      DecryptionError,
+    );
+  });
+
+  it('is built from the configuration with both keys, so every process reads under either (n4)', () => {
+    const built = createColumnCipher({ ENCRYPTION_KEY: OTHER_KEY, ENCRYPTION_KEY_PREVIOUS: KEY });
+    expect(built.rotating).toBe(true);
+    expect(built.decrypt(old, PAYOUT)).toBe('rcp_0123456789');
+    expect(createColumnCipher({ ENCRYPTION_KEY: KEY }).rotating).toBe(false);
   });
 
   it('says whether a rotation is running: a previous key is held', () => {

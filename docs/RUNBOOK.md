@@ -303,10 +303,11 @@ environment exists yet; until it does, "install" means a developer's `.env`.
      value still under the old key again under the new one, one column at a
      time.
   3. Wait for the worker to log "Every encrypted value is under ENCRYPTION_KEY;
-     ENCRYPTION_KEY_PREVIOUS can be removed" from a run that started after both
-     processes restarted. If the sweep fails instead, naming columns with values
-     under neither key, those values were written under a key nobody holds any
-     more: stop and raise it with the team.
+     ENCRYPTION_KEY_PREVIOUS can be removed" with a `startedAt` later than the
+     restart of the last process from step 1, so the run began once no process
+     could still write under the old key. If the sweep fails instead, naming
+     columns with values under neither key, those values were written under a
+     key nobody holds any more: stop and raise it with the team.
   4. Remove `ENCRYPTION_KEY_PREVIOUS` and restart both processes. The old key is
      retired. After a leak, the leaked key still reads values until this step,
      so take it as soon as the log line appears.

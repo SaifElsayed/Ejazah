@@ -80,7 +80,15 @@ function underOldKey(column: string, count: number): Record<string, Uint8Array> 
 
 function silentLog() {
   const lines: string[] = [];
-  return { lines, info: (_fields: object, message: string) => void lines.push(message) };
+  const fields: Record<string, unknown>[] = [];
+  return {
+    lines,
+    fields,
+    info: (logged: object, message: string) => {
+      fields.push({ ...logged });
+      lines.push(message);
+    },
+  };
 }
 
 function sweep(columns: readonly EncryptedColumn[], cipher = rotating, pageSize = 2) {
@@ -216,11 +224,36 @@ describe('the reencrypt-columns sweep (T155)', () => {
     expect(log.lines).toEqual([]);
   });
 
+  it('counts a value that names the new key’s id but neither key reads (PR #61 review, n1)', async () => {
+    const shared = Array.from({ length: 4096 }, (_, counter) => {
+      const key = Buffer.alloc(32);
+      key.writeUInt32BE(counter + 1);
+      return key.toString('base64');
+    }).find((key) => key !== NEW_KEY && columnKeyId(key) === columnKeyId(NEW_KEY));
+    const impostor = new ColumnCipher(shared ?? NEW_KEY).encrypt('nobody holds this key', MFA);
+    const column = new FakeColumn(MFA, { ...underOldKey(MFA, 1), 'row-09': impostor });
+    const { log, run } = sweep([column]);
+
+    expect(impostor[0]).toBe(columnKeyId(NEW_KEY));
+    await expect(run()).rejects.toThrow(`${MFA}: 1`);
+    expect(column.rows.get('row-00')?.[0]).toBe(columnKeyId(NEW_KEY));
+    expect(log.lines).toEqual([]);
+  });
+
   it('says the previous key can be removed only after a run that left none of its values', async () => {
     const column = new FakeColumn(MFA, underOldKey(MFA, 3));
     const { log, run } = sweep([column]);
     await run();
     expect(log.lines).toHaveLength(1);
     expect(log.lines[0]).toMatch(/ENCRYPTION_KEY_PREVIOUS can be removed/);
+  });
+
+  it('names when the run that left none started, so a line is matched to a restart (n3)', async () => {
+    const before = Date.now();
+    const { log, run } = sweep([new FakeColumn(MFA, underOldKey(MFA, 1))]);
+    await run();
+    const startedAt = Date.parse(String(log.fields[0]?.['startedAt']));
+    expect(startedAt).toBeGreaterThanOrEqual(before);
+    expect(startedAt).toBeLessThanOrEqual(Date.now());
   });
 });

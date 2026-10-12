@@ -7,13 +7,16 @@
 // the repository of the module that owns the table (R-API-6). With no previous key it reads
 // nothing, so it is registered in every environment and costs nothing between rotations.
 //
-// Idempotent and resumable: a value already under the current key is left as it is, so a second
+// Idempotent and resumable: a value the current key already reads is left as it is, so a second
 // run, or a run after one that stopped part way, writes only what is still old (R-API-14). A row is
 // written only where it still holds the value read, so a value the application wrote meanwhile,
 // always under the current key, is kept. A value neither key reads is counted and passed over, so
-// every other value is still written; the run then fails naming each column and its count, never
-// the row or the bytes (R-SEC-2), and the previous key is not reported as retirable. After a run
-// that leaves no old value, the log says ENCRYPTION_KEY_PREVIOUS can be removed.
+// every other value is still written, one naming the current key's id included (the cipher
+// decrypts it rather than trust the id; PR #61 review, n1); the run then fails naming each column
+// and its count, never the row or the bytes (R-SEC-2), and the previous key is not reported as
+// retirable. After a run that leaves no old value, the log says ENCRYPTION_KEY_PREVIOUS can be
+// removed and carries `startedAt`, when that run began, so the RUNBOOK's step 3 can tell a run
+// begun after every process restarted from one begun before (n3).
 import { z } from 'zod';
 import {
   type ColumnCipher,
@@ -77,6 +80,7 @@ export function reencryptColumns({
     schedule: '*/10 * * * *',
     run: async () => {
       if (!cipher.rotating) return;
+      const startedAt = new Date().toISOString();
       const unreadable = new Map<string, number>();
       for (const column of columns) {
         const count = await reencrypt(column);
@@ -84,7 +88,7 @@ export function reencryptColumns({
       }
       if (unreadable.size > 0) throw new UnreadableValuesError(unreadable);
       log.info(
-        { columns: columns.map(({ column }) => column) },
+        { startedAt, columns: columns.map(({ column }) => column) },
         'Every encrypted value is under ENCRYPTION_KEY; ENCRYPTION_KEY_PREVIOUS can be removed',
       );
     },
