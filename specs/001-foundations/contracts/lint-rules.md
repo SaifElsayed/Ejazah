@@ -162,7 +162,7 @@ that appear to enforce something they cannot.
 | The database | R-MONEY-8, R-DB-3/5, R-SESS-1 |
 | Runtime guards | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
 | Superseded by ADR 0005 (ids retained, nothing to enforce) | R-MONEY-3/4/7/10/11 |
-| Pipeline gates built in Phase 0 | R-MONEY-9/12, R-TIME-2/3/4/5/7, R-GENDER-1/2/3, R-MOBILE-7, R-API-9/11/14, R-DB-1/4/7/8, R-SEC-1/4/6/12, R-PROC-1/4/5/7/9 |
+| Pipeline gates built in Phase 0 | R-MONEY-1/9/12, R-TIME-2/3/4/5/7, R-GENDER-1/2/3, R-MOBILE-7, R-API-9/11/14, R-DB-1/4/7/8, R-SEC-1/4/6/12, R-PROC-1/4/5/7/9 |
 | Pipeline gates built with the code they hold | Phase 1: R-GENDER-6, R-MOBILE-13, R-HONEST-4. Phase 2: R-HONEST-1. Phase 3: R-GENDER-7, R-SEC-5, R-SESS-2/4/5. Phase 4: R-API-13, R-HONEST-2/3/6 |
 | The PR checklist | R-MOBILE-3, R-MOBILE-12, R-MOBILE-14, R-API-5, R-DB-2, R-DB-4, R-DB-9, R-SEC-7, R-SEC-10, R-PROC-2, R-PROC-3, R-PROC-6 |
 
