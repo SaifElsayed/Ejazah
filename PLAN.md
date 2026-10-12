@@ -71,6 +71,8 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Both spikes closed with a written outcome
 - All three deployable applications build green: mobile client, admin dashboard, API backend (serving both, with its worker process)
 
+**Extension (stated 2026-10-12).** Phase 0 takes one working day more than its five-day batch plan, for one more batch: T159 to T163 and T165 in `specs/001-foundations/tasks.md`. The cause is a real need: T130's register (`specs/001-foundations/checklists/rule-proofs.md`) found that rules claiming a machine mechanism have no failing case, so SC-003's count is not zero. The thirty working days of Phases 1 to 6 start the day after that batch merges, so their start moves with it.
+
 ---
 
 ## Phase 1: Identity and teacher onboarding
@@ -103,6 +105,10 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Payout setup is the first consumer of the gateway's `recipient_verified` and `recipient_rejected` events, so this phase decides, as an ERD change before that work, how such an event is routed to its teacher: a hash column beside `teacher_profiles.payout_account_ref_encrypted`, or a nullable `teacher_user_id` on `payment_events` (note under T117 in `specs/001-foundations/tasks.md`). The stand-in's `PayoutDetails` fields are provisional until the gateway is selected (OPEN-11).
 - No identity caller verifies a password or a one-time code before the Phase 0 rate limits (T103) are in place, and identity validation caps password length (NIST 800-63B); both recorded from the review of PR #46.
 - Every setting an identity flow reads (OTP expiry, attempt limits, terms version) comes through the kernel's `SettingsReader` from the `settings` table seeded in Phase 0, never a constant.
+- T130 (SC-003) is carried open into this cycle. The rules still open in its register are taken up here as named tasks:
+  - R-GENDER-1 and R-GENDER-3 become a condition of the first task whose procedure returns teacher data to a user, the teacher list. A committed leaky subject must fail the adversarial suite before that task merges.
+  - R-MOBILE-13 stays a `CI` rule. Its gate, "the server test exists in the same pull request", is designed in this cycle on the path-coupling script of T163.
+  - T130 closes when the register's count is zero.
 
 **Definition of done**
 
