@@ -245,6 +245,8 @@ implemented as a call to the other — they are separate nets on purpose.
 
 ## 9. Automatic staging (SC-008)
 
+*Deferred to Phase 6 by the owner, 2026-10-13 (T092): no staging environment exists during development. This check runs in Phase 6.*
+
 Merge a trivial visible change to the default branch.
 
 **Expected**: live on staging within fifteen minutes, no human action after
@@ -277,7 +279,7 @@ PLAN.md's Phase 0 list, and where each is proven:
 |---|---|
 | CI green on typecheck, lint, test, build | §8 |
 | Secret scanning and branch protection enforced | §8 |
-| Staging deploys automatically from the default branch | §9 |
+| Staging deploys automatically from the default branch (deferred to Phase 6, T092) | §9 |
 | Migrations run clean from empty database | §2 |
 | Delete revoked at role level on the five protected tables | §3 |
 | Every port has a working stand-in | §5 |

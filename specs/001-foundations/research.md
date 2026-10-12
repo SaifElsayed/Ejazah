@@ -398,6 +398,8 @@ to one package rather than to every module.
 
 ## R-18: Staging environment — **recommendation, needs confirmation**
 
+**Owner's decision, 2026-10-13**: no staging environment during development; it is provisioned in Phase 6 (T092's note). Staging holds synthetic data only (2026-10-12). The production host is planned on a Hostinger VPS.
+
 **Recommendation**: A single always-on staging environment: the backend as a
 container, the admin surface as static assets, managed Postgres and managed
 Redis, deployed automatically on merge from the default branch. The mobile app
@@ -417,6 +419,8 @@ which suggests staging only for now.
 ---
 
 ## R-19: Data residency — **recommendation, needs confirmation**
+
+**Status, 2026-10-13**: the owner has put the question to counsel. Egypt's Personal Data Protection Law (151/2020) and its Executive Regulations (Decree 816/2025, in force 2 November 2025, one-year grace) treat storing personal data outside Egypt as a cross-border transfer that needs the Centre's licence and the data subject's consent, according to the law-firm summaries read on 2026-10-12. This bears on the production host only, since staging holds no real data.
 
 **Recommendation**: Pin all data storage — database, object storage, backups —
 to a single named region, and record that region in the architecture
@@ -463,8 +467,8 @@ computing them here is R-MONEY-5 arithmetic with no caller.
 
 | Item | Status | Blocks |
 |---|---|---|
-| Staging host (R-18) | Recommendation pending confirmation | Task list for FR-066, not the design |
-| Data residency (R-19) | Recommendation pending confirmation | Provisioning, not the design |
+| Staging host (R-18) | Deferred to Phase 6 by the owner (2026-10-13); production on a Hostinger VPS | FR-066 and SC-008, in Phase 6 |
+| Data residency (R-19) | With counsel (2026-10-13) | The production host's region, not the design |
 | Gateway selection (SRS OPEN-11) | Business evaluation pending | The Phase 2 real adapter; not the port, the stand-in or the schema |
 
 Nothing open blocks Phase 1 design or the task breakdown.

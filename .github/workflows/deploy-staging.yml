@@ -1,4 +1,4 @@
-# Deploy on merge to main. BLOCKED on the staging host and data residency decisions (research R-18, R-19).
+# Deploy on merge to main. DEFERRED to Phase 6 by the owner, 2026-10-13 (T092): no staging during development.
 name: deploy-staging
 
 # The token gets read access only (GitHub Actions hardening guide, OpenSSF Scorecard Token-Permissions).

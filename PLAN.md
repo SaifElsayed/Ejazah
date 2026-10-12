@@ -44,7 +44,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 - Security baseline before first feature commit
 - Boundary lint for modules and mobile wall
 - Docker Compose local environment
-- CI pipeline and automatic staging deploy
+- CI pipeline and automatic staging deploy (the staging deploy is deferred to Phase 6 by the owner, 2026-10-13; T092)
 - Full Prisma schema, 33 tables, multi-file
 - Database-level integrity rules and role-level delete revocation
 - Seed data identical on every machine
@@ -64,7 +64,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 - CI green on typecheck, lint, test, build
 - Secret scanning and branch protection enforced
-- Staging deploys automatically from `main`
+- Staging deploys automatically from `main` (deferred to Phase 6 by the owner, 2026-10-13: no paid environment during development; T092)
 - Migrations run clean from empty database
 - DELETE revoked at Postgres role level on `users`, `sessions`, `enrollments`, `ijazahs`, `audit_logs`
 - Every port has a working fake adapter
@@ -283,6 +283,7 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
 **Decisions since this plan was written, carried out here**
 
 - Most hands-on steps of this phase are the owner's, not the implementer's: store accounts and submissions, the hosted environment, operating the staging dataset, the walk-through on two physical devices and the restore drill. The implementer's three days cover the adversarial suite, the manual pass on the gender rules, the performance verification, the store copy in both languages and the reviewer account.
+- The always-on staging environment and its deploy on merge (Phase 0's T092, FR-066, SC-008: live within fifteen minutes of a merge to `main`), deferred here by the owner on 2026-10-13. Staging holds synthetic data only. The production host is planned on a Hostinger VPS, its region decided once counsel answers on Egypt's Personal Data Protection Law (research R-19).
 - The full-codebase review that the Phase 0 schedule planned as a separate week is not inside the thirty days: it runs after day 30, in the improvement time, once the MVP is complete. Within the thirty days every batch still gets its own review.
 
 **Why separate this**
