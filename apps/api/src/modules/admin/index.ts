@@ -1,8 +1,10 @@
 // PUBLIC ENTRY of the admin module (T017). Other modules import this file and nothing below it (R-API-3).
 // Only the three composition files may import it (R-API-4, T143): main.ts, worker.ts, admin.router.ts.
 import type { AuditWriter } from '../../platform/audit/audit-writer.js';
+import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { AdminUsersRepository } from './admin-users.repository.js';
 import { AuditRepository } from './audit.repository.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
@@ -18,4 +20,11 @@ export function createSettingsReader(database: Database): SettingsReader {
  */
 export function createAuditWriter(): AuditWriter {
   return new AuditRepository();
+}
+
+/** The admin module's `_encrypted` column, for the `reencrypt-columns` job (T155, R-API-6). */
+export function createEncryptedColumns(
+  database: Pick<Database, 'adminUser'>,
+): readonly EncryptedColumn[] {
+  return [new AdminUsersRepository(database).mfaSecrets()];
 }

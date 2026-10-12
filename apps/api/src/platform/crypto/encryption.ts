@@ -12,34 +12,93 @@
 // 96-bit IV stays far below NIST SP 800-38D's limit of 2^32 encryptions under one key at this
 // platform's volume. Errors carry neither the plaintext nor the stored bytes (R-SEC-2).
 //
+// T155: the version byte is the key id of the `ENCRYPTION_KEY` the value was written under, one byte
+// derived from that key under a label of its own, so the stored value says which key reads it, as a
+// Tink ciphertext's prefix names its key. During a rotation the cipher holds the current key and the
+// previous one, reads a value under either, and writes only under the current one; the
+// `reencrypt-columns` job (jobs/) turns every old value into a current one, so the previous key can
+// then be retired. Two keys share an id about once in 256, so a previous key that shares the
+// current key's id is refused, and a new key is generated instead. A value under a third key whose id
+// matches one of the two still fails the tag, as a value under any other key does, and `reencrypt`
+// decrypts a value that names the current key too, so the sweep counts such a value instead of
+// passing it over as current (PR #61 review, n1).
+//
+// Every process builds its cipher with `createColumnCipher(config)`, so none holds the current key
+// alone while a rotation runs and fails to read values still under the previous one (n4).
+//
 // The key is not ENCRYPTION_KEY itself but a subkey derived from it by HKDF-SHA256 under a label of
 // its own. Every label derived from ENCRYPTION_KEY is listed here, so none is used twice:
-//   ijazah:storage-link:v1        platform/ports/storage/local.adapter.ts   signs local links (T116)
-//   ijazah:column-encryption:v1   this file                                 encrypts columns (T068)
-//   ijazah:otp-pepper:v1          platform/crypto/hashing.ts                peppers OTP hashes (T069)
+//   ijazah:storage-link:v1              platform/ports/storage/local.adapter.ts  signs local links (T116)
+//   ijazah:column-encryption:v1         this file                                encrypts columns (T068)
+//   ijazah:column-key-id:v1             this file                                names the key (T155)
+//   ijazah:otp-pepper:v1                platform/crypto/hashing.ts               peppers OTP hashes (T069)
+//   ijazah:payment-stand-in-webhook:v1  platform/ports/payment/index.ts          signs stand-in events (T121)
+//   ijazah:video-stand-in-webhook:v1    platform/ports/video/index.ts            signs stand-in events (T121)
+// Only the column key protects a stored value; the rest protect short-lived values, so a rotation
+// re-encrypts the columns alone (T155).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import type { Config } from '../config/config.module.js';
 
 export const COLUMN_KEY_LABEL = 'ijazah:column-encryption:v1';
+export const COLUMN_KEY_ID_LABEL = 'ijazah:column-key-id:v1';
 
-const VERSION = 1;
+const KEY_BYTES = 32;
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 const HEADER_BYTES = 1 + IV_BYTES + TAG_BYTES;
 const COLUMN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 
-/** The column key: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256. */
-export function deriveColumnKey(encryptionKey: string): Buffer {
+function derive(encryptionKey: string, label: string, bytes: number): Buffer {
   return Buffer.from(
-    hkdfSync('sha256', Buffer.from(encryptionKey, 'base64'), Buffer.alloc(0), COLUMN_KEY_LABEL, 32),
+    hkdfSync('sha256', Buffer.from(encryptionKey, 'base64'), Buffer.alloc(0), label, bytes),
   );
 }
 
-/** A stored value that is not one this cipher wrote for this column under this key. */
+/** The column key: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256. */
+export function deriveColumnKey(encryptionKey: string): Buffer {
+  return derive(encryptionKey, COLUMN_KEY_LABEL, KEY_BYTES);
+}
+
+/** The key id a value written under ENCRYPTION_KEY (base64) carries: one byte, 0 to 255. */
+export function columnKeyId(encryptionKey: string): number {
+  return derive(encryptionKey, COLUMN_KEY_ID_LABEL, 1).readUInt8(0);
+}
+
+/** A stored value that is not one this cipher wrote for this column under one of its keys. */
 export class DecryptionError extends Error {
   constructor() {
     super('The encrypted value cannot be decrypted for this column.');
     this.name = 'DecryptionError';
   }
+}
+
+/** A previous key whose id is the current key's, so a stored value could not say which reads it. */
+export class SharedKeyIdError extends Error {
+  constructor() {
+    super(
+      'ENCRYPTION_KEY_PREVIOUS has the same key id as ENCRYPTION_KEY; generate another ENCRYPTION_KEY (openssl rand -base64 32).',
+    );
+    this.name = 'SharedKeyIdError';
+  }
+}
+
+/** One stored value of an `_encrypted` column, by the id of its row. */
+export interface EncryptedValue {
+  readonly id: string;
+  readonly value: Uint8Array;
+}
+
+/**
+ * One `_encrypted` column as the `reencrypt-columns` job reaches it (T155): through the repository
+ * of the module that owns its table (R-API-6), which holds the query and no rule.
+ */
+export interface EncryptedColumn {
+  /** `table.column`, as the cipher binds a value to it. */
+  readonly column: string;
+  /** Up to `limit` rows holding a value, in id order, after the row `after` when it is given. */
+  page(after: string | undefined, limit: number): Promise<readonly EncryptedValue[]>;
+  /** Writes `next` where the row still holds `stored`; false when it holds another value or is gone. */
+  replace(id: string, stored: Uint8Array, next: Uint8Array): Promise<boolean>;
 }
 
 function associatedData(version: number, column: string): Buffer {
@@ -50,31 +109,49 @@ function associatedData(version: number, column: string): Buffer {
 }
 
 export class ColumnCipher {
-  readonly #key: Buffer;
+  readonly #currentId: number;
+  readonly #current: Buffer;
+  /** Column keys by key id: the current key's, and the previous key's while a rotation runs. */
+  readonly #keys = new Map<number, Buffer>();
 
-  constructor(encryptionKey: string) {
-    this.#key = deriveColumnKey(encryptionKey);
+  /** `current` writes and reads; `previous`, set only while a rotation runs, only reads. */
+  constructor(current: string, previous?: string) {
+    this.#currentId = columnKeyId(current);
+    this.#current = deriveColumnKey(current);
+    this.#keys.set(this.#currentId, this.#current);
+    if (previous === undefined) return;
+    const previousId = columnKeyId(previous);
+    if (previousId === this.#currentId) throw new SharedKeyIdError();
+    this.#keys.set(previousId, deriveColumnKey(previous));
   }
 
-  /** The value to store in `column` (`table.column`) for `plaintext`. */
+  /** True while a previous key is held, so values under it may remain. */
+  get rotating(): boolean {
+    return this.#keys.size > 1;
+  }
+
+  /** The value to store in `column` (`table.column`) for `plaintext`, under the current key. */
   encrypt(plaintext: string, column: string): Buffer {
-    const aad = associatedData(VERSION, column);
+    const aad = associatedData(this.#currentId, column);
     const iv = randomBytes(IV_BYTES);
-    const cipher = createCipheriv('aes-256-gcm', this.#key, iv, { authTagLength: TAG_BYTES });
+    const cipher = createCipheriv('aes-256-gcm', this.#current, iv, { authTagLength: TAG_BYTES });
     cipher.setAAD(aad);
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-    return Buffer.concat([Buffer.from([VERSION]), iv, cipher.getAuthTag(), ciphertext]);
+    return Buffer.concat([Buffer.from([this.#currentId]), iv, cipher.getAuthTag(), ciphertext]);
   }
 
   /** The plaintext of a value stored in `column`; `DecryptionError` for anything else. */
   decrypt(stored: Uint8Array, column: string): string {
     const value = Buffer.from(stored);
     const version = value[0];
-    if (value.length < HEADER_BYTES || version !== VERSION) throw new DecryptionError();
+    const key = version === undefined ? undefined : this.#keys.get(version);
+    if (value.length < HEADER_BYTES || version === undefined || key === undefined) {
+      throw new DecryptionError();
+    }
     const aad = associatedData(version, column);
     const iv = value.subarray(1, 1 + IV_BYTES);
     const tag = value.subarray(1 + IV_BYTES, HEADER_BYTES);
-    const decipher = createDecipheriv('aes-256-gcm', this.#key, iv, { authTagLength: TAG_BYTES });
+    const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES });
     decipher.setAAD(aad);
     decipher.setAuthTag(tag);
     try {
@@ -86,4 +163,21 @@ export class ColumnCipher {
       throw new DecryptionError();
     }
   }
+
+  /**
+   * The value to store in place of `stored` so it is under the current key, or undefined when the
+   * current key already reads it. `DecryptionError` when neither key reads it for `column`, a value
+   * naming the current key's id included: the id alone does not prove which key wrote it.
+   */
+  reencrypt(stored: Uint8Array, column: string): Buffer | undefined {
+    const plaintext = this.decrypt(stored, column);
+    return stored[0] === this.#currentId ? undefined : this.encrypt(plaintext, column);
+  }
+}
+
+/** The column cipher a process reads and writes with: the current key, and the previous one while a rotation runs. */
+export function createColumnCipher(
+  config: Pick<Config, 'ENCRYPTION_KEY' | 'ENCRYPTION_KEY_PREVIOUS'>,
+): ColumnCipher {
+  return new ColumnCipher(config.ENCRYPTION_KEY, config.ENCRYPTION_KEY_PREVIOUS);
 }

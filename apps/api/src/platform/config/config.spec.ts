@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigError, loadConfig, loadConfigOrExit } from './config.module.js';
+import { columnKeyId } from '../crypto/encryption.js';
 import { envKeys } from './env.schema.js';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
@@ -174,6 +175,58 @@ describe('loadConfig (T015, FR-039)', () => {
     expect(() => loadConfig({ ...validEnv, ENCRYPTION_KEY: 'not base64!' })).toThrow(
       /ENCRYPTION_KEY/,
     );
+  });
+
+  // T155: the previous key, held only while a rotation runs.
+  it('accepts no ENCRYPTION_KEY_PREVIOUS, or an empty one, as no rotation running', () => {
+    expect(loadConfig(validEnv).ENCRYPTION_KEY_PREVIOUS).toBeUndefined();
+    expect(
+      loadConfig({ ...validEnv, ENCRYPTION_KEY_PREVIOUS: '' }).ENCRYPTION_KEY_PREVIOUS,
+    ).toBeUndefined();
+  });
+
+  it('carries an ENCRYPTION_KEY_PREVIOUS of 32 bytes of base64 beside ENCRYPTION_KEY', () => {
+    const previous = Buffer.alloc(32, 9).toString('base64');
+    const config = loadConfig({ ...validEnv, ENCRYPTION_KEY_PREVIOUS: previous });
+
+    expect(config.ENCRYPTION_KEY_PREVIOUS).toBe(previous);
+    expect(config.ENCRYPTION_KEY).toBe(thirtyTwoBytesBase64);
+  });
+
+  it('refuses an ENCRYPTION_KEY_PREVIOUS that is not 32 bytes of base64, naming it', () => {
+    const shortKey = Buffer.alloc(16).toString('base64');
+
+    expect(() => loadConfig({ ...validEnv, ENCRYPTION_KEY_PREVIOUS: shortKey })).toThrow(
+      /ENCRYPTION_KEY_PREVIOUS/,
+    );
+    expect(() => loadConfig({ ...validEnv, ENCRYPTION_KEY_PREVIOUS: 'not base64!' })).toThrow(
+      /ENCRYPTION_KEY_PREVIOUS/,
+    );
+  });
+
+  it('refuses an ENCRYPTION_KEY_PREVIOUS that shares the key id of ENCRYPTION_KEY, echoing neither', () => {
+    const current = validEnv['ENCRYPTION_KEY'] ?? '';
+    // A key id is one byte, so a few thousand candidate keys hold one that shares it.
+    const shared = [...Array(4096).keys()]
+      .map((counter) => {
+        const key = Buffer.alloc(32);
+        key.writeUInt32BE(counter + 1);
+        return key.toString('base64');
+      })
+      .find((key) => columnKeyId(key) === columnKeyId(current));
+    let message = '';
+    try {
+      loadConfig({ ...validEnv, ENCRYPTION_KEY_PREVIOUS: shared ?? current });
+    } catch (error: unknown) {
+      message = String(error);
+    }
+
+    expect(shared).toBeDefined();
+    expect(message).toMatch(/ENCRYPTION_KEY_PREVIOUS/);
+    expect(message).toMatch(/key id/);
+    expect(message).not.toContain(current);
+    expect(message).not.toContain(shared);
+    expect(() => loadConfig({ ...validEnv, ENCRYPTION_KEY_PREVIOUS: current })).toThrow(/key id/);
   });
 
   it('refuses a malformed PORT, naming it', () => {

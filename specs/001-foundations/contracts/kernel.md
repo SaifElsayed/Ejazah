@@ -140,7 +140,7 @@ a token. Neither mechanism is sufficient alone, which is why R-SEC-2 gets both.
 | Request body limit | Both request surfaces, from configuration; an oversized body answers 413 in the one error shape. Uploads keep their own limit | FR-077, NFR-SEC-9 |
 | Webhook signature verification | Every inbound gateway or provider event, on the raw body, before any handler; unsigned or invalid requests are rejected and no row is written | R-MONEY-9, R-SEC-12 |
 | Cryptographic identifier generation | Certificate numbers, verification tokens | R-DB-6 |
-| Column encryption and hashing | Per the data model's three-regime split | R-DB-7, R-DB-8 |
+| Column encryption and hashing | Per the data model's three-regime split. Every process builds its column cipher with `createColumnCipher(config)`, which holds `ENCRYPTION_KEY_PREVIOUS` beside `ENCRYPTION_KEY` while a rotation runs, so no process reads under the current key alone (T155) | R-DB-7, R-DB-8 |
 
 ---
 

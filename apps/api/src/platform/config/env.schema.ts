@@ -3,6 +3,7 @@
 // spec asserts the two sets are equal, so neither can drift from the other.
 import { Buffer } from 'node:buffer';
 import { z } from 'zod';
+import { columnKeyId } from '../crypto/encryption.js';
 
 const nonEmpty = z.string().min(1);
 const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
@@ -16,6 +17,10 @@ const encryptionKey = z
   .refine((value) => Buffer.from(value, 'base64').byteLength === 32, {
     error: 'must decode to exactly 32 bytes (openssl rand -base64 32)',
   });
+
+function isEncryptionKey(value: unknown): value is string {
+  return encryptionKey.safeParse(value).success;
+}
 
 // Scheme and host only, no path, no trailing slash: the value is joined to webhook routes.
 // Checks keep running after the URL check fails, so the refine must not throw on garbage.
@@ -68,6 +73,10 @@ const envObject = z.object({
   REDIS_URL: redisUrl,
 
   ENCRYPTION_KEY: encryptionKey,
+  // T155: the key ENCRYPTION_KEY replaced, set only while a rotation runs. Values written under it
+  // stay readable until the `reencrypt-columns` job has written each again under ENCRYPTION_KEY;
+  // then it is removed (docs/RUNBOOK.md, "Leaked credential").
+  ENCRYPTION_KEY_PREVIOUS: encryptionKey.optional(),
 
   // Storage is the one port with two real implementations from day one (FR-055).
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
@@ -122,6 +131,7 @@ const envKeyKinds = {
   DATABASE_URL: 'platform',
   REDIS_URL: 'platform',
   ENCRYPTION_KEY: 'platform',
+  ENCRYPTION_KEY_PREVIOUS: 'platform',
   STORAGE_DRIVER: 'platform',
   STORAGE_LOCAL_ROOT: 'platform',
   S3_ENDPOINT: 'provider',
@@ -183,6 +193,22 @@ export const envSchema = envObject.superRefine((env, ctx) => {
       path: ['DATABASE_URL'],
       message:
         'must not use the owner role; runtime connects as the application role (research R-5)',
+    });
+  }
+
+  // A stored value names its key by a one-byte id (T155), so the previous key must not share the
+  // current key's. Compared only when both keys are well formed; the key check reports the rest.
+  if (
+    env.ENCRYPTION_KEY_PREVIOUS !== undefined &&
+    isEncryptionKey(env.ENCRYPTION_KEY) &&
+    isEncryptionKey(env.ENCRYPTION_KEY_PREVIOUS) &&
+    columnKeyId(env.ENCRYPTION_KEY) === columnKeyId(env.ENCRYPTION_KEY_PREVIOUS)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['ENCRYPTION_KEY_PREVIOUS'],
+      message:
+        'has the same key id as ENCRYPTION_KEY; generate another ENCRYPTION_KEY (openssl rand -base64 32)',
     });
   }
 
