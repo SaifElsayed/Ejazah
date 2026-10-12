@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { IGNORED, SUITES } from './suite-gate.paths';
+import { IGNORED, type Suite, SUITES } from './suite-gate.paths';
 
 const repositoryRoot = join(__dirname, '..');
 
@@ -46,16 +46,16 @@ export function matches(path: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => patternToRegExp(pattern).test(path));
 }
 
-/** Whether a change to `path` is one the patterns guard: never a spec, Markdown or a fixture. */
-export function guards(path: string, patterns: readonly string[]): boolean {
-  return !matches(path, IGNORED) && matches(path, patterns);
+/** Whether `suite` guards a change to `path`: never a spec, Markdown, a fixture or an exception. */
+export function guards(path: string, suite: Suite): boolean {
+  return !matches(path, IGNORED) && matches(path, suite.changes) && !matches(path, suite.except);
 }
 
 /** Every refusal for this list of changed files; none when it passes. */
 export function judge(changed: readonly string[]): string[] {
   const refusals: string[] = [];
   for (const suite of SUITES) {
-    const guarded = changed.filter((path) => guards(path, suite.changes));
+    const guarded = changed.filter((path) => guards(path, suite));
     if (guarded.length === 0) continue;
     if (changed.some((path) => matches(path, suite.tests))) continue;
     refusals.push(

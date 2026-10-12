@@ -13,6 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -30,24 +31,30 @@ afterEach(() => {
 
 describe('which paths each suite guards (scripts/suite-gate.paths.ts)', () => {
   it.each([
-    ['apps/api/src/platform/guards/requester-gender.ts', GENDER.changes],
-    ['apps/api/src/modules/catalog/teacher-list.service.ts', GENDER.changes],
-    ['packages/contracts/src/gender-filter.ts', GENDER.changes],
-    ['packages/time/src/resolve.ts', TIME.changes],
-  ])('a change to %s is guarded', (path, patterns) => {
-    expect(guards(path, patterns)).toBe(true);
+    ['apps/api/src/platform/guards/requester-gender.ts', GENDER],
+    ['apps/api/src/modules/catalog/teacher-list.service.ts', GENDER],
+    ['apps/api/src/modules/booking/gender-pairing.ts', GENDER],
+    ['packages/contracts/src/gender-filter.ts', GENDER],
+    ['packages/time/src/resolve.ts', TIME],
+  ])('a change to %s is guarded', (path, suite) => {
+    expect(guards(path, suite)).toBe(true);
   });
 
   it.each([
-    ['apps/api/src/modules/catalog/README.md', GENDER.changes],
-    ['apps/api/src/modules/catalog/catalog.service.spec.ts', GENDER.changes],
-    ['apps/api/src/modules/identity/identity.repository.ts', GENDER.changes],
-    ['packages/time/src/resolve.spec.ts', TIME.changes],
-    ['packages/time/README.md', TIME.changes],
-    ['tests/violations/fixtures/packages/time/src/x.ts', TIME.changes],
-    ['tests/violations/fixtures/apps/api/src/modules/catalog/catalog.service.ts', GENDER.changes],
-  ])('a change to %s is not guarded', (path, patterns) => {
-    expect(guards(path, patterns)).toBe(false);
+    ['apps/api/src/modules/catalog/README.md', GENDER],
+    ['apps/api/src/modules/catalog/catalog.service.spec.ts', GENDER],
+    ['apps/api/src/modules/identity/identity.repository.ts', GENDER],
+    // PR #63 review, n1: identity captures gender and filters nothing; nor do the apps' steps.
+    ['apps/api/src/modules/identity/gender-capture.ts', GENDER],
+    ['apps/mobile/src/features/shared/onboarding/gender-step.tsx', GENDER],
+    ['apps/admin/src/users/gender-picker.tsx', GENDER],
+    ['packages/config/eslint-plugin-ijazah/rules/require-requester-gender.js', GENDER],
+    ['packages/time/src/resolve.spec.ts', TIME],
+    ['packages/time/README.md', TIME],
+    ['tests/violations/fixtures/packages/time/src/x.ts', TIME],
+    ['tests/violations/fixtures/apps/api/src/modules/catalog/catalog.service.ts', GENDER],
+  ])('a change to %s is not guarded', (path, suite) => {
+    expect(guards(path, suite)).toBe(false);
   });
 
   it.each([
@@ -55,6 +62,16 @@ describe('which paths each suite guards (scripts/suite-gate.paths.ts)', () => {
     ['packages/time/src/resolve.spec.ts', TIME.tests],
   ])('%s counts as a test of its suite', (path, patterns) => {
     expect(matches(path, patterns)).toBe(true);
+  });
+
+  it('counts only a spec of the adversarial suite, not another file under its folder', () => {
+    expect(matches('tests/adversarial/README.md', GENDER.tests)).toBe(false);
+    expect(
+      judge([
+        'apps/api/src/modules/catalog/teacher-list.service.ts',
+        'tests/adversarial/README.md',
+      ]),
+    ).toHaveLength(1);
   });
 });
 
@@ -185,7 +202,9 @@ describe('the coverage floor refuses a covered path below 80% (T163, T086)', () 
     // The fixtures folder is the run's root, so the configuration's own globs
     // (`packages/money/src/**`) land on the fixture's mirror of that path. The report is written to
     // a throwaway folder, and Vite's cache folder, which the run creates under its root, is removed
-    // unless it was already there.
+    // unless it was already there. The output's terminal escapes are stripped before anything is
+    // matched: on a CI runner the inner Vitest colours its summary, putting escape codes between
+    // `Tests` and `1 passed`, which a local run writing to a pipe does not (PR #63 review).
     const fixtures = join(root, 'tests', 'violations', 'fixtures');
     const cache = join(fixtures, 'node_modules');
     const cacheExisted = existsSync(cache);
@@ -208,7 +227,7 @@ describe('the coverage floor refuses a covered path below 80% (T163, T086)', () 
       { cwd: root, encoding: 'utf8', timeout: 120_000 },
     );
     if (!cacheExisted) rmSync(cache, { recursive: true, force: true });
-    const output = `${result.stdout}${result.stderr}`;
+    const output = stripVTControlCharacters(`${result.stdout}${result.stderr}`);
     expect(result.status, output).toBe(1);
     expect(output).toMatch(/Tests\s+1 passed/);
     expect(output).toMatch(/does not meet "packages\/money\/src\/\*\*" threshold \(80%\)/);
