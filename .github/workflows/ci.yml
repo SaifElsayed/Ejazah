@@ -197,6 +197,10 @@ jobs:
       # every migration merged on the base must be unchanged in the head, and a new one sort last.
       - name: Migration checksum verification against the base (R-DB-1)
         run: pnpm check:migrations --base "$COMPARE_BASE"
+      # T163 — a gender or time change must carry a change to its adversarial or DST tests; the
+      # guarded paths and their tests are listed in scripts/suite-gate.paths.ts.
+      - name: Suite gate against the base (R-PROC-5)
+        run: pnpm check:suites --base "$COMPARE_BASE"
       - name: Create the application role, as docker/initdb does locally (T065)
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
