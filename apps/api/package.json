@@ -5,7 +5,7 @@
   "description": "Backend: tRPC over Nest. Two separately mounted surfaces (user, administrator). The queue worker is a second process of this app, not a fourth application.",
   "type": "module",
   "scripts": {
-    "dev": "tsc-watch -p tsconfig.json --onSuccess \"node --env-file-if-exists=../../.env dist/main.js\"",
+    "dev": "tsc-watch --build tsconfig.json --onSuccess \"node --env-file-if-exists=../../.env dist/main.js\"",
     "dev:worker": "tsx watch --env-file-if-exists=../../.env --conditions=@ijazah/source src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
