@@ -9,6 +9,9 @@
 //
 // Neither fixture needs resolved types, so both are `fast`. Display formatting is deliberately
 // absent: a date rendered for a human is R-MOBILE-9, and T022 owns its fixture.
+//
+// T159 adds R-TIME-6's case, `fast` too: an input schema of packages/contracts that takes the
+// moment of attendance from the client.
 
 import { describeViolations, type ViolationCase } from './harness';
 
@@ -26,6 +29,13 @@ const timeViolations: readonly ViolationCase[] = [
     ruleSet: 'fast',
     fixture: 'apps/api/src/modules/sessions/uses-datetime-library.ts',
     refuses: 'a datetime library imported outside packages/time',
+  },
+  {
+    constitutionId: 'R-TIME-6',
+    ruleId: 'time/no-client-timestamp',
+    ruleSet: 'fast',
+    fixture: 'packages/contracts/src/report-attendance.ts',
+    refuses: 'an input schema that takes the moment of attendance from the client (T159)',
   },
 ];
 

@@ -59,6 +59,12 @@ const catalog = [
     set: FAST,
     rule: require('./rules/no-datetime-outside-package'),
   },
+  { id: 'time/no-client-timestamp', set: FAST, rule: require('./rules/no-client-timestamp') },
+  {
+    id: 'gender/no-authority-in-input',
+    set: FAST,
+    rule: require('./rules/no-authority-in-input'),
+  },
   { id: 'mobile/no-raw-color', set: FAST, rule: require('./rules/no-raw-color') },
   { id: 'mobile/no-physical-direction', set: FAST, rule: require('./rules/no-physical-direction') },
   { id: 'mobile/no-raw-control', set: FAST, rule: require('./rules/no-raw-control') },

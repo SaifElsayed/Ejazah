@@ -29,6 +29,8 @@ needed.
 | `api/no-orm-outside-repository` | Database client imported outside a repository file | R-API-2 |
 | `money/no-number-in-money-position` | A declared money position typed as plain `number` rather than the branded type | R-MONEY-1 |
 | `time/no-datetime-outside-package` | `Date` arithmetic or a datetime library outside `packages/time` | R-TIME-1 |
+| `time/no-client-timestamp` | In an input schema of `packages/contracts/src/` (a declaration named `…Input` or `…InputSchema`): a server-event timestamp by name (`createdAt`, `updatedAt`, `expiresAt`, `joinedAt`, `paidAt`, `occurredAt`, `timestamp`, and their snake_case forms), or any field validated as an absolute instant; a local wall-clock time with its zone is accepted (R-TIME-3, T159) | R-TIME-6 |
+| `gender/no-authority-in-input` | In an input schema of `packages/contracts/src/`: a key named `gender`, `role`, `userId` or `user_id`, anywhere in the schema (T159) | R-GENDER-4 |
 | `mobile/no-raw-color` | Hex, rgb or raw spacing literal in a feature file | R-MOBILE-4 |
 | `mobile/no-physical-direction` | Directional utility instead of a logical one | R-MOBILE-5 |
 | `mobile/no-raw-control` | Raw platform control instead of a shared primitive | R-MOBILE-6 |
