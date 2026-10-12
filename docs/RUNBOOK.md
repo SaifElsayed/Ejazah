@@ -342,8 +342,8 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   with that same permission and replace the repository secret (Settings,
   Secrets and variables, Actions), then delete the old token. It also has an
   expiry date: when it expires, the `dependency-alerts` job fails until it is
-  replaced. From fourteen days before that date, the job's last step warns on
-  every run and names the date (T158). Every other job uses GitHub's own
+  replaced. From fourteen days before that date, the job warns on every run
+  and names the date (T158; `scripts/dependency-alerts.ts` since T160). Every other job uses GitHub's own
   short-lived, read-only token.
 
 **The nets that catch a secret before it leaks** (research R-15):

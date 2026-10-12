@@ -21,3 +21,8 @@ outright (`allowOnly`), failing the run.
 
 Imports resolve inside this tree so a rule that classifies an import by resolving it reaches a
 real file rather than nothing.
+
+One pair is not refused by ESLint: `packages/money/src/under-floor.ts` and its spec (T163). The
+spec covers one branch of four, so the coverage floor of `packages/config/vitest.base.ts` (R-PROC-5,
+T086) refuses the run. `tests/pipeline/suite-gate.spec.ts` runs Vitest over it with this folder as
+the root, so the configuration's own `packages/money/src/**` glob lands on the mirror.

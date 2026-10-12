@@ -65,6 +65,8 @@ export interface AdministratorCaller {
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
 export interface AppContext {
+  /** Which surface this is; never 'admin', so an administrator context cannot stand in (T162, R-SEC-8). */
+  readonly surface: 'app';
   readonly caller: UserCaller | null;
   readonly locale: Locale;
   readonly correlationId: string;
@@ -84,6 +86,8 @@ export interface Administration {
  * (ARCHITECTURE §6.5). `administrator` is null for an unauthenticated request.
  */
 export interface AdminContext {
+  /** Which surface this is; never 'app', so a user context cannot stand in (T162, R-SEC-8). */
+  readonly surface: 'admin';
   readonly administrator: AdministratorCaller | null;
   readonly correlationId: string;
   readonly log: Logger;
@@ -114,6 +118,7 @@ export function createAppContext({ session, log }: ContextSource<UserSession>): 
           gender: session.gender as RequesterGender,
         };
   return {
+    surface: 'app',
     caller,
     locale: session?.preferredLanguage ?? DEFAULT_LOCALE,
     ...correlated(log),
@@ -131,6 +136,7 @@ export function createAdminContext({
   administration,
 }: AdminContextSource): AdminContext {
   return {
+    surface: 'admin',
     administrator: session === null ? null : { adminId: session.adminId },
     ...correlated(log),
     administration,

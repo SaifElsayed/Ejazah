@@ -30,6 +30,8 @@
     "check:migrations": "tsx scripts/migration-check.ts",
     "check:suppressions": "tsx scripts/suppression-gate.ts",
     "check:magic-numbers": "tsx scripts/magic-number-gate.ts",
+    "check:i18n": "tsx scripts/i18n-key-parity.ts",
+    "check:suites": "tsx scripts/suite-gate.ts",
     "prepare": "husky"
   },
   "devDependencies": {
