@@ -544,7 +544,7 @@ Three applications from one monorepo, per plan.md: `apps/mobile/`, `apps/admin/`
   - **A mechanism a cell omitted**: R-DB-4's schema gate, added as `CI`.
   - **T159's tier** for R-TIME-6 and R-GENDER-4.
 
-  The amendment adds a row to the amendment history with the written rationale, and `contracts/lint-rules.md` follows the map. The PR checklist stays at twelve rules. It runs last in its batch, after T159 (SC-003; opened by T130's register, owner's decision 2026-10-12)
+  The amendment adds a row to the amendment history with the written rationale, and `contracts/lint-rules.md` follows the map. The PR checklist stays at twelve rules. In the same change, one PATCH sentence in `specs/001-foundations/spec.md` states SC-003's basis in the document's own words: the count covers every machine tier, runtime guards and database constraints included, as T130's register counts them. spec.md is not the constitution, so that sentence needs no row in the amendment history (Saif's review of PR #62). It runs last in its batch, after T159 (SC-003; opened by T130's register, owner's decision 2026-10-12)
 - [x] T166 [P] [US5] Prove the runtime tier of R-DB-6: `apps/api/src/platform/guards/identifiers.source.spec.ts` replaces `randomBytes` of `node:crypto` with a fake and asserts that each certificate number and verification token is exactly the encoding of the bytes drawn, so an identifier taken from a counter or from `Math.random` fails it (R-DB-6, FR-045; opened by T130's register, owner's decision 2026-10-12) — done 2026-10-12
 
 ---
