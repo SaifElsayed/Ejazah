@@ -333,75 +333,13 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-      # Reads pnpm-lock.yaml only; nothing is installed. A non-zero exit is a critical advisory or an
-      # audit that could not run, and both block.
-      - name: No critical advisory in the lockfile (R-SEC-12)
-        run: |
-          if ! pnpm audit --audit-level critical; then
-            echo "::error::R-SEC-12: pnpm audit found a critical advisory in pnpm-lock.yaml (listed above), or could not read the advisory database; the merge is blocked until it is fixed"
-            exit 1
-          fi
-      # GITHUB_TOKEN cannot read Dependabot alerts, so a fine-grained token with "Dependabot alerts:
-      # read" on this repository is stored as DEPENDABOT_ALERTS_TOKEN (the owner's, note under T090).
-      # Fails closed: an empty secret, any answer other than a list (gh fails on a 4xx or 5xx, so a
-      # 401, 403 or 404 fails here), or no page at all is never read as zero alerts. REST only: the
-      # GraphQL field answers zero without the permission.
-      - name: No open critical Dependabot alert (R-SEC-12)
+      # T160 — both readings and T158's expiry warning live in scripts/dependency-alerts.ts, so its
+      # spec proves every refusal (tests/pipeline/dependency-alerts.spec.ts). It runs under Node's own
+      # type stripping, so nothing is installed before the lockfile is audited. GITHUB_TOKEN cannot
+      # read Dependabot alerts, so a fine-grained token with "Dependabot alerts: read" on this
+      # repository is stored as DEPENDABOT_ALERTS_TOKEN (the owner's, note under T090); the script
+      # fails closed without it. GITHUB_REPOSITORY is set by the runner.
+      - name: No critical advisory and no open critical Dependabot alert (R-SEC-12)
         env:
-          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::R-SEC-12: the secret DEPENDABOT_ALERTS_TOKEN is empty or not available to this run, so open Dependabot alerts cannot be read; the merge is blocked (fail closed)"
-            exit 1
-          fi
-          answer="$RUNNER_TEMP/dependabot-alerts.tsv"
-          if ! gh api --paginate \
-            --header "Accept: application/vnd.github+json" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "repos/$REPOSITORY/dependabot/alerts?state=open&severity=critical&per_page=100" \
-            --jq 'if type == "array" then "page", (.[] | ["alert", .dependency.package.name, .security_advisory.ghsa_id, .html_url] | @tsv) else error("the answer is not a list of alerts") end' \
-            > "$answer"; then
-            echo "::error::R-SEC-12: the Dependabot alerts API did not answer with a list of alerts (see above); no count can be trusted, so the merge is blocked (fail closed)"
-            exit 1
-          fi
-          if ! grep --quiet --line-regexp 'page' "$answer"; then
-            echo "::error::R-SEC-12: the Dependabot alerts API answered with no page; no count can be trusted, so the merge is blocked (fail closed)"
-            exit 1
-          fi
-          open=0
-          while IFS=$'\t' read -r kind package advisory url; do
-            [ "$kind" = alert ] || continue
-            open=$((open + 1))
-            echo "::error::R-SEC-12: open critical Dependabot alert: ${package} ${advisory} ${url}"
-          done < "$answer"
-          if [ "$open" -gt 0 ]; then
-            echo "R-SEC-12: ${open} open critical Dependabot alert(s); the merge is blocked until each is fixed or dismissed"
-            exit 1
-          fi
-          echo "R-SEC-12: no open critical Dependabot alert"
-      # T158 — every answer to a request made with the token carries its expiry date in the
-      # GitHub-Authentication-Token-Expiration header. From fourteen days before that date, every run
-      # warns, so the step above never fails closed by surprise. This step only warns; once the token
-      # has expired, the step above fails closed on its own.
-      - name: DEPENDABOT_ALERTS_TOKEN is not about to expire (R-SEC-12)
-        env:
-          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          headers="$(gh api --include --method GET "repos/$REPOSITORY/dependabot/alerts?per_page=1" 2>/dev/null | tr -d '\r' | sed '/^$/q')" || true
-          expiry="$(printf '%s\n' "$headers" | grep --ignore-case '^github-authentication-token-expiration:' | cut --delimiter=' ' --fields=2-)" || true
-          if [ -z "$expiry" ]; then
-            echo "::warning::R-SEC-12: GitHub returned no expiry date for DEPENDABOT_ALERTS_TOKEN; check it in the repository owner's fine-grained tokens"
-            exit 0
-          fi
-          if ! expires_at="$(date --utc --date "$expiry" +%s 2>/dev/null)"; then
-            echo "::warning::R-SEC-12: the expiry date of DEPENDABOT_ALERTS_TOKEN could not be read: $expiry"
-            exit 0
-          fi
-          days_left=$(( (expires_at - $(date --utc +%s)) / 86400 ))
-          if [ "$days_left" -lt 14 ]; then
-            echo "::warning::R-SEC-12: DEPENDABOT_ALERTS_TOKEN expires on $expiry ($days_left days left); renew it (docs/RUNBOOK.md, GitHub tokens) before the dependency-alerts job fails closed"
-          else
-            echo "DEPENDABOT_ALERTS_TOKEN expires on $expiry ($days_left days left)"
-          fi
+          DEPENDABOT_ALERTS_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
+        run: node scripts/dependency-alerts.ts
