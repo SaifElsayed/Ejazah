@@ -158,17 +158,21 @@ that appear to enforce something they cannot.
 
 | Held by | Rules |
 |---|---|
-| The compiler | R-MONEY-1, R-TIME-6, R-GENDER-4, R-GENDER-6, R-API-7, R-API-11, R-SEC-8, R-SESS-1, R-HONEST-4/5 |
-| The database | R-MONEY-8, R-TIME-3, R-DB-3/5/8, R-SEC-8, R-SESS-1, R-PROC-11 |
+| The compiler | R-MONEY-1, R-GENDER-6, R-API-7, R-API-11, R-SEC-8, R-SESS-1, R-HONEST-4/5 |
+| The database | R-MONEY-8, R-DB-3/5, R-SESS-1 |
 | Runtime guards | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
 | Superseded by ADR 0005 (ids retained, nothing to enforce) | R-MONEY-3/4/7/10/11 |
-| Pipeline gates | R-MONEY-9/12, R-TIME-2/4/5/7, R-GENDER-1/2/3/6/7, R-MOBILE-7/13, R-API-9/11/13/14, R-DB-1/7, R-SEC-1/4/5/6/12, R-SESS-2/4/5, R-HONEST-1/2/3/4/6, R-PROC-1/4/5/7/9 |
-| Human review alone | R-MOBILE-3, R-MOBILE-12, R-MOBILE-14, R-API-5, R-DB-2, R-DB-4, R-DB-9, R-SEC-7, R-SEC-10, R-PROC-2, R-PROC-3, R-PROC-6 |
+| Pipeline gates built in Phase 0 | R-MONEY-9/12, R-TIME-2/3/4/5/7, R-GENDER-1/2/3, R-MOBILE-7, R-API-9/11/14, R-DB-1/4/7/8, R-SEC-1/4/6/12, R-PROC-1/4/5/7/9 |
+| Pipeline gates built with the code they hold | Phase 1: R-GENDER-6, R-MOBILE-13, R-HONEST-4. Phase 2: R-HONEST-1. Phase 3: R-GENDER-7, R-SEC-5, R-SESS-2/4/5. Phase 4: R-API-13, R-HONEST-2/3/6 |
+| The PR checklist | R-MOBILE-3, R-MOBILE-12, R-MOBILE-14, R-API-5, R-DB-2, R-DB-4, R-DB-9, R-SEC-7, R-SEC-10, R-PROC-2, R-PROC-3, R-PROC-6 |
 
-The twelve in the last row are the pull request template, and they are the only
-rules a machine holds nothing of. They are not the only rules a reviewer reads
-for: R-MONEY-12, R-TIME-3, R-TIME-6, R-GENDER-4, R-GENDER-5, R-MOBILE-8,
-R-MOBILE-13, R-API-1, R-API-6, R-API-13, R-DB-7, R-SEC-1, R-SEC-2, R-PROC-10,
+The twelve in the last row are the pull request template. Eleven are the only rules a
+machine holds nothing of; R-DB-4 is held in part by the schema gate (its declared caches)
+and stays on the template because whether any other value is derived is a reviewer's call
+(constitution 2.4.0). One published rule holds a prohibition its id does not name:
+`api/table-ownership`, whose messages end R-API-6, also holds R-PROC-11, because only the admin
+module may reach the `settings` table. The twelve are not the only rules a reviewer reads for: R-MONEY-12, R-TIME-3, R-TIME-6, R-GENDER-4, R-GENDER-5, R-MOBILE-8,
+R-MOBILE-13, R-API-1, R-API-6, R-API-13, R-DB-7, R-SEC-1, R-SEC-2, R-SEC-8, R-PROC-10,
 R-PROC-11, R-HONEST-1 and R-HONEST-5 each carry review as a second mechanism
 behind a machine check. (R-MONEY-12 also carries review.)
 
