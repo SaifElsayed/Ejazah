@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.4.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
+Version 2.4.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -63,7 +63,7 @@ Rules 8 and 9 are reinstated for gateway events.
 
 | ID | Rule | Enforced |
 |---|---|---|
-| R-MONEY-1 | **Never** represent money as float or decimal. Integer piasters only. | `TYPE` - the `Piasters` branded type in `packages/money`; `LINT` bans `number` in money positions |
+| R-MONEY-1 | **Never** represent money as float or decimal. Integer piasters only. | `TYPE` - the `Piasters` branded type in `packages/money`; `LINT` bans `number` in money positions; `CI` - the schema gate refuses a `_piasters` column that is not an integer type |
 | R-MONEY-2 | **Never** name a money variable without the `_piasters` suffix (`price` is forbidden; `price_piasters` is required). | `LINT` custom rule |
 | R-MONEY-3 | *Superseded (ADR 0005).* Was: never store a balance. There is no balance to store. | — |
 | R-MONEY-4 | *Superseded (ADR 0005).* Was: never UPDATE or DELETE a ledger row. There is no ledger. Hard-deletion of every other record that matters is R-DB-3. | — |
@@ -284,7 +284,7 @@ Who holds which rules. This is also the build list for Phase 0
 | **TypeScript** (branded types, schemas, separate routers) | Throughout | R-MONEY-1, R-GENDER-6, R-API-7/11, R-SEC-8, R-SESS-1, R-HONEST-4/5 |
 | **Postgres** (constraints, uniques, revoked privileges) | Phase 0, workstream 2 | R-MONEY-8, R-DB-3/5, R-SESS-1, ERD section 15 |
 | **Runtime guards** (`platform/`, the caller kinds, jobs) | Phase 0, workstream 3, then per module | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
-| **CI gates** | Phase 0, workstream 1 | R-MONEY-9/12, R-TIME-2/3/4/5/7, R-GENDER-1/2/3, R-MOBILE-7, R-API-9/11/14, R-DB-1/4/7/8, R-SEC-1/4/6/12, R-PROC-1/4/5/7/9 |
+| **CI gates** | Phase 0, workstream 1 | R-MONEY-1/9/12, R-TIME-2/3/4/5/7, R-GENDER-1/2/3, R-MOBILE-7, R-API-9/11/14, R-DB-1/4/7/8, R-SEC-1/4/6/12, R-PROC-1/4/5/7/9 |
 | **CI gates** | With the code they hold: Phase 1, R-GENDER-6, R-MOBILE-13, R-HONEST-4; Phase 2, R-HONEST-1; Phase 3, R-GENDER-7, R-SEC-5, R-SESS-2/4/5; Phase 4, R-API-13, R-HONEST-2/3/6 | The rules named in the previous column |
 | **PR checklist** | Phase 0 | The twelve rules below: eleven `REVIEW`-only, and R-DB-4, whose declared caches the schema gate checks while whether any other value is derived stays review's |
 
@@ -380,6 +380,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.4.1 | 2026-10-12 | PATCH (T167, from the review of PR #63): the R-MONEY-1 cell and the Phase 0 CI row of the enforcement map name the schema gate, whose `piasters-type` check has refused a `_piasters` column that is not an integer type since T070. A mechanism the cell omitted, as R-DB-4's was in 2.4.0; no prohibition changed. Follows 2.4.0. |
 | 2.4.0 | 2026-10-12 | MINOR (T165, from T130's register `specs/001-foundations/checklists/rule-proofs.md`, owner's decision 2026-10-12): the enforcement map and the rule cells are made to say what holds each rule. Map rows aligned to their cells: R-SEC-1 leaves the lint row (no lint rule holds it); R-SEC-10 carries the `REVIEW` tag; the `RT` tier names the caller kinds and the jobs beside `platform/`, where R-API-12 and R-SESS-3 are held; the CI row is split by the phase that builds each gate, so the Phase 0 row claims only gates Phase 0 built; R-API-13 no longer names disbursement, retired by ADR 0005 and ADR 0007. Tiers claimed without a mechanism, corrected: R-TIME-3 and R-DB-8 are held by the CI schema gate, not by the database; R-SEC-1 no longer names GitHub push protection, unavailable on this repository (second note under T090); R-PROC-11 is held by table ownership (`LINT`, R-API-6) and review, since the application role may write `settings`; R-SEC-8 keeps `TYPE` (T162's `surface` discriminant) and its separate tables become review's, per the ERD; R-MOBILE-13 keeps `CI`, built with the first mobile feature. A mechanism a cell omitted: R-DB-4 gains `CI`, the schema gate's declared-cache and derived-value checks, and stays on the PR checklist, which keeps twelve items, because whether any other value is derived is still judged by a reviewer. R-TIME-6 and R-GENDER-4 move from `TYPE` to `LINT`: T159's `time/no-client-timestamp` and `gender/no-authority-in-input`. Rationale: SC-003 counts a rule claiming a machine mechanism without a failing case as unproven, so a cell that names a mechanism nothing holds is a false claim the count cannot clear. No prohibition is removed or weakened, so no ADR. Follows 2.3.1. |
 | 2.3.1 | 2026-10-05 | ADR 0010. PATCH: R-DB-4 lists `sessions.teacher_user_id` and `student_user_id` among the declared caches, copied from the enrollment at generation and never changed, so the exclusion constraints of ERD §15.19 can refuse overlapping sessions. R-DB-4 already permitted a new cache through an ADR, so no prohibition changed. Follows 2.3.0. |
 | 2.3.0 | 2026-10-05 | MINOR (review of PR #29, T040): R-SEC-11 is expanded. It now names strict HTTP parsing beside TLS verification, so switching on a lenient HTTP parser is prohibited by the rule's own words, and the enforcement cell names `insecureHTTPParser: true` beside `rejectUnauthorized: false`. `sec/no-disabled-tls` has refused that option since PR #29, by the owner's recorded decision that a lenient parser is what request smuggling needs; this amendment gives that refusal its text. The enforcement cell of R-PROC-7, and with it the CI rows of the enforcement map and of the lint contract, gain a pipeline half (review of PR #31, T139 and T140): the suppression check is run a second time with inline configuration ignored, because a comment could switch the rule off in the first run, and an unused directive becomes an error. The prohibition of R-PROC-7 is unchanged. No prohibition removed or weakened, so no ADR. Follows 2.2.0. |
@@ -400,4 +401,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.4.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-12
+**Version**: 2.4.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-12
