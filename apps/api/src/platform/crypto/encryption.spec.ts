@@ -2,11 +2,24 @@
 // or presented to a third party is stored as one `bytea`: a version byte, a 12-byte IV, a 16-byte
 // tag and the ciphertext. Any change to any part, or decryption under another column or key, is
 // refused with one labelled error that carries none of the bytes.
+//
+// T155: the version byte names the key a value was written under, so `ENCRYPTION_KEY` can be
+// rotated. A cipher holding the current key and the previous one reads a value written under
+// either, always writes under the current one, and turns an old value into a current one.
 import { describe, expect, it } from 'vitest';
-import { COLUMN_KEY_LABEL, ColumnCipher, DecryptionError, deriveColumnKey } from './encryption.js';
+import {
+  COLUMN_KEY_ID_LABEL,
+  COLUMN_KEY_LABEL,
+  ColumnCipher,
+  columnKeyId,
+  DecryptionError,
+  deriveColumnKey,
+  SharedKeyIdError,
+} from './encryption.js';
 
 const KEY = Buffer.alloc(32, 7).toString('base64');
 const OTHER_KEY = Buffer.alloc(32, 9).toString('base64');
+const THIRD_KEY = Buffer.alloc(32, 11).toString('base64');
 const PAYOUT = 'teacher_profiles.payout_account_ref_encrypted';
 const MFA = 'admin_users.mfa_secret_encrypted';
 
@@ -23,6 +36,17 @@ function refused(stored: Uint8Array, column = PAYOUT, by = cipher): DecryptionEr
   return failure as DecryptionError;
 }
 
+/** Another key whose key id is `key`'s. An id is one byte, so a few thousand candidates hold one. */
+function keySharingIdWith(key: string): string {
+  for (let counter = 1; counter <= 4096; counter += 1) {
+    const candidate = Buffer.alloc(32);
+    candidate.writeUInt32BE(counter);
+    const encoded = candidate.toString('base64');
+    if (encoded !== key && columnKeyId(encoded) === columnKeyId(key)) return encoded;
+  }
+  throw new Error('no key among 4096 shares the id');
+}
+
 describe('column encryption (T068, FR-031, R-8)', () => {
   it('decrypts what it encrypted, for the same column', () => {
     const stored = cipher.encrypt('rcp_0123456789', PAYOUT);
@@ -31,10 +55,10 @@ describe('column encryption (T068, FR-031, R-8)', () => {
     expect(cipher.decrypt(cipher.encrypt('نص عربي', PAYOUT), PAYOUT)).toBe('نص عربي');
   });
 
-  it('lays out version, IV, tag and ciphertext in one value, 29 bytes plus the plaintext', () => {
+  it('lays out the key id, IV, tag and ciphertext in one value, 29 bytes plus the plaintext', () => {
     const stored = cipher.encrypt('abc', PAYOUT);
     expect(stored).toHaveLength(29 + 3);
-    expect(stored[0]).toBe(1);
+    expect(stored[0]).toBe(columnKeyId(KEY));
   });
 
   it('draws a fresh IV for every write, so equal plaintexts are not equal values', () => {
@@ -61,6 +85,10 @@ describe('column encryption (T068, FR-031, R-8)', () => {
 
   it('refuses a value written under another key', () => {
     refused(new ColumnCipher(OTHER_KEY).encrypt('rcp_0123456789', PAYOUT));
+  });
+
+  it('refuses a value written under another key that shares its key id', () => {
+    refused(new ColumnCipher(keySharingIdWith(KEY)).encrypt('rcp_0123456789', PAYOUT));
   });
 
   it('refuses a value shorter than version, IV and tag', () => {
@@ -90,5 +118,69 @@ describe('column encryption (T068, FR-031, R-8)', () => {
     expect(columnKey).toHaveLength(32);
     expect(columnKey.equals(Buffer.from(KEY, 'base64'))).toBe(false);
     expect(columnKey.equals(deriveColumnKey(OTHER_KEY))).toBe(false);
+  });
+});
+
+describe('rotating ENCRYPTION_KEY (T155, FR-031, R-DB-8, R-SEC-10)', () => {
+  const rotating = new ColumnCipher(OTHER_KEY, KEY);
+  const old = cipher.encrypt('rcp_0123456789', PAYOUT);
+
+  it('names the key in the version byte: one byte derived from the key under its own label', () => {
+    expect(COLUMN_KEY_ID_LABEL).toBe('ijazah:column-key-id:v1');
+    expect(columnKeyId(KEY)).toBe(columnKeyId(KEY));
+    expect(columnKeyId(KEY)).not.toBe(columnKeyId(OTHER_KEY));
+    expect(Number.isInteger(columnKeyId(KEY))).toBe(true);
+    expect(columnKeyId(KEY)).toBeGreaterThanOrEqual(0);
+    expect(columnKeyId(KEY)).toBeLessThan(256);
+  });
+
+  it('reads a value written under the previous key and one written under the current key', () => {
+    expect(rotating.decrypt(old, PAYOUT)).toBe('rcp_0123456789');
+    const current = new ColumnCipher(OTHER_KEY).encrypt('new', PAYOUT);
+    expect(rotating.decrypt(current, PAYOUT)).toBe('new');
+  });
+
+  it('always writes under the current key, which the previous key cannot read', () => {
+    const written = rotating.encrypt('rcp_0123456789', PAYOUT);
+    expect(written[0]).toBe(columnKeyId(OTHER_KEY));
+    expect(new ColumnCipher(OTHER_KEY).decrypt(written, PAYOUT)).toBe('rcp_0123456789');
+    refused(written, PAYOUT, cipher);
+  });
+
+  it('turns a value under the previous key into one under the current key, for the same column', () => {
+    const turned = rotating.reencrypt(old, PAYOUT) ?? Buffer.alloc(0);
+    expect(turned[0]).toBe(columnKeyId(OTHER_KEY));
+    expect(new ColumnCipher(OTHER_KEY).decrypt(turned, PAYOUT)).toBe('rcp_0123456789');
+    refused(turned, MFA, rotating);
+  });
+
+  it('leaves a value already under the current key as it is', () => {
+    expect(rotating.reencrypt(rotating.encrypt('current', PAYOUT), PAYOUT)).toBeUndefined();
+    expect(cipher.reencrypt(old, PAYOUT)).toBeUndefined();
+  });
+
+  it('refuses to turn a value under neither key, or one moved from another column', () => {
+    const lost = new ColumnCipher(THIRD_KEY).encrypt('lost', PAYOUT);
+    expect(() => rotating.reencrypt(lost, PAYOUT)).toThrow(DecryptionError);
+    expect(() => rotating.reencrypt(old, MFA)).toThrow(DecryptionError);
+  });
+
+  it('says whether a rotation is running: a previous key is held', () => {
+    expect(rotating.rotating).toBe(true);
+    expect(cipher.rotating).toBe(false);
+  });
+
+  it('refuses a previous key that shares the current key’s id, naming neither value', () => {
+    const shared = keySharingIdWith(KEY);
+    expect(() => new ColumnCipher(KEY, shared)).toThrow(SharedKeyIdError);
+    expect(() => new ColumnCipher(KEY, KEY)).toThrow(SharedKeyIdError);
+    let message = '';
+    try {
+      new ColumnCipher(KEY, shared);
+    } catch (error: unknown) {
+      message = String(error);
+    }
+    expect(message).not.toContain(KEY);
+    expect(message).not.toContain(shared);
   });
 });

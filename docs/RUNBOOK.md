@@ -286,17 +286,34 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   key, the one-time-code pepper, the local storage link signature, and the
   webhook secrets of the payment stand-in (when
   `PAYMENT_GATEWAY_WEBHOOK_SECRET` is empty) and the video stand-in.
-  After a change, every `*_encrypted` value written under the old key fails to
-  decrypt: `admin_users.mfa_secret_encrypted`,
+  Those last three protect only short-lived values: codes already sent stop
+  verifying, and links and stand-in events already signed are refused. The four
+  `*_encrypted` columns are kept by these four steps (T155):
+  `admin_users.mfa_secret_encrypted`,
   `teacher_profiles.payout_account_ref_encrypted`,
   `device_push_tokens.token_encrypted` and
-  `verification_documents.storage_key_encrypted`. Codes already sent stop
-  verifying, and local links already issued stop working. There is no
-  re-encryption step yet. In development, generate a new key and rebuild the
-  database (see "Reset the local database"). In a deployed environment that
-  holds encrypted rows, rotating today loses those values, so stop and raise it
-  with the team at once; the re-encryption step must exist before the first
-  such environment does.
+  `verification_documents.storage_key_encrypted`.
+  1. Generate a new key (`openssl rand -base64 32`). Set
+     `ENCRYPTION_KEY_PREVIOUS` to the current value and `ENCRYPTION_KEY` to the
+     new one, for the API and the worker together, and restart both. If they
+     refuse to start because the two keys share a key id, generate another new
+     key; this happens about once in 256.
+  2. Every value is now written under the new key, and both keys read. The
+     worker's `reencrypt-columns` sweep runs every ten minutes and writes each
+     value still under the old key again under the new one, one column at a
+     time.
+  3. Wait for the worker to log "Every encrypted value is under ENCRYPTION_KEY;
+     ENCRYPTION_KEY_PREVIOUS can be removed" from a run that started after both
+     processes restarted. If the sweep fails instead, naming columns with values
+     under neither key, those values were written under a key nobody holds any
+     more: stop and raise it with the team.
+  4. Remove `ENCRYPTION_KEY_PREVIOUS` and restart both processes. The old key is
+     retired. After a leak, the leaked key still reads values until this step,
+     so take it as soon as the log line appears.
+
+  In development, generating a new key and rebuilding the database (see "Reset
+  the local database") is still the shorter way.
+
 - **`PAYMENT_GATEWAY_API_KEY`** and **`PAYMENT_GATEWAY_WEBHOOK_SECRET`**. Issued
   in the gateway's dashboard. The gateway is not chosen yet (SRS OPEN-11), so
   its own steps are written here when its adapter lands. Once the webhook
