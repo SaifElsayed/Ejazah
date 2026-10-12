@@ -136,25 +136,27 @@ This suite is inverted: each case introduces a deliberate violation and asserts
 the build refuses it **and names the constitution rule**. Every rule listed in
 [contracts/lint-rules.md](./contracts/lint-rules.md) has a case.
 
-To watch one by hand — import across the role wall:
+To watch one by hand, lint a fixture of that suite directly. `pnpm lint` skips
+`tests/violations/fixtures/`, so `--no-ignore` is needed. Mobile feature files
+arrive with Phase 1, so today the fixtures are the files that cross the walls
+(T164). First, an import across the role wall:
 
 ```bash
-echo "import { x } from '../../teacher/packages';" \
-  >> apps/mobile/src/features/student/discovery/index.ts
-pnpm lint
+npx eslint --no-ignore tests/violations/fixtures/apps/mobile/src/features/student/imports-teacher-tree.ts
 ```
 
-**Expected**: fails, message ending `R-MOBILE-1`. Revert.
+**Expected**: fails, message ending `R-MOBILE-1`.
 
-Then the one that needs type information:
+Then the one that needs type information, arithmetic on two piaster amounts:
 
 ```bash
-# add, inside a feature file:  const total = price_piasters + fee_piasters;
-pnpm lint:types
+npx eslint --no-ignore --config eslint.types.config.js tests/violations/fixtures/apps/api/src/modules/payments/fee-check.ts
 ```
 
 **Expected**: fails, message ending `R-MONEY-5`. If it passes, the money type is
-an alias rather than a brand and the whole money tier is decorative.
+an alias rather than a brand and the whole money tier is decorative. A file of
+your own works the same once its package declares `@ijazah/money`: in a package
+that does not, the import resolves to nothing and no rule can see the brand.
 
 **Coverage of the guards themselves**: the suite must have a case per rule. A
 rule with no failing case is a rule nobody has proven works — SC-003 sets that
