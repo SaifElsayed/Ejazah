@@ -1,6 +1,6 @@
 # ADR 0003 — Video baseline: a managed provider holds on Egyptian mobile data, and LiveKit Cloud is the provider for Phase 3
 
-**Status:** accepted · **Date:** 2026-10-13 · **Closes:** T123 (FR-069, SC-015) · **Amends:** nothing; one follow-up for the Phase 3 cycle is named under Consequences
+**Status:** accepted · **Date:** 2026-10-13 · **Closes:** T123 (FR-069, SC-015) · **Amends:** nothing; the Daily-to-LiveKit rename is a follow-up for the Phase 3 cycle, named under Consequences
 
 ## Context
 
@@ -25,9 +25,9 @@ paid infrastructure before launch.
 | | LiveKit Cloud | Daily | Agora |
 | --- | --- | --- | --- |
 | Free allowance | 5,000 WebRTC participant minutes a month; a hard cap, so new requests fail instead of being billed | 10,000 participant minutes a month; usage beyond is billed | 10,000 minutes a month; the account is suspended on the second day after the quota is exceeded |
-| Servers nearest Egypt | A "Middle East" region group (Saudi Arabia and UAE) | No published region list found | "200+ data centers", locations not published |
+| Servers nearest Egypt | Region group `me`, "Middle East": Saudi Arabia and UAE, with in-region redundancy (LiveKit's region list, updated 2026-05-14) | No published region list found | "200+ data centers", locations not published |
 | Expo | Official config plugin, development build | Official config plugin, development build | Expo setup through `expo-build-properties`; plugin not confirmed |
-| In our documents | SRS §10 | SRS §10, ARCHITECTURE | Not named |
+| In our documents | SRS §10 | SRS §10, ARCHITECTURE | ARCHITECTURE §3.2 only, as an interchangeable vendor; not in the SRS |
 | Leaving it | Open source; can run on our own host behind the same `VideoPort` | Vendor-only | Vendor-only |
 
 Stream and ZEGOCLOUD were not taken further: no independent evaluation was
@@ -35,22 +35,23 @@ found. Zoom, Meet and Skype links are excluded by FR-SESS-1. A self-hosted
 server (Jitsi, or LiveKit on our own host) needs paid hosting now, which the
 owner ruled out for development.
 
-LiveKit Cloud was tried first. Daily stayed the fallback, to be tried the same
-way only if LiveKit did badly on Egyptian networks. It did not, so Daily was not
-run.
+SRS §10 asks for both providers to be evaluated against a connectivity spike.
+They were compared on paper above; on devices, LiveKit Cloud was tried first and
+Daily stayed the fallback, to be tried the same way only if LiveKit did badly on
+Egyptian networks. It did not, so Daily was not run on devices.
 
 ## What was tested
 
 | Item | Value |
 | --- | --- |
-| Date | 2026-10-13, 21:08 to about 21:30 Cairo time |
+| Date | 2026-10-13, 19:08 to about 19:30 UTC (the room name carries the UTC time) |
 | Provider | LiveKit Cloud, free Build plan; project `ejazah-test`, data region EU (Frankfurt), agent observability disabled (we have no agents, and it records audio) |
 | Room | `t123-202610131908`, created through the server API (`RoomService/CreateRoom`) with at most 2 participants and a 10-minute empty timeout |
 | Tokens | Minted on the developer machine from the API key and secret, HS256, one per participant (`teacher`, `student`), each bound to that room, valid 3 hours. No SDK: `node:crypto` only. The secret never left the machine |
 | Client | LiveKit's own web client, `meet.livekit.io/custom`, opened in each phone's browser. Not our app: the app has no session screens before Phase 3 |
 | Phones | vivo V60 Lite 5G and realme C53 |
 | Network | Etisalat (e&) mobile data on both phones; Wi-Fi switched on and off during the call |
-| Length | About 5 minutes in all, as reported by the owner. The dashboard's room-session record shows 2 participants connected together for 2 minutes in one stretch (21:22 to 21:24); the rest of the time was spent across the rejoins below |
+| Length | About 5 minutes in all, as reported by the owner. The dashboard's room-session record shows 2 participants connected together for 2 minutes in one stretch (19:22 to 19:24 UTC); the rest of the time was spent across the rejoins below |
 
 ## What was observed
 
@@ -60,7 +61,7 @@ run.
 | Two-way audio, recitation and correction | FR-SESS-4 | Clear, no dropouts. Delay about half a second, judged by ear, not instrumented. The owner judged it normal and acceptable for correction |
 | Camera on and off | §3.7.2 | Worked |
 | Switch between Wi-Fi and mobile data mid-call | FR-069 | The call continued; no dropout noticed |
-| Close the page and reopen it | FR-SESS-9 | Rejoined with the same link |
+| Close the page and reopen it | FR-SESS-18 | Rejoined with the same link |
 | Provider-side record of who was connected and when | FR-SESS-9 | The dashboard's session record shows the participant count over time, start time and participant minutes |
 | Web client on one phone | — | `meet.livekit.io` crashed with "Application error: a client-side exception" after joining, with the camera already working. After the advice to open it in an up-to-date Chrome, the owner reported both phones working; which change fixed it was not recorded. It is a fault of the sample web page in that phone's browser, not of the provider; the app will use the native SDK |
 
@@ -95,10 +96,15 @@ one adapter, as ARCHITECTURE §3.2 intends.
 
 ## Consequences
 
-- **Follow-up for the Phase 3 cycle:** `docs/ARCHITECTURE.md` names
-  `daily.adapter.ts` in the module tree and in the ports section. The Phase 3
-  cycle renames it to the LiveKit adapter when it writes the adapter task. This
-  task's path is this file only, so the rename is not made here.
+- **Follow-up for the Phase 3 cycle:** Daily is wired by name in several
+  places, and the Phase 3 cycle renames them together when it writes the
+  adapter task: `docs/ARCHITECTURE.md` (`daily.adapter.ts` in the module tree,
+  `DailyAdapter` in the ports rules), the `DAILY_API_KEY` and
+  `DAILY_WEBHOOK_SECRET` keys in `apps/api/src/platform/config/env.schema.ts`,
+  `config.spec.ts` and `.env.example`, `docs/RUNBOOK.md` (the leaked-credential
+  entry and "Room does not open"), `specs/001-foundations/quickstart.md` §5, and
+  the comments in `apps/api/src/platform/ports/video/index.ts` and its spec. This
+  task's path is this file only, so nothing is renamed here.
 - The app needs an Expo development build from the first video task: the
   LiveKit React Native SDK carries native code that Expo Go does not include.
 - 5,000 free minutes is about 55 forty-five-minute sessions of two people a
@@ -116,15 +122,15 @@ one adapter, as ARCHITECTURE §3.2 intends.
 - **Daily first.** Its free minutes run into billing rather than stopping, and
   no Middle East region was found published. It stays the fallback.
 - **Agora.** Strong network, but suspension on exceeding the free quota would
-  stop live lessons, it is not in our documents, and its Expo setup is manual.
+  stop live lessons, the SRS does not name it, and its Expo setup is manual.
 - **Self-hosting now.** Needs a paid server during development.
 
 ## References
 
 - LiveKit, [Quotas and limits](https://docs.livekit.io/deploy/admin/quotas-and-limits/)
-- LiveKit, [Region pinning](https://docs.livekit.io/deploy/admin/regions/region-pinning)
+- LiveKit, [Regions, regional endpoints and static IPs: region groups](https://docs.livekit.io/deploy/admin/regions/endpoints/#region-groups) (the `me` group) and [Region pinning](https://docs.livekit.io/deploy/admin/regions/region-pinning)
 - LiveKit, [Expo quickstart](https://docs.livekit.io/transport/sdk-platforms/expo/)
 - LiveKit Meet, [`app/custom/page.tsx`](https://github.com/livekit-examples/meet/blob/main/app/custom/page.tsx) (the `liveKitUrl` and `token` parameters)
 - Daily, [React Native installation](https://docs.daily.co/docs/react-native/installation)
 - Agora, [RTC pricing](https://www.agora.io/en/pricing/agora-rtc) and [billing policies](https://docs.agora.io/en/realtime-media/im/reference/billing-policies)
-- SRS FR-SESS-1 to FR-SESS-4, FR-SESS-9, §2.6, §3.7.2, §10; PLAN.md, schedule and Phase 3
+- SRS FR-SESS-1 to FR-SESS-4, FR-SESS-9, FR-SESS-18, §2.6, §3.7.2, §10; PLAN.md, schedule and Phase 3
