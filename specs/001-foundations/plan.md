@@ -193,7 +193,7 @@ mechanically checkable rather than a matter of judgement.
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Nineteen decisions; two (staging host, data residency) are recommendations awaiting confirmation and block provisioning rather than design.
+- **Phase 0 — Research**: [research.md](./research.md). Nineteen decisions; two (staging host, data residency) were recommendations awaiting confirmation that blocked provisioning rather than design; since 2026-10-13 staging is deferred to Phase 6 (T092) and data residency is with counsel.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: not created by this command. Run `/speckit-tasks`.
 

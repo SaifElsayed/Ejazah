@@ -7,8 +7,10 @@ was chosen, why, and what was rejected. Decisions here are inputs to the design
 artifacts, not commitments the spec makes — the spec states outcomes, this states
 how they are reached.
 
-Two decisions at the end (R-18, R-19) are recommendations that need your
-confirmation rather than settled findings; they are marked accordingly.
+Two decisions at the end (R-18, R-19) were recommendations that needed the
+owner's confirmation rather than settled findings. R-18 is decided (staging
+deferred to Phase 6, 2026-10-13); R-19 is with counsel. Each carries a dated
+status line.
 
 ---
 
@@ -396,7 +398,9 @@ to one package rather than to every module.
 
 ---
 
-## R-18: Staging environment — **recommendation, needs confirmation**
+## R-18: Staging environment — **decided: deferred to Phase 6 (2026-10-13)**
+
+**Owner's decision, 2026-10-13**: no staging environment during development; it is provisioned in Phase 6 (T092's note). Staging holds synthetic data only (2026-10-12). The production host is planned on a Hostinger VPS.
 
 **Recommendation**: A single always-on staging environment: the backend as a
 container, the admin surface as static assets, managed Postgres and managed
@@ -410,13 +414,15 @@ migrations to run clean from empty and Phase 6 requires a restore drill — both
 of which are considerably easier against a managed instance with point-in-time
 recovery than against a self-managed one.
 
-**Open**: the specific host, and whether a separate production environment is
-provisioned now or in Phase 6. PLAN.md puts hosted infrastructure at Week 14,
-which suggests staging only for now.
+**Was open, now answered (2026-10-13)**: the specific host, and whether a separate
+production environment is provisioned now or in Phase 6. Neither is provisioned
+now: staging and production both come in Phase 6, production on a Hostinger VPS.
 
 ---
 
-## R-19: Data residency — **recommendation, needs confirmation**
+## R-19: Data residency — **with counsel (2026-10-13)**
+
+**Status, 2026-10-13**: the owner has put the question to counsel. Egypt's Personal Data Protection Law (151/2020) and its Executive Regulations (Ministerial Decree 816/2025, dated 1 November 2025 and made public on 25 December 2025; the firms put the end of its one-year grace at 31 October or 1 November 2026, the exact date for counsel) treat storing personal data outside Egypt as a cross-border transfer that needs the Centre's licence and the data subject's consent, according to the law-firm summaries read on 2026-10-12. This bears on the production host only, since staging holds no real data.
 
 **Recommendation**: Pin all data storage — database, object storage, backups —
 to a single named region, and record that region in the architecture
@@ -463,8 +469,8 @@ computing them here is R-MONEY-5 arithmetic with no caller.
 
 | Item | Status | Blocks |
 |---|---|---|
-| Staging host (R-18) | Recommendation pending confirmation | Task list for FR-066, not the design |
-| Data residency (R-19) | Recommendation pending confirmation | Provisioning, not the design |
+| Staging host (R-18) | Deferred to Phase 6 by the owner (2026-10-13); production on a Hostinger VPS | FR-066 and SC-008, in Phase 6 |
+| Data residency (R-19) | With counsel (2026-10-13) | The production host's region, not the design |
 | Gateway selection (SRS OPEN-11) | Business evaluation pending | The Phase 2 real adapter; not the port, the stand-in or the schema |
 
 Nothing open blocks Phase 1 design or the task breakdown.

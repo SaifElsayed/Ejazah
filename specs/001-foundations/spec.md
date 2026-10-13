@@ -413,7 +413,7 @@ identifier, or a section of `docs/ERD.md` v1.0.
 - **FR-063**: The pipeline MUST fail on removal or rename of a published procedure, field or enum value, comparing against a recorded contract snapshot (R-API-9).
 - **FR-064**: The pipeline MUST run the gender-enforcement suite as a blocking gate from this phase onward, even while its case coverage is still small (R-GENDER-1, R-GENDER-2, R-GENDER-3). Every case in the suite MUST be asserted in both directions — a male requester against female teachers and a female requester against male teachers — against the single visibility predicate of SRS §3.7.1 (ADR 0006).
 - **FR-065**: The review template MUST carry the twelve review-only checklist items verbatim and no other rule, so a reviewer's obligation stays short enough to be read rather than skimmed.
-- **FR-066**: A merge to the default branch MUST deploy automatically to a staging environment reachable from outside the team's network.
+- **FR-066**: A merge to the default branch MUST deploy automatically to a staging environment reachable from outside the team's network. *(Deferred to Phase 6 by the owner, 2026-10-13 (T092).)*
 - **FR-067**: Recorded operational procedures MUST exist for the recoveries this phase makes possible: rebuilding a diverged local database, and responding to a leaked credential by rotating first and investigating second (R-DB-2, R-SEC-10).
 - **FR-068**: Every amendment this phase makes to the data model or to a governing document MUST be recorded, so a later reader can see what changed and why (R-PROC-2).
 
@@ -453,7 +453,7 @@ below are the entities whose structure is load-bearing for a constitutional rule
 - **SC-005**: The complete test suite passes on a machine holding no third-party credential.
 - **SC-006**: The full migration history applied to a completely empty database succeeds on the first attempt with no manual step, and yields every table in the model with no table outside it.
 - **SC-007**: Every integrity rule the model declares is demonstrated by an insert the database rejects.
-- **SC-008**: A merged change is live on staging within fifteen minutes of merge, with no human action after approval.
+- **SC-008**: A merged change is live on staging within fifteen minutes of merge, with no human action after approval. *(Deferred to Phase 6 by the owner, 2026-10-13 (T092).)*
 - **SC-009**: Attempts to push directly to the default branch, to merge without an approving review, or to merge with a failing pipeline fail in every attempt.
 - **SC-010**: A planted test secret is independently rejected by the local check and by the pipeline check, including when placed in the specs directory.
 - **SC-011**: The review checklist contains exactly the twelve review-only items, so a reviewer's obligation fits on one screen.
