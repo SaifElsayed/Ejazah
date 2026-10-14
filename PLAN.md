@@ -73,6 +73,8 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Extension (stated 2026-10-12).** Phase 0 takes one working day more than its five-day batch plan, for one more batch: T159 to T163 and T165 in `specs/001-foundations/tasks.md`. The cause is a real need: T130's register (`specs/001-foundations/checklists/rule-proofs.md`) found that rules claiming a machine mechanism have no failing case, so SC-003's count is not zero. The thirty working days of Phases 1 to 6 start the day after that batch merges, so their start moves with it.
 
+**Extension (stated 2026-10-14).** Phase 0 takes one more working day, for the hardening batch T168 to T173 in `specs/001-foundations/tasks.md` (its Phase 11). The cause is a real need: the closure review of `develop` d7b837f on 2026-10-13 (the security review, the code review and the project reviewer, read together) found nothing Critical and six things that are cheap before Phase 1 writes its first procedure and expensive after: the stand-ins run under a copied configuration because `NODE_ENV` defaults to development; no caller kind forces an output schema; a rate limit is applied by hand and has no platform-wide budget; the queue never retries; the database has no statement timeout and the cipher does not bind a value to its row; the API stops unclean. The thirty working days of Phases 1 to 6 start the day after that batch merges, one day later than the statement above; the ERD amendments the same review raised open the Phase 1 cycle (below) and are not part of this batch.
+
 ---
 
 ## Phase 1: Identity and teacher onboarding
@@ -109,6 +111,13 @@ Because every later phase depends on it, and because boundary lint that arrives 
   - R-GENDER-1 and R-GENDER-3 become a condition of the first task whose procedure returns teacher data to a user, the teacher list. A committed leaky subject must fail the adversarial suite before that task merges.
   - R-MOBILE-13 stays a `CI` rule. Its gate, "the server test exists in the same pull request", is designed in this cycle on the path-coupling script of T163.
   - T130 closes when the register's count is zero.
+- The closure review of Phase 0 (2026-10-13; owner's decision 2026-10-14) opens this cycle with ERD amendments before any identity code is written (R-PROC-2):
+  - a table of hashed sessions and refresh tokens for users and a separate one for administrators (FR-AUTH-7 requires server-side revocation; the ERD has none; R-SEC-8, R-DB-7);
+  - where `users.account_status`, `user_roles.status`, teacher approval and payout verification are resolved on each request, since the request context carries none of them today and ARCHITECTURE §7.2, `contracts/kernel.md` and `procedures.ts` give `teacherProcedure` two meanings (FR-VERIFY-8, FR-VERIFY-10, FR-GENDER-6);
+  - `idempotency_keys` unique on `(scope, actor_id, key)` rather than `(scope, key)`;
+  - an index on `otp_codes (destination, purpose)` and purge sweeps for `otp_codes` and stale `device_push_tokens` (NFR-COMP-2);
+  - the admin panel's authentication transport (a bearer header, no cookies, so no CSRF surface).
+  The text conflicts the review listed (ADR 0001 on the payment port, `/ready` and Redis, NFR-SEC-7's push protection, SRS §6.2 and §3.14 against the ERD, ADR 0005's superseded decisions, the rule count) ride along with the cycle's document pass. Everything else the review deferred stays deferred; ADR 0011 keeps the list.
 
 **Definition of done**
 
