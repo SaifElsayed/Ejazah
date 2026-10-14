@@ -393,10 +393,10 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | enrollment_id | FK → enrollments | |
 | student_user_id / teacher_user_id | FK → users | Denormalised for rendering |
 | subject_id | FK → subjects | |
-| mode | enum generated · uploaded | FR-IJAZAH-2, DEC-42 |
+| mode | enum generated · uploaded | FR-IJAZAH-2, DEC-42. Always `generated` in the MVP; `uploaded` is kept for a deferred mode and never written (ADR 0013) |
 | language | enum ar · en | Mode A template language (FR-LOC-4) |
-| chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable. Mode A only |
-| certificate_storage_key | text | Generated PDF or uploaded scan; signed URLs only |
+| chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable. Mode A only, so always present in the MVP (ADR 0013) |
+| certificate_storage_key | text | The generated PDF (an uploaded scan once Mode B returns, ADR 0013); signed URLs only |
 | paper_copy_intended | boolean | Informational (FR-IJAZAH-5) |
 | verification_token_hash | text, unique | Backs the public QR page (FR-IJAZAH-10). The QR carries the plaintext token; the database stores only its hash and looks up by hash (R-DB-7) |
 | granted_at | timestamptz | |

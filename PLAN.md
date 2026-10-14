@@ -225,14 +225,14 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** grant, verify the certificate that is the product.
 
-**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…14, FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, §3.14
+**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, §3.14
 
 **What this phase delivers**
 
 - Chain of transmission per teacher per subject
 - Admin verification of chain entries
 - Teacher signature upload
-- Ijazah granting, generated and uploaded modes
+- Ijazah granting, platform-generated only (the uploaded mode is deferred, ADR 0013)
 - Immutable chain snapshot at grant
 - Non-guessable certificate numbers and QR
 - Public certificate verification page
@@ -246,7 +246,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Decisions since this plan was written, carried out here**
 
-- Uploaded (Mode B) certificates are content-sniffed, size-limited and stored under the encrypted, signed-URL regime of verification documents, and the public verification page says plainly that such a certificate was uploaded by the teacher and is not platform-generated (FR-IJAZAH-13/14).
+- Every ijazah is platform-generated (ADR 0013). The uploaded mode, with its content sniffing and its verification-page wording (FR-IJAZAH-13/14), is deferred; `ijazahs.mode` stays and the grant service refuses `uploaded`.
 - The certificate number is sixteen Crockford base32 symbols stored without separators and displayed as 4-4-4-4; the verification token is 32 random bytes in base64url — both minted by the Phase 0 identifiers module (T105).
 - The Arabic RTL PDF spike (Phase 0, T124) decides the rendering approach for the 25-entry chain before this phase's Spec Kit cycle.
 - Reminder jobs keyed to a session's start are rescheduled when the session's instants are recomputed (ADR 0009 D3, `reminder_offsets_minutes`, the key T074 seeds).
