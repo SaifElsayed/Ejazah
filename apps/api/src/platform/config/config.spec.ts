@@ -65,40 +65,49 @@ describe('env.schema (T015, FR-039)', () => {
     expect(configError.message).not.toContain(unknown);
   });
 
-  it('refuses the payment stand-in in production only, naming PAYMENT_GATEWAY (T146, R-HONEST-1)', () => {
-    let failure: unknown;
-    try {
-      loadConfig({ ...validEnv, NODE_ENV: 'production' });
-    } catch (error: unknown) {
-      failure = error;
+  // T168 (review finding SEC-1): a stand-in confirms whatever it is told, so it is accepted only
+  // where NODE_ENV says development or test, and refused in every other mode, not only the one
+  // named `production`. The enum admits one other mode today; the rule is written as "not the two".
+  const modesOutsideDevelopmentAndTest = ['production'];
+
+  it('refuses the payment stand-in in every mode but development and test, naming PAYMENT_GATEWAY (T146, T168, R-HONEST-1)', () => {
+    for (const nodeEnv of modesOutsideDevelopmentAndTest) {
+      let failure: unknown;
+      try {
+        loadConfig({ ...validEnv, NODE_ENV: nodeEnv });
+      } catch (error: unknown) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(ConfigError);
+      // Beside the other stand-ins' keys (T153), which such a configuration also refuses.
+      expect((failure as ConfigError).offendingKeys).toContain('PAYMENT_GATEWAY');
+      expect((failure as ConfigError).message).toMatch(/PAYMENT_GATEWAY \(the stand-in gateway/);
     }
-    expect(failure).toBeInstanceOf(ConfigError);
-    // Beside the other stand-ins' keys (T153), which a production configuration also refuses.
-    expect((failure as ConfigError).offendingKeys).toContain('PAYMENT_GATEWAY');
-    expect((failure as ConfigError).message).toMatch(/PAYMENT_GATEWAY \(the stand-in gateway/);
 
     for (const nodeEnv of ['development', 'test']) {
       expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).PAYMENT_GATEWAY).toBe('fake');
     }
   });
 
-  // T153 (FR-056): the video, push and messaging stand-ins are refused in production as the payment
-  // one is (T146), each on its own key. While every key's only member is `fake`, a production
-  // configuration also carries PAYMENT_GATEWAY's refusal, so each case asserts its key is among the
-  // offending ones; development and test accept every stand-in.
+  // T153 (FR-056): the video, push and messaging stand-ins are refused as the payment one is
+  // (T146), each on its own key, in every mode but development and test (T168). While every key's
+  // only member is `fake`, such a configuration also carries PAYMENT_GATEWAY's refusal, so each case
+  // asserts its key is among the offending ones; development and test accept every stand-in.
   it.each(['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SMS_PROVIDER'])(
-    'refuses %s=fake in production only, naming the key (T153)',
+    'refuses %s=fake in every mode but development and test, naming the key (T153, T168)',
     (key) => {
-      for (const value of [{ [key]: 'fake' }, {}]) {
-        let failure: unknown;
-        try {
-          loadConfig({ ...validEnv, NODE_ENV: 'production', ...value });
-        } catch (error: unknown) {
-          failure = error;
+      for (const nodeEnv of modesOutsideDevelopmentAndTest) {
+        for (const value of [{ [key]: 'fake' }, {}]) {
+          let failure: unknown;
+          try {
+            loadConfig({ ...validEnv, NODE_ENV: nodeEnv, ...value });
+          } catch (error: unknown) {
+            failure = error;
+          }
+          expect(failure).toBeInstanceOf(ConfigError);
+          expect((failure as ConfigError).offendingKeys).toContain(key);
+          expect((failure as ConfigError).message).toMatch(new RegExp(`${key} \\(the stand-in`));
         }
-        expect(failure).toBeInstanceOf(ConfigError);
-        expect((failure as ConfigError).offendingKeys).toContain(key);
-        expect((failure as ConfigError).message).toMatch(new RegExp(`${key} \\(the stand-in`));
       }
 
       for (const nodeEnv of ['development', 'test']) {
@@ -107,6 +116,24 @@ describe('env.schema (T015, FR-039)', () => {
       }
     },
   );
+
+  // T168 (review finding SEC-1): a configuration copied onto a server without NODE_ENV used to
+  // default to development, where every stand-in is accepted. There is no default now.
+  it('refuses a configuration without NODE_ENV, naming it, and one naming a mode it does not know', () => {
+    let failure: unknown;
+    try {
+      loadConfig(without(validEnv, 'NODE_ENV'));
+    } catch (error: unknown) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(ConfigError);
+    expect((failure as ConfigError).offendingKeys).toEqual(['NODE_ENV']);
+    expect((failure as ConfigError).message).toMatch(/NODE_ENV/);
+
+    expect(() => loadConfig({ ...validEnv, NODE_ENV: '' })).toThrow(/NODE_ENV/);
+    expect(() => loadConfig({ ...validEnv, NODE_ENV: 'staging' })).toThrow(/NODE_ENV/);
+    expect(() => loadConfig({ ...validEnv, NODE_ENV: 'staging' })).not.toThrow(/staging/);
+  });
 });
 
 describe('loadConfig (T015, FR-039)', () => {
@@ -141,11 +168,12 @@ describe('loadConfig (T015, FR-039)', () => {
   });
 
   it('applies the declared defaults when a defaulted value is absent', () => {
+    // NODE_ENV has no default (T168): it is in `validEnv` and stays.
     const config = loadConfig(
-      without(validEnv, 'NODE_ENV', 'PORT', 'LOG_LEVEL', 'STORAGE_DRIVER', 'STORAGE_LOCAL_ROOT'),
+      without(validEnv, 'PORT', 'LOG_LEVEL', 'STORAGE_DRIVER', 'STORAGE_LOCAL_ROOT'),
     );
 
-    expect(config.NODE_ENV).toBe('development');
+    expect(config.NODE_ENV).toBe('test');
     expect(config.PORT).toBe(3000);
     expect(config.LOG_LEVEL).toBe('info');
     expect(config.STORAGE_DRIVER).toBe('local');
