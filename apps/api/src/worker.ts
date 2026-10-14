@@ -20,6 +20,7 @@ const [
   { initReporting },
   { createLogger },
   { closeDatabase, openDatabase },
+  { onShutdown },
   { requireSettingsReader },
   admin,
   identity,
@@ -35,6 +36,7 @@ const [
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
   import('./platform/db/prisma.repository.js'),
+  import('./platform/lifecycle/shutdown.js'),
   import('./platform/settings/settings-reader.js'),
   import('./modules/admin/index.js'),
   import('./modules/identity/index.js'),
@@ -97,14 +99,13 @@ const worker = queueing.startWorker({
 log.info({ queue: queueing.QUEUE_NAME, jobs: jobs.length }, 'Worker started');
 
 // A deploy stops the process with SIGTERM: the running delivery finishes before the worker closes,
-// and an unfinished one is delivered again, which is safe because every job is idempotent.
-async function stop(signal: NodeJS.Signals): Promise<void> {
-  log.info({ signal }, 'Worker stopping');
-  await worker.close();
-  await queue.close();
-  await closeDatabase(database);
-  process.exit(0);
-}
-
-process.once('SIGTERM', (signal) => void stop(signal));
-process.once('SIGINT', (signal) => void stop(signal));
+// and an unfinished one is delivered again, which is safe because every job is idempotent. The
+// sequence runs once however many signals arrive, and the process exits with its outcome (T173).
+onShutdown(
+  async () => {
+    await worker.close();
+    await queue.close();
+    await closeDatabase(database);
+  },
+  { log },
+);

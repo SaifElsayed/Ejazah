@@ -22,6 +22,12 @@
 // code (`errorCode`, `statusCode`) and a name that says when, how many or whether
 // (`tokenExpiresAt`, `otpAttempts`, `hasToken`). One shared list for both is not built (note in the
 // rule's header); a word added to one belongs in the other.
+//
+// THE `code` OF A SERIALIZED ERROR IS KEPT (T173, the logger item of the code review): the object
+// pino writes for an Error (`type`, `message`, `stack`, the `cause` chain) carries the error's own
+// `code`, a classification an operator reads first (`ECONNREFUSED`, `57014`), never a one-time
+// code. It is copied through on that object and on each error of its cause chain only; a bare
+// `code` anywhere else, an object the error carries under another key included, stays redacted.
 import { pino, type DestinationStream, type Logger } from 'pino';
 
 export type { Logger } from 'pino';
@@ -163,16 +169,23 @@ export function isRedactedKey(name: string): boolean {
  * reached twice side by side is written twice.
  */
 export function redact(value: unknown): unknown {
-  return redactValue(value, new Set());
+  return redactValue(value, new Set(), false);
 }
 
-function redactValue(value: unknown, path: Set<object>): unknown {
+/** A key the serialized form of an Error keeps as written: its classification code. */
+const ERROR_CLASSIFICATION_KEY = 'code';
+/** The key under which pino's serializer writes the next error of the cause chain. */
+const ERROR_CAUSE_KEY = 'cause';
+
+function redactValue(value: unknown, path: Set<object>, serializedError: boolean): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (path.has(value)) return '[circular]';
 
   let readable: unknown = value;
+  let isError = serializedError;
   if (value instanceof Error) {
     readable = pino.stdSerializers.errWithCause(value);
+    isError = true;
   } else if (typeof (value as { toJSON?: unknown }).toJSON === 'function') {
     readable = (value as { toJSON: () => unknown }).toJSON();
     if (readable === null || typeof readable !== 'object') return readable;
@@ -180,10 +193,17 @@ function redactValue(value: unknown, path: Set<object>): unknown {
 
   path.add(value);
   try {
-    if (Array.isArray(readable)) return readable.map((item) => redactValue(item, path));
+    if (Array.isArray(readable)) return readable.map((item) => redactValue(item, path, false));
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(readable as object)) {
-      out[key] = isRedactedKey(key) ? REDACTED : redactValue(inner, path);
+      if (isError && key === ERROR_CLASSIFICATION_KEY) {
+        out[key] = redactValue(inner, path, false);
+      } else if (isRedactedKey(key)) {
+        out[key] = REDACTED;
+      } else {
+        // The cause chain is a chain of serialized errors; any other object the error carries is not.
+        out[key] = redactValue(inner, path, isError && key === ERROR_CAUSE_KEY);
+      }
     }
     return out;
   } finally {

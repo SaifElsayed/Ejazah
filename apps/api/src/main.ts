@@ -7,7 +7,9 @@
 // stays quick. Then reporting is started (T111), the logger created (T100), the database client
 // opened (T102), the admin module's settings reader bound (T113), the rate limiter built over it
 // (T103), the admin module's audit writer bound (T108), each port's provider selected (T121), and the application with both surfaces mounted (T149) and the health routes registered
-// (T110) made to listen.
+// (T110) made to listen. A deploy's SIGTERM, or an operator's SIGINT, stops it once and cleanly
+// (T173): the application stops listening and closes, then the database client is closed, and the
+// process exits with that sequence's outcome.
 import { loadConfigOrExit } from './platform/config/config.module.js';
 
 const config = loadConfigOrExit();
@@ -15,7 +17,8 @@ const config = loadConfigOrExit();
 const [
   { initReporting },
   { createLogger },
-  { openDatabase },
+  { closeDatabase, openDatabase },
+  { onShutdown },
   { ReadinessRepository },
   { requireSettingsReader },
   { createRateLimiter },
@@ -28,6 +31,7 @@ const [
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
   import('./platform/db/prisma.repository.js'),
+  import('./platform/lifecycle/shutdown.js'),
   import('./platform/db/readiness.repository.js'),
   import('./platform/settings/settings-reader.js'),
   import('./platform/guards/rate-limit.guard.js'),
@@ -86,3 +90,14 @@ const application = await createApplication({
 });
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
+
+// Once, however many signals arrive: stop listening and close the application (Nest's shutdown
+// hooks are enabled by the application, so its providers hear it too), then close the database;
+// exit 0 when both closed, 1 when either failed (T173).
+onShutdown(
+  async () => {
+    await application.close();
+    await closeDatabase(database);
+  },
+  { log },
+);

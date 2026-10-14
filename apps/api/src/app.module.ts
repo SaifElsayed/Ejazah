@@ -36,6 +36,11 @@
 // BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
 // any route, so every response carries them, on either surface, on the health routes or elsewhere.
 //
+// SHUTDOWN HOOKS. The application listens for SIGTERM and SIGINT itself (T173), so a provider's
+// `onApplicationShutdown` runs on a signal and `close()` is never run twice: Nest runs one shutdown
+// per cycle whether a signal or `main.ts`'s own stop sequence asks first, and the sequence exits
+// the process once the database is closed too.
+//
 // `main.ts` builds this application after the configuration validated and is the only caller in
 // production; a spec passes fixture routers in place of the real ones.
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -239,6 +244,8 @@ export async function createApplication({
     logger: new KernelLoggerForNest(log),
     abortOnError: false,
   });
+  // The two signals a process is stopped with, the same two `onShutdown` listens for (T173).
+  application.enableShutdownHooks(['SIGTERM', 'SIGINT']);
   // Ahead of every route, so each response carries the headers and the allowlist (T136).
   applySecurityHeaders(application, securityHeaders);
   application.useGlobalFilters(new OneErrorShape(log));
