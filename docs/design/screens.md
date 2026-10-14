@@ -29,7 +29,8 @@ files in `frames/` are the visual source; the route is the implementation.
 | Payment not completed | `(student)/checkout/failed` | Gateway reported failed or cancelled, or the student backed out. The hold stays. Retry (new order on the same hold, while orders can still be created on it, FR-PAYG-18) or Choose another slot (FR-BOOK-12): immediate when no order on the hold is still payable (`created`), as after a failure; otherwise only once the gateway has cancelled that order. Where the gateway reports the earlier payment went through or is still being processed, the new checkout is refused and the student is taken to that enrollment's Processing screen; where the gateway cannot cancel, the student is offered to continue the previous payment with the time left on it (ADR 0010 D6) |
 | Enrollments | `(student)/enrollments` | Sessions consumed vs total |
 | Credentials | `(student)/credentials` | Granted ijazah, certificate, verify code |
-| Account | `(student)/account` | Locale, notifications |
+| Account | `(student)/account` | Language, time zone, terms, sign out, delete account |
+| Delete account | `(student)/account/delete` | What is deleted and kept, current enrollments, typed confirmation, fresh sign-in, final confirmation (FR-AUTH-14, ADR 0015) |
 
 ## Teacher — `(teacher)`, frames in `Ijazah Teacher Screens v2.dc.html`
 | Frame | Route | Notes |
