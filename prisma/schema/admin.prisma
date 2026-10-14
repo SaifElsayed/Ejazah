@@ -39,9 +39,10 @@ model AuditLog {
   adminId    String   @map("admin_id") @db.Uuid
   // A stable machine string.
   action     String
-  // A polymorphic reference to what the action touched.
+  // A polymorphic reference to what the action touched. The id is text, not uuid: settings are keyed
+  // by text and every settings change is audited (T172, FR-ADMIN-17, ADR 0011).
   targetType String   @map("target_type")
-  targetId   String   @map("target_id") @db.Uuid
+  targetId   String   @map("target_id")
   // Mandatory for destructive actions.
   reason     String?
   // State snapshots.

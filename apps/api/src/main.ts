@@ -40,7 +40,11 @@ const [
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
 const log = createLogger({ level: config.LOG_LEVEL });
-const database = openDatabase(config.DATABASE_URL);
+const database = openDatabase(config.DATABASE_URL, {
+  poolMax: config.DATABASE_POOL_MAX,
+  statementTimeoutMs: config.DATABASE_STATEMENT_TIMEOUT_MS,
+  idleInTransactionTimeoutMs: config.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+});
 
 // Every operational number is read through this reader (FR-034); the process refuses to start
 // without one. It is handed to each kernel part that reads settings as that part arrives (T103's

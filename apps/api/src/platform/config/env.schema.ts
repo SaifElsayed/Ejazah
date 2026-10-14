@@ -75,6 +75,12 @@ const envObject = z.object({
   // but the runtime never carries it: config.module.ts strips it from the loaded configuration.
   DATABASE_URL_OWNER: postgresUrl.optional(),
   DATABASE_URL: postgresUrl,
+  // T172 (R-DB-8, review finding SC-5): the pool's size and the two session timeouts every
+  // connection of the process carries, so no statement runs and no transaction idles without a
+  // limit. Milliseconds, as pg sends them to the server.
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   REDIS_URL: redisUrl,
 
   // T171 (FR-052): how many queue deliveries the worker runs at once; four unless set.
@@ -138,6 +144,9 @@ const envKeyKinds = {
   MAX_REQUEST_BODY_BYTES: 'platform',
   DATABASE_URL_OWNER: 'platform',
   DATABASE_URL: 'platform',
+  DATABASE_POOL_MAX: 'platform',
+  DATABASE_STATEMENT_TIMEOUT_MS: 'platform',
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: 'platform',
   REDIS_URL: 'platform',
   QUEUE_CONCURRENCY: 'platform',
   ENCRYPTION_KEY: 'platform',

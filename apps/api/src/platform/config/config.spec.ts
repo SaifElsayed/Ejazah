@@ -399,6 +399,23 @@ describe('loadConfig (T015, FR-039)', () => {
     );
   });
 
+  // T172 (R-DB-8, review finding SC-5): the pool's size and the session's two timeouts, each a
+  // positive integer with a default, so no connection runs a statement or idles in a transaction
+  // without a limit.
+  it.each([
+    ['DATABASE_POOL_MAX', 10],
+    ['DATABASE_STATEMENT_TIMEOUT_MS', 30_000],
+    ['DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS', 60_000],
+  ] as const)('%s defaults to %i, takes a positive integer, and refuses anything else naming the key (T172)', (key, fallback) => {
+    expect(loadConfig(validEnv)[key]).toBe(fallback);
+    expect(loadConfig({ ...validEnv, [key]: '' })[key]).toBe(fallback);
+    expect(loadConfig({ ...validEnv, [key]: '7' })[key]).toBe(7);
+    for (const value of ['0', '-1', '1.5', 'ten-ish']) {
+      expect(() => loadConfig({ ...validEnv, [key]: value })).toThrow(new RegExp(key));
+    }
+    expect(() => loadConfig({ ...validEnv, [key]: 'ten-ish' })).not.toThrow(/ten-ish/);
+  });
+
   it('reports every offending key at once, and never a value (R-SEC-2)', () => {
     const env = without({ ...validEnv, PORT: 'abc', REDIS_URL: 'mysql://nope' }, 'ENCRYPTION_KEY');
 

@@ -105,9 +105,11 @@ async function plantAdministrator(db: Queryable, encryptionKey: string): Promise
   const { rows } = await db.query('SELECT 1 FROM admin_users WHERE id = $1', [ADMINISTRATOR.id]);
   if (rows.length > 0) return;
   const passwordHash = await hashPassword(randomBytes(32).toString('base64url'));
+  // Bound to the column and to the administrator's row (T172).
   const mfaSecret = new ColumnCipher(encryptionKey).encrypt(
     randomBytes(20).toString('base64url'),
     MFA_SECRET_COLUMN,
+    ADMINISTRATOR.id,
   );
   await db.query(
     `INSERT INTO admin_users

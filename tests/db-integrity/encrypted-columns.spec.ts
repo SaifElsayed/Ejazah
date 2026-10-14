@@ -37,7 +37,11 @@ let database: Database;
 beforeAll(async () => {
   // The harness proves DATABASE_URL is the application role, never the owner, before anything runs.
   db = await connectAsApplication();
-  database = openDatabase(process.env['DATABASE_URL'] ?? '');
+  database = openDatabase(process.env['DATABASE_URL'] ?? '', {
+    poolMax: 2,
+    statementTimeoutMs: 30_000,
+    idleInTransactionTimeoutMs: 60_000,
+  });
 });
 
 afterAll(async () => {
@@ -76,15 +80,20 @@ function newUser(tx: Transaction): Promise<{ id: string }> {
   });
 }
 
-/** One row per column, each holding a value written under the old key, by column. */
+/**
+ * One row per column, each holding a value written under the old key, by column. A value is bound
+ * to its row (T172), so each row's id is drawn here and given to the insert.
+ */
 async function plant(tx: Transaction): Promise<Map<string, { id: string; value: Uint8Array }>> {
   const planted = new Map<string, { id: string; value: Uint8Array }>();
-  const value = (column: string) => OLD.encrypt(`secret for ${column}`, column);
+  const value = (column: string, id: string) => OLD.encrypt(`secret for ${column}`, column, id);
 
   const teacher = await newUser(tx);
-  const payout = value('teacher_profiles.payout_account_ref_encrypted');
+  const profileId = randomUUID();
+  const payout = value('teacher_profiles.payout_account_ref_encrypted', profileId);
   const profile = await tx.teacherProfile.create({
     data: {
+      id: profileId,
       userId: teacher.id,
       bio: 'Probe',
       qualificationSummary: 'Probe',
@@ -95,9 +104,11 @@ async function plant(tx: Transaction): Promise<Map<string, { id: string; value: 
   });
   planted.set('teacher_profiles.payout_account_ref_encrypted', { id: profile.id, value: payout });
 
-  const token = value('device_push_tokens.token_encrypted');
+  const deviceId = randomUUID();
+  const token = value('device_push_tokens.token_encrypted', deviceId);
   const device = await tx.devicePushToken.create({
     data: {
+      id: deviceId,
       userId: teacher.id,
       tokenEncrypted: Uint8Array.from(token),
       tokenHash: `probe-${randomUUID()}`,
@@ -108,9 +119,11 @@ async function plant(tx: Transaction): Promise<Map<string, { id: string; value: 
   });
   planted.set('device_push_tokens.token_encrypted', { id: device.id, value: token });
 
-  const storageKey = value('verification_documents.storage_key_encrypted');
+  const documentId = randomUUID();
+  const storageKey = value('verification_documents.storage_key_encrypted', documentId);
   const document = await tx.verificationDocument.create({
     data: {
+      id: documentId,
       userId: teacher.id,
       documentType: 'national_id',
       storageKeyEncrypted: Uint8Array.from(storageKey),
@@ -192,8 +205,8 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
       for (const column of columnsOver(tx)) {
         const mine = planted.get(column.column);
         if (mine === undefined) throw new Error(`nothing planted in ${column.column}`);
-        const next = NEW.encrypt(`secret for ${column.column}`, column.column);
-        const stale = OLD.encrypt('a value the row no longer holds', column.column);
+        const next = NEW.encrypt(`secret for ${column.column}`, column.column, mine.id);
+        const stale = OLD.encrypt('a value the row no longer holds', column.column, mine.id);
 
         expect(await column.replace(mine.id, stale, next)).toBe(false);
         expect(await column.replace(mine.id, mine.value, next)).toBe(true);
@@ -203,7 +216,7 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
         const rows = await readAll(column);
         const held = rows.find(({ id }) => id === mine.id)?.value ?? new Uint8Array();
         expect(Buffer.from(held).equals(next)).toBe(true);
-        expect(NEW.decrypt(held, column.column)).toBe(`secret for ${column.column}`);
+        expect(NEW.decrypt(held, column.column, mine.id)).toBe(`secret for ${column.column}`);
       }
     });
   });

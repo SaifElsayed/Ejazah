@@ -14,7 +14,11 @@ afterEach(async () => {
 
 describe('the readiness query (T110)', () => {
   it('rejects when the database cannot be reached', async () => {
-    database = openDatabase('postgresql://ijazah_app:app@127.0.0.1:1/ijazah');
+    database = openDatabase('postgresql://ijazah_app:app@127.0.0.1:1/ijazah', {
+      poolMax: 2,
+      statementTimeoutMs: 30_000,
+      idleInTransactionTimeoutMs: 60_000,
+    });
     const started = performance.now();
     await expect(new ReadinessRepository(database).databaseReachable()).rejects.toThrow();
     expect(performance.now() - started).toBeLessThan(10_000);

@@ -131,6 +131,7 @@ describe('the seed (T074)', () => {
     const secret = new ColumnCipher(encryptionKey).decrypt(
       admin.mfa_secret_encrypted,
       'admin_users.mfa_secret_encrypted',
+      ADMINISTRATOR_ID,
     );
     expect(secret.length).toBeGreaterThan(0);
   });

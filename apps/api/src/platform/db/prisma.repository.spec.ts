@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { closeDatabase, type Database, openDatabase } from './prisma.repository.js';
 
 const nobodyListens = 'postgresql://ijazah_app:app@127.0.0.1:1/ijazah';
+// The configured limits (T172); their effect on a session is tests/db-integrity/session-timeouts.spec.ts.
+const limits = { poolMax: 2, statementTimeoutMs: 30_000, idleInTransactionTimeoutMs: 60_000 };
 
 let database: Database | undefined;
 
@@ -20,12 +22,12 @@ afterEach(async () => {
 
 describe('the database client (T102)', () => {
   it('is the generated client, with a delegate for every table of the schema', () => {
-    database = openDatabase(nobodyListens);
+    database = openDatabase(nobodyListens, limits);
     expect(typeof database.idempotencyKey.findUnique).toBe('function');
   });
 
   it('fails a query at the connection, within the connection timeout', async () => {
-    database = openDatabase(nobodyListens);
+    database = openDatabase(nobodyListens, limits);
     const started = performance.now();
     await expect(database.$queryRaw`SELECT 1`).rejects.toThrow();
     expect(performance.now() - started).toBeLessThan(10_000);

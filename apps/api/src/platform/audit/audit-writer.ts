@@ -35,7 +35,7 @@ export interface AuditEntry {
   readonly action: string;
   /** What kind of row was touched; with `targetId`, a polymorphic reference. */
   readonly targetType: string;
-  /** The touched row's identifier (a UUID). */
+  /** The touched row's identifier: a UUID, or a settings key, since settings are keyed by text (T172). */
   readonly targetId: string;
   /** Why; mandatory for a destructive action, which each action's task enforces. */
   readonly reason?: string;
