@@ -165,7 +165,11 @@ export function throttle<TOptions extends ThrottledCall>(
     if (declaration.budget !== undefined) {
       await rateLimiter.check(declaration.budget, BUDGET_SUBJECT);
     }
-    await rateLimiter.check(declaration.key, declaration.subjectOf(options));
+    // Only the validated input and the context reach the subject, at runtime as in the type.
+    await rateLimiter.check(
+      declaration.key,
+      declaration.subjectOf({ ctx: options.ctx, input: options.input }),
+    );
     return options.next();
   };
   // It answers exactly what `next` answers; an async function's declared type cannot say so.

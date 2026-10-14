@@ -109,7 +109,12 @@ startup parameters, so the server enforces them. `ColumnCipher.encrypt`,
 after the column, so a value moved between rows fails its tag; every caller
 passes it, the seed included. `audit_logs.target_id` becomes `text` by
 migration `20261014000000_audit_target_id_text`, immutable once merged
-(R-DB-1); the table held no row.
+(R-DB-1); the table held no row. A value encrypted before this batch, under the
+old column-only binding, no longer decrypts: no deployed environment holds one,
+and a development database seeded before this batch is rebuilt with
+`pnpm db:reset`, since the seed keeps an existing administrator row and the
+`reencrypt-columns` sweep would otherwise count its MFA secret unreadable on
+every schedule.
 
 Why: a query or an idle transaction with no limit holds the database for ever;
 a value bound to its column alone lets one row's secret be read as another's;
