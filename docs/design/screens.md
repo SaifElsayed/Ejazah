@@ -6,9 +6,14 @@ files in `frames/` are the visual source; the route is the implementation.
 ## Auth — `(auth)`
 | Frame | Route | Notes |
 |---|---|---|
-| Sign in | `(auth)/sign-in` | Phone first, Arabic keypad, country locked to EG by default |
-| OTP | `(auth)/otp` | Six digits, auto-advance, resend timer |
-| Role | `(auth)/role` | Student or teacher; decides the next group |
+| Welcome | `(auth)/index` | Language, why an account is needed, then Continue with Google, Continue with Apple (iOS only) and Continue with email (ADR 0012) |
+| Email sign-in | `(auth)/email` | Email and password; forgot password |
+| Email sign-up | `(auth)/email-sign-up` | Email and password, then the code |
+| Email code | `(auth)/verify` | Six digits sent to the email, auto-advance, resend timer |
+| Reset password | `(auth)/reset` | Code to the verified email, new password; email accounts only |
+| Role | `(auth)/role` | First sign-in only: student, teacher or both (FR-AUTH-2, FR-AUTH-12) |
+| Profile | `(auth)/profile` | Display name (prefilled from Google or Apple), gender, date of birth, time zone, Terms |
+| Confirm gender | sheet | Gender shown back before the account is completed; only an admin can change it later (FR-GENDER-5) |
 
 ## Student — `(student)`, frames in `Ijazah Student Screens.dc.html`
 | Frame | Route | Notes |

@@ -63,7 +63,8 @@ A port with exactly one implementation, forever, is an extra file, an extra indi
 | Video                                               | ✓     | Daily / LiveKit / Agora are interchangeable; you may switch on price or reliability.                                                                  |
 | Push                                                | ✓     | Expo Notifications now, direct FCM/APNs later.                                                                                                        |
 | File storage                                        | ✓     | Local disk in dev, S3-compatible in prod. Two implementations from day one.                                                                           |
-| SMS / OTP                                           | ✓     | Providers change on price. Trivial interface.                                                                                                         |
+| Email                                               | ✓     | One-time codes for email verification and password reset (ADR 0012). Providers change on price; a stand-in in development. Built in Phase 1. |
+| SMS / OTP                                           | ✓     | Providers change on price. Trivial interface. Unused in MVP: phone sign-up is deferred (ADR 0012); the port and its stand-in stay.                                                                                                         |
 | Chat                                                | ✗     | Built in-house on Postgres + WebSocket. A port would abstract your own code from itself. Add one if Stream or Sendbird ever becomes real.             |
 | Search                                              | ✗     | A filtered Postgres query. The repository already is the port. Moving to Meilisearch means swapping the repository implementation — that seam exists. |
 | Profiles, booking, sessions, certification, reviews | ✗     | Core domain. There is nothing to swap them for. Abstracting your own domain behind an adapter is the classic over-abstraction mistake.                |
@@ -90,10 +91,11 @@ apps/api/src/platform/ports/
 │   └── in-memory.adapter.ts          stand-in for tests
 ├── video/    video.port.ts · daily.adapter.ts · fake.adapter.ts
 ├── push/     push.port.ts · expo.adapter.ts · fake.adapter.ts
+├── email/    email.port.ts · provider.adapter.ts · fake.adapter.ts   (Phase 1, ADR 0012)
 └── sms/      sms.port.ts · provider.adapter.ts · fake.adapter.ts
 ```
 
-Five ports. Selection is configuration, never a code change:
+Five ports, six once Phase 1 adds email (ADR 0012). Selection is configuration, never a code change:
 
 ```ts
 providers: [
