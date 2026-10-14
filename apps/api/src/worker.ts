@@ -84,7 +84,12 @@ const jobs: readonly Job[] = [
 const connection = queueing.connectionFor(config.REDIS_URL);
 const queue = queueing.openQueue(connection);
 await queueing.scheduleSweeps(queue, jobs);
-const worker = queueing.startWorker({ connection, jobs, log });
+const worker = queueing.startWorker({
+  connection,
+  jobs,
+  log,
+  concurrency: config.QUEUE_CONCURRENCY,
+});
 log.info({ queue: queueing.QUEUE_NAME, jobs: jobs.length }, 'Worker started');
 
 // A deploy stops the process with SIGTERM: the running delivery finishes before the worker closes,

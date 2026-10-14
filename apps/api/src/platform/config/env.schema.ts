@@ -77,6 +77,9 @@ const envObject = z.object({
   DATABASE_URL: postgresUrl,
   REDIS_URL: redisUrl,
 
+  // T171 (FR-052): how many queue deliveries the worker runs at once; four unless set.
+  QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(4),
+
   ENCRYPTION_KEY: encryptionKey,
   // T155: the key ENCRYPTION_KEY replaced, set only while a rotation runs. Values written under it
   // stay readable until the `reencrypt-columns` job has written each again under ENCRYPTION_KEY;
@@ -136,6 +139,7 @@ const envKeyKinds = {
   DATABASE_URL_OWNER: 'platform',
   DATABASE_URL: 'platform',
   REDIS_URL: 'platform',
+  QUEUE_CONCURRENCY: 'platform',
   ENCRYPTION_KEY: 'platform',
   ENCRYPTION_KEY_PREVIOUS: 'platform',
   STORAGE_DRIVER: 'platform',

@@ -9,16 +9,30 @@
 // is in Postgres and every job is idempotent, so a delivery lost or repeated changes nothing that
 // matters. A completed job is removed at once, so finished work does not accumulate in Redis.
 //
+// RETRY AND BOUNDED FAILURE (T171, review finding SEC-4): every delivery, a sweep's included, is
+// attempted three times with exponential backoff from one second, which is safe because every job
+// is idempotent (R-API-14); a delivery that fails them all stays in the failed set for an operator,
+// and that set is bounded by a count so a broken job cannot fill Redis. The worker runs
+// `QUEUE_CONCURRENCY` deliveries at once, from the configuration. These numbers are the queue's
+// own operation, not a product setting: they live here in the kernel, outside the magic-number
+// gate's root (R-MONEY-12 governs `modules/`).
+//
 // The connection is the configured URL and nothing else: `rediss://` gives TLS with the
 // certificate verified, as the driver does by default, and no option here loosens it (R-SEC-11).
-import { type ConnectionOptions, Queue, Worker } from 'bullmq';
+import { type ConnectionOptions, type DefaultJobOptions, Queue, Worker } from 'bullmq';
 import { reportError } from '../platform/errors/reporting.js';
 import type { Logger } from '../platform/logging/logger.js';
 import { createDispatcher, type Job } from './job.js';
 
 export const QUEUE_NAME = 'jobs';
 
-const completedJobs = { removeOnComplete: true } as const;
+/** The options every job and every sweep is added with (T171). */
+export const defaultJobOptions = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 1000 },
+  removeOnComplete: true,
+  removeOnFail: { count: 1000 },
+} as const satisfies DefaultJobOptions;
 
 export function connectionFor(redisUrl: string): ConnectionOptions {
   // A worker's blocking read must wait out a Redis restart rather than fail; BullMQ requires null.
@@ -27,7 +41,7 @@ export function connectionFor(redisUrl: string): ConnectionOptions {
 
 /** The producer side: what adds jobs and registers sweeps. */
 export function openQueue(connection: ConnectionOptions): Queue {
-  return new Queue(QUEUE_NAME, { connection, defaultJobOptions: completedJobs });
+  return new Queue(QUEUE_NAME, { connection, defaultJobOptions });
 }
 
 /** The one method of a queue that registering sweeps needs. */
@@ -35,7 +49,7 @@ export interface SweepScheduler {
   upsertJobScheduler(
     id: string,
     repeat: { pattern: string },
-    template: { name: string; data: Record<string, never>; opts: typeof completedJobs },
+    template: { name: string; data: Record<string, never>; opts: typeof defaultJobOptions },
   ): Promise<unknown>;
 }
 
@@ -49,7 +63,7 @@ export async function scheduleSweeps(queue: SweepScheduler, jobs: readonly Job[]
             queue.upsertJobScheduler(
               name,
               { pattern: schedule },
-              { name, data: {}, opts: completedJobs },
+              { name, data: {}, opts: defaultJobOptions },
             ),
           ],
     ),
@@ -74,13 +88,16 @@ export interface WorkerOptions {
   readonly connection: ConnectionOptions;
   readonly jobs: readonly Job[];
   readonly log: Logger;
+  /** How many deliveries run at once: `QUEUE_CONCURRENCY` (T171). */
+  readonly concurrency: number;
 }
 
 /** The consumer side: runs every delivery of the queue through the registered jobs. */
-export function startWorker({ connection, jobs, log }: WorkerOptions): Worker {
+export function startWorker({ connection, jobs, log, concurrency }: WorkerOptions): Worker {
   const dispatch = createDispatcher(jobs);
   const worker = new Worker(QUEUE_NAME, (job) => dispatch({ name: job.name, data: job.data }), {
     connection,
+    concurrency,
   });
   worker.on('failed', onJobFailed(log));
   worker.on('error', (error) => {

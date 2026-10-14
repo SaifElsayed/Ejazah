@@ -384,6 +384,21 @@ describe('loadConfig (T015, FR-039)', () => {
     }
   });
 
+  // T171 (FR-052): how many deliveries the worker runs at once, a positive integer, four unless set.
+  it('runs four deliveries at once by default, and refuses a concurrency that is not a positive integer (T171)', () => {
+    expect(loadConfig(validEnv).QUEUE_CONCURRENCY).toBe(4);
+    expect(loadConfig({ ...validEnv, QUEUE_CONCURRENCY: '8' }).QUEUE_CONCURRENCY).toBe(8);
+    expect(loadConfig({ ...validEnv, QUEUE_CONCURRENCY: '' }).QUEUE_CONCURRENCY).toBe(4);
+    for (const value of ['0', '-1', '1.5', 'four-workers']) {
+      expect(() => loadConfig({ ...validEnv, QUEUE_CONCURRENCY: value })).toThrow(
+        /QUEUE_CONCURRENCY/,
+      );
+    }
+    expect(() => loadConfig({ ...validEnv, QUEUE_CONCURRENCY: 'four-workers' })).not.toThrow(
+      /four-workers/,
+    );
+  });
+
   it('reports every offending key at once, and never a value (R-SEC-2)', () => {
     const env = without({ ...validEnv, PORT: 'abc', REDIS_URL: 'mysql://nope' }, 'ENCRYPTION_KEY');
 
