@@ -60,7 +60,7 @@ export function reencryptColumns({
       for (const { id, value } of page) {
         let next: Buffer | undefined;
         try {
-          next = cipher.reencrypt(value, column.column);
+          next = cipher.reencrypt(value, column.column, id);
         } catch (error: unknown) {
           if (!(error instanceof DecryptionError)) throw error;
           unreadable += 1;

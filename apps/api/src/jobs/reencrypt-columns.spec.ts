@@ -63,18 +63,19 @@ class FakeColumn implements EncryptedColumn {
     return Object.fromEntries(
       [...this.rows.entries()].map(([id, value]) => [
         id,
-        { keyId: value[0], plaintext: rotating.decrypt(value, this.column) },
+        { keyId: value[0], plaintext: rotating.decrypt(value, this.column, id) },
       ]),
     );
   }
 }
 
+/** A value bound to its row (T172), as every stored value is. */
 function underOldKey(column: string, count: number): Record<string, Uint8Array> {
   return Object.fromEntries(
-    Array.from({ length: count }, (_, index) => [
-      `row-${String(index).padStart(2, '0')}`,
-      before.encrypt(`secret ${column} ${index}`, column),
-    ]),
+    Array.from({ length: count }, (_, index) => {
+      const id = `row-${String(index).padStart(2, '0')}`;
+      return [id, before.encrypt(`secret ${column} ${index}`, column, id)];
+    }),
   );
 }
 
@@ -118,21 +119,21 @@ describe('the reencrypt-columns sweep (T155)', () => {
     await sweep([mfa, payout]).run();
 
     for (const column of [mfa, payout]) {
-      for (const value of column.rows.values()) {
+      for (const [id, value] of column.rows) {
         expect(value[0]).toBe(columnKeyId(NEW_KEY));
-        expect(() => before.decrypt(value, column.column)).toThrow();
+        expect(() => before.decrypt(value, column.column, id)).toThrow();
       }
     }
     expect(Object.values(mfa.read()).map(({ plaintext }) => plaintext)).toEqual(
       Object.values(plaintexts[0] ?? {}).map(({ plaintext }) => plaintext),
     );
-    expect(after.decrypt(payout.rows.get('row-02') ?? Buffer.alloc(0), PAYOUT)).toBe(
+    expect(after.decrypt(payout.rows.get('row-02') ?? Buffer.alloc(0), PAYOUT, 'row-02')).toBe(
       `secret ${PAYOUT} 2`,
     );
   });
 
   it('leaves a value already under the new key as it is', async () => {
-    const current = after.encrypt('already current', MFA);
+    const current = after.encrypt('already current', MFA, 'row-00');
     const column = new FakeColumn(MFA, { 'row-00': current, ...underOldKey(MFA, 0) });
     await sweep([column]).run();
     expect(column.rows.get('row-00')).toBe(current);
@@ -188,7 +189,7 @@ describe('the reencrypt-columns sweep (T155)', () => {
 
   it('keeps a value the application wrote while the sweep held the old one', async () => {
     const column = new FakeColumn(MFA, underOldKey(MFA, 1));
-    const written = after.encrypt('written meanwhile', MFA);
+    const written = after.encrypt('written meanwhile', MFA, 'row-00');
     const racing: EncryptedColumn = {
       column: MFA,
       page: (afterId, limit) => column.page(afterId, limit),
@@ -203,7 +204,7 @@ describe('the reencrypt-columns sweep (T155)', () => {
   });
 
   it('writes every value it can read and then fails, naming each column and its count only', async () => {
-    const lost = new ColumnCipher(LOST_KEY).encrypt('nobody holds this key', MFA);
+    const lost = new ColumnCipher(LOST_KEY).encrypt('nobody holds this key', MFA, 'row-09');
     const mfa = new FakeColumn(MFA, { ...underOldKey(MFA, 2), 'row-09': lost });
     const payout = new FakeColumn(PAYOUT, underOldKey(PAYOUT, 2));
     const { log, run } = sweep([mfa, payout]);
@@ -230,7 +231,11 @@ describe('the reencrypt-columns sweep (T155)', () => {
       key.writeUInt32BE(counter + 1);
       return key.toString('base64');
     }).find((key) => key !== NEW_KEY && columnKeyId(key) === columnKeyId(NEW_KEY));
-    const impostor = new ColumnCipher(shared ?? NEW_KEY).encrypt('nobody holds this key', MFA);
+    const impostor = new ColumnCipher(shared ?? NEW_KEY).encrypt(
+      'nobody holds this key',
+      MFA,
+      'row-09',
+    );
     const column = new FakeColumn(MFA, { ...underOldKey(MFA, 1), 'row-09': impostor });
     const { log, run } = sweep([column]);
 

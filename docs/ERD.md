@@ -522,7 +522,7 @@ Every admin action (FR-ADMIN-17). Append-only.
 | id | uuid | PK |
 | admin_id | FK → admin_users | |
 | action | text | Stable machine string |
-| target_type / target_id | text / uuid | Polymorphic reference |
+| target_type / target_id | text / text | Polymorphic reference: a row's uuid, or a settings key, since settings are keyed by text and every settings change is audited (FR-ADMIN-17, ADR 0011 D5) |
 | reason | text, nullable | Mandatory for destructive actions |
 | before / after | jsonb, nullable | State snapshot |
 | occurred_at | timestamptz | Never edited, never deleted. Strictly append-only — no `deleted_at`, no removal path at all (§15.10) |
@@ -672,6 +672,12 @@ Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purch
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
 *End of document. 33 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+
+## Changelog — v1.3 addendum (ADR 0011)
+
+| # | Change | Decision |
+|---|---|---|
+| 1 | §12 `audit_logs.target_id` becomes `text`: a polymorphic reference must hold a settings key as well as a row's uuid, since every settings change is audited (FR-ADMIN-17). Migration `20261014000000_audit_target_id_text`; the table held no row. | ADR 0011 D5, T172 |
 
 ## Changelog — v1.3 addendum (PR #39)
 

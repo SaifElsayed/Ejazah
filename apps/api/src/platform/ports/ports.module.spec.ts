@@ -22,6 +22,7 @@ const SESSION = '01928c3e-7a10-7000-8000-000000000001';
 
 // Only what the schema requires: every provider variable unset, every provider defaulted (SC-005).
 const required = {
+  NODE_ENV: 'test',
   DATABASE_URL: 'postgresql://ijazah_app:app@127.0.0.1:5432/ijazah',
   REDIS_URL: 'redis://127.0.0.1:6379',
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),

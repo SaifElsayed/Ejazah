@@ -57,8 +57,13 @@ const s3Keys = [
   'S3_SECRET_ACCESS_KEY',
 ] as const;
 
+/** The two modes in which a stand-in adapter may run (T168, review finding SEC-1). */
+const standInModes: readonly string[] = ['development', 'test'];
+
 const envObject = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // T168: no default. A configuration copied onto a server without it used to run as development,
+  // where every stand-in is accepted; now it is refused naming the key (FR-039, R-HONEST-1).
+  NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
@@ -70,7 +75,16 @@ const envObject = z.object({
   // but the runtime never carries it: config.module.ts strips it from the loaded configuration.
   DATABASE_URL_OWNER: postgresUrl.optional(),
   DATABASE_URL: postgresUrl,
+  // T172 (R-DB-8, review finding SC-5): the pool's size and the two session timeouts every
+  // connection of the process carries, so no statement runs and no transaction idles without a
+  // limit. Milliseconds, as pg sends them to the server.
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   REDIS_URL: redisUrl,
+
+  // T171 (FR-052): how many queue deliveries the worker runs at once; four unless set.
+  QUEUE_CONCURRENCY: z.coerce.number().int().positive().default(4),
 
   ENCRYPTION_KEY: encryptionKey,
   // T155: the key ENCRYPTION_KEY replaced, set only while a rotation runs. Values written under it
@@ -96,7 +110,8 @@ const envObject = z.object({
 
   // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
   // stand-in until the phase that first calls the port adds its real member (FR-054), so each
-  // defaults to it. Production refuses each stand-in below, as it refuses PAYMENT_GATEWAY's (T153).
+  // defaults to it. Every mode but development and test refuses each stand-in below, as it refuses
+  // PAYMENT_GATEWAY's (T153, T168).
   VIDEO_PROVIDER: z.enum(['fake']).default('fake'),
   PUSH_PROVIDER: z.enum(['fake']).default('fake'),
   SMS_PROVIDER: z.enum(['fake']).default('fake'),
@@ -129,7 +144,11 @@ const envKeyKinds = {
   MAX_REQUEST_BODY_BYTES: 'platform',
   DATABASE_URL_OWNER: 'platform',
   DATABASE_URL: 'platform',
+  DATABASE_POOL_MAX: 'platform',
+  DATABASE_STATEMENT_TIMEOUT_MS: 'platform',
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: 'platform',
   REDIS_URL: 'platform',
+  QUEUE_CONCURRENCY: 'platform',
   ENCRYPTION_KEY: 'platform',
   ENCRYPTION_KEY_PREVIOUS: 'platform',
   STORAGE_DRIVER: 'platform',
@@ -212,27 +231,29 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     });
   }
 
-  // The stand-in confirms whatever it is told to, so a production deployment running it would take
-  // bookings that nobody paid for (R-HONEST-1, T146). Refused here, not in the schema's enum: its
-  // rows are real in development and tests (note under T059).
-  if (env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY === 'fake') {
+  // The stand-in confirms whatever it is told to, so a deployment running it would take bookings
+  // that nobody paid for (R-HONEST-1, T146). Refused here, not in the schema's enum: its rows are
+  // real in development and tests (note under T059). The test is "not development or test", never
+  // "is production" (T168): a mode added later is refused until it is named as one of the two.
+  const standInsAllowed = standInModes.includes(env.NODE_ENV);
+  if (!standInsAllowed && env.PAYMENT_GATEWAY === 'fake') {
     ctx.addIssue({
       code: 'custom',
       path: ['PAYMENT_GATEWAY'],
-      message: 'the stand-in gateway is refused in production (R-HONEST-1)',
+      message: 'the stand-in gateway is refused outside development and test (R-HONEST-1)',
     });
   }
 
   // The same for the video, push and messaging stand-ins (T153, FR-056): each answers without
-  // reaching anyone, so production would hold no lesson, send no notification and deliver no
+  // reaching anyone, so a deployment would hold no lesson, send no notification and deliver no
   // one-time code while reporting success. Each is refused on its own key.
-  if (env.NODE_ENV === 'production') {
+  if (!standInsAllowed) {
     for (const key of standInProviderKeys) {
       if (env[key] === 'fake') {
         ctx.addIssue({
           code: 'custom',
           path: [key],
-          message: 'the stand-in is refused in production (FR-056)',
+          message: 'the stand-in is refused outside development and test (FR-056)',
         });
       }
     }

@@ -5,8 +5,12 @@
 // string. The owner's never reaches this file; config.module.ts strips it from the configuration.
 //
 // ONE PER PROCESS. Each entrypoint (main.ts, worker.ts) opens one client at start and closes it at
-// stop, and hands it to every repository it builds, so the process holds one pool. The pool keeps
-// pg's own default size until a configuration value names another.
+// stop, and hands it to every repository it builds, so the process holds one pool. The pool's size
+// and the two session timeouts every connection carries come from the configuration (T172, review
+// finding SC-5): `DATABASE_POOL_MAX`, `DATABASE_STATEMENT_TIMEOUT_MS` and
+// `DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`. pg sends the timeouts as startup parameters, so the
+// server cuts a statement that runs past the first and a transaction that idles past the second,
+// whatever the process is doing.
 //
 // SOFT DELETION (T148). The client is built with the extension of soft-delete.repository.ts: on
 // users, sessions, enrollments and ijazahs every ordinary read, count and update leaves out a
@@ -36,10 +40,23 @@ export type Transaction = Parameters<Parameters<Database['$transaction']>[0]>[0]
 // the operating system's socket timeout.
 const CONNECTION_TIMEOUT_MILLISECONDS = 5_000;
 
-export function openDatabase(url: string): Database {
+/** The pool and session limits the process opens its client with, from the configuration (T172). */
+export interface DatabaseOptions {
+  /** `DATABASE_POOL_MAX`: connections the pool holds at most. */
+  readonly poolMax: number;
+  /** `DATABASE_STATEMENT_TIMEOUT_MS`: the server cuts a statement that runs longer. */
+  readonly statementTimeoutMs: number;
+  /** `DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`: the server ends a transaction that idles longer. */
+  readonly idleInTransactionTimeoutMs: number;
+}
+
+export function openDatabase(url: string, options: DatabaseOptions): Database {
   const adapter = new PrismaPg({
     connectionString: url,
     connectionTimeoutMillis: CONNECTION_TIMEOUT_MILLISECONDS,
+    max: options.poolMax,
+    statement_timeout: options.statementTimeoutMs,
+    idle_in_transaction_session_timeout: options.idleInTransactionTimeoutMs,
   });
   return extend(new PrismaClient({ adapter }));
 }

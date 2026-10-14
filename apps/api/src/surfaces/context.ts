@@ -20,11 +20,16 @@
 // transaction and write its audit record there (FR-049). Both are handed in by the HTTP application,
 // which `main.ts` builds with the admin module's writer.
 //
+// THE USER CONTEXT CARRIES THE PROCESS'S RATE LIMITER (T170): the caller kinds apply a procedure's
+// declared limit from it, so a limit is declared on the procedure and never applied by hand. It is
+// handed in by the HTTP application from `main.ts`, as the administration is.
+//
 // `RequesterGender` is minted here and nowhere else outside a spec file (R-GENDER-5): from the
 // session's gender, never from input. A caller kind narrows this context; it never mints (T107).
 import { randomUUID } from 'node:crypto';
 import type { AuditWriter } from '../platform/audit/audit-writer.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
+import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 
@@ -71,6 +76,8 @@ export interface AppContext {
   readonly locale: Locale;
   readonly correlationId: string;
   readonly log: Logger;
+  /** The process's limiter, which the caller kinds apply a declared rate limit from (T170). */
+  readonly rateLimiter: RateLimiter;
 }
 
 /** What the administrator caller kind needs to audit every call (T108). */
@@ -106,8 +113,13 @@ function correlated(log: Logger): { correlationId: string; log: Logger } {
   return { correlationId, log: requestLogger(log, correlationId) };
 }
 
+export interface AppContextSource extends ContextSource<UserSession> {
+  /** The process's rate limiter (T103), built in main.ts. */
+  readonly rateLimiter: RateLimiter;
+}
+
 /** The user surface's context for one request. */
-export function createAppContext({ session, log }: ContextSource<UserSession>): AppContext {
+export function createAppContext({ session, log, rateLimiter }: AppContextSource): AppContext {
   const caller: UserCaller | null =
     session === null
       ? null
@@ -122,6 +134,7 @@ export function createAppContext({ session, log }: ContextSource<UserSession>): 
     caller,
     locale: session?.preferredLanguage ?? DEFAULT_LOCALE,
     ...correlated(log),
+    rateLimiter,
   };
 }
 

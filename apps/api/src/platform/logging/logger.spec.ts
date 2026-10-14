@@ -181,6 +181,47 @@ describe('values that are not plain objects (review of PR #35)', () => {
     });
   });
 
+  // T173 (the logger item of the code review): the `code` of a serialized Error classifies what
+  // happened (`ECONNREFUSED`, `57014`, `ERR_MODULE_NOT_FOUND`) and is what an operator reads first;
+  // a bare `code` anywhere else may be the one-time code itself and stays redacted.
+  it('keeps the code of a serialized Error, and of the errors in its cause chain', () => {
+    const out = capture();
+    const root = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:6379'), {
+      code: 'ECONNREFUSED',
+    });
+    const failure = Object.assign(new Error('the counter is unreachable', { cause: root }), {
+      code: 'RATE_LIMIT_COUNTER_DOWN',
+    });
+    createLogger({ level: 'info', destination: out }).error({ err: failure }, 'unexpected');
+
+    const [record] = out.records();
+    expect(record?.['err']).toMatchObject({
+      type: 'Error',
+      code: 'RATE_LIMIT_COUNTER_DOWN',
+      cause: { type: 'Error', code: 'ECONNREFUSED' },
+    });
+    expect(redact({ failure: root })).toMatchObject({ failure: { code: 'ECONNREFUSED' } });
+  });
+
+  it('still redacts a bare code outside an Error, and one nested in an object an Error carries', () => {
+    const out = capture();
+    const planted = { code: 'ONE-TIME-7f3e', attempt: { code: 'ONE-TIME-7f3e' } };
+    const failure = Object.assign(new Error('delivery failed'), {
+      code: 'EAI_AGAIN',
+      details: { code: 'ONE-TIME-7f3e', destination: 'phone' },
+    });
+    createLogger({ level: 'info', destination: out }).info({ ...planted, err: failure }, 'sent');
+
+    expect(out.lines[0]).not.toContain('ONE-TIME-7f3e');
+    const [record] = out.records();
+    expect(record).toMatchObject({
+      code: REDACTED,
+      attempt: { code: REDACTED },
+      err: { code: 'EAI_AGAIN', details: { code: REDACTED, destination: 'phone' } },
+    });
+    expect(redact({ code: 'ONE-TIME-7f3e' })).toEqual({ code: REDACTED });
+  });
+
   it('reads a value through its own toJSON before redacting it (m2)', () => {
     const sneaky = { v: { toJSON: () => ({ token: planted, kept: 1 }) } };
     expect(redact(sneaky)).toEqual({ v: { token: REDACTED, kept: 1 } });

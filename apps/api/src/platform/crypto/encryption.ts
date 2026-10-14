@@ -5,12 +5,14 @@
 //
 // AES-256-GCM from `node:crypto`, nothing written by hand (R-SEC-7). The stored value is
 //   version (1 byte) | IV (12 bytes, fresh per write) | tag (16 bytes) | ciphertext
-// and the associated data is the version byte followed by the column's name, `table.column`. So a
-// value changed anywhere, read as another version, or moved into another column fails the tag.
-// The binding is to the column, not the row: two teachers' values swapped between their rows still
-// decrypt, and renaming a column means re-encrypting its values under the new name. A random
-// 96-bit IV stays far below NIST SP 800-38D's limit of 2^32 encryptions under one key at this
-// platform's volume. Errors carry neither the plaintext nor the stored bytes (R-SEC-2).
+// and the associated data is the version byte, the column's name, `table.column`, a newline, and
+// the id of the row the value belongs to (T172, review finding SEC-6). So a value changed anywhere,
+// read as another version, moved into another column or moved into another row fails the tag:
+// the binding is to the column AND the row, so two teachers' values swapped between their rows no
+// longer decrypt. Renaming a column means re-encrypting its values under the new name; a row's id
+// never changes. A random 96-bit IV stays far below NIST SP 800-38D's limit of 2^32 encryptions
+// under one key at this platform's volume. Errors carry neither the plaintext, the stored bytes
+// nor the row (R-SEC-2).
 //
 // T155: the version byte is the key id of the `ENCRYPTION_KEY` the value was written under, one byte
 // derived from that key under a label of its own, so the stored value says which key reads it, as a
@@ -34,6 +36,7 @@
 //   ijazah:otp-pepper:v1                platform/crypto/hashing.ts               peppers OTP hashes (T069)
 //   ijazah:payment-stand-in-webhook:v1  platform/ports/payment/index.ts          signs stand-in events (T121)
 //   ijazah:video-stand-in-webhook:v1    platform/ports/video/index.ts            signs stand-in events (T121)
+//   ijazah:rate-limit-subject:v1        platform/guards/rate-limit.guard.ts      hashes rate-limit subjects (T170)
 // Only the column key protects a stored value; the rest protect short-lived values, so a rotation
 // re-encrypts the columns alone (T155).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
@@ -101,11 +104,20 @@ export interface EncryptedColumn {
   replace(id: string, stored: Uint8Array, next: Uint8Array): Promise<boolean>;
 }
 
-function associatedData(version: number, column: string): Buffer {
+// The column name holds no newline, so the newline tells where the row id begins.
+const ROW_SEPARATOR = '\n';
+
+function associatedData(version: number, column: string, rowId: string): Buffer {
   if (!COLUMN.test(column)) {
     throw new TypeError('An encrypted column is named `table.column`, in lower snake case.');
   }
-  return Buffer.concat([Buffer.from([version]), Buffer.from(column, 'utf8')]);
+  if (typeof rowId !== 'string' || rowId === '') {
+    throw new TypeError('An encrypted value is bound to the id of its row; none was given.');
+  }
+  return Buffer.concat([
+    Buffer.from([version]),
+    Buffer.from(`${column}${ROW_SEPARATOR}${rowId}`, 'utf8'),
+  ]);
 }
 
 export class ColumnCipher {
@@ -130,9 +142,9 @@ export class ColumnCipher {
     return this.#keys.size > 1;
   }
 
-  /** The value to store in `column` (`table.column`) for `plaintext`, under the current key. */
-  encrypt(plaintext: string, column: string): Buffer {
-    const aad = associatedData(this.#currentId, column);
+  /** The value to store in `column` (`table.column`) of row `rowId` for `plaintext`, under the current key. */
+  encrypt(plaintext: string, column: string, rowId: string): Buffer {
+    const aad = associatedData(this.#currentId, column, rowId);
     const iv = randomBytes(IV_BYTES);
     const cipher = createCipheriv('aes-256-gcm', this.#current, iv, { authTagLength: TAG_BYTES });
     cipher.setAAD(aad);
@@ -140,15 +152,17 @@ export class ColumnCipher {
     return Buffer.concat([Buffer.from([this.#currentId]), iv, cipher.getAuthTag(), ciphertext]);
   }
 
-  /** The plaintext of a value stored in `column`; `DecryptionError` for anything else. */
-  decrypt(stored: Uint8Array, column: string): string {
+  /** The plaintext of a value stored in `column` of row `rowId`; `DecryptionError` for anything else. */
+  decrypt(stored: Uint8Array, column: string, rowId: string): string {
     const value = Buffer.from(stored);
     const version = value[0];
     const key = version === undefined ? undefined : this.#keys.get(version);
+    // The arguments are checked before the value, so a caller's mistake is a TypeError even for a
+    // value this cipher could not read.
+    const aad = associatedData(version ?? this.#currentId, column, rowId);
     if (value.length < HEADER_BYTES || version === undefined || key === undefined) {
       throw new DecryptionError();
     }
-    const aad = associatedData(version, column);
     const iv = value.subarray(1, 1 + IV_BYTES);
     const tag = value.subarray(1 + IV_BYTES, HEADER_BYTES);
     const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES });
@@ -166,12 +180,13 @@ export class ColumnCipher {
 
   /**
    * The value to store in place of `stored` so it is under the current key, or undefined when the
-   * current key already reads it. `DecryptionError` when neither key reads it for `column`, a value
-   * naming the current key's id included: the id alone does not prove which key wrote it.
+   * current key already reads it. `DecryptionError` when neither key reads it for `column` and
+   * `rowId`, a value naming the current key's id included: the id alone does not prove which key
+   * wrote it.
    */
-  reencrypt(stored: Uint8Array, column: string): Buffer | undefined {
-    const plaintext = this.decrypt(stored, column);
-    return stored[0] === this.#currentId ? undefined : this.encrypt(plaintext, column);
+  reencrypt(stored: Uint8Array, column: string, rowId: string): Buffer | undefined {
+    const plaintext = this.decrypt(stored, column, rowId);
+    return stored[0] === this.#currentId ? undefined : this.encrypt(plaintext, column, rowId);
   }
 }
 

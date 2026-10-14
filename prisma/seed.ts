@@ -71,9 +71,11 @@ const SUBJECTS = [
 ] as const;
 
 /**
- * SRS §3.14, every numeric setting at its default, each key naming its unit; and the four rate
- * limits of NFR-SEC-10 (owner's decision 2026-10-10, shared with T103). The table of record is the
- * note under T074 in specs/001-foundations/tasks.md.
+ * SRS §3.14, every numeric setting at its default, each key naming its unit; the four rate limits
+ * of NFR-SEC-10 (owner's decision 2026-10-10, shared with T103); and the two platform-wide budgets
+ * beside the one-time-code and authentication limits (T170), counted under one subject for every
+ * caller, each owner-adjustable in the admin panel. The table of record is the note under T074 in
+ * specs/001-foundations/tasks.md.
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
@@ -93,6 +95,8 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_one_time_code', { limit: 5, window_seconds: 600 }],
   ['rate_limit_search', { limit: 60, window_seconds: 60 }],
   ['rate_limit_payment_initiation', { limit: 10, window_seconds: 600 }],
+  ['rate_limit_one_time_code_budget', { limit: 300, window_seconds: 3600 }],
+  ['rate_limit_authentication_budget', { limit: 1000, window_seconds: 900 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';
@@ -101,9 +105,11 @@ async function plantAdministrator(db: Queryable, encryptionKey: string): Promise
   const { rows } = await db.query('SELECT 1 FROM admin_users WHERE id = $1', [ADMINISTRATOR.id]);
   if (rows.length > 0) return;
   const passwordHash = await hashPassword(randomBytes(32).toString('base64url'));
+  // Bound to the column and to the administrator's row (T172).
   const mfaSecret = new ColumnCipher(encryptionKey).encrypt(
     randomBytes(20).toString('base64url'),
     MFA_SECRET_COLUMN,
+    ADMINISTRATOR.id,
   );
   await db.query(
     `INSERT INTO admin_users

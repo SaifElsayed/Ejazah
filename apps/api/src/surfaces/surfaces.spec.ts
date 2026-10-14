@@ -91,10 +91,22 @@ function separation(
 const kept = { notOfUserSurface: [], notOfAdministratorSurface: [], mountedOnBoth: [] };
 
 // A real procedure of each kind, as a module would declare them.
-const catalogue = publicProcedure(z.void()).query(() => 'subjects');
-const booking = studentProcedure(z.object({ slotId: z.string() })).mutation(() => 'held');
-const availability = teacherProcedure(z.void()).query(() => 'slots');
-const approval = adminProcedure(z.object({ teacherId: z.string() })).mutation(() => 'approved');
+const catalogue = publicProcedure({
+  input: z.void(),
+  output: z.string(),
+  rateLimit: { key: 'rate_limit_search', subjectOf: () => 'anyone' },
+}).query(() => 'subjects');
+const booking = studentProcedure({
+  input: z.object({ slotId: z.string() }),
+  output: z.string(),
+}).mutation(() => 'held');
+const availability = teacherProcedure({ input: z.void(), output: z.string() }).query(
+  () => 'slots',
+);
+const approval = adminProcedure({
+  input: z.object({ teacherId: z.string() }),
+  output: z.string(),
+}).mutation(() => 'approved');
 // A procedure built around the caller kinds, on a tRPC instance of its own.
 const stray = initTRPC.create().procedure.query(() => 'stray');
 
@@ -122,6 +134,19 @@ describe('the two surfaces share nothing (T098)', () => {
       typeof approval
     >();
     expect(separation(user, administrator)).toEqual(kept);
+  });
+
+  // T170: a declared rate limit is stamped in the procedure's meta beside its surface, so what a
+  // surface serves can be read for its limits as it is read for its surface.
+  it('a procedure’s meta names its surface and, when declared, its rate limit (T170)', () => {
+    const user = createAppRouter({ catalogue: { list: catalogue }, booking, availability });
+    const metaOf = (path: string) =>
+      (proceduresOf(user).get(path)?._def.meta ?? undefined) as
+        | { surface: string; rateLimit?: string }
+        | undefined;
+    expect(metaOf('catalogue.list')).toEqual({ surface: 'app', rateLimit: 'rate_limit_search' });
+    expect(metaOf('booking')).toEqual({ surface: 'app' });
+    expect(metaOf('availability')).toEqual({ surface: 'app' });
   });
 
   it('the type collector finds a procedure of the named surface at any depth', () => {

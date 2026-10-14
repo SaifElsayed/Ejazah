@@ -2,8 +2,9 @@
 //
 // An empty database of this file's own is migrated and seeded as the application role. The seed
 // plants five subjects in both languages, the settings of SRS §3.14 with their defaults plus the
-// four rate-limit rows (owner's decision 2026-10-10, shared with T103), and one administrator, each
-// with a fixed identifier and a fixed instant; every other table stays empty.
+// four rate-limit rows (owner's decision 2026-10-10, shared with T103) and the two budget rows
+// (T170), and one administrator, each with a fixed identifier and a fixed instant; every other
+// table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
 // it stores the Argon2id hash of a random one it discards at once (T069) and a random MFA secret
@@ -53,6 +54,8 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_one_time_code: { limit: 5, window_seconds: 600 },
   rate_limit_search: { limit: 60, window_seconds: 60 },
   rate_limit_payment_initiation: { limit: 10, window_seconds: 600 },
+  rate_limit_one_time_code_budget: { limit: 300, window_seconds: 3600 },
+  rate_limit_authentication_budget: { limit: 1000, window_seconds: 900 },
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -128,6 +131,7 @@ describe('the seed (T074)', () => {
     const secret = new ColumnCipher(encryptionKey).decrypt(
       admin.mfa_secret_encrypted,
       'admin_users.mfa_secret_encrypted',
+      ADMINISTRATOR_ID,
     );
     expect(secret.length).toBeGreaterThan(0);
   });
@@ -177,6 +181,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '17', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '19', admins: '1' }]);
   });
 });

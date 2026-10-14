@@ -23,7 +23,11 @@ beforeAll(async () => {
   // The harness proves DATABASE_URL is the application role, never the owner, before anything runs.
   const db = await connectAsApplication();
   await db.end();
-  database = openDatabase(process.env['DATABASE_URL'] ?? '');
+  database = openDatabase(process.env['DATABASE_URL'] ?? '', {
+    poolMax: 2,
+    statementTimeoutMs: 30_000,
+    idleInTransactionTimeoutMs: 60_000,
+  });
 });
 
 afterAll(async () => {

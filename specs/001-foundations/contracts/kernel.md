@@ -58,6 +58,18 @@ Four, and the way an endpoint declares who may call it:
 | Teacher | A caller holding the teacher role |
 | Administrator | An authenticated administrator |
 
+**Every kind takes its two schemas** (T169, owner's decision 2026-10-10):
+`publicProcedure({ input, output })`, `studentProcedure({ input, output })`,
+`teacherProcedure({ input, output })` and `adminProcedure({ input, output })`,
+each a zod schema, and applies `.output(output)` beside `.input(input)`. A
+procedure cannot be declared without an output schema, so what a handler
+returns is parsed before it leaves: a field the schema does not name is
+stripped (R-HONEST-4), the contract snapshot records the fields the schema
+names and never an output inferred from the handler (R-API-9), and a result
+that fails its schema is answered as the internal error, unexpected, while an
+input that fails its schema stays the validation failure with its paths. A
+procedure that takes nothing says so with `z.void()`.
+
 **The administrator kind writes its own audit record** after the handler
 returns and before the call commits (R-API-12, FR-049). There is no
 administrative route that bypasses auditing, because auditing is not something
@@ -135,7 +147,7 @@ a token. Neither mechanism is sufficient alone, which is why R-SEC-2 gets both.
 
 | Guard | Applies to | Rule |
 |---|---|---|
-| Rate limiting | Authentication, one-time-code, search and payment-initiation paths, available to any endpoint | R-SEC-6, NFR-SEC-10 |
+| Rate limiting | Declared on the caller kind, never applied by hand (T170): `rateLimit: { key, subjectOf, budget? }`, required on the public kind and accepted by the student and teacher kinds; the kind applies it from the limiter the request context carries, after input validation, and stamps the key in the procedure's meta. The four default keys are the authentication, one-time-code, search and payment-initiation paths; a `budget` is a second key counted under the one subject `*` for every caller, checked first, so a path has a platform-wide cap beside its per-subject one (seeded for one-time code and authentication). Subjects are hashed with HMAC-SHA256 under a key derived from `ENCRYPTION_KEY` | R-SEC-6, NFR-SEC-10 |
 | Content sniffing | Every upload; the declared type is discarded, not compared | R-SEC-4 |
 | Request body limit | Both request surfaces, from configuration; an oversized body answers 413 in the one error shape. Uploads keep their own limit | FR-077, NFR-SEC-9 |
 | Webhook signature verification | Every inbound gateway or provider event, on the raw body, before any handler; unsigned or invalid requests are rejected and no row is written | R-MONEY-9, R-SEC-12 |

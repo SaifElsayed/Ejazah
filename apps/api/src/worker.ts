@@ -20,6 +20,7 @@ const [
   { initReporting },
   { createLogger },
   { closeDatabase, openDatabase },
+  { onShutdown },
   { requireSettingsReader },
   admin,
   identity,
@@ -35,6 +36,7 @@ const [
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
   import('./platform/db/prisma.repository.js'),
+  import('./platform/lifecycle/shutdown.js'),
   import('./platform/settings/settings-reader.js'),
   import('./modules/admin/index.js'),
   import('./modules/identity/index.js'),
@@ -50,7 +52,11 @@ const [
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
 const log = createLogger({ level: config.LOG_LEVEL });
-const database = openDatabase(config.DATABASE_URL);
+const database = openDatabase(config.DATABASE_URL, {
+  poolMax: config.DATABASE_POOL_MAX,
+  statementTimeoutMs: config.DATABASE_STATEMENT_TIMEOUT_MS,
+  idleInTransactionTimeoutMs: config.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+});
 
 // Every operational number a job reads comes through this reader (FR-034); the worker refuses to
 // start without one. No key is read here: the store is empty until the seed (T074).
@@ -84,18 +90,22 @@ const jobs: readonly Job[] = [
 const connection = queueing.connectionFor(config.REDIS_URL);
 const queue = queueing.openQueue(connection);
 await queueing.scheduleSweeps(queue, jobs);
-const worker = queueing.startWorker({ connection, jobs, log });
+const worker = queueing.startWorker({
+  connection,
+  jobs,
+  log,
+  concurrency: config.QUEUE_CONCURRENCY,
+});
 log.info({ queue: queueing.QUEUE_NAME, jobs: jobs.length }, 'Worker started');
 
 // A deploy stops the process with SIGTERM: the running delivery finishes before the worker closes,
-// and an unfinished one is delivered again, which is safe because every job is idempotent.
-async function stop(signal: NodeJS.Signals): Promise<void> {
-  log.info({ signal }, 'Worker stopping');
-  await worker.close();
-  await queue.close();
-  await closeDatabase(database);
-  process.exit(0);
-}
-
-process.once('SIGTERM', (signal) => void stop(signal));
-process.once('SIGINT', (signal) => void stop(signal));
+// and an unfinished one is delivered again, which is safe because every job is idempotent. The
+// sequence runs once however many signals arrive, and the process exits with its outcome (T173).
+onShutdown(
+  async () => {
+    await worker.close();
+    await queue.close();
+    await closeDatabase(database);
+  },
+  { log },
+);

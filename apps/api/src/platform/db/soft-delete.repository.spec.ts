@@ -7,7 +7,11 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { closeDatabase, openDatabase } from './prisma.repository.js';
 import { HardDeleteRefusedError, liveRowsOnly } from './soft-delete.repository.js';
 
-const database = openDatabase('postgresql://ijazah_app:app@127.0.0.1:1/ijazah');
+const database = openDatabase('postgresql://ijazah_app:app@127.0.0.1:1/ijazah', {
+  poolMax: 2,
+  statementTimeoutMs: 30_000,
+  idleInTransactionTimeoutMs: 60_000,
+});
 
 afterAll(async () => {
   await closeDatabase(database);

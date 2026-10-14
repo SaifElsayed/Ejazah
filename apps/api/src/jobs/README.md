@@ -14,3 +14,13 @@ Push delivery is reachable only from the queued notification job (R-API-15).
 - `double-run.ts` — `runOnceAndTwice({ world, run, observe })`. A job's spec calls the handler directly, no queue, and asserts `expect(twice).toEqual(once)`.
 
 A job reads and writes through the modules' public entries and the kernel; it never queries a table itself (R-API-6).
+
+## Retry, bounded failure and concurrency (T171)
+
+`queue.ts` exports `defaultJobOptions`, the options every job and every sweep is added with:
+`attempts: 3` with exponential `backoff` from one second (`delay: 1000`), safe because every job is
+idempotent; `removeOnComplete: true`, so finished work does not accumulate in Redis; and
+`removeOnFail: { count: 1000 }`, so a delivery that fails every attempt stays for an operator while the
+failed set stays bounded. The worker runs `QUEUE_CONCURRENCY` deliveries at once (`.env.example`; a positive
+integer, 4 unless set), handed in by `worker.ts`. These numbers are the queue's own operation, kept in the
+kernel: the magic-number gate governs `modules/`, where every operational number is a setting.

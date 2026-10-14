@@ -29,8 +29,17 @@
 // They are a required option: the application cannot be built with an administrator surface and no
 // writer.
 //
+// RATE LIMITING. The user surface's context carries the process's rate limiter (T170), from which
+// the caller kinds apply each procedure's declared limit. It is a required option too: the
+// application cannot be built with a user surface and no limiter.
+//
 // BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
 // any route, so every response carries them, on either surface, on the health routes or elsewhere.
+//
+// SHUTDOWN HOOKS. The application listens for SIGTERM and SIGINT itself (T173), so a provider's
+// `onApplicationShutdown` runs on a signal and `close()` is never run twice: Nest runs one shutdown
+// per cycle whether a signal or `main.ts`'s own stop sequence asks first, and the sequence exits
+// the process once the database is closed too.
 //
 // `main.ts` builds this application after the configuration validated and is the only caller in
 // production; a spec passes fixture routers in place of the real ones.
@@ -51,6 +60,7 @@ import { createHTTPHandler } from '@trpc/server/adapters/standalone';
 import { DomainError, type ErrorCode } from './platform/errors/domain-error.js';
 import { mapError, type MappedError } from './platform/errors/error-filter.js';
 import { reportError } from './platform/errors/reporting.js';
+import type { RateLimiter } from './platform/guards/rate-limit.guard.js';
 import {
   applySecurityHeaders,
   type SecurityHeadersOptions,
@@ -112,6 +122,8 @@ export interface ApplicationOptions {
   readonly maxRequestBodyBytes: number;
   /** The transactions and the bound audit writer every administrative call runs with (T108). */
   readonly administration: Administration;
+  /** The process's rate limiter, which every user-surface call carries (T170). */
+  readonly rateLimiter: RateLimiter;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
 }
@@ -224,6 +236,7 @@ export async function createApplication({
   securityHeaders,
   maxRequestBodyBytes,
   administration,
+  rateLimiter,
   surfaces = { app: appRouter, admin: adminRouter },
 }: ApplicationOptions): Promise<INestApplication> {
   const application = await NestFactory.create(AppModule.with({ readiness }), {
@@ -231,6 +244,8 @@ export async function createApplication({
     logger: new KernelLoggerForNest(log),
     abortOnError: false,
   });
+  // The two signals a process is stopped with, the same two `onShutdown` listens for (T173).
+  application.enableShutdownHooks(['SIGTERM', 'SIGINT']);
   // Ahead of every route, so each response carries the headers and the allowlist (T136).
   applySecurityHeaders(application, securityHeaders);
   application.useGlobalFilters(new OneErrorShape(log));
@@ -238,7 +253,7 @@ export async function createApplication({
     surfacePaths.app,
     surfaceHandler(
       surfaces.app,
-      () => createAppContext({ session: null, log }),
+      () => createAppContext({ session: null, log, rateLimiter }),
       log,
       maxRequestBodyBytes,
     ),
