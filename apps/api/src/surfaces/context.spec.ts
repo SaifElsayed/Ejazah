@@ -8,6 +8,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createLogger } from '../platform/logging/logger.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import type { AuditWriter } from '../platform/audit/audit-writer.js';
+import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import {
   type AdminContext,
   type AppContext,
@@ -20,17 +21,18 @@ const administration = {
   transactions: {} as Transactions,
   auditWriter: {} as AuditWriter,
 };
+const rateLimiter = {} as RateLimiter;
 
 describe('the user and administrator contexts (T162, R-SEC-8)', () => {
   it('each names its surface, set by its own factory', () => {
-    expect(createAppContext({ session: null, log }).surface).toBe('app');
+    expect(createAppContext({ session: null, log, rateLimiter }).surface).toBe('app');
     expect(createAdminContext({ session: null, log, administration }).surface).toBe('admin');
     expectTypeOf<AppContext['surface']>().toEqualTypeOf<'app'>();
     expectTypeOf<AdminContext['surface']>().toEqualTypeOf<'admin'>();
   });
 
   it('neither is assignable to the other, in either direction', () => {
-    const app: AppContext = createAppContext({ session: null, log });
+    const app: AppContext = createAppContext({ session: null, log, rateLimiter });
     const admin: AdminContext = createAdminContext({ session: null, log, administration });
 
     // @ts-expect-error -- T162: a user context is never an administrator context (R-SEC-8).
@@ -44,7 +46,7 @@ describe('the user and administrator contexts (T162, R-SEC-8)', () => {
   });
 
   it('a context that has every field of the other but its own surface is still refused', () => {
-    const app = createAppContext({ session: null, log });
+    const app = createAppContext({ session: null, log, rateLimiter });
     // Every field the administrator context has, added to a user context, except its surface.
     const widened = { ...app, administrator: null, administration };
 

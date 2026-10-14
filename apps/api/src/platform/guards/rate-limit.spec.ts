@@ -7,11 +7,18 @@
 // `toErrorShape`, the mapping the HTTP application sends, so "throttled" means 429 `RATE_LIMITED`
 // in the one error shape.
 //
-// The limits are settings rows read through the kernel's `SettingsReader` (T113): the four keys and
+// The limits are settings rows read through the kernel's `SettingsReader` (T113): the keys and
 // their defaults are the owner's decision, shared with the seed (T074). The reader here is a fake
 // that behaves as the admin module's does, so a missing or invalid row fails closed. The counter is
 // an in-memory fake of `RateLimitCounter`; the Redis counter's own script is asserted at the end
 // against a fake client, since no test needs a Redis.
+//
+// T170 (review findings SEC-2, SEC-8): a limit is declared on the caller kind, `rateLimit: { key,
+// subjectOf, budget? }`, never applied by hand, and the kind applies it from the limiter the request
+// context carries. A `budget` is a second key counted under the one constant subject `*`, so a path
+// has a platform-wide cap beside its per-subject one; it is checked first, so a refused budget
+// counts nothing per subject. The counter key hashes the subject with HMAC-SHA256 under a key
+// derived from ENCRYPTION_KEY, so a Redis dump cannot be brute-forced back to phone numbers.
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -26,12 +33,14 @@ import {
   toErrorShape,
 } from '../../surfaces/procedures.js';
 import {
+  BUDGET_SUBJECT,
   defaultRateLimits,
+  deriveRateLimitSubjectKey,
   createRateLimiter,
+  RATE_LIMIT_SUBJECT_LABEL,
   type RateLimitCounter,
   RateLimiter,
   RedisRateLimitCounter,
-  throttle,
 } from './rate-limit.guard.js';
 
 /** The settings store, as the admin module answers it: missing or refused rows fail closed. */
@@ -63,7 +72,10 @@ class FakeCounter implements RateLimitCounter {
 
 const PHONE = '+201001234567';
 const OTHER_PHONE = '+201009876543';
+const THIRD_PHONE = '+201005555555';
 const REPORT_LIMIT = 'rate_limit_report_user';
+const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+const OTHER_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
 
 const student: UserSession = {
   userId: '0199c1a0-0000-7000-8000-000000000001',
@@ -72,44 +84,88 @@ const student: UserSession = {
   preferredLanguage: 'ar',
 };
 
-function fixture(options: { readonly limit?: number; readonly windowSeconds?: number } = {}) {
+function fixture(
+  options: {
+    readonly limit?: number;
+    readonly windowSeconds?: number;
+    readonly budgetLimit?: number;
+  } = {},
+) {
   const settings = new FakeSettings();
   const counter = new FakeCounter();
-  const limiter = new RateLimiter({ settings, counter });
+  const limiter = new RateLimiter({
+    settings,
+    counter,
+    subjectKey: deriveRateLimitSubjectKey(ENCRYPTION_KEY),
+  });
   const window = { limit: options.limit ?? 3, window_seconds: options.windowSeconds ?? 60 };
   for (const key of [...Object.values(defaultRateLimits), REPORT_LIMIT]) {
     settings.values.set(key, window);
+  }
+  if (options.budgetLimit !== undefined) {
+    const budget = { limit: options.budgetLimit, window_seconds: 3600 };
+    settings.values.set(defaultRateLimits.authenticationBudget, budget);
+    settings.values.set(defaultRateLimits.oneTimeCodeBudget, budget);
   }
 
   const phoneInput = z.object({ phone: z.string() });
   const text = z.string();
   const router = createAppRouter({
-    signIn: publicProcedure({ input: phoneInput, output: text })
-      .use(throttle(limiter, defaultRateLimits.authentication, ({ input }) => input.phone))
-      .mutation(() => 'signed-in'),
-    requestCode: publicProcedure({ input: phoneInput, output: text })
-      .use(throttle(limiter, defaultRateLimits.oneTimeCode, ({ input }) => input.phone))
-      .mutation(() => 'sent'),
-    search: studentProcedure({ input: z.void(), output: text })
-      .use(throttle(limiter, defaultRateLimits.search, ({ ctx }) => ctx.caller.userId))
-      .query(() => 'results'),
-    startCheckout: studentProcedure({ input: z.void(), output: text })
-      .use(throttle(limiter, defaultRateLimits.paymentInitiation, ({ ctx }) => ctx.caller.userId))
-      .mutation(() => 'checkout'),
-    profile: publicProcedure({ input: phoneInput, output: text }).query(() => 'profile'),
-    reportUser: studentProcedure({ input: z.void(), output: text })
-      .use(throttle(limiter, REPORT_LIMIT, ({ ctx }) => ctx.caller.userId))
-      .mutation(() => 'reported'),
-    nobody: publicProcedure({ input: z.void(), output: text })
-      .use(throttle(limiter, defaultRateLimits.search, () => ''))
-      .query(() => 'nobody'),
+    signIn: publicProcedure({
+      input: phoneInput,
+      output: text,
+      rateLimit: {
+        key: defaultRateLimits.authentication,
+        subjectOf: ({ input }) => input.phone,
+        ...(options.budgetLimit === undefined
+          ? {}
+          : { budget: defaultRateLimits.authenticationBudget }),
+      },
+    }).mutation(() => 'signed-in'),
+    requestCode: publicProcedure({
+      input: phoneInput,
+      output: text,
+      rateLimit: {
+        key: defaultRateLimits.oneTimeCode,
+        subjectOf: ({ input }) => input.phone,
+        ...(options.budgetLimit === undefined
+          ? {}
+          : { budget: defaultRateLimits.oneTimeCodeBudget }),
+      },
+    }).mutation(() => 'sent'),
+    search: studentProcedure({
+      input: z.void(),
+      output: text,
+      rateLimit: { key: defaultRateLimits.search, subjectOf: ({ ctx }) => ctx.caller.userId },
+    }).query(() => 'results'),
+    startCheckout: studentProcedure({
+      input: z.void(),
+      output: text,
+      rateLimit: {
+        key: defaultRateLimits.paymentInitiation,
+        subjectOf: ({ ctx }) => ctx.caller.userId,
+      },
+    }).mutation(() => 'checkout'),
+    // A student procedure that declares no limit: nothing is read, nothing is counted.
+    profile: studentProcedure({ input: phoneInput, output: text }).query(() => 'profile'),
+    reportUser: studentProcedure({
+      input: z.void(),
+      output: text,
+      rateLimit: { key: REPORT_LIMIT, subjectOf: ({ ctx }) => ctx.caller.userId },
+    }).mutation(() => 'reported'),
+    nobody: publicProcedure({
+      input: z.void(),
+      output: text,
+      rateLimit: { key: defaultRateLimits.search, subjectOf: () => '' },
+    }).query(() => 'nobody'),
   });
 
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const callerFor = createAppCallerFactory(router);
-  const anonymous = () => callerFor(createAppContext({ session: null, log }));
-  const signedIn = () => callerFor(createAppContext({ session: student, log }));
-  return { settings, counter, anonymous, signedIn };
+  const anonymous = () => callerFor(createAppContext({ session: null, log, rateLimiter: limiter }));
+  const signedIn = () =>
+    callerFor(createAppContext({ session: student, log, rateLimiter: limiter }));
+  return { settings, counter, limiter, anonymous, signedIn };
 }
 
 type Fixture = ReturnType<typeof fixture>;
@@ -154,12 +210,14 @@ const defaultPaths: ReadonlyArray<{
 ];
 
 describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
-  it('names the four default paths by the settings keys the seed plants (T074)', () => {
+  it('names the four default paths and the two budgets by the settings keys the seed plants (T074, T170)', () => {
     expect(defaultRateLimits).toEqual({
       authentication: 'rate_limit_authentication',
       oneTimeCode: 'rate_limit_one_time_code',
       search: 'rate_limit_search',
       paymentInitiation: 'rate_limit_payment_initiation',
+      oneTimeCodeBudget: 'rate_limit_one_time_code_budget',
+      authenticationBudget: 'rate_limit_authentication_budget',
     });
   });
 
@@ -174,11 +232,11 @@ describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
     expect(f.settings.reads.every((key) => key === path.key)).toBe(true);
   });
 
-  it('leaves an endpoint outside the four untouched: no setting read, nothing counted', async () => {
+  it('leaves an endpoint that declares no limit untouched: no setting read, nothing counted', async () => {
     const f = fixture({ limit: 1 });
 
     for (let call = 1; call <= 50; call += 1) {
-      expect(await outcome(() => f.anonymous().profile({ phone: PHONE }))).toEqual({
+      expect(await outcome(() => f.signedIn().profile({ phone: PHONE }))).toEqual({
         status: 200,
         body: 'profile',
       });
@@ -187,7 +245,7 @@ describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
     expect(f.counter.counts.size).toBe(0);
   });
 
-  it('throttles an endpoint outside the four once it opts in, at the limit of its own key', async () => {
+  it('throttles an endpoint outside the four once it declares a key of its own, at that key’s limit', async () => {
     const f = fixture({ limit: 3 });
     f.settings.values.set(REPORT_LIMIT, { limit: 2, window_seconds: 3600 });
 
@@ -307,12 +365,104 @@ describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
             throw new Error('connect ECONNREFUSED 127.0.0.1:6379');
           },
         },
+        subjectKey: deriveRateLimitSubjectKey(ENCRYPTION_KEY),
       });
 
       await expect(limiter.check(defaultRateLimits.search, 'someone')).rejects.toThrow(
         'ECONNREFUSED',
       );
     });
+  });
+});
+
+describe('a platform-wide budget beside the per-subject limit (T170, review finding SEC-8)', () => {
+  it('counts every subject under one key, and refuses at its limit whoever calls', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 3 });
+    const signIn = (phone: string) => f.anonymous().signIn({ phone });
+
+    expect((await outcome(() => signIn(PHONE))).status).toBe(200);
+    expect((await outcome(() => signIn(OTHER_PHONE))).status).toBe(200);
+    expect((await outcome(() => signIn(THIRD_PHONE))).status).toBe(200);
+    // A fourth caller, under its own per-subject limit, is refused by the budget.
+    expect(await outcome(() => signIn('+201007777777'))).toEqual(throttled);
+    expect(await outcome(() => signIn(PHONE))).toEqual(throttled);
+
+    const budgetKey = [...f.counter.counts.keys()].find((key) =>
+      key.includes(defaultRateLimits.authenticationBudget),
+    );
+    expect(budgetKey).toBeDefined();
+    expect(f.counter.counts.get(budgetKey ?? '')).toBe(5);
+    expect(f.settings.reads.filter((key) => key === defaultRateLimits.authenticationBudget)).toHaveLength(5);
+  });
+
+  it('is checked first, so a refused budget counts nothing against the caller’s own subject', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 1 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect(await outcome(() => f.anonymous().signIn({ phone: OTHER_PHONE }))).toEqual(throttled);
+
+    const perSubject = [...f.counter.counts.entries()].filter(
+      ([key]) => !key.includes(defaultRateLimits.authenticationBudget),
+    );
+    expect(perSubject).toHaveLength(1);
+    expect(perSubject[0]?.[1]).toBe(1);
+    // The refused call read the budget and nothing else.
+    expect(f.settings.reads.at(-1)).toBe(defaultRateLimits.authenticationBudget);
+  });
+
+  it('is counted under one constant subject, apart from every caller', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10 });
+    await outcome(() => f.anonymous().requestCode({ phone: PHONE }));
+    await outcome(() => f.anonymous().requestCode({ phone: OTHER_PHONE }));
+
+    const keys = [...f.counter.counts.keys()];
+    expect(keys).toHaveLength(3);
+    expect(keys.filter((key) => key.includes(defaultRateLimits.oneTimeCodeBudget))).toHaveLength(1);
+    expect(BUDGET_SUBJECT).toBe('*');
+  });
+
+  it('fails closed when the budget row is missing, before the per-subject limit is read', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10 });
+    f.settings.values.delete(defaultRateLimits.authenticationBudget);
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(500);
+    expect(f.counter.counts.size).toBe(0);
+    expect(f.settings.reads).toEqual([defaultRateLimits.authenticationBudget]);
+  });
+});
+
+describe('the counter key is an HMAC of the subject (T170, review finding SEC-2)', () => {
+  it('derives the subject key from ENCRYPTION_KEY under its own label, 32 bytes unlike the key itself', () => {
+    expect(RATE_LIMIT_SUBJECT_LABEL).toBe('ijazah:rate-limit-subject:v1');
+    const derived = deriveRateLimitSubjectKey(ENCRYPTION_KEY);
+    expect(derived).toHaveLength(32);
+    expect(derived.equals(Buffer.from(ENCRYPTION_KEY, 'base64'))).toBe(false);
+    expect(derived.equals(deriveRateLimitSubjectKey(ENCRYPTION_KEY))).toBe(true);
+    expect(derived.equals(deriveRateLimitSubjectKey(OTHER_ENCRYPTION_KEY))).toBe(false);
+  });
+
+  it('hashes one subject differently under two keys, and the same under one key', async () => {
+    const counter = new FakeCounter();
+    const limiterOf = (encryptionKey: string) => {
+      const settings = new FakeSettings();
+      settings.values.set(defaultRateLimits.search, { limit: 100, window_seconds: 60 });
+      return new RateLimiter({
+        settings,
+        counter,
+        subjectKey: deriveRateLimitSubjectKey(encryptionKey),
+      });
+    };
+
+    await limiterOf(ENCRYPTION_KEY).check(defaultRateLimits.search, PHONE);
+    await limiterOf(OTHER_ENCRYPTION_KEY).check(defaultRateLimits.search, PHONE);
+    await limiterOf(ENCRYPTION_KEY).check(defaultRateLimits.search, PHONE);
+
+    expect(counter.counts.size).toBe(2);
+    expect([...counter.counts.values()].sort()).toEqual([1, 2]);
+    for (const key of counter.counts.keys()) {
+      expect(key).not.toContain(PHONE);
+      expect(key).not.toContain('1001234567');
+    }
   });
 });
 
@@ -356,7 +506,12 @@ describe("the process's limiter (T103)", () => {
     const settings = new FakeSettings();
     settings.values.set(defaultRateLimits.search, { limit: 5, window_seconds: 60 });
     // Port 1 on the loopback address: nothing listens there.
-    const limiter = createRateLimiter({ redisUrl: 'redis://127.0.0.1:1', settings, log });
+    const limiter = createRateLimiter({
+      redisUrl: 'redis://127.0.0.1:1',
+      settings,
+      log,
+      encryptionKey: ENCRYPTION_KEY,
+    });
 
     await expect(limiter.check(defaultRateLimits.search, 'someone')).rejects.toThrow();
     expect(lines.some((line) => line.includes('Rate-limit counter unreachable'))).toBe(true);

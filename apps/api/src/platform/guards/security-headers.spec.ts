@@ -22,6 +22,7 @@ import {
 } from '../../surfaces/procedures.js';
 import { ConfigError, loadConfig } from '../config/config.module.js';
 import { createLogger } from '../logging/logger.js';
+import { RateLimiter } from './rate-limit.guard.js';
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
 // it. Each part refuses if it is ever reached.
@@ -36,9 +37,21 @@ const ADMIN = 'https://admin.ijazah.example';
 const OTHER_ADMIN = 'https://ops.ijazah.example';
 const STRANGER = 'https://attacker.example';
 
+// Every public procedure declares a limit (T170); the limits themselves are rate-limit.spec.ts's,
+// so this limiter admits every call.
+const rateLimiter = new RateLimiter({
+  settings: { read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }) },
+  counter: { hit: async () => 1 },
+  subjectKey: Buffer.alloc(32),
+});
+
 const surfaces = {
   app: createAppRouter({
-    ping: publicProcedure({ input: z.void(), output: z.string() }).query(() => 'pong'),
+    ping: publicProcedure({
+      input: z.void(),
+      output: z.string(),
+      rateLimit: { key: 'rate_limit_search', subjectOf: () => 'anyone' },
+    }).query(() => 'pong'),
   }),
   admin: createAdminRouter({
     approve: adminProcedure({
@@ -59,6 +72,7 @@ async function start(mode: Mode): Promise<{ application: INestApplication; origi
     securityHeaders: { allowedOrigins: [ADMIN, OTHER_ADMIN], mode },
     maxRequestBodyBytes: 1_048_576,
     administration,
+    rateLimiter,
   });
   await application.listen(0, '127.0.0.1');
   const origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

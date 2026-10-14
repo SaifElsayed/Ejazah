@@ -73,6 +73,9 @@ interface Trpc {
 }
 const { initTRPC } = apiRequire('@trpc/server') as { initTRPC: Trpc };
 
+/** A public procedure's rate limit (T170); the snapshot records neither the key nor the subject. */
+const anyone = { key: 'rate_limit_search', subjectOf: () => 'anyone' } as const;
+
 /** What a case changes in the fixture contract; every field left out keeps the base. */
 interface Variant {
   readonly createName?: string;
@@ -145,6 +148,7 @@ function sources(variant: Variant = {}): SnapshotSources {
     [variant.profileName ?? 'get']: publicProcedure({
       input: z.object({ teacherId: z.string() }),
       output: z.null(),
+      rateLimit: anyone,
     }).query(() => null),
   };
   const availability = {
@@ -170,9 +174,11 @@ function sources(variant: Variant = {}): SnapshotSources {
     ...(variant.settingsOnApp === true
       ? {
           settings: {
-            update: publicProcedure({ input: settingsInput, output: z.null() }).mutation(
-              () => null,
-            ),
+            update: publicProcedure({
+              input: settingsInput,
+              output: z.null(),
+              rateLimit: anyone,
+            }).mutation(() => null),
           },
         }
       : {}),

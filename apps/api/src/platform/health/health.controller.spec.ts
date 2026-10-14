@@ -10,6 +10,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApplication, surfacePaths } from '../../app.module.js';
+import { RateLimiter } from '../guards/rate-limit.guard.js';
 import { createLogger } from '../logging/logger.js';
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
@@ -20,6 +21,13 @@ const administration = {
     write: () => Promise.reject(new Error('no administrative call is expected here')),
   },
 };
+
+// The real surfaces are mounted and carry no procedure yet, so no call here is rate limited (T170).
+const rateLimiter = new RateLimiter({
+  settings: { read: () => Promise.reject(new Error('no rate limit is expected here')) },
+  counter: { hit: () => Promise.reject(new Error('no rate limit is expected here')) },
+  subjectKey: Buffer.alloc(32),
+});
 
 const secret = 'connect ECONNREFUSED 10.0.4.17:5432 (ijazah_app@db-primary)';
 
@@ -42,6 +50,7 @@ beforeAll(async () => {
     securityHeaders: { allowedOrigins: [], mode: 'test' },
     maxRequestBodyBytes: 1_048_576,
     administration,
+    rateLimiter,
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

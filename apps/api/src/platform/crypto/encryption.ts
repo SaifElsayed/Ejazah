@@ -34,6 +34,7 @@
 //   ijazah:otp-pepper:v1                platform/crypto/hashing.ts               peppers OTP hashes (T069)
 //   ijazah:payment-stand-in-webhook:v1  platform/ports/payment/index.ts          signs stand-in events (T121)
 //   ijazah:video-stand-in-webhook:v1    platform/ports/video/index.ts            signs stand-in events (T121)
+//   ijazah:rate-limit-subject:v1        platform/guards/rate-limit.guard.ts      hashes rate-limit subjects (T170)
 // Only the column key protects a stored value; the rest protect short-lived values, so a rotation
 // re-encrypts the columns alone (T155).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';

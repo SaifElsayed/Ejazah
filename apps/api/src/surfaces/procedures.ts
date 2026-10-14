@@ -16,6 +16,13 @@
 // `caller` is not null. The gender it carries is the `RequesterGender` the request context minted
 // from the session (T106); nothing here builds one.
 //
+// A RATE LIMIT IS DECLARED ON THE KIND, never applied by hand (T170, FR-043, R-SEC-6):
+// `rateLimit: { key, subjectOf, budget? }`, required on `publicProcedure` (an anonymous endpoint
+// without one does not compile) and accepted by the student and teacher kinds. After the input is
+// validated, the kind applies `throttle` from the limiter the request context carries, budget
+// first and then the subject, and stamps the key in the procedure's meta beside its surface, so
+// what a surface serves can be read for its limits (surfaces.spec.ts).
+//
 // TWO tRPC INSTANCES, one per surface, because the two contexts are separate types (R-SEC-8). Each
 // stamps its procedures with the surface's meta, in the type and at runtime, so an administrative
 // capability is recognisable wherever it is mounted (T098): `{ surface: 'admin' }` exists only on
@@ -56,11 +63,18 @@ import type { AuditEntry, AuditTrail } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
+import {
+  type RateLimitDeclaration,
+  type RateLimitKey,
+  throttle,
+} from '../platform/guards/rate-limit.guard.js';
 import type { AdminContext, AdministratorCaller, AppContext, Role, UserCaller } from './context.js';
 
 /** The meta of every user-surface procedure. */
 export interface AppMeta {
   readonly surface: 'app';
+  /** The settings key of the procedure's declared rate limit, when it declares one (T170). */
+  readonly rateLimit?: RateLimitKey;
 }
 
 /** The meta of every administrator-surface procedure: what makes it an administrative capability. */
@@ -164,6 +178,26 @@ export interface ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
   readonly output: z.ZodType<TOutOut, TOutIn>;
 }
 
+/** The context a signed-in user's procedure reads: the surface's, with its caller present. */
+type SignedInContext = AppContext & { readonly caller: UserCaller };
+
+/** What a user-surface kind takes: its schemas and, for a public kind always, its rate limit (T170). */
+export interface AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, TContext>
+  extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
+  readonly rateLimit?: RateLimitDeclaration<TContext, TInOut>;
+}
+
+/** The public kind's declaration: an anonymous endpoint always names its limit (R-SEC-6). */
+export interface PublicProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>
+  extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
+  readonly rateLimit: RateLimitDeclaration<AppContext, TInOut>;
+}
+
+/** The meta a user-surface procedure is stamped with: its surface, and its limit's key when declared. */
+function appMeta(rateLimit: RateLimitDeclaration<never, never> | undefined): AppMeta {
+  return rateLimit === undefined ? { surface: 'app' } : { surface: 'app', rateLimit: rateLimit.key };
+}
+
 /** Admits an authenticated user holding `role`, and narrows the context to that caller. */
 function requireRole(role: Role) {
   return app.middleware(({ ctx, next }) => {
@@ -179,11 +213,12 @@ const requireAdministrator = admin.middleware(({ ctx, next }) => {
   return next({ ctx: { administrator: ctx.administrator } });
 });
 
-/** Anyone, authenticated or not. */
+/** Anyone, authenticated or not; always rate limited, by the declaration it carries. */
 export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
   output,
-}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  rateLimit,
+}: PublicProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
   AppContext,
   AppMeta,
   object,
@@ -192,14 +227,23 @@ export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
   TOutIn,
   TOutOut
 > {
-  return app.procedure.input(input).output(output);
+  // The type already requires it; a declaration that slipped past the compiler is refused here.
+  if (rateLimit === undefined) {
+    throw new Error('A public procedure declares its rate limit (R-SEC-6, T170).');
+  }
+  return app.procedure
+    .meta(appMeta(rateLimit))
+    .input(input)
+    .output(output)
+    .use(throttle(rateLimit));
 }
 
 /** A caller holding the student role, active. */
 export function studentProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
   output,
-}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  rateLimit,
+}: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>): CallerKind<
   AppContext,
   AppMeta,
   { caller: UserCaller },
@@ -208,14 +252,20 @@ export function studentProcedure<TIn, TInOut, TOutIn, TOutOut>({
   TOutIn,
   TOutOut
 > {
-  return app.procedure.use(requireRole('student')).input(input).output(output);
+  const builder = app.procedure
+    .meta(appMeta(rateLimit))
+    .use(requireRole('student'))
+    .input(input)
+    .output(output);
+  return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
 }
 
 /** A caller holding the teacher role, active. */
 export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
   output,
-}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  rateLimit,
+}: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>): CallerKind<
   AppContext,
   AppMeta,
   { caller: UserCaller },
@@ -224,7 +274,12 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
   TOutIn,
   TOutOut
 > {
-  return app.procedure.use(requireRole('teacher')).input(input).output(output);
+  const builder = app.procedure
+    .meta(appMeta(rateLimit))
+    .use(requireRole('teacher'))
+    .input(input)
+    .output(output);
+  return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
 }
 
 /** What an administrator handler receives beyond the surface's context (T108). */

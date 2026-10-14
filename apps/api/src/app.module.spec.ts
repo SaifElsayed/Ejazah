@@ -13,9 +13,11 @@
 // body one byte over it is refused with 413 `PAYLOAD_TOO_LARGE` on each surface before its
 // procedure runs, a body exactly at it is read, and a refusal is not logged as unexpected.
 import type { INestApplication } from '@nestjs/common';
+import { initTRPC } from '@trpc/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createApplication, type Surfaces, surfacePaths } from './app.module.js';
+import { RateLimiter } from './platform/guards/rate-limit.guard.js';
 import { createLogger } from './platform/logging/logger.js';
 import {
   adminProcedure,
@@ -23,6 +25,7 @@ import {
   createAppRouter,
   publicProcedure,
   studentProcedure,
+  toErrorShape,
 } from './surfaces/procedures.js';
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
@@ -36,20 +39,35 @@ const administration = {
 
 const secret = 'SELECT password_hash FROM admin_users -- 7f3e';
 
+// Every public procedure declares a limit (T170); the limits themselves are tested in
+// platform/guards, so this limiter admits every call.
+const rateLimiter = new RateLimiter({
+  settings: { read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }) },
+  counter: { hit: async () => 1 },
+  subjectKey: Buffer.alloc(32),
+});
+const anyone = { key: 'rate_limit_search', subjectOf: () => 'anyone' } as const;
+
 const user = createAppRouter({
-  ping: publicProcedure({ input: z.void(), output: z.string() }).query(() => 'pong'),
-  echo: publicProcedure({ input: z.object({ n: z.number() }), output: z.number() }).query(
-    ({ input }) => input.n,
+  ping: publicProcedure({ input: z.void(), output: z.string(), rateLimit: anyone }).query(
+    () => 'pong',
   ),
-  boom: publicProcedure({ input: z.void(), output: z.string() }).query(() => {
+  echo: publicProcedure({
+    input: z.object({ n: z.number() }),
+    output: z.number(),
+    rateLimit: anyone,
+  }).query(({ input }) => input.n),
+  boom: publicProcedure({ input: z.void(), output: z.string(), rateLimit: anyone }).query(() => {
     throw new Error(secret);
   }),
   me: studentProcedure({ input: z.void(), output: z.string() }).query(
     ({ ctx }) => ctx.caller.userId,
   ),
-  pad: publicProcedure({ input: z.object({ pad: z.string() }), output: z.number() }).mutation(
-    ({ input }) => input.pad.length,
-  ),
+  pad: publicProcedure({
+    input: z.object({ pad: z.string() }),
+    output: z.number(),
+    rateLimit: anyone,
+  }).mutation(({ input }) => input.pad.length),
 });
 
 const administrator = createAdminRouter({
@@ -77,6 +95,7 @@ beforeAll(async () => {
     securityHeaders: { allowedOrigins: [], mode: 'test' },
     maxRequestBodyBytes: BODY_LIMIT,
     administration,
+    rateLimiter,
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');
@@ -170,11 +189,14 @@ describe('the request body limit (T150, FR-077)', () => {
   // refuses an anonymous caller before that; no administrator session is resolved yet, so no
   // request reads a body on the real administrator surface. To show that surface's handler carries
   // the limit, a second application mounts there a router whose procedure reads its input first:
-  // a user-surface router, which the types refuse on that mount and only a spec can put there.
-  const readsFirst = createAppRouter({
-    approve: publicProcedure({ input: z.object({ pad: z.string() }), output: z.number() }).mutation(
-      ({ input }) => input.pad.length,
-    ),
+  // one built around the caller kinds on a tRPC instance of this spec's own, with the kernel's
+  // formatter, since a public kind now applies a rate limit from a limiter the administrator
+  // context does not carry (T170). The types refuse it on that mount; only a spec can put it there.
+  const stray = initTRPC.create({ errorFormatter: ({ error }) => toErrorShape(error).body });
+  const readsFirst = stray.router({
+    approve: stray.procedure
+      .input(z.object({ pad: z.string() }))
+      .mutation(({ input }) => input.pad.length),
   }) as unknown as Surfaces['admin'];
   let wired: INestApplication;
   let wiredOrigin: string;
@@ -186,6 +208,7 @@ describe('the request body limit (T150, FR-077)', () => {
       securityHeaders: { allowedOrigins: [], mode: 'test' },
       maxRequestBodyBytes: BODY_LIMIT,
       administration,
+      rateLimiter,
       surfaces: { app: user, admin: readsFirst },
     });
     await wired.listen(0, '127.0.0.1');

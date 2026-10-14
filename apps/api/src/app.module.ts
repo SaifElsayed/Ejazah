@@ -29,6 +29,10 @@
 // They are a required option: the application cannot be built with an administrator surface and no
 // writer.
 //
+// RATE LIMITING. The user surface's context carries the process's rate limiter (T170), from which
+// the caller kinds apply each procedure's declared limit. It is a required option too: the
+// application cannot be built with a user surface and no limiter.
+//
 // BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
 // any route, so every response carries them, on either surface, on the health routes or elsewhere.
 //
@@ -51,6 +55,7 @@ import { createHTTPHandler } from '@trpc/server/adapters/standalone';
 import { DomainError, type ErrorCode } from './platform/errors/domain-error.js';
 import { mapError, type MappedError } from './platform/errors/error-filter.js';
 import { reportError } from './platform/errors/reporting.js';
+import type { RateLimiter } from './platform/guards/rate-limit.guard.js';
 import {
   applySecurityHeaders,
   type SecurityHeadersOptions,
@@ -112,6 +117,8 @@ export interface ApplicationOptions {
   readonly maxRequestBodyBytes: number;
   /** The transactions and the bound audit writer every administrative call runs with (T108). */
   readonly administration: Administration;
+  /** The process's rate limiter, which every user-surface call carries (T170). */
+  readonly rateLimiter: RateLimiter;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
 }
@@ -224,6 +231,7 @@ export async function createApplication({
   securityHeaders,
   maxRequestBodyBytes,
   administration,
+  rateLimiter,
   surfaces = { app: appRouter, admin: adminRouter },
 }: ApplicationOptions): Promise<INestApplication> {
   const application = await NestFactory.create(AppModule.with({ readiness }), {
@@ -238,7 +246,7 @@ export async function createApplication({
     surfacePaths.app,
     surfaceHandler(
       surfaces.app,
-      () => createAppContext({ session: null, log }),
+      () => createAppContext({ session: null, log, rateLimiter }),
       log,
       maxRequestBodyBytes,
     ),

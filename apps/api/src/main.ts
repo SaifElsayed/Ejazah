@@ -49,9 +49,15 @@ const database = openDatabase(config.DATABASE_URL);
 const settings = requireSettingsReader(createSettingsReader(database));
 
 // The process's one rate limiter (T103, FR-043): it counts in Redis and reads each limit from the
-// settings above on every call. It is handed to the authentication, one-time-code, search and
-// payment-initiation procedures as their modules arrive, and connects to Redis on its first count.
-const rateLimiter = createRateLimiter({ redisUrl: config.REDIS_URL, settings, log });
+// settings above on every call. Every user-surface request carries it in its context (T170), so a
+// procedure's declared limit is applied by its caller kind; it connects to Redis on its first
+// count, and hashes each subject under a key derived from ENCRYPTION_KEY.
+const rateLimiter = createRateLimiter({
+  redisUrl: config.REDIS_URL,
+  settings,
+  log,
+  encryptionKey: config.ENCRYPTION_KEY,
+});
 
 // Every administrative call runs in one transaction and writes its audit record there, through the
 // admin module's writer (T108, FR-049); the process refuses to start without one, so no
@@ -72,6 +78,7 @@ const application = await createApplication({
   securityHeaders: { allowedOrigins: config.ADMIN_ALLOWED_ORIGINS, mode: config.NODE_ENV },
   maxRequestBodyBytes: config.MAX_REQUEST_BODY_BYTES,
   administration,
+  rateLimiter,
 });
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');

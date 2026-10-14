@@ -147,7 +147,7 @@ a token. Neither mechanism is sufficient alone, which is why R-SEC-2 gets both.
 
 | Guard | Applies to | Rule |
 |---|---|---|
-| Rate limiting | Authentication, one-time-code, search and payment-initiation paths, available to any endpoint | R-SEC-6, NFR-SEC-10 |
+| Rate limiting | Declared on the caller kind, never applied by hand (T170): `rateLimit: { key, subjectOf, budget? }`, required on the public kind and accepted by the student and teacher kinds; the kind applies it from the limiter the request context carries, after input validation, and stamps the key in the procedure's meta. The four default keys are the authentication, one-time-code, search and payment-initiation paths; a `budget` is a second key counted under the one subject `*` for every caller, checked first, so a path has a platform-wide cap beside its per-subject one (seeded for one-time code and authentication). Subjects are hashed with HMAC-SHA256 under a key derived from `ENCRYPTION_KEY` | R-SEC-6, NFR-SEC-10 |
 | Content sniffing | Every upload; the declared type is discarded, not compared | R-SEC-4 |
 | Request body limit | Both request surfaces, from configuration; an oversized body answers 413 in the one error shape. Uploads keep their own limit | FR-077, NFR-SEC-9 |
 | Webhook signature verification | Every inbound gateway or provider event, on the raw body, before any handler; unsigned or invalid requests are rejected and no row is written | R-MONEY-9, R-SEC-12 |
