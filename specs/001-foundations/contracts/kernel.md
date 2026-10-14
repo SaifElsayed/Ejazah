@@ -58,6 +58,18 @@ Four, and the way an endpoint declares who may call it:
 | Teacher | A caller holding the teacher role |
 | Administrator | An authenticated administrator |
 
+**Every kind takes its two schemas** (T169, owner's decision 2026-10-10):
+`publicProcedure({ input, output })`, `studentProcedure({ input, output })`,
+`teacherProcedure({ input, output })` and `adminProcedure({ input, output })`,
+each a zod schema, and applies `.output(output)` beside `.input(input)`. A
+procedure cannot be declared without an output schema, so what a handler
+returns is parsed before it leaves: a field the schema does not name is
+stripped (R-HONEST-4), the contract snapshot records the fields the schema
+names and never an output inferred from the handler (R-API-9), and a result
+that fails its schema is answered as the internal error, unexpected, while an
+input that fails its schema stays the validation failure with its paths. A
+procedure that takes nothing says so with `z.void()`.
+
 **The administrator kind writes its own audit record** after the handler
 returns and before the call commits (R-API-12, FR-049). There is no
 administrative route that bypasses auditing, because auditing is not something

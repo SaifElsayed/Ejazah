@@ -86,36 +86,34 @@ const handlerRan = vi.fn();
 
 /** A fixture administrator surface; every handler writes through the transaction it is handed. */
 function surfaceOver(database: FakeDatabase) {
+  const approvalCall = { input: z.object({ teacherId: z.string() }), output: z.string() };
   return createAdminRouter({
-    approve: adminProcedure(z.object({ teacherId: z.string() })).mutation(({ input, ctx }) => {
+    approve: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
       handlerRan();
       database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
       ctx.audit.record(approval);
       return 'approved';
     }),
-    approveUnaudited: adminProcedure(z.object({ teacherId: z.string() })).mutation(
-      ({ input, ctx }) => {
-        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
-        return 'approved';
-      },
-    ),
-    approveThenRefuse: adminProcedure(z.object({ teacherId: z.string() })).mutation(
-      ({ input, ctx }) => {
-        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
-        ctx.audit.record(approval);
-        throw new DomainError('CONFLICT');
-      },
-    ),
-    approveMany: adminProcedure(z.object({ teacherIds: z.array(z.string()) })).mutation(
-      ({ input, ctx }) => {
-        for (const teacherId of input.teacherIds) {
-          database.stage(ctx.tx, { table: 'teacher_approvals', teacherId });
-          ctx.audit.record({ ...approval, reason: `batch of ${input.teacherIds.length}` });
-        }
-        return input.teacherIds.length;
-      },
-    ),
-    viewUnaudited: adminProcedure(z.void()).query(() => 'seen'),
+    approveUnaudited: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
+      database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
+      return 'approved';
+    }),
+    approveThenRefuse: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
+      database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
+      ctx.audit.record(approval);
+      throw new DomainError('CONFLICT');
+    }),
+    approveMany: adminProcedure({
+      input: z.object({ teacherIds: z.array(z.string()) }),
+      output: z.number(),
+    }).mutation(({ input, ctx }) => {
+      for (const teacherId of input.teacherIds) {
+        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId });
+        ctx.audit.record({ ...approval, reason: `batch of ${input.teacherIds.length}` });
+      }
+      return input.teacherIds.length;
+    }),
+    viewUnaudited: adminProcedure({ input: z.void(), output: z.string() }).query(() => 'seen'),
   });
 }
 

@@ -2,8 +2,13 @@
 // declare a procedure (FR-047, FR-050, R-API-11, R-API-12, R-SEC-8; contracts/kernel.md
 // "Caller kinds", ARCHITECTURE §7.2).
 //
-// EACH KIND TAKES ITS INPUT SCHEMA as its argument, so a procedure cannot be declared without one
-// and validation cannot be skipped: a procedure that takes nothing says so with `z.void()`. The base
+// EACH KIND TAKES ITS TWO SCHEMAS, `{ input, output }`, so a procedure cannot be declared without
+// either and neither validation can be skipped: a procedure that takes nothing says so with
+// `z.void()`. The output schema is applied beside the input one (T169, owner's decision
+// 2026-10-10): what the handler returns is parsed by it before it leaves, so zod strips a field the
+// schema does not name (R-HONEST-4), the contract snapshot records the fields the schema names and
+// nothing inferred from the handler (R-API-9), and a result that fails its schema is the internal
+// error, unexpected, never a validation failure carrying the response's own paths. The base
 // builders are not exported, so a procedure cannot be built around the kinds.
 //
 // A KIND NARROWS THE CONTEXT, it never mints: the student and teacher kinds refuse an anonymous
@@ -30,7 +35,10 @@
 // reached through the context.
 //
 // ONE ERROR FORMATTER on both instances: `toErrorShape`, which sends T101's `mapError` result and
-// nothing else, so a tRPC error carries no stack, path or default shape (FR-041, R-API-8).
+// nothing else, so a tRPC error carries no stack, path or default shape (FR-041, R-API-8). tRPC
+// wraps an input that failed its schema as `BAD_REQUEST` with the `ZodError` as cause, and an
+// output that failed its schema as `INTERNAL_SERVER_ERROR` with the `ZodError` as cause; the first
+// is the validation failure with its paths, the second the internal error (T169).
 //
 // The teacher kind admits a caller holding the teacher role, as the kernel contract words it.
 // Whether an unapproved teacher's role counts as active is the session's to say when identity
@@ -43,7 +51,7 @@ import {
   type TRPCProcedureBuilder,
   type TRPCUnsetMarker,
 } from '@trpc/server';
-import type { z } from 'zod';
+import { type z, ZodError } from 'zod';
 import type { AuditEntry, AuditTrail } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
@@ -76,9 +84,14 @@ const transportCodes: Partial<Record<TRPCError['code'], ErrorCode>> = {
 /**
  * The one response for a failed procedure call: T101's mapping of what was thrown. A tRPC error
  * wrapping one of ours is mapped by its cause; one tRPC raised itself (an unknown path, a body that
- * does not parse) by its code. Everything else is the internal error.
+ * does not parse) by its code. An output that failed its schema (a `ZodError` tRPC wrapped as
+ * `INTERNAL_SERVER_ERROR`, T169) is the internal error, unexpected: the paths are the response's,
+ * not the client's. Everything else is the internal error.
  */
 export function toErrorShape(error: TRPCError): MappedError {
+  if (error.code === 'INTERNAL_SERVER_ERROR' && error.cause instanceof ZodError) {
+    return mapError(error);
+  }
   if (error.cause !== undefined && !(error.cause instanceof TRPCError)) {
     return mapError(error.cause);
   }
@@ -130,19 +143,26 @@ export const createAppCallerFactory = app.createCallerFactory;
 export const createAdminCallerFactory = admin.createCallerFactory;
 
 /**
- * What a caller kind returns: a builder over the surface's context with its input already set, to
- * be finished with `.query` or `.mutation`. Named because the declaration output must name it.
+ * What a caller kind returns: a builder over the surface's context with its input and output
+ * already set, to be finished with `.query` or `.mutation`. Named because the declaration output
+ * must name it.
  */
-type CallerKind<TContext, TMeta, TNarrowed, TIn, TOut> = TRPCProcedureBuilder<
+type CallerKind<TContext, TMeta, TNarrowed, TIn, TInOut, TOutIn, TOutOut> = TRPCProcedureBuilder<
   TContext,
   TMeta,
   TNarrowed,
   TIn,
-  TOut,
-  TRPCUnsetMarker,
-  TRPCUnsetMarker,
+  TInOut,
+  TOutIn,
+  TOutOut,
   false
 >;
+
+/** What every kind takes: the schema of what the client sends and of what the handler returns. */
+export interface ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
+  readonly input: z.ZodType<TInOut, TIn>;
+  readonly output: z.ZodType<TOutOut, TOutIn>;
+}
 
 /** Admits an authenticated user holding `role`, and narrows the context to that caller. */
 function requireRole(role: Role) {
@@ -160,24 +180,51 @@ const requireAdministrator = admin.middleware(({ ctx, next }) => {
 });
 
 /** Anyone, authenticated or not. */
-export function publicProcedure<TIn, TOut>(
-  input: z.ZodType<TOut, TIn>,
-): CallerKind<AppContext, AppMeta, object, TIn, TOut> {
-  return app.procedure.input(input);
+export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
+  input,
+  output,
+}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  AppContext,
+  AppMeta,
+  object,
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
+  return app.procedure.input(input).output(output);
 }
 
 /** A caller holding the student role, active. */
-export function studentProcedure<TIn, TOut>(
-  input: z.ZodType<TOut, TIn>,
-): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TOut> {
-  return app.procedure.use(requireRole('student')).input(input);
+export function studentProcedure<TIn, TInOut, TOutIn, TOutOut>({
+  input,
+  output,
+}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  AppContext,
+  AppMeta,
+  { caller: UserCaller },
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
+  return app.procedure.use(requireRole('student')).input(input).output(output);
 }
 
 /** A caller holding the teacher role, active. */
-export function teacherProcedure<TIn, TOut>(
-  input: z.ZodType<TOut, TIn>,
-): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TOut> {
-  return app.procedure.use(requireRole('teacher')).input(input);
+export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
+  input,
+  output,
+}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  AppContext,
+  AppMeta,
+  { caller: UserCaller },
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
+  return app.procedure.use(requireRole('teacher')).input(input).output(output);
 }
 
 /** What an administrator handler receives beyond the surface's context (T108). */
@@ -193,12 +240,22 @@ export interface AuditedCall {
  * An authenticated administrator, every call audited in its own transaction (FR-049, R-API-12).
  * Exists on the administrator surface only (R-API-11).
  */
-export function adminProcedure<TIn, TOut>(
-  input: z.ZodType<TOut, TIn>,
-): CallerKind<AdminContext, AdminMeta, AuditedCall, TIn, TOut> {
+export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
+  input,
+  output,
+}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  AdminContext,
+  AdminMeta,
+  AuditedCall,
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
   return admin.procedure
     .use(requireAdministrator)
     .input(input)
+    .output(output)
     .use(({ ctx, next }) => {
       const { transactions, auditWriter } = ctx.administration;
       return transactions.run(async (tx) => {

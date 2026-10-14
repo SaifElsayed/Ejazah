@@ -91,10 +91,18 @@ function separation(
 const kept = { notOfUserSurface: [], notOfAdministratorSurface: [], mountedOnBoth: [] };
 
 // A real procedure of each kind, as a module would declare them.
-const catalogue = publicProcedure(z.void()).query(() => 'subjects');
-const booking = studentProcedure(z.object({ slotId: z.string() })).mutation(() => 'held');
-const availability = teacherProcedure(z.void()).query(() => 'slots');
-const approval = adminProcedure(z.object({ teacherId: z.string() })).mutation(() => 'approved');
+const catalogue = publicProcedure({ input: z.void(), output: z.string() }).query(() => 'subjects');
+const booking = studentProcedure({
+  input: z.object({ slotId: z.string() }),
+  output: z.string(),
+}).mutation(() => 'held');
+const availability = teacherProcedure({ input: z.void(), output: z.string() }).query(
+  () => 'slots',
+);
+const approval = adminProcedure({
+  input: z.object({ teacherId: z.string() }),
+  output: z.string(),
+}).mutation(() => 'approved');
 // A procedure built around the caller kinds, on a tRPC instance of its own.
 const stray = initTRPC.create().procedure.query(() => 'stray');
 

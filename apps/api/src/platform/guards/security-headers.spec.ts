@@ -37,9 +37,14 @@ const OTHER_ADMIN = 'https://ops.ijazah.example';
 const STRANGER = 'https://attacker.example';
 
 const surfaces = {
-  app: createAppRouter({ ping: publicProcedure(z.void()).query(() => 'pong') }),
+  app: createAppRouter({
+    ping: publicProcedure({ input: z.void(), output: z.string() }).query(() => 'pong'),
+  }),
   admin: createAdminRouter({
-    approve: adminProcedure(z.object({ teacherId: z.string() })).mutation(() => 'approved'),
+    approve: adminProcedure({
+      input: z.object({ teacherId: z.string() }),
+      output: z.string(),
+    }).mutation(() => 'approved'),
   }),
 };
 

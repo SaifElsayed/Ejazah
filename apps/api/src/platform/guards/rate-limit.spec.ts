@@ -82,24 +82,25 @@ function fixture(options: { readonly limit?: number; readonly windowSeconds?: nu
   }
 
   const phoneInput = z.object({ phone: z.string() });
+  const text = z.string();
   const router = createAppRouter({
-    signIn: publicProcedure(phoneInput)
+    signIn: publicProcedure({ input: phoneInput, output: text })
       .use(throttle(limiter, defaultRateLimits.authentication, ({ input }) => input.phone))
       .mutation(() => 'signed-in'),
-    requestCode: publicProcedure(phoneInput)
+    requestCode: publicProcedure({ input: phoneInput, output: text })
       .use(throttle(limiter, defaultRateLimits.oneTimeCode, ({ input }) => input.phone))
       .mutation(() => 'sent'),
-    search: studentProcedure(z.void())
+    search: studentProcedure({ input: z.void(), output: text })
       .use(throttle(limiter, defaultRateLimits.search, ({ ctx }) => ctx.caller.userId))
       .query(() => 'results'),
-    startCheckout: studentProcedure(z.void())
+    startCheckout: studentProcedure({ input: z.void(), output: text })
       .use(throttle(limiter, defaultRateLimits.paymentInitiation, ({ ctx }) => ctx.caller.userId))
       .mutation(() => 'checkout'),
-    profile: publicProcedure(phoneInput).query(() => 'profile'),
-    reportUser: studentProcedure(z.void())
+    profile: publicProcedure({ input: phoneInput, output: text }).query(() => 'profile'),
+    reportUser: studentProcedure({ input: z.void(), output: text })
       .use(throttle(limiter, REPORT_LIMIT, ({ ctx }) => ctx.caller.userId))
       .mutation(() => 'reported'),
-    nobody: publicProcedure(z.void())
+    nobody: publicProcedure({ input: z.void(), output: text })
       .use(throttle(limiter, defaultRateLimits.search, () => ''))
       .query(() => 'nobody'),
   });

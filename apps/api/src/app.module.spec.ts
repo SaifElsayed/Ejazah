@@ -37,17 +37,26 @@ const administration = {
 const secret = 'SELECT password_hash FROM admin_users -- 7f3e';
 
 const user = createAppRouter({
-  ping: publicProcedure(z.void()).query(() => 'pong'),
-  echo: publicProcedure(z.object({ n: z.number() })).query(({ input }) => input.n),
-  boom: publicProcedure(z.void()).query(() => {
+  ping: publicProcedure({ input: z.void(), output: z.string() }).query(() => 'pong'),
+  echo: publicProcedure({ input: z.object({ n: z.number() }), output: z.number() }).query(
+    ({ input }) => input.n,
+  ),
+  boom: publicProcedure({ input: z.void(), output: z.string() }).query(() => {
     throw new Error(secret);
   }),
-  me: studentProcedure(z.void()).query(({ ctx }) => ctx.caller.userId),
-  pad: publicProcedure(z.object({ pad: z.string() })).mutation(({ input }) => input.pad.length),
+  me: studentProcedure({ input: z.void(), output: z.string() }).query(
+    ({ ctx }) => ctx.caller.userId,
+  ),
+  pad: publicProcedure({ input: z.object({ pad: z.string() }), output: z.number() }).mutation(
+    ({ input }) => input.pad.length,
+  ),
 });
 
 const administrator = createAdminRouter({
-  approve: adminProcedure(z.object({ teacherId: z.string() })).mutation(() => 'approved'),
+  approve: adminProcedure({
+    input: z.object({ teacherId: z.string() }),
+    output: z.string(),
+  }).mutation(() => 'approved'),
 });
 
 // The limit the application is built with here; production reads MAX_REQUEST_BODY_BYTES (T150).
@@ -163,7 +172,7 @@ describe('the request body limit (T150, FR-077)', () => {
   // the limit, a second application mounts there a router whose procedure reads its input first:
   // a user-surface router, which the types refuse on that mount and only a spec can put there.
   const readsFirst = createAppRouter({
-    approve: publicProcedure(z.object({ pad: z.string() })).mutation(
+    approve: publicProcedure({ input: z.object({ pad: z.string() }), output: z.number() }).mutation(
       ({ input }) => input.pad.length,
     ),
   }) as unknown as Surfaces['admin'];

@@ -13,9 +13,9 @@
 // object property its parent's JSON Schema lists as required. Fields are read
 // through each parser's Standard JSON Schema interface (`~standard.jsonSchema`), which Zod 4
 // implements by calling its own `z.toJSONSchema`, so no Zod import and no dependency is needed
-// here. A parser that cannot describe itself is refused, never recorded as having no field. A
-// procedure with no output parser publishes no output field this file can read: an output inferred
-// from the handler exists only for the compiler. Then every enum member: the Prisma enums, read from
+// here. A parser that cannot describe itself is refused, never recorded as having no field, and so
+// is a procedure with no output parser (T169): an output inferred from the handler exists only for
+// the compiler, and every caller kind takes `{ input, output }`. Then every enum member: the Prisma enums, read from
 // the generated client's `$Enums` (Prisma's own reading of `prisma/schema/base.prisma`, so a comment
 // or an attribute cannot be misread; it needs `pnpm db:generate`, which every pipeline stage already
 // runs), and every enum `packages/contracts` exports, read as a schema whose JSON Schema is an enum.
@@ -279,12 +279,19 @@ function proceduresOf(router: RouterLike, surface: Surface): Record<string, Proc
       throw new Error(`contract snapshot: ${where} is not a tRPC procedure this file can read`);
     }
     const output = definition['output'];
+    // An output inferred from the handler exists only for the compiler, so a procedure without an
+    // output parser would publish nothing this file can hold a removal against (T169, R-API-9).
+    if (output === undefined) {
+      throw new Error(
+        `contract snapshot: ${where} has no output parser, so nothing it returns can be recorded; every caller kind takes \`{ input, output }\` (R-API-9, T169)`,
+      );
+    }
     entries.push([
       path,
       {
         kind,
         input: fieldsOfParsers(inputs, 'input', where),
-        output: output === undefined ? {} : fieldsOfParsers([output], 'output', where),
+        output: fieldsOfParsers([output], 'output', where),
       },
     ]);
   }

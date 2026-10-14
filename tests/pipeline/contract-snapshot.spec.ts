@@ -48,7 +48,7 @@ import {
 const root = join(__dirname, '..', '..');
 
 /** The schema type the caller kinds take: Zod's, as `apps/api` declares it. */
-type Schema = Parameters<typeof publicProcedure>[0];
+type Schema = Parameters<typeof publicProcedure>[0]['input'];
 
 /** The part of Zod these fixtures use, loaded from the package that declares it. */
 interface Zod {
@@ -59,8 +59,19 @@ interface Zod {
   array(item: Schema): Schema;
   enum(values: readonly [string, ...string[]]): Schema;
   void(): Schema;
+  null(): Schema;
 }
-const { z } = createRequire(join(root, 'apps', 'api', 'package.json'))('zod') as { z: Zod };
+const apiRequire = createRequire(join(root, 'apps', 'api', 'package.json'));
+const { z } = apiRequire('zod') as { z: Zod };
+
+/** tRPC's own builder, as `apps/api` declares it: the one way to declare a procedure outside the kinds. */
+interface Trpc {
+  create(): {
+    procedure: { input(schema: Schema): { query(resolver: () => unknown): unknown } };
+    router(record: object): { _def: { procedures: object } };
+  };
+}
+const { initTRPC } = apiRequire('@trpc/server') as { initTRPC: Trpc };
 
 /** What a case changes in the fixture contract; every field left out keeps the base. */
 interface Variant {
@@ -120,25 +131,33 @@ function sources(variant: Variant = {}): SnapshotSources {
       variant.enrollmentIdOptional === true ? enrollmentId.optional() : enrollmentId;
   }
 
-  const create = studentProcedure(z.object(createInput))
-    .output(z.object(createOutput))
-    .mutation(() => ({ status: 'pending_payment', enrollmentId: 'e' }));
-  const listed = studentProcedure(z.void());
+  const create = studentProcedure({
+    input: z.object(createInput),
+    output: z.object(createOutput),
+  }).mutation(() => ({ status: 'pending_payment', enrollmentId: 'e' }));
+  const listed = studentProcedure({ input: z.void(), output: z.array(z.string()) });
   const list = variant.listKind === 'mutation' ? listed.mutation(() => []) : listed.query(() => []);
   const booking = {
     [variant.createName ?? 'create']: create,
     ...(variant.withList === false ? {} : { list }),
   };
   const profile = {
-    [variant.profileName ?? 'get']: publicProcedure(z.object({ teacherId: z.string() })).query(
-      () => null,
-    ),
+    [variant.profileName ?? 'get']: publicProcedure({
+      input: z.object({ teacherId: z.string() }),
+      output: z.null(),
+    }).query(() => null),
   };
   const availability = {
-    set: teacherProcedure(z.object({ isActive: z.boolean() })).mutation(() => null),
+    set: teacherProcedure({
+      input: z.object({ isActive: z.boolean() }),
+      output: z.null(),
+    }).mutation(() => null),
   };
   const reviews = {
-    submit: studentProcedure(z.object({ rating: z.number() })).mutation(() => null),
+    submit: studentProcedure({
+      input: z.object({ rating: z.number() }),
+      output: z.null(),
+    }).mutation(() => null),
   };
   const settingsInput = z.object({ key: z.string(), value: z.number() });
 
@@ -149,13 +168,25 @@ function sources(variant: Variant = {}): SnapshotSources {
     ...(variant.extraProcedure === true ? { reviews } : {}),
     // The same path on the other surface: the administrator capability is not where it was.
     ...(variant.settingsOnApp === true
-      ? { settings: { update: publicProcedure(settingsInput).mutation(() => null) } }
+      ? {
+          settings: {
+            update: publicProcedure({ input: settingsInput, output: z.null() }).mutation(
+              () => null,
+            ),
+          },
+        }
       : {}),
   });
   const admin = createAdminRouter(
     variant.settingsOnApp === true
       ? {}
-      : { settings: { update: adminProcedure(settingsInput).mutation(() => null) } },
+      : {
+          settings: {
+            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(
+              () => null,
+            ),
+          },
+        },
   );
 
   const genders = variant.genders ?? ['male', 'female'];
@@ -219,8 +250,24 @@ describe('the snapshot records the published contract (T084, FR-063)', () => {
       '$.note': { type: 'string' },
       '$.status': { type: 'string', values: ['confirmed', 'pending_payment'], required: true },
     });
-    // A procedure with no output parser publishes no output field the snapshot can read.
-    expect(snapshot.procedures.app['profile.get']?.output).toEqual({});
+    expect(snapshot.procedures.app['profile.get']?.output).toEqual({ $: { type: 'null' } });
+  });
+
+  // T169 (review finding SEC-3): an output inferred from the handler exists only for the compiler,
+  // so a procedure without an output parser would be recorded as publishing nothing, and no removal
+  // from its output could ever fail. The caller kinds cannot declare one; a router built around
+  // them (which the surfaces refuse to mount, T098) is refused here, naming the procedure.
+  it('refuses a procedure that has no output parser, naming its path (T169)', () => {
+    const t = initTRPC.create();
+    const stray = t.router({
+      profile: t.router({
+        get: t.procedure.input(z.object({ teacherId: z.string() })).query(() => null),
+      }),
+    });
+    const { routers, ...rest } = sources();
+    expect(() => snapshotOf({ ...rest, routers: { ...routers, app: stray } })).toThrow(
+      /app profile\.get.*no output parser/,
+    );
   });
 
   it('records every member of every enum, from the Prisma schema and from packages/contracts', () => {
