@@ -60,6 +60,7 @@ The root identity. One row per human, regardless of how many roles they hold.
 | gender | enum male · female | Self-declared, FR-AUTH-3. Changed only via admin (FR-GENDER-5) |
 | date_of_birth | date | FR-AUTH-4 |
 | display_name | text | |
+| certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, added in the Phase 1 pass) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
 | account_status | enum active · suspended · verification_required · banned | |
@@ -218,7 +219,7 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 
 Chain of transmission — ordered names, per teacher per subject (FR-ISNAD-1…6). Not a graph.
 
-**Amended by ADR 0017 (shape lands in the Phase 1 ERD pass, forward migration).** The chain is transcribed by the admin from the teacher's ijazah PDF, never typed by the teacher. Each row moves under a credential: `credential_id` FK → `teacher_credentials` replaces (`teacher_user_id`, `subject_id`); `transmitter_name` becomes `names` (text[], one generation holding one or more names, ADR 0004 D3); `position` counts origin first; `verification_status`, `verified_by_admin_id` and `verified_at` go (a chain exists only on an approved credential) and `created_by_admin_id` is added; unique (`credential_id`, `position`). New table `teacher_credentials`: `id`, `teacher_user_id`, `subject_id`, `document_id` FK → `verification_documents` (the PDF), `riwaya`, `tariq` (nullable), `status` enum pending · needs_document · approved · rejected, `review_reason`, `reviewed_by_admin_id`, `reviewed_at`; one approved credential per (`teacher_user_id`, `subject_id`). The table count changes then, not here.
+**Amended by ADR 0017 (shape lands in the Phase 1 ERD pass, forward migration).** The chain is transcribed by the admin from the teacher's ijazah PDF, never typed by the teacher. Each row moves under a credential: `credential_id` FK → `teacher_credentials` replaces (`teacher_user_id`, `subject_id`); `transmitter_name` becomes `names` (text[], one generation holding one or more names, ADR 0004 D3); `position` counts origin first; `verification_status`, `verified_by_admin_id` and `verified_at` go (a chain exists only on an approved credential) and `created_by_admin_id` is added; unique (`credential_id`, `position`). New table `teacher_credentials`: `id`, `teacher_user_id`, `subject_id`, `document_id` FK → `verification_documents` (the PDF), `holder_name` (the teacher's full name as on the PDF, ADR 0019), `riwaya`, `tariq` (nullable), `status` enum pending · needs_document · approved · rejected, `review_reason`, `reviewed_by_admin_id`, `reviewed_at`; one approved credential per (`teacher_user_id`, `subject_id`). The table count changes then, not here.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -516,7 +517,7 @@ Separate from `users` entirely (FR-ADMIN-1) — different auth, different tables
 | id | uuid | PK |
 | email | text, unique | |
 | password_hash | text | |
-| mfa_secret_encrypted | bytea | MFA mandatory (NFR-SEC-6) |
+| mfa_secret_encrypted | bytea | MFA mandatory (NFR-SEC-6). One admin role in the MVP, no role column (ADR 0019); single-use recovery codes live in `admin_recovery_codes` (`admin_id`, `code_hash`, `used_at`), added in the Phase 1 pass |
 | display_name | text | |
 | is_active | boolean | |
 | created_at | timestamptz | |
