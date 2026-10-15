@@ -198,6 +198,8 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | currency | char(3), default 'EGP' | |
 | is_active | boolean | Deactivation never touches existing enrollments (FR-PROFILE-3) |
 
+**Amended by ADR 0018 (Phase 1 ERD pass, forward migration).** `packages` gains `track` enum recitation · ijazah_track; `enrollments` gains `snapshot_track`; `sessions` gains `makeup_for_session_id` (nullable, FK → sessions); a new table `session_remedies` (`id`, `session_id` unique, `kind` enum makeup · refund, `status` enum awaiting_choice · proposed · counter_proposed · booked · refund_case, `proposed_date`, `counter_date`, `decided_at`, `case_id` nullable FK → disputes) records what each session not consumed is owed (FR-MAKEUP-1..6); `settings` gains the make-up choice window.
+
 ### `availability_slots`
 
 Recurring weekly, local wall-clock + zone (Architecture §9).
