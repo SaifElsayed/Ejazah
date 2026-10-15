@@ -216,6 +216,8 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 
 Chain of transmission — ordered names, per teacher per subject (FR-ISNAD-1…6). Not a graph.
 
+**Amended by ADR 0017 (shape lands in the Phase 1 ERD pass, forward migration).** The chain is transcribed by the admin from the teacher's ijazah PDF, never typed by the teacher. Each row moves under a credential: `credential_id` FK → `teacher_credentials` replaces (`teacher_user_id`, `subject_id`); `transmitter_name` becomes `names` (text[], one generation holding one or more names, ADR 0004 D3); `position` counts origin first; `verification_status`, `verified_by_admin_id` and `verified_at` go (a chain exists only on an approved credential) and `created_by_admin_id` is added; unique (`credential_id`, `position`). New table `teacher_credentials`: `id`, `teacher_user_id`, `subject_id`, `document_id` FK → `verification_documents` (the PDF), `riwaya`, `tariq` (nullable), `status` enum pending · approved · rejected, `review_reason`, `reviewed_by_admin_id`, `reviewed_at`; one approved credential per (`teacher_user_id`, `subject_id`). The table count changes then, not here.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
@@ -385,6 +387,8 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 ## 8. Certification
 
 ### `ijazahs`
+
+**Amended by ADR 0017 (Phase 4 ERD pass, forward migration).** An ijazah is issued by the admin on the teacher's request: `ijazahs` gains `request_id` FK → `ijazah_requests` (unique) and `issued_by_admin_id` FK → `admin_users`. New table `ijazah_requests`: `id`, `enrollment_id`, `teacher_user_id`, `student_user_id`, `subject_id`, `completion_date` (date), `language` enum ar · en, `status` enum pending · approved · rejected, `reason` (nullable, mandatory on reject), `decided_by_admin_id`, `decided_at`, `created_at`; at most one pending request per enrollment. `chain_snapshot_json` keeps generations (arrays of names) with the teacher appended (FR-ISNAD-7).
 
 | Column | Type | Notes |
 |---|---|---|
