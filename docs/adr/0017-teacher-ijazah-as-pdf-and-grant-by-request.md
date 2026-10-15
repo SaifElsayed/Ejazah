@@ -108,6 +108,8 @@ The template accepts a chain of any length; 35 men is not a limit.
 
 The verification page lists the whole chain at any length.
 
+The template prints two dates: the completion date the teacher gave, in the body («وكان ختمه يوم …»), and the issue date, in the dated line («حُرِّرت بتاريخ …»). Both appear in Hijri and Gregorian.
+
 ### D5 — Data
 
 - **`teacher_credentials` (new).** It records:
@@ -115,7 +117,7 @@ The verification page lists the whole chain at any length.
   - subject;
   - document (→ `verification_documents`);
   - riwaya and tariq;
-  - status (pending, approved or rejected);
+  - status (pending, needs another document, approved or rejected);
   - review reason;
   - who reviewed it, and when.
 - **`isnad_entries`.** Re-keyed to the credential. One row per generation,
