@@ -3,6 +3,8 @@
 **Version 1.4 — MVP Baseline (Buildable)**
 Supersedes v1.3, v1.2, v1.1 and v1.0. Date: September 2026.
 
+> **Amendment 2026-10-15 — [ADR 0016](adr/0016-one-role-per-account-and-no-paper-copy-flag.md).** An account is a Student or a Teacher, chosen once at the first sign-in and never changed or added to; the paper-copy flag (FR-IJAZAH-5) is deferred. Rewrites §2.2, FR-AUTH-2, FR-ADMIN-4 and FR-ADMIN-5, edits §4.1, §6.2, UC-7, §13 and DEC-30, and adds DEC-56.
+
 > **Amendment 2026-10-14 — [ADR 0015](adr/0015-account-deletion-and-no-user-block.md).** A user can delete their account from the app or request it on the web; reporting replaces a user-to-user block. Adds FR-AUTH-14, FR-AUTH-15, DEC-55 and RISK-12, and edits §4.1, NFR-COMP-3 and §8.
 
 > **Amendment 2026-10-14 — [ADR 0014](adr/0014-admin-shares-the-design-system-and-is-bilingual.md).** The Admin panel is in Arabic (default, RTL) and English, and uses the same design system as the mobile app. Edits §2, FR-LOC-5 and DEC-31, and adds DEC-54.
@@ -99,17 +101,16 @@ Three components:
 - **Admin web panel** — desktop web, internal operators only, Arabic and English interface on the app's design system [DEC-31, DEC-54].
 - **Backend platform** — authentication, scheduling, gateway checkout and webhook confirmation, live-session orchestration, notifications, storage.
 
-### 2.2 Dual-Role Accounts [DEC-30]
+### 2.2 One Role per Account [DEC-30, DEC-56]
 
-A single account may hold both Student and Teacher roles simultaneously. A teacher of one subject may legitimately wish to study another and receive an ijazah for it.
+*(Rewritten 2026-10-15, [ADR 0016](adr/0016-one-role-per-account-and-no-paper-copy-flag.md).)* An account holds exactly one role, Student or Teacher, chosen at the first sign-in (FR-AUTH-2, FR-AUTH-12). The role cannot be changed afterwards and no second role can be added. A teacher who wishes to study uses a separate account under another email. Dual-role accounts are deferred (§13).
 
 Consequences, which are binding on the data model and every authorisation check:
 
-- Roles are a set, not a single value. `User.roles` is a collection.
-- The app presents a role switcher; the active role determines navigation and permissions for that context.
-- Gender rules apply per session role, not per account. A female user acting as Teacher is discoverable only by female students; the same user acting as Student sees and books only female teachers. Both sessions are same-gender, as every session is (§3.7.1), and in each her camera is optional and entirely her own choice (§3.7.2).
+- The app shows the navigation of the account's one role. There is no role switcher.
+- Gender rules apply to the account's role: a female Teacher is discoverable only by female Students, and a female Student sees and books only female Teachers (§3.7.1).
 - A user shall never be able to enroll with themselves. Enforced server-side.
-- Teacher approval applies to the Teacher role only. Suspending the Teacher role does not suspend the Student role; banning the account suspends both.
+- Suspension acts on the account (`users.account_status`); withdrawing a Teacher's approval acts on the Teacher profile (FR-VERIFY-8). There is no per-role suspension.
 
 ### 2.3 User Classes
 
@@ -147,7 +148,7 @@ Consequences, which are binding on the data model and every authorisation check:
 | ID         | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FR-AUTH-1  | (Rewritten, ADR 0012) The system shall allow sign-up and sign-in with Google, with Apple (offered on iOS), or with an email address and a password. An email-and-password account shall verify its address with a one-time code before onboarding. A Google or Apple account is keyed by the provider's stable subject identifier, never by its email. Phone and email remain separate, independently unique, individually nullable fields; every MVP account has an email, and phone sign-up is deferred (§13) [DEC-25, DEC-52]. |
-| FR-AUTH-2  | The system shall require selection of at least one role at signup: Student or Teacher. Additional roles may be added later (§2.2).                                                                                                                                                                                                                                                                                                                         |
+| FR-AUTH-2  | (Rewritten, ADR 0016) The system shall require the choice of exactly one role at the first sign-in: Student or Teacher. The role cannot be changed afterwards, and no second role can be added (§2.2). |
 | FR-AUTH-3  | The system shall require gender declaration (Male / Female) at signup as a mandatory field.                                                                                                                                                                                                                                                                                                                                                                |
 | FR-AUTH-4  | The system shall collect date of birth at signup. It shall not block registration on age. Accounts under 18 shall be flagged `is_minor` and surfaced to admin [DEC-04].                                                                                                                                                                                                                                                                                    |
 | FR-AUTH-5  | The system shall support Arabic and English, switchable at any time.                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -449,7 +450,7 @@ A Teacher grants an ijazah in one of exactly two modes, chosen at grant time. *(
 | FR-IJAZAH-2  | (Rewritten, ADR 0013) Granting shall produce a platform-generated certificate (Mode A) from the platform template. Granting offers no mode choice, and no MVP code path shall create an ijazah whose mode is `uploaded`. Every ijazah carries a unique certificate identifier. |
 | FR-IJAZAH-3  | The certificate shall be viewable and downloadable in-app by the Student at any time, and by the granting Teacher.                                                                                                                                                                       |
 | FR-IJAZAH-4  | Every granted ijazah shall be recorded on the Student's profile as a permanent credential record.                                                                                                                                                                                        |
-| FR-IJAZAH-5  | For Mode A, the Teacher may additionally flag intent to issue a physical paper ijazah outside the app. Informational only.                                                                                                                                                               |
+| FR-IJAZAH-5  | (Deferred, ADR 0016.) For Mode A, the Teacher may additionally flag intent to issue a physical paper ijazah outside the app. Informational only. |
 | FR-IJAZAH-7  | Only a Teacher may grant an ijazah. No Admin action shall create one.                                                                                                                                                                                                                    |
 | FR-IJAZAH-8  | An Admin shall be able to revoke a granted ijazah with a mandatory reason, setting `revoked_at` and `revoked_reason`, marking it invalid at its verification endpoint, and hiding it from the Student's public credentials. Never hard-deleted.                                          |
 | FR-IJAZAH-9  | (Rewritten) Revocation of an ijazah shall not bar the Student from receiving future ijazahs, from that Teacher or any other [DEC-43]. Barring is a separate, explicit Admin action requiring its own reason, used only in cases of abuse.                                                |
@@ -478,8 +479,8 @@ A Teacher grants an ijazah in one of exactly two modes, chosen at grant time. *(
 | FR-ADMIN-1  | Admin authentication shall be separate from app login, restricted to authorised internal accounts, with mandatory multi-factor authentication.                                                                                                                   |
 | FR-ADMIN-2  | Teacher Verification Queue: pending applications with documents, subject claims and verification call record.                                                                                                                                                    |
 | FR-ADMIN-3  | Admin actions on applicants: approve, reject, request more information, ban.                                                                                                                                                                                     |
-| FR-ADMIN-4  | User directory: all users with profile details, roles, gender declaration, is_minor flag, verification status, account status.                                                                                                                                   |
-| FR-ADMIN-5  | Suspend or reinstate a user account, or an individual role on that account.                                                                                                                                                                                      |
+| FR-ADMIN-4  | User directory: all users with profile details, role, gender declaration, is_minor flag, verification status, account status *(ADR 0016)*. |
+| FR-ADMIN-5  | Suspend or reinstate a user account *(ADR 0016: no per-role suspension)*. |
 | FR-ADMIN-6  | Package and Session monitor: status, schedule, payment status from the gateway record; searchable and filterable by Student, Teacher or date *(v1.4)*. |
 | FR-ADMIN-7 | Disputes and Compensation Queue with binding resolution (FR-DISPUTE-3, FR-DISPUTE-5/6) *(v1.4)*. |
 | FR-ADMIN-8  | Gender Dispute Queue (FR-GENDER-4), including the correction and ban actions in FR-GENDER-6/7 *(v1.3)*.                                                                                                                  |
@@ -544,7 +545,7 @@ Rule/action settings (not numeric): teacher application decision; teacher status
 - **Teacher experience:** application/verification status, profile & package editor, availability editor, booking calendar, live session screen, chat, cancellation requests, payout setup, ijazah-granting flow, reviews received *(v1.4)*, account deletion *(ADR 0015)*.
 - **Admin panel:** verification queue, user directory, package/session monitor, session review queue, disputes queue, gender-dispute queue, reports queue, payments monitor, ijazah administration, configuration *(v1.4)*.
 
-Both mobile experiences share one codebase with role-based navigation and a role switcher (§2.2).
+Both mobile experiences share one codebase; an account sees its one role's navigation, with no role switcher (§2.2, ADR 0016).
 
 ### 4.2 Hardware Interfaces
 
@@ -643,7 +644,7 @@ User, UserRole, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, Verif
 
 **User** — id, phone (nullable, unique; unused in MVP, ADR 0012), email (nullable, unique; present on every MVP account), password_hash (null for Google and Apple accounts), gender (Male/Female), date_of_birth, is_minor (derived), preferred_language, timezone (IANA), account_status (Active / Suspended / Verification-Required / Banned), terms_version_accepted, created_at. Minor status and ijazah-bar status are computed on read (R-DB-4). Constraint: at least one of phone or email present.
 
-**UserRole** — user_id, role (Student / Teacher), status, granted_at. Supports dual-role (§2.2).
+**UserRole** — user_id, role (Student / Teacher), status, granted_at. One row per user in the MVP (§2.2, ADR 0016); the table is kept so dual roles can return.
 
 **TeacherProfile** — user_id, display_name, bio, photo_url, verification_status (Pending / Approved / Rejected / Suspended / Banned), verification_call_completed_at, verification_call_notes, approved_by_admin_id, approved_at, payout_account_ref_encrypted, payout_configured_at, payout_verified_at *(v1.4)*, average_rating (cached), review_count (cached).
 
@@ -733,7 +734,7 @@ Remaining entities (Review, Dispute, GenderFlag, UserReport, ChatMessage, Notifi
 
 **UC-6 — Dispute resolution.** Party raises a dispute within the dispute window → session outcome frozen as Disputed → dispute appears in Admin queue with attendance telemetry and chat log → Admin reviews and records a binding resolution with reason (outcome upheld or re-marked, no-show attributed, compensation ordered, or a party suspended or banned) → both parties notified → audit entry written → any ordered compensation executed by Platform Administration through the gateway, recorded when the gateway reports it. No funds move in the platform's code path *(v1.4)*.
 
-**UC-7 — Granting an ijazah.** Teacher opens the Enrollment, selects Grant Ijazah → confirms subject and language, optionally flags paper intent → system checks the Student is not barred → generates PDF from the platform template with unique number, QR and verification token → stored, recorded on the Student's profile, Student notified. Alternates: Student barred → rejected; erroneous grant → Admin revokes with reason, record retained.
+**UC-7 — Granting an ijazah.** Teacher opens the Enrollment, selects Grant Ijazah → confirms subject and language → system checks the Student is not barred → generates PDF from the platform template with unique number, QR and verification token → stored, recorded on the Student's profile, Student notified. Alternates: Student barred → rejected; erroneous grant → Admin revokes with reason, record retained.
 
 **UC-8 — Retired (v1.3, ADR 0005).** Was withdrawal.
 
@@ -774,7 +775,7 @@ Deliberately excluded, versus the original broader concept: Elasticsearch, Rabbi
 
 ## 13. Deferred Scope
 
-Phone sign-up by SMS code and linking a second sign-in method to an account (ADR 0012) · Teacher-uploaded certificates, Mode B (ADR 0013) · Parent/guardian accounts · session recording · platform-held funds of any kind (wallets, escrow, ledgers — retired by ADR 0005 and not reintroduced by ADR 0007) · AI-driven teacher recommendations · group or family sessions · session rescheduling · enrollment-level cancellation · languages beyond Arabic and English · in-app scheduling of verification calls.
+Phone sign-up by SMS code and linking a second sign-in method to an account (ADR 0012) · Dual-role accounts and adding a role to an account, and the paper-copy flag of FR-IJAZAH-5 (ADR 0016) · Teacher-uploaded certificates, Mode B (ADR 0013) · Parent/guardian accounts · session recording · platform-held funds of any kind (wallets, escrow, ledgers — retired by ADR 0005 and not reintroduced by ADR 0007) · AI-driven teacher recommendations · group or family sessions · session rescheduling · enrollment-level cancellation · languages beyond Arabic and English · in-app scheduling of verification calls.
 
 ## 14. Decision Log
 
@@ -813,7 +814,7 @@ Phone sign-up by SMS code and linking a second sign-in method to an account (ADR
 | DEC-27  | Standardised platform certificate template; QR + public verification; signed URLs; Arabic PDF proven Week 2.                                                                                                                                                     |
 | DEC-28  | Suspended teachers cannot join any session; remaining sessions cancelled. *(Refund clause retired v1.3.)*                                                                                                                                                                           |
 | DEC-29  | FR-BOOK-6 merged into FR-CANCEL-1.                                                                                                                                                                                                                               |
-| DEC-30  | Dual-role accounts supported; roles are a set; gender rules apply per session role.                                                                                                                                                                              |
+| DEC-30  | Dual-role accounts supported; roles are a set; gender rules apply per session role. *(Amended 2026-10-15 by DEC-56: one role per account in the MVP.)* |
 | DEC-31  | Admin panel English-only. *(Amended 2026-10-14 by DEC-54: Arabic and English.)*                                                                                                                                                                                                                                        |
 | DEC-32  | Moderated reviews lose the comment; the star rating still counts.                                                                                                                                                                                                |
 | DEC-33  | *(Retired v1.3, ADR 0005.)* Automated disbursement with manual fallback on failure — not manual-first.                                                                                                                                                                                       |
@@ -837,6 +838,7 @@ Phone sign-up by SMS code and linking a second sign-in method to an account (ADR
 | DEC-51  | *(2026-09-28.)* Browser security headers and a CORS origin allowlist are a kernel guarantee for every browser-facing surface (NFR-SEC-11). They were absent from v1.0–v1.4, which listed rate limiting, validation, signed URLs, MFA and audit but no HTTP header hygiene; found by the develop security review after PR #23. |
 | DEC-52  | *(2026-10-14, ADR 0012.)* Sign-up and sign-in with Google, Apple (iOS) or email and password; sign-in before onboarding; no automatic linking by email; phone sign-up by SMS deferred for its per-message cost, sender-ID registration and pumping risk. |
 | DEC-53  | *(2026-10-14, ADR 0013.)* Every ijazah granted in the MVP is platform-generated; the uploaded mode is deferred and `ijazahs.mode` is kept with only `generated` written. |
+| DEC-56  | *(2026-10-15, ADR 0016.)* One role per account, chosen once at the first sign-in; no role switcher, no added role, suspension per account; the paper-copy flag is deferred. |
 | DEC-55  | *(2026-10-14, ADR 0015.)* In-app and web account deletion, immediate and final, with personal fields erased and legally needed records kept; no user-to-user block — reporting plus Admin suspension or ban is the block. |
 | DEC-54  | *(2026-10-14, ADR 0014.)* The Admin panel uses the mobile app's design system (one token source, the same component contracts) and is in Arabic and English. |
 

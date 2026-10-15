@@ -72,14 +72,14 @@ A Google or Apple sign-in is keyed by the provider's subject identifier, never b
 
 ### `user_roles`
 
-Roles are a set (dual-role, SRS §2.2).
+One row per user in the MVP: an account is a student or a teacher, never both (SRS §2.2, ADR 0016). The table is kept so dual roles can return; a unique index on `user_id` lands with a forward migration in the Phase 1 ERD pass.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | user_id | FK → users | |
 | role | enum student · teacher | |
-| status | enum active · suspended | Per-role suspension independent of account |
+| status | enum active · suspended | Stays `active` in the MVP: suspension is per account (`users.account_status`, ADR 0016) |
 | granted_at | timestamptz | unique (user_id, role) |
 
 ### `teacher_profiles`
@@ -397,7 +397,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | language | enum ar · en | Mode A template language (FR-LOC-4) |
 | chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable. Mode A only, so always present in the MVP (ADR 0013) |
 | certificate_storage_key | text | The generated PDF (an uploaded scan once Mode B returns, ADR 0013); signed URLs only |
-| paper_copy_intended | boolean | Informational (FR-IJAZAH-5) |
+| paper_copy_intended | boolean | Informational (FR-IJAZAH-5). Stays false in the MVP: the flag is deferred (ADR 0016) |
 | verification_token_hash | text, unique | Backs the public QR page (FR-IJAZAH-10). The QR carries the plaintext token; the database stores only its hash and looks up by hash (R-DB-7) |
 | granted_at | timestamptz | |
 | revoked_at | timestamptz, nullable | FR-IJAZAH-8. Revocation, not deletion — a revoked ijazah is never shown as valid |
