@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="dark">
+{{SB}}
+
+  <header class="app-header">
+    <div class="app-header__titles">
+      <h1 class="text-headline">الشيخ أحمد المصري</h1>
+      <span class="app-header__subtitle">حفظ القرآن · الجلسة 4 من 8</span>
+    </div>
+    <div class="app-header__actions">
+      <span class="timer-pill">{{icon:hourglass:sm}}02:14 / 45:00</span>
+      <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ">{{icon:flag:md}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <section class="video-tile grow gap-4" aria-label="المعلم">
+      <span class="avatar avatar--3xl avatar--neutral">أ</span>
+      <span class="stack gap-2 items-center text-center gutter">
+        <span class="row gap-2"><span class="spinner spinner--sm" aria-hidden="true"></span><strong class="text-headline">بانتظار انضمام الشيخ أحمد…</strong></span>
+      </span>
+      <span class="video-tile__label">الشيخ أحمد · لم ينضم بعد</span>
+    </section>
+    <section class="video-tile video-tile--self gap-4" aria-label="أنت">
+      <span class="avatar avatar--xl avatar--neutral">ي</span>
+      <span class="stack gap-half">
+        <strong class="text-body text-medium">أنت · في الجلسة</strong>
+        <span class="text-caption tone-muted">الصوت يعمل · الكاميرا مغلقة</span>
+      </span>
+    </section>
+  </main>
+
+  <footer class="action-bar action-bar--row call-controls">
+    <button type="button" class="call-btn" aria-label="كتم الصوت">{{icon:mic:lg}}</button>
+    <button type="button" class="call-btn call-btn--off" aria-label="تشغيل الكاميرا">{{icon:video-off:lg}}</button>
+    <a href="Chat.dc.html" class="call-btn" aria-label="المحادثة">{{icon:message-square:lg}}</a>
+    <a href="SessionEnded.dc.html" class="call-btn call-btn--end" aria-label="مغادرة الجلسة">{{icon:phone-off:lg}}</a>
+  </footer>
+</div>

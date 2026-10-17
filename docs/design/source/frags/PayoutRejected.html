@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="TeacherAccount.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">حساب الاستلام</h1>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <div class="state-hero">
+      <span class="icon-tile icon-tile--2xl icon-tile--danger">{{icon:circle-x:xl}}</span>
+      <div class="stack gap-2">
+        <h2 class="text-title-2">لم تتمكن بوابة الدفع من التحقق من حسابك</h2>
+        <p class="text-body tone-muted">لا تزال غير ظاهر للطلاب.</p>
+      </div>
+    </div>
+
+    <div class="banner banner--danger">
+      {{icon:alert-circle:md}}
+      <span class="stack gap-half grow">
+        <strong class="text-callout text-bold">السبب</strong>
+        <span>اسم صاحب الحساب البنكي لا يطابق الاسم في بطاقة هويتك.</span>
+      </span>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-3"><span class="tone-primary">{{icon:check:md}}</span><span class="grow">استخدم حسابًا باسمك كما هو في بطاقة الهوية.</span></li>
+      <li class="row row--top gap-3"><span class="tone-primary">{{icon:check:md}}</span><span class="grow">تأكد من رقم الحساب واسم البنك قبل الإرسال.</span></li>
+    </ul>
+
+    <div class="stack gap-2 push">
+      <a href="PayoutStart.dc.html" class="btn btn--primary btn--block">{{icon:rotate-ccw:md}}المحاولة مرة أخرى</a>
+      <p class="text-caption tone-muted text-center">إن تكرر الرفض، راسل فريق الدعم: <span class="ltr text-latin">support@ijazah.app</span></p>
+    </div>
+  </main>
+</div>

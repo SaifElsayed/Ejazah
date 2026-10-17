@@ -1,0 +1,44 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="StudentAccount.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">حذف الحساب</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="banner banner--warning">
+      {{icon:triangle-alert:md}}
+      <p class="grow">لديك اشتراكان جاريان مع الشيخ أحمد المصري. ستُلغى جلساتك القادمة كلها دون تعويض.</p>
+    </div>
+
+    <section class="section gap-2">
+      <h2 class="section__title">ما يُحذف</h2>
+      <ul class="stack gap-2 text-callout">
+        <li class="row row--top gap-2"><span class="tone-danger">{{icon:x:sm:medium}}</span><span class="grow">اسمك وبريدك وتاريخ ميلادك وصورتك</span></li>
+        <li class="row row--top gap-2"><span class="tone-danger">{{icon:x:sm:medium}}</span><span class="grow">محادثاتك وتعليقات تقييماتك</span></li>
+      </ul>
+    </section>
+
+    <section class="section gap-2">
+      <h2 class="section__title">ما يبقى</h2>
+      <ul class="stack gap-2 text-callout">
+        <li class="row row--top gap-2"><span class="tone-success">{{icon:check:sm:medium}}</span><span class="grow">إجازاتك الصادرة، وتبقى صالحة</span></li>
+        <li class="row row--top gap-2"><span class="tone-success">{{icon:check:sm:medium}}</span><span class="grow">سجلات الدفع والجلسات دون بياناتك الشخصية، كما يلزم القانون</span></li>
+      </ul>
+    </section>
+
+    <div class="field">
+      <label for="cf" class="field__label">اكتب «حذف» للتأكيد</label>
+      <input id="cf" class="input input--focused" value="حذف">
+      <span class="field__hint">لا يمكن التراجع عن الحذف.</span>
+    </div>
+
+    <div class="stack gap-2 push">
+      <a href="DeleteAccountSheet.dc.html" class="btn btn--danger btn--block">{{icon:trash:md}}حذف الحساب</a>
+      <a href="StudentAccount.dc.html" class="btn btn--ghost btn--block">إلغاء</a>
+    </div>
+  </main>
+</div>

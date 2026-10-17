@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — ملف المعلم</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen screen--long" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Discovery.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <div class="nav-header__trailing">
+        <a href="ReportSheet.dc.html" class="link link--muted text-callout"><svg class="icon icon--sm" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>إبلاغ</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="row gap-4">
+      <span class="avatar avatar--2xl">أ</span>
+      <span class="stack gap-1 grow">
+        <h1 class="text-title-2">الشيخ أحمد المصري</h1>
+        <span class="row wrap gap-2 text-callout tone-muted"><span class="badge badge--neutral">ذكر</span>حفظ القرآن</span>
+        <span class="rating"><svg class="icon icon--sm icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg>4.9 من 86 تقييمًا</span>
+      </span>
+    </section>
+
+    <p class="text-callout">أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا، بالتسميع المتدرّج وجهًا بوجه.</p>
+
+    <section class="card card--accent card--compact">
+      <div class="row row--between gap-2">
+        <span class="stack grow">
+          <h2 class="row gap-2 text-body text-bold tone-accent"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg>السند — حفظ القرآن</h2>
+          <span class="text-caption tone-muted">حفص عن عاصم · من طريق الشاطبية · 35 جيلًا</span>
+        </span>
+      </div>
+      <ol class="chain" aria-label="السند">
+        <li class="chain__item">
+          <span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span>
+          <span>رسول الله ﷺ</span>
+        </li>
+        <li class="chain__item">
+          <span class="chain__rail"><span class="chain__dot chain__dot--more"></span><span class="chain__line"></span></span>
+          <span class="text-caption tone-accent">… 33 جيلًا</span>
+        </li>
+        <li class="chain__item">
+          <span class="chain__rail"><span class="chain__dot"></span></span>
+          <strong>الشيخ أحمد المصري</strong>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">الباقات</h2>
+      <div class="card card--compact card--row row--between card--selected">
+        <span class="stack gap-half">
+          <span class="row wrap gap-2"><strong class="text-body text-bold">حفظ القرآن · 8 جلسات</strong><span class="badge badge--neutral">تسميع</span></span>
+          <span class="text-caption tone-muted">45 دقيقة للجلسة</span>
+          <span class="text-caption tone-muted">إن غاب المعلم تختار جلسة تعويضية أو استرداد ثمنها</span>
+        </span>
+        <span class="stack gap-half">
+          <strong class="text-body text-bold self-end">1,200 ج.م</strong>
+          <span class="text-caption tone-muted self-end">150 ج.م للجلسة</span>
+        </span>
+      </div>
+      <div class="card card--compact card--row row--between">
+        <span class="stack gap-half">
+          <span class="row wrap gap-2"><strong class="text-body text-bold">حفظ القرآن · 12 جلسة</strong><span class="badge badge--accent">مسار إجازة</span></span>
+          <span class="text-caption tone-muted">60 دقيقة للجلسة</span>
+          <span class="text-caption tone-muted">يطلب لك المعلم الإجازة بعد الإتمام · التعويض بجلسة</span>
+        </span>
+        <span class="stack gap-half">
+          <strong class="text-body text-bold self-end">2,160 ج.م</strong>
+          <span class="text-caption tone-muted self-end">180 ج.م للجلسة</span>
+        </span>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section__header">
+        <h2 class="section__title"><a href="TeacherProfileReviews.dc.html" class="link">التقييمات<svg class="icon icon--sm" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></h2>
+        <span class="rating"><svg class="icon icon--sm icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg>4.9 · 86 تقييمًا</span>
+      </div>
+      <article class="stack gap-1">
+        <div class="row row--between gap-2">
+          <span class="text-callout text-medium">سعيد م.</span>
+          <span class="rating"><svg class="icon icon--xs icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg>2 · 10 أكتوبر</span>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="action-bar">
+    <a href="BookingSheet.dc.html" class="btn btn--primary btn--block">اختيار الموعد · حفظ القرآن · 8 جلسات</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":868}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

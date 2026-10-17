@@ -1,1 +1,1592 @@
-{}
+{
+  "account": {
+    "delete": {
+      "cancel": "Cancel",
+      "confirmLabel": "Type “delete” to confirm",
+      "confirmWord": "delete",
+      "deleted": "What is deleted",
+      "deletedItems": {
+        "chats": "Your chats and the comments of your reviews",
+        "personal": "Your name, email, date of birth and photo"
+      },
+      "irreversible": "Deletion cannot be undone.",
+      "kept": "What is kept",
+      "keptItems": {
+        "ijazahs": "Your issued ijazahs, which stay valid",
+        "records": "Payment and session records without your personal data, as the law requires"
+      },
+      "sheet": {
+        "cancel": "Cancel",
+        "confirmGoogle": "Confirm with Google and delete the account",
+        "text": "Your upcoming sessions are cancelled, and the account cannot be restored.",
+        "title": "Delete your account permanently?"
+      },
+      "submit": "Delete account",
+      "title": "Delete account",
+      "warning": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}. All your upcoming sessions will be cancelled without compensation.",
+      "warningShort": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}."
+    },
+    "deleteAccount": "Delete account",
+    "gender": "Gender",
+    "genders": {
+      "male": "Male"
+    },
+    "language": "Language",
+    "languages": {
+      "ar": "العربية",
+      "en": "English"
+    },
+    "memberSince": "{gender, select, female {Student} other {Student}} · since {date}",
+    "providers": {
+      "google": "Google"
+    },
+    "restricted": {
+      "available": "Still available",
+      "availableItems": {
+        "ijazahs": "Your ijazahs stay valid",
+        "support": "Writing to support to ask or to object"
+      },
+      "bannedTitle": "Your account is banned",
+      "contactSupport": "Contact support",
+      "lede": "We suspended your account until the review of a report ends.",
+      "signOut": "Sign out",
+      "stopped": "Paused for now",
+      "stoppedItems": {
+        "booking": "Booking new packages and joining sessions",
+        "chat": "Chatting with teachers"
+      },
+      "title": "Your account is temporarily suspended"
+    },
+    "signInMethod": "Sign-in method",
+    "signOut": "Sign out",
+    "signOutSheet": {
+      "cancel": "Cancel",
+      "confirm": "Sign out",
+      "text": "To sign in again, use the same Google account.",
+      "title": "Sign out?"
+    },
+    "terms": "Terms and conditions",
+    "timeZone": "Time zone",
+    "timeZoneFromDevice": "{city} · from the device",
+    "title": "Account",
+    "verifyIdentity": {
+      "banner": {
+        "strong": "You cannot book a new package until we review the document.",
+        "text": "Your upcoming sessions continue."
+      },
+      "docType": "Document type",
+      "docTypes": {
+        "nationalId": "National ID card",
+        "passport": "Passport"
+      },
+      "intro": "We need an identity document to confirm your account details.",
+      "submit": "Send for review",
+      "tip": "Photograph it whole and clearly.",
+      "title": "Identity confirmation",
+      "upload": {
+        "nationalId": "Upload the national ID card",
+        "nationalIdHint": "One PDF file with both sides of the card"
+      }
+    }
+  },
+  "auth": {
+    "emailSignIn": {
+      "a11y": {
+        "showPassword": "Show password"
+      },
+      "createAccount": "Create an account with email",
+      "error": {
+        "invalidCredentials": "The email or password is incorrect."
+      },
+      "forgotPassword": "Forgot your password?",
+      "noAccount": "No account yet?",
+      "signIn": "Sign in",
+      "title": "Sign in with email"
+    },
+    "emailSignUp": {
+      "haveAccount": "Already have an account?",
+      "sendCode": "Send verification code",
+      "signIn": "Sign in",
+      "title": "New account with email"
+    },
+    "field": {
+      "confirmPassword": "Confirm password",
+      "email": "Email",
+      "newPassword": "New password",
+      "password": "Password"
+    },
+    "forgotPassword": {
+      "lede": "We will send a code to your email so you can choose a new password.",
+      "otherMethod": "Sign in another way",
+      "sendCode": "Send code",
+      "title": "Forgot your password"
+    },
+    "otp": {
+      "a11y": {
+        "digit1": "First digit",
+        "digit2": "Second digit",
+        "digit3": "Third digit",
+        "digit4": "Fourth digit",
+        "digit5": "Fifth digit",
+        "digit6": "Sixth digit"
+      },
+      "changeEmail": "Change email",
+      "code": "Code",
+      "confirm": "Confirm",
+      "lede": "We sent a code to {email}",
+      "resendIn": "Resend in {time}",
+      "title": "Confirm your email"
+    },
+    "resetPassword": {
+      "code": "Verification code",
+      "lede": "We sent a code to {email}",
+      "resendIn": "Resend in {time}",
+      "save": "Save password",
+      "title": "New password"
+    },
+    "signInConflict": {
+      "bodyEmailPassword": "{email} is registered with email and password. Sign in with them.",
+      "signInEmailPassword": "Sign in with email and password",
+      "title": "This email already has an account"
+    },
+    "welcome": {
+      "apple": "Continue with Apple",
+      "email": "Continue with email",
+      "feature": {
+        "gender": "Always a teacher of your own gender",
+        "isnad": "Teachers licensed with a connected chain of transmission"
+      },
+      "google": "Continue with Google",
+      "tagline": "Learn the Quran in live sessions at a fixed weekly time."
+    }
+  },
+  "chat": {
+    "a11y": {
+      "attach": "Attach a PDF file or a document",
+      "send": "Send"
+    },
+    "fileSize": "{size} KB",
+    "filesOnly": "You can send PDF files and documents only.",
+    "imageRejected": "Images cannot be sent in the chat. Send a PDF file or a document.",
+    "message": "Message",
+    "notSent": "Not sent",
+    "pdf": "PDF",
+    "placeholder": "Write a message",
+    "subtitle": "{subject} · {sessions, plural, one {# session} other {# sessions}}"
+  },
+  "common": {
+    "a11y": {
+      "account": "Account",
+      "back": "Back",
+      "close": "Close",
+      "deleteFile": "Remove file",
+      "notifications": "Notifications",
+      "notificationsUnread": "Notifications, some unread",
+      "report": "Report",
+      "step": "Step {step} of {total}",
+      "unread": "Unread"
+    },
+    "action": {
+      "accept": "Accept",
+      "addSubject": "Add a subject",
+      "back": "Back",
+      "cancel": "Cancel",
+      "change": "Change",
+      "clear": "Clear",
+      "clearAll": "Clear all",
+      "close": "Close",
+      "confirm": "Confirm",
+      "contactSupport": "Contact support",
+      "continue": "Continue",
+      "decline": "Decline",
+      "done": "Done",
+      "downloadPdf": "Download PDF",
+      "edit": "Edit",
+      "home": "Home",
+      "later": "Later",
+      "markAllRead": "Mark all as read",
+      "next": "Next",
+      "replace": "Replace",
+      "retry": "Try again",
+      "save": "Save",
+      "send": "Send",
+      "share": "Share",
+      "signOut": "Sign out"
+    },
+    "brand": {
+      "mark": "I",
+      "name": "Ijazah"
+    },
+    "currency": "EGP {amount}",
+    "day": {
+      "friday": "Friday",
+      "monday": "Monday",
+      "saturday": "Saturday",
+      "sunday": "Sunday",
+      "thursday": "Thursday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday"
+    },
+    "file": {
+      "pagesAndSize": "{pages, plural, one {# page} other {# pages}} · {size} MB",
+      "pdf": "PDF",
+      "pdfOnly": "PDF only",
+      "sizeMb": "{size} MB",
+      "uploadedAndSize": "Uploaded · {size} MB"
+    },
+    "format": {
+      "dateTime": "{date} · {time}",
+      "duration": "{minutes} minutes",
+      "durationShort": "{minutes} min",
+      "packageFull": "{subject} · {count, plural, one {# session} other {# sessions}} · {minutes} minutes",
+      "packageLine": "{count, plural, one {# session} other {# sessions}} · {minutes} minutes",
+      "packageLineWithPrice": "{count, plural, one {# session} other {# sessions}} · {minutes} minutes · EGP {amount}",
+      "packageShort": "{subject} · {count, plural, one {# session} other {# sessions}}",
+      "price": "EGP {amount}",
+      "progress": "{done} of {total}",
+      "sessionOf": "Session {n} of {total}",
+      "sessions": "{count, plural, zero {No sessions} one {# session} other {# sessions}}",
+      "timeZone": "{city} time",
+      "yourTimeZone": "Your time zone: {city}"
+    },
+    "gender": {
+      "female": "Female",
+      "male": "Male"
+    },
+    "language": {
+      "a11y": {
+        "label": "Language"
+      },
+      "ar": "العربية",
+      "en": "English"
+    },
+    "package": {
+      "full": "{subject} · {sessions, plural, one {# session} other {# sessions}} · {minutes, plural, one {# minute} other {# minutes}}",
+      "short": "{subject} · {sessions, plural, one {# session} other {# sessions}}",
+      "withTeacher": "{teacher} · {package}"
+    },
+    "progress": {
+      "sessions": "{done} of {total} sessions",
+      "short": "{done} of {total}"
+    },
+    "provider": {
+      "google": "Google"
+    },
+    "reviewTeam": {
+      "from": "From the review team",
+      "fromOn": "From the review team · {date}"
+    },
+    "role": {
+      "student": "Student",
+      "teacher": "Teacher"
+    },
+    "sessions": "{count, plural, one {# session} other {# sessions}}",
+    "state": {
+      "loadError": "Could not load the data. Try again.",
+      "offline": "No internet connection"
+    },
+    "tabs": {
+      "student": {
+        "a11y": {
+          "label": "Main navigation"
+        },
+        "account": "Account",
+        "credentials": "Ijazahs",
+        "discovery": "Explore",
+        "enrollments": "Enrollments",
+        "home": "Home"
+      }
+    },
+    "time": {
+      "dateTime": "{date} · {time}",
+      "inZone": "({city})",
+      "range": "{start} – {end}",
+      "weeklySlot": "every {weekday} {time}",
+      "zoneOf": "{city} time"
+    },
+    "track": {
+      "ijazah": "Ijazah track",
+      "ijazahTrack": "Ijazah track",
+      "recitation": "Recitation"
+    },
+    "unit": {
+      "generations": "{count, plural, one {# generation} other {# generations}}",
+      "kilobytes": "{size} KB",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "sessions": "{count, plural, zero {No sessions} one {# session} other {# sessions}}"
+    }
+  },
+  "notifications": {
+    "a11y": {
+      "unread": "Unread"
+    },
+    "groups": {
+      "earlier": "Earlier",
+      "thisWeek": "This week",
+      "today": "Today"
+    },
+    "items": {
+      "certificateName": {
+        "body": "Enter your name as it is written on it",
+        "title": "Your teacher requested an ijazah for you"
+      },
+      "disputeResolved": {
+        "body": "Session of {date} · outcome upheld: {status}",
+        "title": "The dispute has been decided"
+      },
+      "enrollmentTerminated": {
+        "body": "{subject} · {teacher}",
+        "title": "Your enrollment ended for teacher absence"
+      },
+      "ijazahIssued": {
+        "body": "{riwaya} · by way of {tariq}",
+        "title": "You received an ijazah in {subject} from {teacher}"
+      },
+      "paymentConfirmed": {
+        "body": "{subject} · {sessions, plural, one {# session} other {# sessions}} · every {weekday} {time} from {date}",
+        "bodyReady": "{subject} · {sessions, plural, one {# session ready} other {# sessions ready}}",
+        "title": "Payment confirmed"
+      },
+      "reminderTomorrow": {
+        "body": "{date} · {time} · {teacher}",
+        "title": "Reminder: your session is tomorrow"
+      },
+      "teacherCancelRequest": {
+        "body": "{date} · {time} · accept or decline before its time",
+        "title": "The teacher asked to cancel a session"
+      },
+      "teacherNoShow": {
+        "body": "Choose the compensation",
+        "title": "The teacher was absent from the session of {date}"
+      }
+    },
+    "markAllRead": "Mark all as read",
+    "teacher": {
+      "a11y": {
+        "unread": "Unread"
+      },
+      "cancelRequest": {
+        "meta": "Today's session at {time} · accept or decline before its time",
+        "title": "Cancellation request from {student}"
+      },
+      "disputeResolved": {
+        "meta": "Session of {date} with {student} · outcome upheld: {status}",
+        "title": "Dispute resolved"
+      },
+      "earlier": "Earlier",
+      "ijazahApproved": {
+        "meta": "{subject} · {riwaya}",
+        "title": "The administration approved {student}'s ijazah request"
+      },
+      "markAllRead": "Mark all as read",
+      "newBooking": {
+        "meta": "{student} · {subject} · {count, plural, one {# session} other {# sessions}} · {day} {time}",
+        "title": "New booking"
+      },
+      "newReview": {
+        "meta": "{student} · {rating} of 5",
+        "title": "New review"
+      },
+      "sessionSoon": {
+        "meta": "{student} · {subject} · {time}",
+        "title": "Your session is in {minutes, plural, one {# minute} other {# minutes}}"
+      },
+      "title": "Notifications",
+      "today": "Today"
+    },
+    "title": "Notifications"
+  },
+  "onboarding": {
+    "confirm": {
+      "confirmStudent": "Confirm and create the account",
+      "confirmTeacher": "Confirm and continue to the teaching application",
+      "gender": "Gender",
+      "name": "Name",
+      "role": "Role",
+      "title": "Confirm before creating the account",
+      "warning": "The role and the gender cannot be changed after the account is created."
+    },
+    "notifications": {
+      "allow": "Allow",
+      "lede": "We only send a notification when it matters to you.",
+      "notNow": "Not now",
+      "reasonIjazah": "Your ijazah being issued",
+      "reasonPayment": "The result of a payment",
+      "reasonReminder": "A reminder before each session",
+      "title": "Never miss a session"
+    },
+    "profile": {
+      "agreeTerms": "I agree to the {terms}",
+      "dateOfBirth": "Date of birth",
+      "displayName": "Display name",
+      "gender": "Gender",
+      "genderHint": "It cannot be changed later.",
+      "termsLink": "Terms and Conditions",
+      "timeZone": "Time zone",
+      "timeZoneFromDevice": "{city} · from the device",
+      "title": "Your details"
+    },
+    "role": {
+      "a11y": {
+        "role": "Role"
+      },
+      "lede": "Choose your role. It cannot be changed after the account is created.",
+      "student": "Student",
+      "studentHint": "Find a teacher and book your sessions",
+      "teacher": "Teacher",
+      "teacherHint": "Teach the Quran once your application is approved",
+      "title": "How will you use Ijazah?"
+    },
+    "terms": {
+      "changes": "We will tell you before any change to the terms.",
+      "compensation": {
+        "body1": "If a session did not take place as it should, open a dispute. The administration decides the compensation after review.",
+        "body2": "A session the teacher misses or that is cancelled by agreement is made up with another session; on recitation packages you may ask for a refund of its price instead when the teacher is absent.",
+        "title": "Compensation"
+      },
+      "conduct": {
+        "body1": "Abuse, harassment and inappropriate content are forbidden in sessions and chats. You can report any violation.",
+        "body2": "Suspension or banning of the account for a violation earns no refund.",
+        "title": "Conduct"
+      },
+      "identity": {
+        "body": "We may ask you for an identity document at any time. Registering with a gender other than your own leads to the account being banned.",
+        "title": "Identity and gender"
+      },
+      "intermediary": {
+        "body": "The platform connects you with approved teachers and does not provide the teaching itself. The teacher is responsible for their sessions and for the ijazah they grant.",
+        "title": "Ijazah is a technology intermediary"
+      },
+      "payment": {
+        "body": "You pay the package price to the teacher through the payment gateway. The platform does not hold your money and takes no commission.",
+        "title": "Payment"
+      },
+      "title": "Terms and Conditions",
+      "version": "Version {version} · effective from {date}"
+    },
+    "timeZone": {
+      "a11y": {
+        "list": "Time zone",
+        "otherCities": "Other cities"
+      },
+      "otherCities": "Other cities",
+      "searchPlaceholder": "Search for a city",
+      "title": "Time zone",
+      "useDevice": "Use the device time zone ({city})"
+    }
+  },
+  "session": {
+    "ended": {
+      "attendance": "Your attendance",
+      "backToEnrollment": "Back to the enrollment",
+      "dispute": "Something went wrong in the session? Open a dispute",
+      "disputeUntil": "You can open a dispute until {date} {time}",
+      "duration": "Session length",
+      "time": "Time",
+      "timeValue": "{date} · {start} – {end}",
+      "title": "Session ended",
+      "with": "With {teacher} · {subject} · session {n} of {total}"
+    },
+    "pre": {
+      "a11y": {
+        "preview": "Camera preview"
+      },
+      "camera": "Camera",
+      "cameraOff": "Your camera is off",
+      "cameraOptional": "Optional",
+      "cameraStatus": {
+        "off": "Off"
+      },
+      "duration": "Duration",
+      "join": "Join session",
+      "mic": "Microphone",
+      "micRequired": "Required",
+      "micStatus": {
+        "denied": "Not allowed",
+        "working": "Working"
+      },
+      "micWorking": "Microphone working",
+      "permission": {
+        "banner": "Allow Ijazah to use the microphone in Settings to join the session.",
+        "meta": "{date} · {start} – {end} · {minutes, plural, one {# minute} other {# minutes}}",
+        "micDenied": "Microphone not allowed",
+        "noAccess": "The app cannot reach the microphone",
+        "openSettings": "Open Settings"
+      },
+      "sessionOf": "{subject} · session {n} of {total}",
+      "teacher": {
+        "a11y": {
+          "cameraPreview": "Camera preview",
+          "report": "Report"
+        },
+        "camera": "Camera",
+        "cameraOff": "Your camera is off",
+        "cameraOptional": "Optional",
+        "counterpartMeta": "{subject} · session {n} of {total}",
+        "duration": "Length",
+        "durationValue": "{minutes} minutes",
+        "join": "Join the session",
+        "mic": "Microphone",
+        "micOk": "Working",
+        "micRequired": "Required",
+        "micWorking": "Microphone is working",
+        "timeRange": "{start} – {end}",
+        "title": "Before the session"
+      },
+      "title": "Before the session"
+    },
+    "room": {
+      "a11y": {
+        "cameraDisabledWeak": "Camera paused because of the weak connection",
+        "cameraOn": "Turn the camera on",
+        "chat": "Chat",
+        "leave": "Leave session",
+        "mute": "Mute",
+        "self": "You",
+        "teacher": "Teacher"
+      },
+      "audioOnCameraOff": "Audio on · camera off",
+      "audioOnly": "Audio only",
+      "cameraOffSpeaking": "Camera off · speaking now",
+      "notJoined": "{name} · not joined yet",
+      "reconnecting": "Reconnecting…",
+      "subtitle": "{subject} · session {n} of {total}",
+      "timer": "{elapsed} / {total}",
+      "waitingFor": "Waiting for {name} to join…",
+      "weakConnection": "Weak connection — continuing with audio only",
+      "you": "You",
+      "youInSession": "You · in the session"
+    }
+  },
+  "status": {
+    "application": {
+      "approved": "Approved",
+      "needsDocument": "Another file needed",
+      "pending": "Under review"
+    },
+    "credential": {
+      "approved": "Verified",
+      "needsDocument": "Another file needed",
+      "pending": "Under review",
+      "rejected": "Rejected"
+    },
+    "enrollment": {
+      "active": "Ongoing",
+      "cancelled": "Cancelled",
+      "completed": "Completed",
+      "confirmed": "Active",
+      "confirming": "Confirming",
+      "pendingPayment": "Awaiting payment",
+      "terminatedNoShow": "Ended for teacher absence"
+    },
+    "ijazah": {
+      "issued": "Issued",
+      "pending": "Under review",
+      "rejected": "Rejected"
+    },
+    "package": {
+      "active": "Active",
+      "paused": "Paused",
+      "published": "Published",
+      "unpublished": "Not published"
+    },
+    "payout": {
+      "verified": "Verified",
+      "verifying": "Being verified"
+    },
+    "session": {
+      "bothNoShow": "Nobody attended",
+      "cancelledByAdmin": "Cancelled by the administration",
+      "cancelledByAgreement": "Cancelled by agreement",
+      "disputed": "Disputed",
+      "done": "Done",
+      "scheduled": "Upcoming",
+      "studentNoShow": "Student absent",
+      "teacherNoShow": "Teacher absent",
+      "underReview": "Under administration review"
+    }
+  },
+  "student": {
+    "booking": {
+      "availableSlots": "Available slots",
+      "continueToPayment": "Continue to payment",
+      "packageLine": "{subject} · {sessions} × {minutes} minutes · {city} time",
+      "range": "First session: {firstDate}, {time} · last session: {lastDate}",
+      "slotBooked": "{slot} · booked",
+      "slotTaken": "The {slot} slot was just booked. Choose another slot.",
+      "title": "Choose your weekly slot"
+    },
+    "cancelPicker": {
+      "hint": "Upcoming sessions only. The request expires at the session time if it is not answered.",
+      "option": "{n} · {date} · {time}",
+      "placeholder": "Choose the session",
+      "teacherRequested": "The teacher asked to cancel it · reply to that first",
+      "title": "Choose the session"
+    },
+    "cancelRequest": {
+      "a11y": {
+        "details": "Details for the teacher"
+      },
+      "noReply": "If the teacher does not reply before the session time, the session stands.",
+      "reason": "Reason",
+      "reasons": {
+        "family": "Family matter",
+        "health": "Health",
+        "other": "Other reason",
+        "travel": "Travel"
+      },
+      "session": "Session",
+      "sessionValue": "{date} · {time} ({city})",
+      "submit": "Send request",
+      "title": "Request a session cancellation"
+    },
+    "cancelRespond": {
+      "accept": "Accept the cancellation",
+      "decline": "Decline",
+      "ifAccept": {
+        "label": "If you accept:",
+        "text": "the session is cancelled and a replacement session is proposed to you."
+      },
+      "ifDecline": {
+        "label": "If you decline:",
+        "text": "the session stays at its time."
+      },
+      "noReplyBy": "If you do not reply before {date} {time}, the session stands.",
+      "quote": "“{text}”",
+      "session": "Session {n} · {date} · {time} ({city})",
+      "title": "The teacher asked to cancel a session"
+    },
+    "certificate": {
+      "a11y": {
+        "image": "Ijazah in {subject}, {riwaya} by way of {tariq}, from {teacher} to {student}, completed the reading {completed}, issued {issuedGregorian} corresponding to {issuedHijri}, certificate number {number}",
+        "revokedImage": "The revoked ijazah in {subject}, certificate number {number}"
+      },
+      "revoked": {
+        "reason": "Reason: “{reason}”",
+        "title": "This ijazah has been revoked"
+      },
+      "title": "Ijazah"
+    },
+    "certificateName": {
+      "fullName": "Full name",
+      "hint": "Written once; to change it, contact support",
+      "preview": "This is how it appears on the ijazah",
+      "save": "Save",
+      "title": "Your name as written on the ijazah"
+    },
+    "checkout": {
+      "a11y": {
+        "order": "Order"
+      },
+      "amount": "Amount",
+      "amountPaid": "Amount paid",
+      "enrollment": "Enrollment",
+      "firstSession": "First session",
+      "note": {
+        "gateway": "You choose the payment method on the payment gateway's page; the platform does not store your card details.",
+        "recitation": "Recitation package: if the teacher misses a session, you choose between a make-up session and a refund of its price."
+      },
+      "orderNumber": "Order number",
+      "package": "Package",
+      "packageValue": "{subject} · {sessions} · {minutes} minutes",
+      "packageWithTeacher": "{subject} · {sessions} · {teacher}",
+      "pay": "Pay {amount}",
+      "payWithin": "Complete the payment within {time}",
+      "slot": "Slot",
+      "slotWithCity": "{slot} ({city})",
+      "teacher": "Teacher",
+      "title": "Review your order",
+      "toEnrollments": "To my enrollments",
+      "total": "Total",
+      "weeklySlot": "Weekly slot"
+    },
+    "checkoutConfirmed": {
+      "a11y": {
+        "receipt": "Receipt"
+      },
+      "date": "Date",
+      "lede": "Your sessions are every {weekday} at {time}, from {date}.",
+      "sessionDate": "{date} · {time}",
+      "sessionN": "Session {n}",
+      "sessions": "Your sessions",
+      "title": "Booked",
+      "untilSession": "… up to session {n} on {date}",
+      "viewEnrollment": "View enrollment"
+    },
+    "checkoutExpired": {
+      "lede": "The order was cancelled and nothing was charged.",
+      "startOver": "Start over",
+      "status": "Status",
+      "title": "Payment time ran out"
+    },
+    "checkoutFailed": {
+      "chooseAnotherSlot": "Choose another slot",
+      "lede": "You can try again.",
+      "payWithin": "Complete the payment within",
+      "title": "Payment not completed"
+    },
+    "checkoutPrevious": {
+      "a11y": {
+        "previousOrder": "Previous order"
+      },
+      "continuePrevious": "Complete the previous payment",
+      "lede": "Complete the payment for the {previousSlot} slot first, or wait until it expires to book the {newSlot} slot.",
+      "payWithin": "Complete the payment within",
+      "previousOrder": "Previous order",
+      "title": "You have an unfinished payment",
+      "wait": "I will wait"
+    },
+    "checkoutProcessing": {
+      "delayed": {
+        "text": "You will get a notification when it completes.",
+        "title": "The payment is taking a little longer"
+      },
+      "summary": "{package} · {amount}",
+      "title": "Completing the payment…"
+    },
+    "checkoutSlotUnavailable": {
+      "enrollmentStatus": "Enrollment status",
+      "lede": "The booking was cancelled, and we will contact you about the amount paid.",
+      "title": "Your payment arrived, but the slot is no longer available"
+    },
+    "credentials": {
+      "a11y": {
+        "qr": "Verification code",
+        "thumbnail": "Thumbnail of the {subject} ijazah"
+      },
+      "empty": {
+        "action": "My enrollments",
+        "text": "The ijazahs your teachers grant you appear here.",
+        "title": "No ijazahs yet"
+      },
+      "issued": "Issued {gregorian} · {hijri}",
+      "kind": "Ijazah with isnad",
+      "number": "Certificate number",
+      "numberInline": "Certificate number: {number}",
+      "riwaya": "{riwaya} · by way of {tariq}",
+      "teacherCompleted": "{teacher} · completed {date}",
+      "teacherIssued": "{teacher} · {date}",
+      "title": "My ijazahs",
+      "view": "View ijazah"
+    },
+    "discovery": {
+      "all": "All",
+      "card": {
+        "from": "from {price}",
+        "meta": "{subjects} · {riwaya} · {years}",
+        "nearestSlot": "Nearest slot {slot}",
+        "ratingCount": "{rating} · {count}",
+        "years": "{count, plural, one {# year} other {# years}}"
+      },
+      "empty": {
+        "clearFilters": "Clear filters",
+        "text": "Try removing a filter or choosing another section.",
+        "title": "No teacher matches these filters"
+      },
+      "filter": {
+        "a11y": {
+          "activeFilters": "Active filters",
+          "filters": "Filters",
+          "filtersActive": "Filters · {count} active",
+          "removeRating": "Remove the rating filter: {label}",
+          "removeRiwaya": "Remove the riwaya filter",
+          "removeTrack": "Remove the track filter",
+          "section": "Section"
+        },
+        "rating": "Rating",
+        "resultCount": "{count, plural, zero {No teachers} one {# teacher} other {# teachers}}",
+        "riwaya": "Riwaya · within {subject}",
+        "show": "{count, plural, zero {No teachers} one {Show # teacher} other {Show # teachers}}",
+        "starsAndUp": "{count, plural, one {# star and up} other {# stars and up}}",
+        "track": "Track"
+      },
+      "search": {
+        "a11y": {
+          "clear": "Clear search"
+        },
+        "hintText": "for example: Tajweed, Qira'at",
+        "hintTitle": "Try searching by subject name",
+        "resultCount": "{count, plural, zero {No results} one {# result} other {# results}} for “{query}” · in all sections"
+      },
+      "searchPlaceholder": "Search by sheikh name or subject",
+      "title": "Explore"
+    },
+    "dispute": {
+      "details": "Details",
+      "reasons": {
+        "connection": "The audio or video kept cutting out during the session",
+        "endedEarly": "The teacher ended the session before its time",
+        "other": "Other reason",
+        "teacherAbsent": "The teacher did not attend or was very late"
+      },
+      "session": "Session {n} · {date}",
+      "sessionMeta": "{start} – {end} · {teacher}",
+      "submit": "Send the dispute",
+      "title": "Open a dispute about a session",
+      "what": "What happened?",
+      "window": "You can open a dispute until {date} {time}."
+    },
+    "enrollmentDetail": {
+      "chat": "Chat",
+      "progressUntil": "{done} of {total} · until {date}",
+      "requestCancel": "Request a session cancellation",
+      "session": {
+        "disputeUntil": "Open a dispute · until {date}",
+        "labelled": "Session {n} · {date}",
+        "madeUpBy": "Made up by the session of {date}",
+        "makeupFor": "Make-up for the session of {date}",
+        "pair": "Sessions {a} and {b} · {dateA} and {dateB}",
+        "range": "{from} to {to} · from {fromDate} to {toDate}",
+        "rangeLabelled": "Sessions {from} to {to} · {fromDate} to {toDate}",
+        "row": "{n} · {date}",
+        "teacherCancelRequest": "The teacher asked to cancel it · reply before its time"
+      },
+      "sessions": "Sessions",
+      "terminated": {
+        "endedOn": "The enrollment ended on {date}, and the remaining sessions were cancelled.",
+        "rateTeacher": "Rate the teacher",
+        "willContact": "We will contact you about the sessions that did not take place."
+      },
+      "title": "Enrollment details",
+      "weekly": "Every {weekday} {time} ({city})"
+    },
+    "enrollments": {
+      "a11y": {
+        "tabs": "Enrollment status"
+      },
+      "card": {
+        "cancelPending": "Cancellation request awaiting your reply",
+        "compensationPending": "Compensation awaiting the administration's decision",
+        "completedOn": "{teacher} · completed {date}",
+        "endedOn": "{teacher} · ended {date}",
+        "first": "First session: {date} · {time}",
+        "ijazahIssued": "Ijazah issued {date}",
+        "next": "Next: {date}",
+        "until": "until {date}",
+        "weekly": "{teacher} · every {weekday} {time}"
+      },
+      "empty": {
+        "action": "Explore teachers",
+        "text": "Your sessions will appear here after your first booking.",
+        "title": "No enrollments yet"
+      },
+      "reviewPrompt": {
+        "subtitle": "{subject} · {track} · {teacher}",
+        "title": "An enrollment you have not reviewed yet"
+      },
+      "tabs": {
+        "active": "Active",
+        "ended": "Ended"
+      },
+      "title": "My enrollments"
+    },
+    "home": {
+      "empty": {
+        "browseBySubject": "Browse by subject",
+        "findTeacher": "Find a teacher",
+        "kicker": "Your first step",
+        "step1": "Search by subject and see the teacher's chain of transmission",
+        "step2": "Choose a fixed weekly time",
+        "step3": "Pay, and all your sessions are booked",
+        "title": "Choose a teacher and a package that suit you"
+      },
+      "greeting": "Peace be upon you",
+      "joinNeedsConnection": "Joining needs a connection",
+      "joinOpensAt": "Joining opens at {time}",
+      "lastUpdated": "Last updated today at {time}",
+      "nextSession": "Your next session",
+      "nextStep": "Next step",
+      "package": "{subject} · {sessions}",
+      "progress": {
+        "a11y": "{done} of {total} sessions done"
+      },
+      "reviewMeta": "with {teacher} · completed {date}",
+      "reviewPrompt": "Review your completed {subject} enrollment",
+      "sessionTimeToday": "Today, {weekday} · {start}–{end} · {city} time",
+      "sessionTimeTodayDated": "Today, {date} · {start}–{end} · {city} time",
+      "sessionTitle": "{subject} — {teacher}",
+      "startsIn": "{hours, plural, one {In # hour} other {In # hours}}",
+      "stat": {
+        "lastSession": "Last session"
+      },
+      "upcomingEnrollment": "{teacher} · starts {date}, {time}",
+      "welcome": "Welcome"
+    },
+    "makeupChoice": {
+      "legend": "Compensation",
+      "makeup": "Make-up session",
+      "proposed": "Proposed: {date} {time}",
+      "refund": "Refund of the session · {amount}",
+      "title": "The teacher was absent from the session of {date}",
+      "window": "Choose within {days, plural, one {# day} other {# days}}, otherwise the make-up session is booked"
+    },
+    "makeupProposal": {
+      "accept": "Accept the time",
+      "date": "Date",
+      "fallback": "If the teacher does not agree, the proposed time stands",
+      "meta": "{minutes, plural, one {# minute} other {# minutes}} · {city} time · make-up for the session of {date}",
+      "proposeOther": "Propose another time",
+      "send": "Send to the teacher",
+      "slot": "{date} · {time}",
+      "time": "Time",
+      "title": "Make-up session"
+    },
+    "report": {
+      "details": "Details (optional)",
+      "detailsPlaceholder": "Describe briefly what happened",
+      "reason": "Reason for the report",
+      "reasons": {
+        "fraud": "Fraud or a request to pay outside the app",
+        "misconduct": "Inappropriate behaviour",
+        "offensiveContent": "Offensive content",
+        "other": "Other",
+        "wrongGender": "The declared gender is incorrect"
+      },
+      "submit": "Send report",
+      "title": "Report {teacher}"
+    },
+    "review": {
+      "a11y": {
+        "close": "Close",
+        "rating": "Rating from 1 to 5 stars",
+        "star": "{count, plural, one {# star} other {# stars}}"
+      },
+      "comment": "Your comment (optional)",
+      "labels": {
+        "4": "Very good"
+      },
+      "question": "How was your experience?",
+      "selected": "{rating} of 5 · {label}",
+      "submit": "Send review",
+      "summary": "{subject} · {done} of {total} sessions · completed {date}",
+      "title": "Rate your enrollment"
+    },
+    "sessions": {
+      "hint": {
+        "adminDecides": "Not counted · the administration decides the compensation",
+        "disputed": "Outcome frozen until the administration's decision",
+        "joinOpens": "Joining opens {minutes, plural, one {# minute} other {# minutes}} before it",
+        "makeupProposed": "Not counted · a make-up session is proposed",
+        "studentNoShow": "Counted from the package",
+        "teacherNoShowChoose": "Not counted · choose a make-up session or a refund",
+        "underReview": "Connection below the threshold or a service outage · the outcome follows the review"
+      }
+    },
+    "tabs": {
+      "a11y": {
+        "nav": "Main navigation"
+      },
+      "account": "Account",
+      "credentials": "Ijazahs",
+      "enrollments": "Enrollments",
+      "explore": "Explore",
+      "home": "Home"
+    },
+    "teacherProfile": {
+      "chooseSlot": "Choose a slot · {package}",
+      "genderSubject": "{gender} · {subject}",
+      "isnad": {
+        "a11y": {
+          "chain": "Chain of transmission"
+        },
+        "generations": "{count, plural, one {# generation} other {# generations}}",
+        "meta": "{riwaya} · {tariq} · {generations}",
+        "more": "… {generations}",
+        "title": "Chain of transmission — {subject}"
+      },
+      "minutesPerSession": "{minutes} minutes per session",
+      "packages": "Packages",
+      "pricePerSession": "{price} per session",
+      "ratingOf": "{rating} from {count, plural, one {# review} other {# reviews}}",
+      "remedy": {
+        "ijazahTrack": "The teacher requests your ijazah after completion · make-up by a session",
+        "recitation": "If the teacher is absent, you choose a make-up session or a refund of its price"
+      },
+      "report": "Report",
+      "reviewLine": "{rating} · {date}",
+      "reviews": "Reviews",
+      "reviewsCount": "{rating} · {count, plural, one {# review} other {# reviews}}"
+    },
+    "teacherReviews": {
+      "a11y": {
+        "list": "Reviews, newest first"
+      },
+      "commentRemoved": "The administration removed the comment",
+      "reviewMeta": "{package} · {date}",
+      "summary": "from {count, plural, one {# review} other {# reviews}} · by students who completed an enrollment with him",
+      "title": "Reviews of {teacher}"
+    }
+  },
+  "teacher": {
+    "account": {
+      "credentials": "My ijazahs",
+      "credentialsPending": "{count} under review",
+      "deleteAccount": "Delete account",
+      "gender": "Gender",
+      "language": "Language",
+      "payout": "Payout account",
+      "profile": "Public profile",
+      "profileHint": "Name, photo, bio, subjects",
+      "ratingLine": "{rating} · {count, plural, one {# review} other {# reviews}}",
+      "signInMethod": "Sign-in method",
+      "signature": "Signature image",
+      "signatureSaved": "Saved",
+      "teaching": "Teaching",
+      "terms": "Terms and conditions",
+      "timeZone": "Time zone",
+      "timeZoneFromDevice": "{city} · from the device",
+      "title": "Account"
+    },
+    "application": {
+      "approved": {
+        "a11y": {
+          "steps": "Next steps"
+        },
+        "lede": "May Allah bless you. Complete these steps so students can book with you.",
+        "packages": "Packages and slots",
+        "packagesHint": "Published once the payout account is verified",
+        "payout": "Payout account",
+        "payoutHint": "So students' payments reach you",
+        "profile": "Your public profile",
+        "profileFirst": "Complete the public profile first",
+        "profileHint": "Photo and bio",
+        "setupPayout": "Set up the payout account",
+        "title": "You are approved as a teacher"
+      },
+      "documents": {
+        "identityHint": "One PDF file with both sides of the card.",
+        "identityTitle": "Proof of identity",
+        "nationalId": "National ID card",
+        "next": "Next: Ijazahs",
+        "passport": "Passport",
+        "title": "Documents"
+      },
+      "ijazahs": {
+        "lede": "Upload your ijazah for each subject you chose, as a PDF file.",
+        "submit": "Submit the application",
+        "title": "Ijazahs",
+        "upload": "Upload the {subject} ijazah"
+      },
+      "moreInfo": {
+        "heading": "The reviewer asked for another file",
+        "resubmit": "Resubmit the application",
+        "title": "Application",
+        "uploadTitle": "Upload what was asked for"
+      },
+      "rejected": {
+        "applyAgain": "Apply again",
+        "heading": "Your application was not approved this time",
+        "noteTitle": "Reviewer's note",
+        "title": "Application"
+      },
+      "status": {
+        "moreInfoCard": "The reviewer asked for another file",
+        "receivedText": "You will get a notification at every update.",
+        "receivedTitle": "We received your application",
+        "timeline": {
+          "a11y": "Application stages",
+          "call": "Verification call",
+          "callMeta": "We will contact you to set a time",
+          "decision": "Decision",
+          "review": "Review of documents and ijazahs",
+          "submitted": "Application submitted",
+          "submittedMeta": "{date} · {count, plural, one {# subject} other {# subjects}}"
+        },
+        "title": "Application"
+      },
+      "steps": {
+        "a11y": "Application steps",
+        "documents": "Documents",
+        "ijazahs": "Ijazahs",
+        "stepOf": "Step {n} of {total}",
+        "subjects": "Subjects"
+      },
+      "subjects": {
+        "next": "Next: Documents",
+        "qualificationHint": "The kind of ijazah or certificate, and your years of teaching.",
+        "qualificationLabel": "Your qualification",
+        "subjectsHint": "Choose one or more.",
+        "subjectsLabel": "Which subjects do you teach?",
+        "title": "Apply as a teacher"
+      }
+    },
+    "availability": {
+      "a11y": {
+        "editSlot": "Edit the {day} {time} slot",
+        "editSlotBooked": "Edit the {day} {time} slot, booked",
+        "editSlotDisabled": "Edit the {day} {time} slot, disabled"
+      },
+      "addSlot": "Slot",
+      "disableSheet": {
+        "bookedLine": "Booked: {student} · {subject} · until {date}",
+        "confirm": "Disable slot",
+        "contextLine": "{day} · {time} · {minutes} minutes · your time zone: {city}",
+        "text": "It is no longer offered for new bookings. Sessions booked on it keep their times until {student}'s enrollment ends on {date}, and you can enable it whenever you wish.",
+        "title": "Disable the {day} {time} slot?"
+      },
+      "editor": {
+        "day": "Day",
+        "disable": "Disable slot",
+        "disableNote": "Sessions already booked on this slot stay as they are.",
+        "duration": "Length",
+        "durationOption": "{minutes} min",
+        "save": "Save slot",
+        "starts": "Starts",
+        "timeZoneHint": "Your time zone: {city}",
+        "title": "Edit slot"
+      },
+      "legend": {
+        "booked": "Booked",
+        "disabled": "Disabled",
+        "free": "Free"
+      },
+      "noSlotsOn": "{days}: no slots",
+      "slot": "{time} · {minutes} min",
+      "subtitle": "Your time zone: {city} · repeats every week",
+      "title": "Slots"
+    },
+    "cancel": {
+      "picker": {
+        "makeupFor": "Make-up for the session of {date}",
+        "note": "Upcoming sessions only. The request ends automatically at the session time if it is not answered.",
+        "option": "{n} · {date} · {time}",
+        "placeholder": "Choose the session",
+        "title": "Choose the session"
+      },
+      "request": {
+        "a11y": {
+          "message": "Message to the student"
+        },
+        "note": "If the student does not reply before the session time, the session stands.",
+        "reason": "Reason",
+        "reasons": {
+          "family": "Family matter",
+          "health": "Health",
+          "other": "Another reason",
+          "travel": "Travel"
+        },
+        "session": "Session",
+        "sessionValue": "Session {n} · {date} · {time}",
+        "submit": "Send the request",
+        "title": "Request a session cancellation"
+      },
+      "respond": {
+        "accept": "Accept the cancellation",
+        "deadline": "If you do not reply before {time} today, the session stands.",
+        "decline": "Decline",
+        "ifAccept": "If you accept:",
+        "ifAcceptText": "The session is cancelled and a make-up session is proposed.",
+        "ifDecline": "If you decline:",
+        "ifDeclineText": "The session stays at its time.",
+        "reason": "Reason: {reason}",
+        "sessionLine": "Session {n} · {date} · {time} ({city})",
+        "title": "The student asked to cancel a session"
+      }
+    },
+    "credentials": {
+      "a11y": {
+        "chain": "Chain of transmission"
+      },
+      "add": {
+        "note": "The subject becomes available to you after review.",
+        "pdfOnly": "PDF only.",
+        "picker": {
+          "placeholder": "Choose the subject",
+          "search": "Search subjects",
+          "title": "Choose the subject"
+        },
+        "subject": "Subject",
+        "submit": "Send for review",
+        "title": "Add a subject",
+        "yourIjazah": "Your ijazah in this subject"
+      },
+      "chainMore": "… {count, plural, one {# generation} other {# generations}}",
+      "credential": {
+        "currentFile": "Current file",
+        "heading": "The reviewer asked for another file",
+        "title": "{subject} ijazah",
+        "uploadAnother": "Upload another file"
+      },
+      "riwayaLine": "Riwaya of {riwaya} · by the tariq of {tariq}",
+      "submittedOn": "Submitted {date}",
+      "title": "My ijazahs",
+      "verifiedOn": "Verified {date} · chain of {count, plural, one {# generation} other {# generations}}"
+    },
+    "deleteAccount": {
+      "confirmHint": "Deletion cannot be undone.",
+      "confirmLabel": "Type “delete” to confirm",
+      "confirmWord": "delete",
+      "delete": "Delete account",
+      "deletedIdentity": "Your name, email, photo and signature",
+      "deletedProfile": "Your public profile, packages and slots",
+      "deletedTitle": "What is deleted",
+      "keptIjazahs": "Your students' issued ijazahs, which remain valid",
+      "keptRecords": "Payment and session records without your personal data",
+      "keptTitle": "What stays",
+      "sheet": {
+        "confirmGoogle": "Confirm with Google and delete the account",
+        "text": "Your students' upcoming sessions are cancelled, and the account cannot be restored.",
+        "title": "Delete your account permanently?"
+      },
+      "title": "Delete account",
+      "warning": "Your students' upcoming sessions will be cancelled and the administration will contact them about compensation."
+    },
+    "enrollment": {
+      "a11y": {
+        "report": "Report the student"
+      },
+      "chat": "Chat",
+      "chatEnded": "The chat ended with the enrollment and its dispute window.",
+      "ijazah": {
+        "issuedOn": "Issued {date}",
+        "line": "{subject} · {riwaya} · by the tariq of {tariq} · completed {date}",
+        "number": "Certificate number",
+        "prompt": "When you see that {student} has completed the syllabus, request the ijazah for them. The administration reviews it and issues it on the template with your signature and chain.",
+        "request": "Request an ijazah",
+        "title": "Ijazah with chain",
+        "view": "View the ijazah"
+      },
+      "noShowWarning": "Another absence ends this enrollment and opens a compensation case for the student.",
+      "notReviewed": "The student has not reviewed this enrollment yet.",
+      "payout": "Paid EGP {paid} · gateway fee {fee} · you receive EGP {net}",
+      "payoutEnded": "Paid EGP {paid} · gateway fee {fee} · you received EGP {net}",
+      "requestCancel": "Request a session cancellation",
+      "schedule": "Every {day} {time} ({city}) · until {endDate}",
+      "scheduleEnded": "Was every {day} {time} · from {startDate} to {endDate}",
+      "sessions": {
+        "adminConfirmed": "Confirmed by the administration after review",
+        "cancelPending": "You requested cancellation · waiting for the student's reply",
+        "compensationOpened": "A compensation case was opened for the student",
+        "makeupFor": "Make-up for the session of {date}",
+        "makeupRow": "Session {n} · {date}",
+        "openDispute": "Open a dispute · until {deadline}",
+        "range": "{from} to {to} · from {startDate} to {endDate}",
+        "resultUpheldMadeUp": "Outcome upheld {date} · made up",
+        "row": "{n} · {date}",
+        "studentCancelPending": "The student asked to cancel it · reply before {time}",
+        "title": "Sessions"
+      },
+      "stats": {
+        "cancelledByAdmin": "Cancelled by the administration",
+        "done": "Done",
+        "teacherNoShow": "Teacher absent",
+        "upcoming": "Upcoming"
+      },
+      "title": "Enrollment"
+    },
+    "ijazahRequest": {
+      "a11y": {
+        "summary": "Ijazah"
+      },
+      "blocked": {
+        "text": "Upload your signature image once, then complete {student}'s ijazah request.",
+        "title": "Add your signature first",
+        "upload": "Upload signature"
+      },
+      "completionDate": "Completion date",
+      "enrollmentMeta": "{subject} · {count, plural, one {# session} other {# sessions}} · completed {date}",
+      "language": "Certificate language",
+      "preview": "Preview the certificate",
+      "previewAlt": "The ijazah as it will be issued: {student}, {subject} by the riwaya of {riwaya}, under the ijazah of {teacher}",
+      "riwaya": "Riwaya",
+      "riwayaValue": "{riwaya} · by the tariq of {tariq}",
+      "send": "Send the request",
+      "sent": {
+        "a11y": {
+          "summary": "Request"
+        },
+        "backToStudents": "Back to My students",
+        "completionDate": "Completion date",
+        "language": "Certificate language",
+        "lede": "We will let you know when the decision is made.",
+        "sentAt": "Sent",
+        "sentAtValue": "{date} {time}",
+        "status": "Status",
+        "student": "Student",
+        "subject": "Subject",
+        "subjectValue": "{subject} · riwaya of {riwaya}",
+        "title": "Ijazah request sent",
+        "track": "Track"
+      },
+      "steps": {
+        "a11y": "Steps",
+        "details": "Details",
+        "preview": "Preview"
+      },
+      "subject": "Subject",
+      "title": "Ijazah request"
+    },
+    "makeup": {
+      "respond": {
+        "a11y": {
+          "summary": "Make-up time"
+        },
+        "accept": "Accept",
+        "decline": "Decline (the proposed time stays)",
+        "meta": "{city} time · {minutes} minutes",
+        "proposed": "Proposed time",
+        "sessionLine": "Session {n} · make-up for the session of {date}",
+        "studentProposal": "Student's proposal",
+        "title": "Another time for the make-up"
+      }
+    },
+    "packages": {
+      "activate": "Activate",
+      "activeEnrollments": "Ongoing enrollments",
+      "activeGroup": "Active {count}",
+      "deactivate": "Pause",
+      "deactivateSheet": {
+        "confirm": "Pause the package",
+        "contextLine": "EGP {amount} · {count, plural, one {# ongoing enrollment} other {# ongoing enrollments}}",
+        "text": "It disappears from your profile so no new student can buy it. The {count} ongoing enrollments continue as they are, and you can activate it whenever you wish.",
+        "title": "Pause the package “{package}”?"
+      },
+      "editor": {
+        "activeHint": "Visible to students",
+        "activeLabel": "Package is active",
+        "currency": "EGP",
+        "duration": "Session length",
+        "durationOption": "{minutes} min",
+        "editNote": "The change applies to new enrollments only.",
+        "perSessionHint": "EGP {amount} per session",
+        "save": "Save package",
+        "sessionCount": "Number of sessions",
+        "slotsHint": "You have {count, plural, one {# weekly slot} other {# weekly slots}} of {minutes} minutes.",
+        "subject": "Subject",
+        "subjectPicker": {
+          "addAnother": "To add another subject",
+          "title": "Package subject"
+        },
+        "title": "Edit package",
+        "totalPrice": "Total price",
+        "track": "Track",
+        "trackHint": "An ijazah can be requested from the ijazah track only"
+      },
+      "lockedBanner": "Your packages will not be visible to students until the payout account is verified",
+      "new": "New package",
+      "pausedGroup": "Paused {count}",
+      "perSession": "Per session",
+      "price": "Price",
+      "title": "Packages"
+    },
+    "payout": {
+      "rejected": {
+        "heading": "The payment gateway could not verify your account",
+        "lede": "You are still not visible to students.",
+        "reason": {
+          "nameMismatch": "The bank account holder's name does not match the name on your ID card."
+        },
+        "reasonLabel": "Reason",
+        "supportNote": "If it is rejected again, write to the support team: {email}",
+        "tipName": "Use an account in your name as it appears on your ID card.",
+        "tipNumber": "Check the account number and the bank name before submitting.",
+        "title": "Payout account"
+      },
+      "setup": {
+        "addedOn": "Added {date}",
+        "change": "Change account",
+        "newBankAccount": "New bank account",
+        "note": "You will not be visible to students until it is verified; your current enrollments continue.",
+        "title": "Change payout account",
+        "verifyingText": "You will get a notification when verification ends.",
+        "verifyingTitle": "We are verifying your new account"
+      },
+      "start": {
+        "continueToGateway": "Continue to the payment gateway",
+        "heading": "Where should your payments go?",
+        "lede": "The price of your packages reaches you directly.",
+        "title": "Payout account"
+      },
+      "verified": {
+        "a11y": {
+          "published": "What was published"
+        },
+        "lede": "You are now visible to students, and they can enroll in your packages.",
+        "packages": "Packages",
+        "packagesPublished": "{count} published",
+        "payoutAccount": "Payout account",
+        "reviewPackages": "Review my packages",
+        "title": "Payout account verified",
+        "toToday": "Go to Today",
+        "verifiedOn": "Verified {date}",
+        "weeklySlots": "Weekly slots"
+      }
+    },
+    "profile": {
+      "bio": "Bio",
+      "changePhoto": "Change photo",
+      "displayName": "Display name",
+      "gender": "Gender",
+      "genderHint": "To change it, contact support.",
+      "qualificationType": "Type of qualification",
+      "subjectWithRiwaya": "{subject} · {riwaya}",
+      "subjects": "Subjects",
+      "title": "Public profile",
+      "yearsTeaching": "Years of teaching"
+    },
+    "report": {
+      "details": "Details (optional)",
+      "detailsPlaceholder": "Describe briefly what happened",
+      "reasonLabel": "Reason for the report",
+      "reasons": {
+        "behaviour": "Inappropriate behaviour",
+        "genderIncorrect": "Declared gender is not correct",
+        "offPlatform": "Asked to communicate or pay outside the app",
+        "offensiveContent": "Offensive content",
+        "other": "Other"
+      },
+      "submit": "Send the report",
+      "title": "Report {student}"
+    },
+    "restricted": {
+      "availableIjazahs": "Your students' issued ijazahs remain valid",
+      "availableSupport": "Writing to support to ask or to object",
+      "availableTitle": "Still available",
+      "lede": "The administration suspended your account until the review ends. The reason was sent to you in a notification.",
+      "stoppedDiscovery": "Visibility to students and new bookings",
+      "stoppedSessions": "Joining sessions, including those in progress now",
+      "stoppedTitle": "Stopped now",
+      "stoppedUpcoming": "Your upcoming sessions were cancelled, and the administration is contacting your students about compensation",
+      "title": "Your account is temporarily suspended"
+    },
+    "reviews": {
+      "a11y": {
+        "list": "Reviews, most recent first"
+      },
+      "commentRemoved": "Comment removed · {date}",
+      "count": "from {count, plural, one {# review} other {# reviews}}",
+      "meta": "{subject} · {count, plural, one {# session} other {# sessions}} · {date}",
+      "title": "My reviews"
+    },
+    "signature": {
+      "a11y": {
+        "certificateImage": "The ijazah page, with the teacher's signature at the bottom",
+        "preview": "Preview of your signature image"
+      },
+      "hint": "A clear picture of your signature in ink on white paper, PNG or JPG.",
+      "lede": "Your signature appears on every ijazah issued at your request.",
+      "previewTitle": "Preview",
+      "replaceImage": "Replace image",
+      "title": "Signature image",
+      "upload": "Upload signature",
+      "whereText": "At the bottom of the ijazah, next to the seal.",
+      "whereTitle": "Where it appears"
+    },
+    "students": {
+      "a11y": {
+        "activeList": "Ongoing enrollments, nearest session first",
+        "endedList": "Ended enrollments, most recent first"
+      },
+      "cancelRequestFromStudent": "Cancellation request from the student",
+      "endedMeta": "{done} of {total} · completed {completedDate} · ijazah issued {issuedDate}",
+      "endedNote": "Ended enrollments stay here with their sessions and ijazahs.",
+      "search": "Search by student name",
+      "secondEnrollment": "second enrollment",
+      "sessionOn": "Session {n} of {total} · {date} {time}",
+      "sessionToday": "Session {n} of {total} · today {time}",
+      "tabs": {
+        "a11y": "Enrollment status",
+        "active": "Ongoing",
+        "ended": "Ended"
+      },
+      "title": "My students"
+    },
+    "tabs": {
+      "a11y": {
+        "label": "Teacher navigation"
+      },
+      "account": "Account",
+      "availability": "Slots",
+      "packages": "Packages",
+      "students": "My students",
+      "today": "Today"
+    },
+    "today": {
+      "a11y": {
+        "agenda": "Today's sessions",
+        "nextDay": "Next day",
+        "prevDay": "Previous day"
+      },
+      "cancelRequestFromStudent": "Cancellation request from the student",
+      "empty": {
+        "availability": "My slots",
+        "text": "Your next session is {date}, {time} with {student} (first session of {total}).",
+        "title": "No sessions on this day"
+      },
+      "emptySummary": "No sessions · {city} time",
+      "join": "Join",
+      "rowMeta": "{subject} · session {n} of {total} · {minutes} min",
+      "rowMetaNoDuration": "{subject} · session {n} of {total}",
+      "startsIn": "Session {n} of {total} · starts in {minutes} min",
+      "stats": {
+        "cancelRequests": "Cancellation request",
+        "done": "Done",
+        "remaining": "Left today"
+      },
+      "summary": "{count, plural, zero {No sessions} one {# session} other {# sessions}} · {hours} hours · {city} time",
+      "title": "Today"
+    }
+  },
+  "web": {
+    "deleteAccount": {
+      "brandDone": "Ijazah · Account deletion",
+      "brandSuffix": "· Account deletion",
+      "code": {
+        "a11y": {
+          "digit1": "First digit",
+          "digit2": "Second digit",
+          "digit3": "Third digit",
+          "digit4": "Fourth digit",
+          "digit5": "Fifth digit",
+          "digit6": "Sixth digit"
+        },
+        "changeEmail": "Change email",
+        "irreversible": "Deletion cannot be undone and the account cannot be restored.",
+        "label": "Code",
+        "lede": "We sent a 6-digit code to {email}",
+        "submit": "Delete the account permanently",
+        "title": "Enter the code"
+      },
+      "done": {
+        "confirmation": "A deletion confirmation was sent to {email}. For questions, write to {supportEmail}.",
+        "ijazahs": "Your ijazahs stay valid on the verification page by their number.",
+        "lede": "Your personal data has been deleted and your upcoming sessions cancelled, and the account cannot be restored.",
+        "newAccount": "You can create a new account with the same email at any time.",
+        "records": "Payment and session records are kept without your data, as the law requires.",
+        "title": "Your account has been deleted"
+      },
+      "email": "Account email address",
+      "info": "Your personal data is deleted and your upcoming sessions are cancelled. Your ijazahs stay valid, and payment records are kept without your data as the law requires.",
+      "lede": "From the app: Account, then Delete account. If you no longer have the app, request the deletion here.",
+      "sendCode": "Send code",
+      "steps": {
+        "code": {
+          "meta": "then the account is deleted at once",
+          "title": "Code and confirmation"
+        },
+        "email": {
+          "done": "Code sent",
+          "meta": "We send a code to it",
+          "title": "Account email"
+        }
+      },
+      "title": "Delete your Ijazah account"
+    },
+    "verify": {
+      "brandSuffix": "· Ijazah verification",
+      "chain": "Chain of transmission",
+      "chainMore": "… {count, plural, one {# generation} other {# generations}}",
+      "completed": "Completed the reading",
+      "grantee": "Grantee",
+      "grantor": "Grantor",
+      "issued": "Issued",
+      "issuedValue": "{gregorian} · {hijri}",
+      "number": "Certificate number",
+      "revoked": "Revoked ijazah",
+      "riwaya": "{riwaya} · by way of {tariq}",
+      "showFullChain": "Show the full chain ({count, plural, one {# generation} other {# generations}})",
+      "subject": "Subject",
+      "valid": "Valid ijazah"
+    }
+  }
+}

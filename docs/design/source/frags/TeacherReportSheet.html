@@ -1,0 +1,39 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar avatar--lg">ي</span>
+      <span class="stack grow">
+        <strong class="text-headline">يوسف أحمد</strong>
+        <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات · 45 دقيقة</span>
+      </span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">إبلاغ عن يوسف أحمد</h1>
+      <a href="TeacherEnrollment.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <fieldset class="stack gap-2">
+      <legend class="field__label pad-bottom">سبب البلاغ</legend>
+      <label class="choice choice--selected"><input type="radio" name="reason" class="visually-hidden" checked><span class="choice__mark"></span>سلوك غير لائق</label>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>محتوى مسيء</label>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>طلب التواصل أو الدفع خارج التطبيق</label>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>الجنس المعلن غير صحيح</label>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>أخرى</label>
+    </fieldset>
+
+    <div class="field">
+      <label for="details" class="field__label">التفاصيل (اختياري)</label>
+      <textarea id="details" class="input" rows="2" placeholder="صف ما حدث باختصار"></textarea>
+    </div>
+
+    <a href="TeacherEnrollment.dc.html" class="btn btn--danger btn--block">إرسال البلاغ</a>
+  </section>
+</div>

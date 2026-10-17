@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — دفع سابق لم يكتمل (وإن كان قيد المعالجة: إلى «نؤكد دفعتك»)</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="BookingSheet.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">مراجعة الطلب</h1>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <div class="stack gap-3 items-center text-center">
+      <span class="icon-tile icon-tile--2xl icon-tile--warning" aria-hidden="true"><svg class="icon icon--xl" data-icon="hourglass" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></svg></span>
+      <div class="stack gap-1">
+        <h2 class="text-title-2">لديك دفع لم يكتمل بعد</h2>
+        <p class="text-body tone-muted">أكمل دفع موعد السبت 10:00 ص أولًا، أو انتظر حتى ينتهي وقته لتحجز موعد الأحد 5:00 م.</p>
+      </div>
+    </div>
+
+    <section class="summary" aria-label="الطلب السابق">
+      <div class="summary__row"><span class="summary__label">الطلب السابق</span><span class="summary__value row wrap row--end gap-2">حفظ القرآن · 8 جلسات · الشيخ أحمد المصري<span class="badge badge--neutral">تسميع</span></span></div>
+      <div class="summary__row"><span class="summary__label">الموعد</span><span class="summary__value">السبت 10:00 ص</span></div>
+      <div class="summary__row"><span class="summary__label">المبلغ</span><span class="summary__value">1,200 ج.م</span></div>
+      <div class="summary__row"><span class="summary__label">أكمل الدفع خلال</span><span class="summary__value ltr">6:40</span></div>
+    </section>
+
+    <div class="stack gap-2 push">
+      <a href="Checkout.dc.html" class="btn btn--primary btn--block">أكمل الدفع السابق</a>
+      <a href="TeacherProfile.dc.html" class="btn btn--ghost btn--block">سأنتظر</a>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

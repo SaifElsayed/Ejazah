@@ -1,0 +1,43 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <main class="page">
+    <header class="page-header">
+      <div class="stack grow items-end">
+        <div class="segmented segmented--inline" role="group" aria-label="اللغة">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</button>
+          <button type="button" class="segmented__option" aria-pressed="false">English</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="grow row row--center items-center">
+      <section class="auth-card" aria-labelledby="ttl">
+        <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة · الإدارة</span></span>
+
+        <div class="page-intro">
+          <h1 id="ttl" class="page-intro__title">التحقق بخطوتين</h1>
+          <p class="page-intro__lede">أدخل الرمز المكوّن من ستة أرقام من تطبيق المصادقة على هاتفك. التحقق بخطوتين إلزامي لكل حساب إدارة.</p>
+        </div>
+
+        <form class="field">
+          <label for="otp1" class="field__label">رمز المصادقة</label>
+          <div class="otp">
+            <input id="otp1" type="text" inputmode="numeric" maxlength="1" value="3" class="otp__cell otp__cell--filled" aria-label="الرقم الأول">
+            <input type="text" inputmode="numeric" maxlength="1" value="9" class="otp__cell otp__cell--filled" aria-label="الرقم الثاني">
+            <input type="text" inputmode="numeric" maxlength="1" value="2" class="otp__cell otp__cell--filled" aria-label="الرقم الثالث">
+            <input type="text" inputmode="numeric" maxlength="1" value="" class="otp__cell otp__cell--active" aria-label="الرقم الرابع">
+            <input type="text" inputmode="numeric" maxlength="1" value="" class="otp__cell" aria-label="الرقم الخامس">
+            <input type="text" inputmode="numeric" maxlength="1" value="" class="otp__cell" aria-label="الرقم السادس">
+          </div>
+          <span class="field__hint text-center">يتجدّد الرمز كل 30 ثانية.</span>
+        </form>
+
+        <a href="AdminMfaRecovery.dc.html" class="btn btn--ghost btn--md self-center">استخدم رمز استرداد</a>
+
+        <div class="stack gap-2">
+          <a href="AdminHome.dc.html" class="btn btn--primary btn--block">دخول</a>
+          <a href="AdminSignIn.dc.html" class="btn btn--ghost btn--block">الرجوع إلى الدخول</a>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>

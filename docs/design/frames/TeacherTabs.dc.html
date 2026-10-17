@@ -1,21 +1,31 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charset="utf-8" />
-    <title>TeacherTabs</title>
-    <link rel="stylesheet" href="_artboard.css" />
-  </head>
-  <body>
-    <!--
-      Seed artboards for: TeacherTabs
-      Frames listed in docs/design/screens.md. Regenerate or extend this file
-      with the /design canvas; tokens must match design/tokens.json.
-    -->
-    <div class="canvas">
-      <figure>
-        <figcaption class="artboard-label">TeacherTabs — frame 1</figcaption>
-        <div class="artboard"></div>
-      </figure>
-    </div>
-  </body>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>شريط تبويب المعلم</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="board board--flush" dir="rtl" data-theme="light">
+  <nav class="tabbar" aria-label="تنقل المعلم">
+    <a href="TeacherHome.dc.html" class="tabbar__item tabbar__item--active" aria-current="page"><svg class="icon icon--lg" data-icon="calendar" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>اليوم</span></a>
+    <a href="TeacherStudents.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="users" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></svg><span>طلابي</span></a>
+    <a href="Availability.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>المواعيد</span></a>
+    <a href="Packages.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="layers" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8 12 4l8 4-8 4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg><span>الباقات</span></a>
+    <a href="TeacherAccount.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حسابي</span></a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":84}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
 </html>

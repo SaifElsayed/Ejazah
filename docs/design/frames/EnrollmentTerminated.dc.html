@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — اشتراك انتهى لغياب المعلم</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Enrollments.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">تفاصيل الاشتراك</h1>
+      <div class="nav-header__trailing">
+        <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ"><svg class="icon icon--md" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="card card--surface">
+      <div class="row gap-3">
+        <span class="avatar">خ</span>
+        <span class="stack grow">
+          <strong class="text-body text-bold">الشيخ خالد عبد العزيز</strong>
+          <span class="text-caption tone-muted">القراءات · 8 جلسات · 60 دقيقة</span>
+        </span>
+      </div>
+      <span class="badge badge--danger self-start"><svg class="icon icon--xs" data-icon="user-x" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5"/><path d="m22 8-5 5"/></svg>انتهى لغياب المعلم</span>
+      <p class="text-callout">انتهى الاشتراك يوم السبت 26 سبتمبر، وأُلغيت الجلسات المتبقية.</p>
+    </section>
+
+    <div class="list">
+      <div class="list__row">
+        <span class="stack grow">
+          <span class="text-callout text-medium">الجلستان 1 و2 · 5 و12 سبتمبر</span>
+        </span>
+        <span class="badge badge--success">تمت</span>
+      </div>
+      <div class="list__row">
+        <span class="stack grow">
+          <span class="text-callout text-medium">الجلستان 3 و4 · 19 و26 سبتمبر</span>
+        </span>
+        <span class="badge badge--warning">غياب المعلم</span>
+      </div>
+      <div class="list__row">
+        <span class="text-callout tone-muted grow">الجلسات 5 إلى 8 · 3 إلى 24 أكتوبر</span>
+        <span class="badge badge--neutral">ألغتها الإدارة</span>
+      </div>
+    </div>
+
+    <div class="banner banner--info">
+      <svg class="icon icon--md" data-icon="scale" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+      <span class="grow">سنتواصل معك بشأن الجلسات التي لم تتم.</span>
+    </div>
+
+    <a href="WriteReview.dc.html" class="btn btn--primary btn--block push"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg>قيّم المعلم</a>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

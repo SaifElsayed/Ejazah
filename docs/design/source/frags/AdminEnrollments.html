@@ -1,0 +1,174 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminEnrollments:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">الاشتراكات والجلسات</h1>
+        <p class="page-header__subtitle">عرض فقط. الإجراء الوحيد هنا إلغاء جلسة بسبب مكتوب يُسجَّل في سجل التدقيق.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم الطالب أو المعلم">
+          </label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر · 1 مفعّل" aria-expanded="false">{{icon:filter:md}}<span class="filter-trigger__count">1</span></button>
+        </div>
+        <div class="filter-chips" aria-label="الفلاتر المفعّلة">
+          <button type="button" class="chip chip--selected chip--removable" aria-label="إزالة فلتر المعلم">المعلم: الشيخ أحمد المصري{{icon:x:xs}}</button>
+          <a href="AdminEnrollments.dc.html" class="link">مسح الكل</a>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الطالب</th><th>الباقة</th><th>المسار</th><th>الحالة</th><th>الجلسات</th><th>الشراء</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">عمر سامي</a></td>
+                  <td class="table__wrap">حفظ القرآن · 8 جلسات</td>
+                  <td><span class="badge badge--neutral">تسميع</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>0 من 8</td>
+                  <td>14 أكتوبر</td>
+                </tr>
+                <tr class="table__row--selected">
+                  <td><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a></td>
+                  <td class="table__wrap">حفظ القرآن · 8 جلسات</td>
+                  <td><span class="badge badge--neutral">تسميع</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>1 من 8</td>
+                  <td>13 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a></td>
+                  <td class="table__wrap">حفظ القرآن · 12 جلسة</td>
+                  <td><span class="badge badge--accent">مسار إجازة</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>0 من 12</td>
+                  <td>12 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">زياد طارق</a></td>
+                  <td class="table__wrap">حفظ القرآن · 12 جلسة</td>
+                  <td><span class="badge badge--accent">مسار إجازة</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>1 من 12</td>
+                  <td>11 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">نور سمير</a></td>
+                  <td class="table__wrap">حفظ القرآن · 8 جلسات</td>
+                  <td><span class="badge badge--neutral">تسميع</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>1 من 8</td>
+                  <td>10 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">حسن إبراهيم</a></td>
+                  <td class="table__wrap">حفظ القرآن · 12 جلسة</td>
+                  <td><span class="badge badge--accent">مسار إجازة</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>1 من 12</td>
+                  <td>4 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">عبد الرحمن علي</a></td>
+                  <td class="table__wrap">حفظ القرآن · 8 جلسات</td>
+                  <td><span class="badge badge--neutral">تسميع</span></td>
+                  <td><span class="badge badge--success">جارٍ</span></td>
+                  <td>3 من 8</td>
+                  <td>27 سبتمبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">عبد الرحمن علي</a></td>
+                  <td class="table__wrap">حفظ القرآن · 8 جلسات</td>
+                  <td><span class="badge badge--neutral">تسميع</span></td>
+                  <td><span class="badge badge--danger">ملغى</span></td>
+                  <td>0 من 8</td>
+                  <td><span class="stack"><span>13 أكتوبر</span><a href="AdminPayments.dc.html" class="link text-caption ltr">IJZ-2026-004814</a></span></td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a></td>
+                  <td class="table__wrap">حفظ القرآن · 8 جلسات</td>
+                  <td><span class="badge badge--accent">مسار إجازة</span></td>
+                  <td><span class="badge badge--neutral">مكتمل</span></td>
+                  <td><span class="stack"><span>8 من 8</span><span class="text-caption tone-muted">اكتمل 19 أغسطس</span></span></td>
+                  <td>28 يونيو</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>9 من 100 · اشتراكات <a href="AdminTeacher.dc.html" class="link">الشيخ أحمد المصري</a> · الجارية أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل الاشتراك">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg">ي</span>
+              <span class="stack grow">
+                <a href="AdminUsers.dc.html" class="link text-title-3 self-start">يوسف أحمد</a>
+                <span class="text-caption tone-muted">حفظ القرآن · تسميع · 8 جلسات · 45 دقيقة مع الشيخ أحمد المصري</span>
+              </span>
+              <span class="badge badge--success">جارٍ</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">الباقة كما اشتُريت</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">المسار</dt><dd class="kv__value"><span class="badge badge--neutral">تسميع</span></dd></div>
+                  <div class="kv__item"><dt class="kv__label">الجلسات</dt><dd class="kv__value">8 جلسات · 45 دقيقة</dd></div>
+                  <div class="kv__item"><dt class="kv__label">السعر</dt><dd class="kv__value">1,200.00 ج.م</dd></div>
+                  <div class="kv__item"><dt class="kv__label">الموعد</dt><dd class="kv__value">الأربعاء 6:00 م · القاهرة</dd></div>
+                  <div class="kv__item"><dt class="kv__label">أُكِّد</dt><dd class="kv__value">13 أكتوبر 2026</dd></div>
+                </dl>
+              </section>
+
+              <section class="section">
+                <div class="section__header"><h2 class="group-label">الجلسات · 1 من 8</h2><span class="text-caption tone-muted">14 أكتوبر ← 2 ديسمبر</span></div>
+                <div class="list" role="radiogroup" aria-label="الجلسة المراد إلغاؤها">
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs" disabled><span>1 · الأربعاء 14 أكتوبر</span></span><span class="badge badge--success">تمت</span></label>
+                  <label class="list__row list__row--selected"><span class="row gap-3"><input type="radio" class="check" name="cs" checked><span>2 · الأربعاء 21 أكتوبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs"><span>3 · الأربعاء 28 أكتوبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs"><span>4 · الأربعاء 4 نوفمبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs"><span>5 · الأربعاء 11 نوفمبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs"><span>6 · الأربعاء 18 نوفمبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs"><span>7 · الأربعاء 25 نوفمبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                  <label class="list__row"><span class="row gap-3"><input type="radio" class="check" name="cs"><span>8 · الأربعاء 2 ديسمبر</span></span><span class="badge badge--neutral">قادمة</span></label>
+                </div>
+              </section>
+
+              <section class="section">
+                <div class="section__header"><h2 class="group-label">الدفع · عرض فقط</h2><a href="AdminPayments.dc.html" class="link">فتح في المدفوعات{{icon:chevron-left:sm}}</a></div>
+                <div class="summary">
+                  <div class="summary__row"><span class="summary__label">رقم الطلب</span><span class="summary__value ltr">IJZ-2026-004812</span></div>
+                  <div class="summary__row"><span class="summary__label">الحالة</span><span class="summary__value"><span class="badge badge--success">مدفوع</span></span></div>
+                  <div class="summary__row"><span class="summary__label">دُفع</span><span class="summary__value">13 أكتوبر · 2:14 م</span></div>
+                  <div class="summary__row"><span class="summary__label">المبلغ</span><span class="summary__value">1,200.00 ج.م</span></div>
+                </div>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">إلغاء الجلسة 2</a>
+              <p class="panel__note">يُلغي المشرف الجلسة دون موافقة الطرفين ودون عقوبة على أيٍّ منهما، فتصبح حالتها «ألغتها الإدارة» ويفتح الإلغاء قضية تعويض للاشتراك. السبب إلزامي، ويصل إلى الطرفين، ويُسجَّل في سجل التدقيق.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

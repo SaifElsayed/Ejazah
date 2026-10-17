@@ -1,0 +1,54 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">الشيخ أحمد المصري</strong>
+        <span class="row wrap gap-2 text-caption tone-muted">حفظ القرآن · 8 جلسات · 45 دقيقة<span class="badge badge--neutral">تسميع</span></span>
+      </span>
+      <span class="badge badge--success">جارٍ</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">الجلسة التعويضية</h1>
+      <a href="EnrollmentDetail.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="card card--surface card--compact card--row gap-3">
+      <span class="icon-tile">{{icon:calendar:md}}</span>
+      <span class="stack gap-half grow">
+        <strong class="text-body text-bold">الأربعاء 9 ديسمبر · 6:00 م</strong>
+        <span class="text-caption tone-muted">45 دقيقة · بتوقيت القاهرة · تعويض عن جلسة 21 أكتوبر</span>
+      </span>
+    </div>
+
+    <a href="EnrollmentDetail.dc.html" class="btn btn--primary btn--block">قبول الموعد</a>
+
+    <section class="stack gap-3" aria-labelledby="counter-title">
+      <button type="button" id="counter-title" class="btn btn--ghost btn--md self-start" aria-expanded="true">اقتراح موعد آخر</button>
+      <div class="grid-2 gap-2">
+        <div class="field">
+          <span class="field__label" id="cdate">التاريخ</span>
+          <button type="button" class="input row row--between" aria-labelledby="cdate">
+            <span>الخميس 3 ديسمبر</span>{{icon:chevron-down:md}}
+          </button>
+        </div>
+        <div class="field">
+          <span class="field__label" id="ctime">الوقت</span>
+          <button type="button" class="input row row--between" aria-labelledby="ctime">
+            <span>6:00 م</span>{{icon:chevron-down:md}}
+          </button>
+        </div>
+      </div>
+      <p class="row row--top gap-2 text-caption tone-muted">{{icon:info:sm}}إن لم يوافق المعلم يبقى الموعد المقترح</p>
+      <a href="EnrollmentDetail.dc.html" class="btn btn--secondary btn--block">إرسال للمعلم</a>
+    </section>
+  </section>
+</div>

@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body screen__body--bare behind-sheet" aria-hidden="true">
+    <ol class="steps">
+      <li class="steps__item steps__item--done"><span class="steps__bar"></span></li>
+      <li class="steps__item steps__item--current"><span class="steps__bar"></span></li>
+    </ol>
+    <div class="page-intro">
+      <strong class="page-intro__title">بياناتك</strong>
+    </div>
+    <span class="input"></span>
+    <span class="segmented"><span class="segmented__option segmented__option--selected"></span><span class="segmented__option"></span></span>
+    <span class="input"></span>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <h1 id="sheet-title" class="sheet__title">تأكيد قبل إنشاء الحساب</h1>
+
+    <div class="summary">
+      <div class="summary__row"><span class="summary__label">الاسم</span><span class="summary__value">يوسف أحمد</span></div>
+      <div class="summary__row"><span class="summary__label">الدور</span><span class="summary__value">طالب</span></div>
+      <div class="summary__row summary__row--emphasis"><span class="summary__label">الجنس</span><span class="summary__value">ذكر</span></div>
+    </div>
+
+    <div class="banner banner--warning">
+      {{icon:alert-circle:md}}
+      <p class="grow">لا يمكن تغيير الدور ولا الجنس بعد إنشاء الحساب.</p>
+    </div>
+
+    <div class="stack gap-2">
+      <a href="NotificationPermission.dc.html" class="btn btn--primary btn--block">تأكيد وإنشاء الحساب</a>
+      <a href="OnboardProfile.dc.html" class="btn btn--ghost btn--block">تعديل</a>
+    </div>
+  </section>
+</div>

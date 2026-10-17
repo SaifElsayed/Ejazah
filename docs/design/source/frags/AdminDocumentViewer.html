@@ -1,0 +1,81 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminUsers:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="row gap-4">
+        <a href="AdminUsers.dc.html" class="icon-btn icon-btn--surface" aria-label="رجوع إلى المستخدمين">{{icon:chevron-right:md}}</a>
+        <div class="stack">
+          <h1 class="page-header__title">بطاقة الرقم القومي</h1>
+          <p class="page-header__subtitle">طلبتها الإدارة من عبد الرحمن علي · رُفعت 14 أكتوبر 2026 · عرض فقط</p>
+        </div>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="split">
+        <div class="split__list">
+          <div class="toolbar row--between">
+            <span class="text-callout text-medium">بطاقة الرقم القومي.pdf · الصفحة 1 من 2</span>
+            <nav class="pager" aria-label="صفحات الوثيقة">
+              <button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button>
+              <button type="button" class="pager__page pager__page--current" aria-current="page">1</button>
+              <button type="button" class="pager__page">2</button>
+              <button type="button" class="pager__page" aria-label="الصفحة التالية">{{icon:chevron-left:sm}}</button>
+            </nav>
+          </div>
+          <div class="doc-viewer grow" role="img" aria-label="بطاقة الرقم القومي، الوجه الأمامي">
+            <span class="doc-viewer__page"></span>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="عن الوثيقة">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg">ع</span>
+              <span class="stack grow">
+                <a href="AdminUsers.dc.html" class="link text-title-3 self-start">عبد الرحمن علي</a>
+                <span class="text-caption tone-muted">طالب · ذكر · القاهرة</span>
+              </span>
+              <span class="badge badge--warning">بانتظار إثبات الهوية</span>
+            </header>
+
+            <div class="panel__body">
+              <dl class="kv">
+                <div class="kv__item"><dt class="kv__label">نوع الوثيقة</dt><dd class="kv__value">بطاقة الرقم القومي</dd></div>
+                <div class="kv__item"><dt class="kv__label">الصفحات</dt><dd class="kv__value">ملف PDF · صفحتان</dd></div>
+                <div class="kv__item"><dt class="kv__label">طُلبت</dt><dd class="kv__value">12 أكتوبر 2026 · سارة عادل</dd></div>
+                <div class="kv__item"><dt class="kv__label">رُفعت</dt><dd class="kv__value">14 أكتوبر 2026 · 8:20 م</dd></div>
+              </dl>
+
+              <section class="section">
+                <h2 class="group-label">سبب الطلب</h2>
+                <p class="text-callout">بلاغ من الشيخ محمود فتحي: حضر الجلسة شخص غير صاحب الحساب.</p>
+                <a href="AdminReports.dc.html" class="link text-callout self-start">فتح البلاغ{{icon:chevron-left:sm}}</a>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">بعد القرار</h2>
+                <ul class="stack gap-2 text-callout">
+                  <li class="row row--top gap-2">{{icon:circle-check:sm}}<span>القبول يعيد الحساب نشطًا، ويُتاح له الحجز من جديد.</span></li>
+                  <li class="row row--top gap-2">{{icon:file-text:sm}}<span>طلب وثيقة أخرى يُبقي الحجز متوقفًا، ويصله طلبك مع ملاحظتك.</span></li>
+                </ul>
+              </section>
+
+              <div class="field">
+                <label class="field__label" for="dv-note">ملاحظة لصاحب الحساب (إلزامية لطلب وثيقة أخرى)</label>
+                <textarea id="dv-note" class="input" rows="2" placeholder="مثلًا: صورة الوجه الخلفي غير واضحة"></textarea>
+              </div>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--primary btn--md">قبول الوثيقة وإعادة تفعيل الحجز</a>
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--secondary btn--md">طلب وثيقة أخرى</a>
+              <p class="panel__note">الوثائق للعرض فقط: لا تُنزَّل ولا تُعدَّل. يُسجَّل قرارك باسمك في سجل التدقيق.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

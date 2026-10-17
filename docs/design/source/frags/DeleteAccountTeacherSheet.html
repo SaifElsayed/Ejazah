@@ -1,0 +1,28 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <strong class="text-title-3">حذف الحساب</strong>
+    <div class="banner banner--warning">
+      {{icon:triangle-alert:md}}
+      <span class="grow">ستُلغى جلسات طلابك القادمة وتتواصل الإدارة معهم بشأن التعويض.</span>
+    </div>
+    <strong class="section__title">ما يُحذف</strong>
+    <span class="text-callout tone-muted">اسمك وبريدك وصورتك وتوقيعك</span>
+    <strong class="section__title">ما يبقى</strong>
+    <span class="text-callout tone-muted">إجازات طلابك الصادرة، وتبقى صالحة</span>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <span class="icon-tile icon-tile--lg icon-tile--danger">{{icon:trash:lg}}</span>
+    <h1 id="sheet-title" class="sheet__title">حذف حسابك نهائيًا؟</h1>
+    <p class="text-body tone-muted">تُلغى جلسات طلابك القادمة، ولا يمكن استعادة الحساب.</p>
+    <div class="stack gap-2">
+      <a href="Welcome.dc.html" class="btn btn--danger btn--block">تأكيد بجوجل وحذف الحساب</a>
+      <a href="DeleteAccountTeacher.dc.html" class="btn btn--ghost btn--block">إلغاء</a>
+    </div>
+  </section>
+</div>

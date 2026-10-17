@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <main class="screen__body screen__body--bare">
+    <ol class="steps" aria-label="الخطوة 1 من 2">
+      <li class="steps__item steps__item--current" aria-current="step"><span class="steps__bar"></span></li>
+      <li class="steps__item"><span class="steps__bar"></span></li>
+    </ol>
+
+    <div class="page-intro">
+      <h1 class="page-intro__title">كيف ستستخدم إجازة؟</h1>
+      <p class="page-intro__lede">اختر دورك. لا يمكن تغييره بعد إنشاء الحساب.</p>
+    </div>
+
+    <div class="stack gap-3" role="radiogroup" aria-label="الدور">
+      <label class="card card--row card--selected">
+        <span class="icon-tile icon-tile--xl icon-tile--primary">{{icon:book:lg}}</span>
+        <span class="stack gap-1 grow">
+          <strong class="text-title-3">طالب</strong>
+          <span class="text-callout tone-muted">ابحث عن معلم واحجز جلساتك</span>
+        </span>
+        <input type="radio" name="role" class="check" checked>
+      </label>
+
+      <label class="card card--row">
+        <span class="icon-tile icon-tile--xl icon-tile--neutral">{{icon:award:lg}}</span>
+        <span class="stack gap-1 grow">
+          <strong class="text-title-3">معلم</strong>
+          <span class="text-callout tone-muted">درّس القرآن بعد اعتماد طلبك</span>
+        </span>
+        <input type="radio" name="role" class="check">
+      </label>
+
+    </div>
+
+    <a href="OnboardProfile.dc.html" class="btn btn--primary btn--block push">التالي</a>
+  </main>
+</div>

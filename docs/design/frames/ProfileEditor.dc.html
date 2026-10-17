@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — تعديل الملف العام</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="TeacherAccount.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">الملف العام</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="row gap-4">
+      <span class="avatar avatar--xl">أ</span>
+      <span class="stack gap-half grow">
+        <button type="button" class="link self-start"><svg class="icon icon--sm" data-icon="upload" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>تغيير الصورة</button>
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="name" class="field__label">الاسم الظاهر</label>
+      <input id="name" class="input" value="الشيخ أحمد المصري">
+    </div>
+
+    <div class="field">
+      <label for="gender" class="field__label">الجنس</label>
+      <input id="gender" class="input" value="ذكر" disabled>
+      <span class="field__hint">للتغيير تواصل مع الدعم.</span>
+    </div>
+
+    <div class="field">
+      <label for="bio" class="field__label">نبذة</label>
+      <textarea id="bio" rows="2" class="input input--focused">أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا، بالتسميع المتدرّج وجهًا بوجه.</textarea>
+    </div>
+
+    <div class="field">
+      <span class="field__label" id="subj">المواد</span>
+      <div class="list" aria-labelledby="subj">
+        <div class="list__row">
+          <span class="grow">حفظ القرآن<span class="tone-muted"> · حفص عن عاصم</span></span>
+          <a href="AddSubject.dc.html" class="btn btn--ghost btn--md"><svg class="icon icon--md" data-icon="plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إضافة مادة</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 gap-3">
+      <div class="field">
+        <label for="years" class="field__label">سنوات التدريس</label>
+        <input id="years" class="input" value="12">
+      </div>
+      <div class="field">
+        <label for="qual" class="field__label">نوع المؤهل</label>
+        <input id="qual" class="input" value="إجازة بالسند المتصل">
+      </div>
+    </div>
+  </main>
+
+  <footer class="action-bar">
+    <a href="TeacherAccount.dc.html" class="btn btn--primary btn--block">حفظ</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

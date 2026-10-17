@@ -1,0 +1,70 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">الباقات</h1>
+    <div class="app-header__actions">
+      <a href="PackageEditor.dc.html" class="btn btn--primary btn--md">{{icon:plus:md}}باقة جديدة</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <h2 class="group-label">فعّالة 2</h2>
+
+    <article class="card">
+      <div class="row row--top row--between gap-2">
+        <div class="stack gap-half">
+          <strong class="text-headline">حفظ القرآن</strong>
+          <span class="text-caption tone-muted">8 جلسات · 45 دقيقة</span>
+        </div>
+        <span class="badge badge--neutral">تسميع</span>
+      </div>
+      <div class="grid-3 gap-2">
+        <div class="stat stat--tile"><span class="stat__label">السعر</span><strong class="stat__value">1,200 ج.م</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">للجلسة</span><strong class="stat__value">150 ج.م</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">اشتراكات جارية</span><strong class="stat__value">5</strong></div>
+      </div>
+      <div class="row gap-2">
+        <a href="PackageEditor.dc.html" class="btn btn--secondary btn--md btn--grow">{{icon:pencil:md}}تعديل</a>
+        <a href="PackageDeactivateSheet.dc.html" class="btn btn--secondary btn--md btn--grow">إيقاف</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="row row--top row--between gap-2">
+        <div class="stack gap-half">
+          <strong class="text-headline">حفظ القرآن</strong>
+          <span class="text-caption tone-muted">12 جلسة · 60 دقيقة</span>
+        </div>
+        <span class="badge badge--accent">مسار إجازة</span>
+      </div>
+      <div class="grid-3 gap-2">
+        <div class="stat stat--tile"><span class="stat__label">السعر</span><strong class="stat__value">2,160 ج.م</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">للجلسة</span><strong class="stat__value">180 ج.م</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">اشتراكات جارية</span><strong class="stat__value">3</strong></div>
+      </div>
+      <div class="row gap-2">
+        <a href="PackageEditor.dc.html" class="btn btn--secondary btn--md btn--grow">{{icon:pencil:md}}تعديل</a>
+        <a href="PackageDeactivateSheet.dc.html" class="btn btn--secondary btn--md btn--grow">إيقاف</a>
+      </div>
+    </article>
+
+    <h2 class="group-label">موقوفة 1</h2>
+
+    <article class="card card--compact card--surface">
+      <div class="row row--top row--between gap-2">
+        <div class="stack gap-half">
+          <strong class="text-headline">حفظ القرآن</strong>
+          <span class="text-caption tone-muted">8 جلسات · 45 دقيقة · 1,200 ج.م</span>
+        </div>
+        <span class="badge badge--accent">مسار إجازة</span>
+      </div>
+      <div class="row gap-2">
+        <a href="PackageEditor.dc.html" class="btn btn--secondary btn--md btn--grow">{{icon:pencil:md}}تعديل</a>
+        <button type="button" class="btn btn--secondary btn--md btn--grow">تفعيل</button>
+      </div>
+    </article>
+  </main>
+
+  {{TABS:teacher:Packages}}
+</div>

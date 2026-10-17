@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>نظام التصميم — المكوّنات</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="board" dir="rtl" data-theme="light">
+  <header class="doc-header">
+    <h1 class="text-title-1">المكوّنات</h1>
+    <p class="text-body tone-muted">كل عنصر في الشاشات واحد من هذه المكوّنات، باسمه في <span class="ltr">components.css</span>. يصبح كل منها مكوّنًا في <span class="ltr">apps/mobile/src/design/primitives</span> أو في <span class="ltr">features</span>. إن احتاجت شاشة لونًا أو مقاسًا جديدًا، فالحل نسخة جديدة هنا، لا تعديل في الشاشة.</p>
+  </header>
+
+  <div class="grid-2 gap-8 items-start">
+    <section class="doc-section">
+      <h2 class="doc-title">Button</h2>
+      <div class="doc-specimen">
+        <button type="button" class="btn btn--primary">أساسي</button>
+        <button type="button" class="btn btn--secondary">ثانوي</button>
+        <button type="button" class="btn btn--ghost">نصي</button>
+        <button type="button" class="btn btn--danger">خطر</button>
+      </div>
+      <div class="doc-specimen">
+        <button type="button" class="btn btn--primary btn--md">أساسي md</button>
+        <button type="button" class="btn btn--secondary btn--md">ثانوي md</button>
+        <button type="button" class="btn btn--add btn--md"><svg class="icon icon--sm" data-icon="plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>إضافة</button>
+        <button type="button" class="btn btn--primary btn--md" disabled>معطّل</button>
+      </div>
+      <span class="spec">.btn --primary|secondary|ghost|danger|add|inverse · --md (44) · default (52) · --block · --grow</span>
+      <div class="doc-specimen">
+        <button type="button" class="btn btn--google"><svg class="icon icon--md icon--solid" data-icon="google" viewBox="0 0 24 24" aria-hidden="true"><path style="fill: var(--color-brand-google-blue)" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path style="fill: var(--color-brand-google-green)" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path style="fill: var(--color-brand-google-yellow)" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path style="fill: var(--color-brand-google-red)" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>Google</button>
+        <button type="button" class="btn btn--apple"><svg class="icon icon--md icon--solid" data-icon="apple" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.72-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.86-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.65-.39 6.58 1.1 8.73.73 1.05 1.6 2.23 2.73 2.19 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.3-.88-2.32-3.49zM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.08 1.96-.49 2.56-1.21z"/></svg>Apple</button>
+      </div>
+      <span class="spec">.btn--google · .btn--apple (each provider's brand rules)</span>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">IconButton · TextLink</h2>
+      <div class="doc-specimen">
+        <button type="button" class="icon-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+        <button type="button" class="icon-btn icon-btn--surface" aria-label="الإشعارات"><svg class="icon icon--lg" data-icon="bell" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="icon-btn__dot"></span></button>
+        <button type="button" class="icon-btn icon-btn--primary" aria-label="إرسال"><svg class="icon icon--md" data-icon="arrow-left" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>
+        <button type="button" class="icon-btn icon-btn--muted" aria-label="إغلاق"><svg class="icon icon--md" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <a href="Chat.dc.html" class="link">المحادثة <svg class="icon icon--sm" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+        <a href="ReportSheet.dc.html" class="link link--muted">إبلاغ</a>
+      </div>
+      <span class="spec">.icon-btn --surface|primary|muted · .icon-btn__dot · .back-btn · .link --muted|strong</span>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">Segmented · Chip · Slot</h2>
+      <div class="segmented" role="group" aria-label="اللغة">
+        <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</button>
+        <button type="button" class="segmented__option" aria-pressed="false">English</button>
+      </div>
+      <span class="spec">.segmented (--inline) · .segmented__option--selected — every exclusive choice, language included</span>
+      <div class="doc-specimen">
+        <button type="button" class="chip chip--selected" aria-pressed="true">حفظ القرآن</button>
+        <button type="button" class="chip">التجويد</button>
+        <button type="button" class="slot slot--selected" aria-pressed="true">6:00 م</button>
+        <button type="button" class="slot">7:30 م</button>
+        <span class="slot slot--booked">10:00 ص<span class="slot__dot"></span></span>
+        <span class="slot slot--disabled">9:00 م</span>
+      </div>
+      <span class="spec">.chip(--selected) · .slot --selected|booked|disabled</span>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">Badge · Avatar · IconTile</h2>
+      <div class="doc-specimen">
+        <span class="badge badge--neutral">قيد المراجعة</span>
+        <span class="badge badge--success">نشط</span>
+        <span class="badge badge--warning">طلب إلغاء</span>
+        <span class="badge badge--danger">مرفوض</span>
+        <span class="badge badge--accent">مسار إجازة</span>
+      </div>
+      <span class="spec">.badge --neutral|success|warning|danger|accent — accent only for ijazah and isnad</span>
+      <div class="doc-specimen">
+        <span class="avatar avatar--sm">ي</span><span class="avatar">ي</span><span class="avatar avatar--lg">ي</span><span class="avatar avatar--xl">ي</span><span class="avatar avatar--2xl">أ</span>
+        <span class="icon-tile icon-tile--sm"><svg class="icon icon--sm" data-icon="shield-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="icon-tile"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg></span><span class="icon-tile icon-tile--warning"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></span><span class="icon-tile icon-tile--accent"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg></span><span class="icon-tile icon-tile--neutral"><svg class="icon icon--md" data-icon="file" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></span>
+      </div>
+      <span class="spec">.avatar (round, a person) --sm|touch|lg|xl|2xl|3xl · .icon-tile (square, a thing) + tones</span>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">Field · Input · OTP</h2>
+      <div class="field">
+        <label class="field__label" for="d1">البريد الإلكتروني</label>
+        <input id="d1" class="input input--ltr" value="yousef@gmail.com">
+        <span class="field__hint">نرسل رمزًا للتأكد أنه لك.</span>
+      </div>
+      <div class="input-group input--focused">
+        <input class="input-group__control input--ltr" type="password" value="••••••••" aria-label="كلمة المرور">
+        <button type="button" class="icon-btn icon-btn--muted" aria-label="إظهار"><svg class="icon icon--md" data-icon="eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+      <div class="otp">
+        <input class="otp__cell otp__cell--filled" value="4" aria-label="1"><input class="otp__cell otp__cell--filled" value="8" aria-label="2"><input class="otp__cell otp__cell--active" value="" aria-label="3"><input class="otp__cell" value="" aria-label="4"><input class="otp__cell" value="" aria-label="5"><input class="otp__cell" value="" aria-label="6">
+      </div>
+      <label class="check-row text-body"><input type="checkbox" class="check" checked>أوافق على الشروط</label>
+      <span class="spec">.field · .input (--focused, --ltr, --md) · .input-group · .otp__cell --filled|active · .check-row · .check</span>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">Card · List · Summary · Banner</h2>
+      <div class="card card--row">
+        <span class="icon-tile"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg></span>
+        <span class="stack grow"><strong class="text-body text-medium">بطاقة</strong><span class="text-caption tone-muted ltr">.card --row|compact|surface|hero|accent|warning|primary|selected</span></span>
+      </div>
+      <div class="list">
+        <div class="list__header">قائمة</div>
+        <div class="list__row"><span>المنطقة الزمنية</span><span class="list__value">القاهرة</span></div>
+        <div class="list__row"><span>إجازة حفظ القرآن</span><span class="badge badge--accent">موثّقة</span></div>
+      </div>
+      <div class="summary">
+        <div class="summary__row"><span class="summary__label">الباقة</span><span class="summary__value">حفظ القرآن · 8 جلسات</span></div>
+        <div class="summary__row summary__row--total"><span class="summary__label">الإجمالي</span><span class="summary__value">1,200 ج.م</span></div>
+      </div>
+      <div class="banner"><svg class="icon icon--md" data-icon="lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>Banner محايد، و--warning و--success للحالات.</span></div>
+      <div class="banner banner--warning"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>لا يمكنك تغيير الجنس بعد إنشاء الحساب.</span></div>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">Steps · Progress · Timeline</h2>
+      <ol class="steps">
+        <li class="steps__item steps__item--done"><span class="steps__bar"></span><span>المواد</span></li>
+        <li class="steps__item steps__item--current"><span class="steps__bar"></span><span>الوثائق</span></li>
+        <li class="steps__item"><span class="steps__bar"></span><span>السند</span></li>
+      </ol>
+      <div class="progress"><span class="progress__seg progress__seg--done"></span><span class="progress__seg progress__seg--done"></span><span class="progress__seg progress__seg--done"></span><span class="progress__seg"></span><span class="progress__seg"></span></div>
+      <ol class="timeline">
+        <li class="timeline__item"><span class="timeline__rail"><span class="timeline__marker timeline__marker--done"><svg class="icon icon--xs icon--heavy" data-icon="check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span><span class="timeline__line timeline__line--done"></span></span><span class="timeline__body"><strong class="timeline__title">أُرسل الطلب</strong><span class="timeline__meta">مكتمل</span></span></li>
+        <li class="timeline__item"><span class="timeline__rail"><span class="timeline__marker timeline__marker--current"></span><span class="timeline__line"></span></span><span class="timeline__body"><strong class="timeline__title">قيد المراجعة</strong><span class="timeline__meta">الآن</span></span></li>
+        <li class="timeline__item timeline__item--pending"><span class="timeline__rail"><span class="timeline__marker"></span></span><span class="timeline__body"><span class="timeline__title">القرار</span></span></li>
+      </ol>
+      <span class="spec">.steps · .progress__seg(--done) · .timeline__marker --done|current · .spinner</span>
+    </section>
+
+    <section class="doc-section">
+      <h2 class="doc-title">Rating · Chain (السند)</h2>
+      <span class="rating"><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg>4.9 · 86 تقييمًا</span>
+      <div class="card card--accent">
+        <ol class="chain">
+          <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ محمد عبد الحميد</span></li>
+          <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ عامر السيد عثمان</span></li>
+          <li class="chain__item"><span class="chain__rail"><span class="chain__dot chain__dot--more"></span></span><span class="tone-accent">… حتى رسول الله ﷺ</span></li>
+        </ol>
+      </div>
+      <span class="spec">.rating (color.rating, never gold) · .chain · .chain-input (editable)</span>
+    </section>
+  </div>
+
+  <section class="doc-section">
+    <h2 class="doc-title">الهيكل</h2>
+    <p class="text-body tone-muted">كل شاشة <span class="ltr">.screen</span> فيها شريط الحالة، ثم هيدر واحد (<span class="ltr">.app-header</span> لجذر التبويب، و<span class="ltr">.nav-header</span> للشاشة الفرعية)، ثم <span class="ltr">.screen__body</span>، ثم إما <span class="ltr">.tabbar</span> أو <span class="ltr">.action-bar</span>. النافذة المنبثقة <span class="ltr">.sheet</span> فوق <span class="ltr">.scrim</span>. أمثلة حيّة: الرئيسية، واليوم، ومنح إجازة، واختيار الموعد.</p>
+  </section>
+  <section class="doc-section">
+    <h2 class="doc-title">الحالات والحركة</h2>
+    <p class="text-body tone-muted">المرور والتركيز من لوحة المفاتيح والضغط والتعطيل لكل عنصر تفاعلي. الحركة تؤكد ولا تستعرض: <span class="ltr">duration.fast</span> لتغيّر الحالة، و<span class="ltr">duration.base</span> للنوافذ واللوحات، و<span class="ltr">duration.slow</span> للـ sheet. كلها تتوقف عند تفعيل «تقليل الحركة».</p>
+    <div class="grid-2 gap-8 items-start">
+      <div class="stack gap-4">
+        <div class="doc-specimen">
+          <button type="button" class="btn btn--primary btn--md">عادي</button>
+          <button type="button" class="btn btn--primary btn--md is-hover">مرور</button>
+          <button type="button" class="btn btn--primary btn--md is-focus">تركيز</button>
+          <button type="button" class="btn btn--primary btn--md is-pressed">ضغط</button>
+          <button type="button" class="btn btn--primary btn--md" disabled>معطّل</button>
+        </div>
+        <div class="doc-specimen">
+          <button type="button" class="btn btn--secondary btn--md">عادي</button>
+          <button type="button" class="btn btn--secondary btn--md is-hover">مرور</button>
+          <button type="button" class="btn btn--secondary btn--md is-focus">تركيز</button>
+          <button type="button" class="btn btn--ghost btn--md is-hover">نصي · مرور</button>
+          <button type="button" class="chip is-hover">شيب · مرور</button>
+        </div>
+        <div class="grid-2 gap-3">
+          <input class="input input--md is-hover" value="مرور" aria-label="مرور">
+          <input class="input input--md input--focused is-focus" value="تركيز" aria-label="تركيز">
+        </div>
+        <span class="spec">:hover · :focus-visible (shadow.focus) · :active (motion.press-scale) · [disabled] — .is-hover / .is-focus / .is-pressed draw them here</span>
+      </div>
+      <div class="stack gap-4">
+        <div class="card card--compact">
+          <div class="row gap-3"><span class="skeleton skeleton--avatar"></span><span class="stack gap-2 grow"><span class="skeleton skeleton--text skeleton--w-1-2"></span><span class="skeleton skeleton--text skeleton--w-2-3"></span></span></div>
+          <span class="skeleton skeleton--block"></span>
+        </div>
+        <span class="spec">.skeleton --text|title|avatar|block — loading shape instead of a blank</span>
+        <div class="row row--center"><span class="toast toast--static"><svg class="icon icon--md" data-icon="check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>أُرسل القرار وسُجّل في سجل التدقيق</span></div>
+        <span class="spec">.toast — confirmation after an action · .sheet slides up · .dialog scales in · .split__detail slides from the start</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="doc-section">
+    <h2 class="doc-title">الكثافة</h2>
+    <p class="text-body tone-muted">نفس المكوّنات بمقاسين. العادية للمس على الهاتف (44 بكسل)، والمضغوطة للفأرة في لوحة الإدارة (36 بكسل، والحد الأدنى في WCAG 2.2 هو 24). تُفعَّل بـ <span class="ltr">data-density="compact"</span> على الجذر.</p>
+    <div class="grid-2 gap-8">
+      <div class="stack gap-3"><span class="group-label">عادية · الهاتف</span><div class="doc-specimen"><button type="button" class="btn btn--primary btn--md">اعتماد</button><button type="button" class="btn btn--secondary btn--md">طلب معلومات</button><button type="button" class="icon-btn icon-btn--surface" aria-label="الإشعارات"><svg class="icon icon--md" data-icon="bell" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg></button></div></div>
+      <div class="stack gap-3" data-density="compact"><span class="group-label">مضغوطة · الويب</span><div class="doc-specimen"><button type="button" class="btn btn--primary btn--md">اعتماد</button><button type="button" class="btn btn--secondary btn--md">طلب معلومات</button><button type="button" class="icon-btn icon-btn--surface" aria-label="الإشعارات"><svg class="icon icon--md" data-icon="bell" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg></button></div></div>
+    </div>
+  </section>
+
+  <section class="doc-section">
+    <h2 class="doc-title">الحالات الكاملة</h2>
+    <p class="text-body tone-muted">كل قائمة لها حالة فارغة، وكل حقل له حالة خطأ، وكل قرار له اختيار واضح. الشهادة والتوقيع يُعرضان كما سيستلمهما الطالب.</p>
+    <div class="grid-2 gap-8 items-start">
+      <div class="stack gap-4">
+        <div class="card card--compact"><div class="empty-state"><span class="icon-tile icon-tile--lg icon-tile--neutral"><svg class="icon icon--lg" data-icon="book" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h13v16H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg></span><span class="empty-state__title">لا اشتراكات بعد</span><span class="empty-state__text">اختر معلمًا وباقة، وستظهر جلساتك هنا.</span><a href="Discovery.dc.html" class="btn btn--primary btn--md">استكشف المعلمين</a></div></div>
+        <span class="spec">.empty-state (__title, __text) — what is missing, why, the one next step</span>
+        <div class="field"><label class="field__label" for="cmp-pw">كلمة المرور</label><input id="cmp-pw" class="input input--md input--ltr input--error" type="password" value="password1"><span class="field__error">كلمة المرور غير صحيحة.</span></div>
+        <span class="spec">.input--error + .field__error · .otp__cell--error</span>
+        <div class="banner banner--danger"><svg class="icon icon--md" data-icon="triangle-alert" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>تعذّر تحميل البيانات. حاول مرة أخرى.</span></div>
+        <div class="banner banner--info"><svg class="icon icon--md" data-icon="info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>تُطبَّق الإعدادات على الجلسات القادمة فقط.</span></div>
+        <span class="spec">.banner --danger | --info (with --warning | --success | --plain)</span>
+      </div>
+      <div class="stack gap-4">
+        <div class="stack gap-2">
+          <label class="choice choice--selected"><span class="choice__mark"></span>سلوك غير لائق</label>
+          <label class="choice"><span class="choice__mark"></span>طلب دفع خارج التطبيق</label>
+        </div>
+        <span class="spec">.choice (--selected, --danger) — one of several reasons or decisions</span>
+        <div class="certificate-preview"><span class="certificate-preview__title">إجازة</span><span class="text-body">يشهد الشيخ أحمد المصري بأن يوسف أحمد أتمّ</span><span class="text-headline">حفظ القرآن</span><div class="certificate-preview__footer"><span class="certificate-number ltr">7K4Q-MZ2A-H8MN-B2XN</span><svg class="icon icon--xl" data-icon="qr-code" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg></div></div>
+        <span class="spec">.certificate-preview (__title, __footer, --revoked)</span>
+        <div class="grid-2 gap-3"><div class="signature-pad">التوقيع</div><div class="signature-pad signature-pad--done">أحمد المصري</div></div>
+        <span class="spec">.signature-pad (--done)</span>
+        <div class="pager"><button type="button" class="pager__page" aria-label="السابق"><svg class="icon icon--sm" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><span class="pager__page pager__page--current">1</span><button type="button" class="pager__page">2</button><button type="button" class="pager__page">3</button><button type="button" class="pager__page" aria-label="التالي"><svg class="icon icon--sm" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button></div>
+        <span class="spec">.pager (__page, __page--current) · .doc-viewer · .dialog--wide · .list__row--selected · .list__row--danger</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="doc-section">
+    <h2 class="doc-title">القوائم: الأقسام والبحث والفلاتر</h2>
+    <p class="text-body tone-muted">لكل غرض شكل واحد في التطبيق والإدارة. أقسام القائمة (أي جزء منها أعرض): تبويبات نصية. فلترة القائمة: بحث وأيقونة فلتر تفتح قائمة منسدلة بخيارات هادئة، والفلاتر المطبّقة رقائق تُزال بـ ×. داخل النماذج: الـ Segmented لخيار واحد من اثنين أو ثلاثة، والرقائق للاختيار المتعدد، وحقل الاختيار لقائمة طويلة.</p>
+    <div class="grid-2 gap-8 items-start">
+      <div class="stack gap-4">
+        <div class="gutter"><div class="category-tabs" role="tablist" aria-label="القسم">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">حفظ القرآن<span class="category-tabs__count">2</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">التجويد<span class="category-tabs__count">1</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">القراءات<span class="category-tabs__count">1</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">التفسير<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">الحديث<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">الفقه<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">العقيدة<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">السيرة<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">أصول الفقه<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">اللغة العربية<span class="category-tabs__count">0</span></button>
+        </div></div>
+        <span class="spec">.category-tabs (__item, __item--selected, __count) — sections of one list; quiet text tabs that scroll sideways</span>
+        <div class="search-row">
+          <label class="input-group"><svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input class="input-group__control" type="search" placeholder="ابحث باسم الشيخ أو المادة" aria-label="بحث"></label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر · 2 مفعّلة"><svg class="icon icon--md" data-icon="filter" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span class="filter-trigger__count">2</span></button>
+        </div>
+        <div class="filter-chips"><button type="button" class="chip chip--selected chip--removable"><svg class="icon icon--xs icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--xs icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--xs icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--xs icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--xs" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button><button type="button" class="chip chip--selected chip--removable">حفص عن عاصم<svg class="icon icon--xs" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button><button type="button" class="link">مسح الكل</button></div>
+        <span class="spec">.search-row + .filter-trigger (--active, __count) opens a .dropdown; applied filters are .filter-chips of .chip--removable</span>
+        <div class="field">
+          <span class="field__label" id="cmp-subj">المادة</span>
+          <button type="button" class="select" aria-labelledby="cmp-subj"><span>حفظ القرآن</span><svg class="icon icon--md" data-icon="chevron-down" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <span class="spec">.select (--md, __placeholder) — a field whose value comes from a long list; opens a picker sheet</span>
+      </div>
+      <div class="stack gap-4">
+        <div class="card card--compact">
+          <div class="input-group"><svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input class="input-group__control" type="search" placeholder="ابحث" aria-label="ابحث"></div>
+          <div class="picker" role="radiogroup" aria-label="المادة">
+            <label class="choice choice--selected"><input type="radio" name="cmp-p" class="visually-hidden" checked><span class="choice__mark"></span>حفظ القرآن</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>التجويد</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>القراءات</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>التفسير</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>الحديث</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>الفقه</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>العقيدة</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>السيرة</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>أصول الفقه</label>
+            <label class="choice"><input type="radio" name="cmp-p" class="visually-hidden"><span class="choice__mark"></span>اللغة العربية</label>
+          </div>
+        </div>
+        <span class="spec">.picker inside a .sheet — search on top, the options scroll · .screen .dialog — a centred card over the dimmed screen (e.g. «أضف توقيعك أولًا»)</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":3785}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

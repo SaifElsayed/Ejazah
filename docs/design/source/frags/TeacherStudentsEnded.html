@@ -1,0 +1,50 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">طلابي</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات، توجد غير مقروءة">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="search-row">
+      <label class="input-group">
+        {{icon:search:md}}
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الطالب" aria-label="ابحث باسم الطالب">
+      </label>
+    </div>
+
+    <div class="category-tabs" role="tablist" aria-label="حالة الاشتراك">
+      <a href="TeacherStudents.dc.html" class="category-tabs__item" role="tab" aria-selected="false">جارية<span class="category-tabs__count">8</span></a>
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">منتهية<span class="category-tabs__count">2</span></button>
+    </div>
+
+    <ul class="list" aria-label="الاشتراكات المنتهية، الأحدث أولًا">
+      <li>
+        <a href="TeacherEnrollmentCompleted.dc.html" class="list__row">
+          <span class="avatar">س</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">سعيد منصور</strong>
+            <span class="text-caption tone-muted">12 من 12 · اكتمل 7 أكتوبر · صدرت الإجازة 12 أكتوبر</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--neutral">مكتمل</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollmentCompleted.dc.html" class="list__row">
+          <span class="avatar">ي</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">يوسف أحمد</strong>
+            <span class="text-caption tone-muted">8 من 8 · اكتمل 19 أغسطس · صدرت الإجازة 15 أكتوبر</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--neutral">مكتمل</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </a>
+      </li>
+    </ul>
+    <p class="text-caption tone-muted">تبقى الاشتراكات المنتهية هنا مع جلساتها وإجازاتها.</p>
+  </main>
+
+  {{TABS:teacher:TeacherStudents}}
+</div>

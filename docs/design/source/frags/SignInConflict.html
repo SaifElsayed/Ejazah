@@ -1,0 +1,27 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body screen__body--bare behind-sheet" aria-hidden="true">
+    <div class="stack gap-4 items-start">
+      <span class="brand-mark brand-mark--lg">إ</span>
+      <strong class="text-display">إجازة</strong>
+    </div>
+    <div class="stack gap-3">
+      <span class="btn btn--google btn--block">{{icon:google:md:solid}}المتابعة باستخدام Google</span>
+      <span class="btn btn--apple btn--block">{{icon:apple:md:solid}}المتابعة باستخدام Apple</span>
+      <span class="btn btn--secondary btn--block">{{icon:mail:md}}المتابعة بالبريد الإلكتروني</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <span class="icon-tile icon-tile--lg icon-tile--warning">{{icon:mail:lg}}</span>
+    <h1 id="sheet-title" class="sheet__title">هذا البريد له حساب بالفعل</h1>
+    <p class="text-body"><span class="ltr text-medium">khaled.mansour@example.com</span> مسجّل بالبريد وكلمة المرور. ادخل بهما.</p>
+    <div class="stack gap-2">
+      <a href="EmailSignIn.dc.html" class="btn btn--primary btn--block">الدخول بالبريد وكلمة المرور</a>
+      <a href="Welcome.dc.html" class="btn btn--ghost btn--block">رجوع</a>
+    </div>
+  </section>
+</div>

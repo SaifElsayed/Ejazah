@@ -1,0 +1,137 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminAudit:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">سجل التدقيق</h1>
+        <p class="page-header__subtitle">كل قرار ملزم يتخذه مشرف، بسببه وبما كان قبله وبعده. السجل يُضاف إليه فقط.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="الهدف أو السبب">
+          </label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر · 1 مفعّل" aria-expanded="false">{{icon:filter:md}}<span class="filter-trigger__count">1</span></button>
+        </div>
+        <div class="filter-chips" aria-label="الفلاتر المفعّلة">
+          <button type="button" class="chip chip--selected chip--removable" aria-label="إزالة فلتر التاريخ">التاريخ: آخر 15 يومًا{{icon:x:xs}}</button>
+          <a href="AdminAudit.dc.html" class="link">مسح الكل</a>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الوقت</th><th>المشرف</th><th>الإجراء</th><th>الهدف</th><th>السبب</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="stack"><span>15 أكتوبر</span><span class="text-caption tone-muted">11:20 ص</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">طلب معلومات إضافية</td>
+                  <td class="table__wrap"><a href="AdminApplications.dc.html" class="link">طلب انضمام الشيخ إبراهيم صالح</a></td>
+                  <td class="table__wrap tone-muted">صورة الوجه الخلفي للبطاقة غير واضحة…</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>14 أكتوبر</span><span class="text-caption tone-muted">5:40 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">إزالة تعليق تقييم</td>
+                  <td class="table__wrap"><a href="AdminReviews.dc.html" class="link">تقييم سعيد منصور للشيخ أحمد المصري</a></td>
+                  <td class="table__wrap tone-muted">رقم هاتف شخصي في التعليق.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>14 أكتوبر</span><span class="text-caption tone-muted">1:15 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">رفض طلب انضمام</td>
+                  <td class="table__wrap"><a href="AdminApplications.dc.html" class="link">طلب انضمام الشيخ حامد يونس</a></td>
+                  <td class="table__wrap tone-muted">الوثائق المرفوعة لا تطابق الاسم المسجّل.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>13 أكتوبر</span><span class="text-caption tone-muted">3:10 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">تسجيل مكالمة التحقق</td>
+                  <td class="table__wrap"><a href="AdminApplications.dc.html" class="link">طلب انضمام الشيخة منى عبد الرحمن</a></td>
+                  <td class="table__wrap tone-muted">النتيجة: مناسب.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>13 أكتوبر</span><span class="text-caption tone-muted">2:30 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">اعتماد إجازة معلم</td>
+                  <td class="table__wrap"><a href="AdminCredentials.dc.html" class="link">إجازة التجويد · الشيخة منى عبد الرحمن</a></td>
+                  <td class="table__wrap tone-muted">نُسخت: حفص عن عاصم · من طريق الشاطبية · 29 جيلًا.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>12 أكتوبر</span><span class="text-caption tone-muted">12:05 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">إصدار إجازة بطلب المعلم</td>
+                  <td class="table__wrap"><a href="AdminIjazahs.dc.html" class="link"><span class="table__num certificate-number">R5TN-9WQE-3KDX-6HPA</span></a></td>
+                  <td class="table__wrap tone-muted">طلب الشيخ أحمد المصري لسعيد منصور.</td>
+                </tr>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span>12 أكتوبر</span><span class="text-caption tone-muted">10:30 ص</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">رفض بلاغ</td>
+                  <td class="table__wrap"><a href="AdminReports.dc.html" class="link">بلاغ محادثة</a></td>
+                  <td class="table__wrap tone-muted">لا مخالفة في المحادثة.</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>7 من 25 · آخر 15 يومًا · بتوقيت القاهرة</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page">2</button><button type="button" class="pager__page">3</button><button type="button" class="pager__page" aria-label="الصفحة التالية">{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل القيد">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg icon-tile--neutral">{{icon:flag:lg}}</span>
+              <span class="stack grow">
+                <strong class="text-title-3">رفض بلاغ · بلاغ محادثة</strong>
+                <span class="text-caption tone-muted">12 أكتوبر 2026 · 10:30 ص · سارة عادل</span>
+              </span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">قبل ← بعد</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">قبل</dt><dd class="kv__value"><span class="badge badge--warning">مفتوح</span></dd></div>
+                  <div class="kv__item"><dt class="kv__label">بعد</dt><dd class="kv__value"><span class="badge badge--neutral">مرفوض</span></dd></div>
+                  <div class="kv__item"><dt class="kv__label">السياق</dt><dd class="kv__value">محادثة</dd></div>
+                  <div class="kv__item"><dt class="kv__label">من</dt><dd class="kv__value">طابور البلاغات</dd></div>
+                </dl>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">السبب</h2>
+                <p class="text-callout">لا مخالفة في المحادثة.</p>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">القيد</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">رقم القيد</dt><dd class="kv__value table__num">AUD-2026-018391</dd></div>
+                  <div class="kv__item"><dt class="kv__label">الهدف</dt><dd class="kv__value"><a href="AdminReports.dc.html" class="link">بلاغ محادثة</a></dd></div>
+                </dl>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <p class="panel__note">القيود تُضاف فقط: لا يُعدَّل قيد ولا يُحذف، ولا يملك ذلك أي مشرف.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

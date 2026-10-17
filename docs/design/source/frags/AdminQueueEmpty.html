@@ -1,0 +1,42 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminReports:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">البلاغات</h1>
+        <p class="page-header__subtitle">لا بلاغات مفتوحة الآن. القرار في أي بلاغ يحتاج سببًا ويُسجَّل في سجل التدقيق.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="الحالة">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">مفتوحة<span class="category-tabs__count">0</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">تم البتّ</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم المُبلَّغ عنه أو المُبلِّغ">
+          </label>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>المُبلَّغ عنه</th><th>المُبلِّغ</th><th>السياق</th><th>السبب</th><th>الحالة</th></tr>
+          </thead>
+        </table>
+        <div class="empty-state">
+          <span class="icon-tile icon-tile--2xl icon-tile--neutral">{{icon:circle-check:xl}}</span>
+          <h2 class="empty-state__title">لا بلاغات مفتوحة</h2>
+          <p class="empty-state__text">حُسمت كل البلاغات. يظهر هنا كل بلاغ جديد يرفعه طالب أو معلم من جلسة أو ملف شخصي أو محادثة.</p>
+          <a href="AdminReports.dc.html" class="btn btn--secondary btn--md">عرض البلاغات المحسومة</a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

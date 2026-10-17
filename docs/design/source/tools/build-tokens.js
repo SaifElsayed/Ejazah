@@ -1,0 +1,33 @@
+// Generates project/ds/ijazah/tokens.css from tokens.json. tokens.json is the only source.
+const fs=require('fs'),path=require('path');
+const dir=path.join(__dirname,'..','..','frames','ds','ijazah');
+const t=JSON.parse(fs.readFileSync(path.join(dir,'tokens.json'),'utf8'));
+const get=p=>p.split('.').reduce((o,k)=>o[k],t);
+const res=v=>typeof v==='string'&&/^\{.+\}$/.test(v)?res(get(v.slice(1,-1))):v;
+const L=[],D=[];
+const add=(arr,name,v)=>arr.push(`  --${name}: ${res(v)};`);
+for(const [fam,steps] of Object.entries(t.palette)) for(const [k,v] of Object.entries(steps)) add(L,`palette-${fam}-${k}`,v);
+for(const [k,v] of Object.entries(t.color.light)) add(L,`color-${k}`,v);
+for(const [k,v] of Object.entries(t.color.dark)) add(D,`color-${k}`,v);
+const lightKeys=Object.keys(t.color.light).join(),darkKeys=Object.keys(t.color.dark).join();
+if(lightKeys!==darkKeys) throw new Error('light and dark must define the same semantic colours');
+for(const [k,v] of Object.entries(t.space)) add(L,`space-${k}`,v);
+for(const [k,v] of Object.entries(t.radius)) add(L,`radius-${k}`,v);
+for(const [k,v] of Object.entries(t['border-width'])) add(L,`border-${k}`,v);
+for(const [k,v] of Object.entries(t.font.family)) add(L,`font-${k}`,v);
+for(const [k,v] of Object.entries(t.font.weight)) add(L,`weight-${k}`,v);
+for(const [k,v] of Object.entries(t.text)){add(L,`text-${k}-size`,v.size);add(L,`text-${k}-line`,v.line);}
+for(const [k,v] of Object.entries(t.size)) add(L,`size-${k}`,v);
+for(const [k,v] of Object.entries(t.media)) add(L,`media-${k}`,v);
+for(const [k,v] of Object.entries(t.icon.size)) add(L,`icon-${k}`,v);
+for(const [k,v] of Object.entries(t.icon.stroke)) add(L,`stroke-${k}`,v);
+for(const [k,v] of Object.entries(t.shadow)) add(L,`shadow-${k}`,v);
+for(const [k,v] of Object.entries(t.opacity)) add(L,`opacity-${k}`,v);
+for(const [k,v] of Object.entries(t.duration)) add(L,`duration-${k}`,v);
+for(const [k,v] of Object.entries(t.easing)) add(L,`easing-${k}`,v);
+for(const [k,v] of Object.entries(t.motion)) add(L,`motion-${k}`,v);
+const C=[];for(const [k,v] of Object.entries(t.density.compact)) add(C,k.replace('.','-'),v);
+for(const [k,v] of Object.entries(t.layout)) add(L,`layout-${k}`,v);
+const out=`/* GENERATED from tokens.json by tools/build-tokens.js. Do not edit. */\n:root,\n[data-theme="light"] {\n${L.join('\n')}\n}\n\n[data-theme="dark"] {\n${D.join('\n')}\n}\n\n[data-density="compact"] {\n${C.join('\n')}\n}\n`;
+fs.writeFileSync(path.join(dir,'tokens.css'),out);
+console.log('tokens.css',L.length+D.length,'variables');

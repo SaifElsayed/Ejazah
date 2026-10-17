@@ -1,0 +1,39 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="rv-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--danger">{{icon:alert-circle:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="rv-title">سحب الإجازة <span class="ltr certificate-number">R5TN-9WQE-3KDX-6HPA</span></h2>
+        <p class="text-caption tone-muted">حفظ القرآن · برواية حفص عن عاصم · سعيد منصور · المُجيز الشيخ أحمد المصري · 12 أكتوبر 2026</p>
+      </div>
+    </div>
+
+    <div class="card card--accent card--compact">
+      <span class="group-label">السند · 35 جيلًا · من طريق الشاطبية</span>
+      <ol class="chain">
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>رسول الله ﷺ</span></li>
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot chain__dot--more"></span><span class="chain__line"></span></span><span class="tone-muted">… 32 جيلًا</span></li>
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ ذو الكفل بن هود البورسعيدي</span></li>
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span></span><span class="text-medium">الشيخ أحمد المصري</span></li>
+      </ol>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-2">{{icon:qr-code:sm}}<span>تظهر في صفحة التحقق العامة بأنها <strong>غير صالحة</strong>.</span></li>
+      <li class="row row--top gap-2">{{icon:eye-off:sm}}<span>تختفي من إجازات الطالب المعروضة للعامة.</span></li>
+      <li class="row row--top gap-2">{{icon:lock:sm}}<span>لا تُحذف: يبقى رقمها وسندها كما صدرت، مع سبب السحب واسم المشرف.</span></li>
+      <li class="row row--top gap-2">{{icon:award:sm}}<span>لا يمنع الطالب من تلقي إجازات لاحقة؛ للمنع إجراء مستقل.</span></li>
+    </ul>
+
+    <div class="field">
+      <label class="field__label" for="rv-reason">سبب السحب (إلزامي)</label>
+      <textarea id="rv-reason" class="input input--focused" rows="3" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الإجراء في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminIjazahs.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md" disabled>سحب الإجازة</button>
+    </div>
+  </section>

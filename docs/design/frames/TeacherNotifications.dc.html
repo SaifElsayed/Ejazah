@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — الإشعارات</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="TeacherHome.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">الإشعارات</h1>
+      <div class="nav-header__trailing">
+        <button type="button" class="btn btn--ghost btn--md">تعليم الكل كمقروء</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--flush">
+    <h2 class="group-label gutter pad-top">اليوم</h2>
+    <a href="TeacherStudents.dc.html" class="notice notice--unread">
+      <span class="icon-tile"><svg class="icon icon--md" data-icon="user-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m16 11 2 2 4-4"/></svg></span>
+      <span class="stack gap-half grow">
+        <strong class="text-body text-bold">حجز جديد</strong>
+        <span class="text-caption tone-muted">يوسف أحمد · حفظ القرآن · 8 جلسات · السبت 10:00 ص</span>
+      </span>
+      <span class="stack gap-2">
+        <span class="text-micro tone-muted">3:20 م</span>
+        <span class="unread-dot self-end" role="img" aria-label="غير مقروء"></span>
+      </span>
+    </a>
+    <a href="TeacherPreSession.dc.html" class="notice notice--unread">
+      <span class="icon-tile"><svg class="icon icon--md" data-icon="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+      <span class="stack gap-half grow">
+        <strong class="text-body text-bold">جلستك بعد 15 دقيقة</strong>
+        <span class="text-caption tone-muted">نور سمير · حفظ القرآن · 2:00 م</span>
+      </span>
+      <span class="stack gap-2">
+        <span class="text-micro tone-muted">1:45 م</span>
+        <span class="unread-dot self-end" role="img" aria-label="غير مقروء"></span>
+      </span>
+    </a>
+    <a href="TeacherCancelRespond.dc.html" class="notice notice--unread">
+      <span class="icon-tile icon-tile--warning"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></span>
+      <span class="stack gap-half grow">
+        <strong class="text-body text-bold">طلب إلغاء من حسن إبراهيم</strong>
+        <span class="text-caption tone-muted">جلسة اليوم 4:00 م · اقبل أو ارفض قبل موعدها</span>
+      </span>
+      <span class="stack gap-2">
+        <span class="text-micro tone-muted">10:05 ص</span>
+        <span class="unread-dot self-end" role="img" aria-label="غير مقروء"></span>
+      </span>
+    </a>
+
+    <h2 class="group-label gutter pad-top">سابقًا</h2>
+    <a href="TeacherEnrollment.dc.html" class="notice">
+      <span class="icon-tile icon-tile--neutral"><svg class="icon icon--md" data-icon="scale" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg></span>
+      <span class="stack gap-half grow">
+        <span class="text-body text-medium">حُسم النزاع</span>
+        <span class="text-caption tone-muted">جلسة 21 أكتوبر مع يوسف أحمد · ثبتت النتيجة: غياب المعلم</span>
+      </span>
+      <span class="text-micro tone-muted">23 أكتوبر</span>
+    </a>
+    <a href="CertificateView.dc.html" class="notice">
+      <span class="icon-tile icon-tile--accent"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg></span>
+      <span class="stack gap-half grow">
+        <span class="text-body text-medium">وافقت الإدارة على طلب إجازة يوسف أحمد</span>
+        <span class="text-caption tone-muted">حفظ القرآن · حفص عن عاصم</span>
+      </span>
+      <span class="text-micro tone-muted">15 أكتوبر</span>
+    </a>
+    <a href="TeacherReviews.dc.html" class="notice">
+      <span class="icon-tile icon-tile--neutral"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg></span>
+      <span class="stack gap-half grow">
+        <span class="text-body text-medium">تقييم جديد</span>
+        <span class="text-caption tone-muted">سعيد منصور · 2 من 5</span>
+      </span>
+      <span class="text-micro tone-muted">10 أكتوبر</span>
+    </a>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">طلب الانضمام</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}</a>
+      <a href="SignOutSheet.dc.html" class="icon-btn icon-btn--surface" aria-label="تسجيل الخروج">{{icon:log-out:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="card card--surface card--hero">
+      <span class="badge badge--neutral self-start">قيد المراجعة</span>
+      <div class="stack gap-1">
+        <h2 class="text-title-2">وصلنا طلبك</h2>
+        <p class="text-body tone-muted">سيصلك إشعار عند أي تحديث.</p>
+      </div>
+    </section>
+
+    <a href="ApplicationMoreInfo.dc.html" class="card card--warning card--compact card--row">
+      <span class="icon-tile icon-tile--warning">{{icon:file-text:md}}</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">طلب المشرف ملفًا آخر</strong>
+        <span class="text-caption tone-muted">الخميس 15 أكتوبر</span>
+      </span>
+      {{icon:chevron-left:md}}
+    </a>
+
+    <ol class="timeline" aria-label="مراحل الطلب">
+      <li class="timeline__item">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+        <span class="timeline__body"><strong class="timeline__title">أُرسل الطلب</strong><span class="timeline__meta">الأحد 11 أكتوبر · مادتان</span></span>
+      </li>
+      <li class="timeline__item" aria-current="step">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--current"></span><span class="timeline__line"></span></span>
+        <span class="timeline__body"><strong class="timeline__title">مراجعة الوثائق والإجازات</strong></span>
+      </li>
+      <li class="timeline__item timeline__item--pending">
+        <span class="timeline__rail"><span class="timeline__marker"></span><span class="timeline__line"></span></span>
+        <span class="timeline__body"><span class="timeline__title">مكالمة التحقق</span><span class="timeline__meta">نتواصل معك لتحديد موعدها</span></span>
+      </li>
+      <li class="timeline__item timeline__item--pending">
+        <span class="timeline__rail"><span class="timeline__marker"></span></span>
+        <span class="timeline__body"><span class="timeline__title">القرار</span></span>
+      </li>
+    </ol>
+  </main>
+</div>

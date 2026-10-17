@@ -1,0 +1,113 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminReviews:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">التقييمات</h1>
+        <p class="page-header__subtitle">أحدث تقييمات الطلاب للمعلمين. يملك المشرف إزالة التعليق فقط؛ تبقى النجوم محسوبة ولا يُحذف التقييم.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="العرض">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">كل التقييمات</button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">أُزيل تعليقها</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم الطالب أو المعلم">
+          </label>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الطالب</th><th>المعلم</th><th>التقييم</th><th>التعليق</th><th>التاريخ</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><a href="AdminUsers.dc.html" class="link">زياد طارق</a></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ عمر حسن</a></td>
+                  <td><span class="rating">{{icon:star:sm}}<span>1</span></span></td>
+                  <td class="table__wrap">معلم فاشل ولا يستحق ما يأخذه، ومن يريد…</td>
+                  <td>14 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">سعيد منصور</a></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ أحمد المصري</a></td>
+                  <td><span class="rating">{{icon:star:sm}}<span>2</span></span></td>
+                  <td class="table__wrap tone-muted">أُزيل التعليق · 14 أكتوبر · سارة عادل</td>
+                  <td>10 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">حسن إبراهيم</a></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ محمود فتحي</a></td>
+                  <td><span class="rating">{{icon:star:sm}}<span>4</span></span></td>
+                  <td class="table__wrap">شرح واضح لأحكام النون الساكنة والتنوين…</td>
+                  <td>8 أكتوبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ خالد عبد العزيز</a></td>
+                  <td><span class="rating">{{icon:star:sm}}<span>3</span></span></td>
+                  <td class="table__wrap">جيد، لكن الجلسات تبدأ متأخرة أحيانًا.</td>
+                  <td>29 سبتمبر</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>4 من 214 · الأحدث أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page">2</button><button type="button" class="pager__page">3</button><span class="pager__page">…</span><button type="button" class="pager__page">54</button><button type="button" class="pager__page" aria-label="الصفحة التالية">{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل التقييم">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg">ز</span>
+              <span class="stack grow">
+                <strong class="text-title-3">زياد طارق ← الشيخ عمر حسن</strong>
+                <span class="text-caption tone-muted">كُتب 14 أكتوبر 2026 · بعد اكتمال الاشتراك</span>
+              </span>
+              <span class="badge badge--neutral">التعليق ظاهر</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <div class="section__header"><h2 class="group-label">التقييم</h2><span class="rating">{{icon:star:sm}}<span>1 من 5</span></span></div>
+                <blockquote class="card card--surface card--compact text-callout">معلم فاشل ولا يستحق ما يأخذه، ومن يريد معلمًا حقيقيًا يتواصل معي على واتساب وأدلّه على غيره.</blockquote>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">الاشتراك</h2>
+                <a href="AdminEnrollments.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm">{{icon:book:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">حفظ القرآن · 8 جلسات · 8 من 8</span>
+                    <span class="text-caption tone-muted">مكتمل 7 أكتوبر · فتح الاشتراك</span>
+                  </span>
+                  {{icon:chevron-left:md}}
+                </a>
+              </section>
+
+              <div class="banner">{{icon:star:sm}}<span>بعد إزالة التعليق تبقى النجمة محسوبة في متوسط المعلم، ولا يمكن حذف التقييم نفسه.</span></div>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">{{icon:eye-off:sm}}إزالة التعليق</a>
+              <p class="panel__note">يختفي التعليق من ملف المعلم وتبقى النجوم. يُسجَّل السبب في سجل التدقيق.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

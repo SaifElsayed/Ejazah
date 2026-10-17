@@ -1,0 +1,32 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="cf-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--danger">{{icon:circle-x:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="cf-title">رفض طلب الإجازة</h2>
+        <p class="text-caption tone-muted">يوسف أحمد · حفظ القرآن · برواية حفص عن عاصم · من الشيخ أحمد المصري</p>
+      </div>
+    </div>
+
+    <section class="section">
+      <h3 class="group-label">ما يحدث فور التأكيد</h3>
+      <ul class="stack gap-2 text-callout">
+        <li class="row row--top gap-2">{{icon:award:sm}}<span>لا تصدر الإجازة، ويُغلق الطلب بحالة «مرفوض».</span></li>
+        <li class="row row--top gap-2">{{icon:bell:sm}}<span>يصل إشعار إلى الشيخ أحمد المصري ومعه السبب كما تكتبه.</span></li>
+        <li class="row row--top gap-2">{{icon:book:sm}}<span>لا يتغيّر اشتراك الطالب.</span></li>
+      </ul>
+    </section>
+
+    <div class="field">
+      <label class="field__label" for="cf-reason">سبب الرفض (إلزامي)</label>
+      <textarea id="cf-reason" class="input input--focused" rows="3" placeholder="اكتب ما يلزم المعلم تصحيحه"></textarea>
+      <span class="field__hint">يصل إلى المعلم كما كتبته.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminIjazahRequests.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md" disabled>رفض الطلب</button>
+    </div>
+    <p class="panel__note">يُتاح التأكيد بعد كتابة السبب. يُسجَّل الإجراء وسببه باسمك في سجل التدقيق.</p>
+  </section>

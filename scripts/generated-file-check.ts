@@ -10,6 +10,9 @@
 //                                                compared byte for byte. So a procedure, field or
 //                                                enum member added without regenerating the
 //                                                snapshot fails here, and a hand edit fails too.
+//   apps/mobile/src/design/tokens.ts and the      regenerated in memory from
+//   other files scripts/build-tokens.ts writes     packages/tokens/{tokens,icons}.json (ADR 0020)
+//                                                and compared byte for byte, each one named.
 //   pnpm-lock.yaml                               two runs of pnpm's own `install --lockfile-only`,
 //                                                in a scratch copy of the workspace's manifests, so
 //                                                the committed file is never rewritten and nothing
@@ -42,6 +45,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 
+import { GENERATED_FILES, generateFromRepository } from './build-tokens';
 import { SNAPSHOT_PATH, currentSnapshotText } from './contract-snapshot';
 
 const repositoryRoot = join(__dirname, '..');
@@ -76,6 +80,30 @@ export async function checkContractSnapshot(
       'differs from the snapshot generated from this code (a procedure, field or enum member added or changed without regenerating it, or an edit by hand)',
     command,
   };
+}
+
+/** Compares every file the token generator writes with what the two token sources generate now. */
+export async function checkTokens(
+  root: string,
+  generate: (root: string) => Promise<Readonly<Record<string, string>>> = generateFromRepository,
+): Promise<Drift[]> {
+  const command = 'pnpm tokens:build';
+  const generated = await generate(root);
+  const drifts: Drift[] = [];
+  for (const path of GENERATED_FILES) {
+    const file = join(root, path);
+    if (!existsSync(file)) {
+      drifts.push({ path, problem: 'is missing', command });
+    } else if (readFileSync(file, 'utf8') !== generated[path]) {
+      drifts.push({
+        path,
+        problem:
+          'differs from what packages/tokens/tokens.json and icons.json generate (a token changed without regenerating, or an edit by hand)',
+        command,
+      });
+    }
+  }
+  return drifts;
 }
 
 /** `pnpm` with `args` in `cwd`, run the way this process was started when a pnpm script started it. */
@@ -169,9 +197,16 @@ export function checkLockfile(root: string): Drift | undefined {
   }
 }
 
+/** One row per generated token file: its drift, or nothing when it is as generated. */
+async function tokenRows(): Promise<[string, Drift | undefined][]> {
+  const drifts = await checkTokens(repositoryRoot);
+  return GENERATED_FILES.map((path) => [path, drifts.find((drift) => drift.path === path)]);
+}
+
 async function main(): Promise<number> {
   const checked: [string, Drift | undefined][] = [
     [SNAPSHOT_PATH, await checkContractSnapshot(repositoryRoot)],
+    ...(await tokenRows()),
     ['pnpm-lock.yaml', checkLockfile(repositoryRoot)],
   ];
   for (const [path, drift] of checked) {

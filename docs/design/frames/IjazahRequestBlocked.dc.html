@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — طلب إجازة: أضف توقيعك أولًا</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="nav-header">
+      <div class="nav-header__bar">
+        <span class="back-btn"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
+        <span class="nav-header__title">طلب إجازة</span>
+      </div>
+      <ol class="steps">
+        <li class="steps__item steps__item--current"><span class="steps__bar"></span><span>البيانات</span></li>
+        <li class="steps__item"><span class="steps__bar"></span><span>المعاينة</span></li>
+      </ol>
+    </header>
+    <div class="screen__body">
+      <div class="card card--surface card--compact card--row">
+        <span class="avatar">ي</span>
+        <span class="stack grow">
+          <strong class="text-body text-bold">يوسف أحمد</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات · اكتمل 19 أغسطس</span>
+        </span>
+        <span class="badge badge--success">مكتمل</span>
+      </div>
+      <div class="summary">
+        <div class="summary__row"><span class="summary__label">المادة</span><span class="summary__value">حفظ القرآن</span></div>
+        <div class="summary__row"><span class="summary__label">الرواية</span><span class="summary__value">حفص عن عاصم · من طريق الشاطبية</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="dialog" role="alertdialog" aria-labelledby="dlg-title" aria-describedby="dlg-text">
+    <span class="icon-tile icon-tile--xl icon-tile--warning" aria-hidden="true"><svg class="icon icon--lg" data-icon="pen-line" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></svg></span>
+    <h1 id="dlg-title" class="dialog__title">أضف توقيعك أولًا</h1>
+    <p id="dlg-text" class="text-body tone-muted">ارفع صورة توقيعك مرة واحدة، ثم أكمل طلب إجازة يوسف أحمد.</p>
+    <div class="dialog__actions">
+      <a href="SignatureUpload.dc.html" class="btn btn--primary btn--block"><svg class="icon icon--md" data-icon="upload" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>رفع التوقيع</a>
+      <a href="TeacherStudents.dc.html" class="btn btn--ghost btn--block">لاحقًا</a>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

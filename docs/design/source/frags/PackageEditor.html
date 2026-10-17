@@ -1,0 +1,62 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Packages.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">تعديل الباقة</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="field">
+      <span class="field__label" id="subj">المادة</span>
+      <a href="PackageSubjectPicker.dc.html" class="select" aria-labelledby="subj"><span>حفظ القرآن</span>{{icon:chevron-down:md}}</a>
+    </div>
+
+    <div class="field" role="group" aria-labelledby="track">
+      <span class="field__label" id="track">المسار</span>
+      <div class="segmented">
+        <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">تسميع</button>
+        <button type="button" class="segmented__option" aria-pressed="false">مسار إجازة</button>
+      </div>
+      <span class="field__hint">طلب الإجازة متاح من مسار الإجازة فقط</span>
+    </div>
+
+    <div class="grid-2 gap-3">
+      <div class="field">
+        <label for="count" class="field__label">عدد الجلسات</label>
+        <input id="count" class="input" value="8">
+      </div>
+      <div class="field" role="group" aria-labelledby="dur">
+        <span class="field__label" id="dur">مدة الجلسة</span>
+        <div class="segmented">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">45 د</button>
+          <button type="button" class="segmented__option" aria-pressed="false">60 د</button>
+        </div>
+      </div>
+    </div>
+    <p class="field__hint">لديك 8 مواعيد أسبوعية مدتها 45 دقيقة.</p>
+
+    <div class="field">
+      <label for="price" class="field__label">السعر الكلي</label>
+      <div class="input-group input-group--focused">
+        <input id="price" class="input-group__control" value="1,200">
+        <span class="icon-btn icon-btn--muted text-body">ج.م</span>
+      </div>
+      <span class="field__hint">150 ج.م للجلسة</span>
+    </div>
+
+    <label class="check-row text-body">
+      <input type="checkbox" class="check" checked>
+      <span class="stack grow"><span>الباقة فعّالة</span><span class="text-caption tone-muted">تظهر للطلاب</span></span>
+    </label>
+
+    <div class="banner banner--info">
+      {{icon:info:md}}
+      <p class="grow">يسري التعديل على الاشتراكات الجديدة فقط.</p>
+    </div>
+
+    <a href="Packages.dc.html" class="btn btn--primary btn--block push">حفظ الباقة</a>
+  </main>
+</div>

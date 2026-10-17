@@ -1,0 +1,21 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">اشتراكاتي</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--center">
+    <div class="empty-state">
+      <span class="icon-tile icon-tile--2xl">{{icon:book:xl}}</span>
+      <h2 class="empty-state__title">لا اشتراكات بعد</h2>
+      <p class="empty-state__text">ستظهر هنا جلساتك بعد أول حجز.</p>
+      <a href="Discovery.dc.html" class="btn btn--primary">{{icon:search:md}}استكشف المعلمين</a>
+    </div>
+  </main>
+
+  {{TABS:student:Enrollments}}
+</div>

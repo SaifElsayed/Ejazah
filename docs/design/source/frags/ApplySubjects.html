@@ -1,0 +1,35 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="ConfirmGenderTeacher.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">طلب الانضمام كمعلم<span class="nav-header__subtitle"> · الخطوة 1 من 3</span></h1>
+    </div>
+    <ol class="steps" aria-label="خطوات الطلب">
+      <li class="steps__item steps__item--current" aria-current="step"><span class="steps__bar"></span><span>المواد</span></li>
+      <li class="steps__item"><span class="steps__bar"></span><span>الوثائق</span></li>
+      <li class="steps__item"><span class="steps__bar"></span><span>الإجازات</span></li>
+    </ol>
+  </header>
+
+  <main class="screen__body">
+    <div class="field" role="group" aria-labelledby="subjects">
+      <span class="field__label" id="subjects">ما المواد التي تدرّسها؟</span>
+      <span class="field__hint">اختر واحدة أو أكثر.</span>
+      <div class="row wrap gap-2">
+        <label class="chip chip--selected"><input type="checkbox" class="check" checked>حفظ القرآن</label>
+        <label class="chip chip--selected"><input type="checkbox" class="check" checked>التجويد</label>
+        <label class="chip"><input type="checkbox" class="check">القراءات</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="q" class="field__label">مؤهلك</label>
+      <span class="field__hint">نوع الإجازة أو الشهادة، وسنوات التدريس.</span>
+      <textarea id="q" rows="4" class="input input--focused">إجازة في حفظ القرآن، ودراسة التجويد في الأزهر. أدرّس الحفظ للأطفال منذ ست سنوات.</textarea>
+    </div>
+
+    <a href="ApplyDocuments.dc.html" class="btn btn--primary btn--block push">التالي: الوثائق</a>
+  </main>
+</div>

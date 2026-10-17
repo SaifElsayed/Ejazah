@@ -1,0 +1,37 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body screen__body--flush behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <strong class="text-title-2 gutter">الإشعارات</strong>
+    <div class="notice notice--unread">
+      <span class="icon-tile icon-tile--accent">{{icon:pen-line:md}}</span>
+      <span class="stack gap-half grow">
+        <strong class="text-body text-bold">طلب معلمك إجازة لك</strong>
+        <span class="text-caption tone-muted">أدخل اسمك كما يُكتب فيها</span>
+      </span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">اسمك كما يُكتب في الإجازة</h1>
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="cname">الاسم كاملًا</label>
+      <input id="cname" class="input" value="يوسف بن أحمد بن سعيد الشريف">
+      <span class="field__hint">يُكتب مرة واحدة، ولتعديله تواصل مع الدعم</span>
+    </div>
+
+    <div class="certificate-preview" aria-label="هكذا يظهر في الإجازة">
+      <span class="text-caption tone-muted">هكذا يظهر في الإجازة</span>
+      <span class="certificate-preview__title">يوسف بن أحمد بن سعيد الشريف</span>
+    </div>
+
+    <a href="Notifications.dc.html" class="btn btn--primary btn--block">حفظ</a>
+  </section>
+</div>

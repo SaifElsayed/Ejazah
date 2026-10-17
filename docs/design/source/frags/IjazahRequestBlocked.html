@@ -1,0 +1,41 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="nav-header">
+      <div class="nav-header__bar">
+        <span class="back-btn">{{icon:chevron-right:lg}}</span>
+        <span class="nav-header__title">طلب إجازة</span>
+      </div>
+      <ol class="steps">
+        <li class="steps__item steps__item--current"><span class="steps__bar"></span><span>البيانات</span></li>
+        <li class="steps__item"><span class="steps__bar"></span><span>المعاينة</span></li>
+      </ol>
+    </header>
+    <div class="screen__body">
+      <div class="card card--surface card--compact card--row">
+        <span class="avatar">ي</span>
+        <span class="stack grow">
+          <strong class="text-body text-bold">يوسف أحمد</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات · اكتمل 19 أغسطس</span>
+        </span>
+        <span class="badge badge--success">مكتمل</span>
+      </div>
+      <div class="summary">
+        <div class="summary__row"><span class="summary__label">المادة</span><span class="summary__value">حفظ القرآن</span></div>
+        <div class="summary__row"><span class="summary__label">الرواية</span><span class="summary__value">حفص عن عاصم · من طريق الشاطبية</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="dialog" role="alertdialog" aria-labelledby="dlg-title" aria-describedby="dlg-text">
+    <span class="icon-tile icon-tile--xl icon-tile--warning" aria-hidden="true">{{icon:pen-line:lg}}</span>
+    <h1 id="dlg-title" class="dialog__title">أضف توقيعك أولًا</h1>
+    <p id="dlg-text" class="text-body tone-muted">ارفع صورة توقيعك مرة واحدة، ثم أكمل طلب إجازة يوسف أحمد.</p>
+    <div class="dialog__actions">
+      <a href="SignatureUpload.dc.html" class="btn btn--primary btn--block">{{icon:upload:md}}رفع التوقيع</a>
+      <a href="TeacherStudents.dc.html" class="btn btn--ghost btn--block">لاحقًا</a>
+    </div>
+  </section>
+</div>

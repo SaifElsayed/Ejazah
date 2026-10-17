@@ -5,7 +5,8 @@
 // (an addition without regeneration and a hand edit both fail). The lockfile is checked in a scratch
 // copy of the workspace's manifests by pnpm's own `install --lockfile-only`, so these cases also
 // assert that the committed lockfile is never rewritten. The lockfile cases copy the repository's
-// real manifests and lockfile into a throwaway root and change the copy only.
+// real manifests and lockfile into a throwaway root and change the copy only. The token files are
+// compared with what a given generator returns, then with what this repository's sources generate.
 import {
   copyFileSync,
   mkdirSync,
@@ -20,10 +21,12 @@ import { dirname, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { GENERATED_FILES } from '../../scripts/build-tokens';
 import { SNAPSHOT_PATH } from '../../scripts/contract-snapshot';
 import {
   checkContractSnapshot,
   checkLockfile,
+  checkTokens,
   describeDrift,
 } from '../../scripts/generated-file-check';
 
@@ -124,5 +127,41 @@ describe('the lockfile', () => {
       'is not the lockfile pnpm writes for these manifests',
     );
     expect(readFileSync(lockfile, 'utf8')).toBe(edited);
+  });
+});
+
+describe('the design tokens (ADR 0020)', () => {
+  const generated = Object.fromEntries(GENERATED_FILES.map((path) => [path, `// ${path}\n`]));
+  const generate = (): Promise<Readonly<Record<string, string>>> => Promise.resolve(generated);
+
+  function rootHolding(files: Readonly<Record<string, string>>): string {
+    const directory = scratchRoot();
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(directory, path)), { recursive: true });
+      writeFileSync(join(directory, path), text);
+    }
+    return directory;
+  }
+
+  it('passes committed copies that are what the sources generate', async () => {
+    expect(await checkTokens(rootHolding(generated), generate)).toEqual([]);
+  });
+
+  it('fails each copy that differs or is missing, naming R-PROC-9 and the command to run', async () => {
+    const [first, second, ...rest] = GENERATED_FILES;
+    const files: Record<string, string> = { ...generated, [first]: '// edited by hand\n' };
+    delete files[second];
+    const drifts = await checkTokens(rootHolding(files), generate);
+    expect(drifts.map((drift) => drift.path)).toEqual([first, second]);
+    expect(drifts[0]?.problem).toContain('differs from what packages/tokens/tokens.json');
+    expect(drifts[1]?.problem).toBe('is missing');
+    expect(rest.length).toBeGreaterThan(0);
+    const message = describeDrift(drifts[0] ?? { path: '', problem: '', command: '' });
+    expect(message).toContain('R-PROC-9');
+    expect(message).toContain('pnpm tokens:build');
+  });
+
+  it('passes this repository’s committed token files', async () => {
+    expect(await checkTokens(root)).toEqual([]);
   });
 });

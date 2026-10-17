@@ -1,0 +1,171 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminPayments:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">المدفوعات</h1>
+        <p class="page-header__subtitle">سجل الطلبات كما أبلغت به بوابة الدفع. المبالغ بالجنيه المصري.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="banner">{{icon:lock:sm}}<span>عرض فقط. لا يحرّك أي إجراء في هذه الصفحة المال ولا يحجزه ولا يردّه. يُنفَّذ أي تعويض خارج المنصة، ويظهر هنا حين تُبلغ به البوابة.</span></div>
+
+      <div class="toolbar">
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="رقم الطلب أو اسم الطالب">
+          </label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر" aria-expanded="false">{{icon:filter:md}}</button>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الطلب</th><th>الطالب</th><th class="table__end">الإجمالي (ج.م)</th><th class="table__end">الرسوم</th><th class="table__end">الصافي</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004816</span><span class="text-caption tone-muted">15 أكتوبر · 10:42 ص</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">يحيى عادل</a></td>
+                  <td class="table__end"><span class="table__num">1,500.00</span></td>
+                  <td class="table__end tone-muted">—</td>
+                  <td class="table__end tone-muted">—</td>
+                  <td><span class="badge badge--neutral">تم الإنشاء</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004815</span><span class="text-caption tone-muted">14 أكتوبر · 10:15 ص</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">عمر سامي</a></td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__end"><span class="table__num">36.00</span></td>
+                  <td class="table__end"><span class="table__num">1,164.00</span></td>
+                  <td><span class="badge badge--success">مدفوع</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004814</span><span class="text-caption tone-muted">13 أكتوبر · 9:32 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">عبد الرحمن علي</a></td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__end"><span class="table__num">36.00</span></td>
+                  <td class="table__end"><span class="table__num">1,164.00</span></td>
+                  <td><span class="stack items-start gap-half"><span class="badge badge--success">مدفوع</span><a href="AdminEnrollments.dc.html" class="link text-caption">الاشتراك ملغى</a></span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004813</span><span class="text-caption tone-muted">13 أكتوبر · 9:05 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">عمر سامي</a></td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__end tone-muted">—</td>
+                  <td class="table__end tone-muted">—</td>
+                  <td><span class="badge badge--neutral">انتهت المهلة</span></td>
+                </tr>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004812</span><span class="text-caption tone-muted">13 أكتوبر · 2:09 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a></td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__end"><span class="table__num">36.00</span></td>
+                  <td class="table__end"><span class="table__num">1,164.00</span></td>
+                  <td><span class="badge badge--success">مدفوع</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004811</span><span class="text-caption tone-muted">12 أكتوبر · 6:20 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a></td>
+                  <td class="table__end"><span class="table__num">2,160.00</span></td>
+                  <td class="table__end"><span class="table__num">62.40</span></td>
+                  <td class="table__end"><span class="table__num">2,097.60</span></td>
+                  <td><span class="badge badge--success">مدفوع</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004810</span><span class="text-caption tone-muted">12 أكتوبر · 6:12 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a></td>
+                  <td class="table__end"><span class="table__num">2,160.00</span></td>
+                  <td class="table__end tone-muted">—</td>
+                  <td class="table__end tone-muted">—</td>
+                  <td><span class="badge badge--danger">فشل</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num">IJZ-2026-004806</span><span class="text-caption tone-muted">11 أكتوبر · 4:47 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">زياد طارق</a></td>
+                  <td class="table__end"><span class="table__num">2,160.00</span></td>
+                  <td class="table__end"><span class="table__num">62.40</span></td>
+                  <td class="table__end"><span class="table__num">2,097.60</span></td>
+                  <td><span class="badge badge--success">مدفوع</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>8 من 128 · الأحدث أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page">2</button><button type="button" class="pager__page">3</button><span class="pager__page">…</span><button type="button" class="pager__page">19</button><button type="button" class="pager__page" aria-label="الصفحة التالية">{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل الطلب">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg">{{icon:credit-card:lg}}</span>
+              <span class="stack grow">
+                <strong class="text-title-3 ltr">IJZ-2026-004812</strong>
+                <span class="text-caption tone-muted">يوسف أحمد · حفظ القرآن · 8 جلسات مع الشيخ أحمد المصري</span>
+              </span>
+              <span class="badge badge--success">مدفوع</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">المبالغ كما أبلغت بها البوابة</h2>
+                <dl class="kv kv--3">
+                  <div class="kv__item"><dt class="kv__label">الإجمالي</dt><dd class="kv__value">1,200.00 ج.م</dd></div>
+                  <div class="kv__item"><dt class="kv__label">رسوم البوابة</dt><dd class="kv__value">36.00 ج.م</dd></div>
+                  <div class="kv__item"><dt class="kv__label">الصافي للمعلم</dt><dd class="kv__value text-bold">1,164.00 ج.م</dd></div>
+                </dl>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">المراجع</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">رقم الطلب</dt><dd class="kv__value"><span class="table__num">IJZ-2026-004812</span></dd></div>
+                  <div class="kv__item"><dt class="kv__label">رقم المعاملة</dt><dd class="kv__value"><span class="table__num">TXN-418302775</span></dd></div>
+                </dl>
+                <a href="AdminEnrollments.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm">{{icon:book:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">الاشتراك · حفظ القرآن · 8 جلسات</span>
+                    <span class="text-caption tone-muted">جارٍ منذ 13 أكتوبر · 1 من 8</span>
+                  </span>
+                  {{icon:chevron-left:md}}
+                </a>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">ما حدث للطلب</h2>
+                <ol class="timeline" aria-label="أحداث الطلب">
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">أُنشئ الطلب · 2:09 م</strong><span class="timeline__meta">13 أكتوبر</span></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">أبلغت البوابة بنجاح الدفع · 2:14 م</strong><span class="timeline__meta">رقم المعاملة <span class="ltr">TXN-418302775</span></span></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span></span>
+                    <span class="timeline__body"><strong class="timeline__title">تأكّد الاشتراك وأُنشئت جلساته الثماني · 2:14 م</strong><span class="timeline__meta">وصل الإشعار إلى الطالب والمعلم</span></span>
+                  </li>
+                </ol>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <p class="panel__note">لا توجد إجراءات مالية في لوحة الإدارة. إن قررت الإدارة تعويض الطالب يُنفَّذ ذلك خارج المنصة، وتظهر حالة الطلب «مُسترد» حين تُبلغ بها البوابة.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

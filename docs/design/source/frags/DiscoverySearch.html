@@ -1,0 +1,44 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">استكشف</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--scroll gap-4">
+    <div class="search-row">
+      <label class="input-group input-group--focused">
+        {{icon:search:md}}
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الشيخ أو المادة" aria-label="ابحث باسم الشيخ أو المادة" value="أحمد">
+        <a href="Discovery.dc.html" class="icon-btn icon-btn--muted" aria-label="مسح البحث">{{icon:x:sm}}</a>
+      </label>
+      <a href="DiscoveryFilter.dc.html" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر">{{icon:filter:md}}</a>
+
+    </div>
+
+    <span class="text-caption tone-muted">نتيجة واحدة لـ «أحمد» · في كل الأقسام</span>
+
+    <a href="TeacherProfile.dc.html" class="card gap-3">
+      <span class="row gap-3 items-start">
+        <span class="avatar avatar--xl avatar--primary">أ</span>
+        <span class="stack gap-1 grow">
+          <strong class="text-headline">الشيخ <mark class="match">أحمد</mark> المصري</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · حفص عن عاصم · 12 سنة</span>
+          <span class="row gap-1 wrap"><span class="badge badge--neutral">تسميع</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </span>
+      </span>
+      <span class="story-card__quote story-card__quote--two">«أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا، بالتسميع المتدرّج وجهًا بوجه.»</span>
+      <span class="story-card__foot"><span class="rating">{{icon:star:xs:filled}}4.9 · 86</span><span>أقرب موعد الأحد 7:30 م</span><span class="text-callout text-bold tone-default">من 150 ج.م</span></span>
+    </a>
+
+    <div class="card card--surface card--row">
+      <span class="icon-tile icon-tile--round">{{icon:search:md}}</span>
+      <span class="stack grow"><strong class="text-body text-bold">جرّب البحث باسم المادة</strong><span class="text-caption tone-muted">مثل: التجويد، القراءات</span></span>
+    </div>
+  </main>
+
+  {{TABS:student:Discovery}}
+</div>

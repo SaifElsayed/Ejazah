@@ -1,0 +1,16 @@
+{
+  "name": "@ijazah/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The design tokens and the icon registry: the one source every colour, size, type, motion and icon name comes from (ADR 0002, ADR 0014, ADR 0020). tokens.ts, tokens.css, the Tailwind theme and the icon lists are generated from these two files by scripts/build-tokens.ts; never edited by hand.",
+  "type": "module",
+  "exports": {
+    "./tokens.json": "./tokens.json",
+    "./icons.json": "./icons.json"
+  },
+  "files": [
+    "tokens.json",
+    "icons.json",
+    "README.md"
+  ]
+}

@@ -1,0 +1,118 @@
+<div class="console" dir="ltr" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminApplications:en}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">Teacher applications</h1>
+        <p class="page-header__subtitle">3 applications await a decision. A teacher is not shown to students until approved and their payout account is verified.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="Status">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">In review<span class="category-tabs__count">2</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">Waiting on applicant<span class="category-tabs__count">1</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">Decided</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">Search</span>
+            <input class="input-group__control" placeholder="Name or email">
+          </label>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>Applicant</th><th>Subjects</th><th>Call</th><th>Submitted</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><a href="AdminUsers.dc.html" class="row gap-3"><span class="avatar avatar--sm" lang="ar">ي</span><span class="stack"><span class="text-medium"><bdi lang="ar">الشيخ ياسر حمدي</bdi></span><span class="text-caption tone-muted">yasser.hamdy@example.com</span></span></a></td>
+                  <td><span class="table__wrap">Quran memorization, Tajweed</span></td>
+                  <td><span class="badge badge--neutral">Not recorded</span></td>
+                  <td>14 Oct</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="row gap-3"><span class="avatar avatar--sm" lang="ar">م</span><span class="stack"><span class="text-medium"><bdi lang="ar">الشيخة منى عبد الرحمن</bdi></span><span class="text-caption tone-muted">mona.ar@example.com</span></span></a></td>
+                  <td>Tajweed</td>
+                  <td><span class="badge badge--success">Recorded 13 Oct</span></td>
+                  <td>12 Oct</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>2 of 2 · oldest first</span>
+              <nav class="pager" aria-label="Pages"><button type="button" class="pager__page" aria-label="Previous page" disabled>{{icon:chevron-left:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="Next page" disabled>{{icon:chevron-right:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="Application details">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg" lang="ar">ي</span>
+              <span class="stack grow">
+                <strong class="text-title-3"><bdi lang="ar">الشيخ ياسر حمدي</bdi></strong>
+                <span class="text-caption tone-muted">Male · Cairo · applied 14 Oct 2026</span>
+              </span>
+              <span class="badge badge--neutral">In review</span>
+            </header>
+
+            <div class="panel__body">
+              <div class="row row--top gap-6">
+                <section class="section">
+                  <h2 class="group-label">Identity · view only</h2>
+                  <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:user:lg}}</span><span>National ID card</span></a>
+                </section>
+                <section class="section">
+                  <h2 class="group-label">Ijazahs · one PDF per subject</h2>
+                  <div class="row row--top gap-3">
+                    <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:file-text:lg}}</span><span>Quran memorization (PDF)</span><span class="badge badge--warning">In review</span></a>
+                    <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:file-text:lg}}</span><span>Tajweed (PDF)</span><span class="badge badge--warning">In review</span></a>
+                  </div>
+                  <a href="AdminCredentials.dc.html" class="link text-callout self-start">Review ijazah{{icon:chevron-right:sm}}</a>
+                </section>
+              </div>
+
+              <section class="section">
+                <h2 class="group-label">Verification call · outside the app</h2>
+                <div class="grid-2 gap-3">
+                  <div class="field"><label class="field__label" for="cd">Call date</label><input id="cd" class="input input--md" placeholder="dd / mm / yyyy"></div>
+                  <div class="field"><span class="field__label" id="co">Outcome</span>
+                    <div class="segmented" role="group" aria-labelledby="co"><button type="button" class="segmented__option" aria-pressed="false">Suitable</button><button type="button" class="segmented__option" aria-pressed="false">Unsuitable</button></div>
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="field__label" for="cn">Call notes</label>
+                  <textarea id="cn" class="input" rows="2" placeholder="What you checked on the call"></textarea>
+                </div>
+                <button type="button" class="btn btn--secondary btn--md self-start">Save call record</button>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">Subjects and qualification</h2>
+                <div class="row wrap gap-2"><span class="badge badge--neutral">Quran memorization</span><span class="badge badge--neutral">Tajweed</span></div>
+                <p class="text-callout"><bdi lang="ar">إجازة في حفظ القرآن بالسند المتصل منذ 2014. أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا.</bdi></p>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <button type="button" class="btn btn--primary btn--md" disabled>Approve</button>
+              <a href="AdminDecisionDialog.dc.html" class="btn btn--secondary btn--md">Request info</a>
+              <a href="AdminDecisionDialog.dc.html" class="btn btn--danger btn--md">Reject</a>
+              <a href="AdminDecisionDialog.dc.html" class="btn btn--danger btn--md">{{icon:ban:sm}}Ban</a>
+              <p class="panel__note">Approve unlocks once the verification call record is saved: date, outcome and notes. The applicant receives the decision with your note, and it is recorded in the audit log.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

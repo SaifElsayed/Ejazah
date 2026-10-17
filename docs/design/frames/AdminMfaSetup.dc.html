@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الإدارة — إعداد التحقق بخطوتين</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <main class="page">
+    <header class="page-header">
+      <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة · الإدارة</span></span>
+      <div class="segmented segmented--inline" role="group" aria-label="اللغة">
+        <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</button>
+        <button type="button" class="segmented__option" aria-pressed="false">English</button>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="page-intro">
+        <h1 class="page-intro__title">إعداد التحقق بخطوتين</h1>
+        <p class="page-intro__lede">هذا أول دخول لحساب <span class="ltr">sara.adel@example.com</span>. التحقق بخطوتين إلزامي لكل حساب إدارة، ولا يكتمل الدخول قبل إعداده.</p>
+      </div>
+
+      <ol class="grid-3 gap-5">
+        <li class="card card--hero gap-4">
+          <div class="row gap-3">
+            <span class="icon-tile icon-tile--sm icon-tile--round icon-tile--primary">1</span>
+            <h2 class="section__title">امسح الرمز بتطبيق المصادقة</h2>
+          </div>
+          <p class="text-callout tone-muted">افتح تطبيق المصادقة على هاتفك، واختر إضافة حساب، ثم امسح هذا الرمز.</p>
+          <div class="doc-viewer" role="img" aria-label="رمز QR لإضافة الحساب إلى تطبيق المصادقة">
+            <svg class="icon icon--2xl" data-icon="qr-code" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
+            <span class="text-caption">رمز الإعداد · صالح لهذا الدخول فقط</span>
+          </div>
+          <div class="field">
+            <span class="field__label" id="mk">لا تستطيع المسح؟ أدخل هذا المفتاح يدويًا</span>
+            <div class="file" aria-labelledby="mk">
+              <span class="grow text-latin text-medium ltr">XJ4K 7QPM 2LAZ R9TD</span>
+              <button type="button" class="icon-btn icon-btn--muted" aria-label="نسخ المفتاح"><svg class="icon icon--md" data-icon="copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+            </div>
+          </div>
+        </li>
+
+        <li class="card card--hero gap-4">
+          <div class="row gap-3">
+            <span class="icon-tile icon-tile--sm icon-tile--round icon-tile--primary">2</span>
+            <h2 class="section__title">أدخل الرمز الذي يظهر</h2>
+          </div>
+          <p class="text-callout tone-muted">يعرض التطبيق رمزًا من ستة أرقام يتجدّد كل 30 ثانية. أدخله هنا لنتأكد أن الإعداد تم.</p>
+          <div class="field">
+            <label for="otp1" class="field__label">رمز المصادقة</label>
+            <div class="otp">
+              <input id="otp1" type="text" inputmode="numeric" maxlength="1" value="5" class="otp__cell otp__cell--filled" aria-label="الرقم الأول">
+              <input type="text" inputmode="numeric" maxlength="1" value="8" class="otp__cell otp__cell--filled" aria-label="الرقم الثاني">
+              <input type="text" inputmode="numeric" maxlength="1" value="1" class="otp__cell otp__cell--filled" aria-label="الرقم الثالث">
+              <input type="text" inputmode="numeric" maxlength="1" value="0" class="otp__cell otp__cell--filled" aria-label="الرقم الرابع">
+              <input type="text" inputmode="numeric" maxlength="1" value="4" class="otp__cell otp__cell--filled" aria-label="الرقم الخامس">
+              <input type="text" inputmode="numeric" maxlength="1" value="7" class="otp__cell otp__cell--filled" aria-label="الرقم السادس">
+            </div>
+          </div>
+          <div class="banner banner--success">
+            <svg class="icon icon--sm" data-icon="circle-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <p class="grow">الرمز صحيح. تطبيق المصادقة مرتبط بحسابك.</p>
+          </div>
+        </li>
+
+        <li class="card card--hero gap-4">
+          <div class="row gap-3">
+            <span class="icon-tile icon-tile--sm icon-tile--round icon-tile--primary">3</span>
+            <h2 class="section__title">احفظ رموز الاسترداد العشرة</h2>
+          </div>
+          <p class="text-callout tone-muted">إن فقدت هاتفك تدخل بأحد هذه الرموز بدل رمز التطبيق. كل رمز يُستعمل مرة واحدة. تظهر هنا مرة واحدة فقط، فاحفظها الآن.</p>
+          <div class="card card--surface"><ul class="grid-2 gap-3" aria-label="رموز الاسترداد">
+            <li class="text-latin text-medium ltr">4F7K-29QX</li>
+            <li class="text-latin text-medium ltr">M8TD-3HZP</li>
+            <li class="text-latin text-medium ltr">Q2NW-7CJR</li>
+            <li class="text-latin text-medium ltr">X5BE-K4LM</li>
+            <li class="text-latin text-medium ltr">H9VA-6TQS</li>
+            <li class="text-latin text-medium ltr">R3YC-8PWN</li>
+            <li class="text-latin text-medium ltr">D6GU-2KXF</li>
+            <li class="text-latin text-medium ltr">L7ZH-5RMB</li>
+            <li class="text-latin text-medium ltr">W2PJ-9NDA</li>
+            <li class="text-latin text-medium ltr">T6RE-3GVY</li>
+          </ul></div>
+          <div class="row gap-2">
+            <button type="button" class="btn btn--secondary btn--md btn--grow"><svg class="icon icon--sm" data-icon="copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>نسخ</button>
+            <button type="button" class="btn btn--secondary btn--md btn--grow"><svg class="icon icon--sm" data-icon="download" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>تنزيل الرموز</button>
+          </div>
+          <label class="check-row">
+            <input type="checkbox" class="check" checked>
+            <span class="text-callout">حفظت الرموز في مكان آمن خارج هذا الجهاز.</span>
+          </label>
+        </li>
+      </ol>
+
+      <div class="row gap-3">
+        <a href="AdminHome.dc.html" class="btn btn--primary">إتمام الإعداد والدخول</a>
+        <a href="AdminSignIn.dc.html" class="btn btn--ghost">الرجوع إلى الدخول</a>
+        <p class="text-caption tone-muted">يُطلب رمز التطبيق في كل دخول بعد اليوم.</p>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">الشيخ أحمد المصري</strong>
+        <span class="row wrap gap-2 text-caption tone-muted">حفظ القرآن · 8 جلسات · 45 دقيقة<span class="badge badge--neutral">تسميع</span></span>
+      </span>
+      <span class="badge badge--success">جارٍ</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">طلب المعلم إلغاء جلسة</h1>
+      <a href="EnrollmentDetail.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="card card--surface card--compact">
+      <div class="row gap-3">
+        <span class="avatar avatar--sm">أ</span>
+        <span class="stack grow">
+          <strong class="text-callout text-bold">الشيخ أحمد المصري</strong>
+          <span class="text-caption tone-muted">الجلسة 5 · الأربعاء 11 نوفمبر · 6:00 م (القاهرة)</span>
+        </span>
+      </div>
+      <p class="text-body">«عندي ظرف عائلي في هذا اليوم، وأعتذر عن الجلسة.»</p>
+    </div>
+
+    <div class="stack gap-2 text-callout">
+      <p><strong>إن قبلت:</strong> تُلغى الجلسة وتُقترح لك جلسة بديلة.</p>
+      <p><strong>إن رفضت:</strong> تبقى الجلسة في موعدها.</p>
+    </div>
+
+    <div class="banner banner--warning">
+      {{icon:hourglass:md}}
+      <span class="grow">إن لم تردّ قبل الأربعاء 11 نوفمبر 6:00 م تبقى الجلسة قائمة.</span>
+    </div>
+
+    <div class="row gap-2">
+      <a href="EnrollmentDetail.dc.html" class="btn btn--secondary btn--grow">رفض</a>
+      <a href="EnrollmentDetail.dc.html" class="btn btn--primary btn--grow">قبول الإلغاء</a>
+    </div>
+  </section>
+</div>

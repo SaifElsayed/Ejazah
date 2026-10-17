@@ -1,0 +1,29 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="mr-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--warning">{{icon:key-round:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="mr-title">إعادة ضبط التحقق بخطوتين لعمرو خالد</h2>
+        <p class="text-caption tone-muted"><span class="ltr">amr.khaled@example.com</span> · مشرف منذ 20 مايو 2026</p>
+      </div>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-2">{{icon:x:sm}}<span>يُلغى تطبيق المصادقة المرتبط ورموز الاسترداد الحالية فورًا.</span></li>
+      <li class="row row--top gap-2">{{icon:refresh-cw:sm}}<span>في دخوله التالي يعيد الإعداد: رمز جديد في تطبيق المصادقة ورموز استرداد جديدة.</span></li>
+      <li class="row row--top gap-2">{{icon:lock:sm}}<span>تُنهى جلساته المفتوحة، ويدخل بكلمة مروره ثم يكمل الإعداد.</span></li>
+      <li class="row row--top gap-2">{{icon:list:sm}}<span>يُسجَّل الإجراء وسببه باسمك في سجل التدقيق.</span></li>
+    </ul>
+
+    <div class="field">
+      <label class="field__label" for="mr-reason">سبب إعادة الضبط (إلزامي)</label>
+      <textarea id="mr-reason" class="input input--focused" rows="3" placeholder="مثلًا: فقد هاتفه، وتحققت من هويته بمكالمة"></textarea>
+      <span class="field__hint">تحقّق من هوية المشرف خارج اللوحة قبل التأكيد.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminAdmins.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--primary btn--md" disabled>إعادة الضبط</button>
+    </div>
+  </section>

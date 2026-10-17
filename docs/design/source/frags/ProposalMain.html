@@ -1,0 +1,78 @@
+<div class="screen screen--long" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <div class="app-header__titles">
+      <h1 class="app-header__title">السلام عليكم يا يوسف</h1>
+      <span class="app-header__subtitle">الأربعاء 4 نوفمبر</span>
+    </div>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--scroll gap-6">
+    <section class="hero-card" aria-label="جلستك القادمة">
+      <span class="hero-card__kicker">جلستك القادمة · بعد ساعتين</span>
+      <span class="hero-card__row">
+        <span class="hero-card__time">6:00 م</span>
+        <span class="badge">الجلسة 4 من 8</span>
+      </span>
+      <span class="hero-card__meta">حفظ القرآن مع الشيخ أحمد المصري · 45 دقيقة</span>
+      <a href="PreSession.dc.html" class="btn btn--inverse btn--md">{{icon:clock:md}}يفتح الدخول 5:45 م</a>
+    </section>
+
+    <section class="section gap-3">
+      <h2 class="section__title">يحتاج ردّك</h2>
+      <a href="CancelRespondSheet.dc.html" class="card card--warning card--row">
+        <span class="avatar">أ</span>
+        <span class="stack grow">
+          <strong class="text-body text-bold">طلب الشيخ أحمد إلغاء جلسة</strong>
+          <span class="text-caption tone-muted">الأربعاء 11 نوفمبر · ردّ قبل موعدها</span>
+        </span>
+        <span class="tone-muted">{{icon:chevron-left:md}}</span>
+      </a>
+    </section>
+
+    <section class="section gap-3">
+      <div class="section__header">
+        <h2 class="section__title">اشتراكاتي</h2>
+        <a href="Enrollments.dc.html" class="link">الكل</a>
+      </div>
+      <div class="grid-2 gap-3">
+        <a href="EnrollmentDetail.dc.html" class="progress-tile">
+          <span class="row row--between gap-2"><span class="text-callout text-bold">حفظ القرآن</span><span class="badge badge--neutral">تسميع</span></span>
+          <span class="progress-tile__count">2<small> من 8</small></span>
+          <span class="meter meter--thin"><span class="meter__fill" style="width: 25%"></span></span>
+          <span class="text-caption tone-muted">التالية اليوم 6:00 م</span>
+        </a>
+        <a href="Enrollments.dc.html" class="progress-tile">
+          <span class="row row--between gap-2"><span class="text-callout text-bold">حفظ القرآن</span><span class="badge badge--neutral">تسميع</span></span>
+          <span class="progress-tile__count">0<small> من 8</small></span>
+          <span class="meter meter--thin"><span class="meter__fill" style="width: 0%"></span></span>
+          <span class="text-caption tone-muted">تبدأ السبت 7 نوفمبر</span>
+        </a>
+      </div>
+    </section>
+
+    <a href="WriteReview.dc.html" class="card card--row">
+      <span class="icon-tile icon-tile--round icon-tile--accent">{{icon:star:md}}</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">قيّم اشتراكك المكتمل</strong>
+        <span class="text-caption tone-muted">حفظ القرآن · مسار إجازة · مع الشيخ أحمد المصري</span>
+      </span>
+      <span class="tone-muted">{{icon:chevron-left:md}}</span>
+    </a>
+
+    <a href="Discovery.dc.html" class="card card--surface card--row">
+      <span class="icon-tile icon-tile--round">{{icon:search:md}}</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">ابحث عن معلم لمادة أخرى</strong>
+        <span class="text-caption tone-muted">حفظ القرآن · التجويد · القراءات</span>
+      </span>
+      <span class="tone-muted">{{icon:chevron-left:md}}</span>
+    </a>
+  </main>
+
+  {{TABS:student:Main}}
+</div>

@@ -1,0 +1,248 @@
+# Open items from the screen inventory
+
+What the inventory (`screens.md`) and the copy catalogue found undrawn, ambiguous or in need of the
+owner's decision, by area, as recorded on 2026-10-17. Each item is a decision for the owner, a state
+the implementer adds from the generic patterns, or a copy variant the catalogue completed beyond what
+one board draws (marked as such). None of them blocks implementing what is drawn.
+
+## الطالب: الدخول والاستكشاف والدفع
+
+Area: auth, onboarding, student home, discovery, booking, checkout (41 boards). Everything below is something the design does not settle or that the implementer must decide with the owner; nothing here was filled in on the boards' behalf.
+
+## Route and kind conflicts with the brief
+
+1. **Processing is a dialog, the brief gives it a route.** `Processing` / `ProcessingDelayed` are drawn as a centred `.dialog` over the dimmed Checkout summary (`kind: dialog` in inventory.json), while BRIEF-SCREENS lists `(student)/checkout/processing` as a route. The table keeps the route and marks the kind `dialog on (student)/checkout`. Either an Expo route rendered with a transparent modal presentation, or a dialog inside the checkout screen — to decide once.
+2. **TimeZonePicker and Terms** are drawn with a NavHeader and a back arrow to OnboardProfile (full screens), while the brief routes them as modals (`time-zone`, `terms`). Documented as modal routes; the back arrow is the modal's dismiss.
+3. **ConfirmGenderTeacher** is the same sheet as ConfirmGender with a different role row and primary button; recorded as `state of sheet on (auth)/profile: teacher`, not a second sheet.
+4. **ProposalMain** has board title `t` in inventory.json (an unfilled title); the table uses «مقترح الرئيسية». It stays a proposal (undecided); the differences from Main are listed in its row.
+
+## Flows the design leaves open (not drawn)
+
+5. **Returning users.** ADR 0012 D4: a returning Google/Apple user goes straight home. Welcome's provider buttons link to Role (new account). No board shows the teacher landing after email sign-in either (EmailSignIn and ResetPassword both link to the student Main).
+6. **SignInConflict covers one of three cases.** Drawn: the email belongs to an email+password account. Not drawn: the email belongs to a Google account (user tried Apple/email) or to an Apple account. Same sheet, different body and primary button; only `auth.signInConflict.bodyEmailPassword` / `signInEmailPassword` exist in the catalogue.
+7. **ForgotPassword for a Google/Apple address.** ADR 0012 D1 says reset exists only for email accounts; what the screen says when the address has no password is not drawn.
+8. **Password rules** (minimum length, mismatch between the two fields) and the wrong/expired OTP code are not drawn; Components provides `.input--error`, `.field__error`, `.otp__cell--error` and one generic field error «كلمة المرور غير صحيحة.» (not keyed: it is a component sample, not a screen).
+9. **Terms checkbox gating.** OnboardProfile draws the checkbox already checked and «متابعة» enabled; whether Continue is disabled until the box is checked is not drawn. FR-AUTH-11 records version and timestamp on acceptance.
+10. **Teacher's notification permission.** ConfirmGenderTeacher goes straight to ApplySubjects; NotificationPermission exists for the student only (its three reasons are student reasons). A teacher variant is not drawn.
+11. **Home: the current-enrollment card is not a link** (only the upcoming-enrollment row links to Enrollments; the hero's join button is disabled). Whether the card opens EnrollmentDetail is not drawn. The hero join button when the join window is open (`→ PreSession`) is drawn on the session boards (area A2/A3), not on Main.
+12. **Discovery filter groups per subject.** The riwaya group is titled «الرواية · داخل حفظ القرآن» and appears while the «حفظ القرآن» section is selected. Which groups appear under «الكل», «التجويد», «القراءات» (riwayas differ per subject, e.g. «القراءات العشر») is not drawn.
+13. **Discovery empty states.** Drawn: empty because of filters (DiscoveryEmpty). Not drawn: a search with zero results, and the case where no teacher of the student's gender exists at all (launch-cohort risk in §3.7.1). The empty-state copy for those is missing.
+14. **TeacherProfile.** Expanding the collapsed chain («… 33 جيلًا») is not an action on the board; the full chain is visible only on the certificate boards. The profile when the teacher has no active package or no free slot (action bar state) is not drawn. The absent-profile response for an incompatible gender (FR-DISC-3) has no screen (it must look like "not found").
+15. **BookingSheet with no free slot of the package's duration** is not drawn (FR-PROFILE-8 filtering can leave an empty list).
+16. **Checkout note for an ijazah-track package.** Only the recitation note «باقة تسميع: …» is drawn. The sibling sentence for مسار إجازة (make-up only, teacher requests the ijazah) exists only on TeacherProfile's package card (`student.teacherProfile.remedy.ijazahTrack`); the checkout wording for that track is not drawn.
+17. **CheckoutPrevious when the previous payment is processing.** The board title says: if the previous order is being processed, go to Processing («نؤكد دفعتك») instead. That variant (FR-BOOK-12 b) is not drawn; and the string «نؤكد دفعتك» appears only in the board title, not on any board — not keyed.
+18. **PaymentFailed after the retry window.** The countdown «أكمل الدفع خلال 6:30» is the time an order can still be created on the hold; what the screen becomes at zero (presumably CheckoutExpired) is not drawn as a transition.
+19. **Report confirmation.** ReportSheet's «إرسال البلاغ» returns to TeacherProfile; no toast or confirmation is drawn (Components has `.toast`).
+20. **Offline on screens other than Main.** Only MainOffline is drawn; the brief's "MainOffline pattern" (banner + cached content + last-updated + retry) is assumed for Discovery, TeacherProfile, Reviews. Checkout/Processing offline behaviour is not drawn (the countdown keeps running server-side).
+
+## Copy and i18n decisions to confirm
+
+21. **Subjects, riwayas, tariqs, cities, chain names are data, not copy.** «حفظ القرآن», «التجويد», «القراءات», «حفص عن عاصم», «ورش عن نافع», «قالون عن نافع», «القراءات العشر», «من طريق الشاطبية», «رسول الله ﷺ», «القاهرة», «الرياض» … are not in ar.json (BRIEF-PROD: subjects are `subjects.name_ar`; riwaya/tariq belong to the credential; cities are IANA display names). Two copy strings embed subject names verbatim and are keyed as drawn: `student.discovery.search.hintText` «مثل: التجويد، القراءات» and `student.discovery.filter.riwaya` «الرواية · داخل {subject}» (templated). Their English will need the subjects' English names from the same admin list.
+22. **Plural forms beyond what is drawn.** ICU plurals were written for: `common.sessions` (drawn: «8 جلسات», «12 جلسة»), `student.home.startsIn` (drawn only «خلال ساعتين» / «In 2 hours»), `student.discovery.filter.show` (drawn only «عرض معلمَين»), `student.discovery.filter.resultCount` (drawn only «معلمان»), `student.discovery.search.resultCount` (drawn only «نتيجة واحدة»), `student.discovery.card.years` (drawn «12 سنة», «8 سنوات», «20 سنة»), `student.discovery.filter.starsAndUp` (drawn «5 نجوم فأعلى», «2 نجوم فأعلى», «1 نجمة فأعلى» — note the board uses «2 نجوم», not the dual), `student.teacherProfile.ratingOf` / `reviewsCount` / `teacherReviews.summary` (drawn «86 تقييمًا»), `student.teacherProfile.isnad.generations` (drawn «35 جيلًا», «33 جيلًا»). The undrawn branches (zero/one/two/few) are grammatical completions, not designed copy — to be proof-read.
+23. **`student.home.startsIn` is relative time.** The badge «خلال ساعتين» was keyed as an hours plural because that is what is drawn; minutes («خلال 10 د» on the teacher proposal) or days are not drawn for the student home. A relative-time formatter may replace the key.
+24. **Two date lines for the hero.** Main: «اليوم الأربعاء · 6:00 م – 6:45 م · بتوقيت القاهرة»; MainOffline: «اليوم الأربعاء 4 نوفمبر · …» (adds the day of month). Both keyed (`sessionTimeToday`, `sessionTimeTodayDated`); one should be chosen.
+25. **Terms body.** The Terms screen shows a versioned legal text (Version 1.0, effective date). It is keyed under `onboarding.terms.*` for completeness, but a versioned legal document is normally served content, not app copy (FR-AUTH-11 records the accepted version). Decide where it lives; the English is a faithful translation, not reviewed by counsel.
+26. **Terms link inside a sentence.** `onboarding.profile.agreeTerms` = «أوافق على {terms}» with `termsLink` = «الشروط والأحكام» (a placeholder for the tappable part; not fragment assembly — the sentence is one key).
+27. **«الدخول» vs «دخول».** EmailSignIn's primary button is «دخول»; EmailSignUp's link is «الدخول»; SignInConflict's button is «الدخول بالبريد وكلمة المرور». Kept as drawn, three keys.
+28. **«رجوع» on SignInConflict** is a ghost button (closes the sheet), while elsewhere «رجوع» is the back arrow's a11y label; one key `common.action.back`.
+29. **«إعادة الإرسال بعد {time}»** is drawn as a muted line (Otp) and as a field hint (ResetPassword); keyed per screen. The resend action once the countdown ends has no drawn label.
+30. **Tab bar labels** come from `tools/mkboard.js` (`TABS.student` / `student-en`), not from a frag: الرئيسية · استكشف · اشتراكاتي · إجازاتي · حسابي / Home · Explore · Enrollments · Ijazahs · Account, a11y «التنقل الرئيسي» / «Main navigation». Keyed under `common.tabs.student.*`.
+31. **Status words used in this area**: `status.session.done` «تمت», `status.session.teacherNoShow` «غياب المعلم» (Main stats), `status.enrollment.cancelled` «ملغى» (CheckoutExpired, PaymentSlotUnavailable). «قيد التأكيد» (ProcessingDelayed outcome, BRIEF-PROD) is drawn on the enrollments boards (area A2), not here. No status word differs between the boards of this area.
+32. **English reference.** MainEn supplied the English for the home (greeting «Peace be upon you», «Teacher absent», «Ijazah track», «Recitation», «Joining opens at», tab labels). All other English values are new translations in the same register; «Explore» (tab) vs «استكشف» title are the same key family. English currency is written «EGP {amount}» (not drawn anywhere; MainEn shows no amount).
+33. **Inconsistent summaries across the payment screens.** Checkout/Processing show «الباقة» = subject · sessions · minutes; CheckoutExpired/CheckoutPrevious/PaymentFailed show «الباقة» = subject · sessions · teacher; PaymentSuccess/PaymentSlotUnavailable show «الاشتراك» = subject · sessions · teacher. The track badge is present on Checkout, CheckoutExpired, CheckoutPrevious, PaymentSuccess and absent on Processing, ProcessingDelayed, PaymentFailed, PaymentSlotUnavailable. Keyed as two templates (`student.checkout.packageValue`, `packageWithTeacher`); the badge inconsistency is the designer's to settle.
+34. **Rating a11y.** TeacherProfileReviews draws five star icons beside «4.9» with no a11y label on the stars; DiscoveryFilter's star options carry «N نجوم فأعلى». No label exists for the summary stars.
+35. **DiscoveryFilter «عرض معلمَين»** is a live count; the board links it to DiscoveryFiltered. The filter dropdown closes on apply or on the trigger (`aria-expanded`); tapping the scrim is not drawn.
+
+## Requirement mapping that is weak
+
+36. `MainDark` and `MainEn` realise FR-LOC-1/2 and the token set, not a functional requirement; `MainOffline` has no FR (offline is NFR territory, §5.3) — cited as such.
+37. `TimeZonePicker` doubles as the settings override (FR-AUTH-10 «manual override in settings»); the account-settings entry point is in area A2.
+38. The SRS in `D:/ej-design/docs/SRS.md` still has the pre-ADR text for FR-AUTH-1/2/6 (phone, dual roles); rows cite the FR id plus the ADR that rewrites it (ADR 0012 D1/D3/D4, ADR 0016 D1), and FR-AUTH-12/13 as ADR 0012 names them.
+
+## الطالب: الاشتراكات والإجازات والحساب والجلسة
+
+Sources: `D:/ej-design/docs/design/source/{inventory.json, alltext.md, frags/*.html, FACTS.md, BRIEF-PROD.md, BRIEF-COPY.md, tools/notes.json, tools/mkboard.js}`, `D:/ej-ijazah/docs/SRS.md` §3.1, §3.5, §3.7–3.14, §5, `D:/ej-ijazah/docs/adr/0013, 0015, 0018, 0019`. Nothing under `D:/ej-design` was modified.
+
+## Status words that differ between the boards and BRIEF-PROD.md
+
+1. **Both-No-Show.** BRIEF-PROD says «لم يحضر أحد (لا تُحتسب)»; SessionStates draws the badge «لم يحضر أحد» with the sub-line «لا تُحتسب · تُقترح جلسة تعويضية». The catalogue uses the drawn badge (`status.session.bothNoShow`) — FACTS (2026-10-17) lists the SessionStates words as the phone vocabulary.
+2. **Under-Threshold / Provider-Outage.** BRIEF-PROD says the user sees «قيد المراجعة»; SessionStates draws «قيد مراجعة الإدارة». Catalogue: the drawn word (`status.session.underReview`), one word for both backend statuses; the admin's words («أقل من حد الحضور» / «انقطاع الخدمة») are B's.
+3. **Badge tone of «ألغتها الإدارة».** Danger on SessionStates, neutral on EnrollmentTerminated. Same word; the implementer must pick one tone (SessionStates is the reference list).
+4. **Enrollment statuses not drawn in this area** but defined from BRIEF-PROD so the file is complete: `status.enrollment.pendingPayment` «بانتظار الدفع», `cancelled` «ملغى», `confirming` «قيد التأكيد» (A1's checkout boards draw them).
+
+## Copy that differs between boards (kept as separate keys)
+
+5. Dispute deadline: RaiseDispute «يمكنك فتح نزاع حتى {date} {time}.» (with a full stop) vs SessionEnded «يمكنك فتح نزاع حتى {date} {time}» (without). Two keys: `student.dispute.window`, `session.ended.disputeUntil`.
+6. Session-row labels: EnrollmentDetail «{n} · {date}» and the collapsed range «6 إلى 8 · من 18 نوفمبر إلى 2 ديسمبر»; SessionStates row 9 «الجلسة 9 · …»; EnrollmentTerminated «الجلستان 1 و2 · 5 و12 سبتمبر» and «الجلسات 5 إلى 8 · 3 إلى 24 أكتوبر». Five templates under `student.enrollmentDetail.session.{row, labelled, pair, range, rangeLabelled}`; the design does not say which grouping rule produces the pair vs the range form.
+7. Credentials draws two card variants for the same entity: the full card (thumbnail, riwaya line, completion and issue dates, number row with QR button) and a short card (award tile, «{teacher} · {date}», inline number). Which variant applies when is not stated (the full one carries the data of the newest ijazah; the short one may simply be the compact form). Both sets of keys exist.
+8. «تحميل PDF» appears on Credentials and CertificateView → `common.action.downloadPdf`. «تسجيل الخروج» appears on StudentAccount, SignOutSheet, AccountRestricted → also kept per screen (`account.signOut`, `account.signOutSheet.confirm`, `account.restricted.signOut`) because the sheet's button is the destructive one.
+
+## Gaps (the design is silent)
+
+9. **WriteReview rating labels.** Only «4 من 5 · جيدة جدًا» is drawn; the labels for 1, 2, 3 and 5 stars are not. `student.review.labels` has only `"4"`.
+10. **WriteReview for a terminated enrollment.** EnrollmentTerminated leads to WriteReview, but the summary line is drawn only in its completed form («… · اكتمل {date}»). The terminated form is not drawn.
+11. **WriteReview close target.** Drawn as → Main; it is opened from Main, EnrollmentsEnded and EnrollmentTerminated, so implement as «go back». The success state after «إرسال التقييم» (drawn → TeacherProfile) is not drawn either.
+12. **DeleteAccount warning.** Only the dual is drawn («لديك اشتراكان جاريان مع الشيخ أحمد المصري.»). The other ICU plural forms in `account.delete.warning` are my extrapolation of the same sentence, to be reviewed by the owner. The sentence names one teacher; wording for several teachers, and for a student with no active enrollment, is not drawn.
+13. **Provider-specific sentences.** SignOutSheet «لتدخل مرة أخرى استخدم حساب Google نفسه.» and DeleteAccountSheet «تأكيد بجوجل وحذف الحساب» are Google-only; the Apple and email-password variants (FR-AUTH-14 fresh sign-in) are not drawn. `account.providers` has only `google`, `account.genders` only `male` (the female value «أنثى» and «طالبة» are not drawn in this area; «طالبة» is in `account.memberSince` via an ICU select because BRIEF-PROD requires female forms).
+14. **StudentAccount** draws no profile editing (display name, photo, date of birth) and no notification-permission setting. FR-AUTH-10's manual time-zone override is TimeZonePicker (A1).
+15. **CertificateNameSheet placement.** It opens on Notifications, so by the brief's rule it is listed under `shared/notifications`; the data is the student's `users.certificate_name` (ADR 0019 D1) and the sheet could equally live in `student/credentials`. The implementer decides; the keys are under `student.certificateName`.
+16. **VerifyCertificate.** Only the valid state is drawn. The revoked state is described in the board title (badge «إجازة مسحوبة», a line with the revocation date and the public reason) — `web.verify.revoked` holds the badge word; the line's wording is not given. Not drawn: unknown or malformed code, the English page, the expanded full chain, loading. Where the page is served is an open decision.
+17. **CertificateView / CertificateRevoked.** No zoom, pager or multi-page view (FR-IJAZAH-11 allows a second page). «مشاركة» does not say whether it shares the PDF or the verification link. The revoked state has no buttons and no date (FACTS).
+18. **Credentials.** How a revoked ijazah appears in the student's own list is not drawn (FR-IJAZAH-8 hides it from the public credentials only).
+19. **CancelRequestSheet.** The reason list (ظرف صحي · سفر · ظرف عائلي · سبب آخر) is the design's; the SRS only says «with a reason» (FR-CANCEL-1). Whether the text area is mandatory (for «سبب آخر» or always) is not stated.
+20. **CancelSessionPicker.** Not drawn: a session that already carries the student's own pending request, and the case of no upcoming session. The disabled option's sub-line «طلب المعلم إلغاءها · ردّ عليه أولًا» implies one open request per session.
+21. **RaiseDispute.** The reason list is the design's (the SRS has none). Whether «التفاصيل» is required is not stated. The post-submission state (row badge «محل نزاع») is on SessionStates.
+22. **MakeupChoiceSheet.** «متابعة» is drawn leading to MakeupProposalSheet, which is the make-up path; what follows the refund choice (a confirmation, or the compensation-case notice) is not drawn. The sheet applies only to a teacher no-show on a recitation enrollment (FR-MAKEUP-2); for the ijazah track and for cancelled-by-agreement / both-absent the design implies MakeupProposalSheet opens directly, but that path is not drawn.
+23. **MakeupProposalSheet.** The native date and time pickers are not drawn; the counter-proposal's constraints (must match the package duration, teacher's free slots) are not stated.
+24. **SessionStates.** The sentence «نموذج: كل حالة يمكن أن تظهر …» and the heading «حالات الجلسة» are a designer's note on a reference board, not UI copy; they are not in the catalogue. The lead-time hint «يفتح الدخول قبلها بـ 15 دقيقة» holds the admin setting (§3.14) → template `student.sessions.hint.joinOpens`.
+25. **EnrollmentTerminated.** The card has no track badge (every other package mention has one). The review button after a review exists is not drawn (FR-REVIEW-2).
+26. **EnrollmentsEnded.** A completed enrollment whose ijazah is not (yet) issued is not drawn; the completed card links to Credentials, so no detail screen for a completed enrollment is drawn. The empty «منتهية» tab is not drawn.
+27. **Enrollments.** The card order is not stated (drawn: the older enrollment first).
+28. **VerifyIdentity.** Only the national-ID variant of the upload tile and its hint is drawn («رفع بطاقة الرقم القومي», «ملف PDF واحد فيه وجهَا البطاقة»); the passport variant, the chosen-file state, upload errors, the submitted state and the «pending review» return visit are not drawn.
+29. **DeleteAccountWeb / Code.** Not drawn: an email that belongs to no account (the page should probably not reveal it), resend code, wrong or expired code, rate limiting message. «رمزًا من 6 أرقام» keeps the literal 6 — a product constant, not sample data.
+30. **AccountRestricted.** The banned variant exists only in the board title (`account.restricted.bannedTitle`). The screen is shared with teachers, but «المحادثة مع المعلمين» is student wording; the teacher's wording is not drawn. The support address behind «تواصل مع الدعم» is a constant (mailto).
+31. **PreSession.** The state before the join lead time (FR-SESS-14: countdown, disabled button) and the preview with the camera on are not drawn. The teacher's copy shows the student as counterparty; same keys.
+32. **Session room.** Only «both cameras off» is drawn; video tiles with a camera on, own-muted state, screen share, a full disconnection beyond reconnect, the provider outage, and the other party leaving are not drawn. The tile aria «المعلم» is role-specific (the teacher's copy would say «الطالب» — not drawn). The timer is assumed to count from the scheduled start. Leaving while waiting goes to SessionEnded as drawn; the outcome is only computed after the scheduled end (FR-SESS-10).
+33. **SessionEnded.** No outcome word is shown (correct per FR-SESS-10). Not drawn: a session the student left early and may rejoin.
+34. **Chat.** Not drawn: empty conversation, loading older messages, a failed text send, offline, the read-only state after retention (FR-SESS-13), and the back target when opened from the session room (drawn → EnrollmentDetail).
+35. **Notifications.** Drawn kinds: payment confirmed (two bodies), teacher cancellation request, reminder, dispute resolved, teacher no-show, ijazah issued, certificate-name request, enrollment terminated. Not drawn although FR-NOTIF-1 lists them: payment failed or expired, cancellation request accepted / declined, make-up proposal / counter-proposal / booking, no-show recorded against the student, new review (teacher), credential outcomes (teacher), gender-flag outcome, ijazah revoked. The empty list is not drawn.
+36. **StudentTabs** and **SessionStates** are reference boards; they realise no requirement by themselves (StudentTabs: NFR-USE-2 as the five-tap path).
+
+## Catalogue conventions worth knowing
+
+37. Package naming uses one ICU key with nested plurals (`common.package.full` «{subject} · {sessions, plural, …} · {minutes, plural, …}»), never fragments. `common.unit.sessions` / `minutes` exist for stand-alone counts.
+38. Weekday names in «كل {weekday} {time}» are used in their bare form («أربعاء», «سبت») while dates use the article («الأربعاء 4 نوفمبر»); the date formatter must supply both forms.
+39. `account.memberSince` and `common.role.student` use an ICU `select` on gender for «طالب» / «طالبة».
+40. The English file follows the `student-en` tab definition and MainEn vocabulary («Quran memorization», «Recitation», «Ijazah track», «Teacher absent», «Done», «Cairo time»). «إجازة بالسند» → «Ijazah with isnad» and «المُجيز / المُجاز» → «Grantor / Grantee» are translation choices without an English board.
+41. Data never in the catalogue: names, short names («الشيخ أحمد»), dates, times, timer values, amounts, file names and sizes, certificate numbers, chain names, the sample reason and review texts, the sample chat messages, the support email (`{supportEmail}` placeholder).
+
+## المعلم
+
+## Routes the brief did not list
+
+1. **ApplicationMoreInfo** has its own nav header and a back arrow to ApplicationStatus, so it is a pushed screen, not a state. The brief lists only `application/subjects|documents|ijazahs|status`; I used `(teacher)/application/more-info`. If it should instead be a state of `status`, change one row.
+2. **ApplicationRejected** and **ApplicationApproved** are written as states of `(teacher)/application/status` (same header, no back arrow; Approved has no header at all). The approved state is shown once, then the tabs take over — where that handoff happens (first launch after approval vs a notification tap) is not drawn.
+3. **TeacherRestricted** uses the shared route `restricted` with Kind `screen (teacher variant)`, like the two variants the brief named; its copy sits under `teacher.restricted.*` because `teacher.*` is my area. The student's variant is presumably in area A.
+4. **Sheets reachable from several screens.** TeacherCancelRespond opens from TeacherHome, TeacherStudents, TeacherEnrollmentIjazah and TeacherNotifications; its close/decline/accept links go to TeacherHome only because the board was drawn there. TeacherReportSheet opens from the enrollment screens and from TeacherPreSession. TeacherMakeupRespond closes to TeacherNotifications but accepts/declines to TeacherEnrollment. Implementation: the sheet returns to whatever opened it.
+5. **Feature of the cancel/make-up sheets.** The brief says a sheet belongs to the feature of the screen it opens on, and separately names `sessions (states and cancel flows)`. I put TeacherCancelRequest, TeacherCancelSessionPicker, TeacherCancelRespond and TeacherMakeupRespond under `teacher/sessions` (they open on four different screens) and TeacherReportSheet under `teacher/students`. Easy to move.
+
+## Copy vs data — decisions
+
+6. **Subject names** («حفظ القرآن», «التجويد», «القراءات») are the admin list `subjects.name_ar` (BRIEF-PROD) and are not keyed anywhere, even where they appear as chips or picker rows (ApplySubjects, SubjectPicker, PackageSubjectPicker). The English boards translate «حفظ القرآن» as "Quran memorization" — that is a data translation (`subjects.name_en`), not an i18n key.
+7. **Riwaya and tariq** («حفص عن عاصم», «الشاطبية») are admin-transcribed credential data (ADR 0017 D1). Only the connective words are keyed: `teacher.credentials.riwayaLine` «برواية {riwaya} · من طريق {tariq}», `teacher.ijazahRequest.riwayaValue` «{riwaya} · من طريق {tariq}», `teacher.ijazahRequest.sent.subjectValue` «{subject} · برواية {riwaya}».
+8. **Reviewer notes, the student's cancellation message, the gateway's rejection reason** are data (quoted on the boards). Exception: the payout rejection reason «اسم صاحب الحساب البنكي لا يطابق الاسم في بطاقة هويتك.» is keyed as `teacher.payout.rejected.reason.nameMismatch` because the gateway most likely returns a code the app must word; if it returns free text, drop the key.
+9. **Support e-mail** `support@ijazah.app` (PayoutRejected text, TeacherRestricted mailto) is treated as a configuration value and passed as `{email}` into `teacher.payout.rejected.supportNote`.
+10. **Day names** are drawn as chips in SlotEditor and inside aria labels, so they are keyed under `common.day.*`; in dates («الأربعاء 4 نوفمبر») they come from the date formatter, not these keys.
+11. **Gender value** «ذكر» is keyed as `common.gender.male` (ProfileEditor, TeacherAccount). «أنثى» is not drawn on any teacher board, so no `female` key was added here; the onboarding area must define it.
+12. **Sign-in provider** «جوجل» is keyed as `common.provider.google`; Apple and e-mail are not drawn on teacher boards.
+13. **The confirmation word** «حذف» (DeleteAccountTeacher) is keyed (`teacher.deleteAccount.confirmWord`) so the English build compares against "delete".
+14. **The ijazah certificate number** and «----» preview number are data. The alt text of the certificate preview is keyed as a template (`teacher.ijazahRequest.previewAlt`).
+
+## ICU plural forms I had to supply
+
+The boards draw one form each; the other forms are mine (Arabic rules: one / two / few 3–10 / many 11–99 / other), as the brief's own example does:
+
+- sessions «{#} جلسات / {#} جلسة», generations «{#} جيلًا», reviews «{#} تقييمًا», subjects «مادتان», pages «صفحتان», minutes «{#} دقيقة», weekly slots in `teacher.packages.editor.slotsHint`, ongoing enrollments in `teacher.packages.deactivateSheet.contextLine`.
+- **PackageDeactivateSheet** writes the count in words («الاشتراكات الجارية الخمسة»). `teacher.packages.deactivateSheet.text` uses a numeric `{count}` instead; the zero-enrollment wording («لا اشتراكات جارية») is not drawn.
+- **TeacherHomeEmpty** «(أول جلسة من 8)» is drawn for a session 1; a later session would read «الجلسة n من N» — not drawn, so `teacher.today.empty.text` keeps the drawn form.
+
+## Where the design is silent (states and variants not drawn)
+
+15. Application forms: empty upload controls for the ID and for a subject already chosen are drawn once (ApplyIjazah «رفع إجازة التجويد»); validation and upload-failure states are not drawn. `إرسال الطلب` is drawn `disabled` until every subject has a PDF.
+16. ApplicationRejected: the banned variant is "the same screen without «التقديم مرة أخرى»" (board title); no copy difference drawn. No status badge exists for "rejected"/"banned" — the heading carries it, so `status.application.*` has no `rejected`/`banned` key.
+17. PayoutSetup is drawn as the _replacement pending_ state («تغيير حساب الاستلام», «أُضيف {date}», «اشتراكاتك الحالية مستمرة»). The first-time pending state after approval is not drawn; `status.payout.*` has no `rejected` badge (PayoutRejected uses a hero, not a badge).
+18. TeacherAccount › حساب الاستلام links to PayoutVerified; the pending/rejected badge wording on the account row is not drawn (only «موثّق»). Likewise «صورة التوقيع» shows only «محفوظة»; the "missing" badge is not drawn.
+19. SignatureUpload is drawn only with a signature present; the empty pad (first upload, the state IjazahRequestBlocked leads to) is not drawn.
+20. PackageEditor and SlotEditor are drawn in edit mode; the titles for a new package / new slot are not drawn (I kept «تعديل الباقة» / «تعديل الموعد» as the only keys). Whether a saved package's track or duration may change, and the re-enable action for a disabled slot (the counterpart of «تعطيل الموعد»; Packages has «تفعيل»), are not drawn.
+21. SlotDisableSheet text assumes exactly one booked enrollment on the slot («حتى ينتهي اشتراك {student} في {date}»); free slots and slots with several enrollments have no drawn wording.
+22. TeacherEnrollment stat tiles vary: تمت / غياب المعلم / القادمة on the recitation enrollment, تمت / ألغتها الإدارة / القادمة on the ijazah-track one, تمت / غياب المعلم / القادمة (zeros) on the completed one. The rule for choosing the middle tile is not stated; keys exist for all four labels.
+23. TeacherEnrollment* never shows a _pending_ or _rejected_ ijazah request, although ADR 0017 says "the enrollment shows the request's status"; IjazahRequestSent is the only place «قيد المراجعة» appears for a request. Also not drawn: a completed recitation-track enrollment, a terminated (انتهى لغياب المعلم) or cancelled enrollment from the teacher's side, and ended-list rows for those.
+24. IjazahRequest is drawn from a completed enrollment; TeacherEnrollmentIjazah offers «طلب إجازة» on an active one (FR-IJAZAH-1 "at any point"). The behind-dialog card of IjazahRequestBlocked lacks the «مسار إجازة» badge that IjazahRequest shows — a drawing inconsistency, not a rule.
+25. TeacherCancelRespond's deadline sentence is for a same-day session («قبل اليوم {time}»); the wording for a session on another day is not drawn. TeacherCancelRequest: whether the message is mandatory only for «سبب آخر» is not drawn.
+26. TeacherNotifications draws six kinds; FR-NOTIF-1 also lists application status changes, payout verified, no-show recorded, make-up proposals (ADR 0018), ijazah request rejected, suspension — none drawn.
+27. TeacherReviews draws one moderated review; a review with its text, and the empty state, are not drawn. FACTS says the list must match AdminReviews (several reviewers) — the board shows one.
+28. TeacherRestricted: revocation (FR-VERIFY-8) and ban reuse the screen "with a different title and without the upcoming review" (board title); those titles are not drawn, so only the suspension copy is keyed.
+29. DeleteAccountTeacherSheet draws the Google re-authentication label only; Apple / e-mail-password variants (ADR 0015 D1 step 2) are not drawn.
+30. No board in the area draws a toast after an action (cancel request sent, report sent, package saved, slot saved) although the Components board defines `.toast`.
+
+## Status words — differences and placement
+
+31. «قيد المراجعة» is drawn with three meanings and three badge tones: application (neutral), credential (warning), ijazah request (warning). One key per status namespace (`status.application.pending`, `status.credential.pending`, `status.ijazah.pending`), identical values, so the merge collapses nothing wrong.
+32. «مطلوب ملف آخر» is used both for the application (ApplicationStatus/MoreInfo) and for a credential (CredentialNeedsDocument) — keyed in both namespaces.
+33. The brief lists `status.application / payout / package / ijazah` but the credential vocabulary in FACTS (قيد المراجعة · موثّقة · مطلوب ملف آخر · مرفوضة) needs its own namespace; I used `status.credential.*`. «مرفوضة» is not drawn on any board of mine; it is included because FACTS fixes the word.
+34. «موثّق» (payout, masculine) vs «موثّقة» (credential, feminine) are different keys on purpose. «منشورة» / «غير منشورة» are package publication states distinct from فعّالة/موقوفة.
+35. Session status «لم يحضر أحد»: BRIEF-PROD writes «لم يحضر أحد (لا تُحتسب)», FACTS (2026-10-17) writes «لم يحضر أحد» — not drawn in my area, so not keyed; flagging the discrepancy for area A/C.
+36. The track badges «تسميع» / «مسار إجازة» are not statuses; they sit under `common.track.*`. The agenda badges «طلب إلغاء من الطالب» (TeacherHome/TeacherStudents) and the proposal's «طلب إلغاء» are request markers, keyed under `teacher.today.*` / `teacher.students.*` (duplicated, identical).
+
+## Overlap with shared screens (student files not visible to me)
+
+37. `notifications.teacher.*` contains the whole screen: `title`, `markAllRead`, `today`, `earlier`, `a11y.unread` are certainly the same for the student and should collapse to `notifications.*` on merge; the six item kinds are teacher-specific (new booking, cancel request from a student, review received) or shared with different placeholders (session reminder, dispute resolved, ijazah approved).
+38. `session.pre.teacher.*` contains the whole screen: everything except the counterpart line and the back target is the same for the student (`title`, `a11y.report`, `a11y.cameraPreview`, `cameraOff`, `micWorking`, `duration`, `mic`, `micRequired`, `micOk`, `camera`, `cameraOptional`, `join`).
+39. `teacher.report.*` reasons are the same list the student's ReportSheet most likely uses (minus a block option, ADR 0015 D5); `teacher.cancel.request.reasons.*` is the same reason vocabulary the student picks from (TeacherCancelRespond shows «ظرف صحي» from it). Candidates for `common.*` after merge.
+40. `common.action.*`, `common.a11y.*`, `common.format.*`, `common.day.*`, `common.language.*` are defined here as the brief allows; duplicates across areas should be identical.
+
+## Requirement ids
+
+41. ADR 0017 names FR-PROFILE-11, FR-IJAZAH-15 and FR-ADMIN-19 and ADR 0018 names FR-MAKEUP-1..6 without writing their text; the SRS in `D:/ej-design` does not yet contain them. I cite them with the ADR decision that defines the behaviour (e.g. `FR-PROFILE-11 (ADR 0017 D2)`, `ADR 0018 D3`).
+42. Boards I could not pin to a requirement: TeacherTabs (navigation), the two Proposal boards (undecided). Everything else maps to at least one id.
+43. Teacher no-show wording: TeacherEnrollment's banner «غياب آخر يُنهي هذا الاشتراك…» realises FR-NOSHOW-3/4 with the default threshold 2; the banner must be driven by the admin setting, not a constant.
+44. `TeacherEnrollment` settlement line («دُفع … · رسوم البوابة … · يصلك …») realises FR-PAYG-1 (gateway fee, 100 % net to the teacher) and is explicitly not a balance (§13: no wallet/earnings).
+
+## Proposal boards
+
+45. ProposalTeacherHome / ProposalTeacherStudents are alternatives to TeacherHome / TeacherStudents awaiting the owner's decision (canvas note `s-proposal`). Their strings («الجلسة التالية», «يحتاج ردّك», «بقية اليوم», «تمت اليوم», «لاحقًا», «{n} اشتراكات جارية», «طلب إلغاء جلسته») are not in the catalogue by instruction; if adopted they go under `teacher.today.*` / `teacher.students.*`.
+
+## الإدارة
+
+## Routes and structure
+
+1. **`/credentials` is not in the brief's admin route list.** The sidebar has «مراجعة الإجازات» as its own page (AdminCredentials, AdminCredentialCorrect) with its own tabs and search. I used `/credentials` (feature `pages/credentials`); AdminCredentialCorrect is modelled as `state of /credentials: tab «موثّقة», correction open`. Confirm or rename.
+2. **AdminDocumentViewer is an overlay reached from five places** (applications, users, teacher page, gender, credentials "open full"). Its back arrow and side panel are drawn for the `/users` case (a student's requested ID). When opened from an application or a credential the "بعد القرار / قبول الوثيقة / طلب وثيقة أخرى" block does not apply and the side panel content is not drawn. The implementer needs a context parameter (user / application / credential / gender flag).
+3. **AdminChatLog is routed `/disputes/:id/chat`** but AdminReports also opens it («فتح محادثة الاشتراك», readable while the report is open, FR-SESS-13). The side panel «سبب الاطلاع» is drawn for the dispute case only; a report-context variant (title, reference line) is not drawn. Either a second route (`/reports/:id/chat`) or a context parameter is needed.
+4. **AdminConfirmDialog is one drawn variant of a generic contract** (title = action + target, consequences list, mandatory reason, cancel, confirm disabled until the reason is written, audit footer). The design names it as the target of ~20 binding actions (approve application, approve/reject credential, accept document, reactivate, bar/lift bar, cancel session, issue dispute decision, issue compensation decision, confirm session outcome, gender correct/ban/dismiss, remove review comment, suspend/ban a dispute party, disable admin, save settings). Only "reject ijazah request" has copy. Every other title, consequence list and confirm label is undrawn and must be written.
+5. **AdminDecisionDialog** is drawn for «رفض» only. The segmented «طلب معلومات» and «حظر» variants (their reason lists, note label, confirm button label, footer) are not drawn.
+6. **AdminSuspendDialog** (teacher) is drawn with «إيقاف الحساب» selected; the effects and the confirm label for «سحب الاعتماد» and «حظر الحساب» are not drawn. Same for the student dialog's «حظر الحساب · نهائي» (only the ban note sentence is drawn).
+7. The student detail panel on `/users` is drawn for one student with one active enrollment; a teacher row opens `/users/teachers/:id`. No "nothing selected" state is drawn for the panel on any page except AdminLoadError.
+
+## Status vocabulary — where boards differ
+
+8. **Verification-required state has two words.** AdminUsersFilter option: «يلزم التحقق». Badge on AdminDocumentViewer and AdminGender detail, and the RequireId dialog: «بانتظار إثبات الهوية». Both are in `admin.status.account.{verificationRequired, verificationPending}`; pick one or keep filter ≠ badge deliberately.
+9. **Report "dismissed"**: badge «مرفوض» (masculine, AdminReports footer and AdminAudit after-badge) vs tab «مرفوضة» (feminine, AdminReports tabs). Kept as two keys (`report.dismissed`, `report.dismissedTab`).
+10. **AdminQueueEmpty tabs** are «مفتوحة 0 / تم البتّ» while AdminReports tabs are «مفتوحة / تم اتخاذ إجراء / مرفوضة». One of the two boards is stale; the empty board's «عرض البلاغات المحسومة» also implies a single "decided" tab.
+11. **AdminCompensation tabs** «مفتوحة 3 / بانتظار التنفيذ 3 / الكل» but the table shows 4 statuses (مفتوحة, بانتظار مراجعة الإيقاف, بانتظار تنفيذ الإدارة المالية, أبلغت البوابة بالاسترداد). Which statuses map to «بانتظار التنفيذ» is not stated. Also the Home card says 3 open while the table's open count is 3 of 8 shown.
+12. **Teacher-pending credential** row on `/users` shows «معلمة · قيد المراجعة» (role + application status in one badge). Modelled as `admin.users.roleWithStatus` = "{role} · {status}".
+13. **Application "approved"** appears as «معتمد» (badge on AdminTeacher) while the queue uses «تم البتّ» as a tab. «مرفوض» for an application is only visible in the audit action «رفض طلب انضمام»; no application-level rejected badge is drawn.
+14. Session-outcome words agree with BRIEF-PROD and the phone except «لم يحضر أحد» (admin) vs «لم يحضر أحد (لا تُحتسب)» (BRIEF-PROD); the hint «لا تُحتسب · بلا عقوبة» carries that on the admin side.
+15. `admin.status.payment.refunded` «مُسترد» is never drawn as a badge, only quoted in the Payments footer; `admin.status.package.paused` «موقوفة» and `enrollment.pendingPayment` «بانتظار الدفع» are from BRIEF-PROD, not drawn on an admin board.
+
+## Copy that is partly data (templates to review)
+
+16. **Audit target labels** («طلب انضمام {name}», «تقييم {student} لـ{teacher}», «إجازة {subject} · {teacher}», «إجازة {student} · {code}», «بلاغ محادثة») are rendered from the audit entry's target. I put templates in `admin.audit.targets.*`. The Arabic preposition fuses with «الشيخ» («للشيخ أحمد المصري») — an ICU template cannot produce that; either store the rendered label on the entry (server) or add a formatter for «لـ» + name. Same fusion in `admin.credentials.a11y.documentPage` («…للشيخ ياسر حمدي…») and `admin.dialogs.mfaReset.title` («لعمرو خالد»).
+17. **Home queue hints** («أقدمها منذ 3 أيام · واحد بانتظار المتقدّم», «واحدة لمادة مضافة · أقدمها منذ يومين», «وصل أمس», static compensation hint) are one drawn variant per card. I modelled them as plural templates (`admin.home.queue.*`), but the rule for which hint each queue shows (and what it says at 0, or at "arrived today") is not in the design.
+18. **Trust-signal sentence** on AdminTeacher («طلبات الإلغاء التي قدّمها في كل اشتراكاته: قبل الطالب واحدًا (12 أكتوبر) ورفض الآخر (5 أكتوبر). لا بلاغات عليه.») is generated from counts; drawn only for 1 accepted + 1 declined + 0 reports. Template `admin.teacher.trust.cancelSummary` covers only that shape. Also «2 طلبا إلغاء منه» is the dual form; the plural template covers it.
+19. **Payments event** «تأكّد الاشتراك وأُنشئت جلساته الثماني» spells the session count as an ordinal adjective; kept verbatim. For other counts the sentence needs a plural rule (not drawn).
+20. **AdminAdmins support card** («أبلغ عمرو الدعم يوم 15 أكتوبر 8:40 ص أنه فقد هاتفه ورموز الاسترداد. تحقّق من هويته بمكالمة قبل إعادة الضبط.») reads like free text typed by whoever logged the support request. I put a template under `admin.admins.detail.resetRequestText`; it is probably data.
+21. **AdminCompensation** detail («فُتحت تلقائيًا … حين اختار الطالب الاسترداد», «اختار الطالب استرداد جلسة غاب عنها المعلم», the «بعد القرار» steps) is drawn for the refund-choice reason only. The five other opening reasons need their own detail sentences and decision choices (make-up vs refund amount, suspension review outcome).
+22. **AdminDocumentViewer «سبب الطلب»** is the originating report text («بلاغ من {name}: {text}») — data; only the prefix is copy.
+23. **Feminine forms for the acting admin**: «اعتمدته سارة عادل», «اعتمدتها سارة عادل», «مشرفة», «سارة عادل مشرفة · من بلاغ محادثة». The design only draws a female admin. `admin.common.role.admin/adminFemale` exist; the verbs («اعتمده/اعتمدته») have no masculine key because none is drawn — needs a gendered template or a gender-neutral rewrite before launch.
+24. **Subject names** («حفظ القرآن», «التجويد», «القراءات») are data (`subjects.name_ar`), but AdminHomeEn/AdminApplicationsEn render them in English («Quran memorization», «Tajweed»). The subjects table needs `name_en`; not in this catalogue.
+25. «جوجل» is the only sign-in method drawn (`admin.common.signInMethod.google`); Apple and email words are not drawn. «قاصر: لا» is drawn; «نعم» added as the obvious pair.
+
+## Rules visible on boards that the implementer must honour
+
+26. Approve on `/applications` is disabled until the verification call record (date, outcome, notes) is saved (FR-VERIFY-5) — drawn disabled.
+27. Every confirm button in a dialog is disabled until the mandatory reason is written (AdminConfirmDialog, AdminSuspendDialog, AdminRevokeDialog, AdminMfaResetDialog drawn disabled; AdminDecisionDialog and AdminSuspendStudentDialog drawn enabled because the text is filled).
+28. Settings: the save button shows the number of changed fields («حفظ التغييرات · 1») and is disabled while a field is invalid or the reason is empty; changed fields get the «مُعدَّل» badge; changes apply prospectively only (§3.14).
+29. Session-review choice «انقطاع الخدمة» is disabled unless the session is a provider-outage one.
+30. Enrollments: only «قادمة» sessions are selectable for admin cancellation (done rows disabled); the button label carries the session number.
+31. MFA setup: the finish button needs the verified code and the ticked "saved the codes" checkbox — implied by the copy, not drawn disabled.
+32. Admin sign-in lockout (5 attempts / 15 minutes, settings) must never show a remaining-attempts count; the same error sentence covers wrong credentials and a locked account (ADR 0019 D3).
+33. The sidebar count badge appears only for queues with open items (AdminQueueEmpty removes the Reports count).
+34. AdminUsersFilter's apply button says «عرض 142 مستخدمًا» while the table says «9 من 148» — sample-data inconsistency, not a rule.
+35. The language toggle on sign-in/MFA boards is a `segmented` button pair; in the sidebar it links to the same page in the other language (`state of <route>: en`). Only Home and Applications have English boards; every other page's English is my translation in `en.json`, in the register of the two English boards.
+
+## Boards I could not pin fully to a requirement id
+
+36. AdminCredentials / AdminCredentialCorrect: the SRS text still says FR-ISNAD-1 (teacher records the chain) and FR-ISNAD-6 (teacher edits re-enter review); ADR 0017 rewrites §3.9.1 so the admin transcribes once and the teacher never edits, and adds FR-ADMIN-19 for the new queues. I cite the ADR plus FR-ISNAD-4; the rewritten ids should be re-checked once the SRS is amended.
+37. AdminIjazahRequests: FR-IJAZAH-15 and FR-ADMIN-19 are named by ADR 0017's "Consequences" without their text; cited as «FR-IJAZAH-15 (ADR 0017)».
+38. AdminMfaRecovery / AdminMfaResetDialog / AdminAddAdminDialog: only ADR 0019 D2/D3 — no FR id exists yet.

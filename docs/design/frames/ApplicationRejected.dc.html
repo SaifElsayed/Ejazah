@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>طلب المعلم — مرفوض (الحظر: الشاشة نفسها دون «التقديم مرة أخرى»)</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="app-header">
+    <h1 class="app-header__title">طلب الانضمام</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات"><svg class="icon icon--lg" data-icon="bell" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg></a>
+      <a href="SignOutSheet.dc.html" class="icon-btn icon-btn--surface" aria-label="تسجيل الخروج"><svg class="icon icon--lg" data-icon="log-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></a>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <div class="state-hero">
+      <span class="icon-tile icon-tile--2xl icon-tile--danger"><svg class="icon icon--xl" data-icon="circle-x" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></span>
+      <h2 class="text-title-2">لم يُعتمد طلبك هذه المرة</h2>
+    </div>
+
+    <section class="section">
+      <h3 class="group-label">ملاحظة المشرف</h3>
+      <blockquote class="card card--surface text-body">«الإجازة المرفوعة في التجويد لا تحمل اسم المجيز ولا تاريخها، ولم نتمكن من التحقق منها في المكالمة. يمكنك التقديم مجددًا بإجازة مكتملة البيانات.»</blockquote>
+      <span class="text-caption tone-muted">من فريق المراجعة · الثلاثاء 20 أكتوبر</span>
+    </section>
+
+    <a href="ApplySubjects.dc.html" class="btn btn--primary btn--block push">التقديم مرة أخرى</a>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

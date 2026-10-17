@@ -1,0 +1,163 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <div class="behind-sheet" aria-hidden="true" inert>
+    {{ADMINNAV:AdminApplications:ar}}
+
+    <main class="page">
+      <header class="page-header">
+        <div class="stack">
+          <h1 class="page-header__title">طلبات المعلمين</h1>
+          <p class="page-header__subtitle">3 طلبات تنتظر القرار. لا يظهر المعلم للطلاب قبل الاعتماد وتوثيق حساب الاستلام.</p>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="toolbar">
+          <div class="category-tabs" role="tablist" aria-label="الحالة">
+            <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">قيد المراجعة<span class="category-tabs__count">2</span></button>
+            <button type="button" class="category-tabs__item" role="tab" aria-selected="false">مطلوب من المتقدّم<span class="category-tabs__count">1</span></button>
+            <button type="button" class="category-tabs__item" role="tab" aria-selected="false">تم البتّ</button>
+          </div>
+          <div class="search-row">
+            <label class="input-group input-group--surface toolbar__search">
+              {{icon:search:md}}
+              <span class="visually-hidden">بحث</span>
+              <input class="input-group__control" placeholder="الاسم أو البريد">
+            </label>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="split__list">
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr><th>المتقدّم</th><th>المواد</th><th>مكالمة التحقق</th><th>أُرسل</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="table__row--selected">
+                    <td><a href="AdminUsers.dc.html" class="row gap-3"><span class="avatar avatar--sm">ي</span><span class="stack"><span class="text-medium">الشيخ ياسر حمدي</span><span class="text-caption tone-muted ltr">yasser.hamdy@example.com</span></span></a></td>
+                    <td>حفظ القرآن، التجويد</td>
+                    <td><span class="badge badge--neutral">لم تُسجَّل</span></td>
+                    <td>14 أكتوبر</td>
+                  </tr>
+                  <tr>
+                    <td><a href="AdminUsers.dc.html" class="row gap-3"><span class="avatar avatar--sm">م</span><span class="stack"><span class="text-medium">الشيخة منى عبد الرحمن</span><span class="text-caption tone-muted ltr">mona.ar@example.com</span></span></a></td>
+                    <td>التجويد</td>
+                    <td><span class="badge badge--success">سُجّلت 13 أكتوبر</span></td>
+                    <td>12 أكتوبر</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="table-footer">
+                <span>2 من 2 · الأقدم أولًا</span>
+                <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+              </div>
+            </div>
+          </div>
+
+          <aside class="split__detail" aria-label="تفاصيل الطلب">
+            <section class="panel">
+              <header class="panel__header">
+                <span class="avatar avatar--lg">ي</span>
+                <span class="stack grow">
+                  <strong class="text-title-3">الشيخ ياسر حمدي</strong>
+                  <span class="text-caption tone-muted">ذكر · القاهرة · تقدّم 14 أكتوبر 2026</span>
+                </span>
+                <span class="badge badge--neutral">قيد المراجعة</span>
+              </header>
+
+              <div class="panel__body">
+                <div class="row row--top gap-6">
+                  <section class="section">
+                    <h2 class="group-label">الهوية · عرض فقط</h2>
+                    <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:user:lg}}</span><span>بطاقة الرقم القومي</span></a>
+                  </section>
+                  <section class="section">
+                    <h2 class="group-label">الإجازات · ملف لكل مادة</h2>
+                    <div class="row row--top gap-3">
+                      <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:file-text:lg}}</span><span>حفظ القرآن (PDF)</span><span class="badge badge--warning">قيد المراجعة</span></a>
+                      <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:file-text:lg}}</span><span>التجويد (PDF)</span><span class="badge badge--warning">قيد المراجعة</span></a>
+                    </div>
+                    <a href="AdminCredentials.dc.html" class="link text-callout self-start">مراجعة الإجازة{{icon:chevron-left:sm}}</a>
+                  </section>
+                </div>
+
+                <section class="section">
+                  <h2 class="group-label">مكالمة التحقق · خارج التطبيق</h2>
+                  <div class="grid-2 gap-3">
+                    <div class="field"><label class="field__label" for="cd">تاريخ المكالمة</label><input id="cd" class="input input--md" placeholder="يوم / شهر / سنة"></div>
+                    <div class="field"><span class="field__label" id="co">النتيجة</span>
+                      <div class="segmented" role="group" aria-labelledby="co"><button type="button" class="segmented__option" aria-pressed="false">مناسب</button><button type="button" class="segmented__option" aria-pressed="false">غير مناسب</button></div>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="field__label" for="cn">ملاحظات المكالمة</label>
+                    <textarea id="cn" class="input" rows="2" placeholder="ما الذي تحقّقت منه في المكالمة"></textarea>
+                  </div>
+                  <button type="button" class="btn btn--secondary btn--md self-start">حفظ سجل المكالمة</button>
+                </section>
+
+                <section class="section">
+                  <h2 class="group-label">المواد والمؤهل</h2>
+                  <div class="row wrap gap-2"><span class="badge badge--neutral">حفظ القرآن</span><span class="badge badge--neutral">التجويد</span></div>
+                  <p class="text-callout">إجازة في حفظ القرآن بالسند المتصل منذ 2014. أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا.</p>
+                </section>
+              </div>
+
+              <footer class="panel__footer">
+                <button type="button" class="btn btn--primary btn--md" disabled>اعتماد</button>
+                <a href="AdminDecisionDialog.dc.html" class="btn btn--secondary btn--md">طلب معلومات</a>
+                <a href="AdminDecisionDialog.dc.html" class="btn btn--danger btn--md">رفض</a>
+                <a href="AdminDecisionDialog.dc.html" class="btn btn--danger btn--md">{{icon:ban:sm}}حظر</a>
+                <p class="panel__note">يُتاح الاعتماد بعد حفظ سجل مكالمة التحقق: التاريخ والنتيجة والملاحظات. يصل القرار إلى المتقدّم مع ملاحظتك، ويُسجَّل في سجل التدقيق.</p>
+              </footer>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dd-title">
+    <div class="row row--top gap-3">
+      <span class="avatar">ي</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="dd-title">قرار على طلب الشيخ ياسر حمدي</h2>
+        <p class="text-caption tone-muted">حفظ القرآن، التجويد · تقدّم 14 أكتوبر 2026</p>
+      </div>
+    </div>
+
+    <div class="segmented" role="group" aria-label="نوع القرار">
+      <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">رفض</button>
+      <button type="button" class="segmented__option" aria-pressed="false">طلب معلومات</button>
+      <button type="button" class="segmented__option" aria-pressed="false">{{icon:ban:sm}}حظر</button>
+    </div>
+
+    <fieldset class="stack gap-2">
+      <legend class="field__label pad-bottom">سبب الرفض</legend>
+      <label class="choice choice--danger choice--selected"><input type="radio" name="dd-r" class="visually-hidden" checked><span class="choice__mark"></span><span class="grow">الوثائق لا تطابق الاسم المسجّل</span></label>
+      <label class="choice"><input type="radio" name="dd-r" class="visually-hidden"><span class="choice__mark"></span><span class="grow">المؤهل لا يغطي كل المواد المطلوبة</span></label>
+      <label class="choice"><input type="radio" name="dd-r" class="visually-hidden"><span class="choice__mark"></span><span class="grow">نتيجة مكالمة التحقق: غير مناسب</span></label>
+      <label class="choice"><input type="radio" name="dd-r" class="visually-hidden"><span class="choice__mark"></span><span class="grow">سبب آخر</span></label>
+    </fieldset>
+
+    <div class="field">
+      <label class="field__label" for="dd-note">ملاحظة للمتقدّم (إلزامية)</label>
+      <textarea id="dd-note" class="input input--focused" rows="3">الاسم في الإجازتين المرفوعتين لا يطابق الاسم في بطاقة الرقم القومي. ارفع وثائق تحمل اسمك كما في البطاقة ثم قدّم من جديد.</textarea>
+      <span class="field__hint">يراها المتقدّم كما كتبتها في التطبيق وفي الإشعار.</span>
+    </div>
+
+    <div class="banner banner--info">
+      {{icon:rotate-ccw:sm}}
+      <p class="grow">يمكنه التقديم مرة أخرى. الرفض لا يمنعه من طلب جديد؛ للمنع اختر «حظر».</p>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminApplications.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md">رفض الطلب</button>
+    </div>
+    <p class="panel__note">يُسجَّل القرار وسببه وملاحظتك في سجل التدقيق باسمك.</p>
+  </section>
+</div>

@@ -1,0 +1,1476 @@
+{
+  "admin": {
+    "admins": {
+      "a11y": {
+        "back": "Back to settings",
+        "detail": "Admin details"
+      },
+      "add": "Add admin",
+      "columns": {
+        "added": "Added",
+        "admin": "Admin",
+        "lastSignIn": "Last sign-in",
+        "mfa": "Two-step verification"
+      },
+      "detail": {
+        "addedBy": "Added {date} · {admin}",
+        "auditEntries": "Actions in the log",
+        "auditEntriesCount": "{count, plural, one {# entry} other {# entries}}",
+        "disable": "Disable account",
+        "footer": "Every action here asks for a reason and is recorded under your name in the audit log.",
+        "lastSignIn": "Last sign-in {date} · {time}",
+        "mfaLine": "Two-step verification enabled since {date} · {count, plural, one {# recovery code} other {# recovery codes}} left",
+        "resetMfa": "Reset two-step verification",
+        "resetRequestText": "{name} told support on {date} {time} that they lost their phone and recovery codes. Verify their identity by a call before resetting.",
+        "resetRequestTitle": "Verification reset requested",
+        "selfNote": "An admin cannot reset their own verification or disable their own account; another admin does that with a reason."
+      },
+      "lede": "Operations-team accounts. One role in this version, so every admin has the same permissions (ADR 0019). Two-step verification is mandatory, and every action here is recorded in the audit log.",
+      "pagerSummary": "{shown} of {total} · by last sign-in",
+      "search": {
+        "label": "Search",
+        "placeholder": "Name or email"
+      },
+      "tabs": {
+        "active": "Active",
+        "disabled": "Disabled"
+      },
+      "title": "Admins",
+      "you": "you"
+    },
+    "applications": {
+      "columns": {
+        "applicant": "Applicant",
+        "call": "Call",
+        "subjects": "Subjects",
+        "submitted": "Submitted"
+      },
+      "detail": {
+        "a11y": "Application details",
+        "approve": "Approve",
+        "ban": "Ban",
+        "call": "Verification call · outside the app",
+        "callDate": "Call date",
+        "callDatePlaceholder": "dd / mm / yyyy",
+        "callNotes": "Call notes",
+        "callNotesPlaceholder": "What you checked on the call",
+        "credentialFile": "{subject} (PDF)",
+        "credentials": "Ijazahs · one PDF per subject",
+        "footer": "Approve unlocks once the verification call record is saved: date, outcome and notes. The applicant receives the decision with your note, and it is recorded in the audit log.",
+        "identity": "Identity · view only",
+        "meta": "{gender} · {city} · applied {date}",
+        "outcome": "Outcome",
+        "reject": "Reject",
+        "requestInfo": "Request info",
+        "reviewCredential": "Review ijazah",
+        "saveCall": "Save call record",
+        "subjects": "Subjects and qualification",
+        "suitable": "Suitable",
+        "unsuitable": "Unsuitable"
+      },
+      "lede": "{count, plural, one {# application awaits a decision} other {# applications await a decision}}. A teacher is not shown to students until approved and their payout account is verified.",
+      "pagerSummary": "{shown} of {total} · oldest first",
+      "search": {
+        "label": "Search",
+        "placeholder": "Name or email"
+      },
+      "tabs": {
+        "decided": "Decided",
+        "inReview": "In review",
+        "waitingOnApplicant": "Waiting on applicant"
+      },
+      "title": "Teacher applications"
+    },
+    "audit": {
+      "a11y": {
+        "detail": "Entry details",
+        "removeDateFilter": "Remove date filter"
+      },
+      "actions": {
+        "approveTeacherCredential": "Approve teacher ijazah",
+        "dismissReport": "Dismiss report",
+        "issueIjazahOnRequest": "Issue ijazah on teacher's request",
+        "recordVerificationCall": "Record verification call",
+        "rejectApplication": "Reject application",
+        "removeReviewComment": "Remove review comment",
+        "requestMoreInfo": "Request more information"
+      },
+      "clearAll": "Clear all",
+      "columns": {
+        "action": "Action",
+        "admin": "Admin",
+        "reason": "Reason",
+        "target": "Target",
+        "time": "Time"
+      },
+      "dateFilterChip": "Date: last {days} days",
+      "detail": {
+        "after": "After",
+        "before": "Before",
+        "beforeAfter": "Before → after",
+        "context": "Context",
+        "contextChat": "Chat",
+        "contextSource": "From the reports queue",
+        "entryNo": "Entry number",
+        "entryTitle": "Entry",
+        "footer": "Entries are append-only: no entry is edited or deleted, and no admin can do so.",
+        "meta": "{date} · {time} · {admin}",
+        "reason": "Reason",
+        "target": "Target",
+        "title": "{action} · {target}"
+      },
+      "lede": "Every binding decision an admin takes, with its reason and what was before and after. The log is append-only.",
+      "pagerSummary": "{shown} of {total} · last {days} days · {city} time",
+      "search": {
+        "label": "Search",
+        "placeholder": "Target or reason"
+      },
+      "targets": {
+        "application": "Application of {name}",
+        "chatReport": "Chat report",
+        "credential": "{subject} ijazah · {teacher}",
+        "ijazah": "Ijazah of {student} · {code}",
+        "review": "Review by {student} of {teacher}"
+      },
+      "title": "Audit log"
+    },
+    "chatLog": {
+      "a11y": {
+        "back": "Back to the dispute",
+        "messages": "Messages",
+        "reason": "Reason for viewing",
+        "viewFile": "View file"
+      },
+      "backToDispute": "Back to the dispute",
+      "banner": "This chat is shown because the enrollment has an open dispute, and is not shown otherwise. Your opening it is recorded in the audit log with your name and the time. Nothing can be written in it or deleted from it.",
+      "disputeLine": "Session {n} · {outcome}",
+      "disputeRaised": "Raised by the teacher {date} · {time}",
+      "disputeRef": "Dispute over session {n} of {total}",
+      "fileMeta": "{sender} · {date} · {size}",
+      "filesTitle": "Files sent",
+      "readOnly": "View only",
+      "reasonTitle": "Reason for viewing",
+      "retention": "The chat is kept while the dispute is open. After it is settled it is deleted when the enrollment's usual retention period ends.",
+      "stats": {
+        "files": "Files",
+        "firstMessage": "First message",
+        "lastMessage": "Last message",
+        "messages": "Messages"
+      },
+      "subtitle": "{student} with {teacher} · {subject} · {sessions} · {minutes}",
+      "title": "Enrollment chat",
+      "viewLogged": "Your viewing was recorded: {admin} · {date} · {time}."
+    },
+    "common": {
+      "a11y": {
+        "activeFilters": "Active filters",
+        "digit1": "First digit",
+        "digit2": "Second digit",
+        "digit3": "Third digit",
+        "digit4": "Fourth digit",
+        "digit5": "Fifth digit",
+        "digit6": "Sixth digit",
+        "filters": "Filters",
+        "filtersActive": "Filters · {count} active",
+        "nextPage": "Next page",
+        "pages": "Pages",
+        "previousPage": "Previous page",
+        "status": "Status"
+      },
+      "action": {
+        "all": "All",
+        "approve": "Approve",
+        "backToSignIn": "Back to sign-in",
+        "ban": "Ban",
+        "banAccount": "Ban account",
+        "barFromIjazahs": "Bar from receiving ijazahs",
+        "cancel": "Cancel",
+        "clear": "Clear",
+        "clearAll": "Clear all",
+        "continue": "Continue",
+        "copy": "Copy",
+        "dismissReport": "Dismiss report",
+        "issueDecision": "Issue decision",
+        "openInPayments": "Open in payments",
+        "reactivate": "Reactivate",
+        "reject": "Reject",
+        "requestAnotherDocument": "Request another document",
+        "requestInfo": "Request info",
+        "requireId": "Require ID",
+        "retry": "Try again",
+        "search": "Search",
+        "signIn": "Sign in",
+        "suspendAccount": "Suspend account",
+        "viewOnly": "View only"
+      },
+      "amount": "EGP {amount}",
+      "currency": "EGP",
+      "dateTime": "{date} · {time}",
+      "documentType": {
+        "nationalId": "National ID card",
+        "passport": "Passport"
+      },
+      "gender": {
+        "female": "Female",
+        "male": "Male"
+      },
+      "generations": "{count, plural, one {# generation} other {# generations}}",
+      "kb": "{size} KB",
+      "language": {
+        "ar": "العربية",
+        "en": "English"
+      },
+      "minor": "Minor",
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "no": "No",
+      "none": "None",
+      "package": "{subject} · {sessions} · {minutes}",
+      "packageShort": "{subject} · {sessions}",
+      "pager": {
+        "ellipsis": "…",
+        "pageOf": "Page {page} of {total}"
+      },
+      "pdf": "PDF",
+      "progress": "{done} of {total}",
+      "reasonAuditPlaceholder": "Recorded with the decision in the audit log",
+      "reasonLoggedWithAction": "The reason is recorded with the action in the audit log.",
+      "reasonRequiredPlaceholder": "Write a clear reason",
+      "role": {
+        "admin": "Admin",
+        "adminFemale": "Admin",
+        "student": "Student",
+        "studentFemale": "Student",
+        "teacher": "Teacher",
+        "teacherFemale": "Teacher"
+      },
+      "sessions": "{count, plural, one {# session} other {# sessions}}",
+      "signInMethod": {
+        "google": "Google"
+      },
+      "yes": "Yes"
+    },
+    "compensation": {
+      "columns": {
+        "openReason": "Reason opened",
+        "paid": "Paid (EGP)",
+        "parties": "Student · Teacher",
+        "status": "Status",
+        "undelivered": "Undelivered"
+      },
+      "detail": {
+        "a11y": "Compensation case details",
+        "afterTitle": "After the decision",
+        "choiceWindow": "Choice window",
+        "choiceWindowValue": "Chose on day {day} of {days} days",
+        "choices": {
+          "close": "Close the case",
+          "closeHint": "Without a refund",
+          "refund": "Order a refund of {amount}",
+          "refundHint": "The decision is recorded, and finance executes it through the payment gateway"
+        },
+        "decisionTitle": "Decision",
+        "enrollment": "Enrollment",
+        "footer": "The decision reaches the student and the teacher and is recorded with your notes in the audit log. No button here moves money.",
+        "issue": "Issue decision",
+        "notesLabel": "Decision notes (required)",
+        "openInPayments": "Open in payments",
+        "openReason": "Reason opened",
+        "openReasonRefundChoice": "The student chose a refund for a session the teacher missed",
+        "openedAuto": "Opened automatically {date} · {time} · when the student chose a refund",
+        "orderNo": "Order number",
+        "proposedAmount": "Proposed amount",
+        "proposedAmountHint": "Price of one session: {price} ÷ {sessions}",
+        "session": "Session",
+        "sessionValue": "{n} · {day} {date}",
+        "steps": {
+          "decideNow": "Admin decision now",
+          "opened": "Case opened {date} · the student chose a refund",
+          "pendingFinance": "Awaiting finance execution through the payment gateway",
+          "reported": "Gateway reported the refund",
+          "reportedHint": "Appears in payments and the case closes"
+        },
+        "title": "{student} · {teacher}",
+        "trackNote": "On the recitation track the student chooses, after a teacher absence, between a make-up session and a refund of the session. On the ijazah track the session is made up with a session only."
+      },
+      "lede": "{count, plural, one {# open case} other {# open cases}}. A case opens automatically: when an enrollment ends with paid sessions left in it, when a student chooses a refund for a session the teacher missed, or when a student is suspended (the case awaits the suspension review). The decision is the admin's alone. No button here moves money.",
+      "pagerSummary": "{shown} of {total} · open first",
+      "perSession": "Per session {amount}",
+      "reasons": {
+        "adminCancelledSession": "Session cancelled by admin",
+        "genderCorrection": "Gender correction",
+        "paymentUnconfirmed": "Payment could not be confirmed",
+        "studentRefundChoice": "Session refund at the student's choice (teacher absent)",
+        "studentSuspension": "Student suspended (awaiting review)",
+        "teacherNoShowTwice": "Teacher absent twice"
+      },
+      "search": {
+        "label": "Search",
+        "placeholder": "Student or teacher name"
+      },
+      "tabs": {
+        "all": "All",
+        "open": "Open",
+        "pendingExecution": "Awaiting execution"
+      },
+      "title": "Compensation"
+    },
+    "credentials": {
+      "a11y": {
+        "correctChain": "Correct the chain",
+        "deleteGeneration": "Delete generation {n}",
+        "documentPage": "{subject} ijazah of {teacher}, page {page}",
+        "documentPages": "Ijazah pages",
+        "openFull": "Open the document at full size",
+        "queueAndDocument": "Queue and document",
+        "removeName": "Remove: {name}",
+        "transcribe": "Transcribe the ijazah",
+        "verifiedAndDocument": "Verified ijazahs and document"
+      },
+      "columns": {
+        "source": "Source",
+        "submitted": "Submitted",
+        "teacherSubject": "Teacher and subject",
+        "verifiedOn": "Verified"
+      },
+      "correctLede": "Correcting a verified chain. The teacher does not edit their chain; correction is for the administration only.",
+      "lede": "{count, plural, one {# ijazah awaits review} other {# ijazahs await review}}: one PDF per subject, from applications or from subjects teachers add.",
+      "panel": {
+        "addGeneration": "Generation",
+        "addName": "Name",
+        "applicationLink": "Application",
+        "approve": "Approve",
+        "cancel": "Cancel",
+        "chain": "Chain by generation · from its origin to the holder",
+        "chainEllipsis": "… generations {from} to {to} …",
+        "correctEffect1": "The corrected chain appears on the teacher's page, and on every ijazah issued after saving.",
+        "correctEffect2": "Ijazahs issued before the correction stay as issued.",
+        "correctFooter": "Saving unlocks once the reason is written. The correction, its reason and the chain before and after are recorded under your name in the audit log.",
+        "correctReason": "Reason for the correction (required)",
+        "footer": "Approving makes the ijazah \"Verified\" with the riwaya, tariq and chain as you transcribed them. \"Request another document\" sets it to \"Another file needed\" until the teacher uploads a new file. Your decision is recorded under your name in the audit log.",
+        "generation": "{n}",
+        "generationNameLabel": "Name in generation {n}",
+        "generationWas": "Was in generation {n}: {name}",
+        "holderName": "Holder's name as in the file",
+        "holderNameHint": "Copied verbatim from the ijazah file, and printed on every ijazah the teacher grants.",
+        "holderRow": "{teacher} · holder",
+        "metaAtApplication": "At application · uploaded {date} · ",
+        "metaVerified": "Verified {date} · {admin} · ",
+        "reject": "Reject",
+        "requestAnother": "Request another document",
+        "requestLabel": "What the other document needs · reaches the teacher (required to request another document)",
+        "requestPlaceholder": "For example: the second page is unreadable",
+        "riwaya": "Riwaya",
+        "saveCorrection": "Save correction",
+        "tariq": "Tariq (optional)",
+        "teacherPageLink": "Teacher page",
+        "title": "{subject} ijazah · {teacher}"
+      },
+      "search": {
+        "label": "Search",
+        "placeholder": "Teacher name"
+      },
+      "source": {
+        "addedSubject": "Added subject",
+        "atApplication": "At application"
+      },
+      "tabs": {
+        "anotherFileNeeded": "Another file needed",
+        "inReview": "In review",
+        "rejected": "Rejected",
+        "verified": "Verified"
+      },
+      "title": "Credential review"
+    },
+    "dialogs": {
+      "addAdmin": {
+        "auditHint": "The addition is recorded under your name in the audit log.",
+        "cancel": "Cancel",
+        "inviteHint": "They receive a link to set a password, then set up two-step verification at first sign-in before seeing any page.",
+        "lede": "One role: has the same permissions you have.",
+        "mfaHint": "Their sign-in does not complete before two-step verification is set up.",
+        "name": "Name",
+        "send": "Send invitation",
+        "title": "Add admin",
+        "workEmail": "Work email"
+      },
+      "confirm": {
+        "rejectIjazahRequest": {
+          "cancel": "Cancel",
+          "confirm": "Reject request",
+          "effects": {
+            "enrollmentUnchanged": "The student's enrollment does not change.",
+            "notIssued": "The ijazah is not issued, and the request closes as \"Rejected\".",
+            "notified": "A notification reaches {teacher} with the reason as you write it."
+          },
+          "effectsTitle": "What happens on confirmation",
+          "footer": "Confirmation unlocks once the reason is written. The action and its reason are recorded under your name in the audit log.",
+          "reasonHint": "Reaches the teacher as you wrote it.",
+          "reasonLabel": "Reason for rejection (required)",
+          "reasonPlaceholder": "Write what the teacher needs to correct",
+          "subtitle": "{student} · {subject} · riwaya {riwaya} · from {teacher}",
+          "title": "Reject the ijazah request"
+        }
+      },
+      "decision": {
+        "a11yKind": "Decision type",
+        "cancel": "Cancel",
+        "confirmReject": "Reject application",
+        "footer": "The decision, its reason and your note are recorded in the audit log under your name.",
+        "kinds": {
+          "ban": "Ban",
+          "reject": "Reject",
+          "requestInfo": "Request info"
+        },
+        "noteHint": "The applicant sees it as you wrote it, in the app and in the notification.",
+        "noteLabel": "Note to the applicant (required)",
+        "reapplyHint": "They can apply again. Rejection does not prevent a new application; to prevent one choose \"Ban\".",
+        "reasonLabel": "Reason for rejection",
+        "reasons": {
+          "callUnsuitable": "Verification call outcome: unsuitable",
+          "nameMismatch": "The documents do not match the registered name",
+          "other": "Other reason",
+          "qualificationGap": "The qualification does not cover all the requested subjects"
+        },
+        "subtitle": "{subjects} · applied {date}",
+        "title": "Decision on the application of {name}"
+      },
+      "documentViewer": {
+        "a11y": {
+          "about": "About the document",
+          "back": "Back to users",
+          "page": "{documentType}, front side",
+          "pages": "Document pages"
+        },
+        "accept": "Accept the document and reactivate booking",
+        "acceptEffect": "Accepting makes the account active again, and booking is available to them anew.",
+        "afterDecision": "After the decision",
+        "documentType": "Document type",
+        "fileCaption": "{file} · page {page} of {total}",
+        "footer": "Documents are view only: not downloaded and not edited. Your decision is recorded under your name in the audit log.",
+        "noteLabel": "Note to the account holder (required to request another document)",
+        "notePlaceholder": "For example: the photo of the back side is unclear",
+        "openReport": "Open the report",
+        "pages": "Pages",
+        "pagesValue": "PDF file · {count, plural, one {# page} other {# pages}}",
+        "personMeta": "{role} · {gender} · {city}",
+        "requestAnother": "Request another document",
+        "requestAnotherEffect": "Requesting another document keeps booking paused, and your request reaches them with your note.",
+        "requestReason": "Reason for the request",
+        "requestReasonReport": "Report by {name}: {text}",
+        "requested": "Requested",
+        "requestedValue": "{date} · {admin}",
+        "subtitle": "Requested by the administration from {name} · uploaded {date} · view only",
+        "uploaded": "Uploaded",
+        "uploadedValue": "{date} · {time}"
+      },
+      "mfaReset": {
+        "cancel": "Cancel",
+        "confirm": "Reset",
+        "effects": {
+          "audited": "The action and its reason are recorded under your name in the audit log.",
+          "nextSignIn": "At their next sign-in they set up again: a new code in the authenticator app and new recovery codes.",
+          "revoked": "The linked authenticator app and the current recovery codes are cancelled immediately.",
+          "sessionsEnded": "Their open sessions are ended, and they sign in with their password then complete the setup."
+        },
+        "reasonLabel": "Reason for the reset (required)",
+        "reasonPlaceholder": "For example: lost their phone, and I verified their identity by a call",
+        "subtitle": "{email} · admin since {date}",
+        "title": "Reset two-step verification for {name}",
+        "verifyHint": "Verify the admin's identity outside the panel before confirming."
+      },
+      "requireId": {
+        "cancel": "Cancel",
+        "confirm": "Require proof of identity",
+        "effectBookings": "New bookings stop until the document is reviewed. Sessions already booked are not cancelled.",
+        "effectStatusAfter": ".",
+        "effectStatusBefore": "The account status becomes ",
+        "effectStatusEmphasis": "Awaiting proof of identity",
+        "effectSuspicion": "An action on suspicion only, not a routine step.",
+        "effectUpload": "They are asked to upload a national ID card or passport, and the document arrives for review here.",
+        "reasonHint": "The reason is recorded with the request in the audit log.",
+        "reasonLabel": "Reason for the request (required)",
+        "reasonPlaceholder": "Write a clear reason",
+        "subtitle": "{name} · {role} · {status}",
+        "title": "Require proof of identity"
+      },
+      "revoke": {
+        "cancel": "Cancel",
+        "chainEllipsis": "… {generations}",
+        "chainTitle": "Chain · {generations} · via {tariq}",
+        "confirm": "Revoke ijazah",
+        "effects": {
+          "hidden": "Disappears from the student's publicly shown ijazahs.",
+          "kept": "Not deleted: its number and chain stay as issued, with the reason for revocation and the admin's name.",
+          "noBar": "Does not bar the student from receiving later ijazahs; barring is a separate action.",
+          "verifyAfter": ".",
+          "verifyBefore": "Shows on the public verification page as ",
+          "verifyEmphasis": "not valid"
+        },
+        "reasonHint": "The reason is recorded with the action in the audit log.",
+        "reasonLabel": "Reason for revocation (required)",
+        "reasonPlaceholder": "Write a clear reason",
+        "subtitle": "{subject} · riwaya {riwaya} · {student} · grantor {teacher} · {date}",
+        "title": "Revoke ijazah {code}"
+      },
+      "suspendStudent": {
+        "afterReviewTitle": "What is owed after the review",
+        "banNote": "With \"Ban account\" all their upcoming sessions ({count}) are cancelled and no compensation is owed, unless the administration decides otherwise in the case.",
+        "cancel": "Cancel",
+        "clearedLabel": "Cleared",
+        "clearedText": "A make-up session for every cancelled session, or a refund of its price. Their enrollment is \"Recitation\", so they choose between the two; on the \"Ijazah track\" compensation is by sessions only.",
+        "confirm": "Suspend account",
+        "effects": {
+          "cancelled": "Every session that falls during the suspension is cancelled, the first on {day} {date}, and the teacher sees them as \"Cancelled by admin\". Their slot becomes available for booking again.",
+          "caseAfter": " and awaits the outcome of the review.",
+          "caseBefore": "A case opens in ",
+          "caseLink": "Compensation",
+          "noJoin": "Cannot join any session, nor book a new enrollment.",
+          "notified": "A notification reaches {teacher}."
+        },
+        "effectsTitle": "What happens on confirmation",
+        "faultLabel": "Violation confirmed",
+        "faultText": "Nothing is owed, as with a student absence.",
+        "kinds": {
+          "ban": "Ban account · permanent",
+          "suspend": "Suspend account · temporary until review"
+        },
+        "reasonHint": "The reason is recorded with the action in the audit log.",
+        "reasonLabel": "Reason for suspension (required)",
+        "reasonPlaceholder": "Write a clear reason",
+        "subtitle": "Student since {date} · one active enrollment · {subject} · {track} · {count, plural, one {# upcoming session} other {# upcoming sessions}}",
+        "title": "Suspend {name}"
+      },
+      "suspendTeacher": {
+        "cancel": "Cancel",
+        "confirm": "Suspend and cancel {count, plural, one {# session} other {# sessions}}",
+        "effects": {
+          "cancelled": "All their upcoming sessions are cancelled, and students see them as \"Cancelled by admin\".",
+          "casesAfter": " queue, and the admin decides it.",
+          "casesBefore": "A compensation case opens for each enrollment in the ",
+          "casesLink": "Compensation",
+          "hidden": "Disappears from search now, and no new booking is accepted for them.",
+          "noJoin": "Cannot join any session, even one in progress now.",
+          "notified": "A notification reaches every affected student."
+        },
+        "effectsTitle": "What happens on confirmation",
+        "kinds": {
+          "ban": "Ban account",
+          "revokeApproval": "Revoke approval",
+          "suspend": "Suspend account"
+        },
+        "reasonHint": "The reason is recorded with the action in the audit log.",
+        "reasonLabel": "Reason for suspension (required)",
+        "reasonPlaceholder": "Write a clear reason",
+        "stats": {
+          "casesOpened": "{count, plural, one {# compensation case opened} other {# compensation cases opened}}",
+          "sessionsCancelled": "{count, plural, one {# upcoming session cancelled} other {# upcoming sessions cancelled}}",
+          "studentsNotified": "{count, plural, one {# student notified} other {# students notified}}"
+        },
+        "subtitle": "Approved teacher since {date} · {count, plural, one {# active enrollment} other {# active enrollments}}",
+        "title": "Suspend {name}"
+      }
+    },
+    "disputes": {
+      "columns": {
+        "autoOutcome": "Automatic outcome",
+        "session": "Session",
+        "status": "Status",
+        "student": "Student",
+        "teacher": "Teacher"
+      },
+      "detail": {
+        "a11y": "Dispute details",
+        "a11yEvents": "Join and leave events",
+        "a11yTelemetry": "Simultaneous connection {percent}% against a {threshold}% threshold",
+        "attendance": "Recorded attendance",
+        "banParty": "Ban party",
+        "chatHint": "The chat is shown to the admin only while the session has an open dispute.",
+        "chatLink": "Enrollment chat log",
+        "chatMeta": "{count, plural, one {# message} other {# messages}} between {from} and {to} on the day of the session",
+        "chatTitle": "Chat",
+        "choices": {
+          "dismiss": "Dismiss the dispute",
+          "dismissHint": "No basis · closed as is",
+          "orderCompensation": "Order compensation for the student",
+          "orderCompensationHint": "A decision that is recorded and executed outside the platform",
+          "reclassifyConsumed": "Reclassify: consumed",
+          "reclassifyConsumedHint": "Becomes \"Done\" and is deducted from the package",
+          "reclassifyNotConsumed": "Reclassify: not consumed",
+          "reclassifyNotConsumedHint": "Not deducted, no absence against anyone",
+          "recordNoShow": "Record an absence",
+          "recordNoShowHint": "Against the student or the teacher",
+          "uphold": "Uphold the outcome",
+          "upholdHint": "Stays \"{outcome}\" after review"
+        },
+        "compensationNote": "Ordering compensation is recorded as a decision only; no button here moves money. Platform administration executes it outside the platform, and it appears in payments when the gateway reports it.",
+        "decisionTitle": "Decision",
+        "disputeTitle": "Dispute",
+        "events": {
+          "bothLeft": "Both parties left",
+          "joinWindowEndedWithoutTeacher": "Join window ended without the teacher",
+          "studentJoined": "Student joined",
+          "teacherDisconnectedAndReturned": "Teacher disconnected and returned",
+          "teacherJoined": "Teacher joined"
+        },
+        "footer": "Unlocks after choosing the decision and writing the notes. The decision reaches the student and the teacher, and is recorded in the audit log.",
+        "issue": "Issue decision",
+        "noShowCount": "Teacher absences in the enrollment",
+        "noShowCountValue": "{count} of {threshold} before termination",
+        "notesLabel": "Decision notes (required)",
+        "partyStudent": "Student · {name}",
+        "partyTeacher": "Teacher · {name}",
+        "partyTitle": "Action on one of the parties",
+        "raisedBy": "Raised by",
+        "raisedByValue": "{name} · {role}",
+        "sentAt": "Sent",
+        "session": "Session",
+        "sessionStatus": "Session status",
+        "sessionStatusValue": "Disputed · outcome frozen",
+        "sessionValue": "{day} {date} · {from}–{to}",
+        "subtitle": "{student} with {teacher} · {subject} · {sessions} · {minutes}",
+        "suspendParty": "Suspend party",
+        "telemetry": "Simultaneous connection {minutes} of {total} minutes ({percent}%) · threshold {threshold}%. Recorded as \"Teacher absent\" because their first join came after the join window ended ({joinWindow} minutes).",
+        "title": "Session {n} of {total} · {outcome}",
+        "window": "Dispute window",
+        "windowValue": "Raised {hours} hours after the end of the session"
+      },
+      "lede": "{count, plural, one {# open dispute} other {# open disputes}} over session outcomes. The dispute window is {hours} hours from the end of the session, and every decision is recorded in the audit log.",
+      "pagerSummary": "{shown} of {total} · open first",
+      "raisedByStudent": "Raised by the student · {date}",
+      "raisedByTeacher": "Raised by the teacher · {date}",
+      "search": {
+        "label": "Search",
+        "placeholder": "Student or teacher name"
+      },
+      "tabs": {
+        "all": "All",
+        "decided": "Decided",
+        "open": "Open"
+      },
+      "title": "Disputes"
+    },
+    "enrollments": {
+      "a11y": {
+        "detail": "Enrollment details",
+        "removeTeacherFilter": "Remove teacher filter",
+        "sessionToCancel": "Session to cancel"
+      },
+      "clearAll": "Clear all",
+      "columns": {
+        "package": "Package",
+        "purchase": "Purchase",
+        "sessions": "Sessions",
+        "status": "Status",
+        "student": "Student",
+        "track": "Track"
+      },
+      "completedOn": "completed {date}",
+      "detail": {
+        "amount": "Amount",
+        "cancelSession": "Cancel session {n}",
+        "confirmed": "Confirmed",
+        "footer": "The admin cancels the session without either party's consent and without penalty to either, so its status becomes \"Cancelled by admin\" and the cancellation opens a compensation case for the enrollment. The reason is required, reaches both parties, and is recorded in the audit log.",
+        "openInPayments": "Open in payments",
+        "orderNo": "Order number",
+        "packageTitle": "Package as purchased",
+        "paidAt": "Paid",
+        "paymentTitle": "Payment · view only",
+        "price": "Price",
+        "sessionRow": "{n} · {date}",
+        "sessions": "Sessions",
+        "sessionsRange": "{from} → {to}",
+        "sessionsTitle": "Sessions · {done} of {total}",
+        "sessionsValue": "{sessions} · {minutes}",
+        "slot": "Slot",
+        "slotValue": "{day} {time} · {city}",
+        "status": "Status",
+        "subtitle": "{subject} · {track} · {sessions} · {minutes} with {teacher}",
+        "track": "Track"
+      },
+      "error": {
+        "detailHint": "Details appear once the list loads and you choose an enrollment.",
+        "nothingLoaded": "Nothing loaded yet",
+        "retry": "Try again",
+        "text": "The response did not arrive in the usual time. Nothing in the data has changed; try again, and if the error repeats, tell the operations team.",
+        "title": "Could not load enrollments"
+      },
+      "lede": "View only. The only action here is cancelling a session with a written reason recorded in the audit log.",
+      "pagerSummary": "{shown} of {total} · enrollments of {teacher} · active first",
+      "search": {
+        "label": "Search",
+        "placeholder": "Student or teacher name"
+      },
+      "teacherFilterChip": "Teacher: {name}",
+      "title": "Enrollments and sessions"
+    },
+    "gender": {
+      "columns": {
+        "date": "Date",
+        "raisedBy": "Raised by",
+        "status": "Status",
+        "user": "Reported user"
+      },
+      "correctedTo": "{role} · corrected to {gender}",
+      "detail": {
+        "a11y": "Dispute details",
+        "affectedEnrollments": "Active enrollments affected by the correction · {count}",
+        "ban": "Ban (falsification)",
+        "banLabel": "Ban",
+        "banText": "The account is banned, all its enrollments are cancelled, and a compensation case opens for each affected enrollment",
+        "consequencesTitle": "What each decision entails",
+        "correct": "Correct (honest error)",
+        "correctLabel": "Correct",
+        "correctText": "The gender is corrected, the remaining sessions in non-compliant enrollments are cancelled, and a compensation case opens for each enrollment. No ban",
+        "declaredGender": "Declared gender",
+        "declaredGenderValue": "{gender} · confirmed at sign-up",
+        "dismiss": "Dismiss the dispute",
+        "dismissLabel": "Dismiss the dispute",
+        "dismissReasonLabel": "Reason for dismissing the dispute (required)",
+        "dismissText": "Closes the dispute without any change",
+        "enrollmentLine": "{subject} · {sessions} · {teacher}",
+        "enrollmentMeta": "{status} · {done} of {total} · {day} {time}",
+        "footer": "No decision is issued without a reason. Correction cancels the non-compliant enrollments and opens compensation cases for them; a ban cancels all enrollments and opens compensation cases. The reason is recorded in the audit log.",
+        "idDocument": "Identity document · view only",
+        "idDocumentMeta": "Requested {requestedDate} · uploaded {uploadedDate} {uploadedTime}",
+        "incompatible": "Non-compliant after correction",
+        "raisedBy": "Raised by",
+        "raisedByValue": "{name} · {role}",
+        "reasonPlaceholder": "Recorded with the decision in the audit log",
+        "reportTitle": "Dispute",
+        "subtitle": "{role} · {status} · dispute from {date} · {time}"
+      },
+      "lede": "{count, plural, one {# open dispute} other {# open disputes}}. The declared gender stays authoritative in search and sessions until a decision is issued, and changes only from here.",
+      "pagerSummary": "{shown} of {total} · open first",
+      "raisedByAdminFromChatReport": "{role} · from a chat report",
+      "search": {
+        "label": "Search",
+        "placeholder": "Name or email"
+      },
+      "tabs": {
+        "all": "All",
+        "decided": "Decided",
+        "open": "Open"
+      },
+      "title": "Gender disputes",
+      "userCell": "{role} · {gender}"
+    },
+    "home": {
+      "columns": {
+        "action": "Action",
+        "admin": "Admin",
+        "target": "Target",
+        "time": "Time"
+      },
+      "fullAuditLog": "Full audit log",
+      "latestActions": "Latest actions",
+      "openQueues": "Open queues",
+      "queue": {
+        "addedSubjectThenOldest": "{added, plural, one {One for an added subject} other {# for added subjects}} · {days, plural, one {oldest # day ago} other {oldest # days ago}}",
+        "arrivedYesterday": "Arrived yesterday",
+        "compensationHint": "Opened automatically when an enrollment ends before all its sessions",
+        "oldest": "{days, plural, one {Oldest # day ago} other {Oldest # days ago}}",
+        "oldestWithWaiting": "{days, plural, one {Oldest # day ago} other {Oldest # days ago}} · {waiting, plural, one {one waiting on the applicant} other {# waiting on the applicant}}"
+      },
+      "subtitle": "{date} · {city} time",
+      "title": "Overview"
+    },
+    "ijazahRequests": {
+      "columns": {
+        "completion": "Completion",
+        "status": "Status",
+        "subjectRiwaya": "Subject and riwaya",
+        "submitted": "Submitted",
+        "teacherStudent": "Teacher and student"
+      },
+      "detail": {
+        "a11y": "Request details",
+        "a11yCertificate": "The certificate as it will be issued",
+        "approve": "Approve and issue",
+        "certificateName": "Student's name on the ijazah",
+        "certificateNameMeta": "Entered by the student {date}",
+        "chainNote": "The chain ({generations}) comes from the teacher's verified ijazah, and is not edited here.",
+        "checks": {
+          "credentialVerified": "The teacher's {subject} ijazah is verified",
+          "notBarred": "The student is not barred from receiving ijazahs",
+          "signatureUploaded": "The teacher's signature is uploaded",
+          "trackOk": "The enrollment is on the \"Ijazah track\""
+        },
+        "completionDate": "Completion date",
+        "enrollment": "Enrollment",
+        "enrollmentValue": "{subject} · {sessions} · completed {date}",
+        "footer": "On approval the ijazah is issued with its number, and a notification reaches the teacher and the student. Your decision is recorded under your name in the audit log.",
+        "language": "Certificate language",
+        "reject": "Reject",
+        "student": "Student",
+        "subject": "Subject",
+        "subjectValue": "{subject} · {riwaya} · via {tariq}",
+        "subtitle": "From {teacher} · {date} · {time}",
+        "teacher": "Teacher",
+        "title": "Ijazah request · {student}",
+        "track": "Enrollment track"
+      },
+      "issuedOn": "Issued · {date}",
+      "lede": "{count, plural, one {# request awaits a decision} other {# requests await a decision}}. The teacher requests the ijazah for their student, and it is issued on your approval.",
+      "pagerSummary": "{shown} of {total} · newest first",
+      "pair": "{teacher} to {student}",
+      "rejectedOn": "Rejected · {date}",
+      "search": {
+        "label": "Search",
+        "placeholder": "Teacher or student name"
+      },
+      "tabs": {
+        "all": "All",
+        "decided": "Decided",
+        "inReview": "In review"
+      },
+      "title": "Ijazah requests"
+    },
+    "ijazahs": {
+      "barred": {
+        "a11y": "Barred from receiving ijazahs",
+        "lift": "Lift the bar",
+        "meta": "Since {date} · {admin} · reason: {reason}",
+        "note": "No ijazah request is sent for a barred student. Lifting the bar also asks for a reason, and the bar and its lifting stay in the audit log.",
+        "title": "Barred from receiving ijazahs · {count}"
+      },
+      "columns": {
+        "certificateNo": "Certificate number",
+        "parties": "Student and teacher",
+        "request": "Request",
+        "status": "Status"
+      },
+      "detail": {
+        "a11y": "Ijazah details",
+        "bar": "Bar from receiving ijazahs",
+        "chainEllipsis": "… {generations}",
+        "chainTitle": "Chain · {generations} · via {tariq}",
+        "footer": "Revocation does not bar the student from later ijazahs; barring is a separate action. Every action here asks for a reason and is recorded in the audit log.",
+        "grantor": "Grantor",
+        "issued": "Issued {date} · approved by {admin}",
+        "request": "Request",
+        "requestValue": "Sent by the teacher {date}",
+        "revoke": "Revoke ijazah",
+        "student": "Student",
+        "subtitle": "{subject} · riwaya {riwaya}",
+        "verifyPage": "Public verification page",
+        "verifyPageHint": "What someone scanning the certificate code sees"
+      },
+      "issuedCell": "{subject} · issued {date}",
+      "lede": "Every ijazah was issued at its teacher's request. An ijazah is revoked, never deleted, and its number keeps showing its status on the verification page.",
+      "pagerSummary": "{shown} of {total} · newest first",
+      "partiesCell": "{student} from {teacher}",
+      "requestCell": "Requested {date}",
+      "requestsLink": "Ijazah requests · {count}",
+      "revokedOn": "Revoked · {date}",
+      "search": {
+        "label": "Search",
+        "placeholder": "Certificate number or student name"
+      },
+      "title": "Ijazahs"
+    },
+    "mfa": {
+      "backToSignIn": "Back to sign-in",
+      "codeLabel": "Authentication code",
+      "lede": "Enter the six-digit code from the authenticator app on your phone. Two-step verification is mandatory for every admin account.",
+      "refreshHint": "The code renews every {seconds} seconds.",
+      "signIn": "Sign in",
+      "title": "Two-step verification",
+      "useRecoveryCode": "Use a recovery code"
+    },
+    "mfaRecovery": {
+      "backToAppCode": "Back to the app code",
+      "backToSignIn": "Back to sign-in",
+      "codeLabel": "Recovery code",
+      "lede": "Enter one of the ten recovery codes you saved at setup. Each code is used once.",
+      "lostHint": "If you have lost the codes too, another admin resets verification for your account.",
+      "signIn": "Sign in",
+      "title": "Sign in with a recovery code"
+    },
+    "mfaSetup": {
+      "backToSignIn": "Back to sign-in",
+      "finish": "Finish setup and sign in",
+      "footer": "The app code is required at every sign-in from today.",
+      "lede": "This is the first sign-in for {email}. Two-step verification is mandatory for every admin account, and sign-in does not complete until it is set up.",
+      "step1": {
+        "a11y": {
+          "copyKey": "Copy key",
+          "qr": "QR code to add the account to the authenticator app"
+        },
+        "manualKey": "Cannot scan? Enter this key manually",
+        "qrCaption": "Setup code · valid for this sign-in only",
+        "text": "Open the authenticator app on your phone, choose add account, then scan this code.",
+        "title": "Scan the code with your authenticator app"
+      },
+      "step2": {
+        "codeLabel": "Authentication code",
+        "text": "The app shows a six-digit code that renews every {seconds} seconds. Enter it here so we can confirm the setup worked.",
+        "title": "Enter the code that appears",
+        "verified": "The code is correct. The authenticator app is linked to your account."
+      },
+      "step3": {
+        "a11y": {
+          "codes": "Recovery codes"
+        },
+        "copy": "Copy",
+        "download": "Download codes",
+        "savedConfirm": "I have saved the codes somewhere safe outside this device.",
+        "text": "If you lose your phone you sign in with one of these codes instead of the app code. Each code is used once. They appear here only once, so save them now.",
+        "title": "Save the ten recovery codes"
+      },
+      "title": "Set up two-step verification"
+    },
+    "nav": {
+      "a11y": {
+        "language": "Language",
+        "panel": "Admin panel",
+        "signOut": "Sign out"
+      },
+      "brand": "Ijazah · Admin",
+      "brandMark": "I",
+      "groups": {
+        "queues": "Queues",
+        "records": "Records & system"
+      },
+      "items": {
+        "applications": "Applications",
+        "audit": "Audit log",
+        "compensation": "Compensation",
+        "credentials": "Credential review",
+        "disputes": "Disputes",
+        "enrollments": "Enrollments & sessions",
+        "gender": "Gender disputes",
+        "home": "Overview",
+        "ijazahRequests": "Ijazah requests",
+        "ijazahs": "Ijazahs",
+        "payments": "Payments",
+        "reports": "Reports",
+        "reviews": "Reviews",
+        "sessionReview": "Session review",
+        "settings": "Settings",
+        "users": "Users"
+      }
+    },
+    "payments": {
+      "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
+      "columns": {
+        "fee": "Fee",
+        "gross": "Gross (EGP)",
+        "net": "Net",
+        "order": "Order",
+        "status": "Status",
+        "student": "Student"
+      },
+      "detail": {
+        "a11y": "Order details",
+        "a11yEvents": "Order events",
+        "amountsTitle": "Amounts as reported by the gateway",
+        "enrollment": "Enrollment · {subject} · {sessions}",
+        "enrollmentSince": "Active since {date} · {done} of {total}",
+        "events": {
+          "confirmed": "Enrollment confirmed and its eight sessions created",
+          "created": "Order created",
+          "notified": "Notification reached the student and the teacher",
+          "paid": "Gateway reported the payment succeeded",
+          "transaction": "Transaction number {id}"
+        },
+        "eventsTitle": "What happened to the order",
+        "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
+        "gatewayFee": "Gateway fee",
+        "gross": "Gross",
+        "netToTeacher": "Net to teacher",
+        "orderNo": "Order number",
+        "referencesTitle": "References",
+        "subtitle": "{student} · {subject} · {sessions} with {teacher}",
+        "transactionNo": "Transaction number"
+      },
+      "enrollmentCancelled": "Enrollment cancelled",
+      "lede": "The order record as reported by the payment gateway. Amounts in Egyptian pounds.",
+      "pagerSummary": "{shown} of {total} · newest first",
+      "search": {
+        "label": "Search",
+        "placeholder": "Order number or student name"
+      },
+      "title": "Payments"
+    },
+    "reports": {
+      "columns": {
+        "context": "Context",
+        "reason": "Reason",
+        "reported": "Reported",
+        "reporter": "Reporter",
+        "status": "Status"
+      },
+      "contexts": {
+        "chat": "Chat",
+        "profile": "Profile",
+        "session": "Session"
+      },
+      "detail": {
+        "a11y": "Report details",
+        "chatHint": "Available to the admin while the report is open",
+        "contextSession": "Context · session",
+        "dismiss": "Dismiss report",
+        "enrollmentLine": "{subject} · {sessions} · {status}",
+        "footer": "Dismissing sets the report to \"Dismissed\", and any other action sets it to \"Action taken\". The reason is required and recorded in the audit log, and the reported user is not told of a dismissal.",
+        "openChat": "Open enrollment chat",
+        "openGenderFlag": "Open a gender dispute",
+        "reasonLabel": "Reason for the decision (required)",
+        "reasonPlaceholder": "Recorded with the decision in the audit log",
+        "reportTitle": "Report",
+        "reporter": "Reporter",
+        "reporterValue": "{name} · {role}",
+        "requireId": "Require ID",
+        "sentAt": "Sent",
+        "sessionLine": "Session {n} of {total} · {day} {date} · {time}",
+        "subtitle": "{role} · {accountStatus} · no previous reports",
+        "suspend": "Suspend account"
+      },
+      "empty": {
+        "showDecided": "Show settled reports",
+        "text": "All reports have been settled. Every new report a student or teacher raises from a session, a profile or a chat appears here.",
+        "title": "No open reports"
+      },
+      "lede": "{count, plural, one {# open report} other {# open reports}} on sessions, profiles and chats. The decision needs a reason and is recorded in the audit log.",
+      "ledeEmpty": "No open reports right now. The decision on any report needs a reason and is recorded in the audit log.",
+      "openSince": "{days, plural, one {# day ago} other {# days ago}}",
+      "pagerSummary": "{shown} of {total} · newest first",
+      "reasons": {
+        "impersonation": "Account impersonation",
+        "misleadingPhoto": "Misleading photo",
+        "offPlatformContact": "Off-platform contact",
+        "verbalAbuse": "Verbal abuse"
+      },
+      "search": {
+        "label": "Search",
+        "placeholder": "Reported or reporter name"
+      },
+      "tabs": {
+        "actioned": "Action taken",
+        "decided": "Decided",
+        "dismissed": "Dismissed",
+        "open": "Open"
+      },
+      "title": "Reports"
+    },
+    "reviews": {
+      "a11y": {
+        "detail": "Review details",
+        "view": "View"
+      },
+      "columns": {
+        "comment": "Comment",
+        "date": "Date",
+        "rating": "Rating",
+        "student": "Student",
+        "teacher": "Teacher"
+      },
+      "commentRemoved": "Comment removed · {date} · {admin}",
+      "detail": {
+        "completedOn": "Completed {date} · ",
+        "enrollmentLine": "{subject} · {sessions} · {done} of {total}",
+        "enrollmentTitle": "Enrollment",
+        "footer": "The comment disappears from the teacher's profile and the stars remain. The reason is recorded in the audit log.",
+        "hint": "After the comment is removed the star still counts in the teacher's average, and the review itself cannot be deleted.",
+        "openEnrollment": "Open enrollment",
+        "rating": "Rating",
+        "ratingValue": "{rating} of 5",
+        "removeComment": "Remove comment",
+        "title": "{student} → {teacher}",
+        "written": "Written {date} · after the enrollment completed"
+      },
+      "lede": "The latest student reviews of teachers. The admin can only remove the comment; the stars keep counting and the review is not deleted.",
+      "pagerSummary": "{shown} of {total} · newest first",
+      "search": {
+        "label": "Search",
+        "placeholder": "Student or teacher name"
+      },
+      "tabs": {
+        "all": "All reviews",
+        "commentRemoved": "Comment removed"
+      },
+      "title": "Reviews"
+    },
+    "sessionReview": {
+      "columns": {
+        "session": "Session",
+        "simultaneous": "Simultaneous connection",
+        "status": "Status",
+        "student": "Student",
+        "teacher": "Teacher"
+      },
+      "detail": {
+        "a11y": "Session details",
+        "a11yEvents": "Join and leave events",
+        "a11yTelemetry": "Simultaneous connection {percent}% against a {threshold}% threshold",
+        "attendance": "Recorded attendance",
+        "choices": {
+          "bothNoShow": "Nobody attended",
+          "bothNoShowHint": "Not deducted · no penalty",
+          "done": "Done",
+          "doneHint": "Deducted from the package",
+          "providerOutage": "Service outage",
+          "providerOutageHint": "For service-outage sessions only: not deducted and no absence against anyone",
+          "studentNoShow": "Student absent",
+          "studentNoShowHint": "Deducted from the package",
+          "teacherNoShow": "Teacher absent",
+          "teacherNoShowHint": "Not deducted · counted against the teacher"
+        },
+        "confirm": "Confirm outcome",
+        "events": {
+          "studentDisconnected": "Student disconnected",
+          "studentJoined": "Student joined",
+          "studentLeft": "Student left",
+          "studentReturned": "Student returned",
+          "teacherJoined": "Teacher joined",
+          "teacherLeftAtEnd": "Teacher left at the end of the slot"
+        },
+        "footer": "The chosen status is fixed and the remaining sessions are updated. The dispute window is {hours} hours from the end of the session, not from this decision, so it may have closed before it; for this session it closes {day} {date} {time}.",
+        "minConnection": "Minimum connection {seconds} seconds",
+        "outcomeTitle": "Session outcome",
+        "reasonHint": "Reaches both parties and is recorded in the audit log.",
+        "reasonLabel": "Reason (required)",
+        "subtitle": "{student} with {teacher} · {day} {date} · {time}",
+        "telemetry": "Simultaneous connection {minutes} of {total} minutes ({percent}%) · threshold {threshold}%.",
+        "title": "Session {n} of {total} · {subject}"
+      },
+      "lede": "{count, plural, one {# session whose outcome the system could not settle} other {# sessions whose outcome the system could not settle}}: a connection below the attendance threshold, or an outage of the video service. The outcome is confirmed with a reason recorded in the audit log.",
+      "minutesOf": "{minutes} of {total} min",
+      "pagerSummary": "{shown} of {total} · oldest first",
+      "search": {
+        "label": "Search",
+        "placeholder": "Student or teacher name"
+      },
+      "sessionCell": "{n} of {total} · {subject}",
+      "tabs": {
+        "decided": "Decided",
+        "pending": "Awaiting decision"
+      },
+      "title": "Session review"
+    },
+    "settings": {
+      "adminsLink": "Admins · {count}",
+      "attendanceThreshold": {
+        "error": "Enter a number from 1 to 100. The current value is {value}%.",
+        "label": "Attendance threshold",
+        "unit": "%"
+      },
+      "banner": "Any change applies to upcoming sessions and bookings only, and never re-evaluates a session or dispute already settled. Every change is recorded with its value before and after and its reason in the audit log.",
+      "chatRetention": {
+        "hint": "After the dispute window closes the chat is deleted, unless a dispute or report stays open.",
+        "label": "Chat retention",
+        "unit": "days"
+      },
+      "checkoutTtl": {
+        "hint": "How long the payment page lasts, with the slot held for the student throughout.",
+        "label": "Payment window",
+        "unit": "minutes"
+      },
+      "confirmationTimeout": {
+        "hint": "After this the student is told the payment is taking longer, and gets a notification when it completes.",
+        "label": "Payment confirmation timeout",
+        "unit": "seconds"
+      },
+      "currency": {
+        "hint": "Display only. All amounts on the platform are in Egyptian pounds.",
+        "label": "Currency",
+        "value": "EGP · Egyptian pound"
+      },
+      "discard": "Discard changes",
+      "disputeWindow": {
+        "hint": "The period after the end of a session in which a dispute over it is accepted.",
+        "label": "Dispute window",
+        "unit": "hours"
+      },
+      "earlyJoin": {
+        "hint": "The earliest both parties can join before the slot.",
+        "label": "Early join",
+        "unit": "minutes"
+      },
+      "groups": {
+        "booking": "Booking and payment",
+        "general": "General",
+        "notifications": "Notifications and chat",
+        "sessions": "Sessions"
+      },
+      "holdGrace": {
+        "hint": "The slot stays held this long afterwards so a payment started at the last moment can complete.",
+        "label": "Extra time for the slot",
+        "unit": "minutes"
+      },
+      "idempotencyRetention": {
+        "hint": "If the student presses \"Pay\" twice within it, they are not charged twice.",
+        "label": "Duplicate-payment guard",
+        "unit": "hours"
+      },
+      "joinWindow": {
+        "hint": "Whoever joins later than this after the session starts counts as absent.",
+        "label": "Join window",
+        "unit": "minutes"
+      },
+      "lede": "The values the platform runs on. Each value explains what it changes.",
+      "lockoutAttempts": {
+        "hint": "After these the admin account is locked. The screen does not show how many remain.",
+        "label": "Admin sign-in attempts before lock",
+        "unit": "attempts"
+      },
+      "lockoutDuration": {
+        "hint": "The account unlocks automatically afterwards.",
+        "label": "Lock duration",
+        "unit": "minutes"
+      },
+      "makeUpChoiceWindow": {
+        "hint": "After a session that was not consumed, the student chooses the make-up slot in this period, or a refund on the recitation track. If it passes without a reply the proposed slot is booked.",
+        "label": "Make-up choice window",
+        "unit": "days"
+      },
+      "minConnection": {
+        "hint": "A connection shorter than this does not count as joining the session.",
+        "label": "Minimum connection",
+        "unit": "seconds"
+      },
+      "modified": "Modified",
+      "noShowTermination": {
+        "hint": "At that point the enrollment ends and a compensation case opens for the student.",
+        "label": "Enrollment ends on teacher absence",
+        "unit": "times"
+      },
+      "reasonLabel": "Reason for the change (required)",
+      "reasonPlaceholder": "Recorded with the change in the audit log",
+      "reminderOffsets": {
+        "hint": "Before every session a reminder reaches both parties at these times.",
+        "label": "Reminder times"
+      },
+      "save": "Save changes · {count}",
+      "slotReleaseBuffer": {
+        "hint": "After the last session in the enrollment, before the slot is offered for booking.",
+        "label": "Slot re-release",
+        "unit": "weeks"
+      },
+      "title": "Settings"
+    },
+    "signIn": {
+      "continue": "Continue",
+      "email": "Email",
+      "error": "Could not sign in. Check your details and try again shortly.",
+      "lede": "This sign-in is separate from the app's, and is for authorised operations-team accounts only.",
+      "password": "Password",
+      "title": "Admin sign-in"
+    },
+    "status": {
+      "account": {
+        "active": "Active",
+        "activeLong": "Account active",
+        "banned": "Banned",
+        "disabled": "Disabled",
+        "suspended": "Suspended",
+        "verificationPending": "Awaiting proof of identity",
+        "verificationRequired": "Verification required"
+      },
+      "application": {
+        "approved": "Approved",
+        "decided": "Decided",
+        "inReview": "In review",
+        "waitingOnApplicant": "Waiting on applicant"
+      },
+      "attendance": {
+        "aboveThreshold": "Above threshold"
+      },
+      "call": {
+        "notRecorded": "Not recorded",
+        "recorded": "Recorded {date}"
+      },
+      "compensation": {
+        "open": "Open",
+        "pendingExecution": "Awaiting execution",
+        "pendingFinance": "Awaiting finance execution",
+        "pendingSuspensionReview": "Awaiting suspension review",
+        "refundReported": "Refund reported by gateway"
+      },
+      "credential": {
+        "anotherFileNeeded": "Another file needed",
+        "inReview": "In review",
+        "rejected": "Rejected",
+        "verified": "Verified"
+      },
+      "dispute": {
+        "decided": "Decided",
+        "open": "Open",
+        "upheld": "Outcome upheld"
+      },
+      "enrollment": {
+        "cancelled": "Cancelled",
+        "completed": "Completed",
+        "confirmed": "Active",
+        "pendingPayment": "Pending payment",
+        "terminatedNoShow": "Ended for teacher absence"
+      },
+      "genderFlag": {
+        "corrected": "Corrected",
+        "dismissed": "Dismissed",
+        "open": "Open"
+      },
+      "ijazah": {
+        "revoked": "Revoked",
+        "valid": "Valid"
+      },
+      "ijazahRequest": {
+        "inReview": "In review",
+        "issued": "Issued",
+        "rejected": "Rejected"
+      },
+      "mfa": {
+        "enabled": "Enabled",
+        "resetRequested": "Reset requested"
+      },
+      "package": {
+        "active": "Active",
+        "paused": "Paused"
+      },
+      "payment": {
+        "created": "Created",
+        "expired": "Expired",
+        "failed": "Failed",
+        "paid": "Paid",
+        "refunded": "Refunded"
+      },
+      "payout": {
+        "verified": "Verified"
+      },
+      "report": {
+        "actioned": "Action taken",
+        "dismissed": "Dismissed",
+        "dismissedTab": "Dismissed",
+        "open": "Open"
+      },
+      "review": {
+        "commentVisible": "Comment visible"
+      },
+      "session": {
+        "bothNoShow": "Nobody attended",
+        "cancelledByAdmin": "Cancelled by admin",
+        "cancelledByAgreement": "Cancelled by agreement",
+        "disputed": "Disputed",
+        "done": "Done",
+        "providerOutage": "Service outage",
+        "scheduled": "Upcoming",
+        "studentNoShow": "Student absent",
+        "teacherNoShow": "Teacher absent",
+        "underThreshold": "Below attendance threshold"
+      },
+      "setting": {
+        "modified": "Modified"
+      },
+      "track": {
+        "ijazah": "Ijazah track",
+        "recitation": "Recitation"
+      }
+    },
+    "teacher": {
+      "a11y": {
+        "back": "Back to users"
+      },
+      "ban": "Ban account",
+      "credentials": {
+        "addedSubjectLine": "Added subject · uploaded {date}",
+        "title": "Ijazahs",
+        "verifiedBadge": "Verified · {date}",
+        "verifiedLine": "{riwaya} · via {tariq} · {generations}"
+      },
+      "enrollments": {
+        "all": "All",
+        "summary": "{upcoming, plural, one {# upcoming session} other {# upcoming sessions}} in these enrollments. {completed, plural, one {# enrollment} other {# enrollments}} completed.",
+        "title": "Active enrollments · {count}"
+      },
+      "footer": "Every action on this page asks for a reason and is recorded in the audit log. Neither gender nor the payout account changes here.",
+      "meta": "{gender} · {city} · {email} · joined {date}",
+      "packages": {
+        "title": "Packages"
+      },
+      "payout": {
+        "noNumber": "The account number is not shown here.",
+        "registered": "Registered with the gateway",
+        "title": "Payout account",
+        "verified": "Verified by the gateway"
+      },
+      "requireId": "Require ID",
+      "suspend": "Suspend account",
+      "trust": {
+        "cancelRequests": "{count, plural, one {cancellation request by them} other {cancellation requests by them}}",
+        "cancelSummary": "Cancellation requests they made across all their enrollments: the student accepted one ({acceptedDate}) and declined the other ({declinedDate}). No reports against them.",
+        "noShows": "teacher absences",
+        "rating": "{rating} from {count, plural, one {# review} other {# reviews}}",
+        "title": "Trust signals"
+      },
+      "verification": {
+        "approvedBy": "Approved by {admin}",
+        "approvedOn": "Approved",
+        "callDate": "Verification call",
+        "callNotes": "Call notes",
+        "documents": "Verification documents · {count}",
+        "outcome": "Outcome",
+        "title": "Verification and approval",
+        "viewOnly": "view only"
+      }
+    },
+    "users": {
+      "columns": {
+        "gender": "Gender",
+        "joined": "Joined",
+        "role": "Role",
+        "status": "Account status",
+        "user": "User"
+      },
+      "detail": {
+        "a11y": "User details",
+        "account": "Account",
+        "ban": "Ban",
+        "barFromIjazahs": "Bar from receiving ijazahs",
+        "birthDate": "Date of birth",
+        "cancelRequests": "Session cancellation requests",
+        "enrollmentLine": "{subject} · {sessions} with {teacher} · {done} of {total}",
+        "enrollmentsSummary": "Enrollments · {active} active · {completed} completed · {terminated} ended for teacher absence",
+        "footer": "Every action asks for a reason and is recorded in the audit log, and a suspended account is reinstated from the same button. Gender does not change here, only through a gender dispute.",
+        "gender": "Gender",
+        "idRequests": "Proof-of-identity requests",
+        "ijazahBar": "Bar from receiving ijazahs",
+        "joined": "Joined",
+        "minor": "Minor",
+        "profile": "Profile",
+        "requireId": "Require ID",
+        "signInMethod": "Sign-in method",
+        "suspend": "Suspend account",
+        "timeZone": "Time zone"
+      },
+      "filter": {
+        "age": "Age",
+        "ageAll": "All",
+        "apply": "{count, plural, one {Show # user} other {Show # users}}",
+        "clear": "Clear",
+        "gender": "Gender",
+        "genderAll": "All",
+        "genderFemale": "Female",
+        "genderMale": "Male",
+        "minorsOnly": "Minors only",
+        "role": "Role",
+        "roleAll": "All",
+        "roleStudent": "Student",
+        "roleTeacher": "Teacher",
+        "status": "Account status",
+        "statusActive": "Active",
+        "statusAll": "All",
+        "statusBanned": "Banned",
+        "statusSuspended": "Suspended",
+        "statusVerificationRequired": "Verification required"
+      },
+      "lede": "Students and teachers. Every suspension, bar or ban needs a reason and is recorded in the audit log.",
+      "pagerSummary": "{shown} of {total} · by last activity",
+      "reactivate": "Reactivate",
+      "roleWithStatus": "{role} · {status}",
+      "search": {
+        "label": "Search",
+        "placeholder": "Name or email"
+      },
+      "title": "Users"
+    }
+  }
+}

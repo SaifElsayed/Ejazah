@@ -1,21 +1,31 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charset="utf-8" />
-    <title>StudentTabs</title>
-    <link rel="stylesheet" href="_artboard.css" />
-  </head>
-  <body>
-    <!--
-      Seed artboards for: StudentTabs
-      Frames listed in docs/design/screens.md. Regenerate or extend this file
-      with the /design canvas; tokens must match design/tokens.json.
-    -->
-    <div class="canvas">
-      <figure>
-        <figcaption class="artboard-label">StudentTabs — frame 1</figcaption>
-        <div class="artboard"></div>
-      </figure>
-    </div>
-  </body>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>شريط تبويب الطالب</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="board board--flush" dir="rtl" data-theme="light">
+  <nav class="tabbar" aria-label="التنقل الرئيسي">
+    <a href="Main.dc.html" class="tabbar__item tabbar__item--active" aria-current="page"><svg class="icon icon--lg" data-icon="house" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg><span>الرئيسية</span></a>
+    <a href="Discovery.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>استكشف</span></a>
+    <a href="Enrollments.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="book" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h13v16H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg><span>اشتراكاتي</span></a>
+    <a href="Credentials.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg><span>إجازاتي</span></a>
+    <a href="StudentAccount.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حسابي</span></a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":84}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
 </html>

@@ -1,0 +1,45 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <main class="screen__body screen__body--bare gap-4">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة</span><span class="text-caption tone-muted">· حذف الحساب</span></span>
+
+    <div class="page-intro">
+      <h1 class="page-intro__title">أدخل الرمز</h1>
+      <p class="page-intro__lede">أرسلنا رمزًا من 6 أرقام إلى <span class="ltr tone-default">yousef@gmail.com</span></p>
+    </div>
+
+    <ol class="timeline">
+      <li class="timeline__item">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+        <span class="timeline__body"><span class="timeline__title">بريد الحساب</span><span class="timeline__meta">أُرسل الرمز</span></span>
+      </li>
+      <li class="timeline__item">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--current">2</span></span>
+        <span class="timeline__body"><span class="timeline__title">الرمز والتأكيد</span><span class="timeline__meta">ثم يُحذف الحساب فورًا</span></span>
+      </li>
+    </ol>
+
+    <form class="field">
+      <label for="code1" class="field__label">الرمز</label>
+      <div class="otp">
+        <input id="code1" type="text" inputmode="numeric" maxlength="1" value="5" class="otp__cell otp__cell--filled" aria-label="الرقم الأول">
+        <input type="text" inputmode="numeric" maxlength="1" value="2" class="otp__cell otp__cell--filled" aria-label="الرقم الثاني">
+        <input type="text" inputmode="numeric" maxlength="1" value="9" class="otp__cell otp__cell--filled" aria-label="الرقم الثالث">
+        <input type="text" inputmode="numeric" maxlength="1" value="0" class="otp__cell otp__cell--filled" aria-label="الرقم الرابع">
+        <input type="text" inputmode="numeric" maxlength="1" value="7" class="otp__cell otp__cell--filled" aria-label="الرقم الخامس">
+        <input type="text" inputmode="numeric" maxlength="1" value="3" class="otp__cell otp__cell--filled" aria-label="الرقم السادس">
+      </div>
+    </form>
+
+    <div class="banner banner--danger" role="alert">
+      {{icon:triangle-alert:md}}
+      <p class="grow">لا يمكن التراجع عن الحذف ولا استعادة الحساب.</p>
+    </div>
+
+    <div class="stack gap-2 push">
+      <a href="DeleteAccountWebDone.dc.html" class="btn btn--danger btn--block">{{icon:trash:md}}حذف الحساب نهائيًا</a>
+      <a href="DeleteAccountWeb.dc.html" class="btn btn--ghost btn--block">تغيير البريد</a>
+    </div>
+  </main>
+</div>
