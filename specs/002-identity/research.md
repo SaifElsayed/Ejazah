@@ -195,7 +195,7 @@ query the session row, the user (gender, language, account status, deleted_at),
 the single role, and for a teacher the profile's verification status and
 payout verification instant, and builds the `UserSession` the caller kinds
 narrow. The kinds gain two declarations. `teacherProcedure({ admits })` is
-required: `'applicant'` (any teacher-role holder whose account is not banned:
+required: `'applicant'` (any teacher-role holder; banned and suspended accounts are the restricted-account rule's, not the standing's:
 the application, status, credentials-after-approval and account paths),
 `'approved'` (verification status approved), or `'publishable'` (approved and
 payout verified; nothing in this phase declares it, Phase 2's publishing paths
@@ -224,12 +224,12 @@ omission).
 ## R-107: Administrator sign-in — TOTP from `node:crypto`, hashed single-use recovery codes, lockout as a column pair behind the throttle (FR-170 to FR-173)
 
 **Decision**: The second factor is RFC 6238 TOTP (SHA-1, six digits, thirty
-seconds, one step of drift either way), computed with `node:crypto` (HMAC) and
-no library; the secret is generated at invite, encrypted with the column cipher
+seconds, one step of drift either way), computed by `otplib` (a proven library, R-SEC-7) behind the kernel
+primitive `platform/crypto/totp.ts`, checked against RFC 6238's vectors; the secret is generated at invite, encrypted with the column cipher
 (`mfa_secret_encrypted`, already NOT NULL) and shown once as an `otpauth://` QR
 and a manual key on the setup page; `mfa_enrolled_at` is null until the first
 code is confirmed, and an unenrolled administrator reaches nothing but setup.
-Ten recovery codes of ten Crockford base32 symbols are drawn from the
+`admin_recovery_code_count` recovery codes (ten) of ten Crockford base32 symbols are drawn from the
 identifiers module, shown once, stored peppered-and-hashed in
 `admin_recovery_codes` (the OTP regime: low entropy, so peppered), each marked
 `used_at` on use; regeneration replaces the set. Lockout is two columns on
@@ -250,8 +250,9 @@ absolute limit `admin_session_max_hours` (12).
 **Rationale**: ADR 0019 D3 fixes the numbers and the indistinguishable answer;
 a column pair keeps the lockout in the database the admin module owns, with no
 Redis state that a restart would clear; the decoy verify is the standard answer
-to timing enumeration. TOTP is fifteen lines over HMAC; a library would add a
-dependency for a function the suite can test against RFC 6238's vectors. The
+to timing enumeration. TOTP goes through `otplib` rather than fifteen lines over HMAC, because
+R-SEC-7 says proven libraries only for auth and crypto code; the suite still
+checks it against RFC 6238's vectors. The
 bearer header with no cookie is the review's decision (no CSRF surface), and
 `sessionStorage` ends the session with the tab, which is the right default for
 a back office.
@@ -340,13 +341,13 @@ and a route helper that applies the anonymous rate limit and the strict
 security-headers middleware already in place; no `Set-Cookie` can be emitted
 from these routes (the helper strips it). The design's stylesheet is served as
 static assets under `/public/design/` from a copy the token build writes into
-`apps/api/src/web/assets/` (`tokens.css` by `scripts/build-tokens.ts`,
+`apps/api/src/platform/web/assets/` (`tokens.css` by `scripts/build-tokens.ts`,
 `components.css` copied by the same script), both under `check:generated`. The
 routes: `GET /terms` (the Terms body with its version, from a served Markdown
-file under `apps/api/src/web/terms/` per language), `GET /delete-account`,
+file under `apps/api/src/platform/web/terms/` per language), `GET /delete-account`,
 `POST /delete-account` (the email step; one sentence for every address), `POST
 /delete-account/confirm` (email and code in the form body, never the URL;
-renders the done page on success). English by `?lang=en` on every route.
+renders the done page on success). The Terms route is the kernel's (static content with a setting); the deletion routes are the identity module's (`modules/identity/web/`), the module that owns the deletion, written over the kernel's helper. English by `?lang=en` on every route.
 
 **Rationale**: ADR 0021 D5's conditions, each made structural: escaping by
 default is the template's only mode; the headers are set by the helper, not per

@@ -23,19 +23,12 @@ same helper.
 
 ## The uploads route
 
-| Route                | Method | Auth                                  | Body                                                               | Answers          |
-| -------------------- | ------ | ------------------------------------- | ------------------------------------------------------------------ | ---------------- |
-| `/uploads/documents` | POST   | user bearer (any standing but banned) | multipart, one file, `kind: 'identity' \| 'credential' \| 'photo'` | `{ documentId }` |
+| Route                | Method | Auth                                  | Body                                                    | Answers          |
+| -------------------- | ------ | ------------------------------------- | ------------------------------------------------------- | ---------------- |
+| `/uploads/documents` | POST   | user bearer (any standing but banned) | multipart, one file, `kind: 'identity' \| 'credential'` | `{ documentId }` |
+| `/uploads/photos`    | POST   | user bearer                           | multipart, one image (JPEG or PNG)                      | `{ photoUrl }`   |
 
-The kernel's upload middleware decides the type by content (R-SEC-4): `identity`
-and `credential` admit `application/pdf` only; `photo` admits JPEG and PNG. The
-size limit is `upload_max_bytes`; the rate limit `rate_limit_upload` per user.
-The file is stored through the storage port under a server-minted key, the
-`verification_documents` row written with the key encrypted (R-DB-8) and the
-caller as `user_id`; a photo goes to `teacher_profiles.photo_key` /
-`users` photo through the same route and is not a verification document. The
-answer carries the id only; a link to the file is minted on demand by the
-procedures that may show it.
+The kernel's upload middleware decides the type by content (R-SEC-4): `/uploads/documents` admits `application/pdf` only, `/uploads/photos` JPEG and PNG only. The size limit is `upload_max_bytes`; the rate limit `rate_limit_upload` per user. A document is stored through the storage port under a server-minted key, the `verification_documents` row written with the key encrypted (R-DB-8) and the caller as `user_id`, and the answer carries the id only; a link to the file is minted on demand by the procedures that may show it. A photo is the identity module's: its route writes `users.photo_key` through identity's own repository (R-API-6) and answers a signed link.
 
 ## Headers every route sends
 
