@@ -1,0 +1,26 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">طلابي</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="category-tabs" role="tablist" aria-label="حالة الاشتراك">
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">جارية</button>
+      <a href="TeacherStudentsEnded.dc.html" class="category-tabs__item" role="tab" aria-selected="false">منتهية</a>
+    </div>
+
+    <section class="empty-state grow">
+      <span class="icon-tile icon-tile--2xl icon-tile--neutral" aria-hidden="true">{{icon:users:xl}}</span>
+      <h2 class="empty-state__title">لا طلاب بعد</h2>
+      <p class="empty-state__text">يظهر هنا كل طالب يحجز باقة منك.</p>
+      <a href="Packages.dc.html" class="btn btn--ghost btn--md">الباقات</a>
+    </section>
+  </main>
+
+  {{TABS:teacher:TeacherStudents}}
+</div>

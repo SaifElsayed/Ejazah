@@ -1,0 +1,23 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <div class="app-header__titles">
+      <h1 class="app-header__title">المواعيد</h1>
+      <span class="app-header__subtitle">بتوقيتك: القاهرة · تتكرر كل أسبوع</span>
+    </div>
+    <div class="app-header__actions">
+      <a href="SlotEditor.dc.html" class="btn btn--primary btn--md">{{icon:plus:md}}موعد</a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--center">
+    <section class="empty-state">
+      <span class="icon-tile icon-tile--2xl" aria-hidden="true">{{icon:clock:xl}}</span>
+      <h2 class="empty-state__title">لا مواعيد بعد</h2>
+      <p class="empty-state__text">أضف مواعيدك الأسبوعية ليحجزها الطلاب.</p>
+    </section>
+  </main>
+
+  {{TABS:teacher:Availability}}
+</div>

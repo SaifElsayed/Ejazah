@@ -17,6 +17,8 @@
       },
       "sheet": {
         "cancel": "Cancel",
+        "confirmApple": "Confirm with Apple and delete the account",
+        "confirmEmail": "Confirm with your password and delete the account",
         "confirmGoogle": "Confirm with Google and delete the account",
         "text": "Your upcoming sessions are cancelled, and the account cannot be restored.",
         "title": "Delete your account permanently?"
@@ -29,6 +31,7 @@
     "deleteAccount": "Delete account",
     "gender": "Gender",
     "genders": {
+      "female": "Female",
       "male": "Male"
     },
     "language": "Language",
@@ -38,6 +41,8 @@
     },
     "memberSince": "{gender, select, female {Student} other {Student}} · since {date}",
     "providers": {
+      "apple": "Apple",
+      "email": "Email and password",
       "google": "Google"
     },
     "restricted": {
@@ -63,6 +68,8 @@
       "cancel": "Cancel",
       "confirm": "Sign out",
       "text": "To sign in again, use the same Google account.",
+      "textApple": "To sign in again, use the same Apple account.",
+      "textEmail": "To sign in again, use your email and password.",
       "title": "Sign out?"
     },
     "terms": "Terms and conditions",
@@ -145,8 +152,12 @@
       "title": "New password"
     },
     "signInConflict": {
+      "bodyApple": "{email} is registered with an Apple account. Sign in with it.",
       "bodyEmailPassword": "{email} is registered with email and password. Sign in with them.",
+      "bodyGoogle": "{email} is registered with a Google account. Sign in with it.",
+      "signInApple": "Sign in with Apple",
       "signInEmailPassword": "Sign in with email and password",
+      "signInGoogle": "Sign in with Google",
       "title": "This email already has an account"
     },
     "welcome": {
@@ -164,6 +175,10 @@
     "a11y": {
       "attach": "Attach a PDF file or a document",
       "send": "Send"
+    },
+    "empty": {
+      "text": "Write your first message to {name}.",
+      "title": "No messages yet"
     },
     "fileSize": "{size} KB",
     "filesOnly": "You can send PDF files and documents only.",
@@ -270,6 +285,8 @@
       "short": "{done} of {total}"
     },
     "provider": {
+      "apple": "Apple",
+      "email": "Email",
       "google": "Google"
     },
     "reviewTeam": {
@@ -319,6 +336,10 @@
   "notifications": {
     "a11y": {
       "unread": "Unread"
+    },
+    "empty": {
+      "text": "Anything new about your sessions shows up here.",
+      "title": "No notifications yet"
     },
     "groups": {
       "earlier": "Earlier",
@@ -800,9 +821,19 @@
         "starsAndUp": "{count, plural, one {# star and up} other {# stars and up}}",
         "track": "Track"
       },
+      "noTeachers": {
+        "refresh": "Refresh",
+        "text": "Every teacher who joins and whom you can study with appears here.",
+        "title": "No teachers available to you yet"
+      },
       "search": {
         "a11y": {
           "clear": "Clear search"
+        },
+        "empty": {
+          "clear": "Clear search",
+          "text": "Try another name, or search by subject.",
+          "title": "No teacher by that name"
         },
         "hintText": "for example: Tajweed, Qira'at",
         "hintTitle": "Try searching by subject name",
@@ -869,6 +900,10 @@
         "action": "Explore teachers",
         "text": "Your sessions will appear here after your first booking.",
         "title": "No enrollments yet"
+      },
+      "endedEmpty": {
+        "text": "Every enrollment that completed or ended appears here.",
+        "title": "No ended enrollments"
       },
       "reviewPrompt": {
         "subtitle": "{subject} · {track} · {teacher}",
@@ -953,7 +988,11 @@
       },
       "comment": "Your comment (optional)",
       "labels": {
-        "4": "Very good"
+        "1": "Poor",
+        "2": "Fair",
+        "3": "Good",
+        "4": "Very good",
+        "5": "Excellent"
       },
       "question": "How was your experience?",
       "selected": "{rating} of 5 · {label}",
@@ -1012,6 +1051,10 @@
         "list": "Reviews, newest first"
       },
       "commentRemoved": "The administration removed the comment",
+      "empty": {
+        "text": "Students review a teacher after completing an enrollment with them.",
+        "title": "No reviews yet"
+      },
       "reviewMeta": "{package} · {date}",
       "summary": "from {count, plural, one {# review} other {# reviews}} · by students who completed an enrollment with him",
       "title": "Reviews of {teacher}"
@@ -1135,6 +1178,10 @@
         "timeZoneHint": "Your time zone: {city}",
         "title": "Edit slot"
       },
+      "empty": {
+        "text": "Add your weekly slots for students to book.",
+        "title": "No slots yet"
+      },
       "legend": {
         "booked": "Booked",
         "disabled": "Disabled",
@@ -1224,6 +1271,8 @@
       "keptRecords": "Payment and session records without your personal data",
       "keptTitle": "What stays",
       "sheet": {
+        "confirmApple": "Confirm with Apple and delete the account",
+        "confirmEmail": "Confirm with your password and delete the account",
         "confirmGoogle": "Confirm with Google and delete the account",
         "text": "Your students' upcoming sessions are cancelled, and the account cannot be restored.",
         "title": "Delete your account permanently?"
@@ -1362,6 +1411,10 @@
         "track": "Track",
         "trackHint": "An ijazah can be requested from the ijazah track only"
       },
+      "empty": {
+        "text": "Create your first package for students to book: the subject, the track, the number of sessions, their length and the price.",
+        "title": "No packages yet"
+      },
       "lockedBanner": "Your packages will not be visible to students until the payout account is verified",
       "new": "New package",
       "pausedGroup": "Paused {count}",
@@ -1455,14 +1508,20 @@
       },
       "commentRemoved": "Comment removed · {date}",
       "count": "from {count, plural, one {# review} other {# reviews}}",
+      "empty": {
+        "text": "Students review you after completing their enrollment with you.",
+        "title": "No reviews yet"
+      },
       "meta": "{subject} · {count, plural, one {# session} other {# sessions}} · {date}",
       "title": "My reviews"
     },
     "signature": {
       "a11y": {
         "certificateImage": "The ijazah page, with the teacher's signature at the bottom",
+        "emptyPad": "No signature image uploaded yet",
         "preview": "Preview of your signature image"
       },
+      "emptyPad": "No image uploaded yet",
       "hint": "A clear picture of your signature in ink on white paper, PNG or JPG.",
       "lede": "Your signature appears on every ijazah issued at your request.",
       "previewTitle": "Preview",
@@ -1478,9 +1537,22 @@
         "endedList": "Ended enrollments, most recent first"
       },
       "cancelRequestFromStudent": "Cancellation request from the student",
+      "empty": {
+        "packages": "Packages",
+        "text": "Every student who books one of your packages appears here.",
+        "title": "No students yet"
+      },
+      "endedEmpty": {
+        "text": "Every enrollment that completed or ended appears here.",
+        "title": "No ended enrollments"
+      },
       "endedMeta": "{done} of {total} · completed {completedDate} · ijazah issued {issuedDate}",
       "endedNote": "Ended enrollments stay here with their sessions and ijazahs.",
       "search": "Search by student name",
+      "searchEmpty": {
+        "text": "Try another name.",
+        "title": "No student by that name"
+      },
       "secondEnrollment": "second enrollment",
       "sessionOn": "Session {n} of {total} · {date} {time}",
       "sessionToday": "Session {n} of {total} · today {time}",

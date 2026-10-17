@@ -280,8 +280,26 @@
    "is_interactive": true,
    "radius": 32
   },
-  "TeacherProfile.dc.html": {
+  "DiscoverySearchEmpty.dc.html": {
    "x": 3290,
+   "y": 3600,
+   "w": 390,
+   "h": 844,
+   "title": "البحث بلا نتائج",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "DiscoveryNoTeachers.dc.html": {
+   "x": 3760,
+   "y": 3600,
+   "w": 390,
+   "h": 844,
+   "title": "لا معلمين متاحين للطالب",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "TeacherProfile.dc.html": {
+   "x": 4230,
    "y": 3600,
    "w": 390,
    "h": 868,
@@ -290,7 +308,7 @@
    "radius": 32
   },
   "TeacherProfileReviews.dc.html": {
-   "x": 3760,
+   "x": 4700,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -298,8 +316,17 @@
    "is_interactive": true,
    "radius": 32
   },
+  "TeacherProfileReviewsEmpty.dc.html": {
+   "x": 5170,
+   "y": 3600,
+   "w": 390,
+   "h": 844,
+   "title": "تقييمات المعلم — لا شيء بعد",
+   "is_interactive": true,
+   "radius": 32
+  },
   "ReportSheet.dc.html": {
-   "x": 4230,
+   "x": 5640,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -308,7 +335,7 @@
    "radius": 32
   },
   "BookingSheet.dc.html": {
-   "x": 4700,
+   "x": 6110,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -317,7 +344,7 @@
    "radius": 32
   },
   "SlotTaken.dc.html": {
-   "x": 5170,
+   "x": 6580,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -326,7 +353,7 @@
    "radius": 32
   },
   "Checkout.dc.html": {
-   "x": 5640,
+   "x": 7050,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -335,7 +362,7 @@
    "radius": 32
   },
   "CheckoutExpired.dc.html": {
-   "x": 6110,
+   "x": 7520,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -344,7 +371,7 @@
    "radius": 32
   },
   "CheckoutPrevious.dc.html": {
-   "x": 6580,
+   "x": 7990,
    "y": 3600,
    "w": 390,
    "h": 844,
@@ -424,8 +451,17 @@
    "is_interactive": true,
    "radius": 32
   },
-  "EnrollmentDetail.dc.html": {
+  "EnrollmentsEndedEmpty.dc.html": {
    "x": 1410,
+   "y": 6091,
+   "w": 390,
+   "h": 844,
+   "title": "اشتراكاتي: المنتهية — فارغة",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "EnrollmentDetail.dc.html": {
+   "x": 1880,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -434,7 +470,7 @@
    "radius": 32
   },
   "SessionStates.dc.html": {
-   "x": 1880,
+   "x": 2350,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -443,7 +479,7 @@
    "radius": 32
   },
   "CancelRequestSheet.dc.html": {
-   "x": 2350,
+   "x": 2820,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -452,7 +488,7 @@
    "radius": 32
   },
   "CancelSessionPicker.dc.html": {
-   "x": 2820,
+   "x": 3290,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -461,7 +497,7 @@
    "radius": 32
   },
   "CancelRespondSheet.dc.html": {
-   "x": 3290,
+   "x": 3760,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -470,7 +506,7 @@
    "radius": 32
   },
   "MakeupChoiceSheet.dc.html": {
-   "x": 3760,
+   "x": 4230,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -479,7 +515,7 @@
    "radius": 32
   },
   "MakeupProposalSheet.dc.html": {
-   "x": 4230,
+   "x": 4700,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -488,7 +524,7 @@
    "radius": 32
   },
   "RaiseDispute.dc.html": {
-   "x": 4700,
+   "x": 5170,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -497,7 +533,7 @@
    "radius": 32
   },
   "EnrollmentTerminated.dc.html": {
-   "x": 5170,
+   "x": 5640,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -506,7 +542,7 @@
    "radius": 32
   },
   "WriteReview.dc.html": {
-   "x": 5640,
+   "x": 6110,
    "y": 6091,
    "w": 390,
    "h": 844,
@@ -739,8 +775,17 @@
    "is_interactive": true,
    "radius": 32
   },
-  "TeacherCredentials.dc.html": {
+  "SignatureUploadEmpty.dc.html": {
    "x": 2820,
+   "y": 9763,
+   "w": 390,
+   "h": 844,
+   "title": "صورة التوقيع — قبل أول رفع",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "TeacherCredentials.dc.html": {
+   "x": 3290,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -749,7 +794,7 @@
    "radius": 32
   },
   "CredentialNeedsDocument.dc.html": {
-   "x": 3290,
+   "x": 3760,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -758,7 +803,7 @@
    "radius": 32
   },
   "AddSubject.dc.html": {
-   "x": 3760,
+   "x": 4230,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -767,7 +812,7 @@
    "radius": 32
   },
   "Packages.dc.html": {
-   "x": 4230,
+   "x": 4700,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -776,7 +821,7 @@
    "radius": 32
   },
   "PackagesLocked.dc.html": {
-   "x": 4700,
+   "x": 5170,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -784,8 +829,17 @@
    "is_interactive": true,
    "radius": 32
   },
+  "PackagesEmpty.dc.html": {
+   "x": 5640,
+   "y": 9763,
+   "w": 390,
+   "h": 844,
+   "title": "الباقات — لا باقات بعد",
+   "is_interactive": true,
+   "radius": 32
+  },
   "PackageEditor.dc.html": {
-   "x": 5170,
+   "x": 6110,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -794,7 +848,7 @@
    "radius": 32
   },
   "PackageDeactivateSheet.dc.html": {
-   "x": 5640,
+   "x": 6580,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -803,7 +857,7 @@
    "radius": 32
   },
   "PackageSubjectPicker.dc.html": {
-   "x": 6110,
+   "x": 7050,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -812,7 +866,7 @@
    "radius": 32
   },
   "SubjectPicker.dc.html": {
-   "x": 6580,
+   "x": 7520,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -821,7 +875,7 @@
    "radius": 32
   },
   "Availability.dc.html": {
-   "x": 7050,
+   "x": 7990,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -829,8 +883,17 @@
    "is_interactive": true,
    "radius": 32
   },
+  "AvailabilityEmpty.dc.html": {
+   "x": 8460,
+   "y": 9763,
+   "w": 390,
+   "h": 844,
+   "title": "المواعيد — لا مواعيد بعد",
+   "is_interactive": true,
+   "radius": 32
+  },
   "SlotEditor.dc.html": {
-   "x": 7520,
+   "x": 8930,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -839,7 +902,7 @@
    "radius": 32
   },
   "SlotDisableSheet.dc.html": {
-   "x": 7990,
+   "x": 9400,
    "y": 9763,
    "w": 390,
    "h": 844,
@@ -883,8 +946,17 @@
    "is_interactive": true,
    "radius": 32
   },
-  "TeacherEnrollment.dc.html": {
+  "TeacherStudentsEmpty.dc.html": {
    "x": 1880,
+   "y": 10963,
+   "w": 390,
+   "h": 844,
+   "title": "طلابي — لا طلاب بعد",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "TeacherEnrollment.dc.html": {
+   "x": 2350,
    "y": 10963,
    "w": 390,
    "h": 920,
@@ -893,7 +965,7 @@
    "radius": 32
   },
   "TeacherEnrollmentIjazah.dc.html": {
-   "x": 2350,
+   "x": 2820,
    "y": 10963,
    "w": 390,
    "h": 1028,
@@ -902,7 +974,7 @@
    "radius": 32
   },
   "TeacherEnrollmentCompleted.dc.html": {
-   "x": 2820,
+   "x": 3290,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -911,7 +983,7 @@
    "radius": 32
   },
   "TeacherCancelRequest.dc.html": {
-   "x": 3290,
+   "x": 3760,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -920,7 +992,7 @@
    "radius": 32
   },
   "TeacherCancelSessionPicker.dc.html": {
-   "x": 3760,
+   "x": 4230,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -929,7 +1001,7 @@
    "radius": 32
   },
   "TeacherCancelRespond.dc.html": {
-   "x": 4230,
+   "x": 4700,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -938,7 +1010,7 @@
    "radius": 32
   },
   "TeacherMakeupRespond.dc.html": {
-   "x": 4700,
+   "x": 5170,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -947,7 +1019,7 @@
    "radius": 32
   },
   "TeacherReportSheet.dc.html": {
-   "x": 5170,
+   "x": 5640,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -956,7 +1028,7 @@
    "radius": 32
   },
   "IjazahRequest.dc.html": {
-   "x": 5640,
+   "x": 6110,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -965,7 +1037,7 @@
    "radius": 32
   },
   "IjazahRequestPreview.dc.html": {
-   "x": 6110,
+   "x": 6580,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -974,7 +1046,7 @@
    "radius": 32
   },
   "IjazahRequestSent.dc.html": {
-   "x": 6580,
+   "x": 7050,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -983,7 +1055,7 @@
    "radius": 32
   },
   "IjazahRequestBlocked.dc.html": {
-   "x": 7050,
+   "x": 7520,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -992,7 +1064,7 @@
    "radius": 32
   },
   "TeacherReviews.dc.html": {
-   "x": 7520,
+   "x": 7990,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -1000,8 +1072,17 @@
    "is_interactive": true,
    "radius": 32
   },
+  "TeacherReviewsEmpty.dc.html": {
+   "x": 8460,
+   "y": 10963,
+   "w": 390,
+   "h": 844,
+   "title": "تقييماتي — لا شيء بعد",
+   "is_interactive": true,
+   "radius": 32
+  },
   "TeacherNotifications.dc.html": {
-   "x": 7990,
+   "x": 8930,
    "y": 10963,
    "w": 390,
    "h": 844,
@@ -1081,12 +1162,30 @@
    "is_interactive": true,
    "radius": 32
   },
-  "Notifications.dc.html": {
+  "ChatEmpty.dc.html": {
    "x": 3760,
+   "y": 12347,
+   "w": 390,
+   "h": 844,
+   "title": "المحادثة — لا رسائل بعد",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "Notifications.dc.html": {
+   "x": 4230,
    "y": 12347,
    "w": 390,
    "h": 916,
    "title": "مشترك — الإشعارات",
+   "is_interactive": true,
+   "radius": 32
+  },
+  "NotificationsEmpty.dc.html": {
+   "x": 4700,
+   "y": 12347,
+   "w": 390,
+   "h": 844,
+   "title": "الإشعارات — فارغة",
    "is_interactive": true,
    "radius": 32
   },
@@ -1104,7 +1203,7 @@
    "y": 13619,
    "w": 390,
    "h": 1050,
-   "title": "مقترح — المعلم: اليوم (بديل قيد القرار)",
+   "title": "t",
    "is_interactive": true,
    "radius": 32
   },
@@ -1113,7 +1212,7 @@
    "y": 13619,
    "w": 390,
    "h": 1172,
-   "title": "مقترح — المعلم: طلابي (بديل قيد القرار)",
+   "title": "t",
    "is_interactive": true,
    "radius": 32
   },
@@ -1261,8 +1360,17 @@
    "is_interactive": true,
    "radius": 12
   },
-  "AdminDocumentViewer.dc.html": {
+  "AdminDecisionDialogInfo.dc.html": {
    "x": 3120,
+   "y": 23565,
+   "w": 1440,
+   "h": 900,
+   "title": "قرار على طلب معلم — طلب معلومات",
+   "is_interactive": true,
+   "radius": 12
+  },
+  "AdminDocumentViewer.dc.html": {
+   "x": 4680,
    "y": 23565,
    "w": 1440,
    "h": 900,
@@ -1271,8 +1379,8 @@
    "radius": 12
   },
   "AdminCredentials.dc.html": {
-   "x": 4680,
-   "y": 23565,
+   "x": 0,
+   "y": 24665,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — مراجعة الإجازات",
@@ -1280,7 +1388,7 @@
    "radius": 12
   },
   "AdminCredentialCorrect.dc.html": {
-   "x": 0,
+   "x": 1560,
    "y": 24665,
    "w": 1440,
    "h": 900,
@@ -1289,7 +1397,7 @@
    "radius": 12
   },
   "AdminUsers.dc.html": {
-   "x": 1560,
+   "x": 3120,
    "y": 24665,
    "w": 1440,
    "h": 900,
@@ -1298,7 +1406,7 @@
    "radius": 12
   },
   "AdminUsersFilter.dc.html": {
-   "x": 3120,
+   "x": 4680,
    "y": 24665,
    "w": 1440,
    "h": 900,
@@ -1307,8 +1415,8 @@
    "radius": 12
   },
   "AdminTeacher.dc.html": {
-   "x": 4680,
-   "y": 24665,
+   "x": 0,
+   "y": 25765,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — صفحة معلم",
@@ -1316,7 +1424,7 @@
    "radius": 12
   },
   "AdminSuspendDialog.dc.html": {
-   "x": 0,
+   "x": 1560,
    "y": 25765,
    "w": 1440,
    "h": 900,
@@ -1324,8 +1432,17 @@
    "is_interactive": true,
    "radius": 12
   },
+  "AdminSuspendDialogRevoke.dc.html": {
+   "x": 3120,
+   "y": 25765,
+   "w": 1440,
+   "h": 900,
+   "title": "إيقاف معلم — سحب الاعتماد",
+   "is_interactive": true,
+   "radius": 12
+  },
   "AdminSuspendStudentDialog.dc.html": {
-   "x": 1560,
+   "x": 4680,
    "y": 25765,
    "w": 1440,
    "h": 900,
@@ -1333,9 +1450,18 @@
    "is_interactive": true,
    "radius": 12
   },
+  "AdminSuspendStudentDialogBan.dc.html": {
+   "x": 0,
+   "y": 26865,
+   "w": 1440,
+   "h": 900,
+   "title": "إيقاف طالب أو حظره — حظر نهائي",
+   "is_interactive": true,
+   "radius": 12
+  },
   "AdminRequireIdDialog.dc.html": {
-   "x": 3120,
-   "y": 25765,
+   "x": 1560,
+   "y": 26865,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — طلب إثبات هوية",
@@ -1343,8 +1469,8 @@
    "radius": 12
   },
   "AdminEnrollments.dc.html": {
-   "x": 4680,
-   "y": 25765,
+   "x": 3120,
+   "y": 26865,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — الاشتراكات والجلسات",
@@ -1352,7 +1478,7 @@
    "radius": 12
   },
   "AdminPayments.dc.html": {
-   "x": 0,
+   "x": 4680,
    "y": 26865,
    "w": 1440,
    "h": 900,
@@ -1361,8 +1487,8 @@
    "radius": 12
   },
   "AdminDisputes.dc.html": {
-   "x": 1560,
-   "y": 26865,
+   "x": 0,
+   "y": 27965,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — النزاعات والتعويض",
@@ -1370,8 +1496,8 @@
    "radius": 12
   },
   "AdminCompensation.dc.html": {
-   "x": 3120,
-   "y": 26865,
+   "x": 1560,
+   "y": 27965,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — التعويضات",
@@ -1379,8 +1505,8 @@
    "radius": 12
   },
   "AdminChatLog.dc.html": {
-   "x": 4680,
-   "y": 26865,
+   "x": 3120,
+   "y": 27965,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — سجل محادثة اشتراك",
@@ -1388,7 +1514,7 @@
    "radius": 12
   },
   "AdminSessionReview.dc.html": {
-   "x": 0,
+   "x": 4680,
    "y": 27965,
    "w": 1440,
    "h": 900,
@@ -1397,8 +1523,8 @@
    "radius": 12
   },
   "AdminGender.dc.html": {
-   "x": 1560,
-   "y": 27965,
+   "x": 0,
+   "y": 29065,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — بلاغات الجنس",
@@ -1406,8 +1532,8 @@
    "radius": 12
   },
   "AdminReports.dc.html": {
-   "x": 3120,
-   "y": 27965,
+   "x": 1560,
+   "y": 29065,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — البلاغات",
@@ -1415,8 +1541,8 @@
    "radius": 12
   },
   "AdminReviews.dc.html": {
-   "x": 4680,
-   "y": 27965,
+   "x": 3120,
+   "y": 29065,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — التقييمات",
@@ -1424,7 +1550,7 @@
    "radius": 12
   },
   "AdminIjazahRequests.dc.html": {
-   "x": 0,
+   "x": 4680,
    "y": 29065,
    "w": 1440,
    "h": 900,
@@ -1433,17 +1559,26 @@
    "radius": 12
   },
   "AdminConfirmDialog.dc.html": {
-   "x": 1560,
-   "y": 29065,
+   "x": 0,
+   "y": 30165,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — تأكيد إجراء ملزم (رفض طلب إجازة؛ النافذة نفسها لكل إجراء ملزم)",
    "is_interactive": true,
    "radius": 12
   },
+  "AdminConfirmDialogIssue.dc.html": {
+   "x": 1560,
+   "y": 30165,
+   "w": 1440,
+   "h": 900,
+   "title": "تأكيد إجراء ملزم — اعتماد وإصدار إجازة",
+   "is_interactive": true,
+   "radius": 12
+  },
   "AdminIjazahs.dc.html": {
    "x": 3120,
-   "y": 29065,
+   "y": 30165,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — الإجازات",
@@ -1452,7 +1587,7 @@
   },
   "AdminRevokeDialog.dc.html": {
    "x": 4680,
-   "y": 29065,
+   "y": 30165,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — سحب إجازة",
@@ -1461,7 +1596,7 @@
   },
   "AdminSettings.dc.html": {
    "x": 0,
-   "y": 30165,
+   "y": 31265,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — الإعدادات",
@@ -1470,7 +1605,7 @@
   },
   "AdminAdmins.dc.html": {
    "x": 1560,
-   "y": 30165,
+   "y": 31265,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — المشرفون",
@@ -1479,7 +1614,7 @@
   },
   "AdminAddAdminDialog.dc.html": {
    "x": 3120,
-   "y": 30165,
+   "y": 31265,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — إضافة مشرف",
@@ -1488,7 +1623,7 @@
   },
   "AdminMfaResetDialog.dc.html": {
    "x": 4680,
-   "y": 30165,
+   "y": 31265,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — إعادة ضبط التحقق بخطوتين لمشرف",
@@ -1497,7 +1632,7 @@
   },
   "AdminAudit.dc.html": {
    "x": 0,
-   "y": 31265,
+   "y": 32365,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — سجل التدقيق",
@@ -1506,7 +1641,7 @@
   },
   "AdminQueueEmpty.dc.html": {
    "x": 1560,
-   "y": 31265,
+   "y": 32365,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — البلاغات: لا شيء مفتوح",
@@ -1515,7 +1650,7 @@
   },
   "AdminLoadError.dc.html": {
    "x": 3120,
-   "y": 31265,
+   "y": 32365,
    "w": 1440,
    "h": 900,
    "title": "الإدارة — تعذّر تحميل الجدول",
@@ -1554,8 +1689,11 @@
   "DiscoveryFiltered.dc.html",
   "DiscoverySearch.dc.html",
   "DiscoveryEmpty.dc.html",
+  "DiscoverySearchEmpty.dc.html",
+  "DiscoveryNoTeachers.dc.html",
   "TeacherProfile.dc.html",
   "TeacherProfileReviews.dc.html",
+  "TeacherProfileReviewsEmpty.dc.html",
   "ReportSheet.dc.html",
   "BookingSheet.dc.html",
   "SlotTaken.dc.html",
@@ -1570,6 +1708,7 @@
   "Enrollments.dc.html",
   "EnrollmentsEnded.dc.html",
   "EnrollmentsEmpty.dc.html",
+  "EnrollmentsEndedEmpty.dc.html",
   "EnrollmentDetail.dc.html",
   "SessionStates.dc.html",
   "CancelRequestSheet.dc.html",
@@ -1605,22 +1744,26 @@
   "PayoutRejected.dc.html",
   "ProfileEditor.dc.html",
   "SignatureUpload.dc.html",
+  "SignatureUploadEmpty.dc.html",
   "TeacherCredentials.dc.html",
   "CredentialNeedsDocument.dc.html",
   "AddSubject.dc.html",
   "Packages.dc.html",
   "PackagesLocked.dc.html",
+  "PackagesEmpty.dc.html",
   "PackageEditor.dc.html",
   "PackageDeactivateSheet.dc.html",
   "PackageSubjectPicker.dc.html",
   "SubjectPicker.dc.html",
   "Availability.dc.html",
+  "AvailabilityEmpty.dc.html",
   "SlotEditor.dc.html",
   "SlotDisableSheet.dc.html",
   "TeacherHome.dc.html",
   "TeacherHomeEmpty.dc.html",
   "TeacherStudents.dc.html",
   "TeacherStudentsEnded.dc.html",
+  "TeacherStudentsEmpty.dc.html",
   "TeacherEnrollment.dc.html",
   "TeacherEnrollmentIjazah.dc.html",
   "TeacherEnrollmentCompleted.dc.html",
@@ -1634,6 +1777,7 @@
   "IjazahRequestSent.dc.html",
   "IjazahRequestBlocked.dc.html",
   "TeacherReviews.dc.html",
+  "TeacherReviewsEmpty.dc.html",
   "TeacherNotifications.dc.html",
   "PreSession.dc.html",
   "TeacherPreSession.dc.html",
@@ -1643,7 +1787,9 @@
   "SessionReconnecting.dc.html",
   "SessionEnded.dc.html",
   "Chat.dc.html",
+  "ChatEmpty.dc.html",
   "Notifications.dc.html",
+  "NotificationsEmpty.dc.html",
   "ProposalMain.dc.html",
   "ProposalTeacherHome.dc.html",
   "ProposalTeacherStudents.dc.html",
@@ -1663,6 +1809,7 @@
   "AdminApplications.dc.html",
   "AdminApplicationsEn.dc.html",
   "AdminDecisionDialog.dc.html",
+  "AdminDecisionDialogInfo.dc.html",
   "AdminDocumentViewer.dc.html",
   "AdminCredentials.dc.html",
   "AdminCredentialCorrect.dc.html",
@@ -1670,7 +1817,9 @@
   "AdminUsersFilter.dc.html",
   "AdminTeacher.dc.html",
   "AdminSuspendDialog.dc.html",
+  "AdminSuspendDialogRevoke.dc.html",
   "AdminSuspendStudentDialog.dc.html",
+  "AdminSuspendStudentDialogBan.dc.html",
   "AdminRequireIdDialog.dc.html",
   "AdminEnrollments.dc.html",
   "AdminPayments.dc.html",
@@ -1683,6 +1832,7 @@
   "AdminReviews.dc.html",
   "AdminIjazahRequests.dc.html",
   "AdminConfirmDialog.dc.html",
+  "AdminConfirmDialogIssue.dc.html",
   "AdminIjazahs.dc.html",
   "AdminRevokeDialog.dc.html",
   "AdminSettings.dc.html",
@@ -1765,7 +1915,7 @@
    "maxW": 4000
   },
   "s-cancel": {
-   "x": 6110,
+   "x": 6580,
    "y": 6091,
    "w": 360,
    "text": "الإلغاء طلب له سبب، والطرف الآخر يقبل أو يرفض، وينتهي الطلب عند بداية الجلسة. الجلسة التي لا تُحتسب تُعوَّض (ADR 0018): غياب المعلم في باقة تسميع يخيّر الطالب بين جلسة تعويضية واسترداد ثمنها؛ وكل ما عدا ذلك، وكل مسار الإجازة، جلسة تعويضية فقط. تُقترح في نفس الموعد بعد آخر جلسة، وللطالب اقتراح موعد آخر يقبله المعلم أو يرفضه، وإن لم يختر خلال 7 أيام تُحجز المقترحة. الاسترداد قضية تعويض تقررها الإدارة وتنفذها البوابة.",
@@ -1807,7 +1957,7 @@
    "maxW": 4000
   },
   "s-money": {
-   "x": 8460,
+   "x": 9870,
    "y": 9763,
    "w": 360,
    "text": "لا توجد شاشة رصيد أو محفظة أو أرباح في أي من الدورين. المنصة لا تحتفظ بأموال؛ حساب الاستلام يُسجَّل لدى البوابة وتُعرض حالة التحقق فقط (ADR 0007, FR-PAYG-13/15).",
@@ -1828,7 +1978,7 @@
    "maxW": 4000
   },
   "s-session": {
-   "x": 4230,
+   "x": 5170,
    "y": 12347,
    "w": 360,
    "text": "الجلسة: الميكروفون مطلوب والكاميرا اختيارية دائمًا (§3.7.2). يُعرض انتظار الطرف الآخر، والاتصال الضعيف يتحول إلى صوت فقط، والانقطاعات القصيرة لا تُحتسب. بعد الخروج تظهر شاشة نهاية الجلسة؛ نتيجتها تُحسب تلقائيًا من الحضور بعد موعد الانتهاء (§3.7.5).",

@@ -68,7 +68,13 @@
         "suitable": "Suitable",
         "unsuitable": "Unsuitable"
       },
+      "empty": {
+        "showDecided": "Show decided applications",
+        "text": "Every application has been decided. Each new application a teacher sends appears here.",
+        "title": "No open applications"
+      },
       "lede": "{count, plural, one {# application awaits a decision} other {# applications await a decision}}. A teacher is not shown to students until approved and their payout account is verified.",
+      "ledeEmpty": "No open applications now. A teacher is not shown to students until approved and their payout account is verified.",
       "pagerSummary": "{shown} of {total} · oldest first",
       "search": {
         "label": "Search",
@@ -119,6 +125,10 @@
         "target": "Target",
         "title": "{action} · {target}"
       },
+      "empty": {
+        "text": "Widen the period or remove a filter.",
+        "title": "No entries match the filters"
+      },
       "lede": "Every binding decision an admin takes, with its reason and what was before and after. The log is append-only.",
       "pagerSummary": "{shown} of {total} · last {days} days · {city} time",
       "search": {
@@ -146,6 +156,9 @@
       "disputeLine": "Session {n} · {outcome}",
       "disputeRaised": "Raised by the teacher {date} · {time}",
       "disputeRef": "Dispute over session {n} of {total}",
+      "empty": {
+        "title": "No messages in this conversation"
+      },
       "fileMeta": "{sender} · {date} · {size}",
       "filesTitle": "Files sent",
       "readOnly": "View only",
@@ -220,6 +233,9 @@
         "ar": "العربية",
         "en": "English"
       },
+      "loadError": {
+        "title": "Could not load {page}"
+      },
       "minor": "Minor",
       "minutes": "{count, plural, one {# minute} other {# minutes}}",
       "no": "No",
@@ -229,6 +245,9 @@
       "pager": {
         "ellipsis": "…",
         "pageOf": "Page {page} of {total}"
+      },
+      "panel": {
+        "nothingSelected": "Select a row to see its details."
       },
       "pdf": "PDF",
       "progress": "{done} of {total}",
@@ -245,6 +264,8 @@
       },
       "sessions": "{count, plural, one {# session} other {# sessions}}",
       "signInMethod": {
+        "apple": "Apple",
+        "email": "Email and password",
         "google": "Google"
       },
       "yes": "Yes"
@@ -292,7 +313,13 @@
         "title": "{student} · {teacher}",
         "trackNote": "On the recitation track the student chooses, after a teacher absence, between a make-up session and a refund of the session. On the ijazah track the session is made up with a session only."
       },
+      "empty": {
+        "showDecided": "Show all",
+        "text": "Every case has been decided. A case opens automatically when an enrollment ends with paid sessions left, when a student chooses a refund, or when a student is suspended.",
+        "title": "No open compensation cases"
+      },
       "lede": "{count, plural, one {# open case} other {# open cases}}. A case opens automatically: when an enrollment ends with paid sessions left in it, when a student chooses a refund for a session the teacher missed, or when a student is suspended (the case awaits the suspension review). The decision is the admin's alone. No button here moves money.",
+      "ledeEmpty": "No open cases now. The decision is the admin’s alone, and no button here moves money.",
       "pagerSummary": "{shown} of {total} · open first",
       "perSession": "Per session {amount}",
       "reasons": {
@@ -333,7 +360,13 @@
         "verifiedOn": "Verified"
       },
       "correctLede": "Correcting a verified chain. The teacher does not edit their chain; correction is for the administration only.",
+      "empty": {
+        "showDecided": "Show verified",
+        "text": "Every credential has been reviewed. Each new file a teacher uploads when applying or adding a subject appears here.",
+        "title": "No credentials awaiting review"
+      },
       "lede": "{count, plural, one {# ijazah awaits review} other {# ijazahs await review}}: one PDF per subject, from applications or from subjects teachers add.",
+      "ledeEmpty": "No credentials awaiting review now.",
       "panel": {
         "addGeneration": "Generation",
         "addName": "Name",
@@ -394,6 +427,188 @@
         "workEmail": "Work email"
       },
       "confirm": {
+        "acceptDocument": {
+          "confirm": "Accept the document",
+          "effects": {
+            "active": "The account becomes active again and can book again.",
+            "kept": "The document stays view-only in the account’s record.",
+            "notified": "{name} is notified."
+          },
+          "title": "Accept {name}’s document"
+        },
+        "approveCredential": {
+          "confirm": "Approve",
+          "effects": {
+            "notified": "{teacher} is notified.",
+            "verified": "The credential becomes “verified” with the riwaya, tariq and chain as you transcribed them; the teacher cannot edit it.",
+            "visible": "The subject appears to students on the teacher’s profile, and the teacher can create packages in it."
+          },
+          "title": "Approve {teacher}’s credential in {subject}"
+        },
+        "banDisputeParty": {
+          "confirm": "Ban the account",
+          "effects": {
+            "banned": "Their account is banned permanently with everything a {role} ban entails: all upcoming sessions cancelled, and no return to the platform.",
+            "decision": "The ban is recorded as part of the dispute decision."
+          },
+          "reasonLabel": "Reason for the ban (required)",
+          "title": "Ban {name} from the dispute"
+        },
+        "barFromIjazahs": {
+          "confirm": "Bar from receiving ijazahs",
+          "effects": {
+            "blocked": "No teacher can request an ijazah for them, and open requests are rejected.",
+            "kept": "Their issued ijazahs stay valid; revoking one is a separate action.",
+            "listed": "They appear in the barred list on the Ijazahs page, where the bar is lifted."
+          },
+          "reasonLabel": "Reason for the bar (required)",
+          "title": "Bar {name} from receiving ijazahs"
+        },
+        "cancelSession": {
+          "confirm": "Cancel session {number}",
+          "effects": {
+            "cancelled": "The session is cancelled as “cancelled by the administration”, with no penalty to anyone, and its slot becomes available again.",
+            "case": "A compensation case opens for the enrollment under Compensation.",
+            "notified": "The student and the teacher are notified with the reason."
+          },
+          "reasonLabel": "Reason for cancellation (required)",
+          "subtitle": "{student} with {teacher} · {package}",
+          "title": "Cancel session {number} · {date}"
+        },
+        "common": {
+          "cancel": "Cancel",
+          "effectsTitle": "What happens on confirmation",
+          "footer": "Confirmation is available once the reason is written. The action and its reason are recorded under your name in the audit log.",
+          "footerNote": "Confirmation is available once the note is written. The action and your note are recorded under your name in the audit log.",
+          "noteHint": "Not sent to the user.",
+          "noteLabel": "Note for the record (required)",
+          "reasonPlaceholder": "Write a clear reason"
+        },
+        "confirmSessionOutcome": {
+          "confirm": "Confirm the outcome",
+          "effects": {
+            "consequences": "It carries what any outcome carries: the session is counted or made up.",
+            "dispute": "Either party can dispute the outcome within the dispute window.",
+            "outcome": "The outcome you chose is confirmed and shown to both parties instead of “under administration review”."
+          },
+          "reasonLabel": "Reason for the confirmation (required)",
+          "subtitle": "{student} with {teacher} · outcome: {outcome}",
+          "title": "Confirm the outcome of session {number} · {date}"
+        },
+        "disableAdmin": {
+          "confirm": "Disable the account",
+          "effects": {
+            "audit": "Their name stays on every action they recorded.",
+            "noSignIn": "They can no longer sign in to the panel, and their open sessions are ended."
+          },
+          "reasonLabel": "Reason for disabling (required)",
+          "title": "Disable admin account {name}"
+        },
+        "dismissGenderFlag": {
+          "confirm": "Dismiss the report",
+          "effects": {
+            "notified": "The reporter is notified that the report was dismissed.",
+            "unchanged": "The declared gender stays as it is, and the report is closed."
+          },
+          "reasonLabel": "Reason for dismissal (required)",
+          "title": "Dismiss the gender report on {name}"
+        },
+        "dismissReport": {
+          "confirm": "Dismiss the report",
+          "effects": {
+            "chat": "The administration’s access to the enrollment’s chat ends when the report is closed.",
+            "closed": "The report is closed as “dismissed” with no action on the account."
+          },
+          "reasonLabel": "Reason for dismissal (required)",
+          "title": "Dismiss {reporter}’s report on {reported}"
+        },
+        "genderBan": {
+          "confirm": "Ban",
+          "effects": {
+            "banned": "The account is banned permanently.",
+            "cases": "A compensation case opens for every counterparty in their enrollments.",
+            "enrollments": "All their enrollments and upcoming sessions are cancelled as “cancelled by the administration”.",
+            "notified": "Every affected party is notified."
+          },
+          "reasonLabel": "Reason for the ban (required)",
+          "title": "Ban {name} for falsifying gender"
+        },
+        "genderCorrect": {
+          "confirm": "Correct",
+          "effects": {
+            "cases": "A compensation case opens for every affected enrollment.",
+            "enrollments": "Upcoming sessions in every enrollment that is no longer compliant are cancelled as “cancelled by the administration”.",
+            "notified": "Both parties of every affected enrollment are notified.",
+            "record": "The declared gender is corrected from now on in search and sessions."
+          },
+          "reasonLabel": "Reason for the correction (required)",
+          "title": "Correct {name}’s gender to {gender}"
+        },
+        "issueCompensationDecision": {
+          "confirm": "Issue the decision",
+          "effects": {
+            "execution": "If it is a refund, finance executes it through the gateway, and the payment status changes when the gateway reports it.",
+            "makeup": "If it is a make-up session, its date is proposed to the student in the app.",
+            "noMoney": "This button moves no money.",
+            "recorded": "The decision is recorded in the case and reaches the student and the teacher."
+          },
+          "reasonLabel": "Reason for the decision (required)",
+          "subtitle": "{student} · {package} · decision: {decision}",
+          "title": "Issue the compensation decision · {case}"
+        },
+        "issueDisputeDecision": {
+          "confirm": "Issue the decision",
+          "effects": {
+            "case": "If the decision is compensation, a case opens under Compensation.",
+            "final": "The decision is final; the dispute cannot be reopened.",
+            "notified": "The decision reaches both parties with your reason.",
+            "outcome": "The session’s outcome is fixed as you chose, and the “disputed” status is lifted."
+          },
+          "reasonLabel": "Reason for the decision (required)",
+          "subtitle": "{student} with {teacher} · decision: {decision}",
+          "title": "Issue the dispute decision · session of {date}"
+        },
+        "issueIjazah": {
+          "confirm": "Approve and issue",
+          "effects": {
+            "immutable": "It cannot be edited once issued; revoking it is a separate action with a reason.",
+            "issued": "The ijazah is issued now with its number, with the names as entered: grantor {grantor}, grantee {grantee}.",
+            "notified": "{teacher} and {student} are notified.",
+            "public": "It appears as valid on the public verification page and in the student’s ijazahs."
+          },
+          "notePlaceholder": "e.g. the chain matches the teacher’s verified credential and the names match the documents",
+          "subtitle": "{student} · {subject} · riwaya {riwaya} · from {teacher}",
+          "title": "Approve and issue the ijazah"
+        },
+        "liftIjazahBar": {
+          "confirm": "Lift the bar",
+          "effects": {
+            "allowed": "Teachers can request ijazahs for them again.",
+            "history": "The previous bar and its reason stay in the audit log."
+          },
+          "reasonLabel": "Reason for lifting the bar (required)",
+          "title": "Lift the bar on {name}"
+        },
+        "reactivateAccount": {
+          "confirm": "Reactivate",
+          "effects": {
+            "active": "The account becomes active again: they can sign in, book and join sessions.",
+            "notified": "{name} is notified.",
+            "sessions": "Sessions cancelled during the suspension do not come back; their compensation is in the account’s case under Compensation."
+          },
+          "reasonLabel": "Reason for reactivation (required)",
+          "title": "Reactivate {name}’s account"
+        },
+        "rejectCredential": {
+          "confirm": "Reject the credential",
+          "effects": {
+            "notified": "{teacher} is notified with the reason as you write it.",
+            "reapply": "They can upload another credential for the same subject.",
+            "rejected": "The credential becomes “rejected”, and the subject is not shown to students."
+          },
+          "reasonLabel": "Reason for rejection (required)",
+          "title": "Reject {teacher}’s credential in {subject}"
+        },
         "rejectIjazahRequest": {
           "cancel": "Cancel",
           "confirm": "Reject request",
@@ -409,10 +624,69 @@
           "reasonPlaceholder": "Write what the teacher needs to correct",
           "subtitle": "{student} · {subject} · riwaya {riwaya} · from {teacher}",
           "title": "Reject the ijazah request"
+        },
+        "removeReviewComment": {
+          "confirm": "Remove the comment",
+          "effects": {
+            "removed": "The comment text is removed from the teacher’s profile; the star rating keeps counting.",
+            "shown": "The student and the teacher see “the administration removed the comment”."
+          },
+          "reasonLabel": "Reason for removal (required)",
+          "title": "Remove {student}’s comment on {teacher}"
+        },
+        "requestAnotherDocument": {
+          "confirm": "Request another document",
+          "effects": {
+            "notified": "Your request reaches them with your note.",
+            "pending": "The account stays “identity proof pending” with booking stopped until the new document is reviewed."
+          },
+          "reasonLabel": "Note for the account holder (required)",
+          "title": "Request another document from {name}"
+        },
+        "requestCredentialDocument": {
+          "confirm": "Send the request",
+          "effects": {
+            "notified": "Your request reaches them with your note, in the app and as a notification.",
+            "status": "The credential becomes “another document required” until the teacher uploads what you asked for, then returns to the queue.",
+            "unchanged": "Nothing already verified changes."
+          },
+          "reasonLabel": "What the teacher must provide (required)",
+          "title": "Request another document from {teacher}"
+        },
+        "saveCredentialCorrection": {
+          "confirm": "Save the correction",
+          "effects": {
+            "applied": "The corrected chain applies from now on the teacher’s profile and on every ijazah issued after the correction.",
+            "issuedKept": "Ijazahs issued before it do not change.",
+            "logged": "The previous chain is kept with the correction in the audit log."
+          },
+          "reasonLabel": "Reason for the correction (required)",
+          "title": "Save the correction to {teacher}’s chain"
+        },
+        "suspendDisputeParty": {
+          "confirm": "Suspend the account",
+          "effects": {
+            "decision": "The suspension is recorded as part of the dispute decision.",
+            "suspended": "Their account is suspended at once with everything a {role} suspension entails: no sessions and no booking, sessions inside the suspension cancelled, and a compensation case opened."
+          },
+          "reasonLabel": "Reason for suspension (required)",
+          "title": "Suspend {name} from the dispute"
         }
       },
       "decision": {
         "a11yKind": "Decision type",
+        "ban": {
+          "banner": "The account is banned permanently: no sign-in and no new application with the same email. The ban is not lifted from the panel.",
+          "confirm": "Ban the applicant",
+          "legend": "Reason for the ban",
+          "noteLabel": "Note to the applicant (required)",
+          "reasons": {
+            "callFraud": "Verification call result: fraud",
+            "forgedDocuments": "Forged or altered documents",
+            "impersonation": "Impersonating another person or identity",
+            "other": "Another reason"
+          }
+        },
         "cancel": "Cancel",
         "confirmReject": "Reject application",
         "footer": "The decision, its reason and your note are recorded in the audit log under your name.",
@@ -430,6 +704,19 @@
           "nameMismatch": "The documents do not match the registered name",
           "other": "Other reason",
           "qualificationGap": "The qualification does not cover all the requested subjects"
+        },
+        "requestInfo": {
+          "banner": "The application stays open as “another document required” until the applicant uploads what you asked for, then returns to the queue.",
+          "confirm": "Send the request",
+          "footer": "The request, its reason and your note are recorded in the audit log under your name.",
+          "legend": "What is needed",
+          "noteLabel": "What the applicant must provide (required)",
+          "reasons": {
+            "idUnclear": "ID image unclear or incomplete",
+            "ijazahUnreadable": "Ijazah file unreadable or incomplete",
+            "nameMismatch": "Name on the ijazah does not match the ID",
+            "other": "Another reason"
+          }
         },
         "subtitle": "{subjects} · applied {date}",
         "title": "Decision on the application of {name}"
@@ -512,8 +799,29 @@
         "subtitle": "{subject} · riwaya {riwaya} · {student} · grantor {teacher} · {date}",
         "title": "Revoke ijazah {code}"
       },
+      "submitError": "The action could not be completed. Nothing changed; try again.",
       "suspendStudent": {
         "afterReviewTitle": "What is owed after the review",
+        "ban": {
+          "confirm": "Ban the account",
+          "effects": {
+            "cancelledAll": "All their upcoming sessions ({count}) are cancelled, and the teacher sees them as “cancelled by the administration”. Their slots become available again.",
+            "noCompensationAfter": ".",
+            "noCompensationBefore": "No compensation is owed; if the administration decides otherwise, it does so in a case opened under ",
+            "noCompensationLink": "Compensation",
+            "noSignIn": "They cannot sign in to their account or book a new enrollment. The ban is permanent and is not lifted from the panel.",
+            "notified": "{teacher} is notified."
+          },
+          "kept": {
+            "ijazahsLabel": "Their issued ijazahs",
+            "ijazahsText": "Stay valid on the verification page; revoking one is a separate action.",
+            "recordLabel": "Their record in the panel",
+            "recordText": "The account stays visible here as “banned” with the reason and the admin’s name, and is not deleted."
+          },
+          "keptTitle": "What remains",
+          "reasonLabel": "Reason for the ban (required)",
+          "title": "Ban {name}"
+        },
         "banNote": "With \"Ban account\" all their upcoming sessions ({count}) are cancelled and no compensation is owed, unless the administration decides otherwise in the case.",
         "cancel": "Cancel",
         "clearedLabel": "Cleared",
@@ -541,6 +849,15 @@
         "title": "Suspend {name}"
       },
       "suspendTeacher": {
+        "ban": {
+          "confirm": "Ban and cancel {count, plural, one {# session} other {# sessions}}",
+          "effects": {
+            "banned": "The account is banned permanently: no sign-in and no new application with the same email, and the ban is not lifted from the panel.",
+            "ijazahsKept": "Their students’ issued ijazahs stay valid; revoking a specific one is a separate action."
+          },
+          "reasonLabel": "Reason for the ban (required)",
+          "title": "Ban {name}"
+        },
         "cancel": "Cancel",
         "confirm": "Suspend and cancel {count, plural, one {# session} other {# sessions}}",
         "effects": {
@@ -561,6 +878,15 @@
         "reasonHint": "The reason is recorded with the action in the audit log.",
         "reasonLabel": "Reason for suspension (required)",
         "reasonPlaceholder": "Write a clear reason",
+        "revoke": {
+          "confirm": "Revoke approval and cancel {count, plural, one {# session} other {# sessions}}",
+          "effects": {
+            "ijazahsKept": "Their students’ issued ijazahs stay valid; revoking a specific one is a separate action.",
+            "lost": "They lose approved-teacher status: hidden from search, no new bookings accepted, and no return except through a new application the administration reviews."
+          },
+          "reasonLabel": "Reason for revoking approval (required)",
+          "title": "Revoke {name}’s approval"
+        },
         "stats": {
           "casesOpened": "{count, plural, one {# compensation case opened} other {# compensation cases opened}}",
           "sessionsCancelled": "{count, plural, one {# upcoming session cancelled} other {# upcoming sessions cancelled}}",
@@ -634,7 +960,13 @@
         "window": "Dispute window",
         "windowValue": "Raised {hours} hours after the end of the session"
       },
+      "empty": {
+        "showDecided": "Show resolved",
+        "text": "Every dispute has been resolved. Each dispute a student or teacher raises over a session’s outcome appears here.",
+        "title": "No open disputes"
+      },
       "lede": "{count, plural, one {# open dispute} other {# open disputes}} over session outcomes. The dispute window is {hours} hours from the end of the session, and every decision is recorded in the audit log.",
+      "ledeEmpty": "No open disputes now. Every decision is recorded in the audit log.",
       "pagerSummary": "{shown} of {total} · open first",
       "raisedByStudent": "Raised by the student · {date}",
       "raisedByTeacher": "Raised by the teacher · {date}",
@@ -686,6 +1018,10 @@
         "status": "Status",
         "subtitle": "{subject} · {track} · {sessions} · {minutes} with {teacher}",
         "track": "Track"
+      },
+      "empty": {
+        "text": "Try another name or remove a filter.",
+        "title": "No enrollments match the search"
       },
       "error": {
         "detailHint": "Details appear once the list loads and you choose an enrollment.",
@@ -739,7 +1075,13 @@
         "reportTitle": "Dispute",
         "subtitle": "{role} · {status} · dispute from {date} · {time}"
       },
+      "empty": {
+        "showDecided": "Show decided",
+        "text": "Every report has been decided. Each report on a declared gender appears here.",
+        "title": "No open gender reports"
+      },
       "lede": "{count, plural, one {# open dispute} other {# open disputes}}. The declared gender stays authoritative in search and sessions until a decision is issued, and changes only from here.",
+      "ledeEmpty": "No open reports now. The declared gender changes only from here.",
       "pagerSummary": "{shown} of {total} · open first",
       "raisedByAdminFromChatReport": "{role} · from a chat report",
       "search": {
@@ -755,6 +1097,10 @@
       "userCell": "{role} · {gender}"
     },
     "home": {
+      "actionsEmpty": {
+        "text": "The admins’ latest actions appear here.",
+        "title": "No actions yet"
+      },
       "columns": {
         "action": "Action",
         "admin": "Admin",
@@ -809,8 +1155,14 @@
         "title": "Ijazah request · {student}",
         "track": "Enrollment track"
       },
+      "empty": {
+        "showDecided": "Show decided",
+        "text": "Every request has been decided. Each request a teacher sends for their student appears here.",
+        "title": "No open ijazah requests"
+      },
       "issuedOn": "Issued · {date}",
       "lede": "{count, plural, one {# request awaits a decision} other {# requests await a decision}}. The teacher requests the ijazah for their student, and it is issued on your approval.",
+      "ledeEmpty": "No requests await a decision now. The teacher requests the ijazah for their student, and it is issued on your approval.",
       "pagerSummary": "{shown} of {total} · newest first",
       "pair": "{teacher} to {student}",
       "rejectedOn": "Rejected · {date}",
@@ -833,6 +1185,10 @@
         "note": "No ijazah request is sent for a barred student. Lifting the bar also asks for a reason, and the bar and its lifting stay in the audit log.",
         "title": "Barred from receiving ijazahs · {count}"
       },
+      "barredEmpty": {
+        "text": "Every account the administration barred from receiving ijazahs appears here.",
+        "title": "No one is barred from receiving ijazahs"
+      },
       "columns": {
         "certificateNo": "Certificate number",
         "parties": "Student and teacher",
@@ -854,6 +1210,10 @@
         "subtitle": "{subject} · riwaya {riwaya}",
         "verifyPage": "Public verification page",
         "verifyPageHint": "What someone scanning the certificate code sees"
+      },
+      "empty": {
+        "text": "Try another number or name, or remove a filter.",
+        "title": "No ijazahs match the search"
       },
       "issuedCell": "{subject} · issued {date}",
       "lede": "Every ijazah was issued at its teacher's request. An ijazah is revoked, never deleted, and its number keeps showing its status on the verification page.",
@@ -983,6 +1343,10 @@
         "subtitle": "{student} · {subject} · {sessions} with {teacher}",
         "transactionNo": "Transaction number"
       },
+      "empty": {
+        "text": "Try another reference or name, or remove a filter.",
+        "title": "No payments match the search"
+      },
       "enrollmentCancelled": "Enrollment cancelled",
       "lede": "The order record as reported by the payment gateway. Amounts in Egyptian pounds.",
       "pagerSummary": "{shown} of {total} · newest first",
@@ -1078,6 +1442,10 @@
         "title": "{student} → {teacher}",
         "written": "Written {date} · after the enrollment completed"
       },
+      "empty": {
+        "text": "Every review a student writes after completing an enrollment appears here.",
+        "title": "No reviews"
+      },
       "lede": "The latest student reviews of teachers. The admin can only remove the comment; the stars keep counting and the review is not deleted.",
       "pagerSummary": "{shown} of {total} · newest first",
       "search": {
@@ -1133,7 +1501,13 @@
         "telemetry": "Simultaneous connection {minutes} of {total} minutes ({percent}%) · threshold {threshold}%.",
         "title": "Session {n} of {total} · {subject}"
       },
+      "empty": {
+        "showDecided": "Show confirmed",
+        "text": "Every session’s outcome has been confirmed. Each session whose outcome the system could not settle appears here.",
+        "title": "No sessions awaiting review"
+      },
       "lede": "{count, plural, one {# session whose outcome the system could not settle} other {# sessions whose outcome the system could not settle}}: a connection below the attendance threshold, or an outage of the video service. The outcome is confirmed with a reason recorded in the audit log.",
+      "ledeEmpty": "No sessions awaiting review now.",
       "minutesOf": "{minutes} of {total} min",
       "pagerSummary": "{shown} of {total} · oldest first",
       "search": {
@@ -1469,6 +1843,10 @@
       "search": {
         "label": "Search",
         "placeholder": "Name or email"
+      },
+      "searchEmpty": {
+        "text": "Try another name or email, or remove a filter.",
+        "title": "No user matches the search"
       },
       "title": "Users"
     }

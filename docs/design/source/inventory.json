@@ -435,6 +435,35 @@
   ]
  },
  {
+  "id": "DiscoverySearchEmpty",
+  "title": "البحث بلا نتائج",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "Discovery",
+   "DiscoveryFilter"
+  ]
+ },
+ {
+  "id": "DiscoveryNoTeachers",
+  "title": "لا معلمين متاحين للطالب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "Discovery"
+  ]
+ },
+ {
   "id": "TeacherProfile",
   "title": "الطالب — ملف المعلم",
   "w": 390,
@@ -459,6 +488,19 @@
   "tabs": "",
   "adminNav": "",
   "heading": "تقييمات الشيخ أحمد المصري",
+  "links": [
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "TeacherProfileReviewsEmpty",
+  "title": "تقييمات المعلم — لا شيء بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تقييمات الشيخ عمر حسن",
   "links": [
    "TeacherProfile"
   ]
@@ -655,6 +697,20 @@
   "links": [
    "Notifications",
    "Discovery"
+  ]
+ },
+ {
+  "id": "EnrollmentsEndedEmpty",
+  "title": "اشتراكاتي: المنتهية — فارغة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اشتراكاتي",
+  "links": [
+   "Notifications",
+   "Enrollments"
   ]
  },
  {
@@ -1149,6 +1205,19 @@
   ]
  },
  {
+  "id": "SignatureUploadEmpty",
+  "title": "صورة التوقيع — قبل أول رفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "صورة التوقيع",
+  "links": [
+   "TeacherAccount"
+  ]
+ },
+ {
   "id": "TeacherCredentials",
   "title": "المعلم — إجازاتي",
   "w": 390,
@@ -1219,6 +1288,19 @@
   ]
  },
  {
+  "id": "PackagesEmpty",
+  "title": "الباقات — لا باقات بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الباقات",
+  "links": [
+   "PackageEditor"
+  ]
+ },
+ {
   "id": "PackageEditor",
   "title": "المعلم — باقة جديدة أو تعديل باقة",
   "w": 390,
@@ -1275,6 +1357,19 @@
  {
   "id": "Availability",
   "title": "المعلم — المواعيد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "المواعيد",
+  "links": [
+   "SlotEditor"
+  ]
+ },
+ {
+  "id": "AvailabilityEmpty",
+  "title": "المواعيد — لا مواعيد بعد",
   "w": 390,
   "h": 844,
   "kind": "phone",
@@ -1374,6 +1469,21 @@
    "TeacherNotifications",
    "TeacherStudents",
    "TeacherEnrollmentCompleted"
+  ]
+ },
+ {
+  "id": "TeacherStudentsEmpty",
+  "title": "طلابي — لا طلاب بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلابي",
+  "links": [
+   "TeacherNotifications",
+   "TeacherStudentsEnded",
+   "Packages"
   ]
  },
  {
@@ -1562,6 +1672,19 @@
   ]
  },
  {
+  "id": "TeacherReviewsEmpty",
+  "title": "تقييماتي — لا شيء بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تقييماتي",
+  "links": [
+   "TeacherAccount"
+  ]
+ },
+ {
   "id": "TeacherNotifications",
   "title": "المعلم — الإشعارات",
   "w": 390,
@@ -1699,6 +1822,20 @@
   ]
  },
  {
+  "id": "ChatEmpty",
+  "title": "المحادثة — لا رسائل بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الشيخ أحمد المصري",
+  "links": [
+   "EnrollmentDetail",
+   "ReportSheet"
+  ]
+ },
+ {
   "id": "Notifications",
   "title": "مشترك — الإشعارات",
   "w": 390,
@@ -1720,8 +1857,21 @@
   ]
  },
  {
+  "id": "NotificationsEmpty",
+  "title": "الإشعارات — فارغة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإشعارات",
+  "links": [
+   "Main"
+  ]
+ },
+ {
   "id": "ProposalMain",
-  "title": "t",
+  "title": "مقترح — الطالب: الرئيسية (بديل قيد القرار)",
   "w": 390,
   "h": 997,
   "kind": "phone",
@@ -2015,6 +2165,23 @@
   ]
  },
  {
+  "id": "AdminDecisionDialogInfo",
+  "title": "قرار على طلب معلم — طلب معلومات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminApplications:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminDocumentViewer",
+   "AdminCredentials",
+   "AdminDecisionDialog",
+   "AdminApplications"
+  ]
+ },
+ {
   "id": "AdminDocumentViewer",
   "title": "الإدارة — عرض وثيقة",
   "w": 1440,
@@ -2139,8 +2306,49 @@
   ]
  },
  {
+  "id": "AdminSuspendDialogRevoke",
+  "title": "إيقاف معلم — سحب الاعتماد",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminRequireIdDialog",
+   "AdminSuspendDialog",
+   "AdminDocumentViewer",
+   "AdminCredentialCorrect",
+   "AdminCredentials",
+   "AdminEnrollments",
+   "AdminCompensation",
+   "AdminTeacher"
+  ]
+ },
+ {
   "id": "AdminSuspendStudentDialog",
   "title": "الإدارة — إيقاف طالب أو حظره",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsersFilter",
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminRequireIdDialog",
+   "AdminSuspendStudentDialog",
+   "AdminCompensation"
+  ]
+ },
+ {
+  "id": "AdminSuspendStudentDialogBan",
+  "title": "إيقاف طالب أو حظره — حظر نهائي",
   "w": 1440,
   "h": 900,
   "kind": "admin",
@@ -2340,6 +2548,24 @@
  {
   "id": "AdminConfirmDialog",
   "title": "الإدارة — تأكيد إجراء ملزم (رفض طلب إجازة؛ النافذة نفسها لكل إجراء ملزم)",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminIjazahRequests:ar",
+  "heading": "",
+  "links": [
+   "AdminIjazahs",
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminConfirmDialog",
+   "AdminIjazahRequests"
+  ]
+ },
+ {
+  "id": "AdminConfirmDialogIssue",
+  "title": "تأكيد إجراء ملزم — اعتماد وإصدار إجازة",
   "w": 1440,
   "h": 900,
   "kind": "admin",

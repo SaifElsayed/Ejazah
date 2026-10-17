@@ -1,0 +1,33 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">استكشف</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--scroll gap-4">
+    <div class="search-row">
+      <label class="input-group input-group--focused">
+        {{icon:search:md}}
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الشيخ أو المادة" aria-label="ابحث باسم الشيخ أو المادة" value="محمد عبد الله">
+        <a href="Discovery.dc.html" class="icon-btn icon-btn--muted" aria-label="مسح البحث">{{icon:x:sm}}</a>
+      </label>
+      <a href="DiscoveryFilter.dc.html" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر">{{icon:filter:md}}</a>
+
+    </div>
+
+    <span class="text-caption tone-muted">لا نتائج لـ «محمد عبد الله» · في كل الأقسام</span>
+
+    <section class="empty-state">
+      <span class="icon-tile icon-tile--2xl icon-tile--neutral" aria-hidden="true">{{icon:search:xl}}</span>
+      <h2 class="empty-state__title">لم نجد معلمًا بهذا الاسم</h2>
+      <p class="empty-state__text">جرّب اسمًا آخر، أو ابحث باسم المادة.</p>
+      <a href="Discovery.dc.html" class="btn btn--ghost btn--md">مسح البحث</a>
+    </section>
+  </main>
+
+  {{TABS:student:Discovery}}
+</div>

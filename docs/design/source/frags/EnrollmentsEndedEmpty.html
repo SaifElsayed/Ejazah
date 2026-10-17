@@ -1,0 +1,25 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">اشتراكاتي</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="category-tabs" role="tablist" aria-label="حالة الاشتراك">
+      <a href="Enrollments.dc.html" class="category-tabs__item" role="tab" aria-selected="false">جارية<span class="category-tabs__count">1</span></a>
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">منتهية</button>
+    </div>
+
+    <section class="empty-state grow">
+      <span class="icon-tile icon-tile--2xl icon-tile--neutral" aria-hidden="true">{{icon:book:xl}}</span>
+      <h2 class="empty-state__title">لا اشتراكات منتهية</h2>
+      <p class="empty-state__text">يظهر هنا كل اشتراك اكتمل أو انتهى.</p>
+    </section>
+  </main>
+
+  {{TABS:student:Enrollments}}
+</div>
