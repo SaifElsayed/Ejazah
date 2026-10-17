@@ -293,7 +293,7 @@ Get this wrong for two weeks and fixing it is a rewrite of every screen.
 
 Vite SPA. Routes mirror the admin queues. It uses the app's design system: the same token source, read as CSS variables, and the same component contracts, with shadcn/ui as the behaviour base themed by those tokens (ADR 0014). Arabic (default, RTL) and English.
 
-The only shared thing is `packages/contracts`, and even there it consumes a separate router.
+Beyond the design system (§6.3, ADR 0014 D1), the only shared code is `packages/contracts`, and even there it consumes a separate router.
 
 ## 7. The API layer
 

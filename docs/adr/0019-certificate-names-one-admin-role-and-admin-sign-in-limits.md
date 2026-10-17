@@ -20,7 +20,11 @@ The final design audit found three gaps.
 
 - When a teacher sends the first ijazah request for a student whose account has no certificate name, the request waits.
   The student is asked for the name as it should be printed. It is shown as it will appear, entered once, and editable
-  later only through support.
+  later only by an admin on the student's request, audit-logged (FR-ADMIN-17).
+- The certificate stores the printed names at issue (`ijazahs.student_name_printed`,
+  `ijazahs.teacher_name_printed`, in the same ERD pass as `request_id`), so a deletion that erases
+  `users.certificate_name` (ADR 0015 D3) leaves the certificate verifying unchanged; a later
+  correction of the account's name never rewrites an issued certificate.
 - The request then goes on to the admin (FR-IJAZAH-15).
 - The name is `users.certificate_name`.
 
@@ -40,7 +44,11 @@ Sub-roles (vetting, moderation, read-only) are deferred (§13). `admin_users` ge
   screen never shows how many attempts remain.
 - **Recovery codes.** At MFA setup the admin receives 10 single-use recovery codes. They are stored hashed
   (`admin_recovery_codes`) and can be regenerated.
-- **MFA reset.** Another admin resets a lost MFA, with a reason, and the reset is audited.
+- **MFA reset.** Another admin resets a lost MFA, with a reason, and the reset is audited. With one admin role
+  (D2), any admin may reset any other's MFA; the owner accepts this for the MVP.
+- **Lockout is the second line, not the first.** ADR 0011 D3's per-subject throttle and budget is the primary control,
+  so a stranger who knows an admin's email cannot lock them out at will beyond that budget; the locked and the
+  wrong-password answers are the same message with the same timing, so neither reveals the state.
 
 ## Consequences
 

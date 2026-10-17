@@ -49,7 +49,7 @@ Thirty-three tables. One database, one schema. The grouping above maps 1:1 to th
 
 ### `users`
 
-The root identity. One row per human, regardless of how many roles they hold.
+The root identity. One row per human, with exactly one role (ADR 0016).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -60,7 +60,7 @@ The root identity. One row per human, regardless of how many roles they hold.
 | gender | enum male · female | Self-declared, FR-AUTH-3. Changed only via admin (FR-GENDER-5) |
 | date_of_birth | date | FR-AUTH-4 |
 | display_name | text | |
-| certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, added in the Phase 1 pass) |
+| certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, added in the Phase 1 pass). Erased on deletion; the names a certificate prints are snapshotted onto `ijazahs` at issue (ADR 0015 D3, ADR 0019 D1) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
 | account_status | enum active · suspended · verification_required · banned | |
@@ -69,7 +69,7 @@ The root identity. One row per human, regardless of how many roles they hold.
 
 `is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
 
-A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
+A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. Its rows are deleted outright when the account is deleted (ADR 0015 D3), so the unique never blocks the person's new account. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
 
 ### `user_roles`
 
@@ -391,7 +391,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 
 ### `ijazahs`
 
-**Amended by ADR 0017 (Phase 4 ERD pass, forward migration).** An ijazah is issued by the admin on the teacher's request: `ijazahs` gains `request_id` FK → `ijazah_requests` (unique) and `issued_by_admin_id` FK → `admin_users`. New table `ijazah_requests`: `id`, `enrollment_id`, `teacher_user_id`, `student_user_id`, `subject_id`, `completion_date` (date), `language` enum ar · en, `status` enum pending · approved · rejected, `reason` (nullable, mandatory on reject), `decided_by_admin_id`, `decided_at`, `created_at`; at most one pending request per enrollment. `chain_snapshot_json` keeps generations (arrays of names) with the teacher appended (FR-ISNAD-7).
+**Amended by ADR 0017 (Phase 4 ERD pass, forward migration).** An ijazah is issued by the admin on the teacher's request: `ijazahs` gains `request_id` FK → `ijazah_requests` (unique) and `issued_by_admin_id` FK → `admin_users`. New table `ijazah_requests`: `id`, `enrollment_id`, `teacher_user_id`, `student_user_id`, `subject_id`, `completion_date` (date), `language` enum ar · en, `status` enum pending · approved · rejected, `reason` (nullable, mandatory on reject), `decided_by_admin_id`, `decided_at`, `created_at`; at most one pending request per enrollment. `chain_snapshot_json` keeps generations (arrays of names) with the teacher appended (FR-ISNAD-7). ADR 0019 D1 (same pass): `student_name_printed` and `teacher_name_printed` text NOT NULL, the names as issued, so the certificate verifies after a deletion erases `users.certificate_name` (ADR 0015 D3).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -660,7 +660,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 4. `session_participant_events.provider_event_id` unique — webhook replay safety (attendance).
 5. *Retired (ADR 0005 D1).* Was `ledger_entries.idempotency_key` unique. Number kept so old citations resolve.
 6. *Retired (ADR 0005 D1).* Was UPDATE/DELETE revoked on `ledger_entries`. Number kept so old citations resolve.
-7. `isnad_entries (teacher, subject, position)` unique — a chain cannot have two names at one position.
+7. `isnad_entries (credential_id, position)` unique (ADR 0017) — a chain cannot have two generations at one position.
 8. `chat_messages`: body or attachment, or a purged row — check constraint (FR-SESS-13).
 9. `reviews.rating` between 1 and 5 — check constraint.
 10. `users`, `sessions`, `enrollments`, `ijazahs`, `audit_logs`: no DELETE — revoked at the Postgres role level (R-DB-3). For the first four, removal is `deleted_at` and the row survives. `audit_logs` has no `deleted_at` either: it is strictly append-only, with no removal path at all. The app's DB user physically cannot destroy a person, a lesson, a purchase, a certificate, or any record of what an administrator did.

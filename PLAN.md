@@ -320,7 +320,6 @@ Cut in this order if a gate slips. The phase each cut belongs to is in brackets,
 - Reviews and ratings (Phase 4)
 - In-session file sharing, keeping text chat (Phase 3)
 - Public certificate verification page (Phase 4)
-- Uploaded certificates, shipping generated only (Phase 4)
 - Notification breadth (Phase 4)
 - Admin settings UI (Phase 4)
 - One store first (Phase 6)

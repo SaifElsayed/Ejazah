@@ -1,6 +1,6 @@
 # ADR 0018 — Package tracks, make-up sessions, and what a student's suspension costs
 
-**Status:** accepted · **Date:** 2026-10-15 · **Decided by:** the owner, 2026-10-15 · **Amends:** SRS FR-PROFILE-2, FR-IJAZAH-1, §3.8 (FR-CANCEL-2, FR-NOSHOW-2, FR-NOSHOW-6, FR-DISPUTE-5; adds §3.8.5 FR-MAKEUP-1..6), FR-ADMIN-5, FR-NOTIF-1, §3.14, §6, §7, OPEN-11 (adds DEC-58); ERD packages, enrollments, sessions, settings
+**Status:** accepted · **Date:** 2026-10-15 · **Decided by:** the owner, 2026-10-15 · **Amends:** SRS FR-PROFILE-2, FR-IJAZAH-1, §3.8 (FR-CANCEL-2, FR-NOSHOW-2, FR-NOSHOW-6, FR-DISPUTE-5; adds §3.8.5 FR-MAKEUP-1..6), FR-ADMIN-5, FR-AUTH-11, FR-NOTIF-1, §3.14, §6, §7, OPEN-11 (adds DEC-58); ERD packages, enrollments, sessions, settings
 
 ## Context
 
@@ -72,7 +72,7 @@ before a payout is taken from the teacher's pending payout is decided there too.
 
 | Action | Upcoming sessions | Money |
 |---|---|---|
-| **Suspension** (temporary, under review) | Sessions falling inside the suspension are cancelled (`cancelled_by_admin`). A compensation case opens and waits for the review | If the student is cleared: make-up sessions or a refund, under D2's rule for the enrollment's track. If the fault is confirmed: nothing owed, as with a student's absence |
+| **Suspension** (temporary, under review) | Every upcoming session is cancelled at the moment of suspension (`cancelled_by_admin`); a suspension has no end date, so none is left to become a no-show. A compensation case opens and waits for the review | If the student is cleared: make-up sessions or a refund, under D2's rule for the enrollment's track. If the fault is confirmed: nothing owed, as with a student's absence |
 | **Ban** (final) | All upcoming sessions are cancelled | Nothing owed by default. The administration may decide otherwise in the case |
 
 Either way, the teacher is notified and the freed slots return to booking. The Terms say plainly that a suspension
@@ -90,7 +90,7 @@ or ban for a violation earns no refund (FR-AUTH-11).
   - §3.14 gains the choice window.
   - OPEN-11 gains two questions.
   - §6 and §7 change, and DEC-58 is added.
-- **ERD.** Forward migrations in the Phase 1 and Phase 2 passes:
+- **ERD.** Forward migrations in the Phase 1 ERD pass:
   - `packages.track` (enum `recitation` · `ijazah_track`) and `enrollments.snapshot_track`;
   - `sessions.makeup_for_session_id` (nullable);
   - a `session_remedies` table: one row per session not consumed, holding:

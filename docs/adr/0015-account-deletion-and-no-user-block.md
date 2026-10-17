@@ -60,8 +60,13 @@ A public page explains the in-app path. It also takes a request without the app:
   - Device push tokens are removed.
 - **The account row.** The `users` row is soft-deleted (`deleted_at`, ERD
   §15.10).
-  - Its personal fields are erased: display name (shown as «مستخدم محذوف»),
-    email, phone, password hash, date of birth and photo.
+  - Its personal fields are erased: display name (shown as the role word,
+    «طالب محذوف» or «معلم محذوف»), email, phone, password hash, date of birth,
+    photo and certificate name (ADR 0019 D1). The names a certificate prints are
+    snapshotted onto `ijazahs` at issue, so it keeps verifying without them.
+  - Its `auth_identities` rows are deleted outright: a provider subject is
+    personal data with no history value, and its unique
+    `(provider, provider_subject)` must not block the person's new account (D1).
   - The partial unique indexes free the email for a new sign-up.
 - **Teacher data.** A teacher's bio, verification documents and payout
   recipient reference are erased.
