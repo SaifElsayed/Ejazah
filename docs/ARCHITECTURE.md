@@ -32,11 +32,11 @@ Modules are drawn where service boundaries would go if you ever split them out. 
 
 ## 2. Containers
 
-| Container | Technology                                    | Responsibility                                                                             |
-| --------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Mobile    | Expo · React Native · TypeScript · NativeWind | Student and Teacher. One binary, one store listing.                                        |
-| Admin     | Vite · React · shadcn/ui                      | Internal operations. English only. Deliberately plain.                                     |
-| API       | NestJS · tRPC                                 | All business logic. The only thing touching the database.                                  |
+| Container | Technology                                    | Responsibility                                            |
+| --------- | --------------------------------------------- | --------------------------------------------------------- |
+| Mobile    | Expo · React Native · TypeScript · NativeWind | Student and Teacher. One binary, one store listing.       |
+| Admin     | Vite · React · shadcn/ui                      | Internal operations. Arabic and English, the app's design system (ADR 0014). |
+| API       | NestJS · tRPC                                 | All business logic. The only thing touching the database. |
 | Worker    | NestJS · BullMQ                               | Scheduled and deferred work. Second process of `apps/api` (`src/worker.ts`), same modules. |
 | Database  | PostgreSQL · Prisma · one schema              | Single source of truth.                                                                    |
 | Queue     | Redis                                         | BullMQ queues and rate limiting only. Slot holds live in Postgres (`slot_holds`).          |
@@ -60,13 +60,14 @@ A port with exactly one implementation, forever, is an extra file, an extra indi
 | Capability                                          | Port? | Reasoning                                                                                                                                                                                                                                                                                                              |
 | --------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Payment                                             | ✓     | Direct gateway checkout (ADR 0007). The port speaks the domain: create a checkout for an enrollment, verify and parse an inbound event, register a payout recipient, report its status. Gateways are interchangeable on price and KYC reach (OPEN-11); a recording stand-in is the second implementation from day one. |
-| Video                                               | ✓     | Daily / LiveKit / Agora are interchangeable; you may switch on price or reliability.                                                                                                                                                                                                                                   |
-| Push                                                | ✓     | Expo Notifications now, direct FCM/APNs later.                                                                                                                                                                                                                                                                         |
-| File storage                                        | ✓     | Local disk in dev, S3-compatible in prod. Two implementations from day one.                                                                                                                                                                                                                                            |
-| SMS / OTP                                           | ✓     | Providers change on price. Trivial interface.                                                                                                                                                                                                                                                                          |
-| Chat                                                | ✗     | Built in-house on Postgres + WebSocket. A port would abstract your own code from itself. Add one if Stream or Sendbird ever becomes real.                                                                                                                                                                              |
-| Search                                              | ✗     | A filtered Postgres query. The repository already is the port. Moving to Meilisearch means swapping the repository implementation — that seam exists.                                                                                                                                                                  |
-| Profiles, booking, sessions, certification, reviews | ✗     | Core domain. There is nothing to swap them for. Abstracting your own domain behind an adapter is the classic over-abstraction mistake.                                                                                                                                                                                 |
+| Video                                               | ✓     | Daily / LiveKit / Agora are interchangeable; you may switch on price or reliability.                                                                  |
+| Push                                                | ✓     | Expo Notifications now, direct FCM/APNs later.                                                                                                        |
+| File storage                                        | ✓     | Local disk in dev, S3-compatible in prod. Two implementations from day one.                                                                           |
+| Email                                               | ✓     | One-time codes for email verification and password reset (ADR 0012). Providers change on price; a stand-in in development. Built in Phase 1. |
+| SMS / OTP                                           | ✓     | Providers change on price. Trivial interface. Unused in MVP: phone sign-up is deferred (ADR 0012); the port and its stand-in stay.                                                                                                         |
+| Chat                                                | ✗     | Built in-house on Postgres + WebSocket. A port would abstract your own code from itself. Add one if Stream or Sendbird ever becomes real.             |
+| Search                                              | ✗     | A filtered Postgres query. The repository already is the port. Moving to Meilisearch means swapping the repository implementation — that seam exists. |
+| Profiles, booking, sessions, certification, reviews | ✗     | Core domain. There is nothing to swap them for. Abstracting your own domain behind an adapter is the classic over-abstraction mistake.                |
 
 ### 3.3 Why domain modules don't need ports
 
@@ -90,10 +91,11 @@ apps/api/src/platform/ports/
 │   └── in-memory.adapter.ts          stand-in for tests
 ├── video/    video.port.ts · daily.adapter.ts · fake.adapter.ts
 ├── push/     push.port.ts · expo.adapter.ts · fake.adapter.ts
+├── email/    email.port.ts · provider.adapter.ts · fake.adapter.ts   (Phase 1, ADR 0012)
 └── sms/      sms.port.ts · provider.adapter.ts · fake.adapter.ts
 ```
 
-Five ports. Selection is configuration, never a code change:
+Five ports, six once Phase 1 adds email (ADR 0012). Selection is configuration, never a code change:
 
 ```ts
 providers: [
@@ -310,11 +312,11 @@ apps/admin/src/design/
 
 Get this wrong for two weeks and fixing it is a rewrite of every screen.
 
-### 6.5 Admin — deliberately separate
+### 6.5 Admin — a separate app on the shared design system
 
-Vite SPA. Routes mirror the admin queues. Shares nothing visual with mobile — no tokens, no theme, no components, no translations. English only, plain shadcn defaults. It is an internal tool, not a product.
+Vite SPA. Routes mirror the admin queues. It uses the app's design system: the same token source, read as CSS variables, and the same component contracts, with shadcn/ui as the behaviour base themed by those tokens (ADR 0014). Arabic (default, RTL) and English.
 
-The only shared thing is `packages/contracts`, and even there it consumes a separate router.
+Beyond the design system (§6.3, ADR 0014 D1), the only shared code is `packages/contracts`, and even there it consumes a separate router.
 
 ## 7. The API layer
 
@@ -519,7 +521,7 @@ Comments explain why, never what. One error shape everywhere: `{ code, message, 
 - No GraphQL. tRPC gives the same safety with fewer concepts.
 - No Redux. TanStack Query for server state; Zustand only for auth, locale, theme.
 - No custom auth. Proven library.
-- No shared design system between admin and mobile. Admin is a tool, not a product.
+- No second design system. Admin and mobile share one token source and one set of component contracts (ADR 0014).
 - No caching layer until something is measurably slow.
 - No wallet, ledger, escrow or balance. The gateway settles directly to the teacher; the platform keeps a record and 0% (ADR 0007).
 
