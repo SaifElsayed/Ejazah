@@ -177,8 +177,10 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| name_ar / name_en | text | Both mandatory (FR-LOC-1) |
+| name_ar / name_en | text | Both mandatory (FR-LOC-1). `name_en` is the English display name, required on creation (ADR 0021 D1) |
 | is_active | boolean | Admin-managed list |
+
+**Amended by ADR 0021 (D1, a note; no migration).** `name_en` is the English display name: every English page shows it wherever an Arabic page shows `name_ar` (the admin's English boards, the English phone app, the English certificate verification page). The admin's subject list (FR-ADMIN-2) requires both names on creation and refuses a subject with an empty English name. A subject name is data, never an i18n key; the two catalogue strings that embed subject names as examples take them from this table at render time.
 
 ### `teacher_subjects`
 
@@ -499,12 +501,14 @@ Backs both push delivery and the notification centre (FR-NOTIF-1/2).
 |---|---|---|
 | id | uuid | PK |
 | user_id | FK → users | |
-| type | enum teacher_application_status_changed · new_booking · session_reminder · no_show_recorded · cancellation_requested · cancellation_request_accepted · cancellation_request_declined · payment_confirmed · payment_failed · payment_expired · payout_account_verified · dispute_resolved · gender_flag_resolved · ijazah_granted · ijazah_revoked · new_review | One member per FR-NOTIF-1 event, in the order the SRS states them (DEC-13c) |
+| type | enum teacher_application_status_changed · new_booking · session_reminder · no_show_recorded · cancellation_requested · cancellation_request_accepted · cancellation_request_declined · payment_confirmed · payment_failed · payment_expired · payout_account_verified · dispute_resolved · gender_flag_resolved · ijazah_granted · ijazah_revoked · new_review | One member per FR-NOTIF-1 event, in the order the SRS states them (DEC-13c). Twelve members are appended by ADR 0021, below |
 | title_key / body_key | text | i18n keys — rendered in the user's language at display time (FR-NOTIF-3) |
 | payload | jsonb | Deep-link data (enrollment_id, session_id, …) |
 | read_at | timestamptz, nullable | Unread state for the centre |
 | pushed_at | timestamptz, nullable | Set by the delivery job (FR-NOTIF-4) |
 | created_at | timestamptz | |
+
+**Amended by ADR 0021 (Phase 2 notifications pass, forward migration).** `type` gains the twelve members the accepted ADRs imply and the design draws, appended in this order after `new_review`: `makeup_proposed`, `makeup_counter_proposed`, `makeup_booked` (ADR 0018 D3), `certificate_name_requested` (ADR 0019 D1), `enrollment_terminated` (FR-NOSHOW-4), `session_cancelled_by_admin` (FR-CANCEL-6), `session_outcome_confirmed` (FR-SESS-19), `ijazah_request_rejected` and `credential_reviewed` (ADR 0017 D1/D3), `payout_account_rejected` (FR-PAYG-15; `recipient_rejected` is a webhook event, not a notification), `account_suspended` and `account_reinstated` (FR-ADMIN-5, ADR 0018 D5). The existing members stay in place; `teacher_application_status_changed` keeps covering approval, rejection, ban and the request for another document, with the status in `payload`. FR-NOTIF-1 lists the same members by name, so the requirement and this enum say one list (ADR 0021 D3).
 
 ## 12. Admin and platform kernel
 
@@ -526,12 +530,15 @@ Separate from `users` entirely (FR-ADMIN-1) — different auth, different tables
 
 Every admin action (FR-ADMIN-17). Append-only.
 
+**Amended by ADR 0021 (forward migration before the first admin action is written; the table holds no row).** `audit_logs` gains `target_label text NOT NULL`: the target's kind word followed by its stable identifier or public number («طلب انضمام · {application id}», «إجازة · 7K3M-Q9TD-2XWB-8HRN», «حساب · {user id}»), never a person's name and never anything a user or an admin typed. The audit writer renders it in Arabic once, at write time, from `target_type` and `target_id`, and refuses an empty label or one over 200 characters. Because the label is non-personal by construction, it is written once and never rewritten: §15 rule 21 (no UPDATE) is untouched, ADR 0015 D3 needs no exception, and an entry outlives a renamed or deleted target unchanged. The admin pages resolve the target's current display name at read time, beside the stored label; `target_type` and `target_id` stay as they are (ADR 0011 D5).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | admin_id | FK → admin_users | |
 | action | text | Stable machine string |
 | target_type / target_id | text / text | Polymorphic reference: a row's uuid, or a settings key, since settings are keyed by text and every settings change is audited (FR-ADMIN-17, ADR 0011 D5) |
+| target_label | text | Non-personal label of the target at write time: kind word and identifier or public number, at most 200 characters, never a name (ADR 0021 D2, forward migration) |
 | reason | text, nullable | Mandatory for destructive actions |
 | before / after | jsonb, nullable | State snapshot |
 | occurred_at | timestamptz | Never edited, never deleted. Strictly append-only — no `deleted_at`, no removal path at all (§15.10) |
@@ -681,6 +688,14 @@ Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purch
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
 *End of document. 33 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+
+## Changelog — v1.3 addendum (ADR 0021)
+
+| # | Change | Decision |
+|---|---|---|
+| 1 | §4 `subjects`: `name_en` is the English display name, shown wherever an Arabic page shows `name_ar`, required on creation; subject names are data, never i18n keys. Note only, no migration. | ADR 0021 D1 |
+| 2 | §11 `notifications.type` gains twelve members after `new_review`: `makeup_proposed`, `makeup_counter_proposed`, `makeup_booked`, `certificate_name_requested`, `enrollment_terminated`, `session_cancelled_by_admin`, `session_outcome_confirmed`, `ijazah_request_rejected`, `credential_reviewed`, `payout_account_rejected`, `account_suspended`, `account_reinstated`. Forward migration in the Phase 2 notifications pass; FR-NOTIF-1 names the same list. | ADR 0021 D3 |
+| 3 | §12 `audit_logs` gains `target_label text NOT NULL`, the target's non-personal label (kind word and identifier or public number, at most 200 characters) rendered at write time and never rewritten; §15 rule 21 is untouched. Forward migration before the first admin action is written; the table holds no row. | ADR 0021 D2 |
 
 ## Changelog — v1.3 addendum (ADR 0011)
 

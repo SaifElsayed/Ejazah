@@ -1,6 +1,6 @@
 # ADR 0021 — What the design asks of the data and the configuration: English subject names, audit target labels, the undrawn notification kinds, and the support address
 
-**Status:** accepted (D1–D4 accepted by the owner on 2026-10-17, with the conditions written into D2, D4 and D5; D5 and D6 record decisions of 2026-10-15 and 2026-10-17 that the design already applies) · **Date:** 2026-10-17 · **Decided by:** the owner, 2026-10-17 · **Amends (applied when this branch is updated from `develop` after ADR 0012 to 0019 merge, so every governing document is edited once):** ERD §4 note on `subjects`, §11 `notifications.type`, §12 `audit_logs`; SRS FR-NOTIF-1 (lists the events by name), FR-LOC-1 (note), §3.11 FR-ADMIN-17 (note), §3.4 FR-DISC-1/2 (name search, filters), FR-BOOK-7 (the teacher's list search); ARCHITECTURE §3 configuration list, §5 (the public pages); `.env.example` · **Builds on:** [ADR 0020](0020-design-files-in-the-repository.md) D5/D6 (the inventory and the copy catalogue), ADR 0014 D2 (user content stays as typed on English pages), ADR 0017 and ADR 0018 (which add events to FR-NOTIF-1 without naming the enum members)
+**Status:** accepted (D1–D4 accepted by the owner on 2026-10-17, with the conditions written into D2, D4 and D5; D5 and D6 record decisions of 2026-10-15 and 2026-10-17 that the design already applies) · **Date:** 2026-10-17 · **Decided by:** the owner, 2026-10-17 · **Amends:** ERD §4 note on `subjects`, §11 `notifications.type`, §12 `audit_logs`; SRS FR-NOTIF-1 (lists the events by name), FR-LOC-1 (note), §3.11 FR-ADMIN-17 (note), §3.4 FR-DISC-1/2 (name search, filters), FR-BOOK-7 (the teacher's list search); ARCHITECTURE §4 (configuration, the platform row), §5 (the public pages), §7.2 (the audit writer); `.env.example` (with the Phase 2 task, see Consequences) · **Builds on:** [ADR 0020](0020-design-files-in-the-repository.md) D5/D6 (the inventory and the copy catalogue), ADR 0014 D2 (user content stays as typed on English pages), ADR 0017 and ADR 0018 (which add events to FR-NOTIF-1 without naming the enum members)
 
 ## Context
 
@@ -174,7 +174,7 @@ review or the decision sheet.
 - The subject-section tabs show counts (the number of visible teachers per subject, computed
   after the visibility predicate, R-GENDER-3).
 
-## Consequences (applied when this branch is updated from `develop` after ADR 0012 to 0019 merge; D5 and D6 are already applied in the design)
+## Consequences (applied 2026-10-17)
 
 - **ERD.**
   - §4 `subjects`: a note on `name_en` (D1: the English display name; required on creation).
@@ -193,14 +193,20 @@ review or the decision sheet.
     say the same list (ADR 0017 and ADR 0018 added events in prose).
   - §3.14: nothing; the support address is not an admin setting.
   - FR-DISC-1/2 and FR-BOOK-7: the text of D6.
-- **ARCHITECTURE.** §3 configuration: `SUPPORT_EMAIL`; the `platform.publicConfig` query under the
-  platform module; the audit writer renders `targetLabel` from the target's type and id, never
+- **ARCHITECTURE.** §4 (the platform row and a configuration paragraph; the document has no
+  configuration list in §3): `SUPPORT_EMAIL`; the `platform.publicConfig` query under the
+  platform kernel; §7.2: the audit writer renders `targetLabel` from the target's type and id, never
   from a name, and refuses an empty one; the admin audit query resolves the target's current name
   at read time (D2). §5: the public pages
   are routes of the API (D5), rendered from templates that load the design stylesheet.
+  `.env.example` gains the key with the Phase 2 task that adds it to `env.schema.ts`:
+  `apps/api/src/platform/config/config.spec.ts` keeps the example's keys equal to the schema's, so
+  the example cannot lead the schema.
 - **Catalogues.** `admin.audit.targets.*` (five keys), `admin.credentials.a11y.documentPage` and
-  `admin.dialogs.mfaReset.title` move from `apps/admin/src/i18n/` to the server renderer (D2);
-  `notifications.items.*` grow by the undrawn kinds after the copy review (D3).
+  `admin.dialogs.mfaReset.title` move from `apps/admin/src/i18n/` to the server renderer (D2); the
+  keys stay in the admin catalogue until the Phase 1 task that builds the server renderer moves
+  their Arabic there, so nothing is deleted now. `notifications.items.*` grow by the undrawn kinds
+  after the copy review (D3).
 - **Design.** `screens.md` rows for Notifications and TeacherNotifications cite D3; the admin audit
   rows cite D2; the public pages are `web /verify/:code` (three states drawn) and `web /delete-account`
   (D5); the Discovery and TeacherStudents boards already draw D6. The three proposal boards were

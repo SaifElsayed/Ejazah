@@ -160,9 +160,11 @@ Each module has a service (all rules), a repository (all queries), a router (thi
 | moderation    | disputes, compensation cases (opened automatically on termination), gender flags, reports, admin actions                                                                 | `disputes` `gender_flags` `user_reports`                                                           |
 | notifications | templating, delivery, notification centre                                                                                                                                | `notifications`                                                                                    |
 | admin         | admin auth, queues, settings, audit log                                                                                                                                  | `admin_users` `audit_logs` `settings`                                                              |
-| platform      | config, logging, errors, db, idempotency, guards, PORTS (§3)                                                                                                             | `idempotency_keys` (ADR 0008 D2)                                                                   |
+| platform      | config (incl. `SUPPORT_EMAIL`, served by `platform.publicConfig`, ADR 0021 D4), logging, errors, db, idempotency, guards, PORTS (§3)                                     | `idempotency_keys` (ADR 0008 D2)                                                                   |
 
 Discovery is a service inside `catalog`, not a module: search is a filtered query over catalog's own tables (§3.2), and a module owning no tables would have to read another module's tables to do anything, which R-API-6 forbids. Session generation is triggered by `booking` when an enrollment is marked paid, but the rows are written by `sessions` through its public entry — `booking` never touches the `sessions` table. Certification reads the isnad chain through `catalog`'s public entry. `payments` is the only module with an HTTP endpoint outside tRPC: the gateway's webhook is a plain POST whose raw body must reach the signature check untouched (§8).
+
+**Configuration the clients read (ADR 0021 D4).** `SUPPORT_EMAIL` is a required key of `env.schema.ts` with no default, a valid address, validated at startup like every other key. It is not a row of `settings` (§3.14 of the SRS) and not a string in either catalogue: no admin edits it from the panel, so a taken-over admin account cannot point users at another mailbox; a change of address is a configuration change, not a release. The kernel serves it through `platform.publicConfig`, a `publicProcedure` with a declared rate limit (T170) and an `.output(schema)`, returning `{ supportEmail }`; the phone app and the public pages read it at start-up, cache the last value and never block start-up on it. The admin panel has no support link. The key enters `.env.example` with the Phase 2 task that declares it in `env.schema.ts`, since `config.spec.ts` keeps the two equal.
 
 Lint-enforced dependency rules:
 
@@ -228,6 +230,8 @@ ijazah/
 ```
 
 Why the schema is split per module: thirty-three tables in one file, edited daily by three people, produces constant merge conflicts in the most dangerous file in the repo. Prisma's multi-file schema folder removes that entirely, and the file boundaries reinforce module ownership.
+
+**The public web pages are routes of the API (ADR 0021 D5).** The certificate verification page (`/verify/:code`, `?lang=en` for English), the account deletion page (`/delete-account`, its code step and its done step) and the Terms body (the version FR-AUTH-11 records in `terms_acceptances`) are server-rendered pages of `apps/api` on its own origin, under their own paths and never mixed with the procedure routes. They are rendered from templates that escape every value by default (a name, a code, a reason are untrusted data) and load the design stylesheet (§6.3); they send the NFR-SEC-11 header set with a strict `Content-Security-Policy`, set no cookie, and run under the same rate limits as the anonymous procedures. An unknown or malformed verification code answers 404; a revoked ijazah answers 200 with its revocation state and the public reason (FR-IJAZAH-8). The signed PDF URLs and the deletion code come from the same services the procedures use. No separate deploy, no public route in the admin SPA, no paid hosting before launch; moving the pages to a static site later relocates templates, nothing else.
 
 ## 6. The mobile app
 
@@ -341,6 +345,8 @@ A tRPC procedure contains no business logic. Validate, call one service method, 
 | `adminProcedure`   | Admin router only. MFA. Writes an audit entry.            |
 
 Role and gender come from the server-held session, never from client input.
+
+The audit entry an `adminProcedure` writes carries a non-personal label of its target (ADR 0021 D2). The audit writer in `admin` renders `targetLabel` in Arabic once, at write time, from the target's type and id — the kind word and the stable identifier or public number — never from a name or anything a user or an admin typed, and refuses an empty label or one over 200 characters. The label is never rewritten (ERD §15 rule 21). The admin audit query resolves the target's current display name at read time, beside the stored label, and shows the role word for a person whose account was deleted; the fused Arabic forms («للشيخ …») are produced by that server-side renderer, which also owns the two other fused labels the design found (`admin.credentials.a11y.documentPage`, `admin.dialogs.mfaReset.title`).
 
 ### 7.3 Version skew — the tRPC tax
 
