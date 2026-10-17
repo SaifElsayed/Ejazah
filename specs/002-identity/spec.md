@@ -30,6 +30,19 @@ T169), the absence of any client path to gender (R-GENDER-6), the gate that
 keeps a hidden mobile control honest (R-MOBILE-13), and the two adversarial
 subjects the gender suite has never been shown to bite (R-GENDER-1, R-GENDER-3).
 
+**Who builds it, and how big it is.** Phase 0's specification was written for a
+team of three; this one is written for the owner working alone (PLAN.md,
+2026-10-08), with Saif's review session as the reviewer of every batch. The
+scope is the forty-four SRS requirement ids PLAN.md lists for Phase 1 and the
+seven working days of one person, from 2026-10-17; nothing is added to it here,
+and the six clarifications below are the only places where something beyond
+the list is offered, each with a recommendation. Whatever cannot fit is stated
+when it is found and goes to the descope ladder with its cause (PLAN.md,
+"Extending a phase", "When a phase slips anyway"); it is never absorbed
+silently. The steps of the definition of done that need a physical device —
+the end-to-end teacher application, Arabic right-to-left on iOS and Android —
+are the owner's own steps on the owner's devices, and the criteria below say so.
+
 **Scope boundary.** This phase delivers identity, onboarding, account deletion,
 the teacher application and its review, the admin shell, the audit label, payout
 setup against the stand-in gateway, and the design's primitives, providers and
@@ -58,52 +71,16 @@ SC-101 so that a citation never needs the phase spelled out.
 
 ## User Scenarios & Testing _(mandatory)_
 
-The people served by this phase: a person signing in for the first time, a
-teacher applying, an admin reviewing, an approved teacher setting up payout, a
-person deleting their account, and the engineer whose change is judged by the
-machines. Each story is independently demonstrable and names the PLAN.md
-deliverables it covers.
+The people served by this phase are the product's own: a student signing in
+for the first time, a teacher applying and then setting up payout, an admin
+reviewing and deciding, and a person deleting their account. There is no
+team-shaped story here; the data-model pass, the first screens and the proofs
+that close are requirements (FR-101 to FR-111, FR-200 to FR-217), judged by
+the machines Phase 0 built and by the reviewer, not demonstrated as journeys.
+Each story is independently demonstrable and names the PLAN.md deliverables it
+covers.
 
-### User Story 1 - The model is amended before the first identity row exists (Priority: P1)
-
-Before any identity code is written, the data model gains what the closure
-review of Phase 0 and ADR 0012 to ADR 0021 asked of it: where a session and a
-refresh token live and how they are revoked, where a Google or Apple identity is
-keyed, the credentials table and the chain under it, the names a certificate
-prints, the admin's recovery codes, the audit entry's label, and the columns
-ADR 0018 sends to this pass. Each lands by a forward migration, is recorded,
-and is proven by the schema gate and the integrity probes before a procedure
-reads it.
-
-_Covers PLAN.md: "the closure review of Phase 0 opens this cycle with ERD
-amendments before any identity code is written (R-PROC-2)", "ADR 0018's columns
-join this phase's ERD pass", ADR 0021 D2, and the document conflicts that "ride
-along with the cycle's document pass"._
-
-**Why this priority**: A column added after the code that needs it is a column
-added by a second migration and a second round of every repository; a token
-table designed after the sign-in flow is a sign-in flow with no revocation. The
-review said these are cheap before the first procedure and expensive after.
-
-**Independent Test**: Apply the full migration history to an empty database.
-Every table and column this story names exists, the schema gate passes, the
-table-ownership manifest names one owner for each new table, and each integrity
-rule the story adds is demonstrated by an insert the database refuses.
-
-**Acceptance Scenarios**:
-
-1. **Given** an empty database, **When** the full migration history is applied, **Then** it completes in one run and the model holds a table of user sessions and a separate table of administrator sessions, each storing its refresh token only as a hash with issue, expiry and revocation instants (FR-AUTH-7, R-DB-7, R-SEC-8).
-2. **Given** the schema, **When** it is inspected, **Then** `auth_identities` exists, unique on `(provider, provider_subject)`, and no other column keys a provider account by its email (ADR 0012 D2).
-3. **Given** two role rows for one user, **When** the second is inserted, **Then** the database refuses it (ADR 0016 D3).
-4. **Given** the schema, **When** it is inspected, **Then** `teacher_credentials` exists with the holder's name, riwaya, tariq, status, review reason and reviewer; `isnad_entries` is keyed to a credential with `names` as a generation and `position` counting origin first, unique on `(credential_id, position)`; and a second approved credential for one teacher and subject is refused (ADR 0017 D5, ADR 0019 D1, ERD §15 rule 7).
-5. **Given** the schema, **When** it is inspected, **Then** `users.certificate_name`, `admin_recovery_codes` and the two lockout settings rows exist (ADR 0019), `audit_logs.target_label` is NOT NULL (ADR 0021 D2), `enrollments.cancellation_reason` admits `account_deleted` (ADR 0015), and `packages.track`, `enrollments.snapshot_track`, `sessions.makeup_for_session_id`, `session_remedies` and the make-up window setting exist (ADR 0018).
-6. **Given** two idempotency keys with the same scope and key from two different actors, **When** both are inserted, **Then** both are accepted, and a repeat from the same actor is refused (ADR 0011, deferred list).
-7. **Given** an index listing, **When** it is inspected, **Then** `otp_codes (destination, purpose)` is indexed, and a purge sweep exists for consumed or expired codes and for stale push tokens, each idempotent (R-API-14, NFR-COMP-2).
-8. **Given** the documents, **When** the review's text conflicts are checked (ADR 0001 on the payment port, `/ready` and Redis, NFR-SEC-7's push protection, SRS §6.2 and §3.14 against the ERD, ADR 0005's superseded decisions, the rule count) and the follow-ups of PR #70 to #72 (ADR 0012 D5's parenthesis, the order of the DEC rows, the listed stray spaces), **Then** each is corrected and the correction recorded (R-PROC-2).
-
----
-
-### User Story 2 - A person signs in once and becomes exactly one account (Priority: P1)
+### User Story 1 - A person signs in once and becomes exactly one account (Priority: P1)
 
 A person opens the app, picks a language, and continues with Google, with Apple
 (on iOS) or with an email address and a password. A first sign-in proves the
@@ -149,7 +126,7 @@ no question asked twice.
 
 ---
 
-### User Story 3 - A teacher applies with credentials only, and is reviewed by a person (Priority: P1)
+### User Story 2 - A teacher applies with credentials only, and is reviewed by a person (Priority: P1)
 
 A teacher who has just chosen the teacher role lands in the application: the
 subjects they teach from the admin's list, a sentence on their qualification,
@@ -200,7 +177,7 @@ as it happens; the audit log holds every decision with its reason.
 
 ---
 
-### User Story 4 - An admin is a different kind of principal, and leaves a record (Priority: P1)
+### User Story 3 - An admin is a different kind of principal, and leaves a record (Priority: P1)
 
 An admin signs in on a separate page with an email and a password, then a
 six-digit code from an authenticator app; at a first sign-in they set the app
@@ -238,7 +215,7 @@ read its audit entry; rename the target and read the entry again.
 
 ---
 
-### User Story 5 - An approved teacher sets up payout and stays invisible until the gateway says so (Priority: P2)
+### User Story 4 - An approved teacher sets up payout and stays invisible until the gateway says so (Priority: P2)
 
 After approval the app presents payout setup: the teacher registers a payout
 account with the gateway from inside the app, and the platform keeps only the
@@ -277,7 +254,7 @@ the verified screen; replace the account and see the verification state return.
 
 ---
 
-### User Story 6 - A person deletes their account, in the app or on the web (Priority: P2)
+### User Story 5 - A person deletes their account, in the app or on the web (Priority: P2)
 
 From Account, a person reads what is deleted, what is kept and why, and what
 happens to their enrollments; types the confirmation word; signs in again; and
@@ -312,81 +289,6 @@ the same email and succeed.
 5. **Given** the public deletion page, **When** an email is entered, **Then** the same sentence answers every address, a code goes to the address if it belongs to an account, and the code step runs the same deletion as the app; **Then** the done page says the confirmation was sent to that address (FR-AUTH-15, `DeleteAccountWeb*`).
 6. **Given** the public pages (the deletion flow and the Terms body), **When** their responses are inspected, **Then** they are routes of the API under their own paths, send a strict Content-Security-Policy and the full header set and CORS allowlist, set no cookie, are rendered from templates that escape every value, and run under the anonymous rate limits; English is `?lang=en` (ADR 0021 D5).
 7. **Given** a record kind a later phase adds (an enrollment, a session, a case), **When** that phase lands, **Then** its deletion consequence attaches through the deletion's single entry and the deletion's own transaction is unchanged (ADR 0015 D4).
-
----
-
-### User Story 7 - The first screens are the design, in both directions and both languages (Priority: P2)
-
-Every screen of this phase is built from its board: the primitives the design
-fixed, the theme and direction providers, the icon registry, the i18n runtime
-with the catalogues already written, and the admin panel's component layer on
-the same tokens. Arabic is right-to-left and English left-to-right by logical
-direction alone; no raw colour or spacing exists outside the design folder; a
-token change is one line and a rebuild. The three feature trees stand with the
-wall between them.
-
-_Covers PLAN.md: "Design tokens as single source", "Arabic and English with
-logical RTL", "Student, teacher and shared feature trees", ADR 0020 D7 ("what
-D7 leaves for it"), and the definition of done items "Arabic RTL renders
-correctly on iOS and Android", "No raw colour or spacing value exists outside
-`design/`"._
-
-**Why this priority**: The design is in the repository and is implemented,
-never redesigned (ADR 0020); the first screens set the shape every later screen
-copies. It ranks P2 because a correct flow on an ugly screen is still a correct
-flow, and because its machines (the lint rules, the parity check) already exist.
-
-**Independent Test**: Run every Phase 1 screen on iOS and Android in Arabic and
-in English, compare each with its board, and switch the language without
-signing out; run the lint set and the parity check; change one token and rebuild.
-
-**Acceptance Scenarios**:
-
-1. **Given** `docs/design/components.md`, **When** the phone primitives are built, **Then** each implements its contract — props, variants, states, tokens — on the typed contracts of `apps/mobile/src/design/primitives/`, and no screen composes a raw platform control (ADR 0020 D4/D7, R-MOBILE-6).
-2. **Given** a screen of this phase, **When** it is compared with its board, **Then** it matches, its copy comes from the catalogue and never from a literal, and sample values on the board are data (ADR 0020 D5, R-MOBILE-7).
-3. **Given** the language switch, **When** it is used anywhere, **Then** the whole app follows at once, without sign-out, and every directional icon and margin flips by logical direction (FR-LOC-2/3, R-MOBILE-5).
-4. **Given** a plural in either language, **When** it renders, **Then** it uses the five ICU forms, and zero where the board draws it (ADR 0020 D6).
-5. **Given** the catalogues, **When** the pipeline runs, **Then** the key sets of both phone files and both admin files are identical (R-MOBILE-7, `check:i18n`, `check:i18n:admin`).
-6. **Given** a tab root whose feature is a later phase, **When** it is opened, **Then** it shows that feature's drawn empty or locked state and no data path (`StudentHomeEmpty`, `PackagesLocked`, `TeacherHomeEmpty`).
-7. **Given** a state the design does not draw, **When** it occurs, **Then** the generic pattern of screens.md's states tables is used: skeleton, empty state, danger banner with retry, and the offline pattern on every tab root and list.
-8. **Given** the admin panel, **When** its components are inspected, **Then** they implement the same contracts on the behaviour base themed by the same tokens, read as CSS variables (ADR 0014 D1, ADR 0020 D7).
-
----
-
-### User Story 8 - The machines judge the first feature code, and the open proofs close (Priority: P3)
-
-The first procedures of the product are declared with their output schema and
-their rate limit, read every number from settings or the shared packages, write
-through the call's transaction, and are covered to the floor. The proofs Phase 0
-left to this phase land: a test that no user-facing procedure accepts gender, a
-gate that refuses a mobile change hiding a control without its server test, a
-leak test over every user-facing output, and the two adversarial subjects the
-gender suite must be seen to fail.
-
-_Covers PLAN.md: "Every number in module code has a stated place", "The output
-parser on every procedure is already required by the caller kinds (T169)",
-"T130 (SC-003) is carried open into this cycle", "R-GENDER-1 and R-GENDER-3 …
-A committed leaky subject must fail the adversarial suite", "R-MOBILE-13 …
-designed in this cycle on the path-coupling script of T163"._
-
-**Why this priority**: These proofs cost nothing while the code is small and are
-the reason Phase 0 was built. They rank P3 because a product flow does not wait
-on them; the register does.
-
-**Independent Test**: Read T130's register after the phase: the rows assigned to
-Phase 1 are closed, each with a committed failing case, and Phase 1's own count
-is zero.
-
-**Acceptance Scenarios**:
-
-1. **Given** any procedure of this phase, **When** the contract snapshot is generated, **Then** it carries an output schema, and a test over the snapshot asserts that no user-facing output names a date of birth of another person, a document storage key, a password or second-factor hash, a provider subject or a recipient reference (R-HONEST-4).
-2. **Given** the user surface, **When** a CI test runs, **Then** it asserts that no procedure's input carries `gender`, so gender is changeable through no user-facing path (R-GENDER-6).
-3. **Given** a change under the mobile feature trees that hides or disables an action, **When** the pipeline runs with no change under the server tests that hold the rule, **Then** it fails naming R-MOBILE-13, on the path-coupling script (R-MOBILE-13, T163).
-4. **Given** the adversarial gender suite, **When** it runs against a committed subject that drops the gender conjunct, and against one that applies the asymmetric rule, **Then** each is seen to fail in both directions, in the way the lint harness inverts a rule (R-GENDER-1, R-GENDER-3).
-5. **Given** module code of this phase, **When** the magic-number gate runs, **Then** it finds no numeric literal other than 0 and 1: limits and windows are settings keys, input bounds live in the contracts package, conversions in the time and money packages (R-MONEY-12).
-6. **Given** the identity, verification, credential and admin modules, **When** coverage is measured, **Then** each is at the 80% floor and the floor's paths were widened to include them (R-PROC-5).
-7. **Given** a repository that reads a relation, **When** it is written, **Then** a lint rule refuses an `include` or `select` that would read soft-deleted rows through the relation, as ADR 0011 deferred to this phase.
-8. **Given** the register, **When** it is re-counted, **Then** R-GENDER-6, R-MOBILE-13, R-HONEST-4, R-GENDER-1 and R-GENDER-3 are proven, each row citing its test, and the rows that remain name only Phases 2 to 4.
 
 ---
 
@@ -430,7 +332,7 @@ phase's list, an ADR decision, a table or rule in `docs/ERD.md`, a board in
 - **FR-108**: The request context MUST resolve, on every authenticated call, the account's status, its single role, and for a teacher the profile's approval and payout verification, from the server's own records; and the caller kind that admits a teacher applicant (for the application, status and account paths) MUST be declared distinctly from the kind that admits an approved teacher, so `teacherProcedure` has one meaning (FR-VERIFY-8/10, FR-GENDER-6, ARCHITECTURE §7.2, `contracts/kernel.md`).
 - **FR-109**: The model MUST say how a gateway recipient event reaches its teacher, decided before the first consumer is written [NEEDS CLARIFICATION: a hash of the recipient reference beside `teacher_profiles.payout_account_ref_encrypted`, looked up without decrypting as `device_push_tokens.token_hash` does, or a nullable `teacher_user_id` on `payment_events`; the note under T117 names both — the recommendation is the hash column, because the event carries only the gateway's reference and the event table then records what the gateway sent, nothing the platform added].
 - **FR-110**: Every table the pass adds MUST land in exactly one owning module of the table-ownership manifest, and the ERD's count, its §1 domain map, the SRS §6.2 entity list and ARCHITECTURE §4 MUST say the same (R-API-6, FR-022).
-- **FR-111**: The document conflicts the closure review listed and the follow-ups of PR #70 to #72 MUST be corrected in the same pass and each correction recorded: ADR 0001 on the payment port, `/ready` and Redis, NFR-SEC-7's push protection, SRS §6.2 and §3.14 against the ERD, ADR 0005's superseded decisions, the rule count; ADR 0012 D5's parenthesis, the order of the DEC rows, the stray spaces (R-PROC-2, ADR 0011).
+- **FR-111**: The document conflicts the closure review listed and the follow-ups of PR #70 to #72 MUST be corrected in the same pass and each correction recorded: ADR 0001 on the payment port, `/ready` and Redis, NFR-SEC-7's push protection, SRS §6.2 and §3.14 against the ERD, ADR 0005's superseded decisions, the rule count; ADR 0012 D5's parenthesis, the order of the DEC rows, the stray spaces; and SRS §2.5, which still says the MVP is built by "2 full-time, 1 part-time" while PLAN.md has recorded a team of one since 2026-10-08 (R-PROC-2, ADR 0011).
 
 **Sign-in and onboarding**
 
@@ -520,7 +422,7 @@ phase's list, an ADR decision, a table or rule in `docs/ERD.md`, a board in
 - **FR-205**: The states the design does not draw MUST use the generic patterns screens.md's states tables assign — skeleton, empty state, danger banner with retry — and every tab root and list MUST follow the offline pattern (screens.md, "States to implement that are not drawn").
 - **FR-206**: No raw colour or spacing value MUST exist outside `design/`; a design change MUST be a change to `packages/tokens/tokens.json` or `docs/design/source/` and a rebuild, never a style override (R-MOBILE-4, ADR 0020 D1/D7).
 
-**Rules, proofs and the engineer's change**
+**Rules, proofs and the change the machines judge**
 
 - **FR-210**: A pipeline gate MUST refuse a change under the mobile feature trees that hides or disables an action when the same change carries no server test under the paths that hold the rule, naming R-MOBILE-13, designed on the path-coupling script of T163 with its path lists in one file (R-MOBILE-13; constitution 2.4.0).
 - **FR-211**: The adversarial gender suite MUST gain two committed subjects it is seen to fail — one that drops the gender conjunct and one that applies the asymmetric v1.1 rule — asserted in both directions in the way the lint harness inverts a rule, closing R-GENDER-1 and R-GENDER-3 in the register [NEEDS CLARIFICATION: PLAN.md attaches this to "the teacher list, the first task whose procedure returns teacher data to a user", but no procedure of this phase returns teacher data to a user, the first being Phase 2's discovery; the recommendation is to commit the inverted subjects in this phase regardless, since the proof is of the suite's bite and needs no procedure, and to keep the Phase 2 teacher list bound to the same cases].
@@ -558,11 +460,11 @@ or first fills.
 
 ### Measurable Outcomes
 
-- **SC-101**: A teacher applies end to end on a physical iOS device and a physical Android device — sign-in, onboarding, two subjects, an identity document and two PDFs — in under ten minutes from a fresh install, with no step needing a person other than the applicant.
+- **SC-101**: The owner, on their own physical iOS device and Android device, applies as a teacher end to end — sign-in, onboarding, two subjects, an identity document and two PDFs — in under ten minutes from a fresh install, with no step needing a person other than the applicant; the owner records the run as the definition-of-done evidence.
 - **SC-102**: Attempts to approve an application whose verification call is not recorded, or one of whose credentials is undecided, succeed zero times out of ten, from the panel and by a direct call alike.
 - **SC-103**: An onboarding abandoned at every step, and one whose token expired, leaves zero rows of the person in every table, asserted by a test over the whole schema.
 - **SC-104**: Every procedure in the contract snapshot carries an output schema, and the leak test over every user-facing output finds zero forbidden fields.
-- **SC-105**: Every screen of this phase is reviewed against its board on iOS and Android in Arabic and in English, and the key-parity checks of both applications report zero difference.
+- **SC-105**: The owner reviews every screen of this phase against its board on their own iOS and Android devices, in Arabic and in English, and records the result; the key-parity checks of both applications report zero difference in the pipeline.
 - **SC-106**: The lint set finds zero raw colour or spacing values outside `design/`, and the magic-number gate finds zero numeric literals other than 0 and 1 under the modules.
 - **SC-107**: The CI test over the user surface finds zero procedures whose input carries `gender`.
 - **SC-108**: One hundred percent of administrative actions taken in the phase's tests have an audit entry with a non-empty, non-personal label, and a renamed or deleted target changes zero stored labels.
@@ -572,7 +474,7 @@ or first fills.
 - **SC-112**: T130's register shows Phase 1's own count at zero, with R-GENDER-6, R-MOBILE-13, R-HONEST-4, R-GENDER-1 and R-GENDER-3 proven.
 - **SC-113**: The full migration history applied to an empty database succeeds on the first attempt and yields every table the pass adds, each with exactly one owner in the manifest and each new integrity rule demonstrated by a refused insert.
 - **SC-114**: The complete test suite passes on a machine holding no Google, Apple, email or gateway credential.
-- **SC-115**: The phase's tasks are grouped into batches of at most six, in dependency order, and the phase closes within its seven working days from 2026-10-17, or an extension is stated at the moment its cause appears (PLAN.md).
+- **SC-115**: The phase's tasks are grouped into batches of at most six, in dependency order, each batch one branch, one pull request and one review by Saif's review session, and the phase closes within its seven working days from 2026-10-17 for one person; an overflow is stated at the moment its cause appears and goes to the descope ladder, never absorbed silently (PLAN.md).
 
 ## Assumptions
 
@@ -582,6 +484,12 @@ or first fills.
 - The email port ships with its stand-in; the provider adapter and the authenticated sending domain are chosen at launch (ARCHITECTURE §3.2). The gateway's hosted recipient onboarding and its real adapter are Phase 2's (OPEN-11); this phase registers recipients through the stand-in and routes its signed events.
 - The settings this phase reads are seeded rows; the surface that edits them (FR-ADMIN-9) is Phase 4's. The subjects this phase offers are the seeded ones; the admin's subject page, when built, obeys ADR 0021 D1.
 - Nothing in this specification is derived from source code presently in the repository beyond naming what Phase 0 built as given.
+
+**Who does what**
+
+- The owner implements, alone, on the working method of Phase 0's final week; Saif's review session reviews each batch; only Critical and Major findings block a merge, at most two rounds, strict on security (PLAN.md, "How a phase is run").
+- The steps that need a physical device are the owner's own: SC-101 (the end-to-end application) and SC-105 (every screen in both languages on iOS and Android). Everything else in the definition of done is demonstrated by a test, a gate or the reviewer reading the diff.
+- SRS §2.5 still describes a team of "2 full-time, 1 part-time"; PLAN.md records the team of one since 2026-10-08. The discrepancy is corrected in this cycle's document pass (FR-111), not relied on in silence.
 
 **Readings of PLAN.md carried into this specification**
 
@@ -604,4 +512,4 @@ or first fills.
 
 **Risk**
 
-- The seven days hold the cycle itself. If the plan or tasks step uncovers a real need — the second-factor setup, the public pages, the admins page — the extension is stated then with its cause (PLAN.md), and the descope ladder is not touched by this phase: nothing in it is on the ladder.
+- The seven days hold the cycle itself, for one person. If the plan or tasks step finds that the forty-four ids do not fit — the second-factor setup, the public pages, the admins page are the likely causes — the overflow is stated then with its cause and goes to the descope ladder (PLAN.md, "When a phase slips anyway"); no extension is taken by default, and nothing of this phase is cut without being named there first.
