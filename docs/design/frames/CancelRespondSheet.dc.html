@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — الرد على طلب المعلم إلغاء جلسة</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">الشيخ أحمد المصري</strong>
+        <span class="row wrap gap-2 text-caption tone-muted">حفظ القرآن · 8 جلسات · 45 دقيقة<span class="badge badge--neutral">تسميع</span></span>
+      </span>
+      <span class="badge badge--success">جارٍ</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">طلب المعلم إلغاء جلسة</h1>
+      <a href="EnrollmentDetail.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق"><svg class="icon icon--md" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    </div>
+
+    <div class="card card--surface card--compact">
+      <div class="row gap-3">
+        <span class="avatar avatar--sm">أ</span>
+        <span class="stack grow">
+          <strong class="text-callout text-bold">الشيخ أحمد المصري</strong>
+          <span class="text-caption tone-muted">الجلسة 5 · الأربعاء 11 نوفمبر · 6:00 م (القاهرة)</span>
+        </span>
+      </div>
+      <p class="text-body">«عندي ظرف عائلي في هذا اليوم، وأعتذر عن الجلسة.»</p>
+    </div>
+
+    <div class="stack gap-2 text-callout">
+      <p><strong>إن قبلت:</strong> تُلغى الجلسة وتُقترح لك جلسة بديلة.</p>
+      <p><strong>إن رفضت:</strong> تبقى الجلسة في موعدها.</p>
+    </div>
+
+    <div class="banner banner--warning">
+      <svg class="icon icon--md" data-icon="hourglass" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></svg>
+      <span class="grow">إن لم تردّ قبل الأربعاء 11 نوفمبر 6:00 م تبقى الجلسة قائمة.</span>
+    </div>
+
+    <div class="row gap-2">
+      <a href="EnrollmentDetail.dc.html" class="btn btn--secondary btn--grow">رفض</a>
+      <a href="EnrollmentDetail.dc.html" class="btn btn--primary btn--grow">قبول الإلغاء</a>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

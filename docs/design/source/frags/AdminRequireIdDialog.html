@@ -1,0 +1,150 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <div class="behind-sheet" aria-hidden="true" inert>
+    {{ADMINNAV:AdminUsers:ar}}
+
+    <main class="page">
+      <header class="page-header">
+        <div class="row gap-4">
+          <a href="AdminUsers.dc.html" class="icon-btn icon-btn--surface" aria-label="رجوع إلى المستخدمين">{{icon:chevron-right:md}}</a>
+          <span class="avatar avatar--xl">أ</span>
+          <div class="stack gap-half">
+            <div class="row gap-2">
+              <h1 class="page-header__title">الشيخ أحمد المصري</h1>
+              <span class="badge badge--success">معتمد</span>
+              <span class="badge badge--neutral">الحساب نشط</span>
+            </div>
+            <p class="page-header__subtitle">ذكر · القاهرة · <span class="ltr">ahmed.elmasry@example.com</span> · انضم 2 مارس 2026</p>
+          </div>
+        </div>
+        <div class="row gap-2">
+          <a href="AdminRequireIdDialog.dc.html" class="btn btn--secondary btn--md">طلب إثبات هوية</a>
+          <a href="AdminSuspendDialog.dc.html" class="btn btn--danger btn--md">إيقاف الحساب</a>
+          <a href="AdminSuspendDialog.dc.html" class="btn btn--danger btn--md">{{icon:ban:sm}}حظر الحساب</a>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="grid-3 gap-5 items-start">
+          <div class="stack gap-5">
+            <section class="card gap-4" aria-labelledby="t-ver">
+              <div class="section__header"><h2 class="section__title" id="t-ver">التحقق والاعتماد</h2><span class="badge badge--success">معتمد</span></div>
+              <dl class="kv">
+                <div class="kv__item"><dt class="kv__label">اعتُمد</dt><dd class="kv__value">18 مارس 2026</dd></div>
+                <div class="kv__item"><dt class="kv__label">الاعتماد</dt><dd class="kv__value">سارة عادل</dd></div>
+                <div class="kv__item"><dt class="kv__label">مكالمة التحقق</dt><dd class="kv__value">16 مارس 2026</dd></div>
+                <div class="kv__item"><dt class="kv__label">النتيجة</dt><dd class="kv__value">مناسب</dd></div>
+              </dl>
+              <div class="stack gap-1">
+                <span class="kv__label">ملاحظات المكالمة</span>
+                <p class="text-callout">طابقت البطاقة صاحبها. تلا وجهين من الأنفال بإتقان، وشرح طريقته في التسميع المتدرّج.</p>
+              </div>
+              <a href="AdminDocumentViewer.dc.html" class="card card--row card--compact card--surface gap-3">
+                <span class="icon-tile icon-tile--sm icon-tile--neutral">{{icon:file-text:sm}}</span>
+                <span class="stack grow"><span class="text-callout text-medium">وثائق التحقق · 3</span><span class="text-caption tone-muted">عرض فقط</span></span>
+                {{icon:chevron-left:md}}
+              </a>
+            </section>
+
+            <section class="card gap-4" aria-labelledby="t-pay">
+              <div class="section__header"><h2 class="section__title" id="t-pay">حساب الاستلام</h2><span class="badge badge--success">موثّق</span></div>
+              <dl class="kv">
+                <div class="kv__item"><dt class="kv__label">سُجّل لدى البوابة</dt><dd class="kv__value">19 مارس 2026</dd></div>
+                <div class="kv__item"><dt class="kv__label">وثّقته البوابة</dt><dd class="kv__value">21 مارس 2026</dd></div>
+              </dl>
+              <div class="banner">
+                {{icon:eye:sm}}
+                <p class="grow">رقم الحساب لا يظهر هنا.</p>
+              </div>
+            </section>
+          </div>
+
+          <div class="stack gap-5">
+            <section class="card gap-4" aria-labelledby="t-trust">
+              <h2 class="section__title" id="t-trust">مؤشرات الثقة</h2>
+              <div class="stats">
+                <div class="stat stat--tile"><span class="stat__value">4.9</span><span class="stat__label">من 86 تقييمًا</span></div>
+                <div class="stat stat--tile"><span class="stat__value">0</span><span class="stat__label">غياب المعلم</span></div>
+                <div class="stat stat--tile"><span class="stat__value">2</span><span class="stat__label">طلبا إلغاء منه</span></div>
+              </div>
+              <p class="text-caption tone-muted">طلبات الإلغاء التي قدّمها في كل اشتراكاته: قبل الطالب واحدًا (12 أكتوبر) ورفض الآخر (5 أكتوبر). لا بلاغات عليه.</p>
+            </section>
+
+            <section class="card gap-3" aria-labelledby="t-isn">
+              <h2 class="section__title" id="t-isn">الإجازات</h2>
+              <div class="list">
+                <a href="AdminCredentialCorrect.dc.html" class="list__row">
+                  <span class="stack"><span class="text-medium">حفظ القرآن</span><span class="text-caption tone-muted">حفص عن عاصم · من طريق الشاطبية · 35 جيلًا</span></span>
+                  <span class="row gap-2"><span class="badge badge--accent">موثّقة · 18 مارس</span>{{icon:chevron-left:md}}</span>
+                </a>
+                <a href="AdminCredentials.dc.html" class="list__row">
+                  <span class="stack"><span class="text-medium">التجويد</span><span class="text-caption tone-muted">مادة مضافة · رُفعت 13 أكتوبر</span></span>
+                  <span class="row gap-2"><span class="badge badge--warning">قيد المراجعة</span>{{icon:chevron-left:md}}</span>
+                </a>
+              </div>
+            </section>
+
+            <section class="card gap-3" aria-labelledby="t-pkg">
+              <h2 class="section__title" id="t-pkg">الباقات</h2>
+              <div class="list">
+                <div class="list__row">
+                  <span class="stack"><span class="text-medium">حفظ القرآن · 8 جلسات · 45 دقيقة</span><span class="text-caption tone-muted ltr">1,200.00 ج.م</span></span>
+                  <span class="badge badge--success">فعّالة</span>
+                </div>
+                <div class="list__row">
+                  <span class="stack"><span class="text-medium">حفظ القرآن · 12 جلسة · 60 دقيقة</span><span class="text-caption tone-muted ltr">2,160.00 ج.م</span></span>
+                  <span class="badge badge--success">فعّالة</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="card gap-3" aria-labelledby="t-enr">
+            <div class="section__header"><h2 class="section__title" id="t-enr">الاشتراكات الجارية · 7</h2><a href="AdminEnrollments.dc.html" class="link text-callout">الكل{{icon:chevron-left:sm}}</a></div>
+            <div class="list">
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">يوسف أحمد</span><span class="text-caption tone-muted">حفظ القرآن · 8 جلسات</span></span><span class="list__value">1 من 8</span></a>
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">عمر سامي</span><span class="text-caption tone-muted">حفظ القرآن · 8 جلسات</span></span><span class="list__value">0 من 8</span></a>
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">مصطفى كمال</span><span class="text-caption tone-muted">حفظ القرآن · 12 جلسة</span></span><span class="list__value">0 من 12</span></a>
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">زياد طارق</span><span class="text-caption tone-muted">حفظ القرآن · 12 جلسة</span></span><span class="list__value">1 من 12</span></a>
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">نور سمير</span><span class="text-caption tone-muted">حفظ القرآن · 8 جلسات</span></span><span class="list__value">1 من 8</span></a>
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">حسن إبراهيم</span><span class="text-caption tone-muted">حفظ القرآن · 12 جلسة</span></span><span class="list__value">1 من 12</span></a>
+              <a href="AdminEnrollments.dc.html" class="list__row"><span class="stack"><span class="text-medium">عبد الرحمن علي</span><span class="text-caption tone-muted">حفظ القرآن · 8 جلسات</span></span><span class="list__value">3 من 8</span></a>
+            </div>
+            <p class="text-caption tone-muted">60 جلسة قادمة في هذه الاشتراكات. اكتمل 92 اشتراكًا.</p>
+          </section>
+        </div>
+
+        <p class="panel__note">كل إجراء في هذه الصفحة يطلب سببًا ويُسجَّل في سجل التدقيق. لا يتغيّر الجنس ولا حساب الاستلام من هنا.</p>
+      </div>
+    </main>
+  </div>
+
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="ri-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--warning">{{icon:user-check:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="ri-title">طلب إثبات هوية</h2>
+        <p class="text-caption tone-muted">الشيخ أحمد المصري · معلم · الحساب نشط</p>
+      </div>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-2">{{icon:hourglass:sm}}<span>تصبح حالة الحساب <strong>بانتظار إثبات الهوية</strong>.</span></li>
+      <li class="row row--top gap-2">{{icon:calendar:sm}}<span>تتوقف الحجوزات الجديدة حتى تُراجع الوثيقة. الجلسات المحجوزة من قبل لا تُلغى.</span></li>
+      <li class="row row--top gap-2">{{icon:upload:sm}}<span>يُطلب منه رفع بطاقة الرقم القومي أو جواز السفر، وتصل الوثيقة إلى المراجعة هنا.</span></li>
+      <li class="row row--top gap-2">{{icon:info:sm}}<span>إجراء عند الاشتباه فقط، وليس خطوة معتادة.</span></li>
+    </ul>
+
+    <div class="field">
+      <label class="field__label" for="ri-reason">سبب الطلب (إلزامي)</label>
+      <textarea id="ri-reason" class="input input--focused" rows="3" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الطلب في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminTeacher.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--primary btn--md" disabled>طلب إثبات الهوية</button>
+    </div>
+  </section>
+</div>

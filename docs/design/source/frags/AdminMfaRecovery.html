@@ -1,0 +1,36 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <main class="page">
+    <header class="page-header">
+      <div class="stack grow items-end">
+        <div class="segmented segmented--inline" role="group" aria-label="اللغة">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</button>
+          <button type="button" class="segmented__option" aria-pressed="false">English</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="grow row row--center items-center">
+      <section class="auth-card" aria-labelledby="ttl">
+        <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة · الإدارة</span></span>
+
+        <div class="page-intro">
+          <h1 id="ttl" class="page-intro__title">الدخول برمز استرداد</h1>
+          <p class="page-intro__lede">أدخل أحد رموز الاسترداد العشرة التي حفظتها عند الإعداد. يُستعمل كل رمز مرة واحدة.</p>
+        </div>
+
+        <form class="field">
+          <label for="rc" class="field__label">رمز الاسترداد</label>
+          <input id="rc" class="input input--ltr input--focused" value="4F7K-29QX" aria-describedby="rc-hint">
+          <span id="rc-hint" class="field__hint">إن فقدت الرموز أيضًا، يعيد مشرف آخر ضبط التحقق لحسابك.</span>
+        </form>
+
+        <a href="AdminMfa.dc.html" class="btn btn--ghost btn--md self-center">الرجوع إلى رمز التطبيق</a>
+
+        <div class="stack gap-2">
+          <a href="AdminHome.dc.html" class="btn btn--primary btn--block">دخول</a>
+          <a href="AdminSignIn.dc.html" class="btn btn--ghost btn--block">الرجوع إلى الدخول</a>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>

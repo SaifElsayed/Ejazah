@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — كل تقييمات المعلم</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="TeacherProfile.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">تقييمات الشيخ أحمد المصري</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="card card--surface card--row gap-4">
+      <strong class="text-display">4.9</strong>
+      <span class="stack gap-1 grow">
+        <span class="rating"><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg></span>
+        <span class="text-callout">من 86 تقييمًا · من طلاب أتمّوا اشتراكًا معه</span>
+      </span>
+    </section>
+
+    <ul class="stack gap-3" aria-label="التقييمات، الأحدث أولًا">
+      <li class="card">
+        <div class="row row--between gap-2">
+          <span class="row gap-2"><span class="avatar avatar--sm">س</span><strong class="text-body text-bold">سعيد م.</strong></span>
+          <span class="rating"><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>2</span></span>
+        </div>
+        <p class="row gap-2 text-callout tone-muted"><svg class="icon icon--sm" data-icon="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg>أزالت الإدارة التعليق</p>
+        <span class="text-caption tone-muted">حفظ القرآن · 12 جلسة · 10 أكتوبر</span>
+      </li>
+      <li class="card">
+        <div class="row row--between gap-2">
+          <span class="row gap-2"><span class="avatar avatar--sm">م</span><strong class="text-body text-bold">محمد س.</strong></span>
+          <span class="rating"><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>5</span></span>
+        </div>
+        <p class="text-callout">صبور، ويصحّح المخارج بهدوء حتى تثبت. التزم بكل المواعيد.</p>
+        <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات · 28 سبتمبر</span>
+      </li>
+      <li class="card">
+        <div class="row row--between gap-2">
+          <span class="row gap-2"><span class="avatar avatar--sm">أ</span><strong class="text-body text-bold">أحمد ع.</strong></span>
+          <span class="rating"><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>4</span></span>
+        </div>
+        <p class="text-callout">تسميع متدرّج ومراجعة منظمة. أتمنى جلسات أطول للمراجعة.</p>
+        <span class="text-caption tone-muted">حفظ القرآن · 12 جلسة · 15 سبتمبر</span>
+      </li>
+      <li class="card">
+        <div class="row row--between gap-2">
+          <span class="row gap-2"><span class="avatar avatar--sm">خ</span><strong class="text-body text-bold">خالد ر.</strong></span>
+          <span class="rating"><svg class="icon icon--sm" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>5</span></span>
+        </div>
+        <p class="text-callout">حفظت معه ثلاثة أجزاء في شهرين، وكانت المراجعة أهم من الحفظ نفسه.</p>
+        <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات · 2 سبتمبر</span>
+      </li>
+    </ul>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

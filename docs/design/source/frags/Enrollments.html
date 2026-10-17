@@ -1,0 +1,56 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">اشتراكاتي</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="category-tabs" role="tablist" aria-label="حالة الاشتراك">
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">جارية<span class="category-tabs__count">2</span></button>
+      <a href="EnrollmentsEnded.dc.html" class="category-tabs__item" role="tab" aria-selected="false">منتهية<span class="category-tabs__count">3</span></a>
+    </div>
+
+    <a href="EnrollmentDetail.dc.html" class="card">
+      <div class="row row--top row--between gap-2">
+        <span class="stack gap-half">
+          <span class="row wrap gap-2"><strong class="text-headline">حفظ القرآن · 8 جلسات · 45 دقيقة</strong><span class="badge badge--neutral">تسميع</span></span>
+          <span class="text-caption tone-muted">الشيخ أحمد المصري · كل أربعاء 6:00 م</span>
+        </span>
+        <span class="badge badge--success">جارٍ</span>
+      </div>
+      <div class="stack gap-2">
+        <div class="progress" aria-label="3 من 8 جلسات">
+          <span class="progress__seg progress__seg--done"></span><span class="progress__seg progress__seg--done"></span><span class="progress__seg progress__seg--done"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span>
+        </div>
+        <div class="row row--between text-caption tone-muted"><span>3 من 8 جلسات</span><span>حتى الأربعاء 9 ديسمبر</span></div>
+      </div>
+      <div class="row row--between gap-2">
+        <span class="text-callout"><span class="tone-muted">القادمة:</span> الأربعاء 11 نوفمبر</span>
+        <span class="badge badge--warning">طلب إلغاء بانتظار ردّك</span>
+      </div>
+    </a>
+
+    <a href="EnrollmentDetail.dc.html" class="card">
+      <div class="row row--top row--between gap-2">
+        <span class="stack gap-half">
+          <span class="row wrap gap-2"><strong class="text-headline">حفظ القرآن · 8 جلسات · 45 دقيقة</strong><span class="badge badge--neutral">تسميع</span></span>
+          <span class="text-caption tone-muted">الشيخ أحمد المصري · كل سبت 10:00 ص</span>
+        </span>
+        <span class="badge badge--success">جارٍ</span>
+      </div>
+      <div class="stack gap-2">
+        <div class="progress" aria-label="0 من 8 جلسات">
+          <span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span>
+        </div>
+        <div class="row row--between text-caption tone-muted"><span>0 من 8 جلسات</span><span>حتى السبت 26 ديسمبر</span></div>
+      </div>
+      <span class="text-callout"><span class="tone-muted">أول جلسة:</span> السبت 7 نوفمبر · 10:00 ص</span>
+    </a>
+  </main>
+
+  {{TABS:student:Enrollments}}
+</div>

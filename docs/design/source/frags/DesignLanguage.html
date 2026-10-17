@@ -1,0 +1,328 @@
+<div class="board" dir="rtl" data-theme="light">
+  <header class="doc-header">
+    <h1 class="text-title-1">نظام التصميم — المرجع</h1>
+    <p class="text-body tone-muted">كل قيمة في الشاشات تأتي من <span class="ltr">ds/ijazah/tokens.json</span>، وكل عنصر من مكوّن في <span class="ltr">components.css</span>، وكل أيقونة من <span class="ltr">icons.json</span>. هذه اللوحة تُولَّد من الملفات نفسها، فلا تختلف عنها. القيمة الحرفية في شاشة أو مكوّن توقف المراجعة.</p>
+  </header>
+
+  <div class="grid-2 gap-8">
+    <section class="doc-section">
+      <h2 class="doc-title">المبادئ</h2>
+      <ul class="stack gap-2 text-body">
+        <li>هادئة ومتأنية ومحترمة. مكان للتسميع، لا للإقناع أو البيع. لا إلحاح، ولا ذنب السلاسل اليومية، ولا احتفالات.</li>
+        <li>العربية هي الأصل وRTL افتراضي. بداية ونهاية، لا يمين ويسار.</li>
+        <li>الذهبي للإجازة والسند والشهادة فقط. نجوم التقييم بلون النص.</li>
+        <li>الطالب مُرشَد: الخطوة التالية ظاهرة دائمًا. المعلم متحكّم: اليوم كله في نظرة.</li>
+      </ul>
+    </section>
+    <section class="doc-section">
+      <h2 class="doc-title">قواعد المكوّنات</h2>
+      <ul class="stack gap-2 text-body">
+        <li>جذر كل تبويب AppHeader: العنوان في البداية والإجراءات في النهاية. الشاشة الفرعية NavHeader: رجوع وعنوان وإجراء اختياري.</li>
+        <li>لا خط فاصل تحت الهيدر حتى يُمرَّر المحتوى. ActionBar فقط فوق محتوى يُمرَّر.</li>
+        <li>اختيار واحد من خيارين أو ثلاثة = Segmented دائمًا، ومنه تغيير اللغة. لا حالة اختيار سوداء.</li>
+        <li>الشخص Avatar دائري، والشيء IconTile مربع. الحالة Badge.</li>
+        <li>أصغر هدف لمس <span class="ltr">size.touch</span> (44)، ولا استثناء.</li>
+      </ul>
+    </section>
+  </div>
+
+  <section class="doc-section">
+    <h2 class="doc-title">الألوان الدلالية — فاتح</h2>
+    <div class="grid-6 gap-4">
+        <div class="doc-item"><span class="swatch" style="background: var(--color-bg)"></span><span class="doc-name">color.bg</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-surface)"></span><span class="doc-name">color.surface</span><span class="spec">palette.neutral.50</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-surface-raised)"></span><span class="doc-name">color.surface-raised</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-surface-strong)"></span><span class="doc-name">color.surface-strong</span><span class="spec">palette.neutral.150</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-border)"></span><span class="doc-name">color.border</span><span class="spec">palette.neutral.150</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-border-strong)"></span><span class="doc-name">color.border-strong</span><span class="spec">palette.neutral.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-text)"></span><span class="doc-name">color.text</span><span class="spec">palette.neutral.925</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-text-muted)"></span><span class="doc-name">color.text-muted</span><span class="spec">palette.neutral.600</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-text-subtle)"></span><span class="doc-name">color.text-subtle</span><span class="spec">palette.neutral.500</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary)"></span><span class="doc-name">color.primary</span><span class="spec">palette.green.600</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-strong)"></span><span class="doc-name">color.primary-strong</span><span class="spec">palette.green.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-subtle)"></span><span class="doc-name">color.primary-subtle</span><span class="spec">palette.green.100</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-soft)"></span><span class="doc-name">color.primary-soft</span><span class="spec">palette.green.50</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-border)"></span><span class="doc-name">color.primary-border</span><span class="spec">palette.green.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-primary)"></span><span class="doc-name">color.on-primary</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-primary-muted)"></span><span class="doc-name">color.on-primary-muted</span><span class="spec">rgba(255, 255, 255, 0.8)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-primary-overlay)"></span><span class="doc-name">color.on-primary-overlay</span><span class="spec">rgba(255, 255, 255, 0.16)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-live)"></span><span class="doc-name">color.live</span><span class="spec">palette.green.600</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent)"></span><span class="doc-name">color.accent</span><span class="spec">palette.gold.500</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-subtle)"></span><span class="doc-name">color.accent-subtle</span><span class="spec">palette.gold.50</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-soft)"></span><span class="doc-name">color.accent-soft</span><span class="spec">palette.gold.100</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-border)"></span><span class="doc-name">color.accent-border</span><span class="spec">palette.gold.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-text)"></span><span class="doc-name">color.accent-text</span><span class="spec">palette.gold.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-warning-subtle)"></span><span class="doc-name">color.warning-subtle</span><span class="spec">palette.orange.50</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-warning-border)"></span><span class="doc-name">color.warning-border</span><span class="spec">palette.orange.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-warning-text)"></span><span class="doc-name">color.warning-text</span><span class="spec">palette.orange.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-danger)"></span><span class="doc-name">color.danger</span><span class="spec">palette.red.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-danger-subtle)"></span><span class="doc-name">color.danger-subtle</span><span class="spec">palette.red.50</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-danger)"></span><span class="doc-name">color.on-danger</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-rating)"></span><span class="doc-name">color.rating</span><span class="spec">palette.neutral.925</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-rating-empty)"></span><span class="doc-name">color.rating-empty</span><span class="spec">palette.neutral.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-scrim)"></span><span class="doc-name">color.scrim</span><span class="spec">rgba(28, 28, 26, 0.35)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-media-overlay)"></span><span class="doc-name">color.media-overlay</span><span class="spec">rgba(0, 0, 0, 0.4)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-status-bar)"></span><span class="doc-name">color.status-bar</span><span class="spec">palette.neutral.925</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-apple)"></span><span class="doc-name">color.brand-apple</span><span class="spec">palette.neutral.1000</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-brand-apple)"></span><span class="doc-name">color.on-brand-apple</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-blue)"></span><span class="doc-name">color.brand-google-blue</span><span class="spec">palette.google.blue</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-green)"></span><span class="doc-name">color.brand-google-green</span><span class="spec">palette.google.green</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-yellow)"></span><span class="doc-name">color.brand-google-yellow</span><span class="spec">palette.google.yellow</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-red)"></span><span class="doc-name">color.brand-google-red</span><span class="spec">palette.google.red</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-focus-ring)"></span><span class="doc-name">color.focus-ring</span><span class="spec">rgba(47, 122, 86, 0.35)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-hover)"></span><span class="doc-name">color.hover</span><span class="spec">palette.neutral.50</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-hover)"></span><span class="doc-name">color.primary-hover</span><span class="spec">palette.green.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-skeleton)"></span><span class="doc-name">color.skeleton</span><span class="spec">palette.neutral.150</span></div>
+    </div>
+  </section>
+
+  <section class="doc-panel" data-theme="dark">
+    <h2 class="doc-title">الألوان الدلالية — داكن (تعيين مستقل، لا فلتر)</h2>
+    <div class="grid-6 gap-4">
+        <div class="doc-item"><span class="swatch" style="background: var(--color-bg)"></span><span class="doc-name">color.bg</span><span class="spec">palette.neutral.950</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-surface)"></span><span class="doc-name">color.surface</span><span class="spec">palette.neutral.900</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-surface-raised)"></span><span class="doc-name">color.surface-raised</span><span class="spec">palette.neutral.850</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-surface-strong)"></span><span class="doc-name">color.surface-strong</span><span class="spec">palette.neutral.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-border)"></span><span class="doc-name">color.border</span><span class="spec">palette.neutral.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-border-strong)"></span><span class="doc-name">color.border-strong</span><span class="spec">palette.neutral.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-text)"></span><span class="doc-name">color.text</span><span class="spec">palette.neutral.100</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-text-muted)"></span><span class="doc-name">color.text-muted</span><span class="spec">palette.neutral.400</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-text-subtle)"></span><span class="doc-name">color.text-subtle</span><span class="spec">palette.neutral.500</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary)"></span><span class="doc-name">color.primary</span><span class="spec">palette.green.600</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-strong)"></span><span class="doc-name">color.primary-strong</span><span class="spec">palette.green.400</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-subtle)"></span><span class="doc-name">color.primary-subtle</span><span class="spec">palette.neutral.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-soft)"></span><span class="doc-name">color.primary-soft</span><span class="spec">palette.neutral.900</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-border)"></span><span class="doc-name">color.primary-border</span><span class="spec">palette.neutral.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-primary)"></span><span class="doc-name">color.on-primary</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-primary-muted)"></span><span class="doc-name">color.on-primary-muted</span><span class="spec">rgba(255, 255, 255, 0.8)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-primary-overlay)"></span><span class="doc-name">color.on-primary-overlay</span><span class="spec">rgba(255, 255, 255, 0.16)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-live)"></span><span class="doc-name">color.live</span><span class="spec">palette.green.400</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent)"></span><span class="doc-name">color.accent</span><span class="spec">palette.gold.500</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-subtle)"></span><span class="doc-name">color.accent-subtle</span><span class="spec">palette.neutral.900</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-soft)"></span><span class="doc-name">color.accent-soft</span><span class="spec">palette.neutral.850</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-border)"></span><span class="doc-name">color.accent-border</span><span class="spec">palette.gold.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-accent-text)"></span><span class="doc-name">color.accent-text</span><span class="spec">palette.gold.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-warning-subtle)"></span><span class="doc-name">color.warning-subtle</span><span class="spec">palette.neutral.900</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-warning-border)"></span><span class="doc-name">color.warning-border</span><span class="spec">palette.orange.800</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-warning-text)"></span><span class="doc-name">color.warning-text</span><span class="spec">palette.orange.200</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-danger)"></span><span class="doc-name">color.danger</span><span class="spec">palette.red.600</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-danger-subtle)"></span><span class="doc-name">color.danger-subtle</span><span class="spec">palette.neutral.900</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-danger)"></span><span class="doc-name">color.on-danger</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-rating)"></span><span class="doc-name">color.rating</span><span class="spec">palette.neutral.100</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-rating-empty)"></span><span class="doc-name">color.rating-empty</span><span class="spec">palette.neutral.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-scrim)"></span><span class="doc-name">color.scrim</span><span class="spec">rgba(0, 0, 0, 0.5)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-media-overlay)"></span><span class="doc-name">color.media-overlay</span><span class="spec">rgba(0, 0, 0, 0.4)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-status-bar)"></span><span class="doc-name">color.status-bar</span><span class="spec">palette.neutral.100</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-apple)"></span><span class="doc-name">color.brand-apple</span><span class="spec">palette.neutral.0</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-on-brand-apple)"></span><span class="doc-name">color.on-brand-apple</span><span class="spec">palette.neutral.1000</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-blue)"></span><span class="doc-name">color.brand-google-blue</span><span class="spec">palette.google.blue</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-green)"></span><span class="doc-name">color.brand-google-green</span><span class="spec">palette.google.green</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-yellow)"></span><span class="doc-name">color.brand-google-yellow</span><span class="spec">palette.google.yellow</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-brand-google-red)"></span><span class="doc-name">color.brand-google-red</span><span class="spec">palette.google.red</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-focus-ring)"></span><span class="doc-name">color.focus-ring</span><span class="spec">rgba(79, 191, 133, 0.45)</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-hover)"></span><span class="doc-name">color.hover</span><span class="spec">palette.neutral.900</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-primary-hover)"></span><span class="doc-name">color.primary-hover</span><span class="spec">palette.green.700</span></div>
+        <div class="doc-item"><span class="swatch" style="background: var(--color-skeleton)"></span><span class="doc-name">color.skeleton</span><span class="spec">palette.neutral.800</span></div>
+    </div>
+  </section>
+
+  <div class="grid-2 gap-8">
+    <section class="doc-section">
+      <h2 class="doc-title">الخطوط</h2>
+      <div class="row row--between gap-4"><span class="text-display">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.display</span><span class="spec">32px / 1.4</span></span></div>
+      <div class="row row--between gap-4"><span class="text-title-1">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.title-1</span><span class="spec">24px / 1.4</span></span></div>
+      <div class="row row--between gap-4"><span class="text-title-2">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.title-2</span><span class="spec">20px / 1.5</span></span></div>
+      <div class="row row--between gap-4"><span class="text-title-3">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.title-3</span><span class="spec">18px / 1.5</span></span></div>
+      <div class="row row--between gap-4"><span class="text-headline">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.headline</span><span class="spec">16px / 1.5</span></span></div>
+      <div class="row row--between gap-4"><span class="text-body-lg">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.body-lg</span><span class="spec">16px / 1.7</span></span></div>
+      <div class="row row--between gap-4"><span class="text-body">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.body</span><span class="spec">14px / 1.7</span></span></div>
+      <div class="row row--between gap-4"><span class="text-callout">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.callout</span><span class="spec">13px / 1.6</span></span></div>
+      <div class="row row--between gap-4"><span class="text-caption">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.caption</span><span class="spec">12px / 1.6</span></span></div>
+      <div class="row row--between gap-4"><span class="text-micro">جلستك القادمة اليوم</span><span class="stack"><span class="doc-name">text.micro</span><span class="spec">11px / 1.5</span></span></div>
+      <div class="row row--between gap-4"><span class="text-ayah">ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ</span><span class="stack"><span class="doc-name">text.ayah</span><span class="spec">24px / 2.1</span></span></div>
+    </section>
+    <section class="doc-section">
+      <h2 class="doc-title">المسافات (أساس 4، إيقاع 8)</h2>
+      <div class="row gap-4"><span class="doc-name grow">space.1</span><span class="spec">4px</span><span class="swatch swatch--bar" style="width: var(--space-1)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.2</span><span class="spec">8px</span><span class="swatch swatch--bar" style="width: var(--space-2)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.3</span><span class="spec">12px</span><span class="swatch swatch--bar" style="width: var(--space-3)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.4</span><span class="spec">16px</span><span class="swatch swatch--bar" style="width: var(--space-4)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.5</span><span class="spec">20px</span><span class="swatch swatch--bar" style="width: var(--space-5)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.6</span><span class="spec">24px</span><span class="swatch swatch--bar" style="width: var(--space-6)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.8</span><span class="spec">32px</span><span class="swatch swatch--bar" style="width: var(--space-8)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.10</span><span class="spec">40px</span><span class="swatch swatch--bar" style="width: var(--space-10)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.12</span><span class="spec">48px</span><span class="swatch swatch--bar" style="width: var(--space-12)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.16</span><span class="spec">64px</span><span class="swatch swatch--bar" style="width: var(--space-16)"></span></div>
+      <div class="row gap-4"><span class="doc-name grow">space.half</span><span class="spec">2px</span><span class="swatch swatch--bar" style="width: var(--space-half)"></span></div>
+      <h2 class="doc-title">الانحناء</h2>
+      <div class="grid-6 gap-3">
+        <div class="doc-item items-center"><span class="swatch swatch--box" style="border-radius: var(--radius-xs)"></span><span class="doc-name">radius.xs</span><span class="spec">4px</span></div>
+        <div class="doc-item items-center"><span class="swatch swatch--box" style="border-radius: var(--radius-sm)"></span><span class="doc-name">radius.sm</span><span class="spec">8px</span></div>
+        <div class="doc-item items-center"><span class="swatch swatch--box" style="border-radius: var(--radius-md)"></span><span class="doc-name">radius.md</span><span class="spec">12px</span></div>
+        <div class="doc-item items-center"><span class="swatch swatch--box" style="border-radius: var(--radius-lg)"></span><span class="doc-name">radius.lg</span><span class="spec">16px</span></div>
+        <div class="doc-item items-center"><span class="swatch swatch--box" style="border-radius: var(--radius-xl)"></span><span class="doc-name">radius.xl</span><span class="spec">20px</span></div>
+        <div class="doc-item items-center"><span class="swatch swatch--box" style="border-radius: var(--radius-full)"></span><span class="doc-name">radius.full</span><span class="spec">999px</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="doc-section">
+    <h2 class="doc-title">المقاسات</h2>
+    <div class="grid-2 gap-4 items-start">
+      <div class="list">
+          <div class="list__row"><span class="doc-name">size.touch</span><span class="spec">44px</span></div>
+          <div class="list__row"><span class="doc-name">size.control-md</span><span class="spec">44px</span></div>
+          <div class="list__row"><span class="doc-name">size.control-lg</span><span class="spec">52px</span></div>
+          <div class="list__row"><span class="doc-name">size.list-row</span><span class="spec">52px</span></div>
+          <div class="list__row"><span class="doc-name">size.check</span><span class="spec">20px</span></div>
+          <div class="list__row"><span class="doc-name">size.dot</span><span class="spec">8px</span></div>
+          <div class="list__row"><span class="doc-name">size.steps-bar</span><span class="spec">4px</span></div>
+          <div class="list__row"><span class="doc-name">size.progress</span><span class="spec">6px</span></div>
+          <div class="list__row"><span class="doc-name">size.handle-width</span><span class="spec">40px</span></div>
+          <div class="list__row"><span class="doc-name">size.handle-height</span><span class="spec">4px</span></div>
+          <div class="list__row"><span class="doc-name">size.otp-width</span><span class="spec">48px</span></div>
+          <div class="list__row"><span class="doc-name">size.otp-height</span><span class="spec">56px</span></div>
+          <div class="list__row"><span class="doc-name">size.upload-tile</span><span class="spec">96px</span></div>
+          <div class="list__row"><span class="doc-name">size.media-preview</span><span class="spec">300px</span></div>
+          <div class="list__row"><span class="doc-name">size.agenda-time</span><span class="spec">88px</span></div>
+          <div class="list__row"><span class="doc-name">size.bubble-max</span><span class="spec">272px</span></div>
+          <div class="list__row"><span class="doc-name">size.call</span><span class="spec">56px</span></div>
+          <div class="list__row"><span class="doc-name">size.call-end</span><span class="spec">72px</span></div>
+          <div class="list__row"><span class="doc-name">size.self-view</span><span class="spec">120px</span></div>
+          <div class="list__row"><span class="doc-name">size.table-row</span><span class="spec">56px</span></div>
+          <div class="list__row"><span class="doc-name">size.doc-thumb</span><span class="spec">88px</span></div>
+          <div class="list__row"><span class="doc-name">media.xs</span><span class="spec">24px</span></div>
+          <div class="list__row"><span class="doc-name">media.sm</span><span class="spec">32px</span></div>
+          <div class="list__row"><span class="doc-name">media.md</span><span class="spec">40px</span></div>
+          <div class="list__row"><span class="doc-name">media.touch</span><span class="spec">44px</span></div>
+          <div class="list__row"><span class="doc-name">media.lg</span><span class="spec">48px</span></div>
+          <div class="list__row"><span class="doc-name">media.xl</span><span class="spec">56px</span></div>
+          <div class="list__row"><span class="doc-name">media.2xl</span><span class="spec">72px</span></div>
+          <div class="list__row"><span class="doc-name">media.3xl</span><span class="spec">96px</span></div>
+          <div class="list__row"><span class="doc-name">icon.size.xs</span><span class="spec">14px</span></div>
+          <div class="list__row"><span class="doc-name">icon.size.sm</span><span class="spec">16px</span></div>
+          <div class="list__row"><span class="doc-name">icon.size.md</span><span class="spec">20px</span></div>
+          <div class="list__row"><span class="doc-name">icon.size.lg</span><span class="spec">24px</span></div>
+          <div class="list__row"><span class="doc-name">icon.size.xl</span><span class="spec">40px</span></div>
+          <div class="list__row"><span class="doc-name">icon.size.2xl</span><span class="spec">56px</span></div>
+          <div class="list__row"><span class="doc-name">icon.stroke.regular</span><span class="spec">1.75</span></div>
+          <div class="list__row"><span class="doc-name">icon.stroke.medium</span><span class="spec">2</span></div>
+      </div>
+      <div class="list">
+          <div class="list__row"><span class="doc-name">icon.stroke.heavy</span><span class="spec">2.5</span></div>
+          <div class="list__row"><span class="doc-name">layout.frame-width</span><span class="spec">390px</span></div>
+          <div class="list__row"><span class="doc-name">layout.frame-height</span><span class="spec">844px</span></div>
+          <div class="list__row"><span class="doc-name">layout.status-bar</span><span class="spec">47px</span></div>
+          <div class="list__row"><span class="doc-name">layout.status-bar-inline</span><span class="spec">30px</span></div>
+          <div class="list__row"><span class="doc-name">layout.header</span><span class="spec">60px</span></div>
+          <div class="list__row"><span class="doc-name">layout.gutter</span><span class="spec">20px</span></div>
+          <div class="list__row"><span class="doc-name">layout.inset-bottom</span><span class="spec">34px</span></div>
+          <div class="list__row"><span class="doc-name">layout.tabbar</span><span class="spec">50px</span></div>
+          <div class="list__row"><span class="doc-name">layout.web-width</span><span class="spec">1440px</span></div>
+          <div class="list__row"><span class="doc-name">layout.web-height</span><span class="spec">900px</span></div>
+          <div class="list__row"><span class="doc-name">layout.sidebar</span><span class="spec">264px</span></div>
+          <div class="list__row"><span class="doc-name">layout.panel</span><span class="spec">456px</span></div>
+          <div class="list__row"><span class="doc-name">layout.dialog</span><span class="spec">480px</span></div>
+          <div class="list__row"><span class="doc-name">layout.web-gutter</span><span class="spec">32px</span></div>
+          <div class="list__row"><span class="doc-name">opacity.past</span><span class="spec">0.6</span></div>
+          <div class="list__row"><span class="doc-name">opacity.disabled</span><span class="spec">0.5</span></div>
+          <div class="list__row"><span class="doc-name">opacity.behind-sheet</span><span class="spec">0.5</span></div>
+          <div class="list__row"><span class="doc-name">duration.fast</span><span class="spec">120ms</span></div>
+          <div class="list__row"><span class="doc-name">duration.base</span><span class="spec">200ms</span></div>
+          <div class="list__row"><span class="doc-name">duration.slow</span><span class="spec">280ms</span></div>
+          <div class="list__row"><span class="doc-name">easing.standard</span><span class="spec">cubic-bezier(0.2, 0, 0, 1)</span></div>
+          <div class="list__row"><span class="doc-name">easing.enter</span><span class="spec">cubic-bezier(0, 0, 0.2, 1)</span></div>
+          <div class="list__row"><span class="doc-name">easing.exit</span><span class="spec">cubic-bezier(0.4, 0, 1, 1)</span></div>
+          <div class="list__row"><span class="doc-name">motion.enter-distance</span><span class="spec">8px</span></div>
+          <div class="list__row"><span class="doc-name">motion.press-scale</span><span class="spec">0.98</span></div>
+          <div class="list__row"><span class="doc-name">motion.dialog-scale</span><span class="spec">0.96</span></div>
+          <div class="list__row"><span class="doc-name">density.compact.size.touch</span><span class="spec">36px</span></div>
+          <div class="list__row"><span class="doc-name">density.compact.size.control-md</span><span class="spec">36px</span></div>
+          <div class="list__row"><span class="doc-name">density.compact.size.control-lg</span><span class="spec">40px</span></div>
+          <div class="list__row"><span class="doc-name">density.compact.size.list-row</span><span class="spec">44px</span></div>
+          <div class="list__row"><span class="doc-name">density.compact.size.table-row</span><span class="spec">44px</span></div>
+          <div class="list__row"><span class="doc-name">density.compact.media.touch</span><span class="spec">36px</span></div>
+          <div class="list__row"><span class="doc-name">border-width.hairline</span><span class="spec">1px</span></div>
+          <div class="list__row"><span class="doc-name">border-width.selected</span><span class="spec">2px</span></div>
+          <div class="list__row"><span class="doc-name">border-width.indicator</span><span class="spec">4px</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="doc-section">
+    <h2 class="doc-title">الأيقونات (أسماء Lucide)</h2>
+    <div class="grid-6 gap-4">
+        <div class="doc-item items-center">{{icon:shield-check:lg}}<span class="doc-name">shield-check</span></div>
+        <div class="doc-item items-center">{{icon:users:lg}}<span class="doc-name">users</span></div>
+        <div class="doc-item items-center">{{icon:mail:lg}}<span class="doc-name">mail</span></div>
+        <div class="doc-item items-center">{{icon:chevron-right:lg}}<span class="doc-name">chevron-right</span></div>
+        <div class="doc-item items-center">{{icon:chevron-left:lg}}<span class="doc-name">chevron-left</span></div>
+        <div class="doc-item items-center">{{icon:arrow-left:lg}}<span class="doc-name">arrow-left</span></div>
+        <div class="doc-item items-center">{{icon:eye:lg}}<span class="doc-name">eye</span></div>
+        <div class="doc-item items-center">{{icon:clock:lg}}<span class="doc-name">clock</span></div>
+        <div class="doc-item items-center">{{icon:book:lg}}<span class="doc-name">book</span></div>
+        <div class="doc-item items-center">{{icon:award:lg}}<span class="doc-name">award</span></div>
+        <div class="doc-item items-center">{{icon:alert-circle:lg}}<span class="doc-name">alert-circle</span></div>
+        <div class="doc-item items-center">{{icon:bell:lg}}<span class="doc-name">bell</span></div>
+        <div class="doc-item items-center">{{icon:house:lg}}<span class="doc-name">house</span></div>
+        <div class="doc-item items-center">{{icon:search:lg}}<span class="doc-name">search</span></div>
+        <div class="doc-item items-center">{{icon:user:lg}}<span class="doc-name">user</span></div>
+        <div class="doc-item items-center">{{icon:check:lg}}<span class="doc-name">check</span></div>
+        <div class="doc-item items-center">{{icon:upload:lg}}<span class="doc-name">upload</span></div>
+        <div class="doc-item items-center">{{icon:x:lg}}<span class="doc-name">x</span></div>
+        <div class="doc-item items-center">{{icon:lock:lg}}<span class="doc-name">lock</span></div>
+        <div class="doc-item items-center">{{icon:star:lg}}<span class="doc-name">star</span></div>
+        <div class="doc-item items-center">{{icon:credit-card:lg}}<span class="doc-name">credit-card</span></div>
+        <div class="doc-item items-center">{{icon:smartphone:lg}}<span class="doc-name">smartphone</span></div>
+        <div class="doc-item items-center">{{icon:qr-code:lg}}<span class="doc-name">qr-code</span></div>
+        <div class="doc-item items-center">{{icon:file:lg}}<span class="doc-name">file</span></div>
+        <div class="doc-item items-center">{{icon:download:lg}}<span class="doc-name">download</span></div>
+        <div class="doc-item items-center">{{icon:calendar:lg}}<span class="doc-name">calendar</span></div>
+        <div class="doc-item items-center">{{icon:layers:lg}}<span class="doc-name">layers</span></div>
+        <div class="doc-item items-center">{{icon:plus:lg}}<span class="doc-name">plus</span></div>
+        <div class="doc-item items-center">{{icon:grip-vertical:lg}}<span class="doc-name">grip-vertical</span></div>
+        <div class="doc-item items-center">{{icon:landmark:lg}}<span class="doc-name">landmark</span></div>
+        <div class="doc-item items-center">{{icon:mic:lg}}<span class="doc-name">mic</span></div>
+        <div class="doc-item items-center">{{icon:video-off:lg}}<span class="doc-name">video-off</span></div>
+        <div class="doc-item items-center">{{icon:message-square:lg}}<span class="doc-name">message-square</span></div>
+        <div class="doc-item items-center">{{icon:phone-off:lg}}<span class="doc-name">phone-off</span></div>
+        <div class="doc-item items-center">{{icon:paperclip:lg}}<span class="doc-name">paperclip</span></div>
+        <div class="doc-item items-center">{{icon:trash:lg}}<span class="doc-name">trash</span></div>
+        <div class="doc-item items-center">{{icon:apple:lg:solid}}<span class="doc-name">apple</span></div>
+        <div class="doc-item items-center">{{icon:google:lg:solid}}<span class="doc-name">google</span></div>
+        <div class="doc-item items-center">{{icon:user-check:lg}}<span class="doc-name">user-check</span></div>
+        <div class="doc-item items-center">{{icon:flag:lg}}<span class="doc-name">flag</span></div>
+        <div class="doc-item items-center">{{icon:sliders-horizontal:lg}}<span class="doc-name">sliders-horizontal</span></div>
+        <div class="doc-item items-center">{{icon:list:lg}}<span class="doc-name">list</span></div>
+        <div class="doc-item items-center">{{icon:log-out:lg}}<span class="doc-name">log-out</span></div>
+        <div class="doc-item items-center">{{icon:filter:lg}}<span class="doc-name">filter</span></div>
+        <div class="doc-item items-center">{{icon:external-link:lg}}<span class="doc-name">external-link</span></div>
+        <div class="doc-item items-center">{{icon:activity:lg}}<span class="doc-name">activity</span></div>
+        <div class="doc-item items-center">{{icon:ban:lg}}<span class="doc-name">ban</span></div>
+        <div class="doc-item items-center">{{icon:chevron-down:lg}}<span class="doc-name">chevron-down</span></div>
+        <div class="doc-item items-center">{{icon:pencil:lg}}<span class="doc-name">pencil</span></div>
+        <div class="doc-item items-center">{{icon:pen-line:lg}}<span class="doc-name">pen-line</span></div>
+        <div class="doc-item items-center">{{icon:wifi-off:lg}}<span class="doc-name">wifi-off</span></div>
+        <div class="doc-item items-center">{{icon:video:lg}}<span class="doc-name">video</span></div>
+        <div class="doc-item items-center">{{icon:mic-off:lg}}<span class="doc-name">mic-off</span></div>
+        <div class="doc-item items-center">{{icon:refresh-cw:lg}}<span class="doc-name">refresh-cw</span></div>
+        <div class="doc-item items-center">{{icon:info:lg}}<span class="doc-name">info</span></div>
+        <div class="doc-item items-center">{{icon:file-text:lg}}<span class="doc-name">file-text</span></div>
+        <div class="doc-item items-center">{{icon:triangle-alert:lg}}<span class="doc-name">triangle-alert</span></div>
+        <div class="doc-item items-center">{{icon:eye-off:lg}}<span class="doc-name">eye-off</span></div>
+        <div class="doc-item items-center">{{icon:user-x:lg}}<span class="doc-name">user-x</span></div>
+        <div class="doc-item items-center">{{icon:rotate-ccw:lg}}<span class="doc-name">rotate-ccw</span></div>
+        <div class="doc-item items-center">{{icon:globe:lg}}<span class="doc-name">globe</span></div>
+        <div class="doc-item items-center">{{icon:share:lg}}<span class="doc-name">share</span></div>
+        <div class="doc-item items-center">{{icon:key-round:lg}}<span class="doc-name">key-round</span></div>
+        <div class="doc-item items-center">{{icon:hourglass:lg}}<span class="doc-name">hourglass</span></div>
+        <div class="doc-item items-center">{{icon:circle-check:lg}}<span class="doc-name">circle-check</span></div>
+        <div class="doc-item items-center">{{icon:circle-x:lg}}<span class="doc-name">circle-x</span></div>
+        <div class="doc-item items-center">{{icon:scale:lg}}<span class="doc-name">scale</span></div>
+        <div class="doc-item items-center">{{icon:copy:lg}}<span class="doc-name">copy</span></div>
+        <div class="doc-item items-center">{{icon:ellipsis-vertical:lg}}<span class="doc-name">ellipsis-vertical</span></div>
+        <div class="doc-item items-center">{{icon:bell-off:lg}}<span class="doc-name">bell-off</span></div>
+        <div class="doc-item items-center">{{icon:link:lg}}<span class="doc-name">link</span></div>
+    </div>
+  </section>
+</div>

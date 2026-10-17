@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — تم الدفع</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <main class="screen__body screen__body--bare">
+    <div class="stack gap-3 items-center text-center">
+      <span class="icon-tile icon-tile--2xl icon-tile--primary" aria-hidden="true"><svg class="icon icon--xl icon--heavy" data-icon="check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
+      <div class="stack gap-1">
+        <h1 class="text-title-2">تم الحجز</h1>
+        <p class="text-body tone-muted">جلساتك كل سبت 10:00 ص، من 7 نوفمبر.</p>
+      </div>
+    </div>
+
+    <section class="summary" aria-label="الإيصال">
+      <div class="summary__row"><span class="summary__label">المعلم</span><span class="summary__value">الشيخ أحمد المصري</span></div>
+      <div class="summary__row"><span class="summary__label">الباقة</span><span class="summary__value row wrap row--end gap-2">حفظ القرآن · 8 جلسات · 45 دقيقة<span class="badge badge--neutral">تسميع</span></span></div>
+      <div class="summary__row"><span class="summary__label">رقم الطلب</span><span class="summary__value ltr">IJZ-2026-005317</span></div>
+      <div class="summary__row"><span class="summary__label">المبلغ المدفوع</span><span class="summary__value">1,200 ج.م</span></div>
+      <div class="summary__row"><span class="summary__label">التاريخ</span><span class="summary__value">الأربعاء 4 نوفمبر 2026، 3:20 م</span></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">جلساتك</h2>
+      <ol class="list">
+        <li class="list__row"><span class="text-medium">الجلسة 1</span><span class="list__value">السبت 7 نوفمبر · 10:00 ص</span></li>
+        <li class="list__row"><span class="text-medium">الجلسة 2</span><span class="list__value">السبت 14 نوفمبر · 10:00 ص</span></li>
+      </ol>
+      <span class="text-caption tone-muted text-center">… حتى الجلسة 8 يوم السبت 26 ديسمبر</span>
+    </section>
+
+    <div class="stack gap-2 push">
+      <a href="EnrollmentDetail.dc.html" class="btn btn--primary btn--block">عرض الاشتراك</a>
+      <a href="Enrollments.dc.html" class="btn btn--ghost btn--block">إلى اشتراكاتي</a>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

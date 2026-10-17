@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>عام — طلب حذف الحساب من الويب</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <main class="screen__body screen__body--bare gap-4">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة</span><span class="text-caption tone-muted">· حذف الحساب</span></span>
+
+    <div class="page-intro">
+      <h1 class="page-intro__title">حذف حسابك في إجازة</h1>
+      <p class="page-intro__lede">من التطبيق: حسابي ← حذف الحساب. وإن لم يعد التطبيق لديك، فاطلب الحذف هنا.</p>
+    </div>
+
+    <ol class="timeline">
+      <li class="timeline__item">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--current">1</span><span class="timeline__line"></span></span>
+        <span class="timeline__body"><span class="timeline__title">بريد الحساب</span><span class="timeline__meta">نرسل إليه رمزًا</span></span>
+      </li>
+      <li class="timeline__item timeline__item--pending">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--pending">2</span></span>
+        <span class="timeline__body"><span class="timeline__title">الرمز والتأكيد</span><span class="timeline__meta">ثم يُحذف الحساب فورًا</span></span>
+      </li>
+    </ol>
+
+    <form class="field">
+      <label for="em" class="field__label">البريد الإلكتروني للحساب</label>
+      <input id="em" type="email" class="input input--ltr input--focused" value="yousef@example.com">
+    </form>
+
+    <div class="banner banner--info">
+      <svg class="icon icon--md" data-icon="info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <p class="grow">تُحذف بياناتك الشخصية وتُلغى جلساتك القادمة. تبقى إجازاتك صالحة، وسجلات الدفع دون بياناتك كما يلزم القانون.</p>
+    </div>
+
+    <a href="DeleteAccountWebCode.dc.html" class="btn btn--danger btn--block push">إرسال الرمز</a>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

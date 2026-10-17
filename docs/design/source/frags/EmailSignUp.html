@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="EmailSignIn.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <div class="page-intro">
+      <h1 class="page-intro__title">حساب جديد بالبريد</h1>
+    </div>
+
+    <form class="stack gap-5">
+      <div class="field">
+        <label for="em" class="field__label">البريد الإلكتروني</label>
+        <input id="em" type="email" class="input input--ltr" value="khaled.mansour@example.com">
+      </div>
+      <div class="field">
+        <label for="pw" class="field__label">كلمة المرور</label>
+        <input id="pw" type="password" class="input input--ltr input--focused" value="••••••••••••">
+      </div>
+      <div class="field">
+        <label for="pw2" class="field__label">تأكيد كلمة المرور</label>
+        <input id="pw2" type="password" class="input input--ltr" value="••••••••••••">
+      </div>
+    </form>
+
+    <div class="stack gap-2 push">
+      <a href="Otp.dc.html" class="btn btn--primary btn--block">إرسال رمز التحقق</a>
+      <p class="row row--center gap-0 text-body tone-muted">
+        <span>لديك حساب؟</span>
+        <a href="EmailSignIn.dc.html" class="btn btn--ghost btn--md">الدخول</a>
+      </p>
+    </div>
+  </main>
+</div>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — الباقات قبل التحقق من حساب الاستلام</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="app-header">
+    <h1 class="app-header__title">الباقات</h1>
+    <div class="app-header__actions">
+      <a href="PackageEditor.dc.html" class="btn btn--primary btn--md"><svg class="icon icon--md" data-icon="plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>باقة جديدة</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <a href="PayoutSetup.dc.html" class="banner banner--warning">
+      <svg class="icon icon--md" data-icon="triangle-alert" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      <strong class="text-callout text-bold grow">لن تظهر باقاتك للطلاب حتى يتم التحقق من حساب الاستلام</strong>
+      <svg class="icon icon--md" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+    </a>
+
+    <h2 class="group-label">فعّالة 2</h2>
+
+    <article class="card">
+      <div class="row row--top row--between gap-2">
+        <div class="stack gap-half">
+          <strong class="text-headline">حفظ القرآن</strong>
+          <span class="text-caption tone-muted">8 جلسات · 45 دقيقة · 1,200 ج.م</span>
+        </div>
+        <span class="stack gap-1 items-end">
+          <span class="badge badge--neutral">تسميع</span>
+          <span class="badge badge--neutral"><svg class="icon icon--xs" data-icon="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg>غير منشورة</span>
+        </span>
+      </div>
+      <div class="row gap-2">
+        <a href="PackageEditor.dc.html" class="btn btn--secondary btn--md btn--grow"><svg class="icon icon--md" data-icon="pencil" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.17 6.81a2.82 2.82 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>تعديل</a>
+        <a href="PackageDeactivateSheet.dc.html" class="btn btn--secondary btn--md btn--grow">إيقاف</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="row row--top row--between gap-2">
+        <div class="stack gap-half">
+          <strong class="text-headline">حفظ القرآن</strong>
+          <span class="text-caption tone-muted">12 جلسة · 60 دقيقة · 2,160 ج.م</span>
+        </div>
+        <span class="stack gap-1 items-end">
+          <span class="badge badge--accent">مسار إجازة</span>
+          <span class="badge badge--neutral"><svg class="icon icon--xs" data-icon="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg>غير منشورة</span>
+        </span>
+      </div>
+      <div class="row gap-2">
+        <a href="PackageEditor.dc.html" class="btn btn--secondary btn--md btn--grow"><svg class="icon icon--md" data-icon="pencil" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.17 6.81a2.82 2.82 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>تعديل</a>
+        <a href="PackageDeactivateSheet.dc.html" class="btn btn--secondary btn--md btn--grow">إيقاف</a>
+      </div>
+    </article>
+
+    <h2 class="group-label">موقوفة 1</h2>
+
+    <article class="card card--compact card--surface">
+      <div class="row row--top row--between gap-2">
+        <div class="stack gap-half">
+          <strong class="text-headline">حفظ القرآن</strong>
+          <span class="text-caption tone-muted">8 جلسات · 45 دقيقة · 1,200 ج.م</span>
+        </div>
+        <span class="badge badge--accent">مسار إجازة</span>
+      </div>
+      <div class="row gap-2">
+        <a href="PackageEditor.dc.html" class="btn btn--secondary btn--md btn--grow"><svg class="icon icon--md" data-icon="pencil" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.17 6.81a2.82 2.82 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>تعديل</a>
+        <button type="button" class="btn btn--secondary btn--md btn--grow">تفعيل</button>
+      </div>
+    </article>
+  </main>
+
+  <nav class="tabbar" aria-label="تنقل المعلم">
+    <a href="TeacherHome.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="calendar" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>اليوم</span></a>
+    <a href="TeacherStudents.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="users" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></svg><span>طلابي</span></a>
+    <a href="Availability.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>المواعيد</span></a>
+    <a href="Packages.dc.html" class="tabbar__item tabbar__item--active" aria-current="page"><svg class="icon icon--lg" data-icon="layers" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8 12 4l8 4-8 4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg><span>الباقات</span></a>
+    <a href="TeacherAccount.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حسابي</span></a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

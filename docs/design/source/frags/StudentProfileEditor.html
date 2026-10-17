@@ -1,0 +1,41 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="StudentAccount.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">الملف الشخصي</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="row gap-4">
+      <span class="avatar avatar--xl">ي</span>
+      <span class="stack gap-half grow">
+        <button type="button" class="link self-start">{{icon:upload:sm}}تغيير الصورة</button>
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="name" class="field__label">الاسم الظاهر</label>
+      <input id="name" class="input" value="يوسف أحمد">
+      <span class="field__hint">يراه معلموك. اسمك على الإجازة يُدخل مرة واحدة عند أول طلب إجازة.</span>
+    </div>
+
+    <div class="field">
+      <label for="dob" class="field__label">تاريخ الميلاد</label>
+      <input id="dob" class="input" value="12 مارس 2004" disabled>
+      <span class="field__hint">للتغيير تواصل مع الدعم.</span>
+    </div>
+
+    <div class="field">
+      <label for="gender" class="field__label">الجنس</label>
+      <input id="gender" class="input" value="ذكر" disabled>
+      <span class="field__hint">للتغيير تواصل مع الدعم.</span>
+    </div>
+  </main>
+
+  <footer class="action-bar">
+    <a href="StudentAccount.dc.html" class="btn btn--primary btn--block">حفظ</a>
+  </footer>
+</div>

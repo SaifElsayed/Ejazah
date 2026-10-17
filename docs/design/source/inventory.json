@@ -1,0 +1,2715 @@
+[
+ {
+  "id": "Welcome",
+  "title": "الترحيب وتسجيل الدخول — جوجل أو Apple أو البريد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Role",
+   "EmailSignIn"
+  ]
+ },
+ {
+  "id": "EmailSignIn",
+  "title": "الدخول بالبريد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الدخول بالبريد",
+  "links": [
+   "Welcome",
+   "ForgotPassword",
+   "Main",
+   "EmailSignUp"
+  ]
+ },
+ {
+  "id": "EmailSignInError",
+  "title": "الدخول بالبريد — كلمة مرور خاطئة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الدخول بالبريد",
+  "links": [
+   "Welcome",
+   "ForgotPassword",
+   "Main",
+   "EmailSignUp"
+  ]
+ },
+ {
+  "id": "EmailSignUp",
+  "title": "حساب جديد بالبريد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حساب جديد بالبريد",
+  "links": [
+   "EmailSignIn",
+   "Otp"
+  ]
+ },
+ {
+  "id": "Otp",
+  "title": "رمز تأكيد البريد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تأكيد بريدك",
+  "links": [
+   "EmailSignUp",
+   "Role"
+  ]
+ },
+ {
+  "id": "ForgotPassword",
+  "title": "نسيت كلمة المرور",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "نسيت كلمة المرور",
+  "links": [
+   "EmailSignIn",
+   "ResetPassword",
+   "Welcome"
+  ]
+ },
+ {
+  "id": "ResetPassword",
+  "title": "استعادة كلمة المرور — حسابات البريد فقط",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "كلمة مرور جديدة",
+  "links": [
+   "ForgotPassword",
+   "Main"
+  ]
+ },
+ {
+  "id": "SignInConflict",
+  "title": "البريد مسجّل بطريقة أخرى",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EmailSignIn",
+   "Welcome"
+  ]
+ },
+ {
+  "id": "Role",
+  "title": "الانضمام ١ — الدور",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "كيف ستستخدم إجازة؟",
+  "links": [
+   "OnboardProfile"
+  ]
+ },
+ {
+  "id": "OnboardProfile",
+  "title": "الانضمام ٢ — البيانات والشروط",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "بياناتك",
+  "links": [
+   "TimeZonePicker",
+   "Terms",
+   "ConfirmGender"
+  ]
+ },
+ {
+  "id": "TimeZonePicker",
+  "title": "المنطقة الزمنية",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "المنطقة الزمنية",
+  "links": [
+   "OnboardProfile"
+  ]
+ },
+ {
+  "id": "Terms",
+  "title": "الشروط والأحكام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الشروط والأحكام",
+  "links": [
+   "OnboardProfile"
+  ]
+ },
+ {
+  "id": "ConfirmGender",
+  "title": "الانضمام ٣ — تأكيد الجنس",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "بياناتك",
+  "links": [
+   "NotificationPermission",
+   "OnboardProfile"
+  ]
+ },
+ {
+  "id": "ConfirmGenderTeacher",
+  "title": "الانضمام — تأكيد الجنس (معلم)",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "بياناتك",
+  "links": [
+   "ApplySubjects",
+   "OnboardProfile"
+  ]
+ },
+ {
+  "id": "NotificationPermission",
+  "title": "إذن الإشعارات",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "لا تفوّتك جلسة",
+  "links": [
+   "StudentHomeEmpty"
+  ]
+ },
+ {
+  "id": "StudentHomeEmpty",
+  "title": "الطالب — الرئيسية قبل أول اشتراك",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Notifications",
+   "StudentAccount",
+   "Discovery"
+  ]
+ },
+ {
+  "id": "ApplySubjects",
+  "title": "طلب المعلم ١ — المواد والمؤهل",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب الانضمام كمعلم",
+  "links": [
+   "ConfirmGenderTeacher",
+   "ApplyDocuments"
+  ]
+ },
+ {
+  "id": "ApplyDocuments",
+  "title": "طلب المعلم ٢ — الوثائق",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الوثائق",
+  "links": [
+   "ApplySubjects",
+   "ApplyIjazah"
+  ]
+ },
+ {
+  "id": "ApplyIjazah",
+  "title": "طلب المعلم ٣ — الإجازات",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإجازات",
+  "links": [
+   "ApplyDocuments"
+  ]
+ },
+ {
+  "id": "ApplicationStatus",
+  "title": "طلب المعلم — قيد المراجعة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب الانضمام",
+  "links": [
+   "TeacherNotifications",
+   "SignOutSheet",
+   "ApplicationMoreInfo"
+  ]
+ },
+ {
+  "id": "ApplicationMoreInfo",
+  "title": "طلب المعلم — مطلوب وثائق إضافية",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب الانضمام",
+  "links": [
+   "ApplicationStatus"
+  ]
+ },
+ {
+  "id": "ApplicationRejected",
+  "title": "طلب المعلم — مرفوض (الحظر: الشاشة نفسها دون «التقديم مرة أخرى»)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب الانضمام",
+  "links": [
+   "TeacherNotifications",
+   "SignOutSheet",
+   "ApplySubjects"
+  ]
+ },
+ {
+  "id": "ApplicationApproved",
+  "title": "طلب المعلم — تم الاعتماد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "PayoutStart",
+   "ProfileEditor",
+   "PackagesLocked"
+  ]
+ },
+ {
+  "id": "Main",
+  "title": "الطالب — الرئيسية",
+  "w": 390,
+  "h": 932,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Notifications",
+   "StudentAccount",
+   "Enrollments",
+   "WriteReview"
+  ]
+ },
+ {
+  "id": "MainOffline",
+  "title": "الطالب — الرئيسية دون اتصال",
+  "w": 390,
+  "h": 876,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Notifications",
+   "StudentAccount",
+   "Enrollments"
+  ]
+ },
+ {
+  "id": "Discovery",
+  "title": "الطالب — الاستكشاف",
+  "w": 390,
+  "h": 935,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "DiscoveryFilter",
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "DiscoveryFilter",
+  "title": "الطالب — الاستكشاف: الفلتر مفتوح",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "DiscoveryFiltered",
+   "Discovery",
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "DiscoveryFiltered",
+  "title": "الطالب — الاستكشاف: بعد تطبيق الفلاتر",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "DiscoveryFilter",
+   "Discovery",
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "DiscoverySearch",
+  "title": "الطالب — الاستكشاف: البحث باسم الشيخ",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "Discovery",
+   "DiscoveryFilter",
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "DiscoveryEmpty",
+  "title": "الطالب — الاستكشاف: لا نتائج للفلاتر",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "DiscoveryFilter",
+   "Discovery"
+  ]
+ },
+ {
+  "id": "DiscoverySearchEmpty",
+  "title": "البحث بلا نتائج",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "Discovery",
+   "DiscoveryFilter"
+  ]
+ },
+ {
+  "id": "DiscoveryNoTeachers",
+  "title": "لا معلمين متاحين للطالب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "استكشف",
+  "links": [
+   "Notifications",
+   "Discovery"
+  ]
+ },
+ {
+  "id": "TeacherProfile",
+  "title": "الطالب — ملف المعلم",
+  "w": 390,
+  "h": 868,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Discovery",
+   "ReportSheet",
+   "TeacherProfileReviews",
+   "BookingSheet"
+  ]
+ },
+ {
+  "id": "TeacherProfileReviews",
+  "title": "الطالب — كل تقييمات المعلم",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تقييمات الشيخ أحمد المصري",
+  "links": [
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "TeacherProfileReviewsEmpty",
+  "title": "تقييمات المعلم — لا شيء بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تقييمات الشيخ عمر حسن",
+  "links": [
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "ReportSheet",
+  "title": "الطالب — إبلاغ عن معلم",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "BookingSheet",
+  "title": "الطالب — اختيار الموعد",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherProfile",
+   "Checkout"
+  ]
+ },
+ {
+  "id": "SlotTaken",
+  "title": "الطالب — الموعد حُجز للتو",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "Checkout",
+  "title": "الطالب — الدفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "مراجعة الطلب",
+  "links": [
+   "BookingSheet",
+   "Processing"
+  ]
+ },
+ {
+  "id": "CheckoutExpired",
+  "title": "الطالب — انتهى وقت الدفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherProfile",
+   "Main"
+  ]
+ },
+ {
+  "id": "CheckoutPrevious",
+  "title": "الطالب — دفع سابق لم يكتمل (وإن كان قيد المعالجة: إلى «نؤكد دفعتك»)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "مراجعة الطلب",
+  "links": [
+   "BookingSheet",
+   "Checkout",
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "Processing",
+  "title": "الطالب — تأكيد الدفع",
+  "w": 390,
+  "h": 844,
+  "kind": "dialog",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "مراجعة الطلب",
+  "links": []
+ },
+ {
+  "id": "ProcessingDelayed",
+  "title": "الطالب — تأكيد متأخر",
+  "w": 390,
+  "h": 844,
+  "kind": "dialog",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "مراجعة الطلب",
+  "links": [
+   "Enrollments"
+  ]
+ },
+ {
+  "id": "PaymentSuccess",
+  "title": "الطالب — تم الدفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EnrollmentDetail",
+   "Enrollments"
+  ]
+ },
+ {
+  "id": "PaymentFailed",
+  "title": "الطالب — لم يكتمل الدفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Checkout",
+   "BookingSheet"
+  ]
+ },
+ {
+  "id": "PaymentSlotUnavailable",
+  "title": "الطالب — الموعد لم يعد متاحًا بعد الدفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Enrollments"
+  ]
+ },
+ {
+  "id": "Enrollments",
+  "title": "الطالب — اشتراكاتي",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اشتراكاتي",
+  "links": [
+   "Notifications",
+   "EnrollmentsEnded",
+   "EnrollmentDetail"
+  ]
+ },
+ {
+  "id": "EnrollmentsEnded",
+  "title": "الطالب — اشتراكاتي: المنتهية",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اشتراكاتي",
+  "links": [
+   "Notifications",
+   "Enrollments",
+   "Credentials",
+   "EnrollmentTerminated",
+   "WriteReview"
+  ]
+ },
+ {
+  "id": "EnrollmentsEmpty",
+  "title": "الطالب — اشتراكاتي (فارغة)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اشتراكاتي",
+  "links": [
+   "Notifications",
+   "Discovery"
+  ]
+ },
+ {
+  "id": "EnrollmentsEndedEmpty",
+  "title": "اشتراكاتي: المنتهية — فارغة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اشتراكاتي",
+  "links": [
+   "Notifications",
+   "Enrollments"
+  ]
+ },
+ {
+  "id": "EnrollmentDetail",
+  "title": "الطالب — تفاصيل الاشتراك (الأربعاء 6:00 م، 4 من 8)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تفاصيل الاشتراك",
+  "links": [
+   "Enrollments",
+   "ReportSheet",
+   "Chat",
+   "CancelRequestSheet",
+   "RaiseDispute",
+   "CancelRespondSheet"
+  ]
+ },
+ {
+  "id": "SessionStates",
+  "title": "الطالب — تفاصيل الاشتراك: حالات الجلسة كلها (نموذج)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حالات الجلسة",
+  "links": [
+   "EnrollmentDetail",
+   "RaiseDispute",
+   "MakeupChoiceSheet"
+  ]
+ },
+ {
+  "id": "CancelRequestSheet",
+  "title": "الطالب — طلب إلغاء جلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EnrollmentDetail",
+   "CancelSessionPicker"
+  ]
+ },
+ {
+  "id": "CancelSessionPicker",
+  "title": "الطالب — طلب إلغاء: اختيار الجلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "CancelRequestSheet"
+  ]
+ },
+ {
+  "id": "CancelRespondSheet",
+  "title": "الطالب — الرد على طلب المعلم إلغاء جلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EnrollmentDetail"
+  ]
+ },
+ {
+  "id": "MakeupChoiceSheet",
+  "title": "الطالب — اختيار تعويض جلسة غاب عنها المعلم",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EnrollmentDetail",
+   "MakeupProposalSheet"
+  ]
+ },
+ {
+  "id": "MakeupProposalSheet",
+  "title": "الطالب — موعد الجلسة التعويضية",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EnrollmentDetail"
+  ]
+ },
+ {
+  "id": "RaiseDispute",
+  "title": "الطالب — فتح نزاع على جلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "فتح نزاع على جلسة",
+  "links": [
+   "EnrollmentDetail"
+  ]
+ },
+ {
+  "id": "EnrollmentTerminated",
+  "title": "الطالب — اشتراك انتهى لغياب المعلم",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تفاصيل الاشتراك",
+  "links": [
+   "Enrollments",
+   "ReportSheet",
+   "WriteReview"
+  ]
+ },
+ {
+  "id": "WriteReview",
+  "title": "الطالب — كتابة التقييم",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "قيّم اشتراكك",
+  "links": [
+   "Main",
+   "TeacherProfile"
+  ]
+ },
+ {
+  "id": "Credentials",
+  "title": "الطالب — إجازاتي",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إجازاتي",
+  "links": [
+   "Notifications",
+   "VerifyCertificate",
+   "CertificateView"
+  ]
+ },
+ {
+  "id": "CredentialsEmpty",
+  "title": "الطالب — إجازاتي (فارغة)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إجازاتي",
+  "links": [
+   "Notifications",
+   "Enrollments"
+  ]
+ },
+ {
+  "id": "CertificateNameSheet",
+  "title": "الطالب — اسمك كما يُكتب في الإجازة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Notifications"
+  ]
+ },
+ {
+  "id": "CertificateView",
+  "title": "الطالب — عرض الشهادة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإجازة",
+  "links": [
+   "Credentials"
+  ]
+ },
+ {
+  "id": "CertificateRevoked",
+  "title": "الطالب — إجازة مسحوبة (حالة بديلة)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإجازة",
+  "links": [
+   "Credentials"
+  ]
+ },
+ {
+  "id": "VerifyCertificate",
+  "title": "عام — صفحة التحقق من الإجازة (في حالة السحب: شارة «إجازة مسحوبة» وسطر السحب بتاريخه وسببه العام)",
+  "w": 390,
+  "h": 856,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "VerifyCertificateRevoked",
+  "title": "صفحة التحقق — إجازة مسحوبة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "VerifyCertificateNotFound",
+  "title": "صفحة التحقق — رقم غير موجود",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "StudentAccount",
+  "title": "الطالب — حسابي",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حسابي",
+  "links": [
+   "Notifications",
+   "StudentProfileEditor",
+   "TimeZonePicker",
+   "Terms",
+   "SignOutSheet",
+   "DeleteAccount"
+  ]
+ },
+ {
+  "id": "StudentProfileEditor",
+  "title": "الملف الشخصي للطالب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الملف الشخصي",
+  "links": [
+   "StudentAccount"
+  ]
+ },
+ {
+  "id": "TeacherAccount",
+  "title": "المعلم — حسابي",
+  "w": 390,
+  "h": 904,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حسابي",
+  "links": [
+   "TeacherNotifications",
+   "SignOutSheet",
+   "TeacherReviews",
+   "ProfileEditor",
+   "TeacherCredentials",
+   "SignatureUpload",
+   "PayoutVerified",
+   "TimeZonePicker",
+   "Terms",
+   "DeleteAccountTeacher"
+  ]
+ },
+ {
+  "id": "SignOutSheet",
+  "title": "تأكيد تسجيل الخروج",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "StudentAccount",
+   "Welcome"
+  ]
+ },
+ {
+  "id": "DeleteAccount",
+  "title": "حذف الحساب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حذف الحساب",
+  "links": [
+   "StudentAccount",
+   "DeleteAccountSheet"
+  ]
+ },
+ {
+  "id": "DeleteAccountSheet",
+  "title": "حذف الحساب — التأكيد الأخير",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Welcome",
+   "DeleteAccount"
+  ]
+ },
+ {
+  "id": "DeleteAccountWeb",
+  "title": "عام — طلب حذف الحساب من الويب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حذف حسابك في إجازة",
+  "links": [
+   "DeleteAccountWebCode"
+  ]
+ },
+ {
+  "id": "DeleteAccountWebCode",
+  "title": "عام — حذف الحساب من الويب: الرمز والتأكيد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "أدخل الرمز",
+  "links": [
+   "DeleteAccountWebDone",
+   "DeleteAccountWeb"
+  ]
+ },
+ {
+  "id": "DeleteAccountWebDone",
+  "title": "عام — حذف الحساب من الويب: تم الحذف",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حُذف حسابك",
+  "links": []
+ },
+ {
+  "id": "DeleteAccountTeacher",
+  "title": "المعلم — حذف الحساب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حذف الحساب",
+  "links": [
+   "TeacherAccount",
+   "DeleteAccountTeacherSheet"
+  ]
+ },
+ {
+  "id": "DeleteAccountTeacherSheet",
+  "title": "المعلم — حذف الحساب: التأكيد الأخير",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Welcome",
+   "DeleteAccountTeacher"
+  ]
+ },
+ {
+  "id": "AccountRestricted",
+  "title": "الحساب موقوف (المحظور: الشاشة نفسها بعنوان «حسابك محظور» ودون مراجعة قادمة)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حسابك موقوف مؤقتًا",
+  "links": [
+   "SignOutSheet"
+  ]
+ },
+ {
+  "id": "TeacherRestricted",
+  "title": "المعلم — الحساب موقوف (سحب الاعتماد والحظر: الشاشة نفسها بعنوان مختلف ودون مراجعة قادمة)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حسابك موقوف مؤقتًا",
+  "links": [
+   "SignOutSheet"
+  ]
+ },
+ {
+  "id": "VerifyIdentity",
+  "title": "تأكيد الهوية بطلب الإدارة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تأكيد الهوية",
+  "links": [
+   "Main"
+  ]
+ },
+ {
+  "id": "PayoutStart",
+  "title": "المعلم — بدء إعداد حساب الاستلام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حساب الاستلام",
+  "links": [
+   "TeacherAccount",
+   "PayoutSetup"
+  ]
+ },
+ {
+  "id": "PayoutSetup",
+  "title": "المعلم — حساب الاستلام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تغيير حساب الاستلام",
+  "links": [
+   "TeacherAccount",
+   "PayoutStart"
+  ]
+ },
+ {
+  "id": "PayoutVerified",
+  "title": "المعلم — تم التحقق من حساب الاستلام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "PayoutStart",
+   "TeacherHome",
+   "Packages"
+  ]
+ },
+ {
+  "id": "PayoutRejected",
+  "title": "المعلم — رفضت البوابة حساب الاستلام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "حساب الاستلام",
+  "links": [
+   "TeacherAccount",
+   "PayoutStart"
+  ]
+ },
+ {
+  "id": "ProfileEditor",
+  "title": "المعلم — تعديل الملف العام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الملف العام",
+  "links": [
+   "TeacherAccount",
+   "AddSubject"
+  ]
+ },
+ {
+  "id": "SignatureUpload",
+  "title": "المعلم — صورة التوقيع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "صورة التوقيع",
+  "links": [
+   "TeacherAccount"
+  ]
+ },
+ {
+  "id": "SignatureUploadEmpty",
+  "title": "صورة التوقيع — قبل أول رفع",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "صورة التوقيع",
+  "links": [
+   "TeacherAccount"
+  ]
+ },
+ {
+  "id": "TeacherCredentials",
+  "title": "المعلم — إجازاتي",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إجازاتي",
+  "links": [
+   "TeacherAccount",
+   "AddSubject"
+  ]
+ },
+ {
+  "id": "CredentialNeedsDocument",
+  "title": "المعلم — إجازة: مطلوب ملف آخر",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إجازة التجويد",
+  "links": [
+   "TeacherCredentials"
+  ]
+ },
+ {
+  "id": "AddSubject",
+  "title": "المعلم — إضافة مادة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إضافة مادة",
+  "links": [
+   "TeacherCredentials",
+   "SubjectPicker"
+  ]
+ },
+ {
+  "id": "Packages",
+  "title": "المعلم — الباقات",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الباقات",
+  "links": [
+   "PackageEditor",
+   "PackageDeactivateSheet"
+  ]
+ },
+ {
+  "id": "PackagesLocked",
+  "title": "المعلم — الباقات قبل التحقق من حساب الاستلام",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الباقات",
+  "links": [
+   "PackageEditor",
+   "PayoutSetup",
+   "PackageDeactivateSheet"
+  ]
+ },
+ {
+  "id": "PackagesEmpty",
+  "title": "الباقات — لا باقات بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الباقات",
+  "links": [
+   "PackageEditor"
+  ]
+ },
+ {
+  "id": "PackageEditor",
+  "title": "المعلم — باقة جديدة أو تعديل باقة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تعديل الباقة",
+  "links": [
+   "Packages",
+   "PackageSubjectPicker"
+  ]
+ },
+ {
+  "id": "PackageDeactivateSheet",
+  "title": "المعلم — تأكيد إيقاف باقة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Packages"
+  ]
+ },
+ {
+  "id": "PackageSubjectPicker",
+  "title": "المعلم — اختيار مادة الباقة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تعديل الباقة",
+  "links": [
+   "PackageEditor",
+   "AddSubject"
+  ]
+ },
+ {
+  "id": "SubjectPicker",
+  "title": "المعلم — اختيار المادة (قائمة تكبر)",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إضافة مادة",
+  "links": [
+   "AddSubject"
+  ]
+ },
+ {
+  "id": "Availability",
+  "title": "المعلم — المواعيد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "المواعيد",
+  "links": [
+   "SlotEditor"
+  ]
+ },
+ {
+  "id": "AvailabilityEmpty",
+  "title": "المواعيد — لا مواعيد بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "المواعيد",
+  "links": [
+   "SlotEditor"
+  ]
+ },
+ {
+  "id": "SlotEditor",
+  "title": "المعلم — إضافة أو تعديل موعد",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "المواعيد",
+  "links": [
+   "Availability",
+   "SlotDisableSheet"
+  ]
+ },
+ {
+  "id": "SlotDisableSheet",
+  "title": "المعلم — تأكيد تعطيل موعد",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Availability",
+   "SlotEditor"
+  ]
+ },
+ {
+  "id": "TeacherHome",
+  "title": "المعلم — اليوم",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اليوم",
+  "links": [
+   "TeacherNotifications",
+   "TeacherHomeEmpty",
+   "TeacherEnrollment",
+   "TeacherPreSession",
+   "TeacherCancelRespond"
+  ]
+ },
+ {
+  "id": "TeacherHomeEmpty",
+  "title": "المعلم — اليوم (يوم بلا جلسات)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "اليوم",
+  "links": [
+   "TeacherNotifications",
+   "TeacherHome",
+   "Availability"
+  ]
+ },
+ {
+  "id": "TeacherStudents",
+  "title": "المعلم — طلابي",
+  "w": 390,
+  "h": 876,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلابي",
+  "links": [
+   "TeacherNotifications",
+   "TeacherStudentsEnded",
+   "TeacherEnrollment",
+   "TeacherCancelRespond"
+  ]
+ },
+ {
+  "id": "TeacherStudentsEnded",
+  "title": "المعلم — طلابي: المنتهية",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلابي",
+  "links": [
+   "TeacherNotifications",
+   "TeacherStudents",
+   "TeacherEnrollmentCompleted"
+  ]
+ },
+ {
+  "id": "TeacherStudentsEmpty",
+  "title": "طلابي — لا طلاب بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلابي",
+  "links": [
+   "TeacherNotifications",
+   "TeacherStudentsEnded",
+   "Packages"
+  ]
+ },
+ {
+  "id": "TeacherEnrollment",
+  "title": "المعلم — اشتراك طالب",
+  "w": 390,
+  "h": 920,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الاشتراك",
+  "links": [
+   "TeacherStudents",
+   "TeacherReportSheet",
+   "Chat",
+   "TeacherCancelRequest",
+   "RaiseDispute"
+  ]
+ },
+ {
+  "id": "TeacherEnrollmentIjazah",
+  "title": "المعلم — اشتراك طالب في مسار إجازة: طلب الإجازة",
+  "w": 390,
+  "h": 1028,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الاشتراك",
+  "links": [
+   "TeacherStudents",
+   "TeacherReportSheet",
+   "Chat",
+   "TeacherCancelRequest",
+   "IjazahRequest",
+   "TeacherCancelRespond"
+  ]
+ },
+ {
+  "id": "TeacherEnrollmentCompleted",
+  "title": "المعلم — اشتراك مكتمل وصدرت إجازته",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الاشتراك",
+  "links": [
+   "TeacherStudents",
+   "TeacherReportSheet",
+   "CertificateView"
+  ]
+ },
+ {
+  "id": "TeacherCancelRequest",
+  "title": "المعلم — طلب إلغاء جلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherEnrollment",
+   "TeacherCancelSessionPicker"
+  ]
+ },
+ {
+  "id": "TeacherCancelSessionPicker",
+  "title": "المعلم — طلب إلغاء: اختيار الجلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherCancelRequest"
+  ]
+ },
+ {
+  "id": "TeacherCancelRespond",
+  "title": "المعلم — الرد على طلب الطالب إلغاء جلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherHome"
+  ]
+ },
+ {
+  "id": "TeacherMakeupRespond",
+  "title": "المعلم — الرد على اقتراح الطالب موعدًا آخر للتعويض",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherNotifications",
+   "TeacherEnrollment"
+  ]
+ },
+ {
+  "id": "TeacherReportSheet",
+  "title": "المعلم — إبلاغ عن طالب",
+  "w": 390,
+  "h": 844,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherEnrollment"
+  ]
+ },
+ {
+  "id": "IjazahRequest",
+  "title": "المعلم — طلب إجازة (1 من 2)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب إجازة",
+  "links": [
+   "TeacherStudents",
+   "IjazahRequestPreview"
+  ]
+ },
+ {
+  "id": "IjazahRequestPreview",
+  "title": "المعلم — طلب إجازة: المعاينة والإرسال (2 من 2)",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب إجازة",
+  "links": [
+   "IjazahRequest",
+   "IjazahRequestSent"
+  ]
+ },
+ {
+  "id": "IjazahRequestSent",
+  "title": "المعلم — أُرسل طلب الإجازة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "TeacherStudents"
+  ]
+ },
+ {
+  "id": "IjazahRequestBlocked",
+  "title": "المعلم — طلب إجازة: أضف توقيعك أولًا",
+  "w": 390,
+  "h": 844,
+  "kind": "dialog",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "طلب إجازة",
+  "links": [
+   "SignatureUpload",
+   "TeacherStudents"
+  ]
+ },
+ {
+  "id": "TeacherReviews",
+  "title": "المعلم — تقييماتي",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تقييماتي",
+  "links": [
+   "TeacherAccount"
+  ]
+ },
+ {
+  "id": "TeacherReviewsEmpty",
+  "title": "تقييماتي — لا شيء بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "تقييماتي",
+  "links": [
+   "TeacherAccount"
+  ]
+ },
+ {
+  "id": "TeacherNotifications",
+  "title": "المعلم — الإشعارات",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإشعارات",
+  "links": [
+   "TeacherHome",
+   "TeacherStudents",
+   "TeacherPreSession",
+   "TeacherCancelRespond",
+   "TeacherEnrollment",
+   "CertificateView",
+   "TeacherReviews"
+  ]
+ },
+ {
+  "id": "PreSession",
+  "title": "مشترك — قبل الجلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "قبل الجلسة",
+  "links": [
+   "Main",
+   "ReportSheet",
+   "SessionRoom"
+  ]
+ },
+ {
+  "id": "TeacherPreSession",
+  "title": "المعلم — قبل الجلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "قبل الجلسة",
+  "links": [
+   "TeacherHome",
+   "TeacherReportSheet",
+   "SessionRoom"
+  ]
+ },
+ {
+  "id": "PreSessionPermission",
+  "title": "مشترك — إذن الميكروفون",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "قبل الجلسة",
+  "links": [
+   "Main",
+   "ReportSheet"
+  ]
+ },
+ {
+  "id": "SessionWaiting",
+  "title": "مشترك — بانتظار الطرف الآخر",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "ReportSheet",
+   "Chat",
+   "SessionEnded"
+  ]
+ },
+ {
+  "id": "SessionRoom",
+  "title": "مشترك — غرفة الجلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "ReportSheet",
+   "Chat",
+   "SessionEnded"
+  ]
+ },
+ {
+  "id": "SessionReconnecting",
+  "title": "مشترك — اتصال ضعيف",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "ReportSheet",
+   "Chat",
+   "SessionEnded"
+  ]
+ },
+ {
+  "id": "SessionEnded",
+  "title": "مشترك — انتهت الجلسة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "EnrollmentDetail",
+   "ReportSheet",
+   "RaiseDispute"
+  ]
+ },
+ {
+  "id": "Chat",
+  "title": "مشترك — المحادثة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الشيخ أحمد المصري",
+  "links": [
+   "EnrollmentDetail",
+   "ReportSheet"
+  ]
+ },
+ {
+  "id": "ChatEmpty",
+  "title": "المحادثة — لا رسائل بعد",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الشيخ أحمد المصري",
+  "links": [
+   "EnrollmentDetail",
+   "ReportSheet"
+  ]
+ },
+ {
+  "id": "Notifications",
+  "title": "مشترك — الإشعارات",
+  "w": 390,
+  "h": 916,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإشعارات",
+  "links": [
+   "Main",
+   "Enrollments",
+   "CancelRespondSheet",
+   "PreSession",
+   "EnrollmentDetail",
+   "MakeupChoiceSheet",
+   "CertificateView",
+   "CertificateNameSheet",
+   "EnrollmentTerminated"
+  ]
+ },
+ {
+  "id": "NotificationsEmpty",
+  "title": "الإشعارات — فارغة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الإشعارات",
+  "links": [
+   "Main"
+  ]
+ },
+ {
+  "id": "MainEn",
+  "title": "الطالب — الرئيسية بالإنجليزية (نموذج LTR)",
+  "w": 390,
+  "h": 1104,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Notifications",
+   "StudentAccount",
+   "Enrollments",
+   "WriteReview"
+  ]
+ },
+ {
+  "id": "MainDark",
+  "title": "الطالب — الرئيسية في الوضع الداكن (نموذج)",
+  "w": 390,
+  "h": 932,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Notifications",
+   "StudentAccount",
+   "Enrollments",
+   "WriteReview"
+  ]
+ },
+ {
+  "id": "StudentTabs",
+  "title": "شريط تبويب الطالب",
+  "w": 390,
+  "h": 84,
+  "kind": "doc",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "TeacherTabs",
+  "title": "شريط تبويب المعلم",
+  "w": 390,
+  "h": 84,
+  "kind": "doc",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "DesignLanguage",
+  "title": "نظام التصميم — المرجع",
+  "w": 1200,
+  "h": 5862,
+  "kind": "sheet",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "Components",
+  "title": "نظام التصميم — المكوّنات",
+  "w": 1200,
+  "h": 3785,
+  "kind": "doc",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": [
+   "Chat",
+   "ReportSheet",
+   "Discovery"
+  ]
+ },
+ {
+  "id": "AdminSignIn",
+  "title": "الإدارة — الدخول",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "دخول الإدارة",
+  "links": [
+   "AdminMfa"
+  ]
+ },
+ {
+  "id": "AdminSignInError",
+  "title": "الإدارة — الدخول: بيانات خاطئة",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "دخول الإدارة",
+  "links": [
+   "AdminMfa"
+  ]
+ },
+ {
+  "id": "AdminMfa",
+  "title": "الإدارة — التحقق بخطوتين",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "التحقق بخطوتين",
+  "links": [
+   "AdminMfaRecovery",
+   "AdminHome",
+   "AdminSignIn"
+  ]
+ },
+ {
+  "id": "AdminMfaRecovery",
+  "title": "الإدارة — الدخول برمز استرداد",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الدخول برمز استرداد",
+  "links": [
+   "AdminMfa",
+   "AdminHome",
+   "AdminSignIn"
+  ]
+ },
+ {
+  "id": "AdminMfaSetup",
+  "title": "الإدارة — إعداد التحقق بخطوتين",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "إعداد التحقق بخطوتين",
+  "links": [
+   "AdminHome",
+   "AdminSignIn"
+  ]
+ },
+ {
+  "id": "AdminHome",
+  "title": "الإدارة — نظرة عامة",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminHome:ar",
+  "heading": "",
+  "links": [
+   "AdminApplications",
+   "AdminCredentials",
+   "AdminIjazahRequests",
+   "AdminDisputes",
+   "AdminCompensation",
+   "AdminGender",
+   "AdminSessionReview",
+   "AdminReports",
+   "AdminAudit",
+   "AdminReviews",
+   "AdminIjazahs"
+  ]
+ },
+ {
+  "id": "AdminHomeEn",
+  "title": "Admin — Overview (English)",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminHome:en",
+  "heading": "",
+  "links": [
+   "AdminApplicationsEn",
+   "AdminCredentials",
+   "AdminIjazahRequests",
+   "AdminDisputes",
+   "AdminCompensation",
+   "AdminGender",
+   "AdminSessionReview",
+   "AdminReports",
+   "AdminAudit",
+   "AdminReviews",
+   "AdminIjazahs"
+  ]
+ },
+ {
+  "id": "AdminApplications",
+  "title": "الإدارة — طلبات المعلمين",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminApplications:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminDocumentViewer",
+   "AdminCredentials",
+   "AdminDecisionDialog"
+  ]
+ },
+ {
+  "id": "AdminApplicationsEn",
+  "title": "Admin — Teacher applications (English)",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminApplications:en",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminDocumentViewer",
+   "AdminCredentials",
+   "AdminDecisionDialog"
+  ]
+ },
+ {
+  "id": "AdminDecisionDialog",
+  "title": "الإدارة — قرار على طلب معلم (رفض؛ النافذة نفسها لطلب المعلومات والحظر)",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminApplications:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminDocumentViewer",
+   "AdminCredentials",
+   "AdminDecisionDialog",
+   "AdminApplications"
+  ]
+ },
+ {
+  "id": "AdminDecisionDialogInfo",
+  "title": "قرار على طلب معلم — طلب معلومات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminApplications:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminDocumentViewer",
+   "AdminCredentials",
+   "AdminDecisionDialog",
+   "AdminApplications"
+  ]
+ },
+ {
+  "id": "AdminDocumentViewer",
+  "title": "الإدارة — عرض وثيقة",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminReports",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminCredentials",
+  "title": "الإدارة — مراجعة الإجازات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminCredentials:ar",
+  "heading": "",
+  "links": [
+   "AdminCredentialCorrect",
+   "AdminApplications",
+   "AdminConfirmDialog",
+   "AdminDocumentViewer"
+  ]
+ },
+ {
+  "id": "AdminCredentialCorrect",
+  "title": "الإدارة — تصحيح سند موثّق",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminCredentials:ar",
+  "heading": "",
+  "links": [
+   "AdminCredentials",
+   "AdminTeacher",
+   "AdminConfirmDialog",
+   "AdminDocumentViewer"
+  ]
+ },
+ {
+  "id": "AdminUsers",
+  "title": "الإدارة — المستخدمون",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsersFilter",
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminRequireIdDialog",
+   "AdminSuspendStudentDialog"
+  ]
+ },
+ {
+  "id": "AdminUsersFilter",
+  "title": "الإدارة — المستخدمون: الفلتر مفتوح",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminRequireIdDialog",
+   "AdminSuspendStudentDialog"
+  ]
+ },
+ {
+  "id": "AdminTeacher",
+  "title": "الإدارة — صفحة معلم",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminRequireIdDialog",
+   "AdminSuspendDialog",
+   "AdminDocumentViewer",
+   "AdminCredentialCorrect",
+   "AdminCredentials",
+   "AdminEnrollments"
+  ]
+ },
+ {
+  "id": "AdminSuspendDialog",
+  "title": "الإدارة — إيقاف معلم",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminRequireIdDialog",
+   "AdminSuspendDialog",
+   "AdminDocumentViewer",
+   "AdminCredentialCorrect",
+   "AdminCredentials",
+   "AdminEnrollments",
+   "AdminCompensation",
+   "AdminTeacher"
+  ]
+ },
+ {
+  "id": "AdminSuspendDialogRevoke",
+  "title": "إيقاف معلم — سحب الاعتماد",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminRequireIdDialog",
+   "AdminSuspendDialog",
+   "AdminDocumentViewer",
+   "AdminCredentialCorrect",
+   "AdminCredentials",
+   "AdminEnrollments",
+   "AdminCompensation",
+   "AdminTeacher"
+  ]
+ },
+ {
+  "id": "AdminSuspendStudentDialog",
+  "title": "الإدارة — إيقاف طالب أو حظره",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsersFilter",
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminRequireIdDialog",
+   "AdminSuspendStudentDialog",
+   "AdminCompensation"
+  ]
+ },
+ {
+  "id": "AdminSuspendStudentDialogBan",
+  "title": "إيقاف طالب أو حظره — حظر نهائي",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsersFilter",
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminRequireIdDialog",
+   "AdminSuspendStudentDialog",
+   "AdminCompensation"
+  ]
+ },
+ {
+  "id": "AdminRequireIdDialog",
+  "title": "الإدارة — طلب إثبات هوية",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminUsers:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminRequireIdDialog",
+   "AdminSuspendDialog",
+   "AdminDocumentViewer",
+   "AdminCredentialCorrect",
+   "AdminCredentials",
+   "AdminEnrollments",
+   "AdminTeacher"
+  ]
+ },
+ {
+  "id": "AdminEnrollments",
+  "title": "الإدارة — الاشتراكات والجلسات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminEnrollments:ar",
+  "heading": "",
+  "links": [
+   "AdminEnrollments",
+   "AdminUsers",
+   "AdminPayments",
+   "AdminTeacher",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminPayments",
+  "title": "الإدارة — المدفوعات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminPayments:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminEnrollments"
+  ]
+ },
+ {
+  "id": "AdminDisputes",
+  "title": "الإدارة — النزاعات والتعويض",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminDisputes:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminChatLog",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminCompensation",
+  "title": "الإدارة — التعويضات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminCompensation:ar",
+  "heading": "",
+  "links": [
+   "AdminPayments",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminChatLog",
+  "title": "الإدارة — سجل محادثة اشتراك",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminDisputes:ar",
+  "heading": "",
+  "links": [
+   "AdminDisputes"
+  ]
+ },
+ {
+  "id": "AdminSessionReview",
+  "title": "الإدارة — مراجعة الجلسات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminSessionReview:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminGender",
+  "title": "الإدارة — بلاغات الجنس",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminGender:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminDocumentViewer",
+   "AdminEnrollments",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminReports",
+  "title": "الإدارة — البلاغات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminReports:ar",
+  "heading": "",
+  "links": [
+   "AdminTeacher",
+   "AdminUsers",
+   "AdminEnrollments",
+   "AdminChatLog",
+   "AdminConfirmDialog",
+   "AdminRequireIdDialog",
+   "AdminGender",
+   "AdminSuspendDialog"
+  ]
+ },
+ {
+  "id": "AdminReviews",
+  "title": "الإدارة — التقييمات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminReviews:ar",
+  "heading": "",
+  "links": [
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminIjazahRequests",
+  "title": "الإدارة — طلبات الإجازة",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminIjazahRequests:ar",
+  "heading": "",
+  "links": [
+   "AdminIjazahs",
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminConfirmDialog",
+  "title": "الإدارة — تأكيد إجراء ملزم (رفض طلب إجازة؛ النافذة نفسها لكل إجراء ملزم)",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminIjazahRequests:ar",
+  "heading": "",
+  "links": [
+   "AdminIjazahs",
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminConfirmDialog",
+   "AdminIjazahRequests"
+  ]
+ },
+ {
+  "id": "AdminConfirmDialogIssue",
+  "title": "تأكيد إجراء ملزم — اعتماد وإصدار إجازة",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminIjazahRequests:ar",
+  "heading": "",
+  "links": [
+   "AdminIjazahs",
+   "AdminUsers",
+   "AdminTeacher",
+   "AdminEnrollments",
+   "AdminConfirmDialog",
+   "AdminIjazahRequests"
+  ]
+ },
+ {
+  "id": "AdminIjazahs",
+  "title": "الإدارة — الإجازات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminIjazahs:ar",
+  "heading": "",
+  "links": [
+   "AdminIjazahRequests",
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "VerifyCertificate",
+   "AdminRevokeDialog"
+  ]
+ },
+ {
+  "id": "AdminRevokeDialog",
+  "title": "الإدارة — سحب إجازة",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminIjazahs:ar",
+  "heading": "",
+  "links": [
+   "AdminIjazahRequests",
+   "AdminUsers",
+   "AdminConfirmDialog",
+   "VerifyCertificate",
+   "AdminRevokeDialog",
+   "AdminIjazahs"
+  ]
+ },
+ {
+  "id": "AdminSettings",
+  "title": "الإدارة — الإعدادات",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminSettings:ar",
+  "heading": "",
+  "links": [
+   "AdminAdmins"
+  ]
+ },
+ {
+  "id": "AdminAdmins",
+  "title": "الإدارة — المشرفون",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminSettings:ar",
+  "heading": "",
+  "links": [
+   "AdminSettings",
+   "AdminAddAdminDialog",
+   "AdminAudit",
+   "AdminMfaResetDialog",
+   "AdminConfirmDialog"
+  ]
+ },
+ {
+  "id": "AdminAddAdminDialog",
+  "title": "الإدارة — إضافة مشرف",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminSettings:ar",
+  "heading": "",
+  "links": [
+   "AdminSettings",
+   "AdminAddAdminDialog",
+   "AdminAudit",
+   "AdminMfaResetDialog",
+   "AdminConfirmDialog",
+   "AdminAdmins"
+  ]
+ },
+ {
+  "id": "AdminMfaResetDialog",
+  "title": "الإدارة — إعادة ضبط التحقق بخطوتين لمشرف",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminSettings:ar",
+  "heading": "",
+  "links": [
+   "AdminSettings",
+   "AdminAddAdminDialog",
+   "AdminAudit",
+   "AdminMfaResetDialog",
+   "AdminConfirmDialog",
+   "AdminAdmins"
+  ]
+ },
+ {
+  "id": "AdminAudit",
+  "title": "الإدارة — سجل التدقيق",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminAudit:ar",
+  "heading": "",
+  "links": [
+   "AdminAudit",
+   "AdminApplications",
+   "AdminReviews",
+   "AdminCredentials",
+   "AdminIjazahs",
+   "AdminReports"
+  ]
+ },
+ {
+  "id": "AdminQueueEmpty",
+  "title": "الإدارة — البلاغات: لا شيء مفتوح",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminReports:ar",
+  "heading": "",
+  "links": [
+   "AdminReports"
+  ]
+ },
+ {
+  "id": "AdminLoadError",
+  "title": "الإدارة — تعذّر تحميل الجدول",
+  "w": 1440,
+  "h": 900,
+  "kind": "admin",
+  "tabs": "",
+  "adminNav": "AdminEnrollments:ar",
+  "heading": "",
+  "links": [
+   "AdminEnrollments"
+  ]
+ }
+]

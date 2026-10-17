@@ -1,0 +1,41 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">الشيخ أحمد المصري</strong>
+        <span class="row wrap gap-2 text-caption tone-muted">حفظ القرآن · 8 جلسات · 45 دقيقة<span class="badge badge--neutral">تسميع</span></span>
+      </span>
+      <span class="badge badge--success">جارٍ</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">غاب المعلم عن جلسة الأربعاء 21 أكتوبر</h1>
+      <a href="EnrollmentDetail.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <fieldset class="stack gap-2">
+      <legend class="visually-hidden">التعويض</legend>
+      <label class="choice choice--selected"><input type="radio" name="remedy" class="visually-hidden" checked><span class="choice__mark"></span>
+        <span class="stack gap-half grow">
+          <span class="text-body text-medium">جلسة تعويضية</span>
+          <span class="text-caption tone-muted">المقترح: الأربعاء 9 ديسمبر 6:00 م</span>
+        </span>
+      </label>
+      <label class="choice"><input type="radio" name="remedy" class="visually-hidden"><span class="choice__mark"></span>
+        <span class="text-body text-medium grow">استرداد ثمن الجلسة · 150 ج.م</span>
+      </label>
+    </fieldset>
+
+    <p class="row row--top gap-2 text-caption tone-muted">{{icon:clock:sm}}اختر خلال 7 أيام، وإلا حُجزت الجلسة التعويضية</p>
+
+    <a href="MakeupProposalSheet.dc.html" class="btn btn--primary btn--block">متابعة</a>
+  </section>
+</div>

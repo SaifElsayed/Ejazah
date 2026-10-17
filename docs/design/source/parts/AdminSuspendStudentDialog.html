@@ -1,0 +1,52 @@
+  <div class="scrim"></div>
+
+  <section class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="ss-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--danger">{{icon:user-x:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="ss-title">إيقاف يوسف أحمد</h2>
+        <p class="text-caption tone-muted">طالب منذ 2 فبراير 2026 · اشتراك جارٍ واحد · حفظ القرآن · تسميع · 7 جلسات قادمة</p>
+      </div>
+    </div>
+
+    <div class="segmented" role="group" aria-label="نوع الإجراء">
+      <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">إيقاف الحساب · مؤقت حتى المراجعة</button>
+      <button type="button" class="segmented__option" aria-pressed="false">{{icon:ban:sm}}حظر الحساب · نهائي</button>
+    </div>
+
+    <div class="grid-2 gap-5 items-start">
+      <section class="section">
+        <h3 class="group-label">ما يحدث فور التأكيد</h3>
+        <ul class="stack gap-2 text-callout">
+          <li class="row row--top gap-2">{{icon:video-off:sm}}<span>لا يستطيع دخول أي جلسة، ولا حجز اشتراك جديد.</span></li>
+          <li class="row row--top gap-2">{{icon:calendar:sm}}<span>تُلغى كل جلسة يقع موعدها خلال الإيقاف، أولها الأربعاء 21 أكتوبر، ويراها المعلم «ألغتها الإدارة». يعود موعدها متاحًا للحجز.</span></li>
+          <li class="row row--top gap-2">{{icon:bell:sm}}<span>يصل إشعار إلى الشيخ أحمد المصري.</span></li>
+          <li class="row row--top gap-2">{{icon:scale:sm}}<span>تُفتح قضية في <a href="AdminCompensation.dc.html" class="link">التعويضات</a> وتنتظر نتيجة المراجعة.</span></li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h3 class="group-label">ما يُستحق بعد المراجعة</h3>
+        <div class="list">
+          <div class="list__row">
+            <span class="stack"><span class="text-medium">ثبتت براءته</span><span class="text-caption tone-muted">جلسة تعويضية عن كل جلسة أُلغيت، أو استرداد ثمنها. اشتراكه «تسميع» فيختار بينهما؛ في «مسار إجازة» تعويض بجلسات فقط.</span></span>
+          </div>
+          <div class="list__row">
+            <span class="stack"><span class="text-medium">ثبتت المخالفة</span><span class="text-caption tone-muted">لا يُستحق شيء، كما في غياب الطالب.</span></span>
+          </div>
+        </div>
+        <p class="text-caption tone-muted">عند «حظر الحساب» تُلغى جلساته القادمة كلها (7) ولا يُستحق تعويض، إلا إن قررت الإدارة غير ذلك في القضية.</p>
+      </section>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="ss-reason">سبب الإيقاف (إلزامي)</label>
+      <textarea id="ss-reason" class="input input--focused" rows="2" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الإجراء في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminUsers.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md" disabled>إيقاف الحساب</button>
+    </div>
+  </section>

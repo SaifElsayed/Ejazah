@@ -1,0 +1,65 @@
+<div class="screen screen--long" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة</span></span>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+      <a href="StudentAccount.dc.html" class="avatar avatar--touch" aria-label="حسابي">ي</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="banner banner--warning" role="status">
+      {{icon:wifi-off:md}}
+      <span class="grow">لا يوجد اتصال بالإنترنت</span>
+    </div>
+
+    <div class="stack">
+      <span class="text-body tone-muted">السلام عليكم</span>
+      <span class="text-title-1">يوسف</span>
+    </div>
+
+    <section class="card card--primary card--hero">
+      <div class="row row--between">
+        <span class="text-callout tone-on-primary-muted">جلستك القادمة</span>
+        <span class="badge badge--on-primary">خلال ساعتين</span>
+      </div>
+      <div class="stack gap-1">
+        <strong class="text-title-2">حفظ القرآن — الشيخ أحمد المصري</strong>
+        <span class="text-body tone-on-primary-muted">اليوم الأربعاء 4 نوفمبر · 6:00 م – 6:45 م · بتوقيت القاهرة</span>
+      </div>
+      <button type="button" class="btn btn--inverse btn--block" disabled>{{icon:wifi-off:md}}الدخول يحتاج اتصالًا</button>
+    </section>
+
+    <section class="card card--surface">
+      <div class="row row--between">
+        <div class="row gap-2"><h2 class="section__title">حفظ القرآن · 8 جلسات</h2><span class="badge badge--neutral">تسميع</span></div>
+        <span class="text-caption tone-muted">الشيخ أحمد المصري</span>
+      </div>
+      <div class="progress" aria-label="تمت 2 من 8 جلسات">
+        <span class="progress__seg progress__seg--done"></span><span class="progress__seg progress__seg--done"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span><span class="progress__seg"></span>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong class="stat__value">2</strong><span class="stat__label">تمت</span></div>
+        <div class="stat"><strong class="stat__value">1</strong><span class="stat__label">غياب المعلم</span></div>
+        <div class="stat"><strong class="stat__value">9 ديسمبر</strong><span class="stat__label">آخر جلسة</span></div>
+      </div>
+    </section>
+    <a href="Enrollments.dc.html" class="card card--surface card--row">
+      <span class="icon-tile">{{icon:book:md}}</span>
+      <span class="stack gap-half grow">
+        <span class="row wrap gap-2"><strong class="text-body text-medium">حفظ القرآن · 8 جلسات</strong><span class="badge badge--neutral">تسميع</span></span>
+        <span class="text-caption tone-muted">الشيخ أحمد المصري · تبدأ السبت 7 نوفمبر 10:00 ص</span>
+      </span>
+      <span class="tone-muted">{{icon:chevron-left:md}}</span>
+    </a>
+
+    <div class="row row--between gap-3">
+      <span class="text-caption tone-muted">آخر تحديث اليوم 4:12 م</span>
+      <button type="button" class="btn btn--ghost btn--md">{{icon:refresh-cw:sm}}إعادة المحاولة</button>
+    </div>
+  </main>
+
+  {{TABS:student:Main}}
+</div>

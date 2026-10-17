@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>طلب المعلم — تم الاعتماد</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <main class="screen__body screen__body--bare">
+    <div class="state-hero">
+      <span class="icon-tile icon-tile--2xl"><svg class="icon icon--xl" data-icon="circle-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <div class="stack gap-2">
+        <h1 class="text-title-1">تم اعتمادك معلمًا</h1>
+        <p class="text-body tone-muted">بارك الله فيك. أكمل هذه الخطوات ليحجز معك الطلاب.</p>
+      </div>
+    </div>
+
+    <nav class="list" aria-label="الخطوات التالية">
+      <a href="PayoutStart.dc.html" class="list__row">
+        <span class="row gap-3 grow">
+          <span class="icon-tile icon-tile--sm icon-tile--round icon-tile--primary">1</span>
+          <span class="stack grow"><span class="text-body text-medium">حساب الاستلام</span><span class="text-caption tone-muted">لتصلك مدفوعات الطلاب</span></span>
+        </span>
+        <svg class="icon icon--md" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+      </a>
+      <a href="ProfileEditor.dc.html" class="list__row">
+        <span class="row gap-3 grow">
+          <span class="icon-tile icon-tile--sm icon-tile--round icon-tile--neutral">2</span>
+          <span class="stack grow"><span class="text-body text-medium">ملفك العام</span><span class="text-caption tone-muted">الصورة والنبذة</span></span>
+        </span>
+        <svg class="icon icon--md" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+      </a>
+      <a href="PackagesLocked.dc.html" class="list__row">
+        <span class="row gap-3 grow">
+          <span class="icon-tile icon-tile--sm icon-tile--round icon-tile--neutral">3</span>
+          <span class="stack grow"><span class="text-body text-medium">الباقات والمواعيد</span><span class="text-caption tone-muted">تُنشر بعد توثيق حساب الاستلام</span></span>
+        </span>
+        <svg class="icon icon--md" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+      </a>
+    </nav>
+
+    <div class="stack gap-2 push">
+      <a href="PayoutStart.dc.html" class="btn btn--primary btn--block">إعداد حساب الاستلام</a>
+      <a href="ProfileEditor.dc.html" class="btn btn--ghost btn--block">إكمال الملف العام أولًا</a>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

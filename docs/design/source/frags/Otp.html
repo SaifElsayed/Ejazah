@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="EmailSignUp.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <div class="page-intro">
+      <h1 class="page-intro__title">تأكيد بريدك</h1>
+      <p class="page-intro__lede">أرسلنا رمزًا إلى <span class="ltr tone-default">khaled.mansour@example.com</span></p>
+    </div>
+
+    <form class="field">
+      <label for="otp1" class="field__label">الرمز</label>
+      <div class="otp">
+        <input id="otp1" type="text" inputmode="numeric" maxlength="1" value="4" class="otp__cell otp__cell--filled" aria-label="الرقم الأول">
+        <input type="text" inputmode="numeric" maxlength="1" value="8" class="otp__cell otp__cell--filled" aria-label="الرقم الثاني">
+        <input type="text" inputmode="numeric" maxlength="1" value="1" class="otp__cell otp__cell--filled" aria-label="الرقم الثالث">
+        <input type="text" inputmode="numeric" maxlength="1" value="" class="otp__cell otp__cell--active" aria-label="الرقم الرابع">
+        <input type="text" inputmode="numeric" maxlength="1" value="" class="otp__cell" aria-label="الرقم الخامس">
+        <input type="text" inputmode="numeric" maxlength="1" value="" class="otp__cell" aria-label="الرقم السادس">
+      </div>
+    </form>
+
+    <p class="row row--center gap-2 text-body tone-muted">
+      {{icon:clock:sm}}
+      <span>إعادة الإرسال بعد <span class="tone-default text-medium">0:42</span></span>
+    </p>
+
+    <div class="stack gap-2 push">
+      <a href="Role.dc.html" class="btn btn--primary btn--block">تأكيد</a>
+      <a href="EmailSignUp.dc.html" class="btn btn--ghost btn--block">تغيير البريد</a>
+    </div>
+  </main>
+</div>

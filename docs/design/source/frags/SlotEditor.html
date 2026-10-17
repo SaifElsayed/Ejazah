@@ -1,0 +1,65 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="app-header">
+      <div class="app-header__titles">
+        <h1 class="app-header__title">المواعيد</h1>
+        <span class="app-header__subtitle">بتوقيتك: القاهرة · تتكرر كل أسبوع</span>
+      </div>
+    </header>
+    <section class="day-block">
+      <h2 class="text-callout text-bold">السبت</h2>
+      <div class="row wrap gap-2">
+        <span class="slot slot--selected">10:00 ص · 45 د</span>
+        <span class="slot">11:00 ص · 60 د</span>
+      </div>
+    </section>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">تعديل الموعد</h1>
+      <a href="Availability.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="field" role="group" aria-labelledby="day">
+      <span class="field__label" id="day">اليوم</span>
+      <div class="row wrap gap-2">
+        <button type="button" class="chip chip--selected" aria-pressed="true">السبت</button>
+        <button type="button" class="chip" aria-pressed="false">الأحد</button>
+        <button type="button" class="chip" aria-pressed="false">الاثنين</button>
+        <button type="button" class="chip" aria-pressed="false">الثلاثاء</button>
+        <button type="button" class="chip" aria-pressed="false">الأربعاء</button>
+        <button type="button" class="chip" aria-pressed="false">الخميس</button>
+        <button type="button" class="chip" aria-pressed="false">الجمعة</button>
+      </div>
+    </div>
+
+    <div class="grid-2 gap-3">
+      <div class="field">
+        <label for="start" class="field__label">يبدأ</label>
+        <div class="input-group">
+          <input id="start" class="input-group__control" value="10:00 ص">
+          <span class="icon-btn icon-btn--muted" aria-hidden="true">{{icon:clock:md}}</span>
+        </div>
+      </div>
+      <div class="field" role="group" aria-labelledby="dur">
+        <span class="field__label" id="dur">المدة</span>
+        <div class="segmented">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">45 د</button>
+          <button type="button" class="segmented__option" aria-pressed="false">60 د</button>
+        </div>
+      </div>
+    </div>
+    <p class="field__hint">بتوقيتك: القاهرة</p>
+
+    <div class="stack gap-2">
+      <a href="Availability.dc.html" class="btn btn--primary btn--block">حفظ الموعد</a>
+      <a href="SlotDisableSheet.dc.html" class="btn btn--danger btn--md btn--block">تعطيل الموعد</a>
+      <p class="action-bar__note">تبقى الجلسات المحجوزة على هذا الموعد كما هي.</p>
+    </div>
+  </section>
+</div>

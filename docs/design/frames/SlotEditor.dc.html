@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — إضافة أو تعديل موعد</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="app-header">
+      <div class="app-header__titles">
+        <h1 class="app-header__title">المواعيد</h1>
+        <span class="app-header__subtitle">بتوقيتك: القاهرة · تتكرر كل أسبوع</span>
+      </div>
+    </header>
+    <section class="day-block">
+      <h2 class="text-callout text-bold">السبت</h2>
+      <div class="row wrap gap-2">
+        <span class="slot slot--selected">10:00 ص · 45 د</span>
+        <span class="slot">11:00 ص · 60 د</span>
+      </div>
+    </section>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">تعديل الموعد</h1>
+      <a href="Availability.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق"><svg class="icon icon--md" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    </div>
+
+    <div class="field" role="group" aria-labelledby="day">
+      <span class="field__label" id="day">اليوم</span>
+      <div class="row wrap gap-2">
+        <button type="button" class="chip chip--selected" aria-pressed="true">السبت</button>
+        <button type="button" class="chip" aria-pressed="false">الأحد</button>
+        <button type="button" class="chip" aria-pressed="false">الاثنين</button>
+        <button type="button" class="chip" aria-pressed="false">الثلاثاء</button>
+        <button type="button" class="chip" aria-pressed="false">الأربعاء</button>
+        <button type="button" class="chip" aria-pressed="false">الخميس</button>
+        <button type="button" class="chip" aria-pressed="false">الجمعة</button>
+      </div>
+    </div>
+
+    <div class="grid-2 gap-3">
+      <div class="field">
+        <label for="start" class="field__label">يبدأ</label>
+        <div class="input-group">
+          <input id="start" class="input-group__control" value="10:00 ص">
+          <span class="icon-btn icon-btn--muted" aria-hidden="true"><svg class="icon icon--md" data-icon="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+        </div>
+      </div>
+      <div class="field" role="group" aria-labelledby="dur">
+        <span class="field__label" id="dur">المدة</span>
+        <div class="segmented">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">45 د</button>
+          <button type="button" class="segmented__option" aria-pressed="false">60 د</button>
+        </div>
+      </div>
+    </div>
+    <p class="field__hint">بتوقيتك: القاهرة</p>
+
+    <div class="stack gap-2">
+      <a href="Availability.dc.html" class="btn btn--primary btn--block">حفظ الموعد</a>
+      <a href="SlotDisableSheet.dc.html" class="btn btn--danger btn--md btn--block">تعطيل الموعد</a>
+      <p class="action-bar__note">تبقى الجلسات المحجوزة على هذا الموعد كما هي.</p>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

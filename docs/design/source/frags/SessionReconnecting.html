@@ -1,0 +1,42 @@
+<div class="screen" dir="rtl" data-theme="dark">
+{{SB}}
+
+  <header class="app-header">
+    <div class="app-header__titles">
+      <h1 class="text-headline">الشيخ أحمد المصري</h1>
+      <span class="app-header__subtitle">حفظ القرآن · الجلسة 4 من 8</span>
+    </div>
+    <div class="app-header__actions">
+      <span class="timer-pill"><span class="live-dot"></span>24:10 / 45:00</span>
+      <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ">{{icon:flag:md}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="banner banner--warning" role="status">
+      {{icon:wifi-off:sm}}
+      <strong class="text-callout text-bold grow">الاتصال ضعيف — نكمل بالصوت فقط</strong>
+    </div>
+
+    <section class="video-tile grow" aria-label="المعلم">
+      <span class="avatar avatar--3xl avatar--primary">أ</span>
+      <span class="row gap-2"><span class="spinner spinner--sm" aria-hidden="true"></span><span class="text-callout tone-muted">جارٍ إعادة الاتصال…</span></span>
+      <span class="video-tile__label">{{icon:refresh-cw:sm}}الشيخ أحمد</span>
+    </section>
+
+    <section class="video-tile video-tile--self gap-4" aria-label="أنت">
+      <span class="avatar avatar--xl avatar--neutral">ي</span>
+      <span class="stack gap-half">
+        <strong class="text-body text-medium">أنت</strong>
+        <span class="text-caption tone-muted">بالصوت فقط</span>
+      </span>
+    </section>
+  </main>
+
+  <footer class="action-bar action-bar--row call-controls">
+    <button type="button" class="call-btn" aria-label="كتم الصوت">{{icon:mic:lg}}</button>
+    <button type="button" class="call-btn call-btn--off" aria-label="الكاميرا متوقفة بسبب ضعف الاتصال" disabled>{{icon:video-off:lg}}</button>
+    <a href="Chat.dc.html" class="call-btn" aria-label="المحادثة">{{icon:message-square:lg}}</a>
+    <a href="SessionEnded.dc.html" class="call-btn call-btn--end" aria-label="مغادرة الجلسة">{{icon:phone-off:lg}}</a>
+  </footer>
+</div>

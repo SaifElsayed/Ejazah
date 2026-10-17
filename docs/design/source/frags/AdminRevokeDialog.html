@@ -1,0 +1,169 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <div class="behind-sheet" aria-hidden="true" inert>
+    {{ADMINNAV:AdminIjazahs:ar}}
+
+    <main class="page">
+      <header class="page-header">
+        <div class="stack">
+          <h1 class="page-header__title">الإجازات</h1>
+          <p class="page-header__subtitle">كل إجازة صدرت بطلب من معلمها. تُسحب الإجازة ولا تُحذف، ويبقى رقمها يدلّ على حالتها في صفحة التحقق.</p>
+        </div>
+        <a href="AdminIjazahRequests.dc.html" class="btn btn--secondary btn--md">طلبات الإجازة · 2</a>
+      </header>
+
+      <div class="page-body">
+        <div class="toolbar">
+          <div class="search-row">
+            <label class="input-group input-group--surface toolbar__search">
+              {{icon:search:md}}
+              <span class="visually-hidden">بحث</span>
+              <input class="input-group__control" placeholder="رقم الشهادة أو اسم الطالب">
+            </label>
+            <button type="button" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر" aria-expanded="false">{{icon:filter:md}}</button>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="split__list">
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr><th>رقم الشهادة</th><th>الطالب والمعلم</th><th>الطلب</th><th>الحالة</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="table__row--selected">
+                    <td><span class="stack"><span class="table__num certificate-number">R5TN-9WQE-3KDX-6HPA</span><span class="text-caption tone-muted">حفظ القرآن · صدرت 12 أكتوبر</span></span></td>
+                    <td><span class="stack"><a href="AdminUsers.dc.html" class="link">سعيد منصور</a><span class="text-caption tone-muted">من الشيخ أحمد المصري</span></span></td>
+                    <td><a href="AdminIjazahRequests.dc.html" class="link">طلب 11 أكتوبر</a></td>
+                    <td><span class="badge badge--success">صالحة</span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="stack"><span class="table__num certificate-number">M3FV-8CJT-2PHW-Y6KD</span><span class="text-caption tone-muted">التجويد · صدرت 2 يوليو</span></span></td>
+                    <td><span class="stack"><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a><span class="text-caption tone-muted">من الشيخ عمر حسن</span></span></td>
+                    <td><a href="AdminIjazahRequests.dc.html" class="link">طلب 29 يونيو</a></td>
+                    <td class="table__wrap"><span class="stack items-start gap-half"><span class="badge badge--danger">مسحوبة · 9 أكتوبر</span><span class="text-caption tone-muted">حضر الجلسات غير صاحب الحساب</span></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="stack"><span class="table__num certificate-number">B2XN-H8MN-7K4Q-QW3R</span><span class="text-caption tone-muted">التجويد · صدرت 3 مايو</span></span></td>
+                    <td><span class="stack"><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a><span class="text-caption tone-muted">من الشيخ محمود فتحي</span></span></td>
+                    <td><a href="AdminIjazahRequests.dc.html" class="link">طلب 30 أبريل</a></td>
+                    <td><span class="badge badge--success">صالحة</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="table-footer">
+                <span>3 من 3 · الأحدث أولًا</span>
+                <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+              </div>
+            </div>
+
+            <section class="section" aria-labelledby="bars">
+              <h2 id="bars" class="group-label">الممنوعون من تلقي الإجازات · 1</h2>
+              <div class="list">
+                <div class="list__row">
+                  <span class="stack">
+                    <a href="AdminUsers.dc.html" class="link self-start">مصطفى كمال</a>
+                    <span class="text-caption tone-muted">منذ 9 أكتوبر · سارة عادل · السبب: حضر الجلسات غير صاحب الحساب.</span>
+                  </span>
+                  <a href="AdminConfirmDialog.dc.html" class="btn btn--secondary btn--md">رفع المنع</a>
+                </div>
+              </div>
+              <p class="field__hint">لا يُرسَل طلب إجازة لطالب ممنوع. رفع المنع يطلب سببًا أيضًا، ويبقى المنع ورفعه في سجل التدقيق.</p>
+            </section>
+          </div>
+
+          <aside class="split__detail" aria-label="تفاصيل الإجازة">
+            <section class="panel">
+              <header class="panel__header">
+                <span class="icon-tile icon-tile--lg icon-tile--accent">{{icon:award:lg:medium}}</span>
+                <span class="stack grow">
+                  <strong class="text-title-3"><span class="ltr certificate-number">R5TN-9WQE-3KDX-6HPA</span></strong>
+                  <span class="text-caption tone-muted">حفظ القرآن · برواية حفص عن عاصم</span>
+                </span>
+                <span class="badge badge--success">صالحة</span>
+              </header>
+
+              <div class="panel__body">
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">الطالب</dt><dd class="kv__value">سعيد منصور</dd></div>
+                  <div class="kv__item"><dt class="kv__label">المُجيز</dt><dd class="kv__value">الشيخ أحمد المصري</dd></div>
+                  <div class="kv__item"><dt class="kv__label">الطلب</dt><dd class="kv__value"><a href="AdminIjazahRequests.dc.html" class="link">أرسله المعلم 11 أكتوبر</a></dd></div>
+                  <div class="kv__item"><dt class="kv__label">صدرت</dt><dd class="kv__value">12 أكتوبر 2026 · اعتماد سارة عادل</dd></div>
+                </dl>
+
+                <section class="section">
+                  <h2 class="group-label">السند · 35 جيلًا · من طريق الشاطبية</h2>
+                  <div class="card card--accent card--compact">
+                    <ol class="chain">
+                      <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>رسول الله ﷺ</span></li>
+                      <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>عثمان بن عفان، علي بن أبي طالب، عبد الله بن مسعود، أبي بن كعب، زيد بن ثابت</span></li>
+                      <li class="chain__item"><span class="chain__rail"><span class="chain__dot chain__dot--more"></span><span class="chain__line"></span></span><span class="tone-muted">… 30 جيلًا</span></li>
+                      <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ رضوان بن ملائكة الله المنياوي</span></li>
+                      <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ ذو الكفل بن هود البورسعيدي</span></li>
+                      <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span></span><span class="text-medium">الشيخ أحمد المصري</span></li>
+                    </ol>
+                  </div>
+                </section>
+
+                <a href="VerifyCertificate.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm icon-tile--neutral">{{icon:qr-code:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">صفحة التحقق العامة</span>
+                    <span class="text-caption tone-muted">ما يراه من يمسح رمز الشهادة</span>
+                  </span>
+                  {{icon:external-link:md}}
+                </a>
+              </div>
+
+              <footer class="panel__footer">
+                <a href="AdminRevokeDialog.dc.html" class="btn btn--danger btn--md">سحب الإجازة</a>
+                <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">{{icon:ban:sm}}منع من تلقي الإجازات</a>
+                <p class="panel__note">السحب لا يمنع الطالب من إجازات لاحقة، والمنع إجراء مستقل. كل إجراء هنا يطلب سببًا ويُسجَّل في سجل التدقيق.</p>
+              </footer>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="rv-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--danger">{{icon:alert-circle:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="rv-title">سحب الإجازة <span class="ltr certificate-number">R5TN-9WQE-3KDX-6HPA</span></h2>
+        <p class="text-caption tone-muted">حفظ القرآن · برواية حفص عن عاصم · سعيد منصور · المُجيز الشيخ أحمد المصري · 12 أكتوبر 2026</p>
+      </div>
+    </div>
+
+    <div class="card card--accent card--compact">
+      <span class="group-label">السند · 35 جيلًا · من طريق الشاطبية</span>
+      <ol class="chain">
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>رسول الله ﷺ</span></li>
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot chain__dot--more"></span><span class="chain__line"></span></span><span class="tone-muted">… 32 جيلًا</span></li>
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ ذو الكفل بن هود البورسعيدي</span></li>
+        <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span></span><span class="text-medium">الشيخ أحمد المصري</span></li>
+      </ol>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-2">{{icon:qr-code:sm}}<span>تظهر في صفحة التحقق العامة بأنها <strong>غير صالحة</strong>.</span></li>
+      <li class="row row--top gap-2">{{icon:eye-off:sm}}<span>تختفي من إجازات الطالب المعروضة للعامة.</span></li>
+      <li class="row row--top gap-2">{{icon:lock:sm}}<span>لا تُحذف: يبقى رقمها وسندها كما صدرت، مع سبب السحب واسم المشرف.</span></li>
+      <li class="row row--top gap-2">{{icon:award:sm}}<span>لا يمنع الطالب من تلقي إجازات لاحقة؛ للمنع إجراء مستقل.</span></li>
+    </ul>
+
+    <div class="field">
+      <label class="field__label" for="rv-reason">سبب السحب (إلزامي)</label>
+      <textarea id="rv-reason" class="input input--focused" rows="3" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الإجراء في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminIjazahs.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md" disabled>سحب الإجازة</button>
+    </div>
+  </section>
+</div>

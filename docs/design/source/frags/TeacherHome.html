@@ -1,0 +1,78 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">اليوم</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات، توجد غير مقروءة">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--flush gap-3">
+    <div class="row row--between gap-3 gutter">
+      <div class="stack">
+        <h2 class="text-title-3">الأربعاء 4 نوفمبر</h2>
+        <span class="text-caption tone-muted">6 جلسات · 5:15 ساعة · بتوقيت القاهرة</span>
+      </div>
+      <div class="row gap-2">
+        <button type="button" class="icon-btn icon-btn--surface" aria-label="اليوم السابق">{{icon:chevron-right:md}}</button>
+        <a href="TeacherHomeEmpty.dc.html" class="icon-btn icon-btn--surface" aria-label="اليوم التالي">{{icon:chevron-left:md}}</a>
+      </div>
+    </div>
+
+    <div class="gutter">
+      <div class="stats card card--surface card--compact">
+        <div class="stat"><strong class="stat__value">2</strong><span class="stat__label">تمت</span></div>
+        <div class="stat"><strong class="stat__value">4</strong><span class="stat__label">متبقية اليوم</span></div>
+        <div class="stat"><strong class="stat__value">1</strong><span class="stat__label">طلب إلغاء</span></div>
+      </div>
+    </div>
+
+    <ol class="agenda" aria-label="جلسات اليوم">
+      <li class="agenda__row past">
+        <span class="agenda__time">9:00 ص</span>
+        <a href="TeacherEnrollment.dc.html" class="agenda__body tone-default">
+          <span class="stack"><span class="text-body text-medium">عبد الرحمن علي</span><span class="text-caption tone-muted">حفظ القرآن · الجلسة 6 من 8 · 45 د</span></span>
+          <span class="badge badge--success">تمت</span>
+        </a>
+      </li>
+      <li class="agenda__row past">
+        <span class="agenda__time">11:00 ص</span>
+        <a href="TeacherEnrollment.dc.html" class="agenda__body tone-default">
+          <span class="stack"><span class="text-body text-medium">مصطفى كمال</span><span class="text-caption tone-muted">حفظ القرآن · الجلسة 3 من 12 · 60 د</span></span>
+          <span class="badge badge--success">تمت</span>
+        </a>
+      </li>
+      <li class="agenda__row agenda__row--current">
+        <span class="agenda__time">2:00 م</span>
+        <span class="agenda__body">
+          <a href="TeacherEnrollment.dc.html" class="stack row--center grow self-stretch tone-default"><span class="text-body text-bold">نور سمير</span><span class="text-caption tone-success">الجلسة 4 من 8 · تبدأ خلال 10 د</span></a>
+          <a href="TeacherPreSession.dc.html" class="btn btn--primary btn--md">ادخل</a>
+        </span>
+      </li>
+      <li class="agenda__row">
+        <span class="agenda__time">4:00 م</span>
+        <a href="TeacherCancelRespond.dc.html" class="agenda__body tone-default">
+          <span class="stack"><span class="text-body text-medium">حسن إبراهيم</span><span class="text-caption tone-muted">حفظ القرآن · الجلسة 5 من 12</span></span>
+          <span class="badge badge--warning">طلب إلغاء من الطالب</span>
+        </a>
+      </li>
+      <li class="agenda__row">
+        <span class="agenda__time">6:00 م</span>
+        <a href="TeacherEnrollment.dc.html" class="agenda__body tone-default">
+          <span class="stack"><span class="text-body text-medium">يوسف أحمد</span><span class="text-caption tone-muted">حفظ القرآن · الجلسة 4 من 8 · 45 د</span></span>
+          <span class="tone-subtle">{{icon:chevron-left:sm}}</span>
+        </a>
+      </li>
+      <li class="agenda__row">
+        <span class="agenda__time">8:15 م</span>
+        <a href="TeacherEnrollment.dc.html" class="agenda__body tone-default">
+          <span class="stack"><span class="text-body text-medium">زياد طارق</span><span class="text-caption tone-muted">حفظ القرآن · الجلسة 4 من 12 · 60 د</span></span>
+          <span class="tone-subtle">{{icon:chevron-left:sm}}</span>
+        </a>
+      </li>
+    </ol>
+  </main>
+
+  {{TABS:teacher:TeacherHome}}
+</div>

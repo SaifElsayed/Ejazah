@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — اختيار المادة (قائمة تكبر)</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="nav-header">
+      <div class="nav-header__bar">
+        <span class="back-btn"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
+        <span class="nav-header__title">إضافة مادة</span>
+      </div>
+    </header>
+    <div class="screen__body gap-4">
+      <span class="field__label">المادة</span>
+      <span class="select"><span class="select__placeholder">اختر المادة</span><svg class="icon icon--md" data-icon="chevron-down" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">اختر المادة</h1>
+      <a href="AddSubject.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق"><svg class="icon icon--md" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    </div>
+
+    <div class="input-group">
+      <svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="input-group__control" type="search" placeholder="ابحث في المواد" aria-label="ابحث في المواد">
+    </div>
+
+    <div class="picker" role="radiogroup" aria-labelledby="sheet-title">
+      <label class="choice choice--disabled"><input type="radio" name="subj" class="visually-hidden" disabled><span class="choice__mark"></span><span class="grow">حفظ القرآن</span><span class="badge badge--accent">موثّقة</span></label>
+      <label class="choice choice--disabled"><input type="radio" name="subj" class="visually-hidden" disabled><span class="choice__mark"></span><span class="grow">التجويد</span><span class="badge badge--warning">قيد المراجعة</span></label>
+      <label class="choice choice--selected"><input type="radio" name="subj" class="visually-hidden" checked><span class="choice__mark"></span><span class="grow">القراءات</span></label>
+    </div>
+
+    <a href="AddSubject.dc.html" class="btn btn--primary btn--block">تم</a>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

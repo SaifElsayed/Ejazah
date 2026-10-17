@@ -1,0 +1,41 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Welcome.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <div class="page-intro">
+      <h1 class="page-intro__title">الدخول بالبريد</h1>
+    </div>
+
+    <form class="stack gap-5">
+      <div class="field">
+        <label for="em" class="field__label">البريد الإلكتروني</label>
+        <input id="em" type="email" class="input input--ltr" value="khaled.mansour@example.com">
+      </div>
+      <div class="field">
+        <div class="row row--between">
+          <label for="pw" class="field__label">كلمة المرور</label>
+          <a href="ForgotPassword.dc.html" class="link text-callout">نسيت كلمة المرور؟</a>
+        </div>
+        <div class="input-group input--error">
+          <input id="pw" type="password" class="input-group__control input--ltr" value="••••••••" aria-invalid="true" aria-describedby="pw-err">
+          <button type="button" class="icon-btn icon-btn--muted" aria-label="إظهار كلمة المرور">{{icon:eye:md}}</button>
+        </div>
+        <span id="pw-err" class="field__error row gap-1" role="alert">{{icon:alert-circle:sm}}البريد أو كلمة المرور غير صحيحة.</span>
+      </div>
+    </form>
+
+    <div class="stack gap-2 push">
+      <a href="Main.dc.html" class="btn btn--primary btn--block">دخول</a>
+      <p class="row row--center gap-0 text-body tone-muted">
+        <span>ليس لديك حساب؟</span>
+        <a href="EmailSignUp.dc.html" class="btn btn--ghost btn--md">أنشئ حسابًا بالبريد</a>
+      </p>
+    </div>
+  </main>
+</div>

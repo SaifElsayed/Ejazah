@@ -1,0 +1,61 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <div class="app-header__titles">
+      <h1 class="app-header__title">المواعيد</h1>
+      <span class="app-header__subtitle">بتوقيتك: القاهرة · تتكرر كل أسبوع</span>
+    </div>
+    <div class="app-header__actions">
+      <a href="SlotEditor.dc.html" class="btn btn--primary btn--md">{{icon:plus:md}}موعد</a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--flush">
+    <section class="day-block">
+      <h2 class="text-callout text-bold">السبت</h2>
+      <div class="row wrap gap-2">
+        <a href="SlotEditor.dc.html" class="slot slot--booked" aria-label="تعديل موعد السبت 10:00 ص، محجوز">10:00 ص · 45 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot" aria-label="تعديل موعد السبت 11:00 ص">11:00 ص · 60 د</a>
+      </div>
+    </section>
+
+    <section class="day-block">
+      <h2 class="text-callout text-bold">الأحد</h2>
+      <div class="row wrap gap-2">
+        <a href="SlotEditor.dc.html" class="slot slot--booked" aria-label="تعديل موعد الأحد 5:00 م، محجوز">5:00 م · 45 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot" aria-label="تعديل موعد الأحد 7:30 م">7:30 م · 45 د</a>
+      </div>
+    </section>
+
+    <section class="day-block">
+      <h2 class="text-callout text-bold">الثلاثاء</h2>
+      <div class="row wrap gap-2">
+        <a href="SlotEditor.dc.html" class="slot" aria-label="تعديل موعد الثلاثاء 4:00 م">4:00 م · 45 د</a>
+        <a href="SlotEditor.dc.html" class="slot slot--disabled" aria-label="تعديل موعد الثلاثاء 9:00 م، معطّل">9:00 م · 45 د</a>
+      </div>
+    </section>
+
+    <section class="day-block day-block--today">
+      <h2 class="text-callout text-bold">الأربعاء</h2>
+      <div class="row wrap gap-2">
+        <a href="SlotEditor.dc.html" class="slot slot--booked">9:00 ص · 45 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot slot--booked">11:00 ص · 60 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot slot--booked">2:00 م · 45 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot slot--booked">4:00 م · 60 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot slot--booked">6:00 م · 45 د<span class="slot__dot"></span></a>
+        <a href="SlotEditor.dc.html" class="slot slot--booked">8:15 م · 60 د<span class="slot__dot"></span></a>
+      </div>
+    </section>
+
+    <p class="day-block text-caption tone-muted">الاثنين والخميس والجمعة: لا مواعيد</p>
+
+    <div class="row wrap gap-4 gutter pad-top text-micro tone-muted">
+      <span class="row gap-2"><span class="legend-swatch legend-swatch--booked"></span>محجوز</span>
+      <span class="row gap-2"><span class="legend-swatch"></span>متاح</span>
+      <span class="row gap-2"><span class="legend-swatch legend-swatch--disabled"></span>معطّل</span>
+    </div>
+  </main>
+
+  {{TABS:teacher:Availability}}
+</div>

@@ -38,8 +38,8 @@ Modules are drawn where service boundaries would go if you ever split them out. 
 | Admin     | Vite · React · shadcn/ui                      | Internal operations. Arabic and English, the app's design system (ADR 0014). |
 | API       | NestJS · tRPC                                 | All business logic. The only thing touching the database. |
 | Worker    | NestJS · BullMQ                               | Scheduled and deferred work. Second process of `apps/api` (`src/worker.ts`), same modules. |
-| Database  | PostgreSQL · Prisma · one schema              | Single source of truth.                                   |
-| Queue     | Redis                                         | BullMQ queues and rate limiting only. Slot holds live in Postgres (`slot_holds`). |
+| Database  | PostgreSQL · Prisma · one schema              | Single source of truth.                                                                    |
+| Queue     | Redis                                         | BullMQ queues and rate limiting only. Slot holds live in Postgres (`slot_holds`).          |
 
 Why the worker is a separate process: a slow PDF render or a stuck notification batch must never block an HTTP request, and a crashed worker must never take the API down. Why it is not a separate application: it imports the same modules as the request process, which is what stops a background job from carrying its own divergent copy of a rule (ADR 0005 D3).
 
@@ -57,8 +57,8 @@ A port with exactly one implementation, forever, is an extra file, an extra indi
 
 ### 3.2 What is a port — and what is not
 
-| Capability                                          | Port? | Reasoning                                                                                                                                             |
-| --------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capability                                          | Port? | Reasoning                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Payment                                             | ✓     | Direct gateway checkout (ADR 0007). The port speaks the domain: create a checkout for an enrollment, verify and parse an inbound event, register a payout recipient, report its status. Gateways are interchangeable on price and KYC reach (OPEN-11); a recording stand-in is the second implementation from day one. |
 | Video                                               | ✓     | Daily / LiveKit / Agora are interchangeable; you may switch on price or reliability.                                                                  |
 | Push                                                | ✓     | Expo Notifications now, direct FCM/APNs later.                                                                                                        |
@@ -108,9 +108,16 @@ providers: [
 
 ```ts
 export interface PaymentPort {
-  createCheckout(enrollmentId: string, amount: Piasters, currency: string, latestExpiry: Date): Promise<CheckoutRef>;   // order id + hosted checkout URL; the order expires no later than latestExpiry (ADR 0010 D4)
-  cancelCheckout(gatewayOrderId: string): Promise<'cancelled' | 'paid' | 'in_progress' | 'unsupported'>;              // cancels an unpaid order, moves no money; an order already cancelled or expired answers 'cancelled' (ADR 0010 D6)
-  verifyAndParseEvent(rawBody: Buffer, headers: Record<string, string>): Promise<GatewayEvent>;   // throws on bad signature
+  createCheckout(
+    enrollmentId: string,
+    amount: Piasters,
+    currency: string,
+    latestExpiry: Date,
+  ): Promise<CheckoutRef>; // order id + hosted checkout URL; the order expires no later than latestExpiry (ADR 0010 D4)
+  cancelCheckout(
+    gatewayOrderId: string,
+  ): Promise<'cancelled' | 'paid' | 'in_progress' | 'unsupported'>; // cancels an unpaid order, moves no money; an order already cancelled or expired answers 'cancelled' (ADR 0010 D6)
+  verifyAndParseEvent(rawBody: Buffer, headers: Record<string, string>): Promise<GatewayEvent>; // throws on bad signature
   registerPayoutRecipient(teacherUserId: string, details: PayoutDetails): Promise<RecipientRef>;
   getRecipientStatus(recipientRef: RecipientRef): Promise<'pending' | 'verified' | 'rejected'>;
 }
@@ -139,23 +146,25 @@ The enforcement rule: money-carrying records (gateway order, gross, fee, net) ex
 
 Each module has a service (all rules), a repository (all queries), a router (thin tRPC procedures), an `index.ts` (public entry), and a README. Twelve modules, one per data-model domain; the machine-readable form is `packages/config/module-tables.json`, which the table-ownership lint rule reads (R-API-6, ADR 0005 D2).
 
-| Module        | Owns                                                                   | Tables                                                                                              |
-| ------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| identity      | users, roles, auth, tokens, gender declaration, teacher profile record incl. payout readiness columns (written via its public entry by `payments`) | `users` `user_roles` `teacher_profiles` `otp_codes` `device_push_tokens` `terms_acceptances` |
-| verification  | teacher applications, documents, admin decisions                        | `verification_documents` `verification_requests`                                                  |
-| catalog       | subjects, packages, availability, isnad chain, signatures; **discovery** (search and browse — gender filter enforced in its repository signatures) | `subjects` `teacher_subjects` `packages` `availability_slots` `isnad_entries` `teacher_signatures` |
-| booking       | slot holds, enrollments, enrollment confirmation (called by `payments` on a paid event) | `slot_holds` `enrollments`                                                                        |
-| payments      | gateway orders, signed-webhook ingestion (raw-body HTTP endpoint outside tRPC), payout recipient onboarding, the `confirm-enrollment` and `expire-pending-payments` jobs | `payments` `payment_events` |
-| sessions      | session generation, live lifecycle, attendance evidence, mutual cancellation, completion | `sessions` `session_participant_events` `cancellation_requests`                                |
-| chat          | in-session messaging, retention, moderation access                      | `chat_messages`                                                                                    |
-| certification | ijazah granting, PDF, public verification, bars                         | `ijazahs` `ijazah_bars`                                                                           |
-| reviews       | ratings, aggregates, moderation                                         | `reviews`                                                                                          |
-| moderation    | disputes, compensation cases (opened automatically on termination), gender flags, reports, admin actions | `disputes` `gender_flags` `user_reports`                                                        |
-| notifications | templating, delivery, notification centre                               | `notifications`                                                                                    |
-| admin         | admin auth, queues, settings, audit log                                 | `admin_users` `audit_logs` `settings`                                                           |
-| platform      | config, logging, errors, db, idempotency, guards, PORTS (§3)            | `idempotency_keys` (ADR 0008 D2)                                                                   |
+| Module        | Owns                                                                                                                                                                     | Tables                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| identity      | users, roles, auth, tokens, gender declaration, teacher profile record incl. payout readiness columns (written via its public entry by `payments`)                       | `users` `user_roles` `teacher_profiles` `otp_codes` `device_push_tokens` `terms_acceptances`       |
+| verification  | teacher applications, documents, admin decisions                                                                                                                         | `verification_documents` `verification_requests`                                                   |
+| catalog       | subjects, packages, availability, isnad chain, signatures; **discovery** (search and browse — gender filter enforced in its repository signatures)                       | `subjects` `teacher_subjects` `packages` `availability_slots` `isnad_entries` `teacher_signatures` |
+| booking       | slot holds, enrollments, enrollment confirmation (called by `payments` on a paid event)                                                                                  | `slot_holds` `enrollments`                                                                         |
+| payments      | gateway orders, signed-webhook ingestion (raw-body HTTP endpoint outside tRPC), payout recipient onboarding, the `confirm-enrollment` and `expire-pending-payments` jobs | `payments` `payment_events`                                                                        |
+| sessions      | session generation, live lifecycle, attendance evidence, mutual cancellation, completion                                                                                 | `sessions` `session_participant_events` `cancellation_requests`                                    |
+| chat          | in-session messaging, retention, moderation access                                                                                                                       | `chat_messages`                                                                                    |
+| certification | ijazah granting, PDF, public verification, bars                                                                                                                          | `ijazahs` `ijazah_bars`                                                                            |
+| reviews       | ratings, aggregates, moderation                                                                                                                                          | `reviews`                                                                                          |
+| moderation    | disputes, compensation cases (opened automatically on termination), gender flags, reports, admin actions                                                                 | `disputes` `gender_flags` `user_reports`                                                           |
+| notifications | templating, delivery, notification centre                                                                                                                                | `notifications`                                                                                    |
+| admin         | admin auth, queues, settings, audit log                                                                                                                                  | `admin_users` `audit_logs` `settings`                                                              |
+| platform      | config (incl. `SUPPORT_EMAIL`, served by `platform.publicConfig`, ADR 0021 D4), logging, errors, db, idempotency, guards, PORTS (§3)                                     | `idempotency_keys` (ADR 0008 D2)                                                                   |
 
 Discovery is a service inside `catalog`, not a module: search is a filtered query over catalog's own tables (§3.2), and a module owning no tables would have to read another module's tables to do anything, which R-API-6 forbids. Session generation is triggered by `booking` when an enrollment is marked paid, but the rows are written by `sessions` through its public entry — `booking` never touches the `sessions` table. Certification reads the isnad chain through `catalog`'s public entry. `payments` is the only module with an HTTP endpoint outside tRPC: the gateway's webhook is a plain POST whose raw body must reach the signature check untouched (§8).
+
+**Configuration the clients read (ADR 0021 D4).** `SUPPORT_EMAIL` is a required key of `env.schema.ts` with no default, a valid address, validated at startup like every other key. It is not a row of `settings` (§3.14 of the SRS) and not a string in either catalogue: no admin edits it from the panel, so a taken-over admin account cannot point users at another mailbox; a change of address is a configuration change, not a release. The kernel serves it through `platform.publicConfig`, a `publicProcedure` with a declared rate limit (T170) and an `.output(schema)`, returning `{ supportEmail }`; the phone app and the public pages read it at start-up, cache the last value and never block start-up on it. The admin panel has no support link. The key enters `.env.example` with the Phase 2 task that declares it in `env.schema.ts`, since `config.spec.ts` keeps the two equal.
 
 Lint-enforced dependency rules:
 
@@ -196,6 +205,7 @@ ijazah/
 │   └── admin/              §6.5
 │
 ├── packages/
+│   ├── tokens/     — tokens.json + icons.json: THE design source (ADR 0020); nothing reads them at runtime
 │   ├── contracts/  — tRPC types, Zod schemas, shared enums
 │   ├── money/      — the branded Piasters type for package prices. NOTHING else touches money
 │   ├── time/       — slot → UTC, DST-safe. NOTHING else does timezone maths
@@ -212,14 +222,16 @@ ijazah/
 │   ├── migrations/  never edited after merge
 │   └── seed.ts      identical fixtures everywhere
 │
-├── scripts/          schema-check · seed-checksum · contract-snapshot · generated-file-check · branch-spec-check
+├── scripts/          schema-check · seed-checksum · contract-snapshot · build-tokens · generated-file-check · branch-spec-check
 ├── tests/            violations · db-integrity · seed · pipeline · ports · adversarial
 ├── specs/            Spec Kit
 ├── docker-compose.yml   postgres · redis
-└── docs/             SRS · ARCHITECTURE · ERD · RUNBOOK · adr/ · design/
+└── docs/             SRS · ARCHITECTURE · ERD · RUNBOOK · adr/ · design/ (design.md · components.md · screens.md · frames/ · source/)
 ```
 
 Why the schema is split per module: thirty-three tables in one file, edited daily by three people, produces constant merge conflicts in the most dangerous file in the repo. Prisma's multi-file schema folder removes that entirely, and the file boundaries reinforce module ownership.
+
+**The public web pages are routes of the API (ADR 0021 D5).** The certificate verification page (`/verify/:code`, `?lang=en` for English), the account deletion page (`/delete-account`, its code step and its done step) and the Terms body (the version FR-AUTH-11 records in `terms_acceptances`) are server-rendered pages of `apps/api` on its own origin, under their own paths and never mixed with the procedure routes. They are rendered from templates that escape every value by default (a name, a code, a reason are untrusted data) and load the design stylesheet (§6.3); they send the NFR-SEC-11 (its header set and the CORS origin allowlist) header set with a strict `Content-Security-Policy`, set no cookie, and run under the same rate limits as the anonymous procedures. An unknown or malformed verification code answers 404; a revoked ijazah answers 200 with its revocation state and the public reason (FR-IJAZAH-8). The signed PDF URLs and the deletion code come from the same services the procedures use. No separate deploy, no public route in the admin SPA, no paid hosting before launch; moving the pages to a static site later relocates templates, nothing else.
 
 ## 6. The mobile app
 
@@ -267,18 +279,33 @@ Each feature folder has the same internal shape — `api.ts`, `hooks.ts`, `compo
 ### 6.3 The design system — one file changes everything
 
 ```
-design/
-├── tokens.ts           — THE source: colours, spacing, radii, typography
-├── tailwind.config.js  consumes tokens.ts — never hardcodes
+packages/tokens/
+├── tokens.json         — THE source: palette, light and dark semantic colours, spacing, radii,
+│                         type, sizes, shadows, motion, density (ADR 0020 D1)
+└── icons.json          — the icon registry (Lucide names)
+
+apps/mobile/src/design/
+├── tokens.ts           GENERATED from tokens.json by `pnpm tokens:build` — typed, resolved
+├── tailwind.theme.json GENERATED — tailwind.config.js consumes it; never hardcodes
+├── icons.ts            GENERATED — the icon names, and the directional ones
+├── tailwind.config.js  consumes tailwind.theme.json
 ├── theme.tsx            light/dark + direction providers
-└── primitives/          Button · Text · Card · Input · Sheet · Badge
+└── primitives/          the contracts of every primitive the design uses (docs/design/components.md)
+
+apps/admin/src/design/
+├── tokens.css          GENERATED — the same tokens as CSS variables (ADR 0014 D1)
+└── icons.ts            GENERATED
 ```
 
 - A raw colour or spacing value never appears in a feature file. Only tokens.
-- Features compose primitives. They don't build buttons.
-- Changing the brand colour is one line.
+- Features compose primitives. They don't build buttons. The primitives are the design's set
+  (ADR 0020 D4), not a fixed six.
+- Changing the brand colour is one line in `tokens.json`, one `pnpm tokens:build`, one commit;
+  `pnpm check:generated` refuses a generated file edited by hand (R-PROC-9).
 - Lint bans hex colours and raw numeric spacing outside `design/`.
 - NativeWind makes it real: Tailwind class names in React Native, same config.
+- The design itself — every board, its source and its tooling — is `docs/design/` (ADR 0020 D3);
+  `screens.md` maps every board to its route, feature folder and requirement ids.
 
 ### 6.4 RTL is logical, never directional
 
@@ -318,6 +345,8 @@ A tRPC procedure contains no business logic. Validate, call one service method, 
 | `adminProcedure`   | Admin router only. MFA. Writes an audit entry.            |
 
 Role and gender come from the server-held session, never from client input.
+
+The audit entry an `adminProcedure` writes carries a non-personal label of its target (ADR 0021 D2). The audit writer in `admin` renders `targetLabel` in Arabic once, at write time, from the target's type and id — the kind word and the stable identifier or public number — never from a name or anything a user or an admin typed, and refuses an empty label or one over 200 characters. The label is never rewritten (ERD §15 rule 21). The admin audit query resolves the target's current display name at read time, beside the stored label, and shows the role word for a person whose account was deleted; the fused Arabic forms («للشيخ …») are produced by that server-side renderer, which also owns the two other fused labels the design found (`admin.credentials.a11y.documentPage`, `admin.dialogs.mfaReset.title`).
 
 ### 7.3 Version skew — the tRPC tax
 
@@ -437,14 +466,14 @@ Three people, no ops experience. Without this, your first production bug is a us
 
 ## 13. Testing
 
-| Layer                | Requirement                                                           |
-| -------------------- | --------------------------------------------------------------------- |
-| Backend services     | Unit tests mandatory, no exceptions                                   |
-| Repositories         | Integration tests against real Postgres in CI                         |
-| Ports                | Fake adapters; no test touches a network                              |
-| Frontend             | Component tests for logic and conditional rendering — not pure layout |
-| Adversarial (gender) | Mandatory, blocking, every commit                                     |
-| E2E                  | The eight use cases in SRS §9, at phase gates                         |
+| Layer                | Requirement                                                                                                                                                                                                                                           |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend services     | Unit tests mandatory, no exceptions                                                                                                                                                                                                                   |
+| Repositories         | Integration tests against real Postgres in CI                                                                                                                                                                                                         |
+| Ports                | Fake adapters; no test touches a network                                                                                                                                                                                                              |
+| Frontend             | Component tests for logic and conditional rendering — not pure layout                                                                                                                                                                                 |
+| Adversarial (gender) | Mandatory, blocking, every commit                                                                                                                                                                                                                     |
+| E2E                  | The eight use cases in SRS §9, at phase gates                                                                                                                                                                                                         |
 | Coverage floor       | Per path, never global (research R-13, ADR 0005 D7): 80% on `packages/money`, `packages/time` and the kernel's guard and error paths from Phase 0; each domain module joins the covered set when it is created. A floor is never lowered (R-PROC-10). |
 
 No global coverage number — chasing coverage on config files teaches people to write worthless tests.

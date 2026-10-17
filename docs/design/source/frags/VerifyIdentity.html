@@ -1,0 +1,39 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Main.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">تأكيد الهوية</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="banner banner--warning">
+      {{icon:triangle-alert:md}}
+      <p class="grow"><strong class="text-bold">لا يمكنك حجز باقة جديدة حتى نراجع الوثيقة.</strong> جلساتك القادمة مستمرة.</p>
+    </div>
+
+    <p class="text-body">نحتاج وثيقة هوية للتأكد من بيانات حسابك.</p>
+
+    <div class="field">
+      <span id="doc" class="field__label">نوع الوثيقة</span>
+      <div class="segmented" role="group" aria-labelledby="doc">
+        <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">بطاقة الرقم القومي</button>
+        <button type="button" class="segmented__option" aria-pressed="false">جواز السفر</button>
+      </div>
+    </div>
+
+    <button type="button" class="upload">
+      <span class="tone-primary">{{icon:upload:md}}</span>
+      <span class="stack grow">
+        <span class="text-callout text-medium">رفع بطاقة الرقم القومي</span>
+        <span class="text-micro tone-muted">ملف PDF واحد فيه وجهَا البطاقة</span>
+      </span>
+    </button>
+
+    <p class="text-caption tone-muted">صوّرها كاملة وواضحة.</p>
+
+    <a href="Main.dc.html" class="btn btn--primary btn--block push">إرسال للمراجعة</a>
+  </main>
+</div>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الباقات — لا باقات بعد</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="app-header">
+    <h1 class="app-header__title">الباقات</h1>
+    <div class="app-header__actions">
+      <a href="PackageEditor.dc.html" class="btn btn--primary btn--md"><svg class="icon icon--md" data-icon="plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>باقة جديدة</a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--center">
+    <section class="empty-state">
+      <span class="icon-tile icon-tile--2xl" aria-hidden="true"><svg class="icon icon--xl" data-icon="layers" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8 12 4l8 4-8 4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg></span>
+      <h2 class="empty-state__title">لا باقات بعد</h2>
+      <p class="empty-state__text">أنشئ باقتك الأولى ليحجزها الطلاب: المادة والمسار وعدد الجلسات ومدتها والسعر.</p>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="تنقل المعلم">
+    <a href="TeacherHome.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="calendar" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>اليوم</span></a>
+    <a href="TeacherStudents.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="users" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></svg><span>طلابي</span></a>
+    <a href="Availability.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="clock" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>المواعيد</span></a>
+    <a href="Packages.dc.html" class="tabbar__item tabbar__item--active" aria-current="page"><svg class="icon icon--lg" data-icon="layers" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8 12 4l8 4-8 4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></svg><span>الباقات</span></a>
+    <a href="TeacherAccount.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حسابي</span></a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

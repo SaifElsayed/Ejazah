@@ -1,0 +1,51 @@
+  <div class="scrim"></div>
+
+  <section class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="sb-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--danger">{{icon:ban:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="sb-title">حظر يوسف أحمد</h2>
+        <p class="text-caption tone-muted">طالب منذ 2 فبراير 2026 · اشتراك جارٍ واحد · حفظ القرآن · تسميع · 7 جلسات قادمة</p>
+      </div>
+    </div>
+
+    <div class="segmented" role="group" aria-label="نوع الإجراء">
+      <button type="button" class="segmented__option" aria-pressed="false">إيقاف الحساب · مؤقت حتى المراجعة</button>
+      <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">{{icon:ban:sm}}حظر الحساب · نهائي</button>
+    </div>
+
+    <div class="grid-2 gap-5 items-start">
+      <section class="section">
+        <h3 class="group-label">ما يحدث فور التأكيد</h3>
+        <ul class="stack gap-2 text-callout">
+          <li class="row row--top gap-2">{{icon:lock:sm}}<span>لا يستطيع الدخول إلى حسابه، ولا حجز اشتراك جديد. الحظر نهائي ولا يُرفع من اللوحة.</span></li>
+          <li class="row row--top gap-2">{{icon:calendar:sm}}<span>تُلغى جلساته القادمة كلها (7)، ويراها المعلم «ألغتها الإدارة». تعود مواعيدها متاحة للحجز.</span></li>
+          <li class="row row--top gap-2">{{icon:bell:sm}}<span>يصل إشعار إلى الشيخ أحمد المصري.</span></li>
+          <li class="row row--top gap-2">{{icon:scale:sm}}<span>لا يُستحق تعويض؛ إن رأت الإدارة غير ذلك قرّرته في قضية تُفتح في <a href="AdminCompensation.dc.html" class="link">التعويضات</a>.</span></li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h3 class="group-label">ما يبقى</h3>
+        <div class="list">
+          <div class="list__row">
+            <span class="stack"><span class="text-medium">إجازاته الصادرة</span><span class="text-caption tone-muted">تبقى صالحة في صفحة التحقق؛ لسحب إجازة إجراء مستقل.</span></span>
+          </div>
+          <div class="list__row">
+            <span class="stack"><span class="text-medium">سجله في اللوحة</span><span class="text-caption tone-muted">يبقى الحساب ظاهرًا هنا بحالة «محظور» مع السبب واسم المشرف، ولا يُحذف.</span></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="sb-reason">سبب الحظر (إلزامي)</label>
+      <textarea id="sb-reason" class="input input--focused" rows="2" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الإجراء في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminUsers.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md" disabled>حظر الحساب</button>
+    </div>
+  </section>

@@ -1,0 +1,64 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">استكشف</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--scroll gap-4">
+    <div class="search-row">
+      <label class="input-group">
+        {{icon:search:md}}
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الشيخ أو المادة" aria-label="ابحث باسم الشيخ أو المادة">
+        
+      </label>
+      <a href="DiscoveryFilter.dc.html" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر · 2 مفعّلة">{{icon:filter:md}}<span class="filter-trigger__count">2</span></a>
+
+    </div>
+
+    <div class="category-tabs" role="tablist" aria-label="القسم">
+      <button type="button" class="category-tabs__item" role="tab" aria-selected="false">الكل<span class="category-tabs__count">3</span></button>
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">حفظ القرآن<span class="category-tabs__count">2</span></button>
+      <button type="button" class="category-tabs__item" role="tab" aria-selected="false">التجويد<span class="category-tabs__count">1</span></button>
+      <button type="button" class="category-tabs__item" role="tab" aria-selected="false">القراءات<span class="category-tabs__count">1</span></button>
+    </div>
+
+    <div class="filter-chips" aria-label="الفلاتر المفعّلة">
+      <button type="button" class="chip chip--selected chip--removable" aria-label="إزالة فلتر التقييم: 4 نجوم فأعلى">{{icon:star:xs:filled}}{{icon:star:xs:filled}}{{icon:star:xs:filled}}{{icon:star:xs:filled}}{{icon:x:xs}}</button>
+      <button type="button" class="chip chip--selected chip--removable" aria-label="إزالة فلتر الرواية">حفص عن عاصم{{icon:x:xs}}</button>
+      <a href="Discovery.dc.html" class="link">مسح الكل</a>
+    </div>
+    <span class="text-caption tone-muted">معلمان</span>
+
+    <a href="TeacherProfile.dc.html" class="card gap-3">
+      <span class="row gap-3 items-start">
+        <span class="avatar avatar--xl avatar--primary">أ</span>
+        <span class="stack gap-1 grow">
+          <strong class="text-headline">الشيخ أحمد المصري</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · حفص عن عاصم · 12 سنة</span>
+          <span class="row gap-1 wrap"><span class="badge badge--neutral">تسميع</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </span>
+      </span>
+      <span class="story-card__quote story-card__quote--two">«أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا، بالتسميع المتدرّج وجهًا بوجه.»</span>
+      <span class="story-card__foot"><span class="rating">{{icon:star:xs:filled}}4.9 · 86</span><span>أقرب موعد الأحد 7:30 م</span><span class="text-callout text-bold tone-default">من 150 ج.م</span></span>
+    </a>
+
+    <a href="TeacherProfile.dc.html" class="card gap-3">
+      <span class="row gap-3 items-start">
+        <span class="avatar avatar--xl ">م</span>
+        <span class="stack gap-1 grow">
+          <strong class="text-headline">الشيخ محمود فتحي</strong>
+          <span class="text-caption tone-muted">حفظ القرآن والتجويد · حفص عن عاصم · 8 سنوات</span>
+          <span class="row gap-1 wrap"><span class="badge badge--neutral">تسميع</span></span>
+        </span>
+      </span>
+      <span class="story-card__quote story-card__quote--two">«نبدأ من مخارج الحروف، ثم نبني التلاوة آيةً آية.»</span>
+      <span class="story-card__foot"><span class="rating">{{icon:star:xs:filled}}4.7 · 41</span><span>أقرب موعد الأحد 7:00 م</span><span class="text-callout text-bold tone-default">من 120 ج.م</span></span>
+    </a>
+  </main>
+
+  {{TABS:student:Discovery}}
+</div>

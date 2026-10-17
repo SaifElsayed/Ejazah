@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>المعلم — باقة جديدة أو تعديل باقة</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Packages.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">تعديل الباقة</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="field">
+      <span class="field__label" id="subj">المادة</span>
+      <a href="PackageSubjectPicker.dc.html" class="select" aria-labelledby="subj"><span>حفظ القرآن</span><svg class="icon icon--md" data-icon="chevron-down" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></a>
+    </div>
+
+    <div class="field" role="group" aria-labelledby="track">
+      <span class="field__label" id="track">المسار</span>
+      <div class="segmented">
+        <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">تسميع</button>
+        <button type="button" class="segmented__option" aria-pressed="false">مسار إجازة</button>
+      </div>
+      <span class="field__hint">طلب الإجازة متاح من مسار الإجازة فقط</span>
+    </div>
+
+    <div class="grid-2 gap-3">
+      <div class="field">
+        <label for="count" class="field__label">عدد الجلسات</label>
+        <input id="count" class="input" value="8">
+      </div>
+      <div class="field" role="group" aria-labelledby="dur">
+        <span class="field__label" id="dur">مدة الجلسة</span>
+        <div class="segmented">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">45 د</button>
+          <button type="button" class="segmented__option" aria-pressed="false">60 د</button>
+        </div>
+      </div>
+    </div>
+    <p class="field__hint">لديك 8 مواعيد أسبوعية مدتها 45 دقيقة.</p>
+
+    <div class="field">
+      <label for="price" class="field__label">السعر الكلي</label>
+      <div class="input-group input-group--focused">
+        <input id="price" class="input-group__control" value="1,200">
+        <span class="icon-btn icon-btn--muted text-body">ج.م</span>
+      </div>
+      <span class="field__hint">150 ج.م للجلسة</span>
+    </div>
+
+    <label class="check-row text-body">
+      <input type="checkbox" class="check" checked>
+      <span class="stack grow"><span>الباقة فعّالة</span><span class="text-caption tone-muted">تظهر للطلاب</span></span>
+    </label>
+
+    <div class="banner banner--info">
+      <svg class="icon icon--md" data-icon="info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <p class="grow">يسري التعديل على الاشتراكات الجديدة فقط.</p>
+    </div>
+
+    <a href="Packages.dc.html" class="btn btn--primary btn--block push">حفظ الباقة</a>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

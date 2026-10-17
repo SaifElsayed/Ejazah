@@ -1,0 +1,29 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="ri-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--warning">{{icon:user-check:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="ri-title">طلب إثبات هوية</h2>
+        <p class="text-caption tone-muted">الشيخ أحمد المصري · معلم · الحساب نشط</p>
+      </div>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-2">{{icon:hourglass:sm}}<span>تصبح حالة الحساب <strong>بانتظار إثبات الهوية</strong>.</span></li>
+      <li class="row row--top gap-2">{{icon:calendar:sm}}<span>تتوقف الحجوزات الجديدة حتى تُراجع الوثيقة. الجلسات المحجوزة من قبل لا تُلغى.</span></li>
+      <li class="row row--top gap-2">{{icon:upload:sm}}<span>يُطلب منه رفع بطاقة الرقم القومي أو جواز السفر، وتصل الوثيقة إلى المراجعة هنا.</span></li>
+      <li class="row row--top gap-2">{{icon:info:sm}}<span>إجراء عند الاشتباه فقط، وليس خطوة معتادة.</span></li>
+    </ul>
+
+    <div class="field">
+      <label class="field__label" for="ri-reason">سبب الطلب (إلزامي)</label>
+      <textarea id="ri-reason" class="input input--focused" rows="3" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الطلب في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminTeacher.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--primary btn--md" disabled>طلب إثبات الهوية</button>
+    </div>
+  </section>

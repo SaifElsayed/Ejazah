@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الإدارة — الإجازات</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <aside class="sidebar" aria-label="لوحة الإدارة">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة · الإدارة</span></span>
+    <nav class="sidebar__nav">
+      <span class="sidebar__group">الطوابير</span>
+      <a href="AdminHome.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="house" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg><span>نظرة عامة</span></a>
+      <a href="AdminApplications.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="user-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m16 11 2 2 4-4"/></svg><span>طلبات المعلمين</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminCredentials.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="file-text" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg><span>مراجعة الإجازات</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminIjazahRequests.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="mail" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>طلبات الإجازة</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminDisputes.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>النزاعات</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminCompensation.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="scale" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg><span>التعويضات</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminGender.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="shield-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>بلاغات الجنس</span><span class="badge badge--neutral nav-item__count">1</span></a>
+      <a href="AdminSessionReview.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="activity" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>مراجعة الجلسات</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminReports.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg><span>البلاغات</span><span class="badge badge--neutral nav-item__count">4</span></a>
+      <span class="sidebar__group">السجلات والنظام</span>
+      <a href="AdminUsers.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="users" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></svg><span>المستخدمون</span></a>
+      <a href="AdminReviews.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>التقييمات</span></a>
+      <a href="AdminEnrollments.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="book" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h13v16H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg><span>الاشتراكات والجلسات</span></a>
+      <a href="AdminPayments.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="credit-card" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg><span>المدفوعات</span></a>
+      <a href="AdminIjazahs.dc.html" class="nav-item nav-item--active" aria-current="page"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg><span>الإجازات</span></a>
+      <a href="AdminSettings.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="sliders-horizontal" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>الإعدادات</span></a>
+      <a href="AdminAudit.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="list" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg><span>سجل التدقيق</span></a>
+    </nav>
+    <div class="sidebar__footer">
+      <div class="row gap-3"><span class="avatar avatar--sm">س</span><span class="stack grow"><span class="text-callout text-medium">سارة عادل</span><span class="text-caption tone-muted">مشرفة</span></span><a href="AdminSignIn.dc.html" class="icon-btn icon-btn--muted" aria-label="تسجيل الخروج"><svg class="icon icon--md" data-icon="log-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></a></div>
+      <div class="segmented" role="group" aria-label="اللغة">
+        <a href="AdminIjazahs.dc.html" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</a>
+        <button type="button" class="segmented__option" aria-pressed="false">English</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">الإجازات</h1>
+        <p class="page-header__subtitle">كل إجازة صدرت بطلب من معلمها. تُسحب الإجازة ولا تُحذف، ويبقى رقمها يدلّ على حالتها في صفحة التحقق.</p>
+      </div>
+      <a href="AdminIjazahRequests.dc.html" class="btn btn--secondary btn--md">طلبات الإجازة · 2</a>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            <svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="رقم الشهادة أو اسم الطالب">
+          </label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر" aria-expanded="false"><svg class="icon icon--md" data-icon="filter" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>رقم الشهادة</th><th>الطالب والمعلم</th><th>الطلب</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span class="table__num certificate-number">R5TN-9WQE-3KDX-6HPA</span><span class="text-caption tone-muted">حفظ القرآن · صدرت 12 أكتوبر</span></span></td>
+                  <td><span class="stack"><a href="AdminUsers.dc.html" class="link">سعيد منصور</a><span class="text-caption tone-muted">من الشيخ أحمد المصري</span></span></td>
+                  <td><a href="AdminIjazahRequests.dc.html" class="link">طلب 11 أكتوبر</a></td>
+                  <td><span class="badge badge--success">صالحة</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num certificate-number">M3FV-8CJT-2PHW-Y6KD</span><span class="text-caption tone-muted">التجويد · صدرت 2 يوليو</span></span></td>
+                  <td><span class="stack"><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a><span class="text-caption tone-muted">من الشيخ عمر حسن</span></span></td>
+                  <td><a href="AdminIjazahRequests.dc.html" class="link">طلب 29 يونيو</a></td>
+                  <td class="table__wrap"><span class="stack items-start gap-half"><span class="badge badge--danger">مسحوبة · 9 أكتوبر</span><span class="text-caption tone-muted">حضر الجلسات غير صاحب الحساب</span></span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="table__num certificate-number">B2XN-H8MN-7K4Q-QW3R</span><span class="text-caption tone-muted">التجويد · صدرت 3 مايو</span></span></td>
+                  <td><span class="stack"><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a><span class="text-caption tone-muted">من الشيخ محمود فتحي</span></span></td>
+                  <td><a href="AdminIjazahRequests.dc.html" class="link">طلب 30 أبريل</a></td>
+                  <td><span class="badge badge--success">صالحة</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>3 من 3 · الأحدث أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled><svg class="icon icon--sm" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled><svg class="icon icon--sm" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button></nav>
+            </div>
+          </div>
+
+          <section class="section" aria-labelledby="bars">
+            <h2 id="bars" class="group-label">الممنوعون من تلقي الإجازات · 1</h2>
+            <div class="list">
+              <div class="list__row">
+                <span class="stack">
+                  <a href="AdminUsers.dc.html" class="link self-start">مصطفى كمال</a>
+                  <span class="text-caption tone-muted">منذ 9 أكتوبر · سارة عادل · السبب: حضر الجلسات غير صاحب الحساب.</span>
+                </span>
+                <a href="AdminConfirmDialog.dc.html" class="btn btn--secondary btn--md">رفع المنع</a>
+              </div>
+            </div>
+            <p class="field__hint">لا يُرسَل طلب إجازة لطالب ممنوع. رفع المنع يطلب سببًا أيضًا، ويبقى المنع ورفعه في سجل التدقيق.</p>
+          </section>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل الإجازة">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg icon-tile--accent"><svg class="icon icon--lg icon--medium" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg></span>
+              <span class="stack grow">
+                <strong class="text-title-3"><span class="ltr certificate-number">R5TN-9WQE-3KDX-6HPA</span></strong>
+                <span class="text-caption tone-muted">حفظ القرآن · برواية حفص عن عاصم</span>
+              </span>
+              <span class="badge badge--success">صالحة</span>
+            </header>
+
+            <div class="panel__body">
+              <dl class="kv">
+                <div class="kv__item"><dt class="kv__label">الطالب</dt><dd class="kv__value">سعيد منصور</dd></div>
+                <div class="kv__item"><dt class="kv__label">المُجيز</dt><dd class="kv__value">الشيخ أحمد المصري</dd></div>
+                <div class="kv__item"><dt class="kv__label">الطلب</dt><dd class="kv__value"><a href="AdminIjazahRequests.dc.html" class="link">أرسله المعلم 11 أكتوبر</a></dd></div>
+                <div class="kv__item"><dt class="kv__label">صدرت</dt><dd class="kv__value">12 أكتوبر 2026 · اعتماد سارة عادل</dd></div>
+              </dl>
+
+              <section class="section">
+                <h2 class="group-label">السند · 35 جيلًا · من طريق الشاطبية</h2>
+                <div class="card card--accent card--compact">
+                  <ol class="chain">
+                    <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>رسول الله ﷺ</span></li>
+                    <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>عثمان بن عفان، علي بن أبي طالب، عبد الله بن مسعود، أبي بن كعب، زيد بن ثابت</span></li>
+                    <li class="chain__item"><span class="chain__rail"><span class="chain__dot chain__dot--more"></span><span class="chain__line"></span></span><span class="tone-muted">… 30 جيلًا</span></li>
+                    <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ رضوان بن ملائكة الله المنياوي</span></li>
+                    <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span><span class="chain__line"></span></span><span>الشيخ ذو الكفل بن هود البورسعيدي</span></li>
+                    <li class="chain__item"><span class="chain__rail"><span class="chain__dot"></span></span><span class="text-medium">الشيخ أحمد المصري</span></li>
+                  </ol>
+                </div>
+              </section>
+
+              <a href="VerifyCertificate.dc.html" class="card card--row card--compact gap-3">
+                <span class="icon-tile icon-tile--sm icon-tile--neutral"><svg class="icon icon--sm" data-icon="qr-code" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg></span>
+                <span class="stack grow">
+                  <span class="text-callout text-medium">صفحة التحقق العامة</span>
+                  <span class="text-caption tone-muted">ما يراه من يمسح رمز الشهادة</span>
+                </span>
+                <svg class="icon icon--md" data-icon="external-link" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+              </a>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminRevokeDialog.dc.html" class="btn btn--danger btn--md">سحب الإجازة</a>
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md"><svg class="icon icon--sm" data-icon="ban" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></svg>منع من تلقي الإجازات</a>
+              <p class="panel__note">السحب لا يمنع الطالب من إجازات لاحقة، والمنع إجراء مستقل. كل إجراء هنا يطلب سببًا ويُسجَّل في سجل التدقيق.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

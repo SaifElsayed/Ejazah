@@ -1,0 +1,48 @@
+<div class="screen" dir="rtl" data-theme="dark">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Main.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">قبل الجلسة</h1>
+      <div class="nav-header__trailing">
+        <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ">{{icon:flag:md}}</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="video-tile video-tile--preview gap-3" aria-label="معاينة الكاميرا">
+      <span class="avatar avatar--2xl avatar--neutral">ي</span>
+      <span class="text-callout tone-muted">كاميرتك مغلقة</span>
+      <span class="video-tile__label"><span class="mic-level" aria-hidden="true"><span class="mic-level__bar mic-level__bar--1"></span><span class="mic-level__bar mic-level__bar--2"></span><span class="mic-level__bar mic-level__bar--3"></span></span>الميكروفون يعمل</span>
+    </section>
+
+    <section class="card">
+      <div class="row gap-3">
+        <span class="avatar avatar--lg avatar--primary">أ</span>
+        <span class="stack grow">
+          <strong class="text-headline">الشيخ أحمد المصري</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · الجلسة 4 من 8</span>
+        </span>
+      </div>
+      <div class="grid-2 gap-2">
+        <div class="stat stat--tile"><span class="stat__label">الأربعاء 4 نوفمبر</span><strong class="stat__value">6:00 – 6:45 م</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">المدة</span><strong class="stat__value">45 دقيقة</strong></div>
+      </div>
+    </section>
+
+    <div class="list">
+      <div class="list__row">
+        <span class="stack"><span class="text-medium">الميكروفون</span><span class="text-caption tone-muted">مطلوب</span></span>
+        <span class="badge badge--success">يعمل</span>
+      </div>
+      <label class="list__row">
+        <span class="stack"><span class="text-medium">الكاميرا</span><span class="text-caption tone-muted">اختيارية</span></span>
+        <input type="checkbox" class="check">
+      </label>
+    </div>
+
+    <a href="SessionRoom.dc.html" class="btn btn--primary btn--block push">دخول الجلسة</a>
+  </main>
+</div>

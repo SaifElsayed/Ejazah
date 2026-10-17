@@ -1,0 +1,128 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminSessionReview:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">مراجعة الجلسات</h1>
+        <p class="page-header__subtitle">جلستان لم يحسم النظام نتيجتهما: اتصال أقل من حد الحضور، أو انقطاع في خدمة الفيديو. تُعتمد النتيجة بسبب يُسجَّل في سجل التدقيق.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="الحالة">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">بانتظار القرار<span class="category-tabs__count">2</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">تم البتّ</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم الطالب أو المعلم">
+          </label>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الجلسة</th><th>الطالب</th><th>المعلم</th><th>الحالة</th><th>اتصال متزامن</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span class="text-medium">2 من 12 · حفظ القرآن</span><span class="text-caption tone-muted">14 أكتوبر · 4:00 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">حسن إبراهيم</a></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ أحمد المصري</a></td>
+                  <td><span class="badge badge--warning">أقل من حد الحضور</span></td>
+                  <td>34 من 60 د</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">1 من 12 · التجويد</span><span class="text-caption tone-muted">13 أكتوبر · 6:00 م</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ محمود فتحي</a></td>
+                  <td><span class="badge badge--warning">انقطاع الخدمة</span></td>
+                  <td>9 من 60 د</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>2 من 2 · الأقدم أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل الجلسة">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg icon-tile--warning">{{icon:activity:lg}}</span>
+              <span class="stack grow">
+                <strong class="text-title-3">الجلسة 2 من 12 · حفظ القرآن</strong>
+                <span class="text-caption tone-muted">حسن إبراهيم مع الشيخ أحمد المصري · الأربعاء 14 أكتوبر · 4:00 م</span>
+              </span>
+              <span class="badge badge--warning">أقل من حد الحضور</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <div class="section__header"><h2 class="group-label">الحضور المسجَّل</h2><span class="text-caption tone-muted">أدنى مدة اتصال 60 ثانية</span></div>
+                <div class="meter" role="img" aria-label="اتصال متزامن 57% والحد 70%"><span class="meter__fill meter__fill--low" style="width: 57%"></span><span class="meter__mark" style="inset-inline-start: 70%"></span></div>
+                <p class="text-caption tone-muted">اتصال متزامن 34 من 60 دقيقة (57%) · الحد 70%.</p>
+                <ol class="timeline" aria-label="أحداث الدخول والخروج">
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">3:57 م · دخل المعلم</strong></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">4:02 م · دخل الطالب</strong></span>
+                  </li>
+                  <li class="timeline__item timeline__item--pending">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--pending">{{icon:x:xs:heavy}}</span><span class="timeline__line"></span></span>
+                    <span class="timeline__body"><span class="timeline__title">4:21 م · انقطع اتصال الطالب</span></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">4:36 م · عاد الطالب</strong></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">4:51 م · خرج الطالب</strong></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span></span>
+                    <span class="timeline__body"><strong class="timeline__title">5:00 م · خرج المعلم في نهاية الموعد</strong></span>
+                  </li>
+                </ol>
+              </section>
+
+              <div class="section">
+                <h2 class="group-label" id="dec">نتيجة الجلسة</h2>
+                <div class="grid-2 gap-2" role="radiogroup" aria-labelledby="dec">
+                  <label class="choice choice--selected"><input type="radio" class="visually-hidden" name="st" checked><span class="choice__mark"></span><span class="stack"><span class="text-callout text-medium">تمت</span><span class="text-caption tone-muted">تُحتسب من الباقة</span></span></label>
+                  <label class="choice"><input type="radio" class="visually-hidden" name="st"><span class="choice__mark"></span><span class="stack"><span class="text-callout text-medium">غياب الطالب</span><span class="text-caption tone-muted">تُحتسب من الباقة</span></span></label>
+                  <label class="choice"><input type="radio" class="visually-hidden" name="st"><span class="choice__mark"></span><span class="stack"><span class="text-callout text-medium">غياب المعلم</span><span class="text-caption tone-muted">لا تُحتسب · تُعدّ على المعلم</span></span></label>
+                  <label class="choice"><input type="radio" class="visually-hidden" name="st"><span class="choice__mark"></span><span class="stack"><span class="text-callout text-medium">لم يحضر أحد</span><span class="text-caption tone-muted">لا تُحتسب · بلا عقوبة</span></span></label>
+                  <label class="choice choice--disabled" aria-disabled="true"><input type="radio" class="visually-hidden" name="st" disabled><span class="choice__mark"></span><span class="stack"><span class="text-callout text-medium">انقطاع الخدمة</span><span class="text-caption tone-muted">لجلسات انقطاع الخدمة فقط: لا تُحتسب ولا غياب على أحد</span></span></label>
+                </div>
+                <div class="field">
+                  <label class="field__label" for="sr">السبب (إلزامي)</label>
+                  <textarea id="sr" class="input input--focused" rows="3">انقطع اتصال الطالب مرة واحدة 15 دقيقة، وبقي الشيخ في الجلسة كاملة. تُحتسب «تمت».</textarea>
+                  <p class="field__hint">يصل إلى الطرفين ويُسجَّل في سجل التدقيق.</p>
+                </div>
+              </div>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--primary btn--md">اعتماد النتيجة</a>
+              <p class="panel__note">تُثبَّت الحالة المختارة وتُحدَّث الجلسات المتبقية. نافذة النزاع 72 ساعة من نهاية الجلسة لا من هذا القرار، فقد تكون أُغلقت قبله؛ لهذه الجلسة تُغلق السبت 17 أكتوبر 5:00 م.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

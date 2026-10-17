@@ -1,0 +1,65 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="EnrollmentDetail.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <h1 class="nav-header__title">الشيخ أحمد المصري</h1>
+        <span class="nav-header__subtitle">حفظ القرآن · 8 جلسات</span>
+      </span>
+      <div class="nav-header__trailing">
+        <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ">{{icon:flag:md}}</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body chat gap-3 pad-top">
+    <div class="banner">
+      {{icon:paperclip:sm}}
+      <p class="grow">يمكنك إرسال ملفات PDF والمستندات فقط.</p>
+    </div>
+
+    <span class="text-micro tone-muted self-center">الثلاثاء</span>
+
+    <div class="stack gap-half">
+      <p class="bubble bubble--mine">السلام عليكم شيخنا، هل أبدأ غدًا من أول الأنفال أم أراجع آخر الأعراف؟</p>
+      <span class="bubble__time self-end">9:12 م</span>
+    </div>
+
+    <div class="stack gap-2">
+      <p class="bubble bubble--theirs">وعليكم السلام. راجع آخر وجهين من الأعراف أولًا، ثم نبدأ الأنفال. أرسلت لك جدول المراجعة.</p>
+      <div class="stack gap-half self-start">
+        <div class="file">
+          <span class="icon-tile icon-tile--danger">PDF</span>
+          <span class="stack grow">
+            <span class="text-callout text-medium">جدول المراجعة.pdf</span>
+            <span class="text-micro tone-muted">184 ك.ب</span>
+          </span>
+        </div>
+        <span class="bubble__time self-start">9:30 م</span>
+      </div>
+    </div>
+
+    <p class="bubble bubble--mine">جزاكم الله خيرًا، وهذه صورة صفحة الحفظ.</p>
+
+    <div class="stack gap-half self-end" role="alert">
+      <div class="file">
+        <span class="icon-tile icon-tile--danger">{{icon:circle-x:md}}</span>
+        <span class="stack grow">
+          <span class="text-callout text-medium">صفحة الحفظ.jpg</span>
+          <span class="text-micro tone-danger">لم تُرسل</span>
+        </span>
+      </div>
+      <span class="field__error">لا يمكن إرسال الصور في المحادثة. أرسل ملف PDF أو مستندًا.</span>
+    </div>
+  </main>
+
+  <footer class="action-bar action-bar--row">
+    <button type="button" class="icon-btn icon-btn--surface" aria-label="إرفاق ملف PDF أو مستند">{{icon:paperclip:md}}</button>
+    <label for="msg" class="visually-hidden">رسالة</label>
+    <input id="msg" class="input input--md grow" placeholder="اكتب رسالة">
+    <button type="button" class="icon-btn icon-btn--primary" aria-label="إرسال">{{icon:arrow-left:md:medium}}</button>
+  </footer>
+</div>

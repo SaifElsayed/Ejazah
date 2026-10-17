@@ -1,0 +1,43 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">استكشف</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--scroll gap-4">
+    <div class="search-row">
+      <label class="input-group">
+        {{icon:search:md}}
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الشيخ أو المادة" aria-label="ابحث باسم الشيخ أو المادة">
+        
+      </label>
+      <a href="DiscoveryFilter.dc.html" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر · 1 مفعّلة">{{icon:filter:md}}<span class="filter-trigger__count">1</span></a>
+
+    </div>
+
+    <div class="category-tabs" role="tablist" aria-label="القسم">
+      <button type="button" class="category-tabs__item" role="tab" aria-selected="false">الكل<span class="category-tabs__count">3</span></button>
+      <button type="button" class="category-tabs__item" role="tab" aria-selected="false">حفظ القرآن<span class="category-tabs__count">2</span></button>
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">التجويد<span class="category-tabs__count">1</span></button>
+      <button type="button" class="category-tabs__item" role="tab" aria-selected="false">القراءات<span class="category-tabs__count">1</span></button>
+    </div>
+
+    <div class="filter-chips" aria-label="الفلاتر المفعّلة">
+      <button type="button" class="chip chip--selected chip--removable" aria-label="إزالة فلتر المسار">مسار إجازة{{icon:x:xs}}</button>
+      <a href="Discovery.dc.html" class="link">مسح الكل</a>
+    </div>
+
+    <section class="empty-state">
+      <span class="icon-tile icon-tile--2xl icon-tile--neutral" aria-hidden="true">{{icon:search:xl}}</span>
+      <h2 class="empty-state__title">لا يوجد معلم يطابق هذه الفلاتر</h2>
+      <p class="empty-state__text">جرّب إزالة فلتر أو اختيار قسم آخر.</p>
+      <a href="Discovery.dc.html" class="btn btn--primary">مسح الفلاتر</a>
+    </section>
+  </main>
+
+  {{TABS:student:Discovery}}
+</div>

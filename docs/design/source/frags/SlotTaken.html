@@ -1,0 +1,43 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-4">
+      <span class="avatar avatar--2xl">أ</span>
+      <span class="stack gap-1">
+        <strong class="text-title-2">الشيخ أحمد المصري</strong>
+        <span class="text-callout tone-muted">ذكر · حفظ القرآن</span>
+      </span>
+    </div>
+    <div class="card card--accent"><span class="text-body text-bold tone-accent">السند — حفظ القرآن</span></div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">اختر موعدك الأسبوعي</h1>
+      <a href="TeacherProfile.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="banner banner--danger" role="alert">
+      {{icon:triangle-alert:md}}
+      <span class="grow">حُجز موعد السبت 10:00 ص للتو. اختر موعدًا آخر.</span>
+    </div>
+
+    <p class="row wrap gap-2 text-callout tone-muted">حفظ القرآن · 8 جلسات × 45 دقيقة · بتوقيت القاهرة<span class="badge badge--neutral">تسميع</span></p>
+
+    <div class="field">
+      <span class="field__label">المواعيد المتاحة</span>
+      <div class="row wrap gap-2">
+        <button type="button" class="slot slot--disabled" disabled>السبت 10:00 ص · محجوز</button>
+        <button type="button" class="slot" aria-pressed="false">الأحد 7:30 م</button>
+        <button type="button" class="slot" aria-pressed="false">الثلاثاء 4:00 م</button>
+        <button type="button" class="slot" aria-pressed="false">الثلاثاء 9:00 م</button>
+      </div>
+    </div>
+
+    <button type="button" class="btn btn--primary btn--block" disabled>متابعة إلى الدفع</button>
+  </section>
+</div>

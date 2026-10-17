@@ -1,0 +1,35 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="OnboardProfile.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">المنطقة الزمنية</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <label class="input-group input-group--surface">
+      {{icon:search:md}}
+      <input type="search" class="input-group__control" placeholder="ابحث عن مدينة" aria-label="ابحث عن مدينة">
+    </label>
+
+    <div class="list" role="radiogroup" aria-label="المنطقة الزمنية">
+      <label class="list__row list__row--selected">
+        <span class="row gap-3 grow">{{icon:smartphone:md}}<span class="text-medium">استخدم توقيت الجهاز (القاهرة)</span></span>
+        <input type="radio" name="tz" class="check" checked>
+      </label>
+    </div>
+
+    <div class="list" role="radiogroup" aria-label="مدن أخرى">
+      <span class="list__header">مدن أخرى</span>
+      <label class="list__row"><span>الرياض</span><input type="radio" name="tz" class="check"></label>
+      <label class="list__row"><span>دبي</span><input type="radio" name="tz" class="check"></label>
+      <label class="list__row"><span>الكويت</span><input type="radio" name="tz" class="check"></label>
+      <label class="list__row"><span>عمّان</span><input type="radio" name="tz" class="check"></label>
+      <label class="list__row"><span>الدار البيضاء</span><input type="radio" name="tz" class="check"></label>
+      <label class="list__row"><span>إسطنبول</span><input type="radio" name="tz" class="check"></label>
+      <label class="list__row"><span>لندن</span><input type="radio" name="tz" class="check"></label>
+    </div>
+  </main>
+</div>

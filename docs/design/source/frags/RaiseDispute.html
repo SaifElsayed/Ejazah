@@ -1,0 +1,41 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="EnrollmentDetail.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">فتح نزاع على جلسة</h1>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <div class="card card--surface card--compact card--row">
+      <span class="icon-tile">{{icon:calendar:md}}</span>
+      <span class="stack grow">
+        <strong class="text-callout text-bold">الجلسة 4 · الأربعاء 4 نوفمبر</strong>
+        <span class="text-caption tone-muted">6:00 – 6:45 م · الشيخ أحمد المصري</span>
+      </span>
+      <span class="badge badge--success">تمت</span>
+    </div>
+
+    <fieldset class="stack gap-2">
+      <legend class="field__label pad-bottom">ماذا حدث؟</legend>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>لم يحضر المعلم أو تأخر كثيرًا</label>
+      <label class="choice choice--selected"><input type="radio" name="reason" class="visually-hidden" checked><span class="choice__mark"></span>تقطّع الصوت أو الصورة أثناء الجلسة</label>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>أنهى المعلم الجلسة قبل موعدها</label>
+      <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>سبب آخر</label>
+    </fieldset>
+
+    <div class="field">
+      <label class="field__label" for="dt">التفاصيل</label>
+      <textarea id="dt" class="input" rows="3">انقطع الصوت عدة مرات، فلم أسمع تصحيح الشيخ في أكثر من موضع.</textarea>
+    </div>
+
+    <div class="banner banner--info">
+      {{icon:clock:md}}
+      <span class="grow">يمكنك فتح نزاع حتى السبت 7 نوفمبر 6:45 م.</span>
+    </div>
+
+    <a href="EnrollmentDetail.dc.html" class="btn btn--primary btn--block push">إرسال النزاع</a>
+  </main>
+</div>

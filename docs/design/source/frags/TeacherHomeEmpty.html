@@ -1,0 +1,32 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">اليوم</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات، توجد غير مقروءة">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--flush gap-3">
+    <div class="row row--between gap-3 gutter">
+      <div class="stack">
+        <h2 class="text-title-3">الخميس 5 نوفمبر</h2>
+        <span class="text-caption tone-muted">لا جلسات · بتوقيت القاهرة</span>
+      </div>
+      <div class="row gap-2">
+        <a href="TeacherHome.dc.html" class="icon-btn icon-btn--surface" aria-label="اليوم السابق">{{icon:chevron-right:md}}</a>
+        <button type="button" class="icon-btn icon-btn--surface" aria-label="اليوم التالي">{{icon:chevron-left:md}}</button>
+      </div>
+    </div>
+
+    <div class="empty-state">
+      <span class="icon-tile icon-tile--2xl icon-tile--neutral" aria-hidden="true">{{icon:calendar:xl}}</span>
+      <h3 class="empty-state__title">لا جلسات في هذا اليوم</h3>
+      <p class="empty-state__text">جلستك القادمة السبت 7 نوفمبر، 10:00 ص مع يوسف أحمد (أول جلسة من 8).</p>
+      <a href="Availability.dc.html" class="btn btn--secondary btn--md">مواعيدي المتاحة</a>
+    </div>
+  </main>
+
+  {{TABS:teacher:TeacherHome}}
+</div>

@@ -1,0 +1,67 @@
+<div class="screen screen--long" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="TeacherStudents.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">الاشتراك</h1>
+      <div class="nav-header__trailing">
+        <a href="TeacherReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ عن الطالب">{{icon:flag:md}}</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="card">
+      <div class="row gap-3">
+        <span class="avatar avatar--lg">ح</span>
+        <span class="stack grow">
+          <strong class="text-headline">حسن إبراهيم</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · 12 جلسة · 60 دقيقة</span>
+        </span>
+        <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--accent">مسار إجازة</span></span>
+      </div>
+      <div class="grid-3 gap-2">
+        <div class="stat stat--tile"><span class="stat__label">تمت</span><strong class="stat__value">3</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">ألغتها الإدارة</span><strong class="stat__value">1</strong></div>
+        <div class="stat stat--tile"><span class="stat__label">القادمة</span><strong class="stat__value">8</strong></div>
+      </div>
+      <span class="row gap-2 text-callout">{{icon:calendar:sm}}كل أربعاء 4:00 م (القاهرة) · حتى 23 ديسمبر</span>
+      <span class="row gap-2 text-callout">{{icon:credit-card:sm}}دُفع 2,160 ج.م · رسوم البوابة 62.40 · يصلك 2,097.60 ج.م</span>
+      <div class="row gap-2">
+        <a href="Chat.dc.html" class="btn btn--secondary btn--md btn--grow">{{icon:message-square:sm}}المحادثة</a>
+        <a href="TeacherCancelRequest.dc.html" class="btn btn--secondary btn--md btn--grow">طلب إلغاء جلسة</a>
+      </div>
+    </section>
+
+    <section class="card card--accent card--compact">
+      <div class="row gap-2 text-body text-bold tone-accent">{{icon:award:md}}الإجازة بالسند</div>
+      <p class="text-callout">حين ترى أن حسن أتمّ المقرَّر، اطلب له الإجازة. تراجعها الإدارة وتصدرها على القالب بتوقيعك وسندك.</p>
+      <a href="IjazahRequest.dc.html" class="btn btn--secondary btn--md self-start">طلب إجازة</a>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">الجلسات</h2>
+      <ol class="list">
+        <li class="list__row"><span class="text-callout text-medium grow">1 · الأربعاء 7 أكتوبر</span><span class="badge badge--success">تمت</span></li>
+        <li class="list__row">
+          <span class="stack grow"><span class="text-callout text-medium">2 · الأربعاء 14 أكتوبر</span><span class="text-caption tone-muted">اعتمدتها الإدارة بعد المراجعة</span></span>
+          <span class="badge badge--success">تمت</span>
+        </li>
+        <li class="list__row">
+          <span class="stack grow"><span class="text-callout text-medium">3 · الأربعاء 21 أكتوبر</span><span class="text-caption tone-muted">فُتحت قضية تعويض للطالب</span></span>
+          <span class="badge badge--neutral">ألغتها الإدارة</span>
+        </li>
+        <li class="list__row"><span class="text-callout text-medium grow">4 · الأربعاء 28 أكتوبر</span><span class="badge badge--success">تمت</span></li>
+        <li class="list__row">
+          <span class="stack grow">
+            <span class="text-callout text-bold">5 · الأربعاء 4 نوفمبر</span>
+            <a href="TeacherCancelRespond.dc.html" class="link text-caption self-start">طلب الطالب إلغاءها · ردّ قبل 4:00 م</a>
+          </span>
+          <span class="badge badge--neutral">قادمة</span>
+        </li>
+        <li class="list__row"><span class="text-callout text-medium grow">6 إلى 12 · من 11 نوفمبر إلى 23 ديسمبر</span><span class="badge badge--neutral">قادمة</span></li>
+      </ol>
+    </section>
+  </main>
+</div>

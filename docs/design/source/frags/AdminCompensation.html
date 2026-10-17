@@ -1,0 +1,174 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminCompensation:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">التعويضات</h1>
+        <p class="page-header__subtitle">3 قضايا مفتوحة. تُفتح القضية تلقائيًا: إذا انتهى اشتراك وبقيت فيه جلسات مدفوعة، أو اختار الطالب استرداد جلسة غاب عنها المعلم، أو أُوقف طالب (تنتظر القضية مراجعة الإيقاف). القرار فيها للمشرف وحده. لا يحرّك أي زر هنا المال.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="الحالة">
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">مفتوحة<span class="category-tabs__count">3</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">بانتظار التنفيذ<span class="category-tabs__count">3</span></button>
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">الكل</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم الطالب أو المعلم">
+          </label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر" aria-expanded="false">{{icon:filter:md}}</button>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الطالب · المعلم</th><th>سبب الفتح</th><th>لم تُنفَّذ</th><th class="table__end">المدفوع (ج.م)</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span class="text-medium">حسن إبراهيم</span><span class="text-caption tone-muted">الشيخ عمر حسن</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>استرداد جلسة باختيار الطالب (غياب المعلم)</span><span class="text-caption tone-muted">12 أكتوبر</span></span></td>
+                  <td>1 من 8</td>
+                  <td class="table__end"><span class="stack"><span class="table__num">1,200.00</span><span class="text-caption tone-muted">الجلسة <span class="table__num">150.00</span></span></span></td>
+                  <td><span class="badge badge--neutral">مفتوحة</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">مصطفى كمال</span><span class="text-caption tone-muted">الشيخ خالد عبد العزيز</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>غياب المعلم مرتين</span><span class="text-caption tone-muted">14 أكتوبر</span></span></td>
+                  <td>5 من 8</td>
+                  <td class="table__end"><span class="table__num">1,440.00</span></td>
+                  <td><span class="badge badge--neutral">مفتوحة</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">حسن إبراهيم</span><span class="text-caption tone-muted">الشيخ أحمد المصري</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>إلغاء جلسة من الإدارة</span><span class="text-caption tone-muted">13 أكتوبر</span></span></td>
+                  <td>1 من 12</td>
+                  <td class="table__end"><span class="table__num">2,160.00</span></td>
+                  <td><span class="badge badge--neutral">مفتوحة</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">هشام فؤاد</span><span class="text-caption tone-muted">الشيخ محمود فتحي</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>إيقاف طالب (بانتظار المراجعة)</span><span class="text-caption tone-muted">9 أكتوبر</span></span></td>
+                  <td>1 من 8</td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__wrap"><span class="badge badge--warning">بانتظار مراجعة الإيقاف</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">عبد الرحمن علي</span><span class="text-caption tone-muted">الشيخ أحمد المصري</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>دفع لم يمكن تأكيده</span><span class="text-caption tone-muted">13 أكتوبر</span></span></td>
+                  <td>8 من 8</td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__wrap"><span class="badge badge--warning">بانتظار تنفيذ الإدارة المالية</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">سلمى حسين</span><span class="text-caption tone-muted">الشيخ عمر حسن</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>تصحيح الجنس</span><span class="text-caption tone-muted">2 أكتوبر</span></span></td>
+                  <td>6 من 8</td>
+                  <td class="table__end"><span class="table__num">1,200.00</span></td>
+                  <td class="table__wrap"><span class="badge badge--warning">بانتظار تنفيذ الإدارة المالية</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">يوسف أحمد</span><span class="text-caption tone-muted">الشيخ خالد عبد العزيز</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>غياب المعلم مرتين</span><span class="text-caption tone-muted">26 سبتمبر</span></span></td>
+                  <td>6 من 8</td>
+                  <td class="table__end"><span class="table__num">1,440.00</span></td>
+                  <td class="table__wrap"><span class="badge badge--warning">بانتظار تنفيذ الإدارة المالية</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">عمر سامي</span><span class="text-caption tone-muted">الشيخ خالد عبد العزيز</span></span></td>
+                  <td class="table__wrap"><span class="stack"><span>غياب المعلم مرتين</span><span class="text-caption tone-muted">20 سبتمبر</span></span></td>
+                  <td>4 من 8</td>
+                  <td class="table__end"><span class="table__num">1,440.00</span></td>
+                  <td><span class="badge badge--success">أبلغت البوابة بالاسترداد</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>8 من 12 · المفتوحة أولًا</span>
+              <nav class="pager" aria-label="الصفحات">
+                <button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button>
+                <button type="button" class="pager__page pager__page--current" aria-current="page">1</button>
+                <button type="button" class="pager__page">2</button>
+                <button type="button" class="pager__page" aria-label="الصفحة التالية">{{icon:chevron-left:sm}}</button>
+              </nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل قضية التعويض">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg icon-tile--neutral">{{icon:scale:lg}}</span>
+              <span class="stack grow">
+                <strong class="text-title-3">حسن إبراهيم · الشيخ عمر حسن</strong>
+                <span class="text-caption tone-muted">فُتحت تلقائيًا 12 أكتوبر 2026 · 7:40 م · حين اختار الطالب الاسترداد</span>
+              </span>
+              <span class="badge badge--neutral">مفتوحة</span>
+            </header>
+
+            <div class="panel__body">
+              <dl class="kv">
+                <div class="kv__item"><dt class="kv__label">سبب الفتح</dt><dd class="kv__value">اختار الطالب استرداد جلسة غاب عنها المعلم</dd></div>
+                <div class="kv__item"><dt class="kv__label">الجلسة</dt><dd class="kv__value"><span class="stack items-start gap-half"><span>3 · السبت 10 أكتوبر</span><span class="badge badge--danger">غياب المعلم</span></span></dd></div>
+                <div class="kv__item"><dt class="kv__label">الاشتراك</dt><dd class="kv__value"><span class="stack items-start gap-half"><span>حفظ القرآن · 8 جلسات · 45 دقيقة</span><span class="badge badge--neutral">تسميع</span></span></dd></div>
+                <div class="kv__item"><dt class="kv__label">مهلة الاختيار</dt><dd class="kv__value">اختار في اليوم الثاني من 7 أيام</dd></div>
+                <div class="kv__item"><dt class="kv__label">المبلغ المقترح</dt><dd class="kv__value"><span class="stack"><span class="ltr">150.00 ج.م</span><span class="text-caption tone-muted">ثمن جلسة واحدة: <span class="ltr">1,200.00</span> ÷ 8</span></span></dd></div>
+                <div class="kv__item"><dt class="kv__label">رقم الطلب</dt><dd class="kv__value"><a href="AdminPayments.dc.html" class="link"><span class="ltr">IJZ-2026-004655</span></a></dd></div>
+              </dl>
+
+              <p class="text-caption tone-muted">في مسار التسميع يختار الطالب بعد غياب المعلم بين جلسة تعويضية واسترداد ثمن الجلسة. في مسار الإجازة تُعوَّض الجلسة بجلسة فقط.</p>
+
+              <fieldset class="stack gap-2">
+                <legend class="field__label pad-bottom">القرار</legend>
+                <label class="choice choice--selected"><input type="radio" name="cp" class="visually-hidden" checked><span class="choice__mark"></span><span class="stack grow"><span class="text-medium">الأمر باسترداد <span class="ltr">150.00 ج.م</span></span><span class="text-caption tone-muted">يُسجَّل القرار، وتنفّذه الإدارة المالية عبر بوابة الدفع</span></span></label>
+                <label class="choice choice--danger"><input type="radio" name="cp" class="visually-hidden"><span class="choice__mark"></span><span class="stack grow"><span class="text-medium">إغلاق القضية</span><span class="text-caption tone-muted">دون استرداد</span></span></label>
+              </fieldset>
+
+              <div class="field">
+                <label class="field__label" for="cp-note">ملاحظات القرار (إلزامية)</label>
+                <textarea id="cp-note" class="input input--focused" rows="2">غياب المعلم ثابت ولم يُطعن فيه، والطالب اختار الاسترداد خلال المهلة.</textarea>
+              </div>
+
+              <section class="section">
+                <h2 class="group-label">بعد القرار</h2>
+                <ol class="timeline">
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--done">{{icon:check:xs:heavy}}</span><span class="timeline__line timeline__line--done"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">فُتحت القضية</strong><span class="timeline__meta">12 أكتوبر · اختار الطالب الاسترداد</span></span>
+                  </li>
+                  <li class="timeline__item">
+                    <span class="timeline__rail"><span class="timeline__marker timeline__marker--current">2</span><span class="timeline__line"></span></span>
+                    <span class="timeline__body"><strong class="timeline__title">قرار المشرف</strong><span class="timeline__meta">الآن</span></span>
+                  </li>
+                  <li class="timeline__item timeline__item--pending">
+                    <span class="timeline__rail"><span class="timeline__marker">3</span><span class="timeline__line"></span></span>
+                    <span class="timeline__body"><span class="timeline__title">بانتظار تنفيذ الإدارة المالية</span><span class="timeline__meta">عبر بوابة الدفع</span></span>
+                  </li>
+                  <li class="timeline__item timeline__item--pending">
+                    <span class="timeline__rail"><span class="timeline__marker">4</span></span>
+                    <span class="timeline__body"><span class="timeline__title">أبلغت البوابة بالاسترداد</span><span class="timeline__meta">يظهر في المدفوعات وتُغلق القضية</span></span>
+                  </li>
+                </ol>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--primary btn--md">إصدار القرار</a>
+              <a href="AdminPayments.dc.html" class="btn btn--ghost btn--md">فتح في المدفوعات</a>
+              <p class="panel__note">يصل القرار إلى الطالب والمعلم ويُسجَّل مع ملاحظاتك في سجل التدقيق. لا يحرّك أي زر هنا المال.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

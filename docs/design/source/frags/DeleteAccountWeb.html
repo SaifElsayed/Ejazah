@@ -1,0 +1,35 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <main class="screen__body screen__body--bare gap-4">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة</span><span class="text-caption tone-muted">· حذف الحساب</span></span>
+
+    <div class="page-intro">
+      <h1 class="page-intro__title">حذف حسابك في إجازة</h1>
+      <p class="page-intro__lede">من التطبيق: حسابي ← حذف الحساب. وإن لم يعد التطبيق لديك، فاطلب الحذف هنا.</p>
+    </div>
+
+    <ol class="timeline">
+      <li class="timeline__item">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--current">1</span><span class="timeline__line"></span></span>
+        <span class="timeline__body"><span class="timeline__title">بريد الحساب</span><span class="timeline__meta">نرسل إليه رمزًا</span></span>
+      </li>
+      <li class="timeline__item timeline__item--pending">
+        <span class="timeline__rail"><span class="timeline__marker timeline__marker--pending">2</span></span>
+        <span class="timeline__body"><span class="timeline__title">الرمز والتأكيد</span><span class="timeline__meta">ثم يُحذف الحساب فورًا</span></span>
+      </li>
+    </ol>
+
+    <form class="field">
+      <label for="em" class="field__label">البريد الإلكتروني للحساب</label>
+      <input id="em" type="email" class="input input--ltr input--focused" value="yousef@example.com">
+    </form>
+
+    <div class="banner banner--info">
+      {{icon:info:md}}
+      <p class="grow">تُحذف بياناتك الشخصية وتُلغى جلساتك القادمة. تبقى إجازاتك صالحة، وسجلات الدفع دون بياناتك كما يلزم القانون.</p>
+    </div>
+
+    <a href="DeleteAccountWebCode.dc.html" class="btn btn--danger btn--block push">إرسال الرمز</a>
+  </main>
+</div>

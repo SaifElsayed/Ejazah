@@ -1,0 +1,132 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminReports:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">البلاغات</h1>
+        <p class="page-header__subtitle">4 بلاغات مفتوحة على جلسات وملفات شخصية ومحادثات. القرار يحتاج سببًا ويُسجَّل في سجل التدقيق.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="الحالة">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">مفتوحة<span class="category-tabs__count">4</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">تم اتخاذ إجراء</button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">مرفوضة</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم المُبلَّغ عنه أو المُبلِّغ">
+          </label>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>المُبلَّغ عنه</th><th>المُبلِّغ</th><th>السياق</th><th>السبب</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><span class="stack items-start"><a href="AdminTeacher.dc.html" class="link">الشيخ خالد عبد العزيز</a><span class="text-caption tone-muted">معلم</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">عمر سامي</a></td>
+                  <td><span class="badge badge--neutral">جلسة</span></td>
+                  <td><span class="table__wrap">تواصل خارج المنصة</span></td>
+                  <td><span class="stack items-start gap-half"><span class="badge badge--warning">مفتوح</span><span class="text-caption tone-muted">منذ يوم</span></span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack items-start"><a href="AdminUsers.dc.html" class="link">مصطفى كمال</a><span class="text-caption tone-muted">طالب</span></span></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ عمر حسن</a></td>
+                  <td><span class="badge badge--neutral">محادثة</span></td>
+                  <td><span class="table__wrap">إساءة لفظية</span></td>
+                  <td><span class="stack items-start gap-half"><span class="badge badge--warning">مفتوح</span><span class="text-caption tone-muted">منذ يوم</span></span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack items-start"><a href="AdminTeacher.dc.html" class="link">الشيخ عمر حسن</a><span class="text-caption tone-muted">معلم</span></span></td>
+                  <td><a href="AdminUsers.dc.html" class="link">زياد طارق</a></td>
+                  <td><span class="badge badge--neutral">ملف شخصي</span></td>
+                  <td><span class="table__wrap">صورة مضلِّلة</span></td>
+                  <td><span class="stack items-start gap-half"><span class="badge badge--warning">مفتوح</span><span class="text-caption tone-muted">منذ يومين</span></span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack items-start"><a href="AdminUsers.dc.html" class="link">عبد الرحمن علي</a><span class="text-caption tone-muted">طالب</span></span></td>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ محمود فتحي</a></td>
+                  <td><span class="badge badge--neutral">جلسة</span></td>
+                  <td><span class="table__wrap">انتحال الحساب</span></td>
+                  <td><span class="stack items-start gap-half"><span class="badge badge--warning">مفتوح</span><span class="text-caption tone-muted">منذ 3 أيام</span></span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>4 من 4 · الأحدث أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل البلاغ">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg">خ</span>
+              <span class="stack grow">
+                <strong class="text-title-3">الشيخ خالد عبد العزيز</strong>
+                <span class="text-caption tone-muted">معلم · الحساب نشط · لا بلاغات سابقة</span>
+              </span>
+              <span class="badge badge--warning">مفتوح</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">البلاغ</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">المُبلِّغ</dt><dd class="kv__value">عمر سامي · طالب</dd></div>
+                  <div class="kv__item"><dt class="kv__label">أُرسل</dt><dd class="kv__value">14 أكتوبر 2026 · 8:05 م</dd></div>
+                </dl>
+                <p class="text-callout">طلب مني رقم واتساب لإكمال الحصص خارج التطبيق بسعر أقل.</p>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">السياق · جلسة</h2>
+                <a href="AdminEnrollments.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm">{{icon:calendar:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">الجلسة 3 من 8 · الأربعاء 14 أكتوبر · 7:00 م</span>
+                    <span class="text-caption tone-muted">القراءات · 8 جلسات · تمت</span>
+                  </span>
+                  {{icon:chevron-left:md}}
+                </a>
+                <a href="AdminChatLog.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm">{{icon:message-square:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">فتح محادثة الاشتراك</span>
+                    <span class="text-caption tone-muted">تُتاح للمشرف ما دام البلاغ مفتوحًا</span>
+                  </span>
+                  {{icon:chevron-left:md}}
+                </a>
+              </section>
+
+              <div class="field">
+                <label class="field__label" for="rr">سبب القرار (إلزامي)</label>
+                <textarea id="rr" class="input" rows="2" placeholder="يُسجَّل مع القرار في سجل التدقيق"></textarea>
+              </div>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--ghost btn--md">رفض البلاغ</a>
+              <a href="AdminRequireIdDialog.dc.html" class="btn btn--secondary btn--md">طلب إثبات هوية</a>
+              <a href="AdminGender.dc.html" class="btn btn--secondary btn--md">فتح بلاغ جنس</a>
+              <a href="AdminSuspendDialog.dc.html" class="btn btn--danger btn--md">إيقاف الحساب</a>
+              <p class="panel__note">رفض البلاغ يجعل حالته «مرفوض»، وأي إجراء آخر يجعلها «تم اتخاذ إجراء». السبب إلزامي ويُسجَّل في سجل التدقيق، ولا يُبلَّغ المُبلَّغ عنه برفض البلاغ.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

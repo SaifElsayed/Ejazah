@@ -1,0 +1,129 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminGender:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">بلاغات الجنس</h1>
+        <p class="page-header__subtitle">بلاغ واحد مفتوح. يبقى الجنس المصرَّح به معتمدًا في البحث والجلسات حتى يصدر قرار، ولا يتغيّر إلا من هنا.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="الحالة">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">الكل</button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">مفتوحة<span class="category-tabs__count">1</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">تم البتّ</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="الاسم أو البريد">
+          </label>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>المستخدم المُبلَّغ عنه</th><th>رفعه</th><th>التاريخ</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><span class="stack items-start"><a href="AdminUsers.dc.html" class="link">نور سمير</a><span class="text-caption tone-muted">طالب · ذكر</span></span></td>
+                  <td><span class="stack items-start"><a href="AdminTeacher.dc.html" class="link">الشيخ أحمد المصري</a><span class="text-caption tone-muted">معلم</span></span></td>
+                  <td>14 أكتوبر</td>
+                  <td><span class="badge badge--warning">مفتوح</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack items-start"><a href="AdminUsers.dc.html" class="link">سلمى حسين</a><span class="text-caption tone-muted">طالبة · صُحّح إلى أنثى</span></span></td>
+                  <td><span class="stack items-start"><span>سارة عادل</span><span class="text-caption tone-muted">مشرفة · من بلاغ محادثة</span></span></td>
+                  <td>2 أكتوبر</td>
+                  <td><span class="badge badge--neutral">صُحّح</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack items-start"><a href="AdminUsers.dc.html" class="link">هشام فؤاد</a><span class="text-caption tone-muted">طالب · ذكر</span></span></td>
+                  <td><span class="stack items-start"><a href="AdminUsers.dc.html" class="link">حسن إبراهيم</a><span class="text-caption tone-muted">طالب</span></span></td>
+                  <td>21 سبتمبر</td>
+                  <td><span class="badge badge--neutral">مرفوض</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>3 من 3 · المفتوحة أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل البلاغ">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg">ن</span>
+              <span class="stack grow">
+                <strong class="text-title-3">نور سمير</strong>
+                <span class="text-caption tone-muted">طالب · بانتظار إثبات الهوية · بلاغ من 14 أكتوبر · 3:05 م</span>
+              </span>
+              <span class="badge badge--warning">مفتوح</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">البلاغ</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">الجنس المصرَّح به</dt><dd class="kv__value">ذكر · أُكِّد عند التسجيل</dd></div>
+                  <div class="kv__item"><dt class="kv__label">رفعه</dt><dd class="kv__value">الشيخ أحمد المصري · معلم</dd></div>
+                </dl>
+                <p class="text-callout">في الجلسة الأولى اليوم الساعة 2:00 م كان صوت المتحدث صوت امرأة، والحساب مسجَّل ذكرًا.</p>
+              </section>
+
+              <section class="section">
+                <div class="section__header"><h2 class="group-label">وثيقة الهوية · عرض فقط</h2><span class="text-caption tone-muted">طُلبت 14 أكتوبر · رُفعت 15 أكتوبر 9:10 ص</span></div>
+                <div class="row gap-3">
+                  <a href="AdminDocumentViewer.dc.html" class="doc-thumb"><span class="doc-thumb__page">{{icon:user:lg}}</span><span>بطاقة الرقم القومي</span></a>
+                </div>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">الاشتراكات الجارية التي يمسّها التصحيح · 1</h2>
+                <a href="AdminEnrollments.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm">{{icon:book:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">حفظ القرآن · 8 جلسات · الشيخ أحمد المصري</span>
+                    <span class="text-caption tone-muted">جارٍ · 1 من 8 · الأربعاء 2:00 م</span>
+                  </span>
+                  <span class="badge badge--danger">غير متوافق بعد التصحيح</span>
+                </a>
+              </section>
+
+              <div class="field">
+                <label class="field__label" for="gr">سبب رفض البلاغ (إلزامي)</label>
+                <textarea id="gr" class="input" rows="2" placeholder="يُسجَّل مع القرار في سجل التدقيق"></textarea>
+              </div>
+
+              <section class="section">
+                <h2 class="group-label">ما يترتب على كل قرار</h2>
+                <div class="list">
+                  <div class="list__row"><span class="stack"><span class="text-medium">تصحيح</span><span class="text-caption tone-muted">يُصحَّح الجنس، وتُلغى الجلسات المتبقية في الاشتراكات غير المتوافقة، وتُفتح قضية تعويض لكل اشتراك. لا حظر</span></span></div>
+                  <div class="list__row"><span class="stack"><span class="text-medium">حظر</span><span class="text-caption tone-muted">يُحظر الحساب، وتُلغى كل اشتراكاته، وتُفتح قضية تعويض لكل اشتراك متأثر</span></span></div>
+                  <div class="list__row"><span class="stack"><span class="text-medium">رفض البلاغ</span><span class="text-caption tone-muted">يُغلق البلاغ دون أي تغيير</span></span></div>
+                </div>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--primary btn--md">تصحيح (خطأ غير متعمد)</a>
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">{{icon:ban:sm}}حظر (تزوير)</a>
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--ghost btn--md">رفض البلاغ</a>
+              <p class="panel__note">لا يصدر قرار دون سبب. التصحيح يلغي الاشتراكات غير المتوافقة ويفتح لها قضايا تعويض؛ الحظر يلغي كل الاشتراكات ويفتح قضايا تعويض. يُسجَّل السبب في سجل التدقيق.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>مشترك — إذن الميكروفون</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="dark">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="Main.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">قبل الجلسة</h1>
+      <div class="nav-header__trailing">
+        <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ"><svg class="icon icon--md" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body gap-4">
+    <section class="video-tile video-tile--preview gap-3" aria-label="معاينة الكاميرا">
+      <span class="icon-tile icon-tile--2xl icon-tile--danger"><svg class="icon icon--xl" data-icon="mic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20"/><path d="M18.89 13.23A7 7 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 19v3"/></svg></span>
+      <span class="text-callout tone-muted">لا يصل التطبيق إلى الميكروفون</span>
+      <span class="video-tile__label"><svg class="icon icon--sm" data-icon="mic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20"/><path d="M18.89 13.23A7 7 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 19v3"/></svg>الميكروفون غير مسموح</span>
+    </section>
+
+    <div class="banner banner--danger">
+      <svg class="icon icon--sm" data-icon="triangle-alert" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      <p class="grow">اسمح لإجازة باستخدام الميكروفون من الإعدادات لتدخل الجلسة.</p>
+    </div>
+
+    <section class="card card--row">
+      <span class="avatar avatar--lg avatar--primary">أ</span>
+      <span class="stack grow">
+        <strong class="text-headline">الشيخ أحمد المصري</strong>
+        <span class="text-caption tone-muted">الأربعاء 4 نوفمبر · 6:00 – 6:45 م · 45 دقيقة</span>
+      </span>
+    </section>
+
+    <div class="list">
+      <div class="list__row">
+        <span class="stack"><span class="text-medium">الميكروفون</span><span class="text-caption tone-muted">مطلوب</span></span>
+        <span class="badge badge--danger">غير مسموح</span>
+      </div>
+      <div class="list__row">
+        <span class="stack"><span class="text-medium">الكاميرا</span><span class="text-caption tone-muted">اختيارية</span></span>
+        <span class="badge badge--neutral">مغلقة</span>
+      </div>
+    </div>
+
+    <div class="stack gap-2 push">
+      <button type="button" class="btn btn--primary btn--block"><svg class="icon icon--md" data-icon="sliders-horizontal" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>فتح الإعدادات</button>
+      <button type="button" class="btn btn--secondary btn--block" disabled>دخول الجلسة</button>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

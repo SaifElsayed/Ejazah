@@ -1,0 +1,51 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar">ح</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">حسن إبراهيم</strong>
+        <span class="text-caption tone-muted">حفظ القرآن · 12 جلسة · 60 دقيقة</span>
+      </span>
+      <span class="badge badge--success">جارٍ</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">طلب الطالب إلغاء جلسة</h1>
+      <a href="TeacherHome.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="card card--surface card--compact">
+      <div class="row gap-3">
+        <span class="avatar avatar--sm">ح</span>
+        <span class="stack grow">
+          <strong class="text-callout text-bold">حسن إبراهيم</strong>
+          <span class="text-caption tone-muted">الجلسة 5 · الأربعاء 4 نوفمبر · 4:00 م (القاهرة)</span>
+        </span>
+      </div>
+      <span class="text-caption tone-muted">السبب: ظرف صحي</span>
+      <p class="text-body">«أصابني دور برد شديد وصوتي لا يساعدني على التسميع اليوم.»</p>
+    </div>
+
+    <div class="stack gap-2 text-callout">
+      <p><strong>إن قبلت:</strong> تُلغى الجلسة وتُقترح جلسة تعويضية.</p>
+      <p><strong>إن رفضت:</strong> تبقى الجلسة في موعدها.</p>
+    </div>
+
+    <div class="banner banner--warning">
+      {{icon:hourglass:md}}
+      <span class="grow">إن لم تردّ قبل اليوم 4:00 م تبقى الجلسة قائمة.</span>
+    </div>
+
+    <div class="row gap-2">
+      <a href="TeacherHome.dc.html" class="btn btn--secondary btn--grow">رفض</a>
+      <a href="TeacherHome.dc.html" class="btn btn--primary btn--grow">قبول الإلغاء</a>
+    </div>
+  </section>
+</div>

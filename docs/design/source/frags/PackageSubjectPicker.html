@@ -1,0 +1,36 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="nav-header">
+      <div class="nav-header__bar">
+        <span class="back-btn">{{icon:chevron-right:lg}}</span>
+        <span class="nav-header__title">تعديل الباقة</span>
+      </div>
+    </header>
+    <div class="screen__body gap-4">
+      <span class="field__label">المادة</span>
+      <span class="select"><span>حفظ القرآن</span>{{icon:chevron-down:md}}</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">مادة الباقة</h1>
+      <a href="PackageEditor.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="picker" role="radiogroup" aria-labelledby="sheet-title">
+      <label class="choice choice--selected"><input type="radio" name="subj" class="visually-hidden" checked><span class="choice__mark"></span><span class="grow">حفظ القرآن</span></label>
+    </div>
+
+    <div class="row row--between gap-2">
+      <span class="text-callout tone-muted">لإضافة مادة أخرى</span>
+      <a href="AddSubject.dc.html" class="btn btn--ghost btn--md">{{icon:plus:md}}إضافة مادة</a>
+    </div>
+
+    <a href="PackageEditor.dc.html" class="btn btn--primary btn--block">تم</a>
+  </section>
+</div>

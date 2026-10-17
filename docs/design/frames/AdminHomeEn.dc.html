@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin — Overview (English)</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="console" dir="ltr" data-theme="light" data-density="compact">
+  <aside class="sidebar" aria-label="Admin panel">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">I</span><span class="brand__name">Ijazah · Admin</span></span>
+    <nav class="sidebar__nav">
+      <span class="sidebar__group">Queues</span>
+      <a href="AdminHome.dc.html" class="nav-item nav-item--active" aria-current="page"><svg class="icon icon--md" data-icon="house" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg><span>Overview</span></a>
+      <a href="AdminApplications.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="user-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m16 11 2 2 4-4"/></svg><span>Applications</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminCredentials.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="file-text" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg><span>Credential review</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminIjazahRequests.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="mail" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Ijazah requests</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminDisputes.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>Disputes</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminCompensation.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="scale" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg><span>Compensation</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminGender.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="shield-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>Gender disputes</span><span class="badge badge--neutral nav-item__count">1</span></a>
+      <a href="AdminSessionReview.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="activity" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Session review</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminReports.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg><span>Reports</span><span class="badge badge--neutral nav-item__count">4</span></a>
+      <span class="sidebar__group">Records & system</span>
+      <a href="AdminUsers.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="users" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></svg><span>Users</span></a>
+      <a href="AdminReviews.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>Reviews</span></a>
+      <a href="AdminEnrollments.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="book" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h13v16H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg><span>Enrollments & sessions</span></a>
+      <a href="AdminPayments.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="credit-card" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg><span>Payments</span></a>
+      <a href="AdminIjazahs.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg><span>Ijazahs</span></a>
+      <a href="AdminSettings.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="sliders-horizontal" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Settings</span></a>
+      <a href="AdminAudit.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="list" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Audit log</span></a>
+    </nav>
+    <div class="sidebar__footer">
+      <div class="row gap-3"><span class="avatar avatar--sm">S</span><span class="stack grow"><span class="text-callout text-medium">Sara Adel</span><span class="text-caption tone-muted">Admin</span></span><a href="AdminSignIn.dc.html" class="icon-btn icon-btn--muted" aria-label="Sign out"><svg class="icon icon--md" data-icon="log-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></a></div>
+      <div class="segmented" role="group" aria-label="Language">
+        <a href="AdminHome.dc.html" class="segmented__option" aria-pressed="false">العربية</a>
+        <a href="AdminHomeEn.dc.html" class="segmented__option segmented__option--selected" aria-pressed="true">English</a>
+      </div>
+    </div>
+  </aside>
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">Overview</h1>
+        <p class="page-header__subtitle">Thursday 15 October 2026 · Cairo time</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <section class="section" aria-labelledby="qs">
+        <h2 id="qs" class="group-label">Open queues</h2>
+        <div class="grid-4 gap-4">
+          <a href="AdminApplicationsEn.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="user-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m16 11 2 2 4-4"/></svg></span><span class="text-headline grow">Teacher applications</span><span class="queue-card__count">3</span></span>
+            <span class="text-caption tone-muted">Oldest 3 days ago · one waiting on the applicant</span>
+          </a>
+          <a href="AdminCredentials.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="file-text" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg></span><span class="text-headline grow">Credential review</span><span class="queue-card__count">3</span></span>
+            <span class="text-caption tone-muted">One for an added subject · oldest 2 days ago</span>
+          </a>
+          <a href="AdminIjazahRequests.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg></span><span class="text-headline grow">Ijazah requests</span><span class="queue-card__count">2</span></span>
+            <span class="text-caption tone-muted">Oldest 2 days ago</span>
+          </a>
+          <a href="AdminDisputes.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></span><span class="text-headline grow">Disputes</span><span class="queue-card__count">2</span></span>
+            <span class="text-caption tone-muted">Oldest 2 days ago</span>
+          </a>
+          <a href="AdminCompensation.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="scale" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg></span><span class="text-headline grow">Compensation</span><span class="queue-card__count">3</span></span>
+            <span class="text-caption tone-muted">Opened automatically when an enrollment ends before all its sessions</span>
+          </a>
+          <a href="AdminGender.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="shield-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="text-headline grow">Gender disputes</span><span class="queue-card__count">1</span></span>
+            <span class="text-caption tone-muted">Arrived yesterday</span>
+          </a>
+          <a href="AdminSessionReview.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="activity" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span><span class="text-headline grow">Session review</span><span class="queue-card__count">2</span></span>
+            <span class="text-caption tone-muted">Oldest 2 days ago</span>
+          </a>
+          <a href="AdminReports.dc.html" class="queue-card">
+            <span class="row gap-3"><span class="icon-tile"><svg class="icon icon--md" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></span><span class="text-headline grow">Reports</span><span class="queue-card__count">4</span></span>
+            <span class="text-caption tone-muted">Oldest 3 days ago</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="audit">
+        <div class="section__header">
+          <h2 id="audit" class="group-label">Latest actions</h2>
+          <a href="AdminAudit.dc.html" class="link text-callout">Full audit log</a>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>15 Oct · 11:20 AM</td>
+                <td>Sara Adel</td>
+                <td>Request more information</td>
+                <td><a href="AdminApplicationsEn.dc.html" class="link">Application of <bdi lang="ar">الشيخ إبراهيم صالح</bdi></a></td>
+              </tr>
+              <tr>
+                <td>14 Oct · 5:40 PM</td>
+                <td>Sara Adel</td>
+                <td>Remove review comment</td>
+                <td><a href="AdminReviews.dc.html" class="link">Review by <bdi lang="ar">سعيد منصور</bdi> of <bdi lang="ar">الشيخ أحمد المصري</bdi></a></td>
+              </tr>
+              <tr>
+                <td>14 Oct · 1:15 PM</td>
+                <td>Sara Adel</td>
+                <td>Reject application</td>
+                <td><a href="AdminApplicationsEn.dc.html" class="link">Application of <bdi lang="ar">الشيخ حامد يونس</bdi></a></td>
+              </tr>
+              <tr>
+                <td>13 Oct · 3:10 PM</td>
+                <td>Sara Adel</td>
+                <td>Record verification call</td>
+                <td><a href="AdminApplicationsEn.dc.html" class="link">Application of <bdi lang="ar">الشيخة منى عبد الرحمن</bdi></a></td>
+              </tr>
+              <tr>
+                <td>13 Oct · 2:30 PM</td>
+                <td>Sara Adel</td>
+                <td>Approve teacher ijazah</td>
+                <td><a href="AdminCredentials.dc.html" class="link">Tajweed ijazah · <bdi lang="ar">الشيخة منى عبد الرحمن</bdi></a></td>
+              </tr>
+              <tr>
+                <td>12 Oct · 12:05 PM</td>
+                <td>Sara Adel</td>
+                <td>Issue ijazah on teacher's request</td>
+                <td><a href="AdminIjazahs.dc.html" class="link">Ijazah of <bdi lang="ar">سعيد منصور</bdi> · <span class="table__num certificate-number">R5TN-9WQE-3KDX-6HPA</span></a></td>
+              </tr>
+              <tr>
+                <td>12 Oct · 10:30 AM</td>
+                <td>Sara Adel</td>
+                <td>Dismiss report</td>
+                <td><a href="AdminReports.dc.html" class="link">Chat report</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

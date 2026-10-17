@@ -1,0 +1,141 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminSettings:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">الإعدادات</h1>
+        <p class="page-header__subtitle">القيم التي تعمل بها المنصة. لكل قيمة شرح لما تغيّره.</p>
+      </div>
+      <a href="AdminAdmins.dc.html" class="btn btn--secondary btn--md">{{icon:key-round:sm}}المشرفون · 3</a>
+    </header>
+
+    <div class="page-body">
+      <div class="banner banner--info">{{icon:info:sm}}<span>أي تغيير يسري على الجلسات والحجوزات القادمة فقط، ولا يُعاد به تقييم جلسة أو نزاع حُسم من قبل. يُسجَّل كل تغيير بقيمته قبل وبعد وسببه في سجل التدقيق.</span></div>
+
+      <div class="grid-3 gap-5 items-start">
+        <section class="card gap-4">
+          <h2 class="section__title">الجلسات</h2>
+          <div class="grid-2 gap-4">
+            <div class="field">
+              <label class="field__label row gap-2" for="s1">حد الحضور<span class="badge badge--warning">مُعدَّل</span></label>
+              <div class="row gap-2"><input id="s1" class="input input--md input--ltr input--error" value="700" aria-invalid="true" aria-describedby="s1e"><span class="text-callout tone-muted shrink-0">%</span></div>
+              <span id="s1e" class="field__error">أدخل رقمًا من 1 إلى 100. القيمة الحالية 70%.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="s2">مهلة الدخول</label>
+              <div class="row gap-2"><input id="s2" class="input input--md input--ltr" value="10"><span class="text-callout tone-muted shrink-0">دقائق</span></div>
+              <span class="field__hint">من يدخل بعد بدء الجلسة بأكثر منها يُعدّ غائبًا.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="s3">أدنى مدة اتصال</label>
+              <div class="row gap-2"><input id="s3" class="input input--md input--ltr" value="60"><span class="text-callout tone-muted shrink-0">ثانية</span></div>
+              <span class="field__hint">اتصال أقصر منها لا يُعدّ دخولًا للجلسة.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="s4">الدخول المبكر</label>
+              <div class="row gap-2"><input id="s4" class="input input--md input--ltr" value="15"><span class="text-callout tone-muted shrink-0">دقيقة</span></div>
+              <span class="field__hint">أقرب وقت قبل الموعد يستطيع فيه الطرفان الدخول.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="s5">إنهاء الاشتراك بغياب المعلم</label>
+              <div class="row gap-2"><input id="s5" class="input input--md input--ltr" value="2"><span class="text-callout tone-muted shrink-0">مرات</span></div>
+              <span class="field__hint">عندها يُنهى الاشتراك وتُفتح قضية تعويض للطالب.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="s6">نافذة النزاع</label>
+              <div class="row gap-2"><input id="s6" class="input input--md input--ltr" value="72"><span class="text-callout tone-muted shrink-0">ساعة</span></div>
+              <span class="field__hint">المدة بعد نهاية الجلسة التي يُقبل فيها نزاع عليها.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card gap-4">
+          <h2 class="section__title">الحجز والدفع</h2>
+          <div class="grid-2 gap-4">
+            <div class="field">
+              <label class="field__label" for="b1">مهلة الدفع</label>
+              <div class="row gap-2"><input id="b1" class="input input--md input--ltr" value="10"><span class="text-callout tone-muted shrink-0">دقائق</span></div>
+              <span class="field__hint">مدة صفحة الدفع، والموعد محجوز للطالب طوالها.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="b2">مهلة إضافية للموعد</label>
+              <div class="row gap-2"><input id="b2" class="input input--md input--ltr" value="5"><span class="text-callout tone-muted shrink-0">دقائق</span></div>
+              <span class="field__hint">يبقى الموعد محجوزًا بعدها ليكتمل دفع بدأ في آخر لحظة.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="b3">مهلة تأكيد الدفع</label>
+              <div class="row gap-2"><input id="b3" class="input input--md input--ltr" value="15"><span class="text-callout tone-muted shrink-0">ثانية</span></div>
+              <span class="field__hint">بعدها يُبلَّغ الطالب أن الدفع يستغرق وقتًا أطول، ويصله إشعار عند اكتماله.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="b4">مدة منع تكرار الدفع</label>
+              <div class="row gap-2"><input id="b4" class="input input--md input--ltr" value="24"><span class="text-callout tone-muted shrink-0">ساعة</span></div>
+              <span class="field__hint">إن ضغط الطالب «ادفع» مرتين خلالها لا يُدفع مرتين.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="b5">إعادة إتاحة الموعد</label>
+              <div class="row gap-2"><input id="b5" class="input input--md input--ltr" value="0"><span class="text-callout tone-muted shrink-0">أسابيع</span></div>
+              <span class="field__hint">بعد آخر جلسة في الاشتراك، قبل أن يُعرض الموعد للحجز.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="b6">مهلة اختيار التعويض</label>
+              <div class="row gap-2"><input id="b6" class="input input--md input--ltr" value="7"><span class="text-callout tone-muted shrink-0">أيام</span></div>
+              <span class="field__hint">بعد جلسة لم تُحتسب يختار فيها الطالب موعد التعويض، أو الاسترداد في التسميع. إن انتهت دون رد يُحجز الموعد المقترح.</span>
+            </div>
+          </div>
+        </section>
+
+        <div class="stack gap-5">
+
+        <section class="card gap-4">
+
+          <h2 class="section__title">الإشعارات والمحادثة</h2>
+
+          <div class="stack gap-4">
+            <div class="field">
+              <label class="field__label" for="n1">مواعيد التذكير</label>
+              <input id="n1" class="input input--md" value="24 ساعة، 15 دقيقة">
+              <span class="field__hint">قبل كل جلسة يصل تذكير للطرفين في هذه الأوقات.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="n2">الاحتفاظ بالمحادثة</label>
+              <div class="row gap-2"><input id="n2" class="input input--md input--ltr" value="0"><span class="text-callout tone-muted shrink-0">أيام</span></div>
+              <span class="field__hint">بعد انتهاء نافذة النزاع تُحذف المحادثة، إلا إن بقي نزاع أو بلاغ مفتوح.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card gap-4">
+          <h2 class="section__title">عام</h2>
+          <div class="grid-2 gap-4">
+            <div class="field">
+              <label class="field__label" for="a1">محاولات دخول المشرف قبل القفل</label>
+              <div class="row gap-2"><input id="a1" class="input input--md input--ltr" value="5"><span class="text-callout tone-muted shrink-0">محاولات</span></div>
+              <span class="field__hint">بعدها يُقفل حساب المشرف. لا تعرض الشاشة كم بقي منها.</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="a2">مدة القفل</label>
+              <div class="row gap-2"><input id="a2" class="input input--md input--ltr" value="15"><span class="text-callout tone-muted shrink-0">دقيقة</span></div>
+              <span class="field__hint">يُفتح الحساب بعدها تلقائيًا.</span>
+            </div>
+          </div>
+          <dl class="kv">
+            <div class="kv__item"><dt class="kv__label">العملة</dt><dd class="kv__value">ج.م · الجنيه المصري</dd></div>
+          </dl>
+          <span class="field__hint">للعرض فقط. كل المبالغ في المنصة بالجنيه المصري.</span>
+        </section>
+        </div>
+      </div>
+
+      <div class="card card--row card--surface items-end gap-4">
+        <div class="field grow">
+          <label class="field__label" for="sr">سبب التغيير (إلزامي)</label>
+          <input id="sr" class="input input--md" placeholder="يُسجَّل مع التغيير في سجل التدقيق">
+        </div>
+        <button type="button" class="btn btn--ghost btn--md">تجاهل التغييرات</button>
+        <button type="button" class="btn btn--primary btn--md" disabled>حفظ التغييرات · 1</button>
+      </div>
+    </div>
+  </main>
+</div>

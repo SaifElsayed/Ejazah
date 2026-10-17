@@ -1,0 +1,46 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="screen__body behind-sheet" aria-hidden="true">
+    <div class="pad-top"></div>
+    <div class="row gap-3">
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <strong class="text-body text-bold">الشيخ أحمد المصري</strong>
+        <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات · 45 دقيقة</span>
+      </span>
+      <span class="badge badge--success">جارٍ</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">طلب إلغاء جلسة</h1>
+      <a href="EnrollmentDetail.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="field">
+      <span class="field__label" id="ses">الجلسة</span>
+      <a href="CancelSessionPicker.dc.html" class="input row row--between" aria-labelledby="ses">
+        <span>الأربعاء 18 نوفمبر · 6:00 م (القاهرة)</span>{{icon:chevron-down:md}}
+      </a>
+    </div>
+
+    <fieldset class="stack gap-2">
+      <legend class="field__label pad-bottom">السبب</legend>
+      <div class="grid-2 gap-2">
+        <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>ظرف صحي</label>
+        <label class="choice choice--selected"><input type="radio" name="reason" class="visually-hidden" checked><span class="choice__mark"></span>سفر</label>
+        <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>ظرف عائلي</label>
+        <label class="choice"><input type="radio" name="reason" class="visually-hidden"><span class="choice__mark"></span>سبب آخر</label>
+      </div>
+      <textarea class="input" rows="2" aria-label="تفاصيل للمعلم">أسافر مع أهلي يوم 17 نوفمبر وأعود بعد أسبوع.</textarea>
+    </fieldset>
+
+    <p class="row row--top gap-2 text-caption tone-muted">{{icon:clock:sm}}إن لم يردّ المعلم قبل الموعد تبقى الجلسة قائمة.</p>
+
+    <a href="EnrollmentDetail.dc.html" class="btn btn--primary btn--block">إرسال الطلب</a>
+  </section>
+</div>

@@ -1,0 +1,42 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dd-title">
+    <div class="row row--top gap-3">
+      <span class="avatar">ي</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="dd-title">قرار على طلب الشيخ ياسر حمدي</h2>
+        <p class="text-caption tone-muted">حفظ القرآن، التجويد · تقدّم 14 أكتوبر 2026</p>
+      </div>
+    </div>
+
+    <div class="segmented" role="group" aria-label="نوع القرار">
+      <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">رفض</button>
+      <button type="button" class="segmented__option" aria-pressed="false">طلب معلومات</button>
+      <button type="button" class="segmented__option" aria-pressed="false">{{icon:ban:sm}}حظر</button>
+    </div>
+
+    <fieldset class="stack gap-2">
+      <legend class="field__label pad-bottom">سبب الرفض</legend>
+      <label class="choice choice--danger choice--selected"><input type="radio" name="dd-r" class="visually-hidden" checked><span class="choice__mark"></span><span class="grow">الوثائق لا تطابق الاسم المسجّل</span></label>
+      <label class="choice"><input type="radio" name="dd-r" class="visually-hidden"><span class="choice__mark"></span><span class="grow">المؤهل لا يغطي كل المواد المطلوبة</span></label>
+      <label class="choice"><input type="radio" name="dd-r" class="visually-hidden"><span class="choice__mark"></span><span class="grow">نتيجة مكالمة التحقق: غير مناسب</span></label>
+      <label class="choice"><input type="radio" name="dd-r" class="visually-hidden"><span class="choice__mark"></span><span class="grow">سبب آخر</span></label>
+    </fieldset>
+
+    <div class="field">
+      <label class="field__label" for="dd-note">ملاحظة للمتقدّم (إلزامية)</label>
+      <textarea id="dd-note" class="input input--focused" rows="3">الاسم في الإجازتين المرفوعتين لا يطابق الاسم في بطاقة الرقم القومي. ارفع وثائق تحمل اسمك كما في البطاقة ثم قدّم من جديد.</textarea>
+      <span class="field__hint">يراها المتقدّم كما كتبتها في التطبيق وفي الإشعار.</span>
+    </div>
+
+    <div class="banner banner--info">
+      {{icon:rotate-ccw:sm}}
+      <p class="grow">يمكنه التقديم مرة أخرى. الرفض لا يمنعه من طلب جديد؛ للمنع اختر «حظر».</p>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminApplications.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md">رفض الطلب</button>
+    </div>
+    <p class="panel__note">يُسجَّل القرار وسببه وملاحظتك في سجل التدقيق باسمك.</p>
+  </section>

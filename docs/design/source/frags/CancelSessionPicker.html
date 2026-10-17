@@ -1,0 +1,33 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="behind-sheet" aria-hidden="true">
+    <div class="screen__body gap-4">
+      <div class="pad-top"></div>
+      <strong class="text-title-3">طلب إلغاء جلسة</strong>
+      <span class="text-caption tone-muted">الشيخ أحمد المصري · حفظ القرآن · 8 جلسات · 45 دقيقة</span>
+      <span class="field__label">الجلسة</span>
+      <span class="select"><span class="select__placeholder">اختر الجلسة</span>{{icon:chevron-down:md}}</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">اختر الجلسة</h1>
+      <a href="CancelRequestSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+    <p class="text-caption tone-muted">الجلسات القادمة فقط. ينتهي الطلب تلقائيًا عند موعد الجلسة إن لم يُردّ عليه.</p>
+
+    <div class="picker" role="radiogroup" aria-labelledby="sheet-title">
+      <label class="choice choice--disabled"><input type="radio" name="ses" class="visually-hidden" disabled><span class="choice__mark"></span><span class="stack grow"><span>5 · الأربعاء 11 نوفمبر · 6:00 م</span><span class="text-caption tone-muted">طلب المعلم إلغاءها · ردّ عليه أولًا</span></span></label>
+      <label class="choice choice--selected"><input type="radio" name="ses" class="visually-hidden" checked><span class="choice__mark"></span><span class="stack grow"><span>6 · الأربعاء 18 نوفمبر · 6:00 م</span></span></label>
+      <label class="choice"><input type="radio" name="ses" class="visually-hidden"><span class="choice__mark"></span><span class="stack grow"><span>7 · الأربعاء 25 نوفمبر · 6:00 م</span></span></label>
+      <label class="choice"><input type="radio" name="ses" class="visually-hidden"><span class="choice__mark"></span><span class="stack grow"><span>8 · الأربعاء 2 ديسمبر · 6:00 م</span></span></label>
+      <label class="choice"><input type="radio" name="ses" class="visually-hidden"><span class="choice__mark"></span><span class="stack grow"><span>9 · الأربعاء 9 ديسمبر · 6:00 م</span><span class="text-caption tone-muted">تعويض عن جلسة 21 أكتوبر</span></span></label>
+    </div>
+
+    <a href="CancelRequestSheet.dc.html" class="btn btn--primary btn--block">تم</a>
+  </section>
+</div>

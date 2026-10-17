@@ -1,0 +1,38 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <div class="behind-sheet" aria-hidden="true">
+    <header class="nav-header">
+      <div class="nav-header__bar">
+        <span class="back-btn">{{icon:chevron-right:lg}}</span>
+        <span class="nav-header__title">إضافة مادة</span>
+      </div>
+    </header>
+    <div class="screen__body gap-4">
+      <span class="field__label">المادة</span>
+      <span class="select"><span class="select__placeholder">اختر المادة</span>{{icon:chevron-down:md}}</span>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <section class="sheet" role="dialog" aria-labelledby="sheet-title">
+    <span class="sheet__handle"></span>
+    <div class="sheet__header">
+      <h1 id="sheet-title" class="sheet__title">اختر المادة</h1>
+      <a href="AddSubject.dc.html" class="icon-btn icon-btn--muted" aria-label="إغلاق">{{icon:x:md}}</a>
+    </div>
+
+    <div class="input-group">
+      {{icon:search:md}}
+      <input class="input-group__control" type="search" placeholder="ابحث في المواد" aria-label="ابحث في المواد">
+    </div>
+
+    <div class="picker" role="radiogroup" aria-labelledby="sheet-title">
+      <label class="choice choice--disabled"><input type="radio" name="subj" class="visually-hidden" disabled><span class="choice__mark"></span><span class="grow">حفظ القرآن</span><span class="badge badge--accent">موثّقة</span></label>
+      <label class="choice choice--disabled"><input type="radio" name="subj" class="visually-hidden" disabled><span class="choice__mark"></span><span class="grow">التجويد</span><span class="badge badge--warning">قيد المراجعة</span></label>
+      <label class="choice choice--selected"><input type="radio" name="subj" class="visually-hidden" checked><span class="choice__mark"></span><span class="grow">القراءات</span></label>
+    </div>
+
+    <a href="AddSubject.dc.html" class="btn btn--primary btn--block">تم</a>
+  </section>
+</div>

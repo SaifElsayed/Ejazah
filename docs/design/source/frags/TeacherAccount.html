@@ -1,0 +1,50 @@
+<div class="screen screen--long" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">حسابي</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات">{{icon:bell:lg}}</a>
+      <a href="SignOutSheet.dc.html" class="icon-btn icon-btn--surface" aria-label="تسجيل الخروج">{{icon:log-out:lg}}</a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="row gap-4">
+      <span class="avatar avatar--xl">أ</span>
+      <span class="stack grow">
+        <strong class="text-title-3">الشيخ أحمد المصري</strong>
+        <a href="TeacherReviews.dc.html" class="link link--muted self-start"><span class="rating">{{icon:star:xs}}4.9 · 86 تقييمًا</span>{{icon:chevron-left:xs}}</a>
+      </span>
+      <span class="badge badge--success">معتمد</span>
+    </div>
+
+    <section class="list" aria-labelledby="teach">
+      <h2 id="teach" class="list__header">التدريس</h2>
+      <a href="ProfileEditor.dc.html" class="list__row"><span>الملف العام</span><span class="list__value">الاسم، الصورة، النبذة، المواد</span></a>
+      <a href="TeacherCredentials.dc.html" class="list__row"><span>إجازاتي</span><span class="badge badge--warning">1 قيد المراجعة</span></a>
+      <a href="SignatureUpload.dc.html" class="list__row"><span>صورة التوقيع</span><span class="badge badge--success">محفوظة</span></a>
+      <a href="PayoutVerified.dc.html" class="list__row"><span>حساب الاستلام</span><span class="badge badge--success">موثّق</span></a>
+    </section>
+
+    <section class="list">
+      <div class="list__row">
+        <span id="lang">اللغة</span>
+        <div class="segmented segmented--inline" role="group" aria-labelledby="lang">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</button>
+          <button type="button" class="segmented__option" aria-pressed="false">English</button>
+        </div>
+      </div>
+      <a href="TimeZonePicker.dc.html" class="list__row"><span>المنطقة الزمنية</span><span class="row gap-2"><span class="list__value">القاهرة · من الجهاز</span><span class="tone-subtle">{{icon:chevron-left:sm}}</span></span></a>
+      <div class="list__row"><span>طريقة الدخول</span><span class="list__value">جوجل</span></div>
+      <div class="list__row"><span>الجنس</span><span class="list__value">ذكر</span></div>
+      <a href="Terms.dc.html" class="list__row"><span>الشروط والأحكام</span><span class="tone-subtle">{{icon:chevron-left:sm}}</span></a>
+    </section>
+
+    <section class="list">
+      <a href="DeleteAccountTeacher.dc.html" class="list__row list__row--danger"><span class="row gap-3 tone-danger">{{icon:trash:md}}حذف الحساب</span></a>
+    </section>
+  </main>
+
+  {{TABS:teacher:TeacherAccount}}
+</div>

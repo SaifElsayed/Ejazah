@@ -1,0 +1,122 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminIjazahRequests:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">طلبات الإجازة</h1>
+        <p class="page-header__subtitle">طلبان ينتظران القرار. يطلب المعلم الإجازة لطالبه، وتصدر عند اعتمادك.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="category-tabs" role="tablist" aria-label="الحالة">
+          <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">الكل</button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">قيد المراجعة<span class="category-tabs__count">2</span></button>
+          <button type="button" class="category-tabs__item" role="tab" aria-selected="false">تم البتّ</button>
+        </div>
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            {{icon:search:md}}
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="اسم المعلم أو الطالب">
+          </label>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>المعلم والطالب</th><th>المادة والرواية</th><th>الإكمال</th><th>أُرسل</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span class="text-medium">الشيخ أحمد المصري</span><span class="text-caption tone-muted">إلى يوسف أحمد</span></span></td>
+                  <td><span class="stack"><span>حفظ القرآن</span><span class="text-caption tone-muted">حفص عن عاصم</span></span></td>
+                  <td>19 أغسطس</td>
+                  <td>14 أكتوبر</td>
+                  <td><span class="badge badge--warning">قيد المراجعة</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">الشيخ محمود فتحي</span><span class="text-caption tone-muted">إلى عمر سامي</span></span></td>
+                  <td><span class="stack"><span>التجويد</span><span class="text-caption tone-muted">حفص عن عاصم</span></span></td>
+                  <td>11 أكتوبر</td>
+                  <td>13 أكتوبر</td>
+                  <td><span class="badge badge--warning">قيد المراجعة</span></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">الشيخ أحمد المصري</span><span class="text-caption tone-muted">إلى سعيد منصور</span></span></td>
+                  <td><span class="stack"><span>حفظ القرآن</span><span class="text-caption tone-muted">حفص عن عاصم</span></span></td>
+                  <td>10 أكتوبر</td>
+                  <td>11 أكتوبر</td>
+                  <td><a href="AdminIjazahs.dc.html" class="link"><span class="badge badge--success">صدرت · 12 أكتوبر</span></a></td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span class="text-medium">الشيخ عمر حسن</span><span class="text-caption tone-muted">إلى عبد الرحمن علي</span></span></td>
+                  <td><span class="stack"><span>حفظ القرآن</span><span class="text-caption tone-muted">حفص عن عاصم</span></span></td>
+                  <td>6 أكتوبر</td>
+                  <td>7 أكتوبر</td>
+                  <td><span class="badge badge--danger">مرفوض · 8 أكتوبر</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>4 من 4 · الأحدث أولًا</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+
+          <div class="doc-viewer grow" role="group" aria-label="الشهادة كما ستصدر">
+            <figure class="certificate-page certificate-page--compact">
+              <img class="certificate-page__image" src="/_blob/585f80230eca9270770f862664b911a0" alt="إجازة حفظ القرآن برواية حفص عن عاصم من الشيخ أحمد المصري إلى يوسف أحمد، بالسند والتوقيع والختم ورمز التحقق">
+            </figure>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل الطلب">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg icon-tile--accent">{{icon:award:lg:medium}}</span>
+              <span class="stack grow">
+                <strong class="text-title-3">طلب إجازة · يوسف أحمد</strong>
+                <span class="text-caption tone-muted">من الشيخ أحمد المصري · 14 أكتوبر · 9:40 ص</span>
+              </span>
+              <span class="badge badge--warning">قيد المراجعة</span>
+            </header>
+
+            <div class="panel__body">
+              <dl class="kv">
+                <div class="kv__item"><dt class="kv__label">الطالب</dt><dd class="kv__value"><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a></dd></div>
+                <div class="kv__item"><dt class="kv__label">المعلم</dt><dd class="kv__value"><a href="AdminTeacher.dc.html" class="link">الشيخ أحمد المصري</a></dd></div>
+                <div class="kv__item"><dt class="kv__label">اسم الطالب على الإجازة</dt><dd class="kv__value"><span class="stack"><span>يوسف بن أحمد بن سعيد الشريف</span><span class="text-caption tone-muted">أدخله الطالب 14 أكتوبر</span></span></dd></div>
+                <div class="kv__item"><dt class="kv__label">مسار الاشتراك</dt><dd class="kv__value"><span class="badge badge--accent">مسار إجازة</span></dd></div>
+                <div class="kv__item"><dt class="kv__label">المادة</dt><dd class="kv__value">حفظ القرآن · حفص عن عاصم · من طريق الشاطبية</dd></div>
+                <div class="kv__item"><dt class="kv__label">الاشتراك</dt><dd class="kv__value"><a href="AdminEnrollments.dc.html" class="link">حفظ القرآن · 8 جلسات · مكتمل 19 أغسطس</a></dd></div>
+                <div class="kv__item"><dt class="kv__label">تاريخ الإكمال</dt><dd class="kv__value">الأربعاء 19 أغسطس 2026</dd></div>
+                <div class="kv__item"><dt class="kv__label">لغة الشهادة</dt><dd class="kv__value">العربية</dd></div>
+              </dl>
+
+              <ul class="stack gap-2 text-callout">
+                <li class="row gap-2"><span class="tone-success">{{icon:circle-check:sm}}</span><span class="grow">إجازة المعلم في حفظ القرآن موثّقة</span></li>
+                <li class="row gap-2"><span class="tone-success">{{icon:circle-check:sm}}</span><span class="grow">الاشتراك في «مسار إجازة»</span></li>
+                <li class="row gap-2"><span class="tone-success">{{icon:circle-check:sm}}</span><span class="grow">توقيع المعلم مرفوع</span></li>
+                <li class="row gap-2"><span class="tone-success">{{icon:circle-check:sm}}</span><span class="grow">الطالب غير ممنوع من تلقي الإجازات</span></li>
+              </ul>
+
+              <p class="row gap-2 text-caption tone-muted">{{icon:lock:sm}}<span class="grow">السند (35 جيلًا) من إجازة المعلم الموثّقة، ولا يُعدَّل هنا.</span></p>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--primary btn--md">اعتماد وإصدار</a>
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">رفض</a>
+              <p class="panel__note">عند الاعتماد تصدر الإجازة برقمها، ويصل إشعار إلى المعلم والطالب. يُسجَّل قرارك باسمك في سجل التدقيق.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

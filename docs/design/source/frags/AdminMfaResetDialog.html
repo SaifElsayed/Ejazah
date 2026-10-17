@@ -1,0 +1,135 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <div class="behind-sheet" aria-hidden="true" inert>
+    {{ADMINNAV:AdminSettings:ar}}
+
+    <main class="page">
+      <header class="page-header">
+        <div class="row gap-4">
+          <a href="AdminSettings.dc.html" class="icon-btn icon-btn--surface" aria-label="رجوع إلى الإعدادات">{{icon:chevron-right:md}}</a>
+          <div class="stack">
+            <h1 class="page-header__title">المشرفون</h1>
+            <p class="page-header__subtitle">حسابات فريق التشغيل. دور واحد في هذه النسخة، فكل مشرف يملك الصلاحيات نفسها (ADR 0019). التحقق بخطوتين إلزامي، ويُسجَّل كل إجراء هنا في سجل التدقيق.</p>
+          </div>
+        </div>
+        <a href="AdminAddAdminDialog.dc.html" class="btn btn--primary btn--md">{{icon:plus:sm}}إضافة مشرف</a>
+      </header>
+
+      <div class="page-body">
+        <div class="toolbar">
+          <div class="category-tabs" role="tablist" aria-label="الحالة">
+            <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">نشط<span class="category-tabs__count">3</span></button>
+            <button type="button" class="category-tabs__item" role="tab" aria-selected="false">معطّل<span class="category-tabs__count">1</span></button>
+          </div>
+          <div class="search-row">
+            <label class="input-group input-group--surface toolbar__search">
+              {{icon:search:md}}
+              <span class="visually-hidden">بحث</span>
+              <input class="input-group__control" placeholder="الاسم أو البريد">
+            </label>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="split__list">
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr><th>المشرف</th><th>التحقق بخطوتين</th><th>آخر دخول</th><th>أُضيف</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="stack"><span class="text-medium">سارة عادل <span class="tone-muted">· أنت</span></span><span class="text-caption tone-muted ltr">sara.adel@example.com</span></span></td>
+                    <td><span class="badge badge--success">مفعّل</span></td>
+                    <td>15 أكتوبر · 9:02 ص</td>
+                    <td>1 مارس 2026</td>
+                  </tr>
+                  <tr class="table__row--selected">
+                    <td><span class="stack"><span class="text-medium">عمرو خالد</span><span class="text-caption tone-muted ltr">amr.khaled@example.com</span></span></td>
+                    <td><span class="badge badge--warning">طلب إعادة الضبط</span></td>
+                    <td>14 أكتوبر · 6:30 م</td>
+                    <td>20 مايو 2026</td>
+                  </tr>
+                  <tr>
+                    <td><span class="stack"><span class="text-medium">نهى سمير</span><span class="text-caption tone-muted ltr">noha.samir@example.com</span></span></td>
+                    <td><span class="badge badge--success">مفعّل</span></td>
+                    <td>13 أكتوبر · 11:15 ص</td>
+                    <td>20 مايو 2026</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="table-footer">
+                <span>3 من 3 · حسب آخر دخول</span>
+                <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page" aria-label="الصفحة التالية" disabled>{{icon:chevron-left:sm}}</button></nav>
+              </div>
+            </div>
+          </div>
+
+          <aside class="split__detail" aria-label="تفاصيل المشرف">
+            <section class="panel">
+              <header class="panel__header">
+                <span class="avatar avatar--lg">ع</span>
+                <span class="stack grow">
+                  <strong class="text-title-3">عمرو خالد</strong>
+                  <span class="text-caption tone-muted ltr">amr.khaled@example.com</span>
+                </span>
+                <span class="badge badge--success">نشط</span>
+              </header>
+
+              <div class="panel__body">
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">أُضيف</dt><dd class="kv__value">20 مايو 2026 · سارة عادل</dd></div>
+                  <div class="kv__item"><dt class="kv__label">التحقق بخطوتين</dt><dd class="kv__value">مفعّل منذ 20 مايو · بقي 7 رموز استرداد</dd></div>
+                  <div class="kv__item"><dt class="kv__label">آخر دخول</dt><dd class="kv__value">14 أكتوبر 2026 · 6:30 م</dd></div>
+                  <div class="kv__item"><dt class="kv__label">إجراءات في السجل</dt><dd class="kv__value"><a href="AdminAudit.dc.html" class="link">38 قيدًا</a></dd></div>
+                </dl>
+
+                <section class="section">
+                  <h2 class="group-label">طلب إعادة ضبط التحقق</h2>
+                  <p class="text-callout">أبلغ عمرو الدعم يوم 15 أكتوبر 8:40 ص أنه فقد هاتفه ورموز الاسترداد. تحقّق من هويته بمكالمة قبل إعادة الضبط.</p>
+                </section>
+
+                <div class="banner">{{icon:info:sm}}<span>لا يستطيع المشرف إعادة ضبط تحققه أو تعطيل حسابه بنفسه؛ يفعل ذلك مشرف آخر بسبب.</span></div>
+              </div>
+
+              <footer class="panel__footer">
+                <a href="AdminMfaResetDialog.dc.html" class="btn btn--secondary btn--md">{{icon:key-round:sm}}إعادة ضبط التحقق بخطوتين</a>
+                <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">تعطيل الحساب</a>
+                <p class="panel__note">كل إجراء هنا يطلب سببًا ويُسجَّل باسمك في سجل التدقيق.</p>
+              </footer>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="mr-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--warning">{{icon:key-round:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="mr-title">إعادة ضبط التحقق بخطوتين لعمرو خالد</h2>
+        <p class="text-caption tone-muted"><span class="ltr">amr.khaled@example.com</span> · مشرف منذ 20 مايو 2026</p>
+      </div>
+    </div>
+
+    <ul class="stack gap-2 text-callout">
+      <li class="row row--top gap-2">{{icon:x:sm}}<span>يُلغى تطبيق المصادقة المرتبط ورموز الاسترداد الحالية فورًا.</span></li>
+      <li class="row row--top gap-2">{{icon:refresh-cw:sm}}<span>في دخوله التالي يعيد الإعداد: رمز جديد في تطبيق المصادقة ورموز استرداد جديدة.</span></li>
+      <li class="row row--top gap-2">{{icon:lock:sm}}<span>تُنهى جلساته المفتوحة، ويدخل بكلمة مروره ثم يكمل الإعداد.</span></li>
+      <li class="row row--top gap-2">{{icon:list:sm}}<span>يُسجَّل الإجراء وسببه باسمك في سجل التدقيق.</span></li>
+    </ul>
+
+    <div class="field">
+      <label class="field__label" for="mr-reason">سبب إعادة الضبط (إلزامي)</label>
+      <textarea id="mr-reason" class="input input--focused" rows="3" placeholder="مثلًا: فقد هاتفه، وتحققت من هويته بمكالمة"></textarea>
+      <span class="field__hint">تحقّق من هوية المشرف خارج اللوحة قبل التأكيد.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminAdmins.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--primary btn--md" disabled>إعادة الضبط</button>
+    </div>
+  </section>
+</div>

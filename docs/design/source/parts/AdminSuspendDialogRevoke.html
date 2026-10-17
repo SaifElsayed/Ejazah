@@ -1,0 +1,45 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="sr-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--danger">{{icon:user-x:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="sr-title">سحب اعتماد الشيخ أحمد المصري</h2>
+        <p class="text-caption tone-muted">معلم معتمد منذ 18 مارس 2026 · 7 اشتراكات جارية</p>
+      </div>
+    </div>
+
+    <div class="segmented" role="group" aria-label="نوع الإجراء">
+      <button type="button" class="segmented__option" aria-pressed="false">إيقاف الحساب</button>
+      <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">سحب الاعتماد</button>
+      <button type="button" class="segmented__option" aria-pressed="false">{{icon:ban:sm}}حظر الحساب</button>
+    </div>
+
+    <section class="section">
+      <h3 class="group-label">ما يحدث فور التأكيد</h3>
+      <div class="stats">
+        <div class="stat stat--tile"><span class="stat__value tone-danger">60</span><span class="stat__label">جلسة قادمة تُلغى</span></div>
+        <div class="stat stat--tile"><span class="stat__value">7</span><span class="stat__label">طلاب يُبلَّغون</span></div>
+        <div class="stat stat--tile"><span class="stat__value">7</span><span class="stat__label">قضايا تعويض تُفتح</span></div>
+      </div>
+      <ul class="stack gap-2 text-callout">
+        <li class="row row--top gap-2">{{icon:user-x:sm}}<span>يفقد صفة المعلم المعتمد: يختفي من البحث، ولا يُقبل عليه حجز جديد، ولا يعود إلا بطلب انضمام جديد تراجعه الإدارة.</span></li>
+        <li class="row row--top gap-2">{{icon:video-off:sm}}<span>لا يستطيع دخول أي جلسة، حتى الجارية الآن.</span></li>
+        <li class="row row--top gap-2">{{icon:calendar:sm}}<span>تُلغى جلساته القادمة كلها، ويراها الطلاب «ألغتها الإدارة».</span></li>
+        <li class="row row--top gap-2">{{icon:bell:sm}}<span>يصل إشعار إلى كل طالب متأثر.</span></li>
+        <li class="row row--top gap-2">{{icon:scale:sm}}<span>تُفتح قضية تعويض لكل اشتراك في طابور <a href="AdminCompensation.dc.html" class="link">التعويضات</a>، ويقرّر فيها المشرف.</span></li>
+        <li class="row row--top gap-2">{{icon:award:sm}}<span>تبقى إجازات طلابه الصادرة صالحة؛ لسحب إجازة بعينها إجراء مستقل.</span></li>
+      </ul>
+    </section>
+
+    <div class="field">
+      <label class="field__label" for="sr-reason">سبب سحب الاعتماد (إلزامي)</label>
+      <textarea id="sr-reason" class="input input--focused" rows="2" placeholder="اكتب سببًا واضحًا"></textarea>
+      <span class="field__hint">يُسجَّل السبب مع الإجراء في سجل التدقيق.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminTeacher.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--danger btn--md" disabled>سحب الاعتماد وإلغاء 60 جلسة</button>
+    </div>
+  </section>

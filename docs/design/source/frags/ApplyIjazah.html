@@ -1,0 +1,44 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="ApplyDocuments.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">الإجازات<span class="nav-header__subtitle"> · الخطوة 3 من 3</span></h1>
+    </div>
+    <ol class="steps" aria-label="خطوات الطلب">
+      <li class="steps__item steps__item--done"><span class="steps__bar"></span><span>المواد</span></li>
+      <li class="steps__item steps__item--done"><span class="steps__bar"></span><span>الوثائق</span></li>
+      <li class="steps__item steps__item--current" aria-current="step"><span class="steps__bar"></span><span>الإجازات</span></li>
+    </ol>
+  </header>
+
+  <main class="screen__body">
+    <p class="text-body tone-muted">ارفع إجازتك في كل مادة اخترتها، ملف PDF.</p>
+
+    <section class="section">
+      <h2 class="section__title">حفظ القرآن</h2>
+      <div class="file">
+        <span class="icon-tile icon-tile--danger">PDF</span>
+        <span class="stack grow">
+          <span class="text-callout text-medium">إجازة حفظ القرآن.pdf</span>
+          <span class="text-micro tone-muted">2.1 م.ب</span>
+        </span>
+        <button type="button" class="icon-btn icon-btn--muted" aria-label="حذف الملف">{{icon:trash:md}}</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">التجويد</h2>
+      <button type="button" class="upload">
+        <span class="tone-primary">{{icon:upload:md}}</span>
+        <span class="stack grow">
+          <span class="text-callout text-medium">رفع إجازة التجويد</span>
+          <span class="text-micro tone-muted">PDF فقط</span>
+        </span>
+      </button>
+    </section>
+
+    <button type="button" class="btn btn--primary btn--block push" disabled>إرسال الطلب</button>
+  </main>
+</div>

@@ -1,0 +1,37 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="EnrollmentDetail.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <span class="avatar">أ</span>
+      <span class="stack grow">
+        <h1 class="nav-header__title">الشيخ أحمد المصري</h1>
+        <span class="nav-header__subtitle">حفظ القرآن · 8 جلسات</span>
+      </span>
+      <div class="nav-header__trailing">
+        <a href="ReportSheet.dc.html" class="icon-btn icon-btn--muted" aria-label="إبلاغ">{{icon:flag:md}}</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="screen__body chat gap-3 pad-top">
+    <div class="banner">
+      {{icon:paperclip:sm}}
+      <p class="grow">يمكنك إرسال ملفات PDF والمستندات فقط.</p>
+    </div>
+
+    <section class="empty-state grow">
+      <span class="icon-tile icon-tile--2xl icon-tile--neutral" aria-hidden="true">{{icon:message-square:xl}}</span>
+      <h2 class="empty-state__title">لا رسائل بعد</h2>
+      <p class="empty-state__text">اكتب أول رسالة إلى الشيخ أحمد المصري.</p>
+    </section>
+  </main>
+
+  <footer class="action-bar action-bar--row">
+    <button type="button" class="icon-btn icon-btn--surface" aria-label="إرفاق ملف PDF أو مستند">{{icon:paperclip:md}}</button>
+    <label for="msg" class="visually-hidden">رسالة</label>
+    <input id="msg" class="input input--md grow" placeholder="اكتب رسالة">
+    <button type="button" class="icon-btn icon-btn--primary" aria-label="إرسال">{{icon:arrow-left:md:medium}}</button>
+  </footer>
+</div>

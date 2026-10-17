@@ -1,0 +1,36 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="ApplySubjects.dc.html" class="back-btn" aria-label="رجوع">{{icon:chevron-right:lg}}</a>
+      <h1 class="nav-header__title">الوثائق<span class="nav-header__subtitle"> · الخطوة 2 من 3</span></h1>
+    </div>
+    <ol class="steps" aria-label="خطوات الطلب">
+      <li class="steps__item steps__item--done"><span class="steps__bar"></span><span>المواد</span></li>
+      <li class="steps__item steps__item--current" aria-current="step"><span class="steps__bar"></span><span>الوثائق</span></li>
+      <li class="steps__item"><span class="steps__bar"></span><span>الإجازات</span></li>
+    </ol>
+  </header>
+
+  <main class="screen__body">
+    <section class="section">
+      <h2 class="section__title" id="id-doc">إثبات الهوية</h2>
+      <div class="segmented" role="group" aria-labelledby="id-doc">
+        <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">بطاقة الرقم القومي</button>
+        <button type="button" class="segmented__option" aria-pressed="false">جواز السفر</button>
+      </div>
+      <div class="file">
+        <span class="icon-tile icon-tile--danger">PDF</span>
+        <span class="stack grow">
+          <span class="text-callout text-medium">بطاقة الرقم القومي.pdf</span>
+          <span class="text-micro tone-muted">صفحتان · 1.4 م.ب</span>
+        </span>
+        <button type="button" class="icon-btn icon-btn--muted" aria-label="حذف الملف">{{icon:trash:md}}</button>
+      </div>
+      <p class="text-caption tone-muted">ملف PDF واحد فيه وجهَا البطاقة.</p>
+    </section>
+
+    <a href="ApplyIjazah.dc.html" class="btn btn--primary btn--block push">التالي: الإجازات</a>
+  </main>
+</div>

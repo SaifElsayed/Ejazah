@@ -1,0 +1,50 @@
+<div class="screen" dir="rtl" data-theme="light">
+{{SB}}
+
+  <main class="screen__body screen__body--bare">
+    <ol class="steps" aria-label="الخطوة 2 من 2">
+      <li class="steps__item steps__item--done"><span class="steps__bar"></span></li>
+      <li class="steps__item steps__item--current" aria-current="step"><span class="steps__bar"></span></li>
+    </ol>
+
+    <div class="page-intro">
+      <h1 class="page-intro__title">بياناتك</h1>
+    </div>
+
+    <form class="stack gap-5">
+      <div class="field">
+        <label for="nm" class="field__label">الاسم الظاهر</label>
+        <input id="nm" class="input" value="يوسف أحمد">
+      </div>
+
+      <div class="field" role="radiogroup" aria-labelledby="g-label">
+        <span id="g-label" class="field__label">الجنس</span>
+        <div class="segmented">
+          <label class="segmented__option segmented__option--selected"><input type="radio" name="g" class="check" checked>ذكر</label>
+          <label class="segmented__option"><input type="radio" name="g" class="check">أنثى</label>
+        </div>
+        <span class="field__hint">لا يمكن تغييره لاحقًا.</span>
+      </div>
+
+      <div class="field">
+        <label for="dob" class="field__label">تاريخ الميلاد</label>
+        <input id="dob" class="input" value="12 مارس 2004">
+      </div>
+
+      <div class="card card--surface card--row">
+        <span class="stack grow">
+          <span class="text-callout text-medium">المنطقة الزمنية</span>
+          <span class="text-caption tone-muted">القاهرة · من الجهاز</span>
+        </span>
+        <a href="TimeZonePicker.dc.html" class="btn btn--ghost btn--md">تغيير</a>
+      </div>
+
+      <label class="check-row check-row--top text-callout">
+        <input type="checkbox" class="check" checked>
+        <span>أوافق على <a href="Terms.dc.html" class="text-medium">الشروط والأحكام</a></span>
+      </label>
+    </form>
+
+    <a href="ConfirmGender.dc.html" class="btn btn--primary btn--block push">متابعة</a>
+  </main>
+</div>

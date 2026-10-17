@@ -1,0 +1,196 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  {{ADMINNAV:AdminUsers:ar}}
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">المستخدمون</h1>
+        <p class="page-header__subtitle">الطلاب والمعلمون. كل إيقاف أو منع أو حظر يحتاج سببًا ويُسجَّل في سجل التدقيق.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="search-row search-row--open">
+        <label class="input-group input-group--surface toolbar__search">
+          {{icon:search:md}}
+          <span class="visually-hidden">بحث</span>
+          <input class="input-group__control" placeholder="الاسم أو البريد">
+        </label>
+        <button type="button" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر" aria-expanded="true">{{icon:filter:md}}</button>
+        <div class="dropdown" role="dialog" aria-label="الفلاتر">
+          <div class="dropdown__group" role="radiogroup" aria-labelledby="f-role">
+            <span class="dropdown__title" id="f-role">الدور</span>
+            <div class="option-grid">
+              <button type="button" class="option option--selected" role="radio" aria-checked="true"><span class="option__mark"></span>الكل</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>طالب</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>معلم</button>
+            </div>
+          </div>
+          <div class="dropdown__group" role="radiogroup" aria-labelledby="f-status">
+            <span class="dropdown__title" id="f-status">حالة الحساب</span>
+            <div class="option-grid">
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>الكل</button>
+              <button type="button" class="option option--selected" role="radio" aria-checked="true"><span class="option__mark"></span>نشط</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>موقوف</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>بانتظار إثبات الهوية</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>محظور</button>
+            </div>
+          </div>
+          <div class="dropdown__group" role="radiogroup" aria-labelledby="f-gender">
+            <span class="dropdown__title" id="f-gender">الجنس</span>
+            <div class="option-grid">
+              <button type="button" class="option option--selected" role="radio" aria-checked="true"><span class="option__mark"></span>الكل</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>ذكر</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>أنثى</button>
+            </div>
+          </div>
+          <div class="dropdown__group" role="radiogroup" aria-labelledby="f-age">
+            <span class="dropdown__title" id="f-age">العمر</span>
+            <div class="option-grid">
+              <button type="button" class="option option--selected" role="radio" aria-checked="true"><span class="option__mark"></span>الكل</button>
+              <button type="button" class="option" role="radio" aria-checked="false"><span class="option__mark"></span>القُصَّر فقط</button>
+            </div>
+          </div>
+          <div class="dropdown__footer">
+            <a href="AdminUsers.dc.html" class="btn btn--primary btn--md btn--grow">عرض 142 مستخدمًا</a>
+            <a href="AdminUsers.dc.html" class="btn btn--ghost btn--md">مسح</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>المستخدم</th><th>الدور</th><th>الجنس</th><th>حالة الحساب</th><th>انضم</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">الشيخة منى عبد الرحمن</a></td>
+                  <td><span class="badge badge--warning">معلمة · قيد المراجعة</span></td>
+                  <td>أنثى</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>12 أكتوبر</td>
+                </tr>
+                <tr class="table__row--selected">
+                  <td><a href="AdminUsers.dc.html" class="link">يوسف أحمد</a></td>
+                  <td><span class="badge badge--neutral">طالب</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>2 فبراير</td>
+                </tr>
+                <tr>
+                  <td><span class="row gap-2"><a href="AdminUsers.dc.html" class="link">عمر سامي</a><span class="badge badge--warning">قاصر</span></span></td>
+                  <td><span class="badge badge--neutral">طالب</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>25 أغسطس</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">هشام فؤاد</a></td>
+                  <td><span class="badge badge--neutral">طالب</span></td>
+                  <td>ذكر</td>
+                  <td><span class="stack items-start gap-1"><span class="badge badge--danger">موقوف</span><a href="AdminConfirmDialog.dc.html" class="btn btn--secondary btn--md">إعادة تفعيل</a></span></td>
+                  <td>3 سبتمبر</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">حسن إبراهيم</a></td>
+                  <td><span class="badge badge--neutral">طالب</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>20 يوليو</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">زياد طارق</a></td>
+                  <td><span class="badge badge--neutral">طالب</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>18 يوليو</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ عمر حسن</a></td>
+                  <td><span class="badge badge--neutral">معلم</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>6 يونيو</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminUsers.dc.html" class="link">سعيد منصور</a></td>
+                  <td><span class="badge badge--neutral">طالب</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>3 يونيو</td>
+                </tr>
+                <tr>
+                  <td><a href="AdminTeacher.dc.html" class="link">الشيخ أحمد المصري</a></td>
+                  <td><span class="badge badge--neutral">معلم</span></td>
+                  <td>ذكر</td>
+                  <td><span class="badge badge--success">نشط</span></td>
+                  <td>2 مارس</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>9 من 148 · حسب آخر نشاط</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled>{{icon:chevron-right:sm}}</button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page">2</button><button type="button" class="pager__page">3</button><span class="pager__page">…</span><button type="button" class="pager__page">17</button><button type="button" class="pager__page" aria-label="الصفحة التالية">{{icon:chevron-left:sm}}</button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل المستخدم">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="avatar avatar--lg">ي</span>
+              <span class="stack grow">
+                <strong class="text-title-3">يوسف أحمد</strong>
+                <span class="text-caption tone-muted ltr">yousef@example.com</span>
+              </span>
+              <span class="badge badge--success">نشط</span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">الملف الشخصي</h2>
+                <dl class="kv kv--3">
+                  <div class="kv__item"><dt class="kv__label">الجنس</dt><dd class="kv__value">ذكر</dd></div>
+                  <div class="kv__item"><dt class="kv__label">تاريخ الميلاد</dt><dd class="kv__value">12 مارس 2004</dd></div>
+                  <div class="kv__item"><dt class="kv__label">قاصر</dt><dd class="kv__value">لا</dd></div>
+                  <div class="kv__item"><dt class="kv__label">المنطقة الزمنية</dt><dd class="kv__value">القاهرة</dd></div>
+                  <div class="kv__item"><dt class="kv__label">طريقة الدخول</dt><dd class="kv__value">جوجل</dd></div>
+                  <div class="kv__item"><dt class="kv__label">انضم</dt><dd class="kv__value">2 فبراير 2026</dd></div>
+                </dl>
+              </section>
+
+
+              <section class="section">
+                <h2 class="group-label">الحساب</h2>
+                <dl class="kv kv--3">
+                  <div class="kv__item"><dt class="kv__label">طلبات إثبات الهوية</dt><dd class="kv__value">لا يوجد</dd></div>
+                  <div class="kv__item"><dt class="kv__label">منع تلقي الإجازات</dt><dd class="kv__value">لا يوجد</dd></div>
+                  <div class="kv__item"><dt class="kv__label">طلبات إلغاء جلسات</dt><dd class="kv__value">لا يوجد</dd></div>
+                </dl>
+                <a href="AdminEnrollments.dc.html" class="card card--row card--compact gap-3">
+                  <span class="icon-tile icon-tile--sm">{{icon:book:sm}}</span>
+                  <span class="stack grow">
+                    <span class="text-callout text-medium">الاشتراكات · 1 جارٍ · 2 مكتمل · 1 انتهى لغياب المعلم</span>
+                    <span class="text-caption tone-muted">حفظ القرآن · 8 جلسات مع الشيخ أحمد المصري · 1 من 8</span>
+                  </span>
+                  {{icon:chevron-left:md}}
+                </a>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <a href="AdminRequireIdDialog.dc.html" class="btn btn--secondary btn--md">طلب إثبات هوية</a>
+              <a href="AdminSuspendStudentDialog.dc.html" class="btn btn--danger btn--md">إيقاف الحساب</a>
+              <a href="AdminConfirmDialog.dc.html" class="btn btn--danger btn--md">منع من تلقي الإجازات</a>
+              <a href="AdminSuspendStudentDialog.dc.html" class="btn btn--danger btn--md">{{icon:ban:sm}}حظر</a>
+              <p class="panel__note">كل إجراء يطلب سببًا ويُسجَّل في سجل التدقيق، ويُعاد الحساب الموقوف من الزر نفسه. لا يتغيّر الجنس من هنا، بل عبر بلاغ الجنس فقط.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>

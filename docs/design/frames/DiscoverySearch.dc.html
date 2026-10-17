@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الطالب — الاستكشاف: البحث باسم الشيخ</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="app-header">
+    <h1 class="app-header__title">استكشف</h1>
+    <div class="app-header__actions">
+      <a href="Notifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات"><svg class="icon icon--lg" data-icon="bell" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body screen__body--scroll gap-4">
+    <div class="search-row">
+      <label class="input-group input-group--focused">
+        <svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الشيخ أو المادة" aria-label="ابحث باسم الشيخ أو المادة" value="أحمد">
+        <a href="Discovery.dc.html" class="icon-btn icon-btn--muted" aria-label="مسح البحث"><svg class="icon icon--sm" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+      </label>
+      <a href="DiscoveryFilter.dc.html" class="icon-btn icon-btn--surface filter-trigger" aria-label="الفلاتر"><svg class="icon icon--md" data-icon="filter" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></a>
+
+    </div>
+
+    <span class="text-caption tone-muted">نتيجة واحدة لـ «أحمد» · في كل الأقسام</span>
+
+    <a href="TeacherProfile.dc.html" class="card gap-3">
+      <span class="row gap-3 items-start">
+        <span class="avatar avatar--xl avatar--primary">أ</span>
+        <span class="stack gap-1 grow">
+          <strong class="text-headline">الشيخ <mark class="match">أحمد</mark> المصري</strong>
+          <span class="text-caption tone-muted">حفظ القرآن · حفص عن عاصم · 12 سنة</span>
+          <span class="row gap-1 wrap"><span class="badge badge--neutral">تسميع</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </span>
+      </span>
+      <span class="story-card__quote story-card__quote--two">«أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا، بالتسميع المتدرّج وجهًا بوجه.»</span>
+      <span class="story-card__foot"><span class="rating"><svg class="icon icon--xs icon--filled" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg>4.9 · 86</span><span>أقرب موعد الأحد 7:30 م</span><span class="text-callout text-bold tone-default">من 150 ج.م</span></span>
+    </a>
+
+    <div class="card card--surface card--row">
+      <span class="icon-tile icon-tile--round"><svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+      <span class="stack grow"><strong class="text-body text-bold">جرّب البحث باسم المادة</strong><span class="text-caption tone-muted">مثل: التجويد، القراءات</span></span>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="التنقل الرئيسي">
+    <a href="Main.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="house" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg><span>الرئيسية</span></a>
+    <a href="Discovery.dc.html" class="tabbar__item tabbar__item--active" aria-current="page"><svg class="icon icon--lg" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>استكشف</span></a>
+    <a href="Enrollments.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="book" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h13v16H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg><span>اشتراكاتي</span></a>
+    <a href="Credentials.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg><span>إجازاتي</span></a>
+    <a href="StudentAccount.dc.html" class="tabbar__item"><svg class="icon icon--lg" data-icon="user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حسابي</span></a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

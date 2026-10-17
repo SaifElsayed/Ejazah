@@ -1,0 +1,41 @@
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <main class="page">
+    <header class="page-header">
+      <div class="stack grow items-end">
+        <div class="segmented segmented--inline" role="group" aria-label="اللغة">
+          <button type="button" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</button>
+          <button type="button" class="segmented__option" aria-pressed="false">English</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="grow row row--center items-center">
+      <section class="auth-card" aria-labelledby="ttl">
+        <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة · الإدارة</span></span>
+
+        <div class="page-intro">
+          <h1 id="ttl" class="page-intro__title">دخول الإدارة</h1>
+          <p class="page-intro__lede">هذا الدخول منفصل عن دخول التطبيق، ومخصّص لحسابات فريق التشغيل المصرَّح لها فقط.</p>
+        </div>
+
+        <div class="banner banner--danger" role="alert">
+          {{icon:circle-x:sm}}
+          <p class="grow">تعذّر الدخول. تحقّق من بياناتك وحاول بعد قليل.</p>
+        </div>
+
+        <form class="stack gap-4">
+          <div class="field">
+            <label for="em" class="field__label">البريد الإلكتروني</label>
+            <input id="em" type="email" class="input input--ltr" value="sara.adel@example.com">
+          </div>
+          <div class="field">
+            <label for="pw" class="field__label">كلمة المرور</label>
+            <input id="pw" type="password" class="input input--ltr input--focused" value="">
+          </div>
+        </form>
+
+        <a href="AdminMfa.dc.html" class="btn btn--primary btn--block">متابعة</a>
+      </section>
+    </div>
+  </main>
+</div>

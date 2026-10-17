@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>صورة التوقيع — قبل أول رفع</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="screen" dir="rtl" data-theme="light">
+  <div class="status-bar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="status-bar__icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1.5 4a9 9 0 0 1 12 0"/><path d="M3.8 6.4a5.6 5.6 0 0 1 7.4 0"/><circle cx="7.5" cy="9" r="0.9" fill="currentColor"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="16" height="7" rx="1.5" fill="currentColor"/><rect x="23" y="4" width="1.5" height="4" rx=".75" fill="currentColor" opacity=".45"/></svg>
+    </span>
+  </div>
+
+  <header class="nav-header">
+    <div class="nav-header__bar">
+      <a href="TeacherAccount.dc.html" class="back-btn" aria-label="رجوع"><svg class="icon icon--lg" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <h1 class="nav-header__title">صورة التوقيع</h1>
+    </div>
+  </header>
+
+  <main class="screen__body">
+    <p class="text-body tone-muted">يظهر توقيعك على كل إجازة تصدر بطلبك.</p>
+
+    <section class="section">
+      <h2 class="section__title">المعاينة</h2>
+      <div class="signature-pad" role="img" aria-label="لم تُرفع صورة توقيع بعد">لم تُرفع صورة بعد</div>
+      <span class="field__hint">صورة واضحة لتوقيعك بالحبر على ورقة بيضاء، PNG أو JPG.</span>
+    </section>
+
+    <section class="section">
+      <h2 class="section__title">أين يظهر</h2>
+      <div class="row row--top gap-4">
+        <figure class="certificate-page certificate-page--compact">
+          <img class="certificate-page__image" src="/_blob/3446c9c9b29da8526f246f9d45725fd1" alt="صفحة الإجازة، وعليها توقيع المعلم أسفلها">
+        </figure>
+        <p class="text-callout tone-muted grow">أسفل الإجازة، بجانب الختم.</p>
+      </div>
+    </section>
+
+    <button type="button" class="btn btn--primary btn--block push"><svg class="icon icon--md" data-icon="upload" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>رفع التوقيع</button>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

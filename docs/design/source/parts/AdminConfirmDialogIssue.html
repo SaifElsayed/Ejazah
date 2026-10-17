@@ -1,0 +1,33 @@
+  <div class="scrim"></div>
+
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="ci-title">
+    <div class="row row--top gap-3">
+      <span class="icon-tile icon-tile--accent">{{icon:award:md}}</span>
+      <div class="stack gap-half grow">
+        <h2 class="dialog__title" id="ci-title">اعتماد وإصدار الإجازة</h2>
+        <p class="text-caption tone-muted">يوسف أحمد · حفظ القرآن · برواية حفص عن عاصم · من الشيخ أحمد المصري</p>
+      </div>
+    </div>
+
+    <section class="section">
+      <h3 class="group-label">ما يحدث فور التأكيد</h3>
+      <ul class="stack gap-2 text-callout">
+        <li class="row row--top gap-2">{{icon:award:sm}}<span>تصدر الإجازة برقمها الآن، بالأسماء كما أُدخلت: المُجيز الشيخ المقرئ أحمد بن عبد الله بن محمود المصري، والمُجاز يوسف بن أحمد بن سعيد الشريف.</span></li>
+        <li class="row row--top gap-2">{{icon:qr-code:sm}}<span>تظهر في صفحة التحقق العامة بأنها صالحة، وفي إجازات الطالب.</span></li>
+        <li class="row row--top gap-2">{{icon:bell:sm}}<span>يصل إشعار إلى الشيخ أحمد المصري وإلى يوسف أحمد.</span></li>
+        <li class="row row--top gap-2">{{icon:lock:sm}}<span>لا تُعدَّل بعد صدورها؛ لسحبها إجراء مستقل بسبب.</span></li>
+      </ul>
+    </section>
+
+    <div class="field">
+      <label class="field__label" for="ci-reason">ملاحظة للسجل (اختيارية)</label>
+      <textarea id="ci-reason" class="input" rows="3" placeholder="مثلًا: السند مطابق لإجازة المعلم الموثّقة، والأسماء مطابقة للوثائق"></textarea>
+      <span class="field__hint">لا تصل إلى المعلم ولا الطالب.</span>
+    </div>
+
+    <div class="dialog__actions">
+      <a href="AdminIjazahRequests.dc.html" class="btn btn--secondary btn--md">إلغاء</a>
+      <button type="button" class="btn btn--primary btn--md">اعتماد وإصدار</button>
+    </div>
+    <p class="panel__note">يُسجَّل الإجراء، وملاحظتك إن كتبتها، باسمك في سجل التدقيق.</p>
+  </section>

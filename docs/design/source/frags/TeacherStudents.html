@@ -1,0 +1,110 @@
+<div class="screen screen--long" dir="rtl" data-theme="light">
+{{SB}}
+
+  <header class="app-header">
+    <h1 class="app-header__title">طلابي</h1>
+    <div class="app-header__actions">
+      <a href="TeacherNotifications.dc.html" class="icon-btn icon-btn--surface" aria-label="الإشعارات، توجد غير مقروءة">{{icon:bell:lg}}<span class="icon-btn__dot"></span></a>
+    </div>
+  </header>
+
+  <main class="screen__body gap-3">
+    <div class="search-row">
+      <label class="input-group">
+        {{icon:search:md}}
+        <input class="input-group__control" type="search" placeholder="ابحث باسم الطالب" aria-label="ابحث باسم الطالب">
+      </label>
+    </div>
+
+    <div class="category-tabs" role="tablist" aria-label="حالة الاشتراك">
+      <button type="button" class="category-tabs__item category-tabs__item--selected" role="tab" aria-selected="true">جارية<span class="category-tabs__count">8</span></button>
+      <a href="TeacherStudentsEnded.dc.html" class="category-tabs__item" role="tab" aria-selected="false">منتهية<span class="category-tabs__count">2</span></a>
+    </div>
+
+    <ul class="list" aria-label="الاشتراكات الجارية، الأقرب موعدًا أولًا">
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">ن</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">نور سمير</strong>
+            <span class="text-caption tone-success">الجلسة 4 من 8 · اليوم 2:00 م</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--neutral">تسميع</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherCancelRespond.dc.html" class="list__row">
+          <span class="avatar">ح</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">حسن إبراهيم</strong>
+            <span class="text-caption tone-muted">الجلسة 5 من 12 · اليوم 4:00 م</span>
+            <span class="text-caption tone-warning">طلب إلغاء من الطالب</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">ي</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">يوسف أحمد</strong>
+            <span class="text-caption tone-muted">الجلسة 4 من 8 · اليوم 6:00 م</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--neutral">تسميع</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">ز</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">زياد طارق</strong>
+            <span class="text-caption tone-muted">الجلسة 4 من 12 · اليوم 8:15 م</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">ي</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">يوسف أحمد <span class="text-caption text-regular tone-muted">· اشتراك ثانٍ</span></strong>
+            <span class="text-caption tone-muted">الجلسة 1 من 8 · السبت 7 نوفمبر 10:00 ص</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--neutral">تسميع</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">ع</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">عمر سامي</strong>
+            <span class="text-caption tone-muted">الجلسة 4 من 8 · الأحد 8 نوفمبر 5:00 م</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--neutral">تسميع</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">ع</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">عبد الرحمن علي</strong>
+            <span class="text-caption tone-muted">الجلسة 7 من 8 · الأربعاء 11 نوفمبر 9:00 ص</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--neutral">تسميع</span></span>
+        </a>
+      </li>
+      <li>
+        <a href="TeacherEnrollment.dc.html" class="list__row">
+          <span class="avatar">م</span>
+          <span class="stack grow">
+            <strong class="text-body text-bold">مصطفى كمال</strong>
+            <span class="text-caption tone-muted">الجلسة 4 من 12 · الأربعاء 11 نوفمبر 11:00 ص</span>
+          </span>
+          <span class="stack gap-1 items-end"><span class="badge badge--success">جارٍ</span><span class="badge badge--accent">مسار إجازة</span></span>
+        </a>
+      </li>
+    </ul>
+  </main>
+
+  {{TABS:teacher:TeacherStudents}}
+</div>

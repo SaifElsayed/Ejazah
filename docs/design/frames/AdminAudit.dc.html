@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الإدارة — سجل التدقيق</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/ijazah/tokens.css">
+<link rel="stylesheet" href="ds/ijazah/components.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&amp;family=Inter:wght@400;500;700&amp;family=Amiri+Quran&amp;display=swap">
+</helmet>
+<div class="console" dir="rtl" data-theme="light" data-density="compact">
+  <aside class="sidebar" aria-label="لوحة الإدارة">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">إ</span><span class="brand__name">إجازة · الإدارة</span></span>
+    <nav class="sidebar__nav">
+      <span class="sidebar__group">الطوابير</span>
+      <a href="AdminHome.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="house" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg><span>نظرة عامة</span></a>
+      <a href="AdminApplications.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="user-check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="m16 11 2 2 4-4"/></svg><span>طلبات المعلمين</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminCredentials.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="file-text" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg><span>مراجعة الإجازات</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminIjazahRequests.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="mail" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>طلبات الإجازة</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminDisputes.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="alert-circle" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>النزاعات</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminCompensation.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="scale" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg><span>التعويضات</span><span class="badge badge--neutral nav-item__count">3</span></a>
+      <a href="AdminGender.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="shield-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>بلاغات الجنس</span><span class="badge badge--neutral nav-item__count">1</span></a>
+      <a href="AdminSessionReview.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="activity" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>مراجعة الجلسات</span><span class="badge badge--neutral nav-item__count">2</span></a>
+      <a href="AdminReports.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg><span>البلاغات</span><span class="badge badge--neutral nav-item__count">4</span></a>
+      <span class="sidebar__group">السجلات والنظام</span>
+      <a href="AdminUsers.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="users" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></svg><span>المستخدمون</span></a>
+      <a href="AdminReviews.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 3 1.1-6.2L3 9.7l6.2-.9z"/></svg><span>التقييمات</span></a>
+      <a href="AdminEnrollments.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="book" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h13v16H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></svg><span>الاشتراكات والجلسات</span></a>
+      <a href="AdminPayments.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="credit-card" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg><span>المدفوعات</span></a>
+      <a href="AdminIjazahs.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="award" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/></svg><span>الإجازات</span></a>
+      <a href="AdminSettings.dc.html" class="nav-item"><svg class="icon icon--md" data-icon="sliders-horizontal" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>الإعدادات</span></a>
+      <a href="AdminAudit.dc.html" class="nav-item nav-item--active" aria-current="page"><svg class="icon icon--md" data-icon="list" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg><span>سجل التدقيق</span></a>
+    </nav>
+    <div class="sidebar__footer">
+      <div class="row gap-3"><span class="avatar avatar--sm">س</span><span class="stack grow"><span class="text-callout text-medium">سارة عادل</span><span class="text-caption tone-muted">مشرفة</span></span><a href="AdminSignIn.dc.html" class="icon-btn icon-btn--muted" aria-label="تسجيل الخروج"><svg class="icon icon--md" data-icon="log-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></a></div>
+      <div class="segmented" role="group" aria-label="اللغة">
+        <a href="AdminAudit.dc.html" class="segmented__option segmented__option--selected" aria-pressed="true">العربية</a>
+        <button type="button" class="segmented__option" aria-pressed="false">English</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="page">
+    <header class="page-header">
+      <div class="stack">
+        <h1 class="page-header__title">سجل التدقيق</h1>
+        <p class="page-header__subtitle">كل قرار ملزم يتخذه مشرف، بسببه وبما كان قبله وبعده. السجل يُضاف إليه فقط.</p>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div class="toolbar">
+        <div class="search-row">
+          <label class="input-group input-group--surface toolbar__search">
+            <svg class="icon icon--md" data-icon="search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span class="visually-hidden">بحث</span>
+            <input class="input-group__control" placeholder="الهدف أو السبب">
+          </label>
+          <button type="button" class="icon-btn icon-btn--surface filter-trigger filter-trigger--active" aria-label="الفلاتر · 1 مفعّل" aria-expanded="false"><svg class="icon icon--md" data-icon="filter" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span class="filter-trigger__count">1</span></button>
+        </div>
+        <div class="filter-chips" aria-label="الفلاتر المفعّلة">
+          <button type="button" class="chip chip--selected chip--removable" aria-label="إزالة فلتر التاريخ">التاريخ: آخر 15 يومًا<svg class="icon icon--xs" data-icon="x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <a href="AdminAudit.dc.html" class="link">مسح الكل</a>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="split__list">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>الوقت</th><th>المشرف</th><th>الإجراء</th><th>الهدف</th><th>السبب</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="stack"><span>15 أكتوبر</span><span class="text-caption tone-muted">11:20 ص</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">طلب معلومات إضافية</td>
+                  <td class="table__wrap"><a href="AdminApplications.dc.html" class="link">طلب انضمام الشيخ إبراهيم صالح</a></td>
+                  <td class="table__wrap tone-muted">صورة الوجه الخلفي للبطاقة غير واضحة…</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>14 أكتوبر</span><span class="text-caption tone-muted">5:40 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">إزالة تعليق تقييم</td>
+                  <td class="table__wrap"><a href="AdminReviews.dc.html" class="link">تقييم سعيد منصور للشيخ أحمد المصري</a></td>
+                  <td class="table__wrap tone-muted">رقم هاتف شخصي في التعليق.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>14 أكتوبر</span><span class="text-caption tone-muted">1:15 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">رفض طلب انضمام</td>
+                  <td class="table__wrap"><a href="AdminApplications.dc.html" class="link">طلب انضمام الشيخ حامد يونس</a></td>
+                  <td class="table__wrap tone-muted">الوثائق المرفوعة لا تطابق الاسم المسجّل.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>13 أكتوبر</span><span class="text-caption tone-muted">3:10 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">تسجيل مكالمة التحقق</td>
+                  <td class="table__wrap"><a href="AdminApplications.dc.html" class="link">طلب انضمام الشيخة منى عبد الرحمن</a></td>
+                  <td class="table__wrap tone-muted">النتيجة: مناسب.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>13 أكتوبر</span><span class="text-caption tone-muted">2:30 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">اعتماد إجازة معلم</td>
+                  <td class="table__wrap"><a href="AdminCredentials.dc.html" class="link">إجازة التجويد · الشيخة منى عبد الرحمن</a></td>
+                  <td class="table__wrap tone-muted">نُسخت: حفص عن عاصم · من طريق الشاطبية · 29 جيلًا.</td>
+                </tr>
+                <tr>
+                  <td><span class="stack"><span>12 أكتوبر</span><span class="text-caption tone-muted">12:05 م</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">إصدار إجازة بطلب المعلم</td>
+                  <td class="table__wrap"><a href="AdminIjazahs.dc.html" class="link"><span class="table__num certificate-number">R5TN-9WQE-3KDX-6HPA</span></a></td>
+                  <td class="table__wrap tone-muted">طلب الشيخ أحمد المصري لسعيد منصور.</td>
+                </tr>
+                <tr class="table__row--selected">
+                  <td><span class="stack"><span>12 أكتوبر</span><span class="text-caption tone-muted">10:30 ص</span></span></td>
+                  <td>سارة عادل</td>
+                  <td class="table__wrap text-medium">رفض بلاغ</td>
+                  <td class="table__wrap"><a href="AdminReports.dc.html" class="link">بلاغ محادثة</a></td>
+                  <td class="table__wrap tone-muted">لا مخالفة في المحادثة.</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-footer">
+              <span>7 من 25 · آخر 15 يومًا · بتوقيت القاهرة</span>
+              <nav class="pager" aria-label="الصفحات"><button type="button" class="pager__page" aria-label="الصفحة السابقة" disabled><svg class="icon icon--sm" data-icon="chevron-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><span class="pager__page pager__page--current" aria-current="page">1</span><button type="button" class="pager__page">2</button><button type="button" class="pager__page">3</button><button type="button" class="pager__page" aria-label="الصفحة التالية"><svg class="icon icon--sm" data-icon="chevron-left" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button></nav>
+            </div>
+          </div>
+        </div>
+
+        <aside class="split__detail" aria-label="تفاصيل القيد">
+          <section class="panel">
+            <header class="panel__header">
+              <span class="icon-tile icon-tile--lg icon-tile--neutral"><svg class="icon icon--lg" data-icon="flag" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></span>
+              <span class="stack grow">
+                <strong class="text-title-3">رفض بلاغ · بلاغ محادثة</strong>
+                <span class="text-caption tone-muted">12 أكتوبر 2026 · 10:30 ص · سارة عادل</span>
+              </span>
+            </header>
+
+            <div class="panel__body">
+              <section class="section">
+                <h2 class="group-label">قبل ← بعد</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">قبل</dt><dd class="kv__value"><span class="badge badge--warning">مفتوح</span></dd></div>
+                  <div class="kv__item"><dt class="kv__label">بعد</dt><dd class="kv__value"><span class="badge badge--neutral">مرفوضة</span></dd></div>
+                  <div class="kv__item"><dt class="kv__label">السياق</dt><dd class="kv__value">محادثة</dd></div>
+                  <div class="kv__item"><dt class="kv__label">من</dt><dd class="kv__value">طابور البلاغات</dd></div>
+                </dl>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">السبب</h2>
+                <p class="text-callout">لا مخالفة في المحادثة.</p>
+              </section>
+
+              <section class="section">
+                <h2 class="group-label">القيد</h2>
+                <dl class="kv">
+                  <div class="kv__item"><dt class="kv__label">رقم القيد</dt><dd class="kv__value table__num">AUD-2026-018391</dd></div>
+                  <div class="kv__item"><dt class="kv__label">الهدف</dt><dd class="kv__value"><a href="AdminReports.dc.html" class="link">بلاغ محادثة</a></dd></div>
+                </dl>
+              </section>
+            </div>
+
+            <footer class="panel__footer">
+              <p class="panel__note">القيود تُضاف فقط: لا يُعدَّل قيد ولا يُحذف، ولا يملك ذلك أي مشرف.</p>
+            </footer>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
