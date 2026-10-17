@@ -75,6 +75,12 @@ ones taken with real hesitation are listed at the end.
 - **26 — the public pages on the API's origin.** A separate static site is the usual choice; the
   API's origin was chosen to avoid a deploy and paid hosting before launch.
 
+**The owner's review (2026-10-17).** All six rows are confirmed as applied. Row 17 and row 26 carry
+conditions, written into ADR 0021 D5: the Terms and the public pages are served by the API under
+their own paths, with a strict CSP, no cookie, escaping templates and the anonymous rate limits; the
+Terms carry the version FR-AUTH-11 records. Row 46 stays locked because the date of birth drives the
+minor flag; a change goes through the admin. ADR 0021 D1–D4 are accepted the same day.
+
 The audit target labels, the English subject names, the notification kinds FR-NOTIF-1 lists and
 the design does not draw, and the support address are data-model and configuration decisions: ADR
 0021 D1–D4 (proposed). The Discovery search and filters and the public pages' home are ADR 0021 D5

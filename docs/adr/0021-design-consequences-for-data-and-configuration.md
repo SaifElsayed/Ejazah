@@ -1,6 +1,6 @@
 # ADR 0021 — What the design asks of the data and the configuration: English subject names, audit target labels, the undrawn notification kinds, and the support address
 
-**Status:** proposed (draft; D5 and D6 record decisions the owner took on 2026-10-15 and 2026-10-17 and the design already applies; D1–D4 wait for acceptance) · **Date:** 2026-10-17 · **Decided by:** the owner for D5 and D6; — for D1–D4 · **Amends (once accepted):** ERD §4 note on `subjects`, §11 `notifications.type`, §12 `audit_logs`; SRS FR-NOTIF-1 (lists the events by name), FR-LOC-1 (note), §3.11 FR-ADMIN-17 (note), §3.4 FR-DISC-1/2 (name search, filters), FR-BOOK-7 (the teacher's list search); ARCHITECTURE §3 configuration list, §5 (the public pages); `.env.example` · **Builds on:** [ADR 0020](0020-design-files-in-the-repository.md) D5/D6 (the inventory and the copy catalogue), ADR 0014 D2 (user content stays as typed on English pages), ADR 0017 and ADR 0018 (which add events to FR-NOTIF-1 without naming the enum members)
+**Status:** accepted (D1–D4 accepted by the owner on 2026-10-17, with the conditions written into D2, D4 and D5; D5 and D6 record decisions of 2026-10-15 and 2026-10-17 that the design already applies) · **Date:** 2026-10-17 · **Decided by:** the owner, 2026-10-17 · **Amends (applied when this branch is updated from `develop` after ADR 0012 to 0019 merge, so every governing document is edited once):** ERD §4 note on `subjects`, §11 `notifications.type`, §12 `audit_logs`; SRS FR-NOTIF-1 (lists the events by name), FR-LOC-1 (note), §3.11 FR-ADMIN-17 (note), §3.4 FR-DISC-1/2 (name search, filters), FR-BOOK-7 (the teacher's list search); ARCHITECTURE §3 configuration list, §5 (the public pages); `.env.example` · **Builds on:** [ADR 0020](0020-design-files-in-the-repository.md) D5/D6 (the inventory and the copy catalogue), ADR 0014 D2 (user content stays as typed on English pages), ADR 0017 and ADR 0018 (which add events to FR-NOTIF-1 without naming the enum members)
 
 ## Context
 
@@ -31,7 +31,7 @@ review or the decision sheet.
    was drawn and approved by the owner on 2026-10-15; FR-DISC-1/2 still say "by subject" and nothing
    gives the teacher a search.
 
-## Decision (proposed)
+## Decision
 
 ### D1 — The English name of a subject is data, shown on English pages
 
@@ -65,6 +65,9 @@ review or the decision sheet.
   `admin.dialogs.mfaReset.title`), which become server-rendered labels too.
 - `admin.audit.targets.*` leave the admin catalogue; their templates move to the renderer's Arabic
   source. `target_type` and `target_id` stay as they are (ADR 0011 D5).
+- Condition (owner, 2026-10-17): the label is a noun phrase that names the target (its name, its
+  number or its kind word) and nothing else: no action word, no free text, nothing typed by the
+  admin. It is at most 200 characters; the audit writer refuses an empty or longer one.
 
 ### D3 — Every notification kind FR-NOTIF-1 lists renders in the one drawn shape, and the enum names them all
 
@@ -122,6 +125,10 @@ review or the decision sheet.
   `{supportEmail}` in `web.deleteAccount.done.confirmation`) and the `mailto:` of «تواصل مع الدعم»
   on the two restricted screens is built from the same value. A support address change is a
   configuration change, not a release.
+- Condition (owner, 2026-10-17): the query is a `publicProcedure`, so it declares its rate limit as
+  every anonymous endpoint must (T170); the apps cache the value and never block start-up on it.
+  The address is never editable from the admin panel: an admin account that is taken over must not
+  be able to point users at another mailbox.
 
 ### D5 — The public web pages are served by the API (decided 2026-10-17)
 
@@ -133,6 +140,13 @@ review or the decision sheet.
 - An unknown or malformed code answers HTTP 404 with the VerifyCertificateNotFound page; a revoked
   ijazah answers 200 with the VerifyCertificateRevoked page (FR-IJAZAH-8: validity, revocation status
   and the public reason).
+- Conditions (owner, 2026-10-17): the pages live under their own paths of the API, never mixed
+  with the procedure routes; they send a strict `Content-Security-Policy` and set no cookie; they are
+  rendered from templates that escape every value by default (a name, a code, a reason are
+  untrusted data); and they run under the same rate limits as the anonymous procedures. The Terms
+  body (decision sheet row 17) is served the same way, with the version FR-AUTH-11 records in
+  `terms_acceptances`. Moving the pages to a static site later is a relocation of templates, not a
+  redesign.
 
 ### D6 — Discovery search and filters, and the teacher's student search, as drawn (decided 2026-10-15)
 
@@ -146,7 +160,7 @@ review or the decision sheet.
   the active and ended tabs.
 - The subject-section tabs show counts (the number of visible teachers per subject).
 
-## Consequences (D1–D4 wait for acceptance; D5 and D6 are applied in the design and listed for the SRS)
+## Consequences (applied when this branch is updated from `develop` after ADR 0012 to 0019 merge; D5 and D6 are already applied in the design)
 
 - **ERD.**
   - §4 `subjects`: a note on `name_en` (D1: the English display name; required on creation).
