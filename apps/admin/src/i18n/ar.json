@@ -21,7 +21,6 @@
         "lastSignIn": "آخر دخول {date} · {time}",
         "mfaLine": "التحقق بخطوتين مفعّل منذ {date} · بقي {count, plural, one {رمز استرداد واحد} two {رمزا استرداد} few {# رموز استرداد} many {# رمز استرداد} other {# رمز استرداد}}",
         "resetMfa": "إعادة ضبط التحقق بخطوتين",
-        "resetRequestText": "أبلغ {name} الدعم يوم {date} {time} أنه فقد هاتفه ورموز الاسترداد. تحقّق من هويته بمكالمة قبل إعادة الضبط.",
         "resetRequestTitle": "طلب إعادة ضبط التحقق",
         "selfNote": "لا يستطيع المشرف إعادة ضبط تحققه أو تعطيل حسابه بنفسه؛ يفعل ذلك مشرف آخر بسبب."
       },
@@ -436,6 +435,15 @@
           },
           "title": "قبول وثيقة {name}"
         },
+        "approveApplication": {
+          "confirm": "اعتماد",
+          "effects": {
+            "approved": "يصبح معلمًا معتمدًا، وتصبح إجازاته الموثّقة مواده.",
+            "notified": "يصل إشعار إلى {name}.",
+            "payout": "يبدأ إعداد حساب الاستلام من التطبيق؛ لا يظهر للطلاب قبل توثيقه."
+          },
+          "title": "اعتماد طلب {name}"
+        },
         "approveCredential": {
           "confirm": "اعتماد",
           "effects": {
@@ -479,9 +487,9 @@
           "cancel": "إلغاء",
           "effectsTitle": "ما يحدث فور التأكيد",
           "footer": "يُتاح التأكيد بعد كتابة السبب. يُسجَّل الإجراء وسببه باسمك في سجل التدقيق.",
-          "footerNote": "يُتاح التأكيد بعد كتابة الملاحظة. يُسجَّل الإجراء وملاحظتك باسمك في سجل التدقيق.",
+          "footerNote": "يُسجَّل الإجراء، وملاحظتك إن كتبتها، باسمك في سجل التدقيق.",
           "noteHint": "لا تصل إلى المستخدم.",
-          "noteLabel": "ملاحظة للسجل (إلزامية)",
+          "noteLabel": "ملاحظة للسجل (اختيارية)",
           "reasonPlaceholder": "اكتب سببًا واضحًا"
         },
         "confirmSessionOutcome": {
@@ -1202,7 +1210,7 @@
         "chainTitle": "السند · {generations} · من طريق {tariq}",
         "footer": "السحب لا يمنع الطالب من إجازات لاحقة، والمنع إجراء مستقل. كل إجراء هنا يطلب سببًا ويُسجَّل في سجل التدقيق.",
         "grantor": "المُجيز",
-        "issued": "صدرت {date} · اعتمدتها {admin}",
+        "issued": "صدرت {date} · اعتماد {admin}",
         "request": "الطلب",
         "requestValue": "أرسله المعلم {date}",
         "revoke": "سحب الإجازة",
@@ -1410,7 +1418,6 @@
       },
       "tabs": {
         "actioned": "تم اتخاذ إجراء",
-        "decided": "تم البتّ",
         "dismissed": "مرفوضة",
         "open": "مفتوحة"
       },
@@ -1637,8 +1644,7 @@
         "banned": "محظور",
         "disabled": "معطّل",
         "suspended": "موقوف",
-        "verificationPending": "بانتظار إثبات الهوية",
-        "verificationRequired": "يلزم التحقق"
+        "verificationPending": "بانتظار إثبات الهوية"
       },
       "application": {
         "approved": "معتمد",
@@ -1712,8 +1718,7 @@
       },
       "report": {
         "actioned": "تم اتخاذ إجراء",
-        "dismissed": "مرفوض",
-        "dismissedTab": "مرفوضة",
+        "dismissed": "مرفوضة",
         "open": "مفتوح"
       },
       "review": {
@@ -1776,7 +1781,7 @@
         "title": "مؤشرات الثقة"
       },
       "verification": {
-        "approvedBy": "اعتمدته {admin}",
+        "approvedBy": "اعتماد {admin}",
         "approvedOn": "اعتُمد",
         "callDate": "مكالمة التحقق",
         "callNotes": "ملاحظات المكالمة",
@@ -1834,7 +1839,7 @@
         "statusAll": "الكل",
         "statusBanned": "محظور",
         "statusSuspended": "موقوف",
-        "statusVerificationRequired": "يلزم التحقق"
+        "statusVerificationRequired": "بانتظار إثبات الهوية"
       },
       "lede": "الطلاب والمعلمون. كل إيقاف أو منع أو حظر يحتاج سببًا ويُسجَّل في سجل التدقيق.",
       "pagerSummary": "{shown} من {total} · حسب آخر نشاط",

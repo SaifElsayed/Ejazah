@@ -33,19 +33,12 @@
 
     <section class="stack gap-3" aria-labelledby="counter-title">
       <button type="button" id="counter-title" class="btn btn--ghost btn--md self-start" aria-expanded="true">اقتراح موعد آخر</button>
-      <div class="grid-2 gap-2">
-        <div class="field">
-          <span class="field__label" id="cdate">التاريخ</span>
-          <button type="button" class="input row row--between" aria-labelledby="cdate">
-            <span>الخميس 3 ديسمبر</span>{{icon:chevron-down:md}}
-          </button>
-        </div>
-        <div class="field">
-          <span class="field__label" id="ctime">الوقت</span>
-          <button type="button" class="input row row--between" aria-labelledby="ctime">
-            <span>6:00 م</span>{{icon:chevron-down:md}}
-          </button>
-        </div>
+      <div class="field">
+        <span class="field__label" id="cslot">موعد آخر من مواعيد المعلم</span>
+        <button type="button" class="input row row--between" aria-labelledby="cslot">
+          <span>الثلاثاء 8 ديسمبر · 4:00 م</span>{{icon:chevron-down:md}}
+        </button>
+        <span class="field__hint">مواعيده الحرة بمدة 45 دقيقة.</span>
       </div>
       <p class="row row--top gap-2 text-caption tone-muted">{{icon:info:sm}}إن لم يوافق المعلم يبقى الموعد المقترح</p>
       <a href="EnrollmentDetail.dc.html" class="btn btn--secondary btn--block">إرسال للمعلم</a>

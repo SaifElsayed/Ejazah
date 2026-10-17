@@ -1,6 +1,6 @@
 # ADR 0021 — What the design asks of the data and the configuration: English subject names, audit target labels, the undrawn notification kinds, and the support address
 
-**Status:** proposed (draft for the owner, 2026-10-17) · **Date:** 2026-10-17 · **Decided by:** — · **Amends (once accepted):** ERD §4 note on `subjects`, §11 `notifications.type`, §12 `audit_logs`; SRS FR-NOTIF-1 (lists the events by name), FR-LOC-1 (note), §3.11 FR-ADMIN-17 (note); ARCHITECTURE §3 configuration list; `.env.example` · **Builds on:** [ADR 0020](0020-design-files-in-the-repository.md) D5/D6 (the inventory and the copy catalogue), ADR 0014 D2 (user content stays as typed on English pages), ADR 0017 and ADR 0018 (which add events to FR-NOTIF-1 without naming the enum members)
+**Status:** proposed (draft; D5 and D6 record decisions the owner took on 2026-10-15 and 2026-10-17 and the design already applies; D1–D4 wait for acceptance) · **Date:** 2026-10-17 · **Decided by:** the owner for D5 and D6; — for D1–D4 · **Amends (once accepted):** ERD §4 note on `subjects`, §11 `notifications.type`, §12 `audit_logs`; SRS FR-NOTIF-1 (lists the events by name), FR-LOC-1 (note), §3.11 FR-ADMIN-17 (note), §3.4 FR-DISC-1/2 (name search, filters), FR-BOOK-7 (the teacher's list search); ARCHITECTURE §3 configuration list, §5 (the public pages); `.env.example` · **Builds on:** [ADR 0020](0020-design-files-in-the-repository.md) D5/D6 (the inventory and the copy catalogue), ADR 0014 D2 (user content stays as typed on English pages), ADR 0017 and ADR 0018 (which add events to FR-NOTIF-1 without naming the enum members)
 
 ## Context
 
@@ -24,6 +24,12 @@ review or the decision sheet.
 4. Four boards show a support e-mail address (PayoutRejected, TeacherRestricted, AccountRestricted,
    DeleteAccountWebDone). The catalogue passes it as a placeholder (`{email}`, `{supportEmail}`);
    nothing defines where the value comes from.
+5. Two public web pages (certificate verification, account deletion) are drawn, and ADR 0020 left open
+   where they are served.
+6. Discovery searches by teacher name as well as subject, filters by rating (الكل / 5…1 فأعلى), by
+   riwaya within a subject and by track, and the teacher's «طلابي» list has a search field. All of it
+   was drawn and approved by the owner on 2026-10-15; FR-DISC-1/2 still say "by subject" and nothing
+   gives the teacher a search.
 
 ## Decision (proposed)
 
@@ -117,7 +123,30 @@ review or the decision sheet.
   on the two restricted screens is built from the same value. A support address change is a
   configuration change, not a release.
 
-## Consequences (to apply once accepted; nothing is applied by this draft)
+### D5 — The public web pages are served by the API (decided 2026-10-17)
+
+- The certificate verification page (`/verify/:code`, with `?lang=en` for English) and the account
+  deletion page (`/delete-account`, its code step and its done step) are server-rendered pages of the
+  API on its own origin, drawn with the design's stylesheet. No separate deploy, no public routes in
+  the admin SPA, no paid hosting before launch; the signed PDF URLs and the deletion code come from
+  the same service.
+- An unknown or malformed code answers HTTP 404 with the VerifyCertificateNotFound page; a revoked
+  ijazah answers 200 with the VerifyCertificateRevoked page (FR-IJAZAH-8: validity, revocation status
+  and the public reason).
+
+### D6 — Discovery search and filters, and the teacher's student search, as drawn (decided 2026-10-15)
+
+- FR-DISC-1 gains: search by teacher name (prefix match on the display name, the match highlighted)
+  as well as by subject; filters by track (ADR 0018 D1), by minimum rating (الكل, then 5…1 stars and
+  up, FR-REVIEW-3) and, when the selected subject has riwayas on the approved credentials, by riwaya.
+  The filter dropdown closes on apply or on the trigger; the applied chips are removable one by one.
+- FR-DISC-3 is unchanged: every result shares the student's gender, enforced at the query layer; a
+  name search never returns an incompatible teacher.
+- FR-BOOK-7 gains, on the teacher's side: the «طلابي» list is searchable by the student's name, in
+  the active and ended tabs.
+- The subject-section tabs show counts (the number of visible teachers per subject).
+
+## Consequences (D1–D4 wait for acceptance; D5 and D6 are applied in the design and listed for the SRS)
 
 - **ERD.**
   - §4 `subjects`: a note on `name_en` (D1: the English display name; required on creation).
@@ -133,13 +162,17 @@ review or the decision sheet.
   - FR-NOTIF-1: the events listed by the enum member names of D3, so the requirement and the ERD
     say the same list (ADR 0017 and ADR 0018 added events in prose).
   - §3.14: nothing; the support address is not an admin setting.
+  - FR-DISC-1/2 and FR-BOOK-7: the text of D6.
 - **ARCHITECTURE.** §3 configuration: `SUPPORT_EMAIL`; the `platform.publicConfig` query under the
-  platform module; the audit writer renders `targetLabel` and refuses an empty one.
+  platform module; the audit writer renders `targetLabel` and refuses an empty one. §5: the public pages
+  are routes of the API (D5), rendered from templates that load the design stylesheet.
 - **Catalogues.** `admin.audit.targets.*` (five keys), `admin.credentials.a11y.documentPage` and
   `admin.dialogs.mfaReset.title` move from `apps/admin/src/i18n/` to the server renderer (D2);
   `notifications.items.*` grow by the undrawn kinds after the copy review (D3).
-- **Design.** No board changes. `screens.md` rows for Notifications and TeacherNotifications cite
-  D3; the admin audit rows cite D2.
+- **Design.** `screens.md` rows for Notifications and TeacherNotifications cite D3; the admin audit
+  rows cite D2; the public pages are `web /verify/:code` (three states drawn) and `web /delete-account`
+  (D5); the Discovery and TeacherStudents boards already draw D6. The three proposal boards were
+  removed from the canvas on 2026-10-17 (their fragments are kept under `docs/design/source/proposals/`).
 - **Work.** D2 is a Phase 1 task (the audit writer exists); D1 is a note on the subjects page task;
   D3 and D4 are Phase 2 tasks with the notifications module and the public pages.
 

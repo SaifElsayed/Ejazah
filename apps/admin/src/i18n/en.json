@@ -21,7 +21,6 @@
         "lastSignIn": "Last sign-in {date} · {time}",
         "mfaLine": "Two-step verification enabled since {date} · {count, plural, one {# recovery code} other {# recovery codes}} left",
         "resetMfa": "Reset two-step verification",
-        "resetRequestText": "{name} told support on {date} {time} that they lost their phone and recovery codes. Verify their identity by a call before resetting.",
         "resetRequestTitle": "Verification reset requested",
         "selfNote": "An admin cannot reset their own verification or disable their own account; another admin does that with a reason."
       },
@@ -436,6 +435,15 @@
           },
           "title": "Accept {name}’s document"
         },
+        "approveApplication": {
+          "confirm": "Approve",
+          "effects": {
+            "approved": "They become an approved teacher, and their verified credentials become their subjects.",
+            "notified": "{name} is notified.",
+            "payout": "Payout setup starts in the app; they are not shown to students until it is verified."
+          },
+          "title": "Approve {name}’s application"
+        },
         "approveCredential": {
           "confirm": "Approve",
           "effects": {
@@ -479,9 +487,9 @@
           "cancel": "Cancel",
           "effectsTitle": "What happens on confirmation",
           "footer": "Confirmation is available once the reason is written. The action and its reason are recorded under your name in the audit log.",
-          "footerNote": "Confirmation is available once the note is written. The action and your note are recorded under your name in the audit log.",
+          "footerNote": "The action, and your note if you write one, are recorded under your name in the audit log.",
           "noteHint": "Not sent to the user.",
-          "noteLabel": "Note for the record (required)",
+          "noteLabel": "Note for the record (optional)",
           "reasonPlaceholder": "Write a clear reason"
         },
         "confirmSessionOutcome": {
@@ -1410,7 +1418,6 @@
       },
       "tabs": {
         "actioned": "Action taken",
-        "decided": "Decided",
         "dismissed": "Dismissed",
         "open": "Open"
       },
@@ -1637,8 +1644,7 @@
         "banned": "Banned",
         "disabled": "Disabled",
         "suspended": "Suspended",
-        "verificationPending": "Awaiting proof of identity",
-        "verificationRequired": "Verification required"
+        "verificationPending": "Awaiting proof of identity"
       },
       "application": {
         "approved": "Approved",
@@ -1713,7 +1719,6 @@
       "report": {
         "actioned": "Action taken",
         "dismissed": "Dismissed",
-        "dismissedTab": "Dismissed",
         "open": "Open"
       },
       "review": {
@@ -1834,7 +1839,7 @@
         "statusAll": "All",
         "statusBanned": "Banned",
         "statusSuspended": "Suspended",
-        "statusVerificationRequired": "Verification required"
+        "statusVerificationRequired": "Identity proof pending"
       },
       "lede": "Students and teachers. Every suspension, bar or ban needs a reason and is recorded in the audit log.",
       "pagerSummary": "{shown} of {total} · by last activity",

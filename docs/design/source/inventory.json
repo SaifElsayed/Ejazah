@@ -935,6 +935,28 @@
   "links": []
  },
  {
+  "id": "VerifyCertificateRevoked",
+  "title": "صفحة التحقق — إجازة مسحوبة",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
+  "id": "VerifyCertificateNotFound",
+  "title": "صفحة التحقق — رقم غير موجود",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "",
+  "links": []
+ },
+ {
   "id": "StudentAccount",
   "title": "الطالب — حسابي",
   "w": 390,
@@ -945,10 +967,24 @@
   "heading": "حسابي",
   "links": [
    "Notifications",
+   "StudentProfileEditor",
    "TimeZonePicker",
    "Terms",
    "SignOutSheet",
    "DeleteAccount"
+  ]
+ },
+ {
+  "id": "StudentProfileEditor",
+  "title": "الملف الشخصي للطالب",
+  "w": 390,
+  "h": 844,
+  "kind": "phone",
+  "tabs": "",
+  "adminNav": "",
+  "heading": "الملف الشخصي",
+  "links": [
+   "StudentAccount"
   ]
  },
  {
@@ -1867,56 +1903,6 @@
   "heading": "الإشعارات",
   "links": [
    "Main"
-  ]
- },
- {
-  "id": "ProposalMain",
-  "title": "مقترح — الطالب: الرئيسية (بديل قيد القرار)",
-  "w": 390,
-  "h": 997,
-  "kind": "phone",
-  "tabs": "",
-  "adminNav": "",
-  "heading": "السلام عليكم يا يوسف",
-  "links": [
-   "Notifications",
-   "PreSession",
-   "CancelRespondSheet",
-   "Enrollments",
-   "EnrollmentDetail",
-   "WriteReview",
-   "Discovery"
-  ]
- },
- {
-  "id": "ProposalTeacherHome",
-  "title": "t",
-  "w": 390,
-  "h": 1050,
-  "kind": "phone",
-  "tabs": "",
-  "adminNav": "",
-  "heading": "اليوم",
-  "links": [
-   "TeacherNotifications",
-   "TeacherPreSession",
-   "TeacherCancelRespond",
-   "TeacherStudents",
-   "TeacherEnrollment"
-  ]
- },
- {
-  "id": "ProposalTeacherStudents",
-  "title": "t",
-  "w": 390,
-  "h": 1172,
-  "kind": "phone",
-  "tabs": "",
-  "adminNav": "",
-  "heading": "طلابي",
-  "links": [
-   "TeacherNotifications",
-   "TeacherEnrollment"
   ]
  },
  {

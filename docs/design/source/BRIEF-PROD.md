@@ -17,19 +17,22 @@ for phone; admin boards add `1440 900`). Every board you create or touch must en
 If a class is truly missing, use the closest one and list the gap in your report. Delete your PNGs.
 
 ## Product rules (from the SRS; do not invent beyond them)
+
 - **A package has no name.** ERD `packages` = subject, session count, duration, price, is_active. Show a package as
   «حفظ القرآن · 8 جلسات · 45 دقيقة» (or shorter «حفظ القرآن · 8 جلسات» in tight rows). Remove names like
   «تسميع أسبوعي» / «مراجعة مكثفة» from every screen you own. Packages are «فعّالة» or «موقوفة» (no draft/archived tabs).
 - **Subjects** are an admin list (`subjects.name_ar`). Use exactly: «حفظ القرآن», «التجويد», «القراءات». The riwaya and tariq belong to a teacher's approved credential
   (ADR 0017) and appear with that credential and its ijazahs («حفص عن عاصم · من طريق الشاطبية»); never on packages or
-  filters. No scope («جزء عمّ»). Discovery filters only by subject.
+  filters. No scope («جزء عمّ»). Discovery searches by teacher name or subject, and filters by subject, track,
+  rating (الكل / 5…1 نجوم فأعلى) and, within a subject that has them, riwaya (owner, 2026-10-15; ADR 0021 D6).
 - **Enrollment status words** (same everywhere, app and admin): Pending-Payment «بانتظار الدفع», Confirmed «جارٍ»,
   Completed «مكتمل», Terminated-No-Show «انتهى لغياب المعلم», Cancelled «ملغى». A «قيد التأكيد» badge only for the
   ProcessingDelayed case.
 - **Session status words**: Scheduled «قادمة», Done «تمت», Student-No-Show «غياب الطالب», Teacher-No-Show «غياب المعلم»,
-  Both-No-Show «لم يحضر أحد (لا تُحتسب)», Under-Threshold and Provider-Outage → user sees «قيد المراجعة» (admin sees
-  «أقل من حد الحضور» / «انقطاع الخدمة»), Cancelled-By-Agreement «أُلغيت بالاتفاق», Cancelled-By-Admin «ألغتها الإدارة»,
-  Disputed «محل نزاع».
+  Both-No-Show «لم يحضر أحد» (badge; the row's sub-line says «لا تُحتسب · تُقترح جلسة تعويضية»), Under-Threshold and
+  Provider-Outage → user sees «قيد مراجعة الإدارة» (admin sees «أقل من حد الحضور» / «انقطاع الخدمة»),
+  Cancelled-By-Agreement «أُلغيت بالاتفاق», Cancelled-By-Admin «ألغتها الإدارة» (a neutral badge, never danger),
+  Disputed «محل نزاع». The SessionStates board is the reference list (owner, 2026-10-17).
 - **Cancellation** = a request with a reason; the other party accepts or declines; it expires at the session start.
   No refund button anywhere for users; reimbursement is an admin compensation case.
 - **No rescheduling, no enrollment cancellation by the student, no wallet/balance/earnings, no recording, no guardian,
@@ -53,5 +56,6 @@ If a class is truly missing, use the closest one and list the gap in your report
   admin "now" = الخميس 15 أكتوبر 2026.
 
 ## Report back (short)
+
 Boards created (name, title, size), boards edited, every href target you used that you did not create, every gap
 (missing class) with the class you would add, and anything in the SRS you could not satisfy.

@@ -26,6 +26,7 @@
       "submit": "حذف الحساب",
       "title": "حذف الحساب",
       "warning": "لديك {count, plural, one {اشتراك جارٍ واحد} two {اشتراكان جاريان} few {# اشتراكات جارية} many {# اشتراكًا جاريًا} other {# اشتراك جارٍ}} مع {teacher}. ستُلغى جلساتك القادمة كلها دون تعويض.",
+      "warningMany": "لديك {count, plural, one {اشتراك جارٍ واحد} two {اشتراكان جاريان} few {# اشتراكات جارية} many {# اشتراكًا جاريًا} other {# اشتراك جارٍ}}. ستُلغى جلساتك القادمة كلها دون تعويض.",
       "warningShort": "لديك {count, plural, one {اشتراك جارٍ واحد} two {اشتراكان جاريان} few {# اشتراكات جارية} many {# اشتراكًا جاريًا} other {# اشتراك جارٍ}} مع {teacher}."
     },
     "deleteAccount": "حذف الحساب",
@@ -40,6 +41,11 @@
       "en": "English"
     },
     "memberSince": "{gender, select, female {طالبة} other {طالب}} · منذ {date}",
+    "notifications": "الإشعارات",
+    "notificationsOff": "متوقفة · من إعدادات الجهاز",
+    "notificationsOn": "مفعّلة · من إعدادات الجهاز",
+    "profile": "الملف الشخصي",
+    "profileValue": "الاسم والصورة",
     "providers": {
       "apple": "Apple",
       "email": "البريد وكلمة المرور",
@@ -53,6 +59,7 @@
       },
       "bannedTitle": "حسابك محظور",
       "contactSupport": "تواصل مع الدعم",
+      "finalLede": "لن تعود إلى المنصة. وصلك السبب في الإشعار.",
       "lede": "أوقفنا حسابك حتى تنتهي مراجعة بلاغ.",
       "signOut": "تسجيل الخروج",
       "stopped": "متوقف الآن",
@@ -126,6 +133,7 @@
       "lede": "سنرسل رمزًا إلى بريدك لتختار كلمة مرور جديدة.",
       "otherMethod": "الدخول بطريقة أخرى",
       "sendCode": "إرسال الرمز",
+      "sentAny": "إن كان البريد مسجّلًا بكلمة مرور فقد وصلك الرمز.",
       "title": "نسيت كلمة المرور"
     },
     "otp": {
@@ -143,6 +151,10 @@
       "lede": "أرسلنا رمزًا إلى {email}",
       "resendIn": "إعادة الإرسال بعد {time}",
       "title": "تأكيد بريدك"
+    },
+    "password": {
+      "minLength": "8 أحرف على الأقل",
+      "mismatch": "كلمتا المرور غير متطابقتين"
     },
     "resetPassword": {
       "code": "رمز التحقق",
@@ -321,6 +333,11 @@
       "weeklySlot": "كل {weekday} {time}",
       "zoneOf": "بتوقيت {city}"
     },
+    "toast": {
+      "cancelRequestSent": "أُرسل طلب الإلغاء",
+      "reportSent": "أُرسل البلاغ",
+      "reviewSent": "شكرًا لتقييمك"
+    },
     "track": {
       "ijazah": "مسار إجازة",
       "ijazahTrack": "مسار إجازة",
@@ -434,6 +451,11 @@
       "reasonIjazah": "صدور إجازتك",
       "reasonPayment": "نتيجة الدفع",
       "reasonReminder": "تذكير قبل كل جلسة",
+      "teacher": {
+        "reasonApplication": "نتيجة طلبك",
+        "reasonBookings": "الحجوزات الجديدة وطلبات الإلغاء",
+        "reasonReminder": "تذكير قبل كل جلسة"
+      },
       "title": "لا تفوّتك جلسة"
     },
     "profile": {
@@ -459,31 +481,7 @@
       "title": "كيف ستستخدم إجازة؟"
     },
     "terms": {
-      "changes": "نخبرك قبل أي تغيير في الشروط.",
-      "compensation": {
-        "body1": "إن لم تتم جلسة كما يجب فافتح نزاعًا. تقرر الإدارة التعويض بعد المراجعة.",
-        "body2": "الجلسة التي يغيب عنها المعلم أو تُلغى بالاتفاق تُعوَّض بجلسة أخرى، ولك في باقات التسميع أن تطلب استرداد ثمنها بدلًا منها إن غاب المعلم.",
-        "title": "التعويض"
-      },
-      "conduct": {
-        "body1": "الإساءة والتحرش والمحتوى غير اللائق ممنوعة في الجلسات والمحادثات. يمكنك الإبلاغ عن أي مخالفة.",
-        "body2": "إيقاف الحساب أو حظره بسبب مخالفة لا يُستحق عنه استرداد.",
-        "title": "السلوك"
-      },
-      "identity": {
-        "body": "قد نطلب منك وثيقة هوية في أي وقت. التسجيل بجنس غير جنسك يؤدي إلى حظر الحساب.",
-        "title": "الهوية والجنس"
-      },
-      "intermediary": {
-        "body": "تربطك المنصة بمعلمين معتمدين، ولا تقدّم التعليم بنفسها. المعلم مسؤول عن جلساته وعن الإجازة التي يمنحها.",
-        "title": "إجازة وسيط تقني"
-      },
-      "payment": {
-        "body": "تدفع ثمن الباقة للمعلم عبر بوابة الدفع. لا تحتفظ المنصة بأموالك ولا تأخذ عمولة.",
-        "title": "الدفع"
-      },
-      "title": "الشروط والأحكام",
-      "version": "الإصدار {version} · سارية من {date}"
+      "title": "الشروط والأحكام"
     },
     "timeZone": {
       "a11y": {
@@ -603,7 +601,8 @@
     "ijazah": {
       "issued": "صدرت",
       "pending": "قيد المراجعة",
-      "rejected": "مرفوض"
+      "rejected": "مرفوض",
+      "revoked": "مسحوبة"
     },
     "package": {
       "active": "فعّالة",
@@ -631,6 +630,11 @@
     "booking": {
       "availableSlots": "المواعيد المتاحة",
       "continueToPayment": "متابعة إلى الدفع",
+      "noSlots": {
+        "action": "اختر باقة أخرى",
+        "text": "كل مواعيد المعلم بهذه المدة محجوزة.",
+        "title": "لا مواعيد متاحة لهذه الباقة"
+      },
       "packageLine": "{subject} · {sessions} × {minutes} دقيقة · بتوقيت {city}",
       "range": "أول جلسة: {firstDate}، {time} · آخر جلسة: {lastDate}",
       "slotBooked": "{slot} · محجوز",
@@ -710,7 +714,6 @@
       "orderNumber": "رقم الطلب",
       "package": "الباقة",
       "packageValue": "{subject} · {sessions} · {minutes} دقيقة",
-      "packageWithTeacher": "{subject} · {sessions} · {teacher}",
       "pay": "ادفع {amount}",
       "payWithin": "أكمل الدفع خلال {time}",
       "slot": "الموعد",
@@ -937,7 +940,6 @@
       },
       "reviewMeta": "مع {teacher} · اكتمل {date}",
       "reviewPrompt": "قيّم اشتراكك المكتمل في {subject}",
-      "sessionTimeToday": "اليوم {weekday} · {start} – {end} · بتوقيت {city}",
       "sessionTimeTodayDated": "اليوم {date} · {start} – {end} · بتوقيت {city}",
       "sessionTitle": "{subject} — {teacher}",
       "startsIn": "{hours, plural, one {خلال ساعة} two {خلال ساعتين} few {خلال # ساعات} many {خلال # ساعة} other {خلال # ساعة}}",
@@ -952,19 +954,32 @@
       "makeup": "جلسة تعويضية",
       "proposed": "المقترح: {date} {time}",
       "refund": "استرداد ثمن الجلسة · {amount}",
+      "refundRequested": {
+        "text": "تقرره الإدارة وتخبرك بالنتيجة.",
+        "title": "طُلب الاسترداد"
+      },
       "title": "غاب المعلم عن جلسة {date}",
       "window": "اختر خلال {days, plural, one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}، وإلا حُجزت الجلسة التعويضية"
     },
     "makeupProposal": {
       "accept": "قبول الموعد",
-      "date": "التاريخ",
       "fallback": "إن لم يوافق المعلم يبقى الموعد المقترح",
       "meta": "{minutes, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}} · بتوقيت {city} · تعويض عن جلسة {date}",
+      "otherSlot": "موعد آخر من مواعيد المعلم",
+      "otherSlotHint": "مواعيده الحرة بمدة {minutes} دقيقة.",
       "proposeOther": "اقتراح موعد آخر",
       "send": "إرسال للمعلم",
       "slot": "{date} · {time}",
-      "time": "الوقت",
       "title": "الجلسة التعويضية"
+    },
+    "profile": {
+      "birthDate": "تاريخ الميلاد",
+      "changePhoto": "تغيير الصورة",
+      "lockedHint": "للتغيير تواصل مع الدعم.",
+      "name": "الاسم الظاهر",
+      "nameHint": "يراه معلموك. اسمك على الإجازة يُدخل مرة واحدة عند أول طلب إجازة.",
+      "save": "حفظ",
+      "title": "الملف الشخصي"
     },
     "report": {
       "details": "التفاصيل (اختياري)",
@@ -998,6 +1013,7 @@
       "selected": "{rating} من 5 · {label}",
       "submit": "إرسال التقييم",
       "summary": "{subject} · {done} من {total} جلسات · اكتمل {date}",
+      "summaryTerminated": "{subject} · {done} من {total} جلسات · انتهى {date}",
       "title": "قيّم اشتراكك"
     },
     "sessions": {
@@ -1034,6 +1050,8 @@
         "title": "السند — {subject}"
       },
       "minutesPerSession": "{minutes} دقيقة للجلسة",
+      "noReviews": "لا تقييمات بعد",
+      "noSlots": "لا مواعيد متاحة حاليًا",
       "packages": "الباقات",
       "pricePerSession": "{price} للجلسة",
       "ratingOf": "{rating} من {count, plural, one {تقييم واحد} two {تقييمين} few {# تقييمات} many {# تقييمًا} other {# تقييم}}",
@@ -1044,7 +1062,8 @@
       "report": "إبلاغ",
       "reviewLine": "{rating} · {date}",
       "reviews": "التقييمات",
-      "reviewsCount": "{rating} · {count, plural, one {تقييم واحد} two {تقييمان} few {# تقييمات} many {# تقييمًا} other {# تقييم}}"
+      "reviewsCount": "{rating} · {count, plural, one {تقييم واحد} two {تقييمان} few {# تقييمات} many {# تقييمًا} other {# تقييم}}",
+      "showFullChain": "عرض السند كاملًا"
     },
     "teacherReviews": {
       "a11y": {
@@ -1165,6 +1184,7 @@
         "confirm": "تعطيل الموعد",
         "contextLine": "{day} · {time} · {minutes} دقيقة · بتوقيتك: {city}",
         "text": "لا يُعرض للحجز الجديد. الجلسات المحجوزة عليه تبقى في مواعيدها حتى ينتهي اشتراك {student} في {date}، ويمكنك تفعيله متى شئت.",
+        "textMany": "لا يُعرض للحجز الجديد. الجلسات المحجوزة عليه تبقى في مواعيدها حتى ينتهي آخر اشتراك في {date}، ويمكنك تفعيله متى شئت.",
         "title": "تعطيل موعد {day} {time}؟"
       },
       "editor": {
@@ -1173,6 +1193,8 @@
         "disableNote": "تبقى الجلسات المحجوزة على هذا الموعد كما هي.",
         "duration": "المدة",
         "durationOption": "{minutes} د",
+        "enable": "تفعيل الموعد",
+        "newTitle": "موعد جديد",
         "save": "حفظ الموعد",
         "starts": "يبدأ",
         "timeZoneHint": "بتوقيتك: {city}",
@@ -1295,6 +1317,10 @@
         "title": "الإجازة بالسند",
         "view": "عرض الإجازة"
       },
+      "ijazahRequest": {
+        "rejectedReason": "السبب: {reason}",
+        "status": "طلب الإجازة · {status}"
+      },
       "noShowWarning": "غياب آخر يُنهي هذا الاشتراك وتُفتح قضية تعويض للطالب.",
       "notReviewed": "لم يقيّم الطالب هذا الاشتراك بعد.",
       "payout": "دُفع {paid} ج.م · رسوم البوابة {fee} · يصلك {net} ج.م",
@@ -1397,6 +1423,8 @@
         "duration": "مدة الجلسة",
         "durationOption": "{minutes} د",
         "editNote": "يسري التعديل على الاشتراكات الجديدة فقط.",
+        "frozenHint": "لا يتغيّر المسار ولا المدة بعد أول اشتراك؛ السعر يسري على الاشتراكات الجديدة.",
+        "newTitle": "باقة جديدة",
         "perSessionHint": "{amount} ج.م للجلسة",
         "save": "حفظ الباقة",
         "sessionCount": "عدد الجلسات",
@@ -1495,7 +1523,10 @@
       "availableIjazahs": "إجازات طلابك الصادرة تبقى صالحة",
       "availableSupport": "مراسلة الدعم للاستفسار أو الاعتراض",
       "availableTitle": "ما زال متاحًا",
+      "bannedTitle": "حسابك محظور",
+      "finalLede": "لن تعود إلى المنصة. وصلك السبب في الإشعار.",
       "lede": "أوقفت الإدارة حسابك حتى تنتهي المراجعة. وصلك السبب في الإشعار.",
+      "revokedTitle": "سُحب اعتمادك",
       "stoppedDiscovery": "الظهور للطلاب والحجوزات الجديدة",
       "stoppedSessions": "دخول الجلسات، حتى الجارية الآن",
       "stoppedTitle": "متوقف الآن",
@@ -1644,6 +1675,10 @@
       },
       "title": "حذف حسابك في إجازة"
     },
+    "notFound": {
+      "text": "تحقّق من الرقم كما هو مطبوع على الشهادة، أو امسح رمز QR من جديد.",
+      "title": "لا توجد إجازة بهذا الرقم"
+    },
     "verify": {
       "brandSuffix": "· التحقق من الإجازات",
       "chain": "السند",
@@ -1655,6 +1690,7 @@
       "issuedValue": "{gregorian} · {hijri}",
       "number": "رقم الشهادة",
       "revoked": "إجازة مسحوبة",
+      "revokedLine": "سُحبت في {date}. السبب: «{reason}»",
       "riwaya": "{riwaya} · من طريق {tariq}",
       "showFullChain": "عرض السند كاملًا ({count, plural, one {جيل واحد} two {جيلان} few {# أجيال} many {# جيلًا} other {# جيل}})",
       "subject": "المادة",

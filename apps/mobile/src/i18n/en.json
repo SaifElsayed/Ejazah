@@ -26,6 +26,7 @@
       "submit": "Delete account",
       "title": "Delete account",
       "warning": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}. All your upcoming sessions will be cancelled without compensation.",
+      "warningMany": "You have {count, plural, one {# active enrollment} other {# active enrollments}}. All your upcoming sessions will be cancelled without compensation.",
       "warningShort": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}."
     },
     "deleteAccount": "Delete account",
@@ -40,6 +41,11 @@
       "en": "English"
     },
     "memberSince": "{gender, select, female {Student} other {Student}} · since {date}",
+    "notifications": "Notifications",
+    "notificationsOff": "Off · from the device settings",
+    "notificationsOn": "On · from the device settings",
+    "profile": "Profile",
+    "profileValue": "Name and photo",
     "providers": {
       "apple": "Apple",
       "email": "Email and password",
@@ -53,6 +59,7 @@
       },
       "bannedTitle": "Your account is banned",
       "contactSupport": "Contact support",
+      "finalLede": "You will not return to the platform. The reason reached you in the notification.",
       "lede": "We suspended your account until the review of a report ends.",
       "signOut": "Sign out",
       "stopped": "Paused for now",
@@ -126,6 +133,7 @@
       "lede": "We will send a code to your email so you can choose a new password.",
       "otherMethod": "Sign in another way",
       "sendCode": "Send code",
+      "sentAny": "If the address is registered with a password, the code has been sent.",
       "title": "Forgot your password"
     },
     "otp": {
@@ -143,6 +151,10 @@
       "lede": "We sent a code to {email}",
       "resendIn": "Resend in {time}",
       "title": "Confirm your email"
+    },
+    "password": {
+      "minLength": "At least 8 characters",
+      "mismatch": "The passwords do not match"
     },
     "resetPassword": {
       "code": "Verification code",
@@ -321,6 +333,11 @@
       "weeklySlot": "every {weekday} {time}",
       "zoneOf": "{city} time"
     },
+    "toast": {
+      "cancelRequestSent": "Cancellation request sent",
+      "reportSent": "Report sent",
+      "reviewSent": "Thank you for your review"
+    },
     "track": {
       "ijazah": "Ijazah track",
       "ijazahTrack": "Ijazah track",
@@ -434,6 +451,11 @@
       "reasonIjazah": "Your ijazah being issued",
       "reasonPayment": "The result of a payment",
       "reasonReminder": "A reminder before each session",
+      "teacher": {
+        "reasonApplication": "Your application’s outcome",
+        "reasonBookings": "New bookings and cancellation requests",
+        "reasonReminder": "A reminder before each session"
+      },
       "title": "Never miss a session"
     },
     "profile": {
@@ -459,31 +481,7 @@
       "title": "How will you use Ijazah?"
     },
     "terms": {
-      "changes": "We will tell you before any change to the terms.",
-      "compensation": {
-        "body1": "If a session did not take place as it should, open a dispute. The administration decides the compensation after review.",
-        "body2": "A session the teacher misses or that is cancelled by agreement is made up with another session; on recitation packages you may ask for a refund of its price instead when the teacher is absent.",
-        "title": "Compensation"
-      },
-      "conduct": {
-        "body1": "Abuse, harassment and inappropriate content are forbidden in sessions and chats. You can report any violation.",
-        "body2": "Suspension or banning of the account for a violation earns no refund.",
-        "title": "Conduct"
-      },
-      "identity": {
-        "body": "We may ask you for an identity document at any time. Registering with a gender other than your own leads to the account being banned.",
-        "title": "Identity and gender"
-      },
-      "intermediary": {
-        "body": "The platform connects you with approved teachers and does not provide the teaching itself. The teacher is responsible for their sessions and for the ijazah they grant.",
-        "title": "Ijazah is a technology intermediary"
-      },
-      "payment": {
-        "body": "You pay the package price to the teacher through the payment gateway. The platform does not hold your money and takes no commission.",
-        "title": "Payment"
-      },
-      "title": "Terms and Conditions",
-      "version": "Version {version} · effective from {date}"
+      "title": "Terms and Conditions"
     },
     "timeZone": {
       "a11y": {
@@ -603,7 +601,8 @@
     "ijazah": {
       "issued": "Issued",
       "pending": "Under review",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "revoked": "Revoked"
     },
     "package": {
       "active": "Active",
@@ -631,6 +630,11 @@
     "booking": {
       "availableSlots": "Available slots",
       "continueToPayment": "Continue to payment",
+      "noSlots": {
+        "action": "Choose another package",
+        "text": "Every slot of the teacher with this length is booked.",
+        "title": "No slots available for this package"
+      },
       "packageLine": "{subject} · {sessions} × {minutes} minutes · {city} time",
       "range": "First session: {firstDate}, {time} · last session: {lastDate}",
       "slotBooked": "{slot} · booked",
@@ -710,7 +714,6 @@
       "orderNumber": "Order number",
       "package": "Package",
       "packageValue": "{subject} · {sessions} · {minutes} minutes",
-      "packageWithTeacher": "{subject} · {sessions} · {teacher}",
       "pay": "Pay {amount}",
       "payWithin": "Complete the payment within {time}",
       "slot": "Slot",
@@ -937,7 +940,6 @@
       },
       "reviewMeta": "with {teacher} · completed {date}",
       "reviewPrompt": "Review your completed {subject} enrollment",
-      "sessionTimeToday": "Today, {weekday} · {start}–{end} · {city} time",
       "sessionTimeTodayDated": "Today, {date} · {start}–{end} · {city} time",
       "sessionTitle": "{subject} — {teacher}",
       "startsIn": "{hours, plural, one {In # hour} other {In # hours}}",
@@ -952,19 +954,32 @@
       "makeup": "Make-up session",
       "proposed": "Proposed: {date} {time}",
       "refund": "Refund of the session · {amount}",
+      "refundRequested": {
+        "text": "The administration decides it and lets you know.",
+        "title": "Refund requested"
+      },
       "title": "The teacher was absent from the session of {date}",
       "window": "Choose within {days, plural, one {# day} other {# days}}, otherwise the make-up session is booked"
     },
     "makeupProposal": {
       "accept": "Accept the time",
-      "date": "Date",
       "fallback": "If the teacher does not agree, the proposed time stands",
       "meta": "{minutes, plural, one {# minute} other {# minutes}} · {city} time · make-up for the session of {date}",
+      "otherSlot": "Another of the teacher’s slots",
+      "otherSlotHint": "Their free slots of {minutes} minutes.",
       "proposeOther": "Propose another time",
       "send": "Send to the teacher",
       "slot": "{date} · {time}",
-      "time": "Time",
       "title": "Make-up session"
+    },
+    "profile": {
+      "birthDate": "Date of birth",
+      "changePhoto": "Change photo",
+      "lockedHint": "To change it, contact support.",
+      "name": "Display name",
+      "nameHint": "Your teachers see it. Your name on the ijazah is entered once, at the first ijazah request.",
+      "save": "Save",
+      "title": "Profile"
     },
     "report": {
       "details": "Details (optional)",
@@ -998,6 +1013,7 @@
       "selected": "{rating} of 5 · {label}",
       "submit": "Send review",
       "summary": "{subject} · {done} of {total} sessions · completed {date}",
+      "summaryTerminated": "{subject} · {done} of {total} sessions · ended {date}",
       "title": "Rate your enrollment"
     },
     "sessions": {
@@ -1034,6 +1050,8 @@
         "title": "Chain of transmission — {subject}"
       },
       "minutesPerSession": "{minutes} minutes per session",
+      "noReviews": "No reviews yet",
+      "noSlots": "No slots available at the moment",
       "packages": "Packages",
       "pricePerSession": "{price} per session",
       "ratingOf": "{rating} from {count, plural, one {# review} other {# reviews}}",
@@ -1044,7 +1062,8 @@
       "report": "Report",
       "reviewLine": "{rating} · {date}",
       "reviews": "Reviews",
-      "reviewsCount": "{rating} · {count, plural, one {# review} other {# reviews}}"
+      "reviewsCount": "{rating} · {count, plural, one {# review} other {# reviews}}",
+      "showFullChain": "Show the full chain"
     },
     "teacherReviews": {
       "a11y": {
@@ -1165,6 +1184,7 @@
         "confirm": "Disable slot",
         "contextLine": "{day} · {time} · {minutes} minutes · your time zone: {city}",
         "text": "It is no longer offered for new bookings. Sessions booked on it keep their times until {student}'s enrollment ends on {date}, and you can enable it whenever you wish.",
+        "textMany": "It is no longer offered for new bookings. Sessions already booked on it keep their times until the last enrollment ends on {date}, and you can enable it whenever you like.",
         "title": "Disable the {day} {time} slot?"
       },
       "editor": {
@@ -1173,6 +1193,8 @@
         "disableNote": "Sessions already booked on this slot stay as they are.",
         "duration": "Length",
         "durationOption": "{minutes} min",
+        "enable": "Enable the slot",
+        "newTitle": "New slot",
         "save": "Save slot",
         "starts": "Starts",
         "timeZoneHint": "Your time zone: {city}",
@@ -1295,6 +1317,10 @@
         "title": "Ijazah with chain",
         "view": "View the ijazah"
       },
+      "ijazahRequest": {
+        "rejectedReason": "Reason: {reason}",
+        "status": "Ijazah request · {status}"
+      },
       "noShowWarning": "Another absence ends this enrollment and opens a compensation case for the student.",
       "notReviewed": "The student has not reviewed this enrollment yet.",
       "payout": "Paid EGP {paid} · gateway fee {fee} · you receive EGP {net}",
@@ -1397,6 +1423,8 @@
         "duration": "Session length",
         "durationOption": "{minutes} min",
         "editNote": "The change applies to new enrollments only.",
+        "frozenHint": "The track and the length do not change after the first enrollment; the price applies to new enrollments.",
+        "newTitle": "New package",
         "perSessionHint": "EGP {amount} per session",
         "save": "Save package",
         "sessionCount": "Number of sessions",
@@ -1495,7 +1523,10 @@
       "availableIjazahs": "Your students' issued ijazahs remain valid",
       "availableSupport": "Writing to support to ask or to object",
       "availableTitle": "Still available",
+      "bannedTitle": "Your account is banned",
+      "finalLede": "You will not return to the platform. The reason reached you in the notification.",
       "lede": "The administration suspended your account until the review ends. The reason was sent to you in a notification.",
+      "revokedTitle": "Your approval was revoked",
       "stoppedDiscovery": "Visibility to students and new bookings",
       "stoppedSessions": "Joining sessions, including those in progress now",
       "stoppedTitle": "Stopped now",
@@ -1644,6 +1675,10 @@
       },
       "title": "Delete your Ijazah account"
     },
+    "notFound": {
+      "text": "Check the number as printed on the certificate, or scan the QR code again.",
+      "title": "No ijazah has this number"
+    },
     "verify": {
       "brandSuffix": "· Ijazah verification",
       "chain": "Chain of transmission",
@@ -1655,6 +1690,7 @@
       "issuedValue": "{gregorian} · {hijri}",
       "number": "Certificate number",
       "revoked": "Revoked ijazah",
+      "revokedLine": "Revoked on {date}. Reason: “{reason}”",
       "riwaya": "{riwaya} · by way of {tariq}",
       "showFullChain": "Show the full chain ({count, plural, one {# generation} other {# generations}})",
       "subject": "Subject",
