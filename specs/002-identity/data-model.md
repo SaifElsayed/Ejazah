@@ -192,33 +192,34 @@ Every number an identity or admin flow reads, planted by `prisma/seed.ts` with
 its default, each named with its unit; `tests/seed/seed.spec.ts`'s row count
 follows.
 
-| Key                             | Default                              | Governs                                      |
-| ------------------------------- | ------------------------------------ | -------------------------------------------- |
-| `admin_lockout_attempts`        | 5                                    | FR-172 (SRS §3.14)                           |
-| `admin_lockout_minutes`         | 15                                   | FR-172 (SRS §3.14)                           |
-| `makeup_choice_window_days`     | 7                                    | ADR 0018 (Phase 3 reads it)                  |
-| `otp_code_ttl_minutes`          | 10                                   | FR-120, FR-129, FR-143                       |
-| `otp_max_attempts`              | 5                                    | the same                                     |
-| `otp_purge_after_hours`         | 24                                   | `purge-otp-codes`                            |
-| `onboarding_token_ttl_minutes`  | 15                                   | FR-125                                       |
-| `session_access_ttl_minutes`    | 15                                   | FR-135                                       |
-| `session_refresh_ttl_days`      | 30                                   | FR-135                                       |
-| `session_refresh_grace_seconds` | 30                                   | R-101                                        |
-| `session_purge_after_days`      | 30                                   | `purge-expired-sessions`                     |
-| `admin_session_idle_minutes`    | 60                                   | FR-170                                       |
-| `admin_session_max_hours`       | 12                                   | FR-170                                       |
-| `admin_invite_ttl_hours`        | 48                                   | FR-174                                       |
-| `push_token_stale_days`         | 90                                   | `purge-stale-push-tokens`                    |
-| `terms_version`                 | `"2026-10"`                          | FR-127                                       |
-| `upload_max_bytes`              | 10485760                             | FR-151                                       |
-| `rate_limit_public_page`        | `{ limit: 60, window_seconds: 60 }`  | FR-144                                       |
-| `rate_limit_upload`             | `{ limit: 20, window_seconds: 600 }` | FR-151                                       |
-| `admin_recovery_code_count`     | 10                                   | FR-171 (ADR 0019 D3)                         |
-| `admin_home_latest_actions`     | 7                                    | FR-176 (`AdminHome`)                         |
-| `admin_list_page_size`          | 25                                   | FR-160, FR-176 (every admin table)           |
-| `provider_nonce_ttl_minutes`    | 10                                   | FR-121 (`auth.providerNonce`)                |
-| `document_link_ttl_seconds`     | 300                                  | FR-151 (every signed document link)          |
-| `rate_limit_token_refresh`      | `{ limit: 30, window_seconds: 60 }`  | FR-135 (`auth.refresh`, by the token's hash) |
+| Key                             | Default                              | Governs                                                                                       |
+| ------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `admin_lockout_attempts`        | 5                                    | FR-172 (SRS §3.14)                                                                            |
+| `admin_lockout_minutes`         | 15                                   | FR-172 (SRS §3.14)                                                                            |
+| `makeup_choice_window_days`     | 7                                    | ADR 0018 (Phase 3 reads it)                                                                   |
+| `otp_code_ttl_minutes`          | 10                                   | FR-120, FR-129, FR-143                                                                        |
+| `otp_max_attempts`              | 5                                    | the same                                                                                      |
+| `otp_purge_after_hours`         | 24                                   | `purge-otp-codes`                                                                             |
+| `onboarding_token_ttl_minutes`  | 15                                   | FR-125                                                                                        |
+| `session_access_ttl_minutes`    | 15                                   | FR-135                                                                                        |
+| `session_refresh_ttl_days`      | 30                                   | FR-135                                                                                        |
+| `session_refresh_grace_seconds` | 30                                   | R-101                                                                                         |
+| `session_purge_after_days`      | 30                                   | `purge-expired-sessions`                                                                      |
+| `admin_session_idle_minutes`    | 60                                   | FR-170                                                                                        |
+| `admin_session_max_hours`       | 12                                   | FR-170                                                                                        |
+| `admin_invite_ttl_hours`        | 48                                   | FR-174                                                                                        |
+| `push_token_stale_days`         | 90                                   | `purge-stale-push-tokens`                                                                     |
+| `terms_version`                 | `"2026-10"`                          | FR-127                                                                                        |
+| `upload_max_bytes`              | 10485760                             | FR-151                                                                                        |
+| `rate_limit_public_page`        | `{ limit: 60, window_seconds: 60 }`  | FR-144                                                                                        |
+| `rate_limit_upload`             | `{ limit: 20, window_seconds: 600 }` | FR-151                                                                                        |
+| `admin_recovery_code_count`     | 10                                   | FR-171 (ADR 0019 D3)                                                                          |
+| `admin_home_latest_actions`     | 7                                    | FR-176 (`AdminHome`)                                                                          |
+| `admin_list_page_size`          | 25                                   | FR-160, FR-176 (every admin table)                                                            |
+| `provider_nonce_ttl_minutes`    | 10                                   | FR-121 (`auth.providerNonce`)                                                                 |
+| `document_link_ttl_seconds`     | 300                                  | FR-151 (every signed document link)                                                           |
+| `rate_limit_token_refresh`      | `{ limit: 30, window_seconds: 60 }`  | FR-135 (`auth.refresh`, by the token's hash)                                                  |
+| `rate_limit_provider_nonce`     | `{ limit: 20, window_seconds: 60 }`  | FR-121 (`auth.providerNonce`, by the client address; the authentication budget caps the path) |
 
 SRS §3.14's table gains the rows a person would change (the admin lockout pair
 is already there; the session, code and upload limits join it); the purge

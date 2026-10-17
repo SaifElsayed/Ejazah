@@ -24,7 +24,7 @@ stand-in (T168). Provider keys, all optional and stripped from every test run:
 `GOOGLE_CLIENT_IDS` (comma-separated audiences), `APPLE_CLIENT_ID`,
 `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
 
-**Stand-in behaviour**: accepts an unsigned fake token of the shape `fake.<provider>.<subject>.<email or ->.<verified|unverified>.<nonce>` — no key, since the device must hold none; the stand-in is refused outside development and test (T168), so the unsigned shape reaches no deployment — still consumes the nonce's mark, records every call, can be told to fail, and answers `exchange` with a recorded fake refresh token and `revoke` with a recorded no-op. The phone app in development builds the fake token behind a development-only flag, so the owner can walk the flow on a device without a provider account.
+**Stand-in behaviour**: accepts an unsigned fake token of the shape `fake.<provider>.<subject>.<email or ->.<verified|unverified>.<nonce>` — no key, since the device must hold none; the stand-in is refused outside development and test (T168), so the unsigned shape reaches no deployment — still compares the nonce it is handed with the fake token's field (the service owns the single-use mark; an adapter holds no Redis state), records every call, can be told to fail, and answers `exchange` with a recorded fake refresh token and `revoke` with a recorded no-op. The phone app in development builds the fake token behind a development-only flag, so the owner can walk the flow on a device without a provider account.
 
 **Live adapter (later task)**: fetches Google's and Apple's JWK sets, caches
 them with their cache headers, verifies with `node:crypto` (RS256 for Google,

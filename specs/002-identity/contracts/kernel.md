@@ -20,13 +20,15 @@ Standing is resolved on every request; nothing is cached across requests
 (FR-108). A resolver never throws for a bad token: it yields null, and the
 kinds answer `UNAUTHENTICATED`.
 
+Both contexts gain `clientAddress`: the socket's peer address, or, when `TRUSTED_PROXY` (an optional platform key, T001) names the one proxy header to trust, that header's first hop. Before launch no proxy is configured (research R-18 left the host open), so it is the socket's; the hosting decision sets the key. It is the subject of the anonymous paths that have no better one (`auth.providerNonce`, `platform.publicConfig`, `catalog.subjects.list`, the four browser routes) and is never logged in full (R-SEC-2: the logger redacts it to its network).
+
 ## The caller kinds
 
 | Kind                         | Change                                                                                                                                                                                                                                                                                                                       |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `publicProcedure`            | Unchanged                                                                                                                                                                                                                                                                                                                    |
 | `studentProcedure`           | Requires role `student`; refuses `suspended` and `banned` with `ACCOUNT_RESTRICTED` unless the procedure declares `admitsRestricted: true`                                                                                                                                                                                   |
-| `userProcedure` (new)        | Any authenticated person of either role, for what both roles share (the account, sign-out, deletion, identity verification); the restricted-account rule as the student kind                                                                                                                                                 |
+| `userProcedure` (new)        | Any authenticated person of either role, for what both roles share (the account, sign-out, deletion, identity verification); the restricted-account rule as the student kind; accepts a `rateLimit` declaration like the student and teacher kinds (`account.delete` declares one)                                           |
 | `teacherProcedure`           | Requires a declaration `admits: 'applicant' \| 'approved' \| 'publishable'` (a procedure without one does not compile); refuses the standing below it with `FORBIDDEN`; the restricted-account rule as the student kind                                                                                                      |
 | `adminProcedure`             | Requires `mfaVerified`; otherwise `MFA_REQUIRED` (or `MFA_SETUP_REQUIRED` when the administrator is unenrolled). Unchanged otherwise: one transaction, the audit record                                                                                                                                                      |
 | `adminPublicProcedure` (new) | On the administrator tRPC instance, anonymous, with a required `rateLimit` declaration like the user surface's public kind; the admin context gains the rate limiter for it. Exists for sign-in, the second factor and the password-set link only; a test asserts the admin surface's public procedures are exactly `auth.*` |
@@ -40,7 +42,7 @@ contract snapshot is unaffected.
 
 ## Idempotency
 
-The key is `(scope, actor_id, key)`; the kernel refuses to key an anonymous mutation (`actor_id` is the server-resolved principal), and refuses a procedure whose output schema carries a token (`accessToken`, `refreshToken`, `sessionToken`, `onboardingToken`), because the first outcome is stored in plain JSON (R-DB-7); `onboarding.complete` is therefore not keyed, and its single use is the token's `jti` mark.
+The key is `(scope, actor_id, key)`; the kernel refuses to key an anonymous mutation (`actor_id` is the server-resolved principal). Keying is a call the handler makes, not a kind option, so what refuses a token-bearing output is a pipeline case: `packages/contracts/src/idempotent-procedures.ts` lists the keyed procedures, `tests/pipeline/output-leak.spec.ts` asserts over the snapshot that none of them has `accessToken`, `refreshToken`, `sessionToken` or `onboardingToken` in its output (R-DB-7), and the idempotency service takes its scope from that list and nothing else. `onboarding.complete` is therefore not keyed, and its single use is the token's `jti` mark.
 
 ## The audit writer
 

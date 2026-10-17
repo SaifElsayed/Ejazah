@@ -66,7 +66,7 @@ seam.
 
 **Constraints**: No third-party credential in the suite (SC-114); no paid infrastructure; no numeric literal in module code (R-MONEY-12); every secret hashed or encrypted (R-DB-7/8); every procedure with an output schema and, where public, a rate limit (T169, T170); Arabic as the source locale and logical direction only; seven working days for one person, with overflow stated and sent to the descope ladder (SC-115).
 
-**Scale/Scope**: 44 SRS requirement ids; 80 specification requirements (FR-101 to FR-217); 6 migrations, 6 new tables, 25 seeded settings rows; 2 new ports; 69 procedures across the two surfaces (32 on the user surface, 37 on the administrator surface); 4 browser routes and the uploads route; 3 scheduled jobs; 1 new lint rule and 2 new pipeline gates; about 60 drawn screens and states across the phone's auth, onboarding, account, application, payout and credentials flows and the admin's sign-in, applications, credentials, admins, home and audit pages. No user-load target: the launch cohort is recruited after Phase 6.
+**Scale/Scope**: 44 SRS requirement ids; 80 specification requirements (FR-101 to FR-217); 6 migrations, 6 new tables, 26 seeded settings rows; 2 new ports; 69 procedures across the two surfaces (32 on the user surface, 37 on the administrator surface); 4 browser routes and the uploads route; 3 scheduled jobs; 1 new lint rule and 2 new pipeline gates; about 60 drawn screens and states across the phone's auth, onboarding, account, application, payout and credentials flows and the admin's sign-in, applications, credentials, admins, home and audit pages. No user-load target: the launch cohort is recruited after Phase 6.
 
 ## Constitution Check
 
@@ -90,13 +90,7 @@ split by phase)?
 | R-HONEST    | Every output is its schema's fields; the first date of birth, document key and recipient reference exist and are kept off the user surface by the leak test                                                                                   | R-HONEST-4's leak test (FR-138)                                                                                               | **PASS** |
 | R-PROC      | Spec, clarification and plan precede code; every batch one branch, one PR, one review; T130's register re-counted; the document pass recorded (R-PROC-2)                                                                                      | The coverage floor widened (FR-213)                                                                                           | **PASS** |
 
-**Note on the one gender input.** `onboarding.complete` carries `gender`: the
-person's own declaration, made once, before any account exists, from which the
-server-held value every later request reads is written. T159's lint rule
-(`gender/no-authority-in-input`) refuses `gender` in any input schema; this
-procedure is the single allow-listed exception, and R-GENDER-6's test asserts
-the allow-list has exactly that one entry (contracts/app-surface.md). No other
-input on either surface names gender; the admin's correction is Phase 4's.
+**Note on the one input that names gender and role.** `onboarding.complete` carries `gender` and `role`: the person's own declarations, made once, before any account exists, from which the server-held values every later request reads are written. T159's lint rule (`gender/no-authority-in-input`) refuses both names in any input schema; this procedure is the single allow-listed exception, for exactly those two fields, keyed by the exported schema name (`onboardingCompleteInput`), and R-GENDER-6's test maps it to `onboarding.complete` through the snapshot and asserts the allow-list holds nothing else (contracts/app-surface.md). No other input on either surface names either; the admin's gender correction is Phase 4's.
 
 **Review-only tier.** The twelve `REVIEW` rules stay on the pull request
 template. Live in this phase: R-SEC-7 (proven libraries only for auth, session and crypto code: Argon2id, HMAC and JWK verification from `node:crypto`, TOTP from `otplib`; the token layouts and the rotation rule are protocol glue the specs prove, recorded in Complexity Tracking), R-API-5 (the two new ports' names), R-DB-9 (the
@@ -117,8 +111,8 @@ recorded in Complexity Tracking.
 specs/002-identity/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification, clarified 2026-10-17
-├── research.md          # Phase 0 output — 20 decisions (R-101 to R-120)
-├── data-model.md        # Phase 1 output — the ERD pass: 6 tables, the columns, 11 rules, 6 migrations, 25 settings rows
+├── research.md          # Phase 0 output — 21 decisions (R-101 to R-121)
+├── data-model.md        # Phase 1 output — the ERD pass: 6 tables, the columns, 11 rules, 6 migrations, 26 settings rows
 ├── quickstart.md        # Phase 1 output — validation guide, device steps marked as the owner's
 ├── contracts/           # Phase 1 output
 │   ├── README.md
@@ -171,8 +165,8 @@ apps/
 └── api/src/
     ├── modules/
     │   ├── identity/                   # sign-in, onboarding, sessions, reset, account, deletion, the teacher application's columns (written through its entry), payout registration and standing; the deletion web routes; the photo route; mail templates; breached-passwords list
-    │   ├── verification/               # the teacher application's services (writing the profile through identity's entry), documents, verification requests (FR-166), the uploads route
-    │   ├── catalog/                    # subjects (list), credentials and the chain
+    │   ├── verification/               # the teacher application's services (writing the profile through identity's entry), the teacher's credentials and identity-verification routers over catalog's entry, documents, verification requests (FR-166), the uploads route
+    │   ├── catalog/                    # subjects (list), the credential and chain tables with their repository entry; imports identity only
     │   ├── payments/                   # the recipient webhook branch, routed to identity (first consumer of the recipient events)
     │   └── admin/                      # admin sign-in, MFA, lockout, admins, audit queries, the label renderer, home
     ├── platform/
@@ -207,7 +201,7 @@ belong once in the kernel, not once per page. Second, the mobile `(auth)` group
 holds both sign-in and onboarding under `shared/`, because both roles walk them
 identically and the wall between the role trees must not have to be crossed to
 reach the account that does not yet exist. Everything else lands under the
-module or feature folder ARCHITECTURE §4 and §6.1 already assign it. One rule binds the modules this phase fills: `identity` imports no other module; `verification`, `catalog` and `payments` import `identity`'s entry; `admin` imports any; the deletion-and-suspension consequences registry lives in `identity` and the others subscribe to it (research R-121), so Nest's injection and ESM meet no cycle.
+module or feature folder ARCHITECTURE §4 and §6.1 already assign it. One rule binds the modules this phase fills: `identity` imports no other module; `catalog` imports `identity` only; `verification` imports `identity` and `catalog`; `payments` imports `identity`; `admin` imports any; the deletion-and-suspension consequences registry lives in `identity` and the others subscribe to it (research R-121), so Nest's injection and ESM meet no cycle.
 
 ## Complexity Tracking
 
@@ -222,9 +216,9 @@ module or feature folder ARCHITECTURE §4 and §6.1 already assign it. One rule 
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Twenty decisions, R-101 to R-120; none awaits the owner — the six owner decisions were taken at clarification.
+- **Phase 0 — Research**: [research.md](./research.md). Twenty-one decisions, R-101 to R-121; none awaits the owner — the six owner decisions were taken at clarification.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
-- **Phase 2 — Tasks**: not created by this command. Run `/speckit-tasks`.
+- **Phase 2 — Tasks**: [tasks.md](./tasks.md), written by `/speckit-tasks` on 2026-10-17.
 
 ## Post-Design Constitution Re-Check
 
@@ -232,8 +226,7 @@ Re-evaluated after the design artefacts were written. No gate changed from
 PASS, and the design surfaced four points worth recording:
 
 1. **`onboarding.complete` is the one input that names gender.** T159's rule
-   would refuse it; the rule gains a one-entry allow-list and R-GENDER-6's test
-   asserts the list's length is one. The declaration is written from the person
+   would refuse it, and so would it refuse `role`; the rule gains a per-procedure, per-field allow-list holding `onboarding.complete` with `gender` and `role`, keyed by the exported schema name, and R-GENDER-6's test asserts that one procedure with those two fields and nothing else. The declarations are written from the person
    to the server once, before an account exists; after that no input names it.
    The constitution is not bent: R-GENDER-4 forbids _authority_ from a client,
    and a person's own first declaration is the data the authority is later read
