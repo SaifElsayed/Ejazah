@@ -49,7 +49,10 @@ token's nonce to match the one the app sent for that exchange (the replay guard
 both providers support). It reads the provider's email only when the token marks
 it verified (`email_verified` for Google; Apple's addresses are verified or
 relay addresses): an unverified email is treated as absent, so the comparison of
-FR-AUTH-13 never answers for a mailbox the caller does not control.
+FR-AUTH-13 never answers for a mailbox the caller does not control. When the
+provider offers no verified email, onboarding asks for one and verifies it by a
+code before the account is written, as the email flow does, so every account
+still has a verified email (D5, FR-AUTH-1) and `users.email` is never empty.
 
 **D3 — No automatic linking.** A Google or Apple sign-in whose email already
 belongs to another account neither signs in to that account nor merges with it.
