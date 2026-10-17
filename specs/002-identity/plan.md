@@ -259,4 +259,8 @@ PASS, and the design surfaced four points worth recording:
    mints its own link. The rule is kept where it applies and the exception is
    named with its cause.
 
+5. **Two additions the specification did not name, each additive.** `auth_identities.provider_refresh_token_encrypted` (Apple only, encrypted, row-bound) exists because Apple's revoke endpoint needs a token obtained at the first sign-in (research R-103), and FR-141 requires the revoke; and `teacher_profiles.verification_status` gains the member `revoked`, because the ERD's enum had no word for a withdrawn approval distinct from an account suspension (ADR 0016 D2). Both are recorded in data-model.md and the ERD's changelog; neither removes or renames anything (R-API-9).
+
+6. **A fifth user kind, `userProcedure`.** The account, sign-out, deletion and identity-verification procedures serve both roles identically; declaring each twice would be two procedures with one body. The kind admits any authenticated person and narrows nothing by role; the student and teacher kinds stay for everything role-bound (contracts/kernel.md).
+
 **Re-check result: PASS.**

@@ -56,7 +56,7 @@ writer from the target's type and id (FR-180). A read is audited like a write.
 | Procedure                 | Input                       | Output | Audit                                                                                                                                                    |
 | ------------------------- | --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `teachers.suspend`        | `{ teacherUserId, reason }` | `void` | `teacher.suspend`; `account_status = suspended`, sessions revoked; the enrollment consequences attach through the deletion-and-suspension entry (FR-142) |
-| `teachers.revokeApproval` | `{ teacherUserId, reason }` | `void` | `teacher.revoke`; `verification_status = suspended` (the ERD's member for a withdrawn approval), returns through a new application                       |
+| `teachers.revokeApproval` | `{ teacherUserId, reason }` | `void` | `teacher.revoke`; `verification_status = revoked` (the member T011 adds), returns through a new application                                              |
 | `teachers.ban`            | `{ teacherUserId, reason }` | `void` | `teacher.ban`                                                                                                                                            |
 | `teachers.reinstate`      | `{ teacherUserId, reason }` | `void` | `teacher.reinstate`                                                                                                                                      |
 
