@@ -86,8 +86,10 @@ the route the inventory names.
 Every string the boards show is in `apps/mobile/src/i18n/ar.json` with its translation in
 `en.json`, nested by `area.screen.element`, shared words under `common.*` and status words under
 `status.*`. Arabic is the source text (ADR 0002); the English is the translation. Values with data
-in them are ICU MessageFormat templates (`{name}`, `{count, plural, …}` with Arabic's six forms).
-Sample data (names, dates, amounts, codes) is never in the catalogue. The admin panel has its own
+in them are ICU MessageFormat templates (`{name}`, `{count, plural, …}`). An Arabic plural carries
+the five CLDR forms `one`, `two`, `few`, `many` and `other`, and `zero` only where the design draws
+a sentence for zero; a missing `zero` falls back to `other` by ICU. Sample data (names, dates,
+amounts, codes) is never in the catalogue. The admin panel has its own
 pair, `apps/admin/src/i18n/ar.json` and `en.json`, under `admin.*` (ADR 0014 D2). The parity check
 holds both pairs, each by its own script: `pnpm check:i18n` the phone pair and
 `pnpm check:i18n:admin` the admin pair.

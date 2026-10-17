@@ -136,9 +136,12 @@ export function toNumber(value: Scalar): number | Scalar {
   return value;
 }
 
+// Every string literal the TypeScript outputs carry is emitted by JSON.stringify, so a quote, a
+// backslash or a control character in a token value survives as a valid literal; Prettier then
+// normalises the quote style (PR #72 review).
 function literal(value: number | string | readonly number[]): string {
   if (typeof value === 'number') return String(value);
-  if (typeof value === 'string') return `'${value.replace(/'/g, "\\'")}'`;
+  if (typeof value === 'string') return JSON.stringify(value);
   return `[${value.join(', ')}]`;
 }
 
@@ -149,7 +152,7 @@ function block(depth: number, pairs: readonly (readonly [string, string])[]): st
 }
 
 function quoteKey(key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : `'${key}'`;
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 
 interface ShadowLayer {
@@ -464,8 +467,8 @@ export function renderIconsTs(icons: IconSource, consumer: 'mobile' | 'admin'): 
   const missing = DIRECTIONAL_ICONS.filter((name) => !names.includes(name));
   if (missing.length > 0)
     throw new Error(`icons: directional icon not in the registry: ${missing.join(', ')}`);
-  const list = names.map((name) => `  '${name}',`).join('\n');
-  const directional = DIRECTIONAL_ICONS.map((name) => `  '${name}',`).join('\n');
+  const list = names.map((name) => `  ${literal(name)},`).join('\n');
+  const directional = DIRECTIONAL_ICONS.map((name) => `  ${literal(name)},`).join('\n');
   const rule =
     consumer === 'mobile'
       ? 'Directional icons flip through useDirection() (lib/direction.ts), never by hand (R-MOBILE-14).'

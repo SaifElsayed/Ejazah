@@ -1774,10 +1774,12 @@
       "requireId": "طلب إثبات هوية",
       "suspend": "إيقاف الحساب",
       "trust": {
+        "cancelDates": "قُبل {acceptedDate} · رُفض {declinedDate}",
         "cancelRequests": "{count, plural, one {طلب إلغاء منه} two {طلبا إلغاء منه} few {طلبات إلغاء منه} many {طلب إلغاء منه} other {طلب إلغاء منه}}",
-        "cancelSummary": "طلبات الإلغاء التي قدّمها في كل اشتراكاته: قبل الطالب واحدًا ({acceptedDate}) ورفض الآخر ({declinedDate}). لا بلاغات عليه.",
+        "cancelSummary": "طلبات الإلغاء التي قدّمها في كل اشتراكاته: {accepted, plural, =0 {لم يقبل الطالب أيًّا منها} one {قبل الطالب طلبًا واحدًا} two {قبل الطالب طلبين} few {قبل الطالب # طلبات} many {قبل الطالب # طلبًا} other {قبل الطالب # طلب}} {declined, plural, =0 {ولم يرفض أيًّا منها} one {ورفض طلبًا واحدًا} two {ورفض طلبين} few {ورفض # طلبات} many {ورفض # طلبًا} other {ورفض # طلب}}.",
         "noShows": "غياب المعلم",
         "rating": "{rating} من {count, plural, one {تقييم واحد} two {تقييمين} few {# تقييمات} many {# تقييمًا} other {# تقييم}}",
+        "reportsSummary": "{reports, plural, =0 {لا بلاغات عليه} one {عليه بلاغ واحد} two {عليه بلاغان} few {عليه # بلاغات} many {عليه # بلاغًا} other {عليه # بلاغ}}.",
         "title": "مؤشرات الثقة"
       },
       "verification": {

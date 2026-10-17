@@ -1774,10 +1774,12 @@
       "requireId": "Require ID",
       "suspend": "Suspend account",
       "trust": {
+        "cancelDates": "Accepted {acceptedDate} · Declined {declinedDate}",
         "cancelRequests": "{count, plural, one {cancellation request by them} other {cancellation requests by them}}",
-        "cancelSummary": "Cancellation requests they made across all their enrollments: the student accepted one ({acceptedDate}) and declined the other ({declinedDate}). No reports against them.",
+        "cancelSummary": "Cancellation requests they made across all their enrollments: {accepted, plural, =0 {the student accepted none} one {the student accepted one} other {the student accepted #}} {declined, plural, =0 {and declined none} one {and declined one} other {and declined #}}.",
         "noShows": "teacher absences",
         "rating": "{rating} from {count, plural, one {# review} other {# reviews}}",
+        "reportsSummary": "{reports, plural, =0 {No reports against them} one {# report against them} other {# reports against them}}.",
         "title": "Trust signals"
       },
       "verification": {

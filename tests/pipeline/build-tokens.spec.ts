@@ -5,6 +5,7 @@
 // the phone app and stay as written for CSS, a shadow becomes layers the app can map, and a
 // directional icon must exist in the registry.
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +13,7 @@ import {
   DIRECTIONAL_ICONS,
   GENERATED_FILES,
   checkSchemes,
+  generate,
   generateFromRepository,
   iconNames,
   parseShadow,
@@ -123,19 +125,30 @@ describe('values', () => {
 describe('the phone app’s tokens.ts', () => {
   const text = renderTokensTs(source());
 
+  // The render is read before Prettier runs in `generate`, so a literal still carries the double
+  // quotes JSON.stringify gave it; the written file carries the repository's single quotes.
   it('carries resolved values, numbers for lengths and the pixel line height', () => {
-    expect(text).toContain("bg: '#ffffff'");
-    expect(text).toContain("bg: '#141412'");
+    expect(text).toContain('bg: "#ffffff"');
+    expect(text).toContain('bg: "#141412"');
     expect(text).toContain('touch: 44,');
     expect(text).toContain('fast: 120,');
     expect(text).toContain('body: { size: 14, line: 1.7, lineHeight: 23.8 }');
     expect(text).toContain('standard: [0.2, 0, 0, 1]');
-    expect(text).toContain("color: '{color.primary}'");
+    expect(text).toContain('color: "{color.primary}"');
   });
 
   it('is marked generated and exports the semantic colour type', () => {
     expect(text.startsWith('// GENERATED from packages/tokens/tokens.json')).toBe(true);
     expect(text).toContain("export type ColorToken = keyof Tokens['color']['light'];");
+  });
+
+  it('round-trips a value holding a backslash and a quote as a valid literal', async () => {
+    const value = "'Plex' \\ fallback";
+    const tricky = source({ font: { family: { arabic: value }, weight: { bold: '700' } } });
+    const files = await generate(root, tricky, icons, '{}', '{}');
+    const line = /^ {6}arabic: (.+),$/m.exec(files['apps/mobile/src/design/tokens.ts']);
+    expect(line).not.toBeNull();
+    expect(runInNewContext(line?.[1] ?? '')).toBe(value);
   });
 });
 
@@ -156,8 +169,8 @@ describe('the icon lists', () => {
   it('lists every registry name and the directional ones, and leaves documentation keys out', () => {
     expect(iconNames(icons)).not.toContain('$description');
     const text = renderIconsTs(icons, 'mobile');
-    expect(text).toContain("  'star',");
-    expect(text).toContain("export const directionalIcons = [\n  'chevron-right',");
+    expect(text).toContain('  "star",');
+    expect(text).toContain('export const directionalIcons = [\n  "chevron-right",');
     expect(text).toContain('useDirection()');
     expect(renderIconsTs(icons, 'admin')).toContain('[dir="rtl"]');
   });
