@@ -35,7 +35,7 @@ Modules are drawn where service boundaries would go if you ever split them out. 
 | Container | Technology                                    | Responsibility                                            |
 | --------- | --------------------------------------------- | --------------------------------------------------------- |
 | Mobile    | Expo · React Native · TypeScript · NativeWind | Student and Teacher. One binary, one store listing.       |
-| Admin     | Vite · React · shadcn/ui                      | Internal operations. English only. Deliberately plain.    |
+| Admin     | Vite · React · shadcn/ui                      | Internal operations. Arabic and English, the app's design system (ADR 0014). |
 | API       | NestJS · tRPC                                 | All business logic. The only thing touching the database. |
 | Worker    | NestJS · BullMQ                               | Scheduled and deferred work. Second process of `apps/api` (`src/worker.ts`), same modules. |
 | Database  | PostgreSQL · Prisma · one schema              | Single source of truth.                                   |
@@ -289,11 +289,11 @@ design/
 
 Get this wrong for two weeks and fixing it is a rewrite of every screen.
 
-### 6.5 Admin — deliberately separate
+### 6.5 Admin — a separate app on the shared design system
 
-Vite SPA. Routes mirror the admin queues. Shares nothing visual with mobile — no tokens, no theme, no components, no translations. English only, plain shadcn defaults. It is an internal tool, not a product.
+Vite SPA. Routes mirror the admin queues. It uses the app's design system: the same token source, read as CSS variables, and the same component contracts, with shadcn/ui as the behaviour base themed by those tokens (ADR 0014). Arabic (default, RTL) and English.
 
-The only shared thing is `packages/contracts`, and even there it consumes a separate router.
+Beyond the design system (§6.3, ADR 0014 D1), the only shared code is `packages/contracts`, and even there it consumes a separate router.
 
 ## 7. The API layer
 
@@ -498,7 +498,7 @@ Comments explain why, never what. One error shape everywhere: `{ code, message, 
 - No GraphQL. tRPC gives the same safety with fewer concepts.
 - No Redux. TanStack Query for server state; Zustand only for auth, locale, theme.
 - No custom auth. Proven library.
-- No shared design system between admin and mobile. Admin is a tool, not a product.
+- No second design system. Admin and mobile share one token source and one set of component contracts (ADR 0014).
 - No caching layer until something is measurably slow.
 - No wallet, ledger, escrow or balance. The gateway settles directly to the teacher; the platform keeps a record and 0% (ADR 0007).
 

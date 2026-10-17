@@ -81,15 +81,16 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** let a teacher apply and an admin approve them, with the identity model built right the first time.
 
-**SRS:** FR-AUTH-1…13, §2.2, FR-VERIFY-1…11, FR-PAYG-12…16, FR-ADMIN-1/17, FR-LOC-1/2/3
+**SRS:** FR-AUTH-1…15, §2.2, FR-VERIFY-1…11, FR-PROFILE-11, FR-ISNAD-1/2, FR-ADMIN-1/17/19, FR-PAYG-12…16, FR-LOC-1/2/3
 
 **What this phase delivers**
 
 - Sign-up and sign-in with Google, Apple (iOS) or email and password; an email account verifies its address by a one-time code; sign-in before onboarding (ADR 0012)
 - Refresh tokens; password reset for email accounts
+- Account deletion in the app and on the web, with the retention rules (FR-AUTH-14/15, ADR 0015)
 - Email port with a stand-in adapter (ADR 0012); the SMS port stays unused
 - Rate limiting on auth and OTP
-- Role set supporting dual role
+- One role per account, chosen once at onboarding (ADR 0016)
 - Gender and date of birth capture
 - Derived `is_minor` flag surfaced to admin
 - Versioned terms acceptance
@@ -101,10 +102,12 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Admin shell with mandatory MFA
 - Audit log written from day one
 - Verification queue: approve, reject, request more, ban
+- Credential review before approval: each ijazah PDF reviewed and its chain transcribed by the admin (FR-ISNAD-1/2, FR-ADMIN-19, FR-PROFILE-11; ADR 0017 D5)
 - Post-approval payout setup in-app via the payment port; recipient reference stored encrypted; teacher invisible and unbookable until the gateway verifies it (ADR 0007 D3)
 
 **Decisions since this plan was written, carried out here**
 
+- ADR 0012 to ADR 0019 (2026-10-14 and 2026-10-15) are read with this cycle: sign-in and the account row written at onboarding completion (ADR 0012), one role per account (ADR 0016), account deletion and no user-to-user block (ADR 0015), the teacher's credentials table and their review before approval (ADR 0017 D5), full names and admin sign-in limits (ADR 0019); ADR 0018's columns join this phase's ERD pass, its make-up sessions and refund case are Phase 2 and Phase 3 work.
 - Payout setup is the first consumer of the gateway's `recipient_verified` and `recipient_rejected` events, so this phase decides, as an ERD change before that work, how such an event is routed to its teacher: a hash column beside `teacher_profiles.payout_account_ref_encrypted`, or a nullable `teacher_user_id` on `payment_events` (note under T117 in `specs/001-foundations/tasks.md`). The stand-in's `PayoutDetails` fields are provisional until the gateway is selected (OPEN-11).
 - No identity caller verifies a password or a one-time code before the Phase 0 rate limits (T103) are in place, and identity validation caps password length (NIST 800-63B); both recorded from the review of PR #46.
 - Every setting an identity flow reads (OTP expiry, attempt limits, terms version) comes through the kernel's `SettingsReader` from the `settings` table seeded in Phase 0, never a constant.
@@ -124,7 +127,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 **Definition of done**
 
 - A teacher applies end to end on a physical device
-- An admin approves them and the audit log records it
+- An admin reviews each credential, approves them, and the audit log records it
 - Arabic RTL renders correctly on iOS and Android
 - Gender is changeable only by an admin
 - Approval is blocked until the verification call is recorded
@@ -142,7 +145,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 **What this phase delivers**
 
 - Subjects in both languages
-- Teacher profiles and packages
+- Teacher profiles and packages, each package on a track (ADR 0018 D1)
 - `packages/time` complete and DST-safe
 - Availability slots as local time plus zone
 - Search and browse
@@ -185,10 +188,11 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** run a session end to end and settle its outcome from evidence, not from the client.
 
-**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-DISPUTE-1…4
+**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…4
 
 **What this phase delivers**
 
+- Make-up sessions: a session not consumed is made up or refunded by an admin-decided case that carries no amount (ADR 0018 D2 to D4)
 - Video adapter behind the port
 - Server-side token minting and join window
 - Session room: audio, camera, screen share
@@ -225,14 +229,13 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** grant, verify the certificate that is the product.
 
-**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…14, FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, §3.14
+**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, §3.14
 
 **What this phase delivers**
 
-- Chain of transmission per teacher per subject
-- Admin verification of chain entries
+- The chain snapshot at issue; the chain itself is transcribed and reviewed with the credential in Phase 1 (ADR 0017)
 - Teacher signature upload
-- Ijazah granting, generated and uploaded modes
+- Ijazah granting, platform-generated only (the uploaded mode is deferred, ADR 0013)
 - Immutable chain snapshot at grant
 - Non-guessable certificate numbers and QR
 - Public certificate verification page
@@ -241,19 +244,20 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Review moderation preserving the star
 - Push notifications and notification centre
 - Delivery job with retry
-- User reports and block
+- User reports; there is no user-to-user block (ADR 0015 D5)
 - Admin settings surface
 
 **Decisions since this plan was written, carried out here**
 
-- Uploaded (Mode B) certificates are content-sniffed, size-limited and stored under the encrypted, signed-URL regime of verification documents, and the public verification page says plainly that such a certificate was uploaded by the teacher and is not platform-generated (FR-IJAZAH-13/14).
+- A student's ijazah is issued on the teacher's request after the admin's check, and the certificate carries full names (ADR 0017, ADR 0019).
+- Every ijazah is platform-generated (ADR 0013). The uploaded mode, with its content sniffing and its verification-page wording (FR-IJAZAH-13/14), is deferred; `ijazahs.mode` stays and the grant service refuses `uploaded`.
 - The certificate number is sixteen Crockford base32 symbols stored without separators and displayed as 4-4-4-4; the verification token is 32 random bytes in base64url — both minted by the Phase 0 identifiers module (T105).
 - The Arabic RTL PDF spike (Phase 0, T124) decides the rendering approach for the 25-entry chain before this phase's Spec Kit cycle.
 - Reminder jobs keyed to a session's start are rescheduled when the session's instants are recomputed (ADR 0009 D3, `reminder_offsets_minutes`, the key T074 seeds).
 
 **Definition of done**
 
-- A teacher grants a certificate in both modes (generated and uploaded)
+- A teacher requests and the admin issues a platform-generated certificate (ADR 0013, ADR 0017)
 - A 25-entry chain renders correctly in Arabic
 - The public page verifies a certificate by token
 - A teacher can never edit a chain entry
@@ -316,7 +320,6 @@ Cut in this order if a gate slips. The phase each cut belongs to is in brackets,
 - Reviews and ratings (Phase 4)
 - In-session file sharing, keeping text chat (Phase 3)
 - Public certificate verification page (Phase 4)
-- Uploaded certificates, shipping generated only (Phase 4)
 - Notification breadth (Phase 4)
 - Admin settings UI (Phase 4)
 - One store first (Phase 6)

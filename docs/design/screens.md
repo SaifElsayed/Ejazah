@@ -11,7 +11,7 @@ files in `frames/` are the visual source; the route is the implementation.
 | Email sign-up | `(auth)/email-sign-up` | Email and password, then the code |
 | Email code | `(auth)/verify` | Six digits sent to the email, auto-advance, resend timer |
 | Reset password | `(auth)/reset` | Code to the verified email, new password; email accounts only |
-| Role | `(auth)/role` | First sign-in only: student, teacher or both (FR-AUTH-2, FR-AUTH-12) |
+| Role | `(auth)/role` | First sign-in only: student or teacher, chosen once and never changed (FR-AUTH-2, FR-AUTH-12, ADR 0016) |
 | Profile | `(auth)/profile` | Display name (prefilled from Google or Apple), gender, date of birth, time zone, Terms |
 | Confirm gender | sheet | Gender shown back before the account is completed; only an admin can change it later (FR-GENDER-5) |
 
@@ -29,7 +29,8 @@ files in `frames/` are the visual source; the route is the implementation.
 | Payment not completed | `(student)/checkout/failed` | Gateway reported failed or cancelled, or the student backed out. The hold stays. Retry (new order on the same hold, while orders can still be created on it, FR-PAYG-18) or Choose another slot (FR-BOOK-12): immediate when no order on the hold is still payable (`created`), as after a failure; otherwise only once the gateway has cancelled that order. Where the gateway reports the earlier payment went through or is still being processed, the new checkout is refused and the student is taken to that enrollment's Processing screen; where the gateway cannot cancel, the student is offered to continue the previous payment with the time left on it (ADR 0010 D6) |
 | Enrollments | `(student)/enrollments` | Sessions consumed vs total |
 | Credentials | `(student)/credentials` | Granted ijazah, certificate, verify code |
-| Account | `(student)/account` | Locale, notifications |
+| Account | `(student)/account` | Language, time zone, terms, sign out, delete account |
+| Delete account | `(student)/account/delete` | What is deleted and kept, current enrollments, typed confirmation, fresh sign-in, final confirmation (FR-AUTH-14, ADR 0015) |
 
 ## Teacher — `(teacher)`, frames in `Ijazah Teacher Screens v2.dc.html`
 | Frame | Route | Notes |
@@ -37,8 +38,8 @@ files in `frames/` are the visual source; the route is the implementation.
 | Home | `(teacher)/index` | The day at a glance, dense by design |
 | Availability | `(teacher)/availability` | Weekly rules, authored in the teacher zone |
 | Packages | `(teacher)/packages` | Draft, published, archived |
-| Isnad | application flow | Chain entry and document upload |
-| Granting | `(teacher)/granting` | Propose, then confirm an ijazah grant |
+| Credentials | application flow and `(teacher)/credentials` | One ijazah PDF per subject, with its review status; add a subject with its PDF. The teacher types no chain (ADR 0017) |
+| Ijazah request | `(teacher)/ijazah-request` | Started from the student's enrollment: completion date and certificate language, the filled certificate as a preview, then send. The admin issues it on approval (ADR 0017) |
 | Payout setup | `(teacher)/payout-setup` | Shown right after approval; registers a payout account with the gateway and shows pending / verified / rejected. No balance, ever (FR-PAYG-13/15) |
 | Account | `(teacher)/account` | |
 

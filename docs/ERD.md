@@ -49,7 +49,7 @@ Thirty-three tables. One database, one schema. The grouping above maps 1:1 to th
 
 ### `users`
 
-The root identity. One row per human, regardless of how many roles they hold.
+The root identity. One row per human, with exactly one role (ADR 0016).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -60,26 +60,27 @@ The root identity. One row per human, regardless of how many roles they hold.
 | gender | enum male · female | Self-declared, FR-AUTH-3. Changed only via admin (FR-GENDER-5) |
 | date_of_birth | date | FR-AUTH-4 |
 | display_name | text | |
+| certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, added in the Phase 1 pass). Erased on deletion; the names a certificate prints are snapshotted onto `ijazahs` at issue (ADR 0015 D3, ADR 0019 D1) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
 | account_status | enum active · suspended · verification_required · banned | |
-| deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
+| deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10). Account deletion (FR-AUTH-14, ADR 0015) sets it and erases `display_name`, `email`, `phone`, `password_hash` and `date_of_birth` in the same transaction; history rows that point to the user stay |
 | created_at / updated_at | timestamptz | |
 
 `is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
 
-A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
+A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. Its rows are deleted outright when the account is deleted (ADR 0015 D3), so the unique never blocks the person's new account. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
 
 ### `user_roles`
 
-Roles are a set (dual-role, SRS §2.2).
+One row per user in the MVP: an account is a student or a teacher, never both (SRS §2.2, ADR 0016). The table is kept so dual roles can return; a unique index on `user_id` lands with a forward migration in the Phase 1 ERD pass.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | user_id | FK → users | |
 | role | enum student · teacher | |
-| status | enum active · suspended | Per-role suspension independent of account |
+| status | enum active · suspended | Stays `active` in the MVP: suspension is per account (`users.account_status`, ADR 0016) |
 | granted_at | timestamptz | unique (user_id, role) |
 
 ### `teacher_profiles`
@@ -198,6 +199,8 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | currency | char(3), default 'EGP' | |
 | is_active | boolean | Deactivation never touches existing enrollments (FR-PROFILE-3) |
 
+**Amended by ADR 0018 (Phase 1 ERD pass, forward migration).** `packages` gains `track` enum recitation · ijazah_track; `enrollments` gains `snapshot_track`; `sessions` gains `makeup_for_session_id` (nullable, FK → sessions); a new table `session_remedies` (`id`, `session_id` unique, `kind` enum makeup · refund, `status` enum awaiting_choice · proposed · counter_proposed · booked · refund_case, `proposed_date`, `counter_date`, `decided_at`, `case_id` nullable FK → disputes) records what each session not consumed is owed (FR-MAKEUP-1..6); `settings` gains the make-up choice window.
+
 ### `availability_slots`
 
 Recurring weekly, local wall-clock + zone (Architecture §9).
@@ -215,6 +218,8 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 ### `isnad_entries`
 
 Chain of transmission — ordered names, per teacher per subject (FR-ISNAD-1…6). Not a graph.
+
+**Amended by ADR 0017 (shape lands in the Phase 1 ERD pass, forward migration).** The chain is transcribed by the admin from the teacher's ijazah PDF, never typed by the teacher. Each row moves under a credential: `credential_id` FK → `teacher_credentials` replaces (`teacher_user_id`, `subject_id`); `transmitter_name` becomes `names` (text[], one generation holding one or more names, ADR 0004 D3); `position` counts origin first; `verification_status`, `verified_by_admin_id` and `verified_at` go (a chain exists only on an approved credential) and `created_by_admin_id` is added; unique (`credential_id`, `position`). New table `teacher_credentials`: `id`, `teacher_user_id`, `subject_id`, `document_id` FK → `verification_documents` (the PDF), `holder_name` (the teacher's full name as on the PDF, ADR 0019), `riwaya`, `tariq` (nullable), `status` enum pending · needs_document · approved · rejected, `review_reason`, `reviewed_by_admin_id`, `reviewed_at`; one approved credential per (`teacher_user_id`, `subject_id`). The table count changes then, not here.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -270,7 +275,7 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_slot_timezone | text | Zone frozen at purchase — DST maths uses this |
 | status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` when its hold is released without conversion (FR-PAYG-6, ADR 0010 D7), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
-| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7 |
+| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), added with a forward migration in the Phase 1 ERD pass |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | purchased_at | timestamptz | |
 
@@ -386,6 +391,8 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 
 ### `ijazahs`
 
+**Amended by ADR 0017 (Phase 4 ERD pass, forward migration).** An ijazah is issued by the admin on the teacher's request: `ijazahs` gains `request_id` FK → `ijazah_requests` (unique) and `issued_by_admin_id` FK → `admin_users`. New table `ijazah_requests`: `id`, `enrollment_id`, `teacher_user_id`, `student_user_id`, `subject_id`, `completion_date` (date), `language` enum ar · en, `status` enum pending · approved · rejected, `reason` (nullable, mandatory on reject), `decided_by_admin_id`, `decided_at`, `created_at`; at most one pending request per enrollment. `chain_snapshot_json` keeps generations (arrays of names) with the teacher appended (FR-ISNAD-7). ADR 0019 D1 (same pass): `student_name_printed` and `teacher_name_printed` text NOT NULL, the names as issued, so the certificate verifies after a deletion erases `users.certificate_name` (ADR 0015 D3).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
@@ -393,11 +400,11 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | enrollment_id | FK → enrollments | |
 | student_user_id / teacher_user_id | FK → users | Denormalised for rendering |
 | subject_id | FK → subjects | |
-| mode | enum generated · uploaded | FR-IJAZAH-2, DEC-42 |
+| mode | enum generated · uploaded | FR-IJAZAH-2, DEC-42. Always `generated` in the MVP; `uploaded` is kept for a deferred mode and never written (ADR 0013) |
 | language | enum ar · en | Mode A template language (FR-LOC-4) |
-| chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable. Mode A only |
-| certificate_storage_key | text | Generated PDF or uploaded scan; signed URLs only |
-| paper_copy_intended | boolean | Informational (FR-IJAZAH-5) |
+| chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable. Mode A only, so always present in the MVP (ADR 0013) |
+| certificate_storage_key | text | The generated PDF (an uploaded scan once Mode B returns, ADR 0013); signed URLs only |
+| paper_copy_intended | boolean | Informational (FR-IJAZAH-5). Stays false in the MVP: the flag is deferred (ADR 0016) |
 | verification_token_hash | text, unique | Backs the public QR page (FR-IJAZAH-10). The QR carries the plaintext token; the database stores only its hash and looks up by hash (R-DB-7) |
 | granted_at | timestamptz | |
 | revoked_at | timestamptz, nullable | FR-IJAZAH-8. Revocation, not deletion — a revoked ijazah is never shown as valid |
@@ -510,7 +517,7 @@ Separate from `users` entirely (FR-ADMIN-1) — different auth, different tables
 | id | uuid | PK |
 | email | text, unique | |
 | password_hash | text | |
-| mfa_secret_encrypted | bytea | MFA mandatory (NFR-SEC-6) |
+| mfa_secret_encrypted | bytea | MFA mandatory (NFR-SEC-6). One admin role in the MVP, no role column (ADR 0019); single-use recovery codes live in `admin_recovery_codes` (`admin_id`, `code_hash`, `used_at`), added in the Phase 1 pass |
 | display_name | text | |
 | is_active | boolean | |
 | created_at | timestamptz | |
@@ -653,7 +660,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 4. `session_participant_events.provider_event_id` unique — webhook replay safety (attendance).
 5. *Retired (ADR 0005 D1).* Was `ledger_entries.idempotency_key` unique. Number kept so old citations resolve.
 6. *Retired (ADR 0005 D1).* Was UPDATE/DELETE revoked on `ledger_entries`. Number kept so old citations resolve.
-7. `isnad_entries (teacher, subject, position)` unique — a chain cannot have two names at one position.
+7. `isnad_entries (credential_id, position)` unique (ADR 0017) — a chain cannot have two generations at one position.
 8. `chat_messages`: body or attachment, or a purged row — check constraint (FR-SESS-13).
 9. `reviews.rating` between 1 and 5 — check constraint.
 10. `users`, `sessions`, `enrollments`, `ijazahs`, `audit_logs`: no DELETE — revoked at the Postgres role level (R-DB-3). For the first four, removal is `deleted_at` and the row survives. `audit_logs` has no `deleted_at` either: it is strictly append-only, with no removal path at all. The app's DB user physically cannot destroy a person, a lesson, a purchase, a certificate, or any record of what an administrator did.
