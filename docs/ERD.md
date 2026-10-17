@@ -54,9 +54,9 @@ The root identity. One row per human, regardless of how many roles they hold.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| phone | text, unique, nullable | E.164. At least one of phone/email — DB check constraint |
-| email | text, unique, nullable | citext |
-| password_hash | text, nullable | null for OTP-only accounts |
+| phone | text, unique, nullable | E.164. At least one of phone/email — DB check constraint. Unused in MVP: phone sign-up is deferred (ADR 0012) |
+| email | text, unique, nullable | citext. Present on every MVP account: Google and Apple always return one, and email accounts verify theirs (ADR 0012) |
+| password_hash | text, nullable | null for Google and Apple accounts (ADR 0012) |
 | gender | enum male · female | Self-declared, FR-AUTH-3. Changed only via admin (FR-GENDER-5) |
 | date_of_birth | date | FR-AUTH-4 |
 | display_name | text | |
@@ -67,6 +67,8 @@ The root identity. One row per human, regardless of how many roles they hold.
 | created_at / updated_at | timestamptz | |
 
 `is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
+
+A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
 
 ### `user_roles`
 
@@ -109,9 +111,9 @@ Signup verification and password reset (FR-AUTH-1/6).
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| destination | text | phone or email |
+| destination | text | an email address in MVP; a phone number when phone sign-up returns (ADR 0012) |
 | code_hash | text | Never store the code plain |
-| purpose | enum signup · login · password_reset | |
+| purpose | enum signup · login · password_reset | `login` is unused in MVP: email accounts sign in with their password (ADR 0012) |
 | expires_at | timestamptz | Short TTL |
 | consumed_at | timestamptz, nullable | Single-use |
 | attempt_count | int, default 0 | Rate-limit companion |
@@ -645,7 +647,7 @@ Add nothing else until a query is measurably slow (Architecture §17).
 
 Rules that must hold even if application code is buggy — so they live in the schema, not just the service:
 
-1. `users`: at least one of phone/email — check constraint.
+1. `users`: at least one of phone/email — check constraint. Every MVP account has an email (ADR 0012), so the check always holds.
 2. `enrollments`: `student_user_id ≠ teacher_user_id` — check constraint (FR-BOOK-11).
 3. `reviews.enrollment_id` unique — one review per enrollment, unbypassable.
 4. `session_participant_events.provider_event_id` unique — webhook replay safety (attendance).

@@ -1,6 +1,6 @@
 # Ijazah — Phase Plan
 
-One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3 and constitution v2.4.1. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change) and ADR 0010 (the database refuses double booking). The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
+One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3 and constitution v2.4.1. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change), ADR 0010 (the database refuses double booking) and ADR 0012 (sign-in with Google, Apple or email; sign-in before onboarding). The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
 
 | Phase | Spec | Working days | Day numbers | Depends on |
 |---|---|---|---|---|
@@ -81,12 +81,13 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** let a teacher apply and an admin approve them, with the identity model built right the first time.
 
-**SRS:** FR-AUTH-1…11, §2.2, FR-VERIFY-1…11, FR-PAYG-12…16, FR-ADMIN-1/17, FR-LOC-1/2/3
+**SRS:** FR-AUTH-1…13, §2.2, FR-VERIFY-1…11, FR-PAYG-12…16, FR-ADMIN-1/17, FR-LOC-1/2/3
 
 **What this phase delivers**
 
-- Signup by phone or email with OTP
-- Login, refresh tokens, password reset
+- Sign-up and sign-in with Google, Apple (iOS) or email and password; an email account verifies its address by a one-time code; sign-in before onboarding (ADR 0012)
+- Refresh tokens; password reset for email accounts
+- Email port with a stand-in adapter (ADR 0012); the SMS port stays unused
 - Rate limiting on auth and OTP
 - Role set supporting dual role
 - Gender and date of birth capture
@@ -116,7 +117,8 @@ Because every later phase depends on it, and because boundary lint that arrives 
   - where `users.account_status`, `user_roles.status`, teacher approval and payout verification are resolved on each request, since the request context carries none of them today and ARCHITECTURE §7.2, `contracts/kernel.md` and `procedures.ts` give `teacherProcedure` two meanings (FR-VERIFY-8, FR-VERIFY-10, FR-GENDER-6);
   - `idempotency_keys` unique on `(scope, actor_id, key)` rather than `(scope, key)`;
   - an index on `otp_codes (destination, purpose)` and purge sweeps for `otp_codes` and stale `device_push_tokens` (NFR-COMP-2);
-  - the admin panel's authentication transport (a bearer header, no cookies, so no CSRF surface).
+  - the admin panel's authentication transport (a bearer header, no cookies, so no CSRF surface);
+  - `auth_identities` for Google and Apple sign-in, keyed by the provider's subject, unique on `(provider, provider_subject)` (ADR 0012 D2).
   The text conflicts the review listed (ADR 0001 on the payment port, `/ready` and Redis, NFR-SEC-7's push protection, SRS §6.2 and §3.14 against the ERD, ADR 0005's superseded decisions, the rule count) ride along with the cycle's document pass. Everything else the review deferred stays deferred; ADR 0011 keeps the list.
 
 **Definition of done**
