@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — six remain, for `/speckit-clarify`: FR-109 (how a recipient event reaches its teacher), FR-133 (the notification-permission step), FR-145 (the support address, ADR 0021 D4), FR-154 (notice of a decision without the notifications module), FR-174 (the admins page), FR-211 (the R-GENDER-1/3 proof without a teacher list). Each carries its recommendation.
+- [x] No [NEEDS CLARIFICATION] markers remain — the six of the first draft (FR-109, FR-133, FR-145, FR-154, FR-174, FR-211) were decided by the owner on 2026-10-17, each on its recommendation, and are recorded under Clarifications
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,7 +33,7 @@
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
 
-**One item open.** The six markers are the questions `/speckit-clarify` puts to the owner, each with a recommendation; the specification is otherwise ready, and `/speckit-plan` runs once the clarification session is recorded.
+**All items pass.** The clarification session of 2026-10-17 is recorded; the specification is ready for `/speckit-plan`.
 
 ### Sources used
 
