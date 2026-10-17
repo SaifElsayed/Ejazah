@@ -13,8 +13,7 @@ gain the rows.
 | Exchange an authorization (Apple) for the provider's refresh token    | Kept encrypted so the account can be revoked at deletion (TN3194)                                                                                                                                                                      |
 | Revoke a provider grant (Apple), given the refresh token              | Account deletion (ADR 0015 D3)                                                                                                                                                                                                         |
 
-**Constraints carried by the interface**: the verify operation takes the nonce,
-so a caller cannot skip the replay check; it returns `emailVerified` as a
+**Constraints carried by the interface**: the verify operation takes the nonce the server minted (`auth.providerNonce`), and the service consumes its single-use mark before verifying, so a captured token and nonce replay nothing; it returns `emailVerified` as a
 separate boolean, so a caller cannot read an unverified email as an address
 (FR-121); it returns no token, so nothing a provider issued is stored except
 the refresh token the revoke operation needs.
@@ -25,14 +24,7 @@ stand-in (T168). Provider keys, all optional and stripped from every test run:
 `GOOGLE_CLIENT_IDS` (comma-separated audiences), `APPLE_CLIENT_ID`,
 `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
 
-**Stand-in behaviour**: accepts tokens of the shape
-`fake.<provider>.<subject>.<email or ->.<verified|unverified>.<nonce>.<signature>`
-signed under a key derived from `ENCRYPTION_KEY` (label
-`ijazah:sign-in-stand-in:v1`), still refuses a nonce mismatch, records every
-call, can be told to fail, and answers `exchange` and `revoke` with recorded
-no-ops. The phone app in development builds the fake token with a helper
-behind a development-only flag, so the owner can walk the flow on a device
-without a provider account.
+**Stand-in behaviour**: accepts an unsigned fake token of the shape `fake.<provider>.<subject>.<email or ->.<verified|unverified>.<nonce>` — no key, since the device must hold none; the stand-in is refused outside development and test (T168), so the unsigned shape reaches no deployment — still consumes the nonce's mark, records every call, can be told to fail, and answers `exchange` with a recorded fake refresh token and `revoke` with a recorded no-op. The phone app in development builds the fake token behind a development-only flag, so the owner can walk the flow on a device without a provider account.
 
 **Live adapter (later task)**: fetches Google's and Apple's JWK sets, caches
 them with their cache headers, verifies with `node:crypto` (RS256 for Google,

@@ -31,6 +31,8 @@ kinds answer `UNAUTHENTICATED`.
 | `adminProcedure`             | Requires `mfaVerified`; otherwise `MFA_REQUIRED` (or `MFA_SETUP_REQUIRED` when the administrator is unenrolled). Unchanged otherwise: one transaction, the audit record                                                                                                                                                      |
 | `adminPublicProcedure` (new) | On the administrator tRPC instance, anonymous, with a required `rateLimit` declaration like the user surface's public kind; the admin context gains the rate limiter for it. Exists for sign-in, the second factor and the password-set link only; a test asserts the admin surface's public procedures are exactly `auth.*` |
 
+A `verification_required` account is admitted by every kind of this phase; Phase 2's booking kind refuses it (FR-137). Only `suspended` and `banned` are the restricted standings.
+
 The `UserSession` the context carries gains `accountStatus`, `role` (one, not
 a set) and `teacher?` (data-model §6); `UserCaller` follows. The existing
 `activeRoles` set becomes the single `role`: no procedure has read it, so the
@@ -38,10 +40,7 @@ contract snapshot is unaffected.
 
 ## Idempotency
 
-The key is `(scope, actor_id, key)`; the kernel refuses to key an anonymous
-mutation (`actor_id` is the server-resolved principal). `onboarding.complete`
-is keyed by the onboarding token's `jti` under a constant actor
-`onboarding`, because no account exists yet.
+The key is `(scope, actor_id, key)`; the kernel refuses to key an anonymous mutation (`actor_id` is the server-resolved principal), and refuses a procedure whose output schema carries a token (`accessToken`, `refreshToken`, `sessionToken`, `onboardingToken`), because the first outcome is stored in plain JSON (R-DB-7); `onboarding.complete` is therefore not keyed, and its single use is the token's `jti` mark.
 
 ## The audit writer
 
@@ -74,4 +73,4 @@ Both are proven by a fixture that fails them, as every gate is
 ## HKDF labels added to `encryption.ts`
 
 `ijazah:access-token:v1`, `ijazah:onboarding-token:v1`,
-`ijazah:admin-invite:v1`, `ijazah:sign-in-stand-in:v1`.
+`ijazah:admin-invite:v1`.

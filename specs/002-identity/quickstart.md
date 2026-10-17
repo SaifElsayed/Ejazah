@@ -29,7 +29,7 @@ everything else is a command.
 ```bash
 pnpm db:migrate && pnpm db:seed
 pnpm db:schema:check
-pnpm test:db-integrity          # rules 22 to 30 each refused
+pnpm test:db-integrity          # rules 22 to 32 each refused
 pnpm lint && pnpm lint:types     # zero raw colour or spacing outside design/
 pnpm check:magic-numbers         # zero literals under the modules
 pnpm check:i18n && pnpm check:i18n:admin

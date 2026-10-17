@@ -31,7 +31,7 @@ count rises from thirty-three tables to thirty-nine.
 
 `packages/config/module-tables.json` gains each under its owner; the
 table-ownership rule (R-API-6) then refuses any other module's read. The
-`verification` module keeps its two tables: it owns the documents and the verification requests. The application's state and decisions are `identity`'s, because they are columns of `teacher_profiles` (§3); the application service reads a document through `verification`'s public entry and grants the approved subjects through `catalog`'s (`grantSubjects`), never touching their tables (R-API-6).
+`verification` module keeps its two tables: it owns the documents and the verification requests. The application's state and decisions are columns of `teacher_profiles` (§3), identity's table, written by the `verification` module's application services through `identity`'s public entry (`setApplication`, `setAccountStatus`), with the approved subjects granted through `catalog`'s (`grantSubjects`); `identity` imports no other module (research R-121) (R-API-6).
 
 ### `user_sessions`
 
@@ -56,14 +56,14 @@ person might need removed from view — it is a credential, and it is destroyed.
 
 ### `auth_identities`
 
-| Column                           | Type                | Notes                                                                                                                                                                           |
-| -------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id                               | uuid                | PK                                                                                                                                                                              |
-| user_id                          | FK → users          | indexed                                                                                                                                                                         |
-| provider                         | enum google · apple |                                                                                                                                                                                 |
-| provider_subject                 | text                | The token's `sub`; unique with `provider` (ERD §15, new rule 22)                                                                                                                |
-| provider_refresh_token_encrypted | bytea, nullable     | Apple only: the refresh token obtained by exchanging the authorization code at the first sign-in, kept so deletion can revoke it (ADR 0015 D3, TN3194, R-DB-8); null for Google |
-| created_at                       | timestamptz         |                                                                                                                                                                                 |
+| Column                           | Type                | Notes                                                                                                                                                                                                                                                                                     |
+| -------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id                               | uuid                | PK                                                                                                                                                                                                                                                                                        |
+| user_id                          | FK → users          | indexed                                                                                                                                                                                                                                                                                   |
+| provider                         | enum google · apple |                                                                                                                                                                                                                                                                                           |
+| provider_subject                 | text                | The token's `sub`; unique with `provider` (ERD §15, new rule 22)                                                                                                                                                                                                                          |
+| provider_refresh_token_encrypted | bytea, nullable     | Apple only: the refresh token obtained by exchanging the authorization code at the first sign-in, kept so deletion can revoke it (ADR 0015 D3, TN3194, R-DB-8), carried from the first sign-in to completion inside the onboarding token as a column-cipher blob (R-102); null for Google |
+| created_at                       | timestamptz         |                                                                                                                                                                                                                                                                                           |
 
 Deleted outright on account deletion (ADR 0015 D3): the application role
 keeps DELETE on this table, and the uniqueness never blocks the person's new
@@ -134,6 +134,10 @@ code of this phase writes it.
 | Table                                  | Column                                                                                                                                                                                                                                                                            | Notes                                                                                                                                                                                                      | Source                         |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | `users`                                | `certificate_name text nullable`                                                                                                                                                                                                                                                  | Asked once at the first ijazah request (Phase 4 writes it); erased on deletion                                                                                                                             | ADR 0019 D1, ADR 0015 D3       |
+| `users`                                | `display_name` and `date_of_birth` become nullable; the phone-or-email check (ERD §15 rule 1) becomes `deleted_at IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL`; rule 32 keeps the three NOT NULL for a live row                                                         | So the one transaction of FR-141 can erase them; ADR 0012 D4's "NOT NULL" is held for every live row by the check rather than by the column                                                                | FR-141                         |
+| `otp_codes`                            | `purpose` gains `account_deletion`                                                                                                                                                                                                                                                | The web deletion's code (FR-143); additive                                                                                                                                                                 | FR-143                         |
+| `teacher_profiles`                     | `photo_key` kept, unused                                                                                                                                                                                                                                                          | The photo of either role is `users.photo_key` from this phase; the column stays and the ERD marks it unused                                                                                                | FR-141                         |
+| `admin_users`                          | `mfa_last_accepted_step bigint nullable`                                                                                                                                                                                                                                          | The last TOTP step accepted, so a code is never accepted twice within its step (RFC 6238 §5.2)                                                                                                             | FR-171                         |
 | `users`                                | `photo_key text nullable`                                                                                                                                                                                                                                                         | The student's or teacher's profile photo (decision 46), served by a signed link; erased on deletion                                                                                                        | FR-141, `StudentProfileEditor` |
 | `teacher_profiles`                     | `approved_shown_at timestamptz nullable`                                                                                                                                                                                                                                          | The once-only `ApplicationApproved` was shown                                                                                                                                                              | FR-152                         |
 | `verification_requests`                | `document_id FK → verification_documents nullable`, `document_type enum national_id · passport nullable`                                                                                                                                                                          | The document the user submitted for the request (`VerifyIdentity`)                                                                                                                                         | FR-166                         |
@@ -188,30 +192,33 @@ Every number an identity or admin flow reads, planted by `prisma/seed.ts` with
 its default, each named with its unit; `tests/seed/seed.spec.ts`'s row count
 follows.
 
-| Key                             | Default                              | Governs                            |
-| ------------------------------- | ------------------------------------ | ---------------------------------- |
-| `admin_lockout_attempts`        | 5                                    | FR-172 (SRS §3.14)                 |
-| `admin_lockout_minutes`         | 15                                   | FR-172 (SRS §3.14)                 |
-| `makeup_choice_window_days`     | 7                                    | ADR 0018 (Phase 3 reads it)        |
-| `otp_code_ttl_minutes`          | 10                                   | FR-120, FR-129, FR-143             |
-| `otp_max_attempts`              | 5                                    | the same                           |
-| `otp_purge_after_hours`         | 24                                   | `purge-otp-codes`                  |
-| `onboarding_token_ttl_minutes`  | 15                                   | FR-125                             |
-| `session_access_ttl_minutes`    | 15                                   | FR-135                             |
-| `session_refresh_ttl_days`      | 30                                   | FR-135                             |
-| `session_refresh_grace_seconds` | 30                                   | R-101                              |
-| `session_purge_after_days`      | 30                                   | `purge-expired-sessions`           |
-| `admin_session_idle_minutes`    | 60                                   | FR-170                             |
-| `admin_session_max_hours`       | 12                                   | FR-170                             |
-| `admin_invite_ttl_hours`        | 48                                   | FR-174                             |
-| `push_token_stale_days`         | 90                                   | `purge-stale-push-tokens`          |
-| `terms_version`                 | `"2026-10"`                          | FR-127                             |
-| `upload_max_bytes`              | 10485760                             | FR-151                             |
-| `rate_limit_public_page`        | `{ limit: 60, window_seconds: 60 }`  | FR-144                             |
-| `rate_limit_upload`             | `{ limit: 20, window_seconds: 600 }` | FR-151                             |
-| `admin_recovery_code_count`     | 10                                   | FR-171 (ADR 0019 D3)               |
-| `admin_home_latest_actions`     | 7                                    | FR-176 (`AdminHome`)               |
-| `admin_list_page_size`          | 25                                   | FR-160, FR-176 (every admin table) |
+| Key                             | Default                              | Governs                                      |
+| ------------------------------- | ------------------------------------ | -------------------------------------------- |
+| `admin_lockout_attempts`        | 5                                    | FR-172 (SRS §3.14)                           |
+| `admin_lockout_minutes`         | 15                                   | FR-172 (SRS §3.14)                           |
+| `makeup_choice_window_days`     | 7                                    | ADR 0018 (Phase 3 reads it)                  |
+| `otp_code_ttl_minutes`          | 10                                   | FR-120, FR-129, FR-143                       |
+| `otp_max_attempts`              | 5                                    | the same                                     |
+| `otp_purge_after_hours`         | 24                                   | `purge-otp-codes`                            |
+| `onboarding_token_ttl_minutes`  | 15                                   | FR-125                                       |
+| `session_access_ttl_minutes`    | 15                                   | FR-135                                       |
+| `session_refresh_ttl_days`      | 30                                   | FR-135                                       |
+| `session_refresh_grace_seconds` | 30                                   | R-101                                        |
+| `session_purge_after_days`      | 30                                   | `purge-expired-sessions`                     |
+| `admin_session_idle_minutes`    | 60                                   | FR-170                                       |
+| `admin_session_max_hours`       | 12                                   | FR-170                                       |
+| `admin_invite_ttl_hours`        | 48                                   | FR-174                                       |
+| `push_token_stale_days`         | 90                                   | `purge-stale-push-tokens`                    |
+| `terms_version`                 | `"2026-10"`                          | FR-127                                       |
+| `upload_max_bytes`              | 10485760                             | FR-151                                       |
+| `rate_limit_public_page`        | `{ limit: 60, window_seconds: 60 }`  | FR-144                                       |
+| `rate_limit_upload`             | `{ limit: 20, window_seconds: 600 }` | FR-151                                       |
+| `admin_recovery_code_count`     | 10                                   | FR-171 (ADR 0019 D3)                         |
+| `admin_home_latest_actions`     | 7                                    | FR-176 (`AdminHome`)                         |
+| `admin_list_page_size`          | 25                                   | FR-160, FR-176 (every admin table)           |
+| `provider_nonce_ttl_minutes`    | 10                                   | FR-121 (`auth.providerNonce`)                |
+| `document_link_ttl_seconds`     | 300                                  | FR-151 (every signed document link)          |
+| `rate_limit_token_refresh`      | `{ limit: 30, window_seconds: 60 }`  | FR-135 (`auth.refresh`, by the token's hash) |
 
 SRS §3.14's table gains the rows a person would change (the admin lockout pair
 is already there; the session, code and upload limits join it); the purge
@@ -223,18 +230,19 @@ Zod `.max()`; conversions in `@ijazah/time`.
 
 ## 5. Integrity rules the database holds (ERD §15, new rules)
 
-| #   | Rule                                                                      | Mechanism                                                                 |
-| --- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| 22  | `auth_identities (provider, provider_subject)` unique                     | unique index                                                              |
-| 23  | `teacher_credentials (teacher_user_id, subject_id)` unique where approved | partial unique index                                                      |
-| 24  | `user_roles (user_id)` unique                                             | unique index (ADR 0016 D3)                                                |
-| 25  | `user_sessions.refresh_token_hash`, `admin_sessions.token_hash` unique    | unique indexes                                                            |
-| 26  | `idempotency_keys (scope, actor_id, key)` unique; `actor_id` NOT NULL     | replaces rule 16's `(scope, key)`                                         |
-| 27  | `teacher_profiles.payout_account_ref_hash` unique where present           | partial unique                                                            |
-| 28  | `isnad_entries (credential_id, position)` unique                          | rule 7, as re-keyed                                                       |
-| 29  | `audit_logs.target_label` NOT NULL and `length ≤ 200`                     | NOT NULL plus a check constraint                                          |
-| 30  | `admin_users`: `locked_until_at IS NULL OR failed_sign_in_count > 0`      | check constraint, so a lock never exists without the count that caused it |
-| 31  | `admin_users`: `is_active = (disabled_at IS NULL)`                        | check constraint, so the flag cannot drift from its source                |
+| #   | Rule                                                                                                                | Mechanism                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 22  | `auth_identities (provider, provider_subject)` unique                                                               | unique index                                                                                         |
+| 23  | `teacher_credentials (teacher_user_id, subject_id)` unique where approved                                           | partial unique index                                                                                 |
+| 24  | `user_roles (user_id)` unique                                                                                       | unique index (ADR 0016 D3)                                                                           |
+| 25  | `user_sessions.refresh_token_hash`, `admin_sessions.token_hash` unique                                              | unique indexes                                                                                       |
+| 26  | `idempotency_keys (scope, actor_id, key)` unique; `actor_id` NOT NULL                                               | replaces rule 16's `(scope, key)`                                                                    |
+| 27  | `teacher_profiles.payout_account_ref_hash` unique where present                                                     | partial unique                                                                                       |
+| 28  | `isnad_entries (credential_id, position)` unique                                                                    | rule 7, as re-keyed                                                                                  |
+| 29  | `audit_logs.target_label` NOT NULL and `length ≤ 200`                                                               | NOT NULL plus a check constraint                                                                     |
+| 30  | `admin_users`: `locked_until_at IS NULL OR failed_sign_in_count > 0`                                                | check constraint, so a lock never exists without the count that caused it                            |
+| 31  | `admin_users`: `is_active = (disabled_at IS NULL)`                                                                  | check constraint, so the flag cannot drift from its source                                           |
+| 32  | `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` | check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141) |
 
 Rules 10 and 21 (no DELETE on the five tables; append-only on the three) are
 untouched. `auth_identities`, `user_sessions`, `admin_sessions`,
@@ -285,9 +293,8 @@ mfaVerified }`; the admin kind refuses `mfaVerified: false`.
 | Identity document storage key                     | Column cipher                                                | `verification_documents` (unchanged) |
 | Access token, onboarding token, admin invite link | Not stored: signed, verified by HMAC under their HKDF labels | —                                    |
 
-The four new HKDF labels (`ijazah:access-token:v1`,
-`ijazah:onboarding-token:v1`, `ijazah:admin-invite:v1`,
-`ijazah:sign-in-stand-in:v1`) join the list in
+The three new HKDF labels (`ijazah:access-token:v1`,
+`ijazah:onboarding-token:v1`, `ijazah:admin-invite:v1`) join the list in
 `encryption.ts`. The schema check's `secret-column` rule reads the new columns
 as it reads the old (`*_hash`, `*_encrypted`).
 
@@ -295,14 +302,14 @@ as it reads the old (`*_hash`, `*_encrypted`).
 
 ## 8. Migrations, in order
 
-| Migration                                        | Lands                                                                                                                                                                                                                            |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `20261018000000_identity_sessions_and_providers` | `user_sessions`, `auth_identities`, `users.certificate_name`, `users.photo_key`, `user_roles (user_id)` unique, `otp_codes` index                                                                                                |
-| `20261018000100_admin_sessions_mfa_lockout`      | `admin_sessions`, `admin_recovery_codes`, the `admin_users` columns and nullable `password_hash`, rules 30 and 31                                                                                                                |
-| `20261018000200_teacher_credentials`             | `teacher_credentials`, the `isnad_entries` re-key, the `teacher_profiles` application and payout columns and `approved_shown_at`, the `revoked` member, `verification_requests.document_id` and `document_type`, rules 23 and 27 |
-| `20261018000300_audit_target_label`              | `audit_logs.target_label`, rule 29                                                                                                                                                                                               |
-| `20261018000400_idempotency_actor`               | `idempotency_keys.actor_id` and the new unique (rule 26)                                                                                                                                                                         |
-| `20261018000500_tracks_remedies_account_deleted` | ADR 0018's columns and `session_remedies`; `account_deleted` on the reason enum                                                                                                                                                  |
+| Migration                                        | Lands                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20261018000000_identity_sessions_and_providers` | `user_sessions`, `auth_identities`, `users.certificate_name`, `users.photo_key`, `display_name` and `date_of_birth` nullable with rule 32 and rule 1 rewritten for deleted rows, `account_deletion` on `OtpPurpose`, `user_roles (user_id)` unique, `otp_codes` index |
+| `20261018000100_admin_sessions_mfa_lockout`      | `admin_sessions`, `admin_recovery_codes`, the `admin_users` columns and nullable `password_hash`, `mfa_last_accepted_step`, rules 30 and 31                                                                                                                           |
+| `20261018000200_teacher_credentials`             | `teacher_credentials`, the `isnad_entries` re-key, the `teacher_profiles` application and payout columns and `approved_shown_at`, the `revoked` member, `verification_requests.document_id` and `document_type`, rules 23 and 27                                      |
+| `20261018000300_audit_target_label`              | `audit_logs.target_label`, rule 29                                                                                                                                                                                                                                    |
+| `20261018000400_idempotency_actor`               | `idempotency_keys.actor_id` and the new unique (rule 26)                                                                                                                                                                                                              |
+| `20261018000500_tracks_remedies_account_deleted` | ADR 0018's columns and `session_remedies`; `account_deleted` on the reason enum                                                                                                                                                                                       |
 
 Each is generated from the schema files and extended by hand where the schema
 language cannot say it (the partial uniques, the check constraints, the DELETE
@@ -314,7 +321,7 @@ catalogue in CI.
 
 ## 9. Documents amended in the same batch (FR-110, FR-111)
 
-- `docs/ERD.md`: §2 (`users`, `user_roles`, `teacher_profiles`, the two new identity tables), §3 (the credential's document), §4 (`teacher_credentials`, `isnad_entries` as re-keyed), §12 (`admin_users`, `admin_sessions`, `admin_recovery_codes`, `audit_logs.target_label`, `idempotency_keys`), §14 (the new indexes), §15 (rules 22 to 30), the domain map in §1 and the count (39); a "v1.3 → v1.4" changelog.
+- `docs/ERD.md`: §2 (`users`, `user_roles`, `teacher_profiles`, the two new identity tables), §3 (the credential's document), §4 (`teacher_credentials`, `isnad_entries` as re-keyed), §12 (`admin_users`, `admin_sessions`, `admin_recovery_codes`, `audit_logs.target_label`, `idempotency_keys`), §14 (the new indexes), §15 (rules 22 to 32), the domain map in §1 and the count (39); a "v1.3 → v1.4" changelog.
 - `docs/SRS.md`: §6.2 (the new entities), §3.14 (the settings rows a person changes), §2.5 (the team of one), and the text conflicts the closure review listed.
 - `docs/ARCHITECTURE.md`: §3.2 (the sign-in port row; seven ports), §3.4 (the two folders, `ports/sign-in/` and `ports/email/`), §4 (the new tables under their modules; the platform row's `SUPPORT_EMAIL` query), §7.2 (the teacher kind's `admits`, the admin public kind).
 - `specs/001-foundations/contracts/kernel.md` and `ports.md`: the kernel changes and the two new ports, by reference to [`contracts/`](./contracts/) here.
