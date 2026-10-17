@@ -129,7 +129,7 @@ The template prints two dates: the completion date the teacher gave, in the body
   - status (pending, approved or rejected);
   - reason;
   - who decided, and when;
-  - the issued ijazah.
+  - the issued ijazah, pointed to from `ijazahs.request_id` (the request carries no `ijazah_id`).
 - **`ijazahs`.** Gains `request_id` and `issued_by_admin_id`.
   `chain_snapshot_json` stays the immutable record (FR-ISNAD-7).
 

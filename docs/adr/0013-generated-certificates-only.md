@@ -1,6 +1,6 @@
 # ADR 0013 — The MVP grants platform-generated certificates only; the uploaded mode is deferred
 
-**Status:** accepted · **Date:** 2026-10-14 · **Decided by:** the owner, 2026-10-14 · **Amends:** SRS §3.9.2, FR-IJAZAH-2, FR-IJAZAH-13, FR-IJAZAH-14, §6.2 Ijazah entity, §7 Certification, §13, DEC-42, RISK-08 (adds DEC-53); ERD `ijazahs` notes; PLAN.md Phase 4; `docs/design/screens.md` Granting · **Amended by:** ADR 0017 (D1's teacher-side confirm-and-render became request-and-admin-issue; D4's FR-ISNAD-4 reference reads per ADR 0017) · **Amended by:** ADR 0017 (D1's teacher-side confirm-and-render became request-and-admin-issue; D4's FR-ISNAD-4 reference reads per ADR 0017)
+**Status:** accepted · **Date:** 2026-10-14 · **Decided by:** the owner, 2026-10-14 · **Amends:** SRS §3.9.2, FR-IJAZAH-2, FR-IJAZAH-13, FR-IJAZAH-14, §6.2 Ijazah entity, §7 Certification, §13, DEC-42, RISK-08 (adds DEC-53); ERD `ijazahs` notes; PLAN.md Phase 4; `docs/design/screens.md` Granting · **Amended by:** ADR 0017 (D1's teacher-side confirm-and-render became request-and-admin-issue; D4's FR-ISNAD-4 reference reads per ADR 0017)
 
 ## Context
 

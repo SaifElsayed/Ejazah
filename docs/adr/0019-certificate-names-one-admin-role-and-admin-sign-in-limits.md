@@ -1,6 +1,6 @@
 # ADR 0019 — Full names on certificates, one admin role, and admin sign-in limits
 
-**Status:** accepted · **Date:** 2026-10-15 · **Decided by:** the owner, 2026-10-15 · **Amends:** SRS FR-IJAZAH-15, FR-ADMIN-1, NFR-SEC-6, §3.14, §13 (adds DEC-59); ERD `users`, `teacher_credentials`, `admin_users`
+**Status:** accepted · **Date:** 2026-10-15 · **Decided by:** the owner, 2026-10-15 · **Amends:** SRS FR-IJAZAH-15, FR-ADMIN-1, NFR-SEC-6, §3.14, §13 (adds DEC-59); ERD `users`, `teacher_credentials`, `ijazahs`, `admin_users`
 
 ## Context
 
@@ -20,7 +20,7 @@ The final design audit found three gaps.
 
 - When a teacher sends the first ijazah request for a student whose account has no certificate name, the request waits.
   The student is asked for the name as it should be printed. It is shown as it will appear, entered once, and editable
-  later only by an admin on the student's request, audit-logged (FR-ADMIN-17).
+  later only by an admin on the student's request, audit-logged (FR-IJAZAH-15, FR-ADMIN-17).
 - The certificate stores the printed names at issue (`ijazahs.student_name_printed`,
   `ijazahs.teacher_name_printed`, in the same ERD pass as `request_id`), so a deletion that erases
   `users.certificate_name` (ADR 0015 D3) leaves the certificate verifying unchanged; a later
@@ -60,6 +60,7 @@ Sub-roles (vetting, moderation, read-only) are deferred (§13). `admin_users` ge
 - **ERD.** Forward migrations in the Phase 1 pass:
   - `users.certificate_name`;
   - `teacher_credentials.holder_name`;
+  - `ijazahs.student_name_printed` and `ijazahs.teacher_name_printed`, in the Phase 4 pass with `request_id` (D1);
   - `admin_recovery_codes` (`admin_id`, `code_hash`, `used_at`);
   - two settings rows.
 - **Design, student:** a sheet asking for the certificate name.
