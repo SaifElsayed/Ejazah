@@ -5,6 +5,7 @@ session; TeacherHome ≈1:50 pm). Admin boards: «now» = Thursday 15 Oct 2026, 
 later ones. Formats and status words: S/BRIEF-PROD.md. Copy rules: S/BRIEF-COPY.md. Chains: origin first.
 
 ## Teacher الشيخ أحمد المصري (male)
+
 - Full name printed on certificates: الشيخ المقرئ أحمد بن عبد الله بن محمود المصري. Approved 18 مارس 2026 (call 16 مارس);
   payout account verified 21 مارس 2026. Email ahmed.elmasry@example.com.
 - Credentials: «حفظ القرآن · حفص عن عاصم · من طريق الشاطبية» approved 18 مارس (35 جيلًا with him);
@@ -19,7 +20,8 @@ later ones. Formats and status words: S/BRIEF-PROD.md. Copy rules: S/BRIEF-COPY.
 - His enrollments and slots: take them from AdminEnrollments (as of 15 Oct) and advance one session per week to 4 Nov.
   The Wednesday 2:00 pm 45-min slot belongs to نور سمير (AdminGender). No Tuesday booking exists.
 
-## Student يوسف أحمد (male, Google, yousef@gmail.com, joined 2 فبراير 2026, born 12 مارس 2004)
+## Student يوسف أحمد (male, Google, yousef@example.com, joined 2 فبراير 2026, born 12 مارس 2004)
+
 - Full name printed on certificates: يوسف بن أحمد بن سعيد الشريف.
 - E1 with Ahmed: حفظ القرآن · 8 جلسات · 45 دقيقة, Wednesdays 6:00 م, 1 يوليو → **completed Wednesday 19 أغسطس 2026**
   (مكتمل). Not reviewed yet (Main still asks for the review).
@@ -33,6 +35,7 @@ later ones. Formats and status words: S/BRIEF-PROD.md. Copy rules: S/BRIEF-COPY.
 - With الشيخ محمود فتحي: an earlier completed التجويد enrollment → ijazah B2XN-H8MN-7K4Q-QW3R, 3 مايو 2026.
 
 ## The ijazah 7K3M-Q9TD-2XWB-8HRN (حفظ القرآن · حفص عن عاصم · من طريق الشاطبية, Ahmed → Yusuf)
+
 - Requested by Ahmed from **E1** on Wednesday 14 أكتوبر 9:40 ص; completion date **الأربعاء 19 أغسطس 2026**
   (6 ربيع الأول 1448 هـ); language العربية.
 - Admin (15 Oct morning) sees it **pending**. Approved later that day → **issued Thursday 15 أكتوبر 2026
@@ -42,15 +45,18 @@ later ones. Formats and status words: S/BRIEF-PROD.md. Copy rules: S/BRIEF-COPY.
 - CertificateRevoked is an alternate state: no date in it, only «سُحبت هذه الإجازة» + reason.
 
 ## Reviews of Ahmed
+
 Take the list from AdminReviews (سعيد منصور 2★ on 10 أكتوبر, comment removed 14 أكتوبر, etc.). Phone boards that show
 Ahmed's reviews (TeacherProfile, TeacherReviews, TeacherNotifications) use the same people, stars and dates; only
 students with a completed/terminated enrollment with Ahmed may appear.
 
 ## Credential statuses
+
 قيد المراجعة · موثّقة · مطلوب ملف آخر · مرفوضة (same words on phone and admin). Ijazah request statuses:
 قيد المراجعة · صدرت · مرفوض.
 
 ## Additions from ADR 0018 / ADR 0019 (owner decisions 2026-10-15)
+
 - **Package tracks.** Ahmed's packages: active «حفظ القرآن · تسميع · 8 جلسات · 45 دقيقة» 1,200 ج.م and «حفظ القرآن · مسار إجازة ·
   12 جلسة · 60 دقيقة» 2,160 ج.م; paused «حفظ القرآن · مسار إجازة · 8 جلسات · 45 دقيقة» 1,200 ج.م (Yusuf's E1 used it).
   E1 = مسار إجازة (the ijazah came from it). E2 and E3 = تسميع. Show the track as a badge «تسميع» / «مسار إجازة» where a
@@ -68,6 +74,7 @@ students with a completed/terminated enrollment with Ahmed may appear.
 - **No «verified teacher» marker** (owner 2026-10-15): every teacher on the platform is verified before entering, so no badge or copy such as «سند موثّق» / «موثّق من المنصة» on student screens. Credential review statuses (موثّقة…) stay.
 
 ## Additions from the owner's review round (2026-10-17)
+
 - No «verified teacher» marker on student screens (every teacher is verified before entry); credential statuses stay.
 - Rating is chosen by tapping stars (1–5, Google-Play style); WriteReview shows 4 of 5 «جيدة جدًا».
 - Ahmed's free 45-min slots on 4 Nov afternoon: السبت 10:00 ص (Yusuf took it at 3:20 pm), الأحد 7:30 م, الثلاثاء 4:00 م, الثلاثاء 9:00 م. Sunday 5:00 pm is عمر سامي's. Nearest free slot shown on Discovery: الأحد 7:30 م. Khaled's cheapest package is 180 ج.م per session.

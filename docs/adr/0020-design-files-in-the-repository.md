@@ -4,7 +4,7 @@
 
 ## Context
 
-The product's design was finished as 168 boards on a design canvas: every screen of the student,
+The product's design was finished as 183 boards on a design canvas: every screen of the student,
 the teacher, the shared session surfaces, the public web pages and the admin panel, in Arabic with
 English and dark variants, drawn with one stylesheet whose every value is a token. The canvas lived
 in a tool session; its sources (fragments, generators, the sample-data facts) lived in a temporary
@@ -45,7 +45,7 @@ brand colour is one line in `tokens.json`, one command, one commit.
 
 ### D3 — The design itself is in the repository and rebuildable
 
-`docs/design/frames/` holds the 168 boards and their canvas layout; `docs/design/source/` holds
+`docs/design/frames/` holds the 183 boards and their canvas layout; `docs/design/source/` holds
 every board's fragment, the admin dialog parts, the generators (`rebuild`, `lint`, `relayout`,
 `gen-discovery`, `compose`, `build-docs`, `inventory`, `dump`, `gallery2`, `serve`), the sample-data
 facts and the design briefs. A board is rebuilt from its fragment byte for byte; the board linter
@@ -89,7 +89,8 @@ Every string the boards show is in `apps/mobile/src/i18n/ar.json` with its trans
 in them are ICU MessageFormat templates (`{name}`, `{count, plural, …}` with Arabic's six forms).
 Sample data (names, dates, amounts, codes) is never in the catalogue. The admin panel has its own
 pair, `apps/admin/src/i18n/ar.json` and `en.json`, under `admin.*` (ADR 0014 D2). The parity check
-(`pnpm check:i18n`) holds both pairs.
+holds both pairs, each by its own script: `pnpm check:i18n` the phone pair and
+`pnpm check:i18n:admin` the admin pair.
 
 ### D7 — What stays for Phase 1
 
@@ -103,9 +104,12 @@ implements a contract or a catalogue this ADR fixes; none redesigns.
 - **ARCHITECTURE.** §5 lists `packages/tokens/` and the new shape of `docs/design/`; §6.3 says the
   source is `packages/tokens/tokens.json`, that `tokens.ts` is generated, and that the primitives
   are the design's set.
-- **Gates.** `check:generated` covers eight more files. `check:i18n` gains the admin pair.
+- **Gates.** `check:generated` covers eight more files. The admin pair gets its own parity script,
+  `check:i18n:admin`, beside `check:i18n`.
 - **Work.** A design change is a change to `source/frags/` or `tokens.json`, a rebuild, a lint and a
   republish of the two artifacts; a new feature starts from `components.md` and `screens.md`.
 - **Open.** Where the public web pages (certificate verification, account deletion) are served is
   not decided here. The three proposal boards (an alternative home, teacher day and teacher students
-  list) stay on the canvas as proposals until the owner decides.
+  list) stay on the canvas as proposals until the owner decides. Both were decided afterwards: the
+  public pages' home is [ADR 0021](0021-design-consequences-for-data-and-configuration.md) D5, and
+  the three proposal boards were retired on 2026-10-17 (decision sheet row 38).

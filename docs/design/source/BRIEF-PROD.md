@@ -50,7 +50,7 @@ If a class is truly missing, use the closest one and list the gap in your report
   boards other agents are creating, listed in your prompt). An action that opens a sheet/dialog links to that board.
   A control that only changes state in place (toggle, segmented, filter chip) is a `<button>`, not a dead link.
   Never `href="#..."`.
-- **Personas** (keep consistent): student يوسف أحمد (male, Google sign-in, yousef@gmail.com, joined 2 فبراير 2026);
+- **Personas** (keep consistent): student يوسف أحمد (male, Google sign-in, yousef@example.com, joined 2 فبراير 2026);
   teacher الشيخ أحمد المصري (male, approved, payout verified). Email/password flows (EmailSignIn/Up, Otp, Reset,
   SignInConflict) use the persona خالد منصور khaled.mansour@example.com. Phone "now" = الأربعاء 4 نوفمبر 2026;
   admin "now" = الخميس 15 أكتوبر 2026.

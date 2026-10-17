@@ -1059,7 +1059,7 @@
  →Notifications 
  ي 
  يوسف أحمد 
- yousef@gmail.com 
+ yousef@example.com 
  طالب · منذ 2 فبراير 2026 
  →StudentProfileEditor 
  الملف الشخصي 
@@ -1127,7 +1127,7 @@
 حسابي 
  ي 
  يوسف أحمد 
- yousef@gmail.com 
+ yousef@example.com 
  طالب · منذ 2 فبراير 2026 
  اللغة العربية 
  المنطقة الزمنية القاهرة · من الجهاز 
@@ -1176,14 +1176,14 @@
  2 
  الرمز والتأكيد ثم يُحذف الحساب فورًا 
  البريد الإلكتروني للحساب 
- [=yousef@gmail.com] 
+ [=yousef@example.com] 
  تُحذف بياناتك الشخصية وتُلغى جلساتك القادمة. تبقى إجازاتك صالحة، وسجلات الدفع دون بياناتك كما يلزم القانون. 
  →DeleteAccountWebCode إرسال الرمز
 
 ##### DeleteAccountWebCode — عام — حذف الحساب من الويب: الرمز والتأكيد
 إ إجازة · حذف الحساب 
  أدخل الرمز 
- أرسلنا رمزًا من 6 أرقام إلى yousef@gmail.com 
+ أرسلنا رمزًا من 6 أرقام إلى yousef@example.com 
  بريد الحساب أُرسل الرمز 
  2 
  الرمز والتأكيد ثم يُحذف الحساب فورًا 
@@ -1205,7 +1205,7 @@
  إجازاتك تبقى صالحة في صفحة التحقق برقمها. 
  سجلات الدفع والجلسات تبقى دون بياناتك، كما يلزم القانون. 
  يمكنك إنشاء حساب جديد بالبريد نفسه في أي وقت. 
- وصلك تأكيد الحذف على yousef@gmail.com. للاستفسار راسل support@ijazah.app.
+ وصلك تأكيد الحذف على yousef@example.com. للاستفسار راسل support@ijazah.app.
 
 ##### DeleteAccountTeacher — المعلم — حذف الحساب
 →TeacherAccount 
@@ -2557,7 +2557,7 @@ I Ijazah
  .avatar (round, a person) --sm|touch|lg|xl|2xl|3xl · .icon-tile (square, a thing) + tones 
  Field · Input · OTP 
  البريد الإلكتروني 
- [=yousef@gmail.com] 
+ [=yousef@example.com] 
  نرسل رمزًا للتأكد أنه لك. 
  [=••••••••] 
  [=4] [=8] [=] [=] [=] [=] 
@@ -3340,7 +3340,7 @@ I Ijazah
  1 2 3 … 17 
  ي 
  يوسف أحمد 
- yousef@gmail.com 
+ yousef@example.com 
  ‹نشط› 
  الملف الشخصي 
  الجنس ذكر 
@@ -3437,7 +3437,7 @@ I Ijazah
  1 2 3 … 17 
  ي 
  يوسف أحمد 
- yousef@gmail.com 
+ yousef@example.com 
  ‹نشط› 
  الملف الشخصي 
  الجنس ذكر 
@@ -3711,7 +3711,7 @@ I Ijazah
  1 2 3 … 17 
  ي 
  يوسف أحمد 
- yousef@gmail.com 
+ yousef@example.com 
  ‹نشط› 
  الملف الشخصي 
  الجنس ذكر 
@@ -3808,7 +3808,7 @@ I Ijazah
  1 2 3 … 17 
  ي 
  يوسف أحمد 
- yousef@gmail.com 
+ yousef@example.com 
  ‹نشط› 
  الملف الشخصي 
  الجنس ذكر 

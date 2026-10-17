@@ -468,7 +468,7 @@ export function renderIconsTs(icons: IconSource, consumer: 'mobile' | 'admin'): 
   const directional = DIRECTIONAL_ICONS.map((name) => `  '${name}',`).join('\n');
   const rule =
     consumer === 'mobile'
-      ? 'Directional icons flip through useDirection() (lib/direction.ts), never by hand (R-MOBILE-5).'
+      ? 'Directional icons flip through useDirection() (lib/direction.ts), never by hand (R-MOBILE-14).'
       : 'Directional icons mirror under [dir="rtl"] through the stylesheet, never by hand.';
   return `// GENERATED from ${ICONS_SOURCE} by scripts/build-tokens.ts. Do not edit; run \`pnpm tokens:build\`.
 //

@@ -821,7 +821,7 @@
         "resultCount": "{count, plural, zero {لا معلمين} one {معلم واحد} two {معلمان} few {# معلمين} many {# معلمًا} other {# معلم}}",
         "riwaya": "الرواية · داخل {subject}",
         "show": "{count, plural, zero {لا معلمين} one {عرض معلم واحد} two {عرض معلمَين} few {عرض # معلمين} many {عرض # معلمًا} other {عرض # معلم}}",
-        "starsAndUp": "{count, plural, one {# نجمة فأعلى} other {# نجوم فأعلى}}",
+        "starsAndUp": "{count, plural, zero {# نجمة فأعلى} one {نجمة واحدة فأعلى} two {نجمتان فأعلى} few {# نجوم فأعلى} many {# نجمة فأعلى} other {# نجمة فأعلى}}",
         "track": "المسار"
       },
       "noTeachers": {

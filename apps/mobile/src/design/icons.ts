@@ -3,7 +3,7 @@
 // Every icon the design draws, by its Lucide name (lucide.dev). A screen uses an icon by one of
 // these names and nothing else; a name outside this list is a design change first. `apple` and
 // `google` are the two brand marks the sign-in buttons require, drawn solid.
-// Directional icons flip through useDirection() (lib/direction.ts), never by hand (R-MOBILE-5).
+// Directional icons flip through useDirection() (lib/direction.ts), never by hand (R-MOBILE-14).
 export const iconNames = [
   'shield-check',
   'users',

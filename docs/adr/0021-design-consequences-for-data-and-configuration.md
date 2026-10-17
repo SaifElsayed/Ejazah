@@ -48,26 +48,37 @@ review or the decision sheet.
 - The riwaya and tariq of a credential (ADR 0017) are transcribed once in Arabic and are shown as
   typed on English pages (ADR 0014 D2), like every other user or admin-typed value.
 
-### D2 — The audit entry stores its target label at write time
+### D2 — The audit entry stores a non-personal target label at write time
 
-- `audit_logs` gains `target_label text NOT NULL`: the label of the target as the admin saw it when
-  acting, rendered by the server in Arabic at write time («طلب انضمام الشيخ ياسر حمدي», «إجازة
-  يوسف أحمد · 7K3M-Q9TD-2XWB-8HRN», «بلاغ محادثة»). Names inside it are the values of that moment.
-- The admin pages show the stored label and never re-render it; an entry outlives a renamed or
-  deleted target (ADR 0015 D3: deletion keeps the audit record without personal data, so the label
-  of a deleted person's entry is rewritten to the role word by the deletion job, as the other
-  columns are).
-- English pages show the stored Arabic label as typed, wrapped in `<bdi>` (ADR 0014 D2); the action
-  word (`admin.audit.actions.*`) stays a key and is translated.
-- The server-side renderer owns the preposition forms: `لـ` + a name beginning with «ال» becomes
-  «لل…» («للشيخ أحمد المصري»), otherwise «لـ» + name. The same renderer serves the two other
-  fused strings the inventory found (`admin.credentials.a11y.documentPage`,
-  `admin.dialogs.mfaReset.title`), which become server-rendered labels too.
+- `audit_logs` gains `target_label text NOT NULL`: the target's kind word followed by its stable
+  identifier or public number, never a person's name («طلب انضمام · {application id}», «إجازة ·
+  7K3M-Q9TD-2XWB-8HRN», «بلاغ محادثة · {report id}», «حساب · {user id}»). The audit writer
+  renders it in Arabic once, at write time, from `target_type` and `target_id`; nothing a user or
+  an admin typed is inside it.
+- The label is non-personal by construction, so it is never rewritten: ERD §15 rule 21 (no UPDATE
+  on `audit_logs`) stands, and ADR 0015 D3 (deletion keeps the audit record without personal data)
+  needs no exception, because the record never held any. An entry outlives a renamed or deleted
+  target unchanged.
+- The admin pages show the stored label and, beside it, when the target still exists, the target's
+  current display name resolved at read time (a join on `target_type`/`target_id`). A deleted
+  person resolves to the role word («طالب محذوف», «معلم محذوف»), since ADR 0015 erased the name.
+  So the drawn audit rows, names visible, hold for live targets, and nothing personal is ever
+  stored in `audit_logs`.
+- English pages show the stored Arabic label, and the read-time name beside it, as typed and
+  wrapped in `<bdi>` (ADR 0014 D2); the action word (`admin.audit.actions.*`) stays a key and is
+  translated.
+- The fused forms («للشيخ …») are produced at read time by the server-side renderer that resolves
+  the name: `لـ` + a name beginning with «ال» becomes «لل…» («للشيخ أحمد المصري»), otherwise
+  `لـ` + name. The same renderer serves the two other fused strings the inventory found
+  (`admin.credentials.a11y.documentPage`, `admin.dialogs.mfaReset.title`), which become
+  server-rendered labels too.
 - `admin.audit.targets.*` leave the admin catalogue; their templates move to the renderer's Arabic
-  source. `target_type` and `target_id` stay as they are (ADR 0011 D5).
-- Condition (owner, 2026-10-17): the label is a noun phrase that names the target (its name, its
-  number or its kind word) and nothing else: no action word, no free text, nothing typed by the
-  admin. It is at most 200 characters; the audit writer refuses an empty or longer one.
+  source (the renderer owns the Arabic). `target_type` and `target_id` stay as they are (ADR 0011
+  D5).
+- Condition (owner, 2026-10-17): the label is a noun phrase that names the target (its kind word
+  and its identifier or number) and nothing else: no action word, no free text, nothing typed by
+  the admin; trivially satisfied, since no user-typed text is inside it. It is at most 200
+  characters; the audit writer refuses an empty or longer one.
 
 ### D3 — Every notification kind FR-NOTIF-1 lists renders in the one drawn shape, and the enum names them all
 
@@ -82,8 +93,9 @@ review or the decision sheet.
   (ADR 0018 D3), `certificate_name_requested` (ADR 0019 D1), `enrollment_terminated` (FR-NOSHOW-4;
   drawn on Notifications), `session_cancelled_by_admin` (FR-CANCEL-6), `session_outcome_confirmed`
   (FR-SESS-19), `ijazah_request_rejected` and `credential_reviewed` (ADR 0017 D1/D3),
-  `payout_account_rejected` (FR-PAYG-14; `recipient_rejected` is a webhook event, not a
-  notification), `account_suspended`, `account_reinstated` (FR-ADMIN-5, ADR 0018 D5).
+  `payout_account_rejected` (FR-PAYG-15, which notifies the Teacher of the gateway's verdict on
+  the payout account; `recipient_rejected` is a webhook event, not a notification),
+  `account_suspended`, `account_reinstated` (FR-ADMIN-5, ADR 0018 D5).
   `teacher_application_status_changed` covers approval, rejection, ban and «مطلوب ملف آخر» with the
   status in the payload.
 - The kinds and who receives them (student S, teacher T), with the drawn ones marked:
@@ -141,7 +153,8 @@ review or the decision sheet.
   ijazah answers 200 with the VerifyCertificateRevoked page (FR-IJAZAH-8: validity, revocation status
   and the public reason).
 - Conditions (owner, 2026-10-17): the pages live under their own paths of the API, never mixed
-  with the procedure routes; they send a strict `Content-Security-Policy` and set no cookie; they are
+  with the procedure routes; they send a strict `Content-Security-Policy` and the full header set
+  and CORS allowlist of NFR-SEC-11 / DEC-51 (SRS §NFR-SEC-11), and set no cookie; they are
   rendered from templates that escape every value by default (a name, a code, a reason are
   untrusted data); and they run under the same rate limits as the anonymous procedures. The Terms
   body (decision sheet row 17) is served the same way, with the version FR-AUTH-11 records in
@@ -158,7 +171,8 @@ review or the decision sheet.
   name search never returns an incompatible teacher.
 - FR-BOOK-7 gains, on the teacher's side: the «طلابي» list is searchable by the student's name, in
   the active and ended tabs.
-- The subject-section tabs show counts (the number of visible teachers per subject).
+- The subject-section tabs show counts (the number of visible teachers per subject, computed
+  after the visibility predicate, R-GENDER-3).
 
 ## Consequences (applied when this branch is updated from `develop` after ADR 0012 to 0019 merge; D5 and D6 are already applied in the design)
 
@@ -166,19 +180,23 @@ review or the decision sheet.
   - §4 `subjects`: a note on `name_en` (D1: the English display name; required on creation).
   - §11 `notifications.type`: the twelve members of D3, appended in the stated order; a forward
     migration in the Phase 2 notifications pass.
-  - §12 `audit_logs`: `target_label text NOT NULL` (D2); a forward migration before the first
-    admin action is written (the table holds no row). The changelog gains a "v1.3 addendum (ADR
-    0021)" block.
+  - §12 `audit_logs`: `target_label text NOT NULL` (D2), non-personal: the kind word and the
+    identifier or number, never a name, so §15 rule 21 is untouched; a forward migration before
+    the first admin action is written (the table holds no row). The changelog gains a "v1.3
+    addendum (ADR 0021)" block.
 - **SRS.**
   - FR-LOC-1: a note that subject names are data with two mandatory names, never translations in
     the app.
-  - FR-ADMIN-17: the entry records the target's label at the time of the action.
+  - FR-ADMIN-17: the entry records the target's non-personal label (kind word and identifier) at
+    the time of the action.
   - FR-NOTIF-1: the events listed by the enum member names of D3, so the requirement and the ERD
     say the same list (ADR 0017 and ADR 0018 added events in prose).
   - §3.14: nothing; the support address is not an admin setting.
   - FR-DISC-1/2 and FR-BOOK-7: the text of D6.
 - **ARCHITECTURE.** §3 configuration: `SUPPORT_EMAIL`; the `platform.publicConfig` query under the
-  platform module; the audit writer renders `targetLabel` and refuses an empty one. §5: the public pages
+  platform module; the audit writer renders `targetLabel` from the target's type and id, never
+  from a name, and refuses an empty one; the admin audit query resolves the target's current name
+  at read time (D2). §5: the public pages
   are routes of the API (D5), rendered from templates that load the design stylesheet.
 - **Catalogues.** `admin.audit.targets.*` (five keys), `admin.credentials.a11y.documentPage` and
   `admin.dialogs.mfaReset.title` move from `apps/admin/src/i18n/` to the server renderer (D2);
