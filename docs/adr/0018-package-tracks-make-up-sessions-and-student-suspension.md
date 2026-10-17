@@ -57,8 +57,10 @@ It is not rescheduling, which stays deferred (§13): the original session keeps 
 
 ### D4 — A refund is an admin-decided case, executed by the gateway
 
-When a student chooses a refund (D2), a compensation case opens (FR-DISPUTE-5). The default amount is one session:
-the snapshot price divided by the snapshot session count.
+When a student chooses a refund (D2), a compensation case opens (FR-DISPUTE-5) for the unconsumed session. The case
+carries no amount: the platform computes no share of a price (ADR 0007 D1, R-MONEY-5 and R-MONEY-6), and `disputes`
+and `session_remedies` gain no `_piasters` column. Platform Administration works out what one session is worth from the
+enrollment's snapshot price and session count outside the code path, as it executes the refund (FR-DISPUTE-6).
 
 The administration decides the case and executes the refund through the gateway (FR-DISPUTE-6). The platform holds no
 funds (ADR 0007).

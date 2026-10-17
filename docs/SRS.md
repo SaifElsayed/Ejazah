@@ -436,7 +436,7 @@ The practical case this handles well: a Student requests cancellation, the Teach
 | FR-MAKEUP-3 | The system shall propose the make-up session at the Enrollment's weekly slot in the week after its last session, or the first later week in which that slot is free. The Student may accept it or propose another date and time; the Teacher accepts or declines a counter-proposal, and a declined counter-proposal falls back to the system's proposal. |
 | FR-MAKEUP-4 | Where the Student has not answered within the Admin-configurable choice window (§3.14, default 7 days), the proposed make-up session is booked. |
 | FR-MAKEUP-5 | A make-up session is an ordinary session of the Enrollment, numbered after its last session and recording the session it makes up; it extends the Enrollment's end and its slot release (FR-BOOK-10). The original session keeps its outcome. This is not rescheduling, which stays deferred (§13). |
-| FR-MAKEUP-6 | A refund choice opens a compensation case (FR-DISPUTE-5) for one session's share of the snapshot price. Platform Administration decides it and executes it through the gateway (FR-DISPUTE-6); the platform moves no money. |
+| FR-MAKEUP-6 | A refund choice opens a compensation case (FR-DISPUTE-5) for the unconsumed session. The case carries no amount: the platform computes no share of a price (ADR 0007). Platform Administration works out the amount from the snapshot price and session count outside the code path, decides the case and executes it through the gateway (FR-DISPUTE-6); the platform moves no money. |
 
 ### 3.9 Ijazah Certification and Chain of Transmission
 

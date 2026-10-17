@@ -1,6 +1,6 @@
 # ADR 0004 — Arabic certificate rendering: Typst renders the generated ijazah, and a chain generation may hold several names
 
-**Status:** accepted; D3's SRS, ERD and model amendment is pending (Phase 4 cycle), and until it lands FR-ISNAD-2 and the current model govern · **Date:** 2026-10-13 · **Closes:** T124 (FR-070, SC-015; proves FR-IJAZAH-11) · **Amends:** nothing; the changes the decisions need are follow-ups for the Phase 4 cycle, named under Consequences
+**Status:** accepted; amended by ADR 0017 (2026-10-15), which landed D3's SRS and ERD amendment (FR-ISNAD-2 names generations each holding one or more names, and the `isnad_entries` note follows); the model change stays with the Phase 4 cycle · **Date:** 2026-10-13 · **Closes:** T124 (FR-070, SC-015; proves FR-IJAZAH-11) · **Amends:** nothing; the changes the decisions need are follow-ups for the Phase 4 cycle, named under Consequences
 
 ## Context
 
