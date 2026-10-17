@@ -69,7 +69,7 @@ The root identity. One row per human, regardless of how many roles they hold.
 
 `is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
 
-A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here.
+A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
 
 ### `user_roles`
 

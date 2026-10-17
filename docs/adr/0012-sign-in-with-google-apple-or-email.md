@@ -1,6 +1,6 @@
 # ADR 0012 — Sign-in with Google, Apple or email; sign-in comes before onboarding; phone sign-up deferred
 
-**Status:** accepted · **Date:** 2026-10-14 · **Decided by:** the owner, on the comparison of 2026-10-14 · **Amends:** SRS FR-AUTH-1, FR-AUTH-6, §4.3, §6.2, §13, DEC-25 (adds FR-AUTH-12, FR-AUTH-13, DEC-52); ERD `users` and `otp_codes` notes, §15 rules 1 and 11; ARCHITECTURE §3.2 and §3.4; PLAN.md Phase 1; `docs/design/screens.md` Auth
+**Status:** accepted · **Date:** 2026-10-14 · **Decided by:** the owner, on the comparison of 2026-10-14 · **Amends:** SRS FR-AUTH-1, FR-AUTH-6, §4.3, §6.2, §13, DEC-25 (adds FR-AUTH-12, FR-AUTH-13, DEC-52); ERD `users` and `otp_codes` notes, §15 rule 1; ARCHITECTURE §3.2 and §3.4; PLAN.md Phase 1; `docs/design/screens.md` Auth
 
 ## Context
 
@@ -44,7 +44,12 @@ no password on the platform (`password_hash` null).
 Apple identity is stored as (provider, `sub`) on a new table, `auth_identities`.
 Google's own guidance: `sub` is "the unique and permanent user identifier";
 "don't use email address as an identifier". The server verifies every ID token's
-signature, issuer, audience and expiry before reading it.
+signature, issuer, audience and expiry before reading it, and requires the
+token's nonce to match the one the app sent for that exchange (the replay guard
+both providers support). It reads the provider's email only when the token marks
+it verified (`email_verified` for Google; Apple's addresses are verified or
+relay addresses): an unverified email is treated as absent, so the comparison of
+FR-AUTH-13 never answers for a mailbox the caller does not control.
 
 **D3 — No automatic linking.** A Google or Apple sign-in whose email already
 belongs to another account neither signs in to that account nor merges with it.
@@ -74,6 +79,24 @@ user goes straight home. Reasons:
 Gender is shown back on its own confirmation step before the account is
 completed, because the user cannot correct it later.
 
+**The account row is written when onboarding completes, not at sign-in** (PR #70
+review, 2026-10-17). `users` keeps its NOT NULL columns (gender, date of birth,
+display name, time zone) and ADR 0016's single `user_roles` row. A first sign-in
+verifies the provider identity (D2) or the email code and hands the app a
+short-lived, single-purpose onboarding token that carries the verified identity
+(the provider and its `sub`, or the verified email), with the name and email the
+provider offered for prefilling; the onboarding answers are held on the device;
+the completing procedure, the only one that accepts that token, writes `users`,
+`auth_identities` (or the password hash) and `user_roles` in one transaction and
+only then issues a session. An abandoned flow leaves no row (reason 3). "An
+account that has not completed onboarding shall reach no other procedure"
+(FR-AUTH-12) is met by construction: there is no account yet. No nullable
+`gender` and no half-onboarded state enter the model, so the gender predicate
+(R-GENDER-5) never meets a requester without a gender. If the token expires the
+user signs in again; Apple sends the name only on the first authorization, so the
+display-name step is prefilled when the provider offers a name and typed
+otherwise.
+
 **D5 — Phone sign-up is deferred, not removed.** `users.phone`, its partial
 unique index and the phone-or-email check constraint stay as they are; every MVP
 account has an email (Google and Apple always return one), so the check always
@@ -90,7 +113,8 @@ decision when a sender ID is registered and its cost is accepted.
 - **ERD.** `auth_identities (user_id, provider google·apple, provider_subject,
   created_at)`, unique on (provider, provider_subject), joins the ERD amendments
   that open the Phase 1 cycle (PLAN.md), with a forward migration. No Phase 0
-  migration changes. `otp_codes.destination` holds an email address in MVP; the
+  migration changes; the `users` columns stay NOT NULL because the row is written
+  when onboarding completes (D4). `otp_codes.destination` holds an email address in MVP; the
   `login` purpose is unused, because email accounts sign in with their password.
 - **Architecture.** An email port (`email.port.ts`, a provider adapter, a
   stand-in) is built in Phase 1; the ports become six. The transactional sender
