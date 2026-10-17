@@ -38,7 +38,7 @@ review or the decision sheet.
 - `subjects.name_en` (already in the ERD and the Prisma schema, mandatory) is the name every
   English page shows wherever an Arabic page shows `name_ar`: the admin's English boards, the
   English phone app (`MainEn` and every English screen), the English certificate verification page.
-- The admin's subject list (the future subjects page, FR-ADMIN-2) requires both names on creation;
+- The admin's subject list (ERD §4 "Admin-managed list", the subjects board) requires both names on creation;
   a subject with an empty English name cannot be saved.
 - No i18n key ever holds a subject name. The two catalogue strings that embed subject names as
   examples (`student.discovery.search.hintText` «مثل: التجويد، القراءات»,
@@ -55,6 +55,8 @@ review or the decision sheet.
   7K3M-Q9TD-2XWB-8HRN», «بلاغ محادثة · {report id}», «حساب · {user id}»). The audit writer
   renders it in Arabic once, at write time, from `target_type` and `target_id`; nothing a user or
   an admin typed is inside it.
+- The label is a write-time snapshot on an append-only row, like `before` and `after`, not a cache of
+  current state (R-DB-4 is not touched).
 - The label is non-personal by construction, so it is never rewritten: ERD §15 rule 21 (no UPDATE
   on `audit_logs`) stands, and ADR 0015 D3 (deletion keeps the audit record without personal data)
   needs no exception, because the record never held any. An entry outlives a renamed or deleted

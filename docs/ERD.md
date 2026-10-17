@@ -180,7 +180,7 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | name_ar / name_en | text | Both mandatory (FR-LOC-1). `name_en` is the English display name, required on creation (ADR 0021 D1) |
 | is_active | boolean | Admin-managed list |
 
-**Amended by ADR 0021 (D1, a note; no migration).** `name_en` is the English display name: every English page shows it wherever an Arabic page shows `name_ar` (the admin's English boards, the English phone app, the English certificate verification page). The admin's subject list (FR-ADMIN-2) requires both names on creation and refuses a subject with an empty English name. A subject name is data, never an i18n key; the two catalogue strings that embed subject names as examples take them from this table at render time.
+**Amended by ADR 0021 (D1, a note; no migration).** `name_en` is the English display name: every English page shows it wherever an Arabic page shows `name_ar` (the admin's English boards, the English phone app, the English certificate verification page). The admin's subject list (the "Admin-managed list" above, the subjects board) requires both names on creation and refuses a subject with an empty English name. A subject name is data, never an i18n key; the two catalogue strings that embed subject names as examples take them from this table at render time.
 
 ### `teacher_subjects`
 
