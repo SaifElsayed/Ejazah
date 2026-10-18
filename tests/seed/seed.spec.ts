@@ -3,8 +3,8 @@
 // An empty database of this file's own is migrated and seeded as the application role. The seed
 // plants five subjects in both languages, the settings of SRS §3.14 with their defaults plus the
 // four rate-limit rows (owner's decision 2026-10-10, shared with T103) and the two budget rows
-// (T170), and one administrator, each with a fixed identifier and a fixed instant; every other
-// table stays empty.
+// (T170), the twenty-six Phase 1 rows of specs/002-identity/data-model.md §4 (T002), and one
+// administrator, each with a fixed identifier and a fixed instant; every other table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
 // it stores the Argon2id hash of a random one it discards at once (T069) and a random MFA secret
@@ -56,6 +56,33 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_payment_initiation: { limit: 10, window_seconds: 600 },
   rate_limit_one_time_code_budget: { limit: 300, window_seconds: 3600 },
   rate_limit_authentication_budget: { limit: 1000, window_seconds: 900 },
+  // Phase 1 (T002): data-model.md §4 of specs/002-identity, in its order.
+  admin_lockout_attempts: 5,
+  admin_lockout_minutes: 15,
+  makeup_choice_window_days: 7,
+  otp_code_ttl_minutes: 10,
+  otp_max_attempts: 5,
+  otp_purge_after_hours: 24,
+  onboarding_token_ttl_minutes: 15,
+  session_access_ttl_minutes: 15,
+  session_refresh_ttl_days: 30,
+  session_refresh_grace_seconds: 30,
+  session_purge_after_days: 30,
+  admin_session_idle_minutes: 60,
+  admin_session_max_hours: 12,
+  admin_invite_ttl_hours: 48,
+  push_token_stale_days: 90,
+  terms_version: '2026-10',
+  upload_max_bytes: 10_485_760,
+  rate_limit_public_page: { limit: 60, window_seconds: 60 },
+  rate_limit_upload: { limit: 20, window_seconds: 600 },
+  admin_recovery_code_count: 10,
+  admin_home_latest_actions: 7,
+  admin_list_page_size: 25,
+  provider_nonce_ttl_minutes: 10,
+  document_link_ttl_seconds: 300,
+  rate_limit_token_refresh: { limit: 30, window_seconds: 60 },
+  rate_limit_provider_nonce: { limit: 20, window_seconds: 60 },
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -181,6 +208,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '19', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '45', admins: '1' }]);
   });
 });

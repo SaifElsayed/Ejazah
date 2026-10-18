@@ -10,6 +10,29 @@ const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
 const redisUrl = z.url({ protocol: /^rediss?$/ });
 const httpUrl = z.url({ protocol: /^https?$/ });
 
+// T001 (Phase 1): one email address, as `SUPPORT_EMAIL` (FR-145) and `EMAIL_FROM` (contracts/ports.md)
+// each are. The message never echoes the value (R-SEC-2).
+const emailAddress = z.email({ error: 'must be one email address' });
+
+// T001 (contracts/kernel.md, "Session resolution"): the one proxy header whose LAST hop, the one the
+// single trusted proxy appended, is the client address; the first hop is written by the client
+// itself. A header name and nothing else; set only when exactly one proxy stands in front of the
+// API. Absent before launch (research R-18 left the host open), so the socket's peer is used.
+const headerName = z
+  .string()
+  .regex(/^[A-Za-z0-9-]+$/, { error: 'must be one HTTP header name, such as X-Forwarded-For' });
+
+// T001 (contracts/ports.md): the audiences a Google identity token may name, comma-separated.
+const googleClientIds = z
+  .string()
+  .transform((value) =>
+    value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== ''),
+  )
+  .pipe(z.array(nonEmpty).min(1, { error: 'must list at least one client id' }));
+
 // 32 bytes, base64 (research R-8). Required in EVERY environment; there is no development bypass and no
 // unencrypted code path (decided 2026-09-07). The message never echoes the value (R-SEC-2).
 const encryptionKey = z
@@ -47,7 +70,16 @@ const allowedOrigins = z
     ),
   );
 
-const standInProviderKeys = ['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SMS_PROVIDER'] as const;
+// T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each has only its
+// stand-in until the live adapter's task adds it, and each is refused outside development and test
+// as the three Phase 0 ones are.
+const standInProviderKeys = [
+  'VIDEO_PROVIDER',
+  'PUSH_PROVIDER',
+  'SMS_PROVIDER',
+  'SIGN_IN_PROVIDER',
+  'EMAIL_PROVIDER',
+] as const;
 
 const s3Keys = [
   'S3_ENDPOINT',
@@ -116,11 +148,34 @@ const envObject = z.object({
   PUSH_PROVIDER: z.enum(['fake']).default('fake'),
   SMS_PROVIDER: z.enum(['fake']).default('fake'),
 
+  // T001 (Phase 1, contracts/ports.md): the sign-in port and the email port, `fake` the only member
+  // of each until the live adapter's task adds it. `EMAIL_FROM` is the sender the stand-in records: a
+  // reserved address by default (RFC 2606); the live sender arrives with the provider chosen at launch.
+  SIGN_IN_PROVIDER: z.enum(['fake']).default('fake'),
+  EMAIL_PROVIDER: z.enum(['fake']).default('fake'),
+  EMAIL_FROM: emailAddress.default('no-reply@ijazah.invalid'),
+
+  // T001 (FR-145, ADR 0021 D4): the support address four screens show, served by the public
+  // configuration query. Required in every mode, a valid address, no default, never an admin setting.
+  SUPPORT_EMAIL: emailAddress,
+
+  // T001 (contracts/kernel.md): the one proxy header the contexts read the client address from, by
+  // its last hop; optional, absent before launch.
+  TRUSTED_PROXY: headerName.optional(),
+
   // Provider credentials are optional: the suite passes with every one unset (FR-054).
   DAILY_API_KEY: nonEmpty.optional(),
   DAILY_WEBHOOK_SECRET: nonEmpty.optional(),
   SMS_PROVIDER_KEY: nonEmpty.optional(),
   EXPO_ACCESS_TOKEN: nonEmpty.optional(),
+
+  // T001 (contracts/ports.md): the live sign-in adapter's credentials, each optional and stripped
+  // from every test run; nothing reads them while SIGN_IN_PROVIDER is `fake`.
+  GOOGLE_CLIENT_IDS: googleClientIds.optional(),
+  APPLE_CLIENT_ID: nonEmpty.optional(),
+  APPLE_TEAM_ID: nonEmpty.optional(),
+  APPLE_KEY_ID: nonEmpty.optional(),
+  APPLE_PRIVATE_KEY: nonEmpty.optional(),
 
   PUBLIC_WEBHOOK_ORIGIN: origin.optional(),
 
@@ -164,10 +219,20 @@ const envKeyKinds = {
   VIDEO_PROVIDER: 'platform',
   PUSH_PROVIDER: 'platform',
   SMS_PROVIDER: 'platform',
+  SIGN_IN_PROVIDER: 'platform',
+  EMAIL_PROVIDER: 'platform',
+  EMAIL_FROM: 'platform',
+  SUPPORT_EMAIL: 'platform',
+  TRUSTED_PROXY: 'platform',
   DAILY_API_KEY: 'provider',
   DAILY_WEBHOOK_SECRET: 'provider',
   SMS_PROVIDER_KEY: 'provider',
   EXPO_ACCESS_TOKEN: 'provider',
+  GOOGLE_CLIENT_IDS: 'provider',
+  APPLE_CLIENT_ID: 'provider',
+  APPLE_TEAM_ID: 'provider',
+  APPLE_KEY_ID: 'provider',
+  APPLE_PRIVATE_KEY: 'provider',
   PUBLIC_WEBHOOK_ORIGIN: 'provider',
   ADMIN_ALLOWED_ORIGINS: 'platform',
   SENTRY_DSN: 'provider',

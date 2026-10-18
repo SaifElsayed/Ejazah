@@ -6,14 +6,13 @@
 //
 // `deriveStandInSecret` (T121) gives a stand-in that signs its own events a secret when no webhook
 // secret is configured: HKDF over the column encryption key under a label of the stand-in's own,
-// with only `node:crypto` (R-SEC-7), as the local storage link key is derived (note under T116).
-import { hkdfSync } from 'node:crypto';
+// with only `node:crypto` (R-SEC-7), as the local storage link key is derived (note under T116),
+// through the kernel's one derivation over its registered labels (T005).
+import { deriveSubkey, type HkdfLabel } from '../crypto/encryption.js';
 
-/** A stand-in's webhook secret, derived from `ENCRYPTION_KEY` under its own label. */
-export function deriveStandInSecret(encryptionKey: string, label: string): string {
-  return Buffer.from(
-    hkdfSync('sha256', Buffer.from(encryptionKey, 'base64'), Buffer.alloc(0), label, 32),
-  ).toString('hex');
+/** A stand-in's webhook secret, derived from `ENCRYPTION_KEY` under its own registered label. */
+export function deriveStandInSecret(encryptionKey: string, label: HkdfLabel): string {
+  return deriveSubkey(encryptionKey, label).toString('hex');
 }
 
 /** An inbound event whose signature is absent or does not hold. The webhook answers 401. */

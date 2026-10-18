@@ -558,7 +558,28 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | Make-up choice window (days) *(ADR 0018)*    | 7               | FR-MAKEUP-4                    |
 | Admin failed sign-in attempts before lockout *(ADR 0019)* | 5 | FR-ADMIN-1 |
 | Admin lockout duration (minutes) *(ADR 0019)* | 15 | FR-ADMIN-1 |
+| One-time code validity (minutes) *(Phase 1)* | 10 | FR-AUTH-1, FR-AUTH-6 |
+| One-time code attempts before it is void (count) *(Phase 1)* | 5 | FR-AUTH-1, FR-AUTH-6 |
+| Onboarding token validity (minutes) *(Phase 1)* | 15 | FR-AUTH-12 |
+| Access token validity (minutes) *(Phase 1)* | 15 | FR-AUTH-7 |
+| Refresh token validity (days) *(Phase 1)* | 30 | FR-AUTH-7 |
+| Provider sign-in nonce validity (minutes) *(Phase 1)* | 10 | FR-AUTH-1 |
+| Admin session idle timeout (minutes) *(Phase 1, ADR 0019)* | 60 | FR-ADMIN-1 |
+| Admin session maximum length (hours) *(Phase 1, ADR 0019)* | 12 | FR-ADMIN-1 |
+| Admin invite link validity (hours) *(Phase 1)* | 48 | FR-ADMIN-1 |
+| Admin recovery codes issued (count) *(Phase 1, ADR 0019 D3)* | 10 | FR-ADMIN-1 |
+| Admin home: latest actions shown (count) *(Phase 1)* | 7 | FR-ADMIN-17 |
+| Admin list page size (rows) *(Phase 1)* | 25 | FR-ADMIN-2, FR-ADMIN-4 |
+| Terms of service version in force *(Phase 1)* | 2026-10 | FR-AUTH-11 |
+| Upload size limit (bytes) *(Phase 1)* | 10485760 | NFR-SEC-9 |
+| Signed document link validity (seconds) *(Phase 1)* | 300 | NFR-SEC-3 |
+| Public page rate limit (requests per window) *(Phase 1)* | 60 per 60 s | NFR-SEC-10 |
+| Upload rate limit (requests per window) *(Phase 1)* | 20 per 600 s | NFR-SEC-10 |
+| Token refresh rate limit (per token, per window) *(Phase 1)* | 30 per 60 s | NFR-SEC-10 |
+| Provider nonce rate limit (per client address, per window) *(Phase 1)* | 20 per 60 s | NFR-SEC-10 |
 | Currency                                    | EGP             | §2.5                           |
+
+Operational settings *(Phase 1)*, seeded with the table above and adjustable the same way, but read by the sweeps and the session service rather than by a person's decision: one-time code purge after 24 hours; expired session purge after 30 days; refresh-token reuse grace of 30 seconds; stale push token purge after 90 days. Every key is seeded by `prisma/seed.ts` at its default (`specs/002-identity/data-model.md` §4).
 
 Rule/action settings (not numeric): teacher application decision; teacher status override; dispute resolution override; gender declaration correction; review moderation; ijazah revocation and barring; ID-verification requirement *(v1.3)*.
 

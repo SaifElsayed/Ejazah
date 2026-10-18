@@ -9,7 +9,10 @@ import { runInNewContext } from 'node:vm';
 
 import { describe, expect, it } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+
 import {
+  COMPONENTS_SOURCE,
   DIRECTIONAL_ICONS,
   GENERATED_FILES,
   checkSchemes,
@@ -17,6 +20,7 @@ import {
   generateFromRepository,
   iconNames,
   parseShadow,
+  renderComponentsCss,
   renderIconsTs,
   renderTokensCss,
   renderTokensTs,
@@ -145,7 +149,7 @@ describe('the phone app’s tokens.ts', () => {
   it('round-trips a value holding a backslash and a quote as a valid literal', async () => {
     const value = "'Plex' \\ fallback";
     const tricky = source({ font: { family: { arabic: value }, weight: { bold: '700' } } });
-    const files = await generate(root, tricky, icons, '{}', '{}');
+    const files = await generate(root, tricky, icons, '{}', '{}', '');
     const line = /^ {6}arabic: (.+),$/m.exec(files['apps/mobile/src/design/tokens.ts']);
     expect(line).not.toBeNull();
     expect(runInNewContext(line?.[1] ?? '')).toBe(value);
@@ -178,6 +182,39 @@ describe('the icon lists', () => {
   it('fails a directional icon missing from the registry', () => {
     const { 'chevron-left': _left, ...without } = icons;
     expect(() => renderIconsTs(without, 'mobile')).toThrow('chevron-left');
+  });
+});
+
+// T004 (Phase 1; research R-111, ADR 0020 D2): the API serves the design's two stylesheets to the
+// public pages from a copy the generator writes, so the boards and the pages read one stylesheet.
+describe('the API’s stylesheets (T004)', () => {
+  const api = 'apps/api/src/platform/web/assets/';
+
+  it('are among the generated files, under check:generated', () => {
+    expect(GENERATED_FILES).toContain(`${api}tokens.css`);
+    expect(GENERATED_FILES).toContain(`${api}components.css`);
+  });
+
+  it('carry the same tokens.css the admin panel and the boards read', async () => {
+    const files = await generate(root, source(), icons, '{}', '{}', '.a { color: red; }\n');
+    expect(files[`${api}tokens.css`]).toBe(files['apps/admin/src/design/tokens.css']);
+    expect(files[`${api}tokens.css`]).toBe(files['docs/design/frames/ds/ijazah/tokens.css']);
+  });
+
+  it('copy the design’s components.css behind one line naming its source', async () => {
+    const text = '.a { color: red; }\n';
+    const files = await generate(root, source(), icons, '{}', '{}', text);
+    const copy = files[`${api}components.css`];
+    expect(copy).toBe(renderComponentsCss(text));
+    expect(copy.split('\n')[0]).toContain(`GENERATED: a copy of ${COMPONENTS_SOURCE}`);
+    expect(copy.split('\n')[0]).toContain('pnpm tokens:build');
+    expect(copy.endsWith(`\n${text}`)).toBe(true);
+  });
+
+  it('copy this repository’s components.css as it is', async () => {
+    const files = await generateFromRepository(root);
+    const design = readFileSync(join(root, COMPONENTS_SOURCE), 'utf8');
+    expect(files[`${api}components.css`]).toBe(renderComponentsCss(design));
   });
 });
 

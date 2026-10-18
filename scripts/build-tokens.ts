@@ -19,14 +19,20 @@
 //   docs/design/frames/ds/ijazah/tokens.json    the design canvas's copy of the source
 //   docs/design/frames/ds/ijazah/tokens.css     the stylesheet the design boards load
 //   docs/design/frames/ds/ijazah/icons.json     the design canvas's copy of the icon registry
+//   apps/api/src/platform/web/assets/tokens.css      the same stylesheet, served by the API under
+//                                                     /public/design/ to the public pages (Phase 1,
+//                                                     T004; research R-111, ADR 0020 D2)
+//   apps/api/src/platform/web/assets/components.css  a copy of docs/design/frames/ds/ijazah/
+//                                                     components.css behind one provenance line,
+//                                                     served beside it
 //
 // HOW A VALUE IS READ. A string of the form `{palette.green.600}` is an alias of another token and
 // is resolved before anything is written; an alias of a missing token fails the build. The light
 // and dark schemes must name the same semantic colours, in the same order, or the build fails: a
 // colour that exists in one scheme only would render as nothing in the other. Lengths are `Npx`
 // strings in the source; the TypeScript output carries them as numbers, the CSS output as written.
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 import { format, resolveConfig } from 'prettier';
 
@@ -34,6 +40,8 @@ const repositoryRoot = join(__dirname, '..');
 
 export const TOKENS_SOURCE = 'packages/tokens/tokens.json';
 export const ICONS_SOURCE = 'packages/tokens/icons.json';
+/** The design's component stylesheet, written by hand on the boards; the API serves a copy (T004). */
+export const COMPONENTS_SOURCE = 'docs/design/frames/ds/ijazah/components.css';
 
 /** Every file this generator writes, relative to the repository root, in a fixed order. */
 export const GENERATED_FILES = [
@@ -45,6 +53,8 @@ export const GENERATED_FILES = [
   'docs/design/frames/ds/ijazah/tokens.json',
   'docs/design/frames/ds/ijazah/tokens.css',
   'docs/design/frames/ds/ijazah/icons.json',
+  'apps/api/src/platform/web/assets/tokens.css',
+  'apps/api/src/platform/web/assets/components.css',
 ] as const;
 
 export type GeneratedPath = (typeof GENERATED_FILES)[number];
@@ -498,13 +508,20 @@ async function formatted(root: string, path: string, text: string): Promise<stri
   return format(text, { ...options, filepath: join(root, path) });
 }
 
-/** Every generated file's text, keyed by its path, from the two sources. */
+/** The API's copy of the component stylesheet: the design's text behind one line saying where it is from. */
+export function renderComponentsCss(componentsText: string): string {
+  return `/* GENERATED: a copy of ${COMPONENTS_SOURCE} by scripts/build-tokens.ts. Do not edit; run \`pnpm tokens:build\`. */
+${componentsText}`;
+}
+
+/** Every generated file's text, keyed by its path, from the three sources. */
 export async function generate(
   root: string,
   source: TokenSource,
   icons: IconSource,
   sourceText: string,
   iconsText: string,
+  componentsText: string,
 ): Promise<Record<GeneratedPath, string>> {
   const css = renderTokensCss(source);
   const ts = async (path: GeneratedPath, text: string): Promise<string> =>
@@ -527,6 +544,8 @@ export async function generate(
     'docs/design/frames/ds/ijazah/tokens.json': sourceText,
     'docs/design/frames/ds/ijazah/tokens.css': css,
     'docs/design/frames/ds/ijazah/icons.json': iconsText,
+    'apps/api/src/platform/web/assets/tokens.css': css,
+    'apps/api/src/platform/web/assets/components.css': renderComponentsCss(componentsText),
   };
 }
 
@@ -534,18 +553,27 @@ export async function generate(
 export function generateFromRepository(root: string): Promise<Record<GeneratedPath, string>> {
   const sourceText = readFileSync(join(root, TOKENS_SOURCE), 'utf8');
   const iconsText = readFileSync(join(root, ICONS_SOURCE), 'utf8');
+  const componentsText = readFileSync(join(root, COMPONENTS_SOURCE), 'utf8');
   const source: unknown = JSON.parse(sourceText);
   const icons: unknown = JSON.parse(iconsText);
   if (typeof source !== 'object' || source === null)
     throw new Error(`${TOKENS_SOURCE} is not an object`);
   if (typeof icons !== 'object' || icons === null)
     throw new Error(`${ICONS_SOURCE} is not an object`);
-  return generate(root, source as TokenSource, icons as IconSource, sourceText, iconsText);
+  return generate(
+    root,
+    source as TokenSource,
+    icons as IconSource,
+    sourceText,
+    iconsText,
+    componentsText,
+  );
 }
 
 async function main(): Promise<void> {
   const files = await generateFromRepository(repositoryRoot);
   for (const path of GENERATED_FILES) {
+    mkdirSync(dirname(join(repositoryRoot, path)), { recursive: true });
     writeFileSync(join(repositoryRoot, path), files[path]);
     process.stdout.write(`tokens: wrote ${path}\n`);
   }
