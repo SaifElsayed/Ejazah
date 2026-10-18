@@ -308,11 +308,13 @@ as it reads the old (`*_hash`, `*_encrypted`).
 | `20261018000000_identity_sessions_and_providers` | `user_sessions`, `auth_identities`, `users.certificate_name`, `users.photo_key`, `display_name` and `date_of_birth` nullable with rule 32 and rule 1 rewritten for deleted rows, `account_deletion` on `OtpPurpose`, `user_roles (user_id)` unique, `otp_codes` index |
 | `20261018000100_admin_sessions_mfa_lockout`      | `admin_sessions`, `admin_recovery_codes`, the `admin_users` columns and nullable `password_hash`, `mfa_last_accepted_step`, rules 30 and 31                                                                                                                           |
 | `20261018000200_teacher_credentials`             | `teacher_credentials`, the `isnad_entries` re-key, the `teacher_profiles` application and payout columns and `approved_shown_at`, the `revoked` member, `verification_requests.document_id` and `document_type`, rules 23 and 27                                      |
-| `20261018000300_audit_target_label`              | `audit_logs.target_label`, rule 29                                                                                                                                                                                                                                    |
-| `20261018000400_idempotency_actor`               | `idempotency_keys.actor_id` and the new unique (rule 26)                                                                                                                                                                                                              |
-| `20261018000500_tracks_remedies_account_deleted` | ADR 0018's columns and `session_remedies`; `account_deleted` on the reason enum                                                                                                                                                                                       |
+| `20261018000300_tracks_remedies_account_deleted` | ADR 0018's columns and `session_remedies`; `account_deleted` on the reason enum                                                                                                                                                                                       |
+| `20261018000400_idempotency_actor`               | `idempotency_keys.actor_id` and the new unique (rule 26); batch B4 with T018, the service that writes the column                                                                                                                                                      |
+| `20261018000500_audit_target_label`              | `audit_logs.target_label`, rule 29; batch B4 with T021, the writer that renders the label                                                                                                                                                                             |
 
-Each is generated from the schema files and extended by hand where the schema
+The first four land in B2; the last two ride with their writers in B4, since the
+repositories and three Phase 0 probes write those rows without the new columns
+until then (conflict review, 2026-10-18). Each is generated from the schema files and extended by hand where the schema
 language cannot say it (the partial uniques, the check constraints, the DELETE
 grants on the new credential tables), as the runbook's migration workflow
 states; the schema check and the integrity probes run against the migrated
