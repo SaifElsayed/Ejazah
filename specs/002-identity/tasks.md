@@ -277,6 +277,7 @@ Three applications from one monorepo (plan.md, "Source Code"): `apps/mobile/src/
   - B10 T051: a city list under `packages/time/src/**` needs a `packages/time/src/**/*.spec.ts` change in the same batch (the TIME suite gate).
   - B12 T065/T067: the home's queue counts read through `verification/index.ts` and `catalog/index.ts` entries added in B12 (the latter is under the gate's exception of T038).
   - B17 T086: measure coverage with the widened include before raising the floor.
+  - B5 T023 (the email port): outside development and test, refuse a `SUPPORT_EMAIL` or `EMAIL_FROM` under a reserved domain (`.invalid`, `.test`, `.example`, `.localhost`, `example.com/net/org`), naming the key and never the value, as the stand-ins are refused; a copied `.env.example` would otherwise show the placeholder on four screens and send from it (PR #75 review, follow-up 3).
   - Every batch that adds a procedure or an enum member runs `pnpm contract:snapshot` in the same change (B2, B5, B10–B13, B15, B16).
 
 ### Within each story
