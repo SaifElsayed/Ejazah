@@ -240,9 +240,17 @@ function phone(): string {
   return `+2010${String(Number.parseInt(randomUUID().slice(0, 8), 16) % 100_000_000).padStart(8, '0')}`;
 }
 
+/** A unique stand-in address under a reserved domain (RFC 2606). Never a real person's. */
+function email(): string {
+  return `probe-${randomUUID()}@example.invalid`;
+}
+
+// T009 (Phase 1, rule 32): a live user keeps an email, so every probe's user carries one, unique
+// per row as the phone is (`users.email` carries the partial unique index of T066).
 export function makeUser(db: Db, values: Readonly<Record<string, unknown>> = {}): Promise<string> {
   return insertRow(db, 'users', {
     phone: phone(),
+    email: email(),
     gender: 'male',
     date_of_birth: '1990-01-01',
     display_name: 'Probe user',
@@ -265,6 +273,44 @@ export function makeAdmin(db: Db): Promise<string> {
 
 export function makeSubject(db: Db): Promise<string> {
   return insertRow(db, 'subjects', { name_ar: 'مادة', name_en: 'Subject', is_active: true });
+}
+
+/**
+ * T008 (Phase 1): one teacher credential over its ijazah PDF (ADR 0017 D5): a
+ * `verification_documents` row of the teacher's, then the `teacher_credentials` row in the given
+ * status (`pending` unless said). A reviewed status names the administrator who reviewed it.
+ */
+export async function makeCredential(
+  db: Db,
+  values: {
+    readonly teacherId: string;
+    readonly subjectId: string;
+    readonly status?: 'pending' | 'needs_document' | 'approved' | 'rejected';
+    readonly admin?: string;
+  },
+): Promise<string> {
+  const documentId = await insertRow(db, 'verification_documents', {
+    user_id: values.teacherId,
+    document_type: 'credential',
+    storage_key_encrypted: Buffer.from('probe'),
+  });
+  const status = values.status ?? 'pending';
+  const reviewed =
+    status === 'pending'
+      ? {}
+      : {
+          reviewed_by_admin_id: values.admin ?? (await makeAdmin(db)),
+          reviewed_at: '2026-10-18T09:00:00Z',
+          review_reason: status === 'approved' ? null : 'Probe reason',
+        };
+  return insertRow(db, 'teacher_credentials', {
+    teacher_user_id: values.teacherId,
+    subject_id: values.subjectId,
+    document_id: documentId,
+    status,
+    submitted_with_application: true,
+    ...reviewed,
+  });
 }
 
 /** A teacher with a subject, a package and a weekly slot: what an enrollment snapshots. */

@@ -105,10 +105,11 @@ async function inClientRollback(probe: (tx: Transaction) => Promise<void>): Prom
 
 const DELETED_AT = '2026-10-08T00:00:00Z';
 
-/** The columns of one live user, for the client's `create`. */
+/** The columns of one live user, for the client's `create`; an email, since rule 32 (T009). */
 function userData() {
   return {
     phone: phoneNumber(),
+    email: emailAddress(),
     gender: 'male',
     dateOfBirth: '1990-01-01T00:00:00Z',
     displayName: 'Probe user',

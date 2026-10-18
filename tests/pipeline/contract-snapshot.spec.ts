@@ -188,9 +188,7 @@ function sources(variant: Variant = {}): SnapshotSources {
       ? {}
       : {
           settings: {
-            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(
-              () => null,
-            ),
+            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(() => null),
           },
         },
   );
@@ -567,7 +565,8 @@ describe('the real contract (T084)', () => {
         .map((line) => line.split(/\s/)[0] ?? '')
         .sort();
     }
-    expect(Object.keys(declared)).toHaveLength(28);
+    // 28 enums of Phase 0 and the eight the Phase 1 ERD pass declared (T009 to T012).
+    expect(Object.keys(declared)).toHaveLength(36);
     expect(snapshot.enums.prisma).toEqual(declared);
     expect(Object.keys(snapshot.procedures)).toEqual(['admin', 'app']);
   });

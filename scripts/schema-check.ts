@@ -6,7 +6,8 @@
 //   timestamp-suffix           a `timestamptz` not ending `_at`, or an `_at` that is not `timestamptz` (R-TIME-5)
 //   piasters-type              an `_piasters` column that is not an integer type (R-MONEY-1)
 //   local-time                 an `_local` column that is not a date or a time, or has no `timezone` beside it (R-TIME-3)
-//   secret-column              a name holding a secret word, not ending `_hash` or `_encrypted` (R-DB-7, R-DB-8)
+//   secret-column              a name holding a secret word, not ending `_hash` or `_encrypted` (R-DB-7, R-DB-8),
+//                              outside the declared list of names that hold a word but no secret (T013)
 //   hash-type                  an `_hash` column that is not text
 //   encrypted-type             an `_encrypted` column that is not `bytea`, or a `bytea` not ending `_encrypted`
 //   enum-duplicate             an enum whose labels, in order, repeat another enum's (enums declared once)
@@ -70,6 +71,17 @@ const SECRET_PHRASES: readonly (readonly string[])[] = [
   ['national', 'id'],
 ];
 
+// Columns whose name holds a secret word and that hold no secret: an instant, or a counter, about
+// the secret, never its material (Phase 1, T013; specs/002-identity/data-model.md §2). Each is
+// named here with why, as the aggregate list below names its exceptions, so the rule stays on by
+// default and the list is reviewed.
+const SECRET_NAMES_ALLOWED: ReadonlyMap<string, string> = new Map([
+  ['admin_users.mfa_last_accepted_step', 'the last TOTP step accepted, a counter (RFC 6238 §5.2)'],
+  ['admin_users.mfa_enrolled_at', 'the instant the second factor was confirmed at setup'],
+  ['admin_users.password_set_at', 'the instant the password was set'],
+  ['admin_sessions.mfa_verified_at', 'the instant the second factor passed on the session'],
+]);
+
 // Words naming a value computed from other rows or columns.
 const AGGREGATE_WORDS: ReadonlySet<string> = new Set([
   'average',
@@ -82,13 +94,15 @@ const AGGREGATE_WORDS: ReadonlySet<string> = new Set([
 ]);
 
 // Columns whose name holds an aggregate word and that are stored on purpose. The first two are
-// caches R-DB-4 declares; the other three are not derived at all.
+// caches R-DB-4 declares; the other four are not derived at all.
 const AGGREGATE_NAMES_ALLOWED: ReadonlyMap<string, string> = new Map([
   ['teacher_profiles.average_rating', 'a cache R-DB-4 declares'],
   ['teacher_profiles.review_count', 'a cache R-DB-4 declares'],
   ['enrollments.snapshot_session_count', "the package's count when booked, a snapshot"],
   ['packages.session_count', "a package's own property, set by the teacher"],
   ['otp_codes.attempt_count', 'the state of a code, counted as attempts happen'],
+  // Phase 1 (T013, ADR 0019 D3): the lockout pair's count, counted as attempts fail.
+  ['admin_users.failed_sign_in_count', 'the state of the lockout, counted as sign-ins fail'],
 ]);
 
 // Prisma's own bookkeeping table: its columns are Prisma's, not this schema's.
@@ -150,7 +164,11 @@ function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): v
       else if (!tablesWithZone.has(table)) at('local-time', 'no timezone column beside it');
     }
     const secured = column.endsWith('_hash') || column.endsWith('_encrypted');
-    if (!secured && SECRET_PHRASES.some((phrase) => holdsPhrase(column, phrase))) {
+    if (
+      !secured &&
+      !SECRET_NAMES_ALLOWED.has(qualified) &&
+      SECRET_PHRASES.some((phrase) => holdsPhrase(column, phrase))
+    ) {
       at('secret-column', 'a secret stored bare; hash it (_hash) or encrypt it (_encrypted)');
     }
     if (column.endsWith('_hash') && !TEXT_TYPES.has(type)) {

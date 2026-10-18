@@ -54,13 +54,14 @@ The root identity. One row per human, with exactly one role (ADR 0016).
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| phone | text, unique, nullable | E.164. At least one of phone/email — DB check constraint. Unused in MVP: phone sign-up is deferred (ADR 0012) |
+| phone | text, unique, nullable | E.164. At least one of phone/email on a live row — DB check constraint (§15 rule 1, rewritten for deleted rows in the Phase 1 pass). Unused in MVP: phone sign-up is deferred (ADR 0012) |
 | email | text, unique, nullable | citext. Present on every MVP account: Google and Apple always return one, and email accounts verify theirs (ADR 0012) |
 | password_hash | text, nullable | null for Google and Apple accounts (ADR 0012) |
 | gender | enum male · female | Self-declared, FR-AUTH-3. Changed only via admin (FR-GENDER-5) |
-| date_of_birth | date | FR-AUTH-4 |
-| display_name | text | |
-| certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, added in the Phase 1 pass). Erased on deletion; the names a certificate prints are snapshotted onto `ijazahs` at issue (ADR 0015 D3, ADR 0019 D1) |
+| date_of_birth | date, nullable | FR-AUTH-4. Nullable only for a deleted row, so the deletion transaction can erase it; §15 rule 32 keeps it NOT NULL while the row is live (Phase 1 pass, migration `20261018000000`) |
+| display_name | text, nullable | Nullable only for a deleted row, as `date_of_birth` (rule 32) |
+| certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, landed by the Phase 1 pass). Erased on deletion; the names a certificate prints are snapshotted onto `ijazahs` at issue (ADR 0015 D3, ADR 0019 D1) |
+| photo_key | text, nullable | The profile photo of either role (decision 46), a storage key served by a signed link; erased on deletion. `teacher_profiles.photo_key` is unused since (Phase 1 pass) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
 | account_status | enum active · suspended · verification_required · banned | |
@@ -69,11 +70,46 @@ The root identity. One row per human, with exactly one role (ADR 0016).
 
 `is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
 
-A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2). Its table, `auth_identities` (`user_id`, `provider` google · apple, `provider_subject`, `created_at`; unique on `(provider, provider_subject)`), is added by the ERD amendments that open the Phase 1 cycle (PLAN.md), with a forward migration; the count of tables below changes then, not here. Its rows are deleted outright when the account is deleted (ADR 0015 D3), so the unique never blocks the person's new account. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender`, `date_of_birth`, `display_name` and `timezone` stay NOT NULL.
+A Google or Apple sign-in is keyed by the provider's subject identifier, never by the email (ADR 0012 D2): its table is `auth_identities` below. The `users` row, its `auth_identities` row (or `password_hash`) and its `user_roles` row are written together when onboarding completes (ADR 0012 D4, FR-AUTH-12): no row exists for a sign-in whose onboarding is incomplete, which is why `gender` and `timezone` stay NOT NULL as columns, and `display_name`, `date_of_birth` and `email` NOT NULL for every live row by §15 rule 32 — the columns themselves are nullable since the Phase 1 pass, so the one transaction of FR-141 can erase them.
+
+### `auth_identities`
+
+A Google or Apple account, keyed by the provider's subject (ADR 0012 D2). Added by the Phase 1 pass (migration `20261018000000`; specs/002-identity/data-model.md §1).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | FK → users | |
+| provider | enum google · apple | |
+| provider_subject | text | The token's `sub`; unique with `provider` (§15 rule 22) |
+| provider_refresh_token_encrypted | bytea, nullable | Apple only: the refresh token obtained by exchanging the authorization code at the first sign-in, kept so deletion can revoke it (ADR 0015 D3, R-DB-8); null for Google. Reached by the `reencrypt-columns` job through the identity repository |
+| created_at | timestamptz | |
+
+Deleted outright on account deletion (ADR 0015 D3): the application role keeps DELETE on this table, and the uniqueness never blocks the person's new account.
+
+### `user_sessions`
+
+A device's session: its refresh token as a hash, rotation, revocation (FR-AUTH-7; specs/002-identity/research.md R-101). Added by the Phase 1 pass (migration `20261018000000`).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | FK → users | Partial index `(user_id) WHERE revoked_at IS NULL`: "revoke every session of the user" reads the live ones |
+| refresh_token_hash | text, unique | SHA-256 lookup hash of the current refresh token (R-DB-7; §15 rule 25) |
+| previous_refresh_token_hash | text, nullable | The hash rotation retired, kept for the grace window; a presentation after it revokes the row (reuse detection) |
+| device_label | text, nullable | What the device reported of itself; shown nowhere in Phase 1 |
+| issued_at | timestamptz | |
+| refreshed_at | timestamptz, nullable | The last rotation |
+| expires_at | timestamptz | Absolute: issue plus `session_refresh_ttl_days`; never extended |
+| revoked_at | timestamptz, nullable | |
+| revoked_reason | enum sign_out · reuse_detected · password_reset · account_deleted · account_suspended · account_banned · admin_action, nullable | |
+| created_at / updated_at | timestamptz | |
+
+No `deleted_at`: a session is a credential, destroyed, not a record kept from view; the application role keeps DELETE. Rows are purged by `purge-expired-sessions` after `session_purge_after_days`.
 
 ### `user_roles`
 
-One row per user in the MVP: an account is a student or a teacher, never both (SRS §2.2, ADR 0016). The table is kept so dual roles can return; a unique index on `user_id` lands with a forward migration in the Phase 1 ERD pass.
+One row per user in the MVP: an account is a student or a teacher, never both (SRS §2.2, ADR 0016). The table is kept so dual roles can return; the unique index on `user_id` (§15 rule 24) landed with the Phase 1 pass (migration `20261018000000`).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -81,7 +117,7 @@ One row per user in the MVP: an account is a student or a teacher, never both (S
 | user_id | FK → users | |
 | role | enum student · teacher | |
 | status | enum active · suspended | Stays `active` in the MVP: suspension is per account (`users.account_status`, ADR 0016) |
-| granted_at | timestamptz | unique (user_id, role) |
+| granted_at | timestamptz | unique (user_id, role); unique (user_id) since the Phase 1 pass (ADR 0016 D3) |
 
 ### `teacher_profiles`
 
@@ -92,9 +128,9 @@ Exists only for users holding the teacher role. 1:1 with the role.
 | id | uuid | PK |
 | user_id | FK → users, unique | |
 | bio | text | |
-| photo_key | text, nullable | Storage key, served via signed URL |
+| photo_key | text, nullable | Unused since the Phase 1 pass: the photo of either role is `users.photo_key`; the column stays |
 | qualification_summary | text | Years/type, FR-PROFILE-1 |
-| verification_status | enum pending · approved · rejected · suspended · banned | FR-AUTH-9, FR-VERIFY-8/9 |
+| verification_status | enum pending · approved · rejected · suspended · banned · revoked | FR-AUTH-9, FR-VERIFY-8/9. `revoked` (Phase 1 pass, FR-165): a withdrawn approval, the teacher returns only through a new application; `suspended` stays the account-level word and is no longer written here |
 | verification_call_completed_at | timestamptz, nullable | Gate on approval, FR-VERIFY-5 |
 | verification_call_notes | text, nullable | |
 | approved_by_admin_id | FK → admin_users, nullable | |
@@ -104,6 +140,15 @@ Exists only for users holding the teacher role. 1:1 with the role.
 | payout_verified_at | timestamptz, nullable | When the gateway verified the account. NULL means not discoverable, not bookable, cannot publish (FR-PAYG-14, §3.7.1 predicate) |
 | average_rating | numeric(3,2), nullable | Cached exception #1 — recomputed on every review write |
 | review_count | int, default 0 | Cached with it |
+| application_submitted_at | timestamptz, nullable | The current application's submission; reapplying after a rejection sets it again (Phase 1 pass, migration `20261018000200`; specs/002-identity/data-model.md §3: the application is a state of the profile, not a table) |
+| application_status | enum in_review · needs_document · rejected · banned · approved, nullable | What the applicant sees, the queue's tab; `verification_status` stays the product's status. Null before the first submission |
+| application_note | text, nullable | The reviewer's latest note to the applicant (the request for a document, the rejection) |
+| application_decided_at / application_decided_by_admin_id | timestamptz, nullable; FK → admin_users, nullable | |
+| identity_document_id | FK → verification_documents, nullable | The identity document of the current application |
+| identity_document_type | enum national_id · passport, nullable | One type shared with `verification_requests.document_type` |
+| approved_shown_at | timestamptz, nullable | The once-only `ApplicationApproved` was shown (FR-152 of Phase 1) |
+| payout_account_ref_hash | text, unique, nullable | SHA-256 lookup hash of the recipient reference beside the encrypted column; routes recipient events (§15 rule 27) |
+| payout_rejected_reason | text, nullable | The gateway's last rejection reason, shown to the teacher; cleared on verification |
 
 ### `otp_codes`
 
@@ -114,10 +159,10 @@ Signup verification and password reset (FR-AUTH-1/6).
 | id | uuid | PK |
 | destination | text | an email address in MVP; a phone number when phone sign-up returns (ADR 0012) |
 | code_hash | text | Never store the code plain |
-| purpose | enum signup · login · password_reset | `login` is unused in MVP: email accounts sign in with their password (ADR 0012) |
+| purpose | enum signup · login · password_reset · account_deletion | `login` is unused in MVP: email accounts sign in with their password (ADR 0012); `account_deletion` is the web deletion's code (FR-AUTH-15, Phase 1 pass) |
 | expires_at | timestamptz | Short TTL |
 | consumed_at | timestamptz, nullable | Single-use |
-| attempt_count | int, default 0 | Rate-limit companion |
+| attempt_count | int, default 0 | Rate-limit companion. Index `(destination, purpose)` since the Phase 1 pass: the lookup every verify and every purge makes |
 
 ### `device_push_tokens`
 
@@ -168,6 +213,8 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | requested_by_admin_id | FK → admin_users | |
 | reason | text | Mandatory |
 | status | enum open · satisfied · expired | Open request ⇒ account_status verification_required |
+| document_id | FK → verification_documents, nullable | The document the user submitted for the request (Phase 1 pass, migration `20261018000200`) |
+| document_type | enum national_id · passport, nullable | The same type as `teacher_profiles.identity_document_type` |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
 
 ## 4. Catalog
@@ -200,8 +247,9 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | price_piasters | bigint | ≥ 0. Charged in full through the gateway at checkout; the gateway settles the net to the teacher (FR-PAYG-1) |
 | currency | char(3), default 'EGP' | |
 | is_active | boolean | Deactivation never touches existing enrollments (FR-PROFILE-3) |
+| track | enum recitation · ijazah_track | The teacher's choice at creation (ADR 0018 D1; Phase 1 pass, migration `20261018000300`, default `recitation` since no row existed). An ijazah can be requested only from the ijazah track (FR-IJAZAH-1) |
 
-**Amended by ADR 0018 (Phase 1 ERD pass, forward migration).** `packages` gains `track` enum recitation · ijazah_track; `enrollments` gains `snapshot_track`; `sessions` gains `makeup_for_session_id` (nullable, FK → sessions); a new table `session_remedies` (`id`, `session_id` unique, `kind` enum makeup · refund, `status` enum awaiting_choice · proposed · counter_proposed · booked · refund_case, `proposed_date`, `counter_date`, `decided_at`, `case_id` nullable FK → disputes) records what each session not consumed is owed (FR-MAKEUP-1..6); `settings` gains the make-up choice window.
+**ADR 0018, landed by the Phase 1 pass (migration `20261018000300`).** `packages.track`; `enrollments.snapshot_track` (§5); `sessions.makeup_for_session_id` and the `session_remedies` table (§5) record what each session not consumed is owed (FR-MAKEUP-1..6); `settings` holds the make-up choice window (seeded by T002).
 
 ### `availability_slots`
 
@@ -217,22 +265,38 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 | timezone | text (IANA) | The teacher's zone at creation |
 | is_active | boolean | Deactivation never affects generated sessions (FR-PROFILE-9) |
 
-### `isnad_entries`
+### `teacher_credentials`
 
-Chain of transmission — ordered names, per teacher per subject (FR-ISNAD-1…6). Not a graph.
-
-**Amended by ADR 0017 (shape lands in the Phase 1 ERD pass, forward migration).** The chain is transcribed by the admin from the teacher's ijazah PDF, never typed by the teacher. Each row moves under a credential: `credential_id` FK → `teacher_credentials` replaces (`teacher_user_id`, `subject_id`); `transmitter_name` becomes `names` (text[], one generation holding one or more names, ADR 0004 D3); `position` counts origin first; `verification_status`, `verified_by_admin_id` and `verified_at` go (a chain exists only on an approved credential) and `created_by_admin_id` is added; unique (`credential_id`, `position`). New table `teacher_credentials`: `id`, `teacher_user_id`, `subject_id`, `document_id` FK → `verification_documents` (the PDF), `holder_name` (the teacher's full name as on the PDF, ADR 0019), `riwaya`, `tariq` (nullable), `status` enum pending · needs_document · approved · rejected, `review_reason`, `reviewed_by_admin_id`, `reviewed_at`; one approved credential per (`teacher_user_id`, `subject_id`). The table count changes then, not here.
+One ijazah PDF per subject with its transcription; the chain hangs under it (ADR 0017 D5, FR-PROFILE-11). Added by the Phase 1 pass (migration `20261018000200`; specs/002-identity/data-model.md §1). Owned by `catalog`; the document itself is `verification`'s.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | teacher_user_id | FK → users | |
 | subject_id | FK → subjects | |
-| position | int ≥ 1 | 1 = the teacher's own teacher, ascending toward origin |
-| transmitter_name | text | Free text, Arabic or English |
-| verification_status | enum unverified · verified | Scholar-committee outcome, recorded by admin (FR-ISNAD-4). Any edit reverts to unverified (FR-ISNAD-6) |
-| verified_by_admin_id | FK → admin_users, nullable | |
-| verified_at | timestamptz, nullable | unique (teacher_user_id, subject_id, position) |
+| document_id | FK → verification_documents | The ijazah PDF |
+| holder_name | text, nullable | The teacher's full name as on the PDF, transcribed at approval (ADR 0019 D1) |
+| riwaya / tariq | text, nullable | Transcribed at approval, Arabic as typed (ADR 0021 D1) |
+| status | enum pending · needs_document · approved · rejected | |
+| review_reason | text, nullable | Mandatory on reject and needs_document; the teacher sees it |
+| reviewed_by_admin_id / reviewed_at | FK → admin_users, nullable; timestamptz, nullable | |
+| submitted_with_application | boolean | Whether it came with an application («عند التقدّم») or was added after approval |
+| created_at / updated_at | timestamptz | |
+
+One approved credential per teacher and subject: partial unique `(teacher_user_id, subject_id) WHERE status = 'approved'` (§15 rule 23). A rejected credential stays as history; a new upload for the same subject is a new row.
+
+### `isnad_entries`
+
+Chain of transmission — one generation per row under a credential (FR-ISNAD-1…6). Not a graph. Re-keyed by ADR 0017 D5 in the Phase 1 pass (migration `20261018000200`): the chain is transcribed by the admin from the teacher's ijazah PDF, never typed by the teacher, and exists only on an approved credential, so it carries no verification state of its own. The table held no row, so the former columns (`teacher_user_id`, `subject_id`, `transmitter_name`, `verification_status`, `verified_by_admin_id`, `verified_at`) were dropped rather than deprecated; the enum `isnad_verification_status` stays declared (R-API-9).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| credential_id | FK → teacher_credentials | |
+| position | int ≥ 1 | Origin first, counting toward the teacher; unique (credential_id, position) — §15 rule 7, as re-keyed |
+| names | text[] | One generation holding one or more names (ADR 0004 D3), Arabic as typed; never empty (check constraint) |
+| created_by_admin_id | FK → admin_users | |
+| created_at / updated_at | timestamptz | |
 
 ### `teacher_signatures`
 
@@ -275,9 +339,10 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_duration_minutes | int | |
 | snapshot_subject_id | FK → subjects | |
 | snapshot_slot_timezone | text | Zone frozen at purchase — DST maths uses this |
+| snapshot_track | enum recitation · ijazah_track | The package's track at purchase (ADR 0018 D1, DEC-24; Phase 1 pass, migration `20261018000300`, default `recitation` as `packages.track`'s) |
 | status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` when its hold is released without conversion (FR-PAYG-6, ADR 0010 D7), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
-| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), added with a forward migration in the Phase 1 ERD pass |
+| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | purchased_at | timestamptz | |
 
@@ -305,7 +370,23 @@ One scheduled occurrence. Its local date, local start time and zone are the sche
 | provider_room_id | text, nullable | Video provider reference |
 | evaluated_at | timestamptz, nullable | When the worker settled it |
 | settled_by_admin_id | FK → admin_users, nullable | For review-queue resolutions (FR-SESS-19) |
+| makeup_for_session_id | FK → sessions, nullable | The session this one makes up for (ADR 0018 D3; Phase 1 pass, migration `20261018000300`) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
+
+### `session_remedies`
+
+What a session not consumed is owed (ADR 0018 D2 to D5, FR-MAKEUP-1..6). Added by the Phase 1 pass (migration `20261018000300`), columns only; no code of Phase 1 writes it, Phase 3 does. Owned by `sessions`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| session_id | FK → sessions, unique | One row per session not consumed |
+| kind | enum makeup · refund | |
+| status | enum awaiting_choice · proposed · counter_proposed · booked · refund_case | |
+| proposed_date / counter_date | date, nullable | Calendar dates; the slot's time is the package's |
+| decided_at | timestamptz, nullable | |
+| case_id | FK → disputes, nullable | The refund case |
+| created_at / updated_at | timestamptz | |
 
 ### `session_participant_events`
 
@@ -520,11 +601,47 @@ Separate from `users` entirely (FR-ADMIN-1) — different auth, different tables
 |---|---|---|
 | id | uuid | PK |
 | email | text, unique | |
-| password_hash | text | |
-| mfa_secret_encrypted | bytea | MFA mandatory (NFR-SEC-6). One admin role in the MVP, no role column (ADR 0019); single-use recovery codes live in `admin_recovery_codes` (`admin_id`, `code_hash`, `used_at`), added in the Phase 1 pass |
+| password_hash | text, nullable | Null from invite until the password-set link is used; sign-in refused while null (Phase 1 pass, migration `20261018000100`) |
+| mfa_secret_encrypted | bytea | MFA mandatory (NFR-SEC-6). One admin role in the MVP, no role column (ADR 0019); single-use recovery codes live in `admin_recovery_codes` below |
+| mfa_last_accepted_step | bigint, nullable | The last TOTP step accepted, so a code is never accepted twice within its step (RFC 6238 §5.2). A counter, not a secret: the schema check's allow-list names it |
+| mfa_enrolled_at | timestamptz, nullable | Null until the first code is confirmed at setup; the secret exists from invite |
+| failed_sign_in_count / locked_until_at | int, default 0; timestamptz, nullable | The lockout pair (settings `admin_lockout_attempts`, `admin_lockout_minutes`, ADR 0019 D3); a lock never exists without the count that caused it (§15 rule 30) |
+| invited_by_admin_id / invited_at | FK → admin_users, nullable; timestamptz, nullable | |
+| password_set_at / disabled_at / last_sign_in_at | timestamptz, nullable | `is_active` is held equal to `disabled_at IS NULL` by §15 rule 31 |
 | display_name | text | |
 | is_active | boolean | |
 | created_at | timestamptz | |
+
+### `admin_sessions`
+
+An administrator's session, a different principal in a different table (R-SEC-8). Added by the Phase 1 pass (migration `20261018000100`).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| admin_id | FK → admin_users | |
+| token_hash | text, unique | SHA-256 lookup hash of the bearer (R-DB-7; §15 rule 25) |
+| mfa_verified_at | timestamptz, nullable | Null until the second factor passes on this session; the admin kind refuses a null |
+| issued_at / last_seen_at | timestamptz | Idle limit from `admin_session_idle_minutes` |
+| expires_at | timestamptz | Absolute, `admin_session_max_hours` |
+| revoked_at | timestamptz, nullable | |
+| created_at / updated_at | timestamptz | |
+
+A credential, not a record: the application role keeps DELETE.
+
+### `admin_recovery_codes`
+
+Ten single-use codes per administrator, hashed (ADR 0019 D3). Added by the Phase 1 pass (migration `20261018000100`).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| admin_id | FK → admin_users | |
+| code_hash | text | Peppered Argon2id, the one-time-code regime |
+| used_at | timestamptz, nullable | Single use |
+| created_at | timestamptz | |
+
+Regeneration deletes the administrator's unused rows and inserts ten; the application role keeps DELETE.
 
 ### `audit_logs`
 
@@ -661,7 +778,7 @@ Add nothing else until a query is measurably slow (Architecture §17).
 
 Rules that must hold even if application code is buggy — so they live in the schema, not just the service:
 
-1. `users`: at least one of phone/email — check constraint. Every MVP account has an email (ADR 0012), so the check always holds.
+1. `users`: at least one of phone/email on a live row — check constraint `deleted_at IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL`, rewritten in the Phase 1 pass so the deletion transaction can erase both (FR-141). Every live MVP account has an email (ADR 0012), which rule 32 now holds.
 2. `enrollments`: `student_user_id ≠ teacher_user_id` — check constraint (FR-BOOK-11).
 3. `reviews.enrollment_id` unique — one review per enrollment, unbypassable.
 4. `session_participant_events.provider_event_id` unique — webhook replay safety (attendance).
@@ -682,6 +799,17 @@ Rules that must hold even if application code is buggy — so they live in the s
 19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a system termination (FR-NOSHOW-4, FR-SESS-16, FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run with `SET CONSTRAINTS … DEFERRED` (raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another session of the same teacher or the same student that these constraints count, restores them to their previous instants and reports them to error tracking (FR-051) for an operator, so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010).
 20. `payment_events`: `payment_id IS NULL` exactly when `event_type` is `recipient_verified` or `recipient_rejected` — check constraint. An order event always names its gateway order; a payout-recipient event never does (FR-PAYG-4, FR-PAYG-15, PR #39).
 21. `audit_logs`, `payment_events`, `session_participant_events`: no UPDATE, no DELETE and no TRUNCATE, revoked at the Postgres role level. Each row records something that happened: an administrator's action, a gateway's signed event, a provider's attendance evidence. It is written once and never rewritten, which restores for these tables the guarantee retired rule 6 gave the ledger. Rule 10 already revokes DELETE on `audit_logs`; this rule adds UPDATE and TRUNCATE there, and all three on the two event tables (PR #39).
+22. `auth_identities (provider, provider_subject)` unique — one provider account is one platform account (ADR 0012 D2; Phase 1 pass).
+23. `teacher_credentials (teacher_user_id, subject_id)` unique `WHERE status = 'approved'` — one approved credential per teacher and subject; a rejected one stays as history (ADR 0017 D5; Phase 1 pass).
+24. `user_roles (user_id)` unique — one role row per user in the MVP (ADR 0016 D3; Phase 1 pass).
+25. `user_sessions.refresh_token_hash` and `admin_sessions.token_hash` unique — a presented token names one session (Phase 1 pass).
+26. `idempotency_keys (scope, actor_id, key)` unique with `actor_id` NOT NULL — replaces rule 16's `(scope, key)`; lands with the kernel batch of Phase 1 (B4), beside the service that writes the actor.
+27. `teacher_profiles.payout_account_ref_hash` unique where present — one recipient reference routes to one teacher (Phase 1 pass).
+28. `isnad_entries (credential_id, position)` unique — rule 7 as re-keyed by ADR 0017; and `names` is never null or empty (Phase 1 pass).
+29. `audit_logs.target_label` NOT NULL and at most 200 characters — lands with the kernel batch of Phase 1 (B4), beside the writer that renders the label (ADR 0021 D2).
+30. `admin_users`: `locked_until_at IS NULL OR failed_sign_in_count > 0` — check constraint, so a lock never exists without the count that caused it (ADR 0019 D3; Phase 1 pass).
+31. `admin_users`: `is_active = (disabled_at IS NULL)` — check constraint, so the flag cannot drift from its source (Phase 1 pass).
+32. `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` — check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141; Phase 1 pass). The five credential tables (`auth_identities`, `user_sessions`, `admin_sessions`, `admin_recovery_codes`, `otp_codes`) keep DELETE for the application role: each is a credential or a key, not a record of something that happened.
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 

@@ -72,22 +72,72 @@ enum RoleStatus {
   @@map("role_status")
 }
 
+// `revoked` (Phase 1, T011, FR-165): a withdrawn approval (FR-VERIFY-8, ADR 0016 D2); the teacher
+// returns only through a new application. `suspended` stays the account-level word and is no
+// longer written to this column.
 enum TeacherVerificationStatus {
   pending
   approved
   rejected
   suspended
   banned
+  revoked
 
   @@map("teacher_verification_status")
 }
 
+// Phase 1 (T011, specs/002-identity/data-model.md §3): what the applicant sees of the application,
+// the queue's tab; `verification_status` stays the product's status.
+enum TeacherApplicationStatus {
+  in_review
+  needs_document
+  rejected
+  banned
+  approved
+
+  @@map("teacher_application_status")
+}
+
+// Phase 1 (T011): the identity document's kind on an application and on a verification request
+// (`VerifyIdentity`'s segmented control). One type for both columns: two enums with the same labels
+// fail the schema check.
+enum IdentityDocumentType {
+  national_id
+  passport
+
+  @@map("identity_document_type")
+}
+
+// `account_deletion` is the web deletion's code (Phase 1, T009, FR-143).
 enum OtpPurpose {
   signup
   login
   password_reset
+  account_deletion
 
   @@map("otp_purpose")
+}
+
+// Phase 1 (T009, specs/002-identity/data-model.md §1): the two providers a sign-in is keyed by
+// (ADR 0012 D2), and why a device's session was revoked (R-101).
+
+enum AuthProvider {
+  google
+  apple
+
+  @@map("auth_provider")
+}
+
+enum SessionRevokedReason {
+  sign_out
+  reuse_detected
+  password_reset
+  account_deleted
+  account_suspended
+  account_banned
+  admin_action
+
+  @@map("session_revoked_reason")
 }
 
 enum DevicePlatform {
@@ -118,11 +168,24 @@ enum VerificationRequestStatus {
 
 // catalog (ERD section 4)
 
+// Declared but no longer carried by a column: ADR 0017 D5 dropped `isnad_entries.verification_status`
+// (a chain exists only on an approved credential). It stays declared, as R-API-9 asks of what was
+// published (Phase 1, T011).
 enum IsnadVerificationStatus {
   unverified
   verified
 
   @@map("isnad_verification_status")
+}
+
+// Phase 1 (T011, ADR 0017 D5, FR-104): a credential's review state.
+enum TeacherCredentialStatus {
+  pending
+  needs_document
+  approved
+  rejected
+
+  @@map("teacher_credential_status")
 }
 
 // booking (ERD section 5)
@@ -148,8 +211,38 @@ enum CancellationReason {
   slot_unavailable
   // Its hold was released by the student's own new checkout (FR-BOOK-12, ADR 0010 D7).
   checkout_abandoned
+  // The student deleted their account (ADR 0015 D4; Phase 1, T012).
+  account_deleted
 
   @@map("cancellation_reason")
+}
+
+// Phase 1 (T012, ADR 0018 D1): every package has a track, and the enrollment keeps it in its
+// snapshot (DEC-24). An ijazah can be requested only from the ijazah track (FR-IJAZAH-1).
+enum PackageTrack {
+  recitation
+  ijazah_track
+
+  @@map("package_track")
+}
+
+// Phase 1 (T012, ADR 0018 D2 to D4): what a session not consumed is owed, and where the remedy
+// stands. The columns land now; the behaviour is Phase 3's.
+enum RemedyKind {
+  makeup
+  refund
+
+  @@map("remedy_kind")
+}
+
+enum RemedyStatus {
+  awaiting_choice
+  proposed
+  counter_proposed
+  booked
+  refund_case
+
+  @@map("remedy_status")
 }
 
 // sessions (ERD section 5)

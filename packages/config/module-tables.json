@@ -1,62 +1,38 @@
 {
-  "$comment": "Domain-to-module ownership manifest (ERD v1.3 section 1, data-model.md section 1, ADR 0005 D2, ADR 0007 D4, ADR 0008 D2). Consumed by api/table-ownership (R-API-6). A table lands in exactly one owner or fails the check. 33 tables: 12 modules plus the platform kernel.",
+  "$comment": "Domain-to-module ownership manifest (ERD v1.3 section 1, data-model.md section 1, ADR 0005 D2, ADR 0007 D4, ADR 0008 D2; Phase 1 adds six tables, specs/002-identity/data-model.md section 1, T003). Consumed by api/table-ownership (R-API-6). A table lands in exactly one owner or fails the check. 39 tables: 12 modules plus the platform kernel.",
   "identity": [
     "users",
     "user_roles",
     "teacher_profiles",
     "otp_codes",
     "device_push_tokens",
-    "terms_acceptances"
+    "terms_acceptances",
+    "user_sessions",
+    "auth_identities"
   ],
-  "verification": [
-    "verification_documents",
-    "verification_requests"
-  ],
+  "verification": ["verification_documents", "verification_requests"],
   "catalog": [
     "subjects",
     "teacher_subjects",
     "packages",
     "availability_slots",
     "isnad_entries",
-    "teacher_signatures"
+    "teacher_signatures",
+    "teacher_credentials"
   ],
-  "booking": [
-    "slot_holds",
-    "enrollments"
-  ],
-  "payments": [
-    "payments",
-    "payment_events"
-  ],
+  "booking": ["slot_holds", "enrollments"],
+  "payments": ["payments", "payment_events"],
   "sessions": [
     "sessions",
     "session_participant_events",
-    "cancellation_requests"
+    "cancellation_requests",
+    "session_remedies"
   ],
-  "chat": [
-    "chat_messages"
-  ],
-  "certification": [
-    "ijazahs",
-    "ijazah_bars"
-  ],
-  "reviews": [
-    "reviews"
-  ],
-  "moderation": [
-    "disputes",
-    "gender_flags",
-    "user_reports"
-  ],
-  "notifications": [
-    "notifications"
-  ],
-  "admin": [
-    "admin_users",
-    "audit_logs",
-    "settings"
-  ],
-  "platform": [
-    "idempotency_keys"
-  ]
+  "chat": ["chat_messages"],
+  "certification": ["ijazahs", "ijazah_bars"],
+  "reviews": ["reviews"],
+  "moderation": ["disputes", "gender_flags", "user_reports"],
+  "notifications": ["notifications"],
+  "admin": ["admin_users", "audit_logs", "settings", "admin_sessions", "admin_recovery_codes"],
+  "platform": ["idempotency_keys"]
 }

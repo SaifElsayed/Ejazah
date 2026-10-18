@@ -8,6 +8,12 @@
 // visible only to the session that made it.
 //
 // The second half needs `DATABASE_URL_OWNER` as well as `DATABASE_URL`, as the concurrency probes do.
+//
+// T013 (Phase 1): the migrated schema now holds four columns named with a secret word that hold no
+// secret (`mfa_last_accepted_step`, `mfa_enrolled_at`, `password_set_at`, `mfa_verified_at`) and one
+// more counter (`failed_sign_in_count`); each is on its declared list, so the first case holds.
+// The violation case gains a lookalike on neither list, so the lists admit what they name and
+// nothing more.
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkSchema, type Violation } from '../../scripts/schema-check';
@@ -71,6 +77,7 @@ describe('the check names every kind of violation (T070)', () => {
           lesson_local date,
           api_token text,
           reset_code text,
+          mfa_recovered_at timestamptz,
           code_hash integer,
           note_encrypted text,
           blob bytea,
@@ -98,6 +105,7 @@ describe('the check names every kind of violation (T070)', () => {
         'local-time probe_violations.lesson_local',
         'secret-column probe_violations.api_token',
         'secret-column probe_violations.reset_code',
+        'secret-column probe_violations.mfa_recovered_at',
         'hash-type probe_violations.code_hash',
         'encrypted-type probe_violations.note_encrypted',
         'encrypted-type probe_violations.blob',
@@ -110,6 +118,6 @@ describe('the check names every kind of violation (T070)', () => {
         'declared-cache teacher_profiles.review_count',
       ]),
     );
-    expect(found).toHaveLength(17);
+    expect(found).toHaveLength(18);
   });
 });

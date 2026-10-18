@@ -29,6 +29,9 @@ model Dispute {
   raisedBy        User?      @relation(fields: [raisedByUserId], references: [id], onDelete: Restrict)
   resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
+  // Phase 1 (T012, ADR 0018): the refund cases that point at this dispute.
+  remedies SessionRemedy[]
+
   @@index([enrollmentId])
   @@index([sessionId])
   @@index([raisedByUserId])
