@@ -15,6 +15,11 @@ model VerificationDocument {
 
   user User @relation(fields: [userId], references: [id])
 
+  // Phase 1 (T011): the rows that point at a document, each ON DELETE RESTRICT.
+  teacherCredentials   TeacherCredential[]
+  identityOfProfiles   TeacherProfile[]
+  verificationRequests VerificationRequest[]
+
   @@index([userId])
   @@map("verification_documents")
 }
@@ -28,14 +33,20 @@ model VerificationRequest {
   reason             String
   // An open request puts the account in `verification_required`.
   status             VerificationRequestStatus
+  // Phase 1 (T011, FR-166): the document the user submitted for the request (`VerifyIdentity`) and
+  // its kind; null until submitted.
+  documentId         String?                   @map("document_id") @db.Uuid
+  documentType       IdentityDocumentType?     @map("document_type")
   createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   resolvedAt         DateTime?                 @map("resolved_at") @db.Timestamptz(6)
   updatedAt          DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user             User      @relation(fields: [userId], references: [id])
-  requestedByAdmin AdminUser @relation(fields: [requestedByAdminId], references: [id], onDelete: Restrict)
+  user             User                  @relation(fields: [userId], references: [id])
+  requestedByAdmin AdminUser             @relation(fields: [requestedByAdminId], references: [id], onDelete: Restrict)
+  document         VerificationDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([requestedByAdminId])
+  @@index([documentId])
   @@map("verification_requests")
 }

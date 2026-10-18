@@ -1,6 +1,10 @@
 // catalog domain (T056, ERD section 4). Owned by apps/api/src/modules/catalog.
-// subjects, teacher_subjects, packages, availability_slots, isnad_entries, teacher_signatures. Availability is local wall-clock beside an IANA zone column (R-TIME-3).
+// subjects, teacher_subjects, packages, availability_slots, isnad_entries, teacher_signatures, and
+// teacher_credentials (Phase 1, T011). Availability is local wall-clock beside an IANA zone column (R-TIME-3).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// What the schema language cannot say lives in the migrations: one approved credential per teacher
+// and subject, a partial unique (rule 23, T011).
 
 // An administrator-managed list, named in both languages (FR-LOC-1).
 model Subject {
@@ -11,11 +15,11 @@ model Subject {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  teacherSubjects TeacherSubject[]
-  packages        Package[]
-  isnadEntries    IsnadEntry[]
-  enrollments     Enrollment[]
-  ijazahs         Ijazah[]
+  teacherSubjects    TeacherSubject[]
+  packages           Package[]
+  teacherCredentials TeacherCredential[]
+  enrollments        Enrollment[]
+  ijazahs            Ijazah[]
 
   @@map("subjects")
 }
@@ -35,20 +39,23 @@ model TeacherSubject {
 }
 
 model Package {
-  id                     String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  teacherUserId          String   @map("teacher_user_id") @db.Uuid
+  id                     String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId          String       @map("teacher_user_id") @db.Uuid
   // A foreign key, not an enum.
-  subjectId              String   @map("subject_id") @db.Uuid
-  sessionCount           Int      @map("session_count")
+  subjectId              String       @map("subject_id") @db.Uuid
+  sessionCount           Int          @map("session_count")
   // Must equal the slot's duration at booking (FR-PROFILE-8).
-  sessionDurationMinutes Int      @map("session_duration_minutes")
+  sessionDurationMinutes Int          @map("session_duration_minutes")
   // Integer piasters, charged in full through the gateway at checkout (FR-PAYG-1, R-MONEY-1).
-  pricePiasters          BigInt   @map("price_piasters")
-  currency               String   @default("EGP") @db.Char(3)
+  pricePiasters          BigInt       @map("price_piasters")
+  currency               String       @default("EGP") @db.Char(3)
+  // The teacher's choice at creation (ADR 0018 D1; Phase 1, T012). The default is the migration's:
+  // no row existed, and the service always writes it.
+  track                  PackageTrack @default(recitation)
   // Deactivation never touches existing enrollments (FR-PROFILE-3).
-  isActive               Boolean  @map("is_active")
-  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isActive               Boolean      @map("is_active")
+  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   teacher User    @relation(fields: [teacherUserId], references: [id])
   subject Subject @relation(fields: [subjectId], references: [id])
@@ -85,30 +92,67 @@ model AvailabilitySlot {
   @@map("availability_slots")
 }
 
-// The chain of transmission: ordered names per teacher per subject, not a graph (FR-ISNAD-1..6).
-model IsnadEntry {
-  id                 String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  teacherUserId      String                  @map("teacher_user_id") @db.Uuid
-  subjectId          String                  @map("subject_id") @db.Uuid
-  // 1 is the teacher's own teacher, ascending toward the origin.
-  position           Int
-  // Free text, Arabic or English.
-  transmitterName    String                  @map("transmitter_name")
-  // Recorded by an administrator (FR-ISNAD-4); any edit reverts it to unverified (FR-ISNAD-6).
-  verificationStatus IsnadVerificationStatus @map("verification_status")
-  verifiedByAdminId  String?                 @map("verified_by_admin_id") @db.Uuid
-  verifiedAt         DateTime?               @map("verified_at") @db.Timestamptz(6)
-  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+// Phase 1 (T011, ADR 0017 D5, FR-104): one ijazah PDF per subject with its transcription; the chain
+// hangs under it. A rejected credential stays as history; a new upload for the same subject is a
+// new row. One approved credential per teacher and subject (rule 23, the partial unique in the
+// migration). Owned by catalog; the document itself is verification's (R-109).
+model TeacherCredential {
+  id                       String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherUserId            String                  @map("teacher_user_id") @db.Uuid
+  subjectId                String                  @map("subject_id") @db.Uuid
+  // The ijazah PDF.
+  documentId               String                  @map("document_id") @db.Uuid
+  // The teacher's full name as on the PDF, transcribed at approval (ADR 0019 D1).
+  holderName               String?                 @map("holder_name")
+  // Transcribed at approval, Arabic as typed (ADR 0021 D1).
+  riwaya                   String?
+  tariq                    String?
+  status                   TeacherCredentialStatus
+  // Mandatory on reject and needs_document; the teacher sees it.
+  reviewReason             String?                 @map("review_reason")
+  reviewedByAdminId        String?                 @map("reviewed_by_admin_id") @db.Uuid
+  reviewedAt               DateTime?               @map("reviewed_at") @db.Timestamptz(6)
+  // Whether it came with an application («عند التقدّم») or was added after approval (FR-PROFILE-11).
+  submittedWithApplication Boolean                 @map("submitted_with_application")
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  teacher         User       @relation(fields: [teacherUserId], references: [id])
-  subject         Subject    @relation(fields: [subjectId], references: [id])
-  verifiedByAdmin AdminUser? @relation(fields: [verifiedByAdminId], references: [id], onDelete: Restrict)
+  teacher         User                 @relation(fields: [teacherUserId], references: [id])
+  subject         Subject              @relation(fields: [subjectId], references: [id])
+  document        VerificationDocument @relation(fields: [documentId], references: [id])
+  reviewedByAdmin AdminUser?           @relation(fields: [reviewedByAdminId], references: [id], onDelete: Restrict)
 
-  // A chain cannot hold two names at one position (ERD section 15.7).
-  @@unique([teacherUserId, subjectId, position])
+  isnadEntries IsnadEntry[]
+
+  @@index([teacherUserId])
   @@index([subjectId])
-  @@index([verifiedByAdminId])
+  @@index([documentId])
+  @@index([reviewedByAdminId])
+  @@map("teacher_credentials")
+}
+
+// The chain of transmission, one generation per row under a credential, not a graph (FR-ISNAD-1..6).
+// Re-keyed by ADR 0017 D5 (Phase 1, T011): transcribed by an administrator from the teacher's
+// ijazah PDF, never typed by the teacher; a chain exists only on an approved credential, so no
+// verification state of its own. The table held no row, so the old columns are dropped rather
+// than deprecated; `IsnadVerificationStatus` stays declared (R-API-9).
+model IsnadEntry {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  credentialId     String   @map("credential_id") @db.Uuid
+  // Origin first, counting toward the teacher.
+  position         Int
+  // One generation holds one or more names (ADR 0004 D3), Arabic as typed.
+  names            String[]
+  createdByAdminId String   @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  credential     TeacherCredential @relation(fields: [credentialId], references: [id])
+  createdByAdmin AdminUser         @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+
+  // A chain cannot hold two generations at one position (rule 28, ERD section 15.7 as re-keyed).
+  @@unique([credentialId, position])
+  @@index([createdByAdminId])
   @@map("isnad_entries")
 }
 

@@ -6,8 +6,14 @@
 // models are singular and map to the ERD's plural table names, so each delegate is the one
 // `api/table-ownership` derives from the manifest (note under T047). Every table carries
 // `created_at`, and a table whose rows change after insert carries `updated_at` (ERD section 0).
-// What the schema language cannot say lives in the migrations: the phone-or-email check (T064),
-// the partial uniques on phone and email (T066) and the revoked DELETE (T065).
+// What the schema language cannot say lives in the migrations: the phone-or-email check (T064,
+// rewritten for deleted rows by the Phase 1 pass), the partial uniques on phone and email (T066),
+// the revoked DELETE (T065) and the live-row check of rule 32 (Phase 1, T009,
+// specs/002-identity/data-model.md §5).
+//
+// Phase 1 (T009): `user_sessions` and `auth_identities` join this domain; `display_name` and
+// `date_of_birth` become nullable so the one transaction of FR-141 can erase them, held NOT NULL for
+// every live row by rule 32; `certificate_name` (ADR 0019 D1) and `photo_key` (decision 46) arrive.
 
 model User {
   id                String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
@@ -19,9 +25,16 @@ model User {
   passwordHash      String?       @map("password_hash")
   // Self-declared (FR-AUTH-3); changed only through an administrator (FR-GENDER-5).
   gender            Gender
-  // Minor status is derived from this on read, never stored (R-DB-4).
-  dateOfBirth       DateTime      @map("date_of_birth") @db.Date
-  displayName       String        @map("display_name")
+  // Minor status is derived from this on read, never stored (R-DB-4). Nullable only for a deleted
+  // row (FR-141); rule 32 keeps it NOT NULL while the row is live (T009).
+  dateOfBirth       DateTime?     @map("date_of_birth") @db.Date
+  // Nullable only for a deleted row, as `date_of_birth` (rule 32).
+  displayName       String?       @map("display_name")
+  // The full name printed on certificates, asked once at the first ijazah request (ADR 0019 D1);
+  // Phase 4 writes it; erased on deletion.
+  certificateName   String?       @map("certificate_name")
+  // The profile photo of either role, a storage key served by a signed link; erased on deletion.
+  photoKey          String?       @map("photo_key")
   preferredLanguage Language      @map("preferred_language")
   // IANA zone, device-reported with a manual override (FR-AUTH-10).
   timezone          String
@@ -33,6 +46,8 @@ model User {
 
   roles                 UserRole[]
   teacherProfile        TeacherProfile?
+  sessions              UserSession[]
+  authIdentities        AuthIdentity[]
   devicePushTokens      DevicePushToken[]
   termsAcceptances      TermsAcceptance[]
   verificationDocuments VerificationDocument[]
@@ -40,7 +55,7 @@ model User {
   teacherSubjects       TeacherSubject[]
   packages              Package[]
   availabilitySlots     AvailabilitySlot[]
-  isnadEntries          IsnadEntry[]
+  teacherCredentials    TeacherCredential[]
   teacherSignature      TeacherSignature?
   notifications         Notification[]
   slotHolds             SlotHold[]
@@ -78,8 +93,63 @@ model UserRole {
 
   user User @relation(fields: [userId], references: [id])
 
+  // One row per user in the MVP (ADR 0016 D3; rule 24, T009); the (user_id, role) unique stays so
+  // dual roles can return.
+  @@unique([userId])
   @@unique([userId, role])
   @@map("user_roles")
+}
+
+// Phase 1 (T009, R-101): a device's session. The refresh token is stored as a SHA-256 lookup hash
+// (R-DB-7); rotation keeps the retired hash for the grace window, and a presentation after it
+// revokes the row (reuse detection). No `deleted_at`: a session is a credential, destroyed, not a
+// record kept from view; the application role keeps DELETE. Rows are purged by
+// `purge-expired-sessions` after `session_purge_after_days`. The foreign key carries its plain index
+// (ERD §14), which also serves "revoke every session of the user"; a partial index on the live rows
+// was considered and not kept (R-DB-9; PR #77 review).
+model UserSession {
+  id                       String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId                   String                @map("user_id") @db.Uuid
+  refreshTokenHash         String                @unique @map("refresh_token_hash")
+  previousRefreshTokenHash String?               @map("previous_refresh_token_hash")
+  // What the device reported of itself («iPhone», «Pixel 8»); shown nowhere in this phase.
+  deviceLabel              String?               @map("device_label")
+  issuedAt                 DateTime              @map("issued_at") @db.Timestamptz(6)
+  // The last rotation.
+  refreshedAt              DateTime?             @map("refreshed_at") @db.Timestamptz(6)
+  // Absolute: issue plus `session_refresh_ttl_days`; never extended.
+  expiresAt                DateTime              @map("expires_at") @db.Timestamptz(6)
+  revokedAt                DateTime?             @map("revoked_at") @db.Timestamptz(6)
+  revokedReason            SessionRevokedReason? @map("revoked_reason")
+  createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("user_sessions")
+}
+
+// Phase 1 (T009, ADR 0012 D2): a Google or Apple account, keyed by the provider's subject, never by
+// the email. Unique on (provider, provider_subject) (rule 22). Deleted outright on account deletion
+// (ADR 0015 D3), so the uniqueness never blocks the person's new account; the application role
+// keeps DELETE. Apple's refresh token, obtained by exchanging the authorization code at the first
+// sign-in, is kept so deletion can revoke it (TN3194, R-DB-8), carried to completion inside the
+// onboarding token as a column-cipher blob (R-102); null for Google. The column joins the
+// `reencrypt-columns` job's list through the identity repository (T013).
+model AuthIdentity {
+  id                            String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId                        String       @map("user_id") @db.Uuid
+  provider                      AuthProvider
+  providerSubject               String       @map("provider_subject")
+  providerRefreshTokenEncrypted Bytes?       @map("provider_refresh_token_encrypted")
+  createdAt                     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+  @@map("auth_identities")
 }
 
 // Exists only for a user holding the teacher role, 1:1 with it.
@@ -105,13 +175,36 @@ model TeacherProfile {
   // Cached exception with `review_count`, recomputed on every review write (R-DB-4).
   averageRating               Decimal?                  @map("average_rating") @db.Decimal(3, 2)
   reviewCount                 Int                       @default(0) @map("review_count")
+  // Phase 1 (T011, data-model.md §3): the application is a state of the profile, not a table.
+  // The current application's submission; reapplying after a rejection sets it again.
+  applicationSubmittedAt      DateTime?                 @map("application_submitted_at") @db.Timestamptz(6)
+  // What the applicant sees; null before the first submission.
+  applicationStatus           TeacherApplicationStatus? @map("application_status")
+  // The reviewer's latest note to the applicant (the request for a document, the rejection).
+  applicationNote             String?                   @map("application_note")
+  applicationDecidedAt        DateTime?                 @map("application_decided_at") @db.Timestamptz(6)
+  applicationDecidedByAdminId String?                   @map("application_decided_by_admin_id") @db.Uuid
+  // The identity document of the current application and its kind.
+  identityDocumentId          String?                   @map("identity_document_id") @db.Uuid
+  identityDocumentType        IdentityDocumentType?     @map("identity_document_type")
+  // The once-only `ApplicationApproved` was shown (FR-152).
+  approvedShownAt             DateTime?                 @map("approved_shown_at") @db.Timestamptz(6)
+  // SHA-256 lookup hash of the recipient reference beside the encrypted column; routes recipient
+  // events (FR-109, R-114). Unique where present (rule 27): Postgres lets nulls repeat.
+  payoutAccountRefHash        String?                   @unique @map("payout_account_ref_hash")
+  // The gateway's last rejection reason, shown on `PayoutRejected`; cleared on verification (FR-191).
+  payoutRejectedReason        String?                   @map("payout_rejected_reason")
   createdAt                   DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                   DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user            User       @relation(fields: [userId], references: [id])
-  approvedByAdmin AdminUser? @relation(fields: [approvedByAdminId], references: [id], onDelete: Restrict)
+  user                      User                  @relation(fields: [userId], references: [id])
+  approvedByAdmin           AdminUser?            @relation(fields: [approvedByAdminId], references: [id], onDelete: Restrict)
+  applicationDecidedByAdmin AdminUser?            @relation("TeacherApplicationDecidedBy", fields: [applicationDecidedByAdminId], references: [id], onDelete: Restrict)
+  identityDocument          VerificationDocument? @relation(fields: [identityDocumentId], references: [id], onDelete: Restrict)
 
   @@index([approvedByAdminId])
+  @@index([applicationDecidedByAdminId])
+  @@index([identityDocumentId])
   @@map("teacher_profiles")
 }
 
@@ -130,6 +223,8 @@ model OtpCode {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  // The lookup every verify and every purge makes (FR-107, T009).
+  @@index([destination, purpose])
   @@map("otp_codes")
 }
 

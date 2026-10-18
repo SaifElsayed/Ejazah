@@ -1,25 +1,54 @@
 // admin domain (T063, ERD section 12). Owned by apps/api/src/modules/admin.
 // admin_users, audit_logs, settings. Administrator identity shares no table with users (R-SEC-8). audit_logs has no deleted_at.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// Phase 1 (T010, specs/002-identity/data-model.md §1, §2, §5): `admin_sessions` and
+// `admin_recovery_codes` join this domain, and `admin_users` gains the invite, lockout and second-factor
+// columns of FR-170 to FR-174. What the schema language cannot say lives in the migration: the checks of
+// rules 30 and 31.
 
 // Separate from `users` entirely (FR-ADMIN-1): its own table, credentials and MFA, no foreign key
 // to or from `users`.
 model AdminUser {
-  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  email              String   @unique
-  passwordHash       String   @map("password_hash")
+  id                  String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email               String    @unique
+  // Null from invite until the password-set link is used; sign-in is refused while null (FR-174, R-110).
+  passwordHash        String?   @map("password_hash")
   // MFA is mandatory (NFR-SEC-6); the secret is recoverable, so encrypted, not hashed (R-DB-8).
-  mfaSecretEncrypted Bytes    @map("mfa_secret_encrypted")
-  displayName        String   @map("display_name")
-  isActive           Boolean  @map("is_active")
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  mfaSecretEncrypted  Bytes     @map("mfa_secret_encrypted")
+  displayName         String    @map("display_name")
+  // Held equal to `disabled_at IS NULL` by rule 31.
+  isActive            Boolean   @map("is_active")
+  // The last TOTP step accepted, so a code is never accepted twice within its step (RFC 6238 §5.2,
+  // FR-171). A step, not a secret: the schema check's allow-list names it (T013).
+  mfaLastAcceptedStep BigInt?   @map("mfa_last_accepted_step")
+  // Null until the first code is confirmed at setup; the secret exists from invite (R-107).
+  mfaEnrolledAt       DateTime? @map("mfa_enrolled_at") @db.Timestamptz(6)
+  // The lockout pair (settings `admin_lockout_attempts`, `admin_lockout_minutes`; ADR 0019 D3); a lock
+  // never exists without the count that caused it (rule 30).
+  failedSignInCount   Int       @default(0) @map("failed_sign_in_count")
+  lockedUntilAt       DateTime? @map("locked_until_at") @db.Timestamptz(6)
+  // The admins page's columns (FR-174).
+  invitedByAdminId    String?   @map("invited_by_admin_id") @db.Uuid
+  invitedAt           DateTime? @map("invited_at") @db.Timestamptz(6)
+  passwordSetAt       DateTime? @map("password_set_at") @db.Timestamptz(6)
+  disabledAt          DateTime? @map("disabled_at") @db.Timestamptz(6)
+  lastSignInAt        DateTime? @map("last_sign_in_at") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  invitedBy     AdminUser?          @relation("AdminInvitedBy", fields: [invitedByAdminId], references: [id], onDelete: Restrict)
+  invited       AdminUser[]         @relation("AdminInvitedBy")
+  sessions      AdminSession[]
+  recoveryCodes AdminRecoveryCode[]
 
   auditLogs            AuditLog[]
   settingsUpdated      Setting[]
   approvedProfiles     TeacherProfile[]
+  decidedApplications  TeacherProfile[]      @relation("TeacherApplicationDecidedBy")
   verificationRequests VerificationRequest[]
-  verifiedIsnadEntries IsnadEntry[]
+  reviewedCredentials  TeacherCredential[]
+  createdIsnadEntries  IsnadEntry[]
   settledSessions      Session[]
   revokedIjazahs       Ijazah[]
   ijazahBarsImposed    IjazahBar[]           @relation("IjazahBarBarredBy")
@@ -29,7 +58,48 @@ model AdminUser {
   resolvedGenderFlags  GenderFlag[]
   resolvedUserReports  UserReport[]
 
+  @@index([invitedByAdminId])
   @@map("admin_users")
+}
+
+// Phase 1 (T010, R-SEC-8, R-107): an administrator's session, a different principal in a different
+// table. The bearer is stored as a SHA-256 lookup hash (R-DB-7); `mfa_verified_at` is null until the
+// second factor passes on this session, and the admin kind refuses a null. Idle limit from
+// `admin_session_idle_minutes`, absolute from `admin_session_max_hours`. A credential, not a record:
+// the application role keeps DELETE.
+model AdminSession {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  adminId       String    @map("admin_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  // An instant, not a secret: the schema check's allow-list names it (T013).
+  mfaVerifiedAt DateTime? @map("mfa_verified_at") @db.Timestamptz(6)
+  issuedAt      DateTime  @map("issued_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime  @map("last_seen_at") @db.Timestamptz(6)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@map("admin_sessions")
+}
+
+// Phase 1 (T010, ADR 0019 D3, FR-171): ten single-use recovery codes per administrator, each a
+// peppered Argon2id hash in the one-time-code regime (R-107). Regeneration deletes the unused rows
+// and inserts ten; the application role keeps DELETE.
+model AdminRecoveryCode {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  adminId   String    @map("admin_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@map("admin_recovery_codes")
 }
 
 // Every administrator action (FR-ADMIN-17). Strictly append-only: no `deleted_at`, no

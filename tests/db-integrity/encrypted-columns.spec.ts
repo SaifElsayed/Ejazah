@@ -2,10 +2,11 @@
 // repositories of the modules that own their tables (R-API-6), against Postgres as the application
 // role (FR-031, R-DB-8, R-SEC-10).
 //
-// Three of the four: identity's two and verification's one. The fourth,
-// `admin_users.mfa_secret_encrypted`, is not reached from here: R-API-4 lets only the three
-// composition files import the admin module (T143), and this file is not one of them. Its
-// repository, `modules/admin/admin-users.repository.ts`, issues the same two queries on its table.
+// Four of the five: identity's three (the third, `auth_identities.provider_refresh_token_encrypted`,
+// since Phase 1's T013) and verification's one. The fifth, `admin_users.mfa_secret_encrypted`, is
+// not reached from here: R-API-4 lets only the three composition files import the admin module
+// (T143), and this file is not one of them. Its repository, `modules/admin/admin-users.repository.ts`,
+// issues the same two queries on its table.
 //
 // Each column holds a value written under the old key. Its page holds that row with that value, in
 // id order and after the given row; a payout reference that is not set is not a row to rewrite. A
@@ -119,6 +120,23 @@ async function plant(tx: Transaction): Promise<Map<string, { id: string; value: 
   });
   planted.set('device_push_tokens.token_encrypted', { id: device.id, value: token });
 
+  const identityId = randomUUID();
+  const refreshToken = value('auth_identities.provider_refresh_token_encrypted', identityId);
+  const identity = await tx.authIdentity.create({
+    data: {
+      id: identityId,
+      userId: teacher.id,
+      provider: 'apple',
+      providerSubject: `probe-${randomUUID()}`,
+      providerRefreshTokenEncrypted: Uint8Array.from(refreshToken),
+    },
+    select: { id: true },
+  });
+  planted.set('auth_identities.provider_refresh_token_encrypted', {
+    id: identity.id,
+    value: refreshToken,
+  });
+
   const documentId = randomUUID();
   const storageKey = value('verification_documents.storage_key_encrypted', documentId);
   const document = await tx.verificationDocument.create({
@@ -154,11 +172,12 @@ async function readAll(
 }
 
 describe('the encrypted columns, through their owning modules (T155)', () => {
-  it('are the three columns of ERD §0 that identity and verification own', async () => {
+  it('are the four columns of ERD §0 that identity and verification own', async () => {
     await inClientRollback(async (tx) => {
       expect(columnsOver(tx).map(({ column }) => column)).toEqual([
         'teacher_profiles.payout_account_ref_encrypted',
         'device_push_tokens.token_encrypted',
+        'auth_identities.provider_refresh_token_encrypted',
         'verification_documents.storage_key_encrypted',
       ]);
     });
@@ -176,6 +195,22 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
         const found = rows.find(({ id }) => id === mine?.id);
         expect(Buffer.from(found?.value ?? []).equals(Buffer.from(mine?.value ?? [1]))).toBe(true);
       }
+    });
+  });
+
+  // T013: a Google identity carries no refresh token (data-model §1), so its row is not paged.
+  it('pass over a Google identity, which holds no refresh token', async () => {
+    await inClientRollback(async (tx) => {
+      const user = await newUser(tx);
+      const google = await tx.authIdentity.create({
+        data: { userId: user.id, provider: 'google', providerSubject: `probe-${randomUUID()}` },
+        select: { id: true },
+      });
+      const refreshTokens = columnsOver(tx).find(
+        ({ column }) => column === 'auth_identities.provider_refresh_token_encrypted',
+      );
+      const rows = refreshTokens === undefined ? [] : await readAll(refreshTokens);
+      expect(rows.map(({ id }) => id)).not.toContain(google.id);
     });
   });
 

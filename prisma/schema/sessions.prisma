@@ -7,6 +7,9 @@
 // are settled by the worker or an administrator (Architecture section 11). What the schema language
 // cannot say lives in the migrations: the two overlap exclusions (T141, ERD section 15.19), the
 // partial index on scheduled sessions (T067) and the revoked DELETE (T065, section 15.10).
+//
+// Phase 1 (T012, ADR 0018): `sessions.makeup_for_session_id` and `session_remedies` land as columns
+// only; no code of this phase writes them (data-model.md §1).
 
 // One scheduled occurrence. The local date, local start time and zone are the schedule; the UTC
 // instants are derived from them (ADR 0009).
@@ -38,27 +41,55 @@ model Session {
   evaluatedAt                  DateTime?     @map("evaluated_at") @db.Timestamptz(6)
   // For review-queue resolutions (FR-SESS-19).
   settledByAdminId             String?       @map("settled_by_admin_id") @db.Uuid
+  // The session this one makes up for (ADR 0018 D3; Phase 1, T012).
+  makeupForSessionId           String?       @map("makeup_for_session_id") @db.Uuid
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
   deletedAt                    DateTime?     @map("deleted_at") @db.Timestamptz(6)
   createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
-  teacher        User       @relation("SessionTeacher", fields: [teacherUserId], references: [id])
-  student        User       @relation("SessionStudent", fields: [studentUserId], references: [id])
-  settledByAdmin AdminUser? @relation(fields: [settledByAdminId], references: [id], onDelete: Restrict)
+  enrollment       Enrollment @relation(fields: [enrollmentId], references: [id])
+  teacher          User       @relation("SessionTeacher", fields: [teacherUserId], references: [id])
+  student          User       @relation("SessionStudent", fields: [studentUserId], references: [id])
+  settledByAdmin   AdminUser? @relation(fields: [settledByAdminId], references: [id], onDelete: Restrict)
+  makeupForSession Session?   @relation("SessionMakeup", fields: [makeupForSessionId], references: [id], onDelete: Restrict)
+  makeupSessions   Session[]  @relation("SessionMakeup")
 
   participantEvents    SessionParticipantEvent[]
   cancellationRequests CancellationRequest[]
   disputes             Dispute[]
   userReports          UserReport[]
+  remedy               SessionRemedy?
 
   // Ordered session lists (ERD section 14).
   @@unique([enrollmentId, sequenceNumber])
   @@index([teacherUserId])
   @@index([studentUserId])
   @@index([settledByAdminId])
+  @@index([makeupForSessionId])
   @@map("sessions")
+}
+
+// Phase 1 (T012, ADR 0018 D2 to D5, FR-MAKEUP-1..6): what a session not consumed is owed. One row
+// per such session; `proposed_date` and `counter_date` are calendar dates (the slot's time is the
+// package's); a refund case points at its dispute. Owned by sessions; written by Phase 3.
+model SessionRemedy {
+  id           String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sessionId    String       @unique @map("session_id") @db.Uuid
+  kind         RemedyKind
+  status       RemedyStatus
+  proposedDate DateTime?    @map("proposed_date") @db.Date
+  counterDate  DateTime?    @map("counter_date") @db.Date
+  decidedAt    DateTime?    @map("decided_at") @db.Timestamptz(6)
+  caseId       String?      @map("case_id") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session Session  @relation(fields: [sessionId], references: [id])
+  case    Dispute? @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@map("session_remedies")
 }
 
 // Raw attendance evidence, from provider webhooks only, never the client. Never updated.

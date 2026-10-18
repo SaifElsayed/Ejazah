@@ -48,6 +48,9 @@ model Enrollment {
   snapshotSubjectId       String              @map("snapshot_subject_id") @db.Uuid
   // The zone frozen at purchase; DST arithmetic uses this.
   snapshotSlotTimezone    String              @map("snapshot_slot_timezone")
+  // The package's track at purchase (ADR 0018 D1, DEC-24; Phase 1, T012). The default is the
+  // migration's, as `packages.track`'s is; the booking service always copies the package's.
+  snapshotTrack           PackageTrack        @default(recitation) @map("snapshot_track")
   // `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5).
   status                  EnrollmentStatus
   // Set once, by the confirm-enrollment job. There is no other write path (R-HONEST-1).

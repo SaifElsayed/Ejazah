@@ -3,8 +3,10 @@
 // "All nine original integrity rules" is read as ERD §15 rules 1–9. Rules 5 and 6 belonged to the
 // managed-payment tables ADR 0005 D1 removed and have no table left to probe, so seven are probed
 // here: 1, 2, 3, 4, 7, 8 and 9. The later rules have their own suites: 10 is T050 and T054, 11 is
-// T053, 13 and 14 are T052, and 17–19 are T142. Rule 4 is also in T052 as a replay probe; it stays
-// here because it is one of the nine.
+// T053, 13 and 14 are T052, 17–19 are T142, and 22 to 32 are T008 (Phase 1). Rule 4 is also in
+// T052 as a replay probe; it stays here because it is one of the nine. Rule 7 is probed as ADR
+// 0017 re-keyed it (data-model.md §5 rule 28, T008): a chain hangs under a credential, one
+// generation per position, so the probe plants a credential first.
 //
 // Each probe first writes a valid row, so a rejection is the rule and not a broken row, and then
 // the forbidden one, expecting the SQLSTATE of the constraint kind: 23514 for a check, 23505 for a
@@ -17,6 +19,8 @@ import {
   enrollmentValues,
   inRollback,
   insertStatement,
+  makeAdmin,
+  makeCredential,
   makeEnrollment,
   makeOffer,
   makeSession,
@@ -88,19 +92,51 @@ describe('ERD §15 rules 1–9, each refused by the database (T051, SC-007)', ()
     });
   });
 
-  it('rule 7: a second name at one position of a chain is refused', async () => {
+  it('rule 7 (28 as re-keyed): a second generation at one position of a chain is refused', async () => {
     await inRollback(db, async () => {
       const teacher = await makeUser(db);
       const subject = await makeSubject(db);
-      const entry = (name: string) => ({
-        teacher_user_id: teacher,
-        subject_id: subject,
-        position: 1,
-        transmitter_name: name,
-        verification_status: 'unverified',
+      const admin = await makeAdmin(db);
+      const credential = await makeCredential(db, {
+        teacherId: teacher,
+        subjectId: subject,
+        status: 'approved',
+        admin,
       });
-      expect(await tryInsert('isnad_entries', entry('First'))).toBeNull();
-      expect(await tryInsert('isnad_entries', entry('Second'))).toBe(SQLSTATE.uniqueViolation);
+      const entry = (names: readonly string[]) => ({
+        credential_id: credential,
+        position: 1,
+        names: [...names],
+        created_by_admin_id: admin,
+      });
+      expect(await tryInsert('isnad_entries', entry(['First']))).toBeNull();
+      expect(await tryInsert('isnad_entries', entry(['Second', 'Third']))).toBe(
+        SQLSTATE.uniqueViolation,
+      );
+    });
+  });
+
+  // PR #77 review: the check behind rule 28's second half, a generation holds one or more names.
+  it('rule 28: a generation with no name, or a null one, is refused', async () => {
+    await inRollback(db, async () => {
+      const teacher = await makeUser(db);
+      const subject = await makeSubject(db);
+      const admin = await makeAdmin(db);
+      const credential = await makeCredential(db, {
+        teacherId: teacher,
+        subjectId: subject,
+        status: 'approved',
+        admin,
+      });
+      const entry = (names: readonly string[] | null) => ({
+        credential_id: credential,
+        position: 2,
+        names: names === null ? null : [...names],
+        created_by_admin_id: admin,
+      });
+      expect(await tryInsert('isnad_entries', entry([]))).toBe(SQLSTATE.checkViolation);
+      expect(await tryInsert('isnad_entries', entry(null))).toBe(SQLSTATE.checkViolation);
+      expect(await tryInsert('isnad_entries', entry(['Fourth']))).toBeNull();
     });
   });
 

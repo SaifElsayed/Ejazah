@@ -30,7 +30,7 @@
 //
 // And the places the rule must stay silent: a repository on its own module's tables, the kernel's
 // `idempotency_keys`, `$transaction`, a member with the same name on something that is not the
-// database client, and every file outside `apps/api`. The all-tables case walks all 33 manifest
+// database client, and every file outside `apps/api`. The all-tables case walks all 39 manifest
 // tables through the rule from a job file, which is how the delegate-to-table mapping is proved
 // against the real manifest rather than against a copy of it.
 //
@@ -105,20 +105,27 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   audit_logs: 'auditLog',
   settings: 'setting',
   idempotency_keys: 'idempotencyKey',
+  // Phase 1 (T003, specs/002-identity/data-model.md §1).
+  user_sessions: 'userSession',
+  auth_identities: 'authIdentity',
+  teacher_credentials: 'teacherCredential',
+  session_remedies: 'sessionRemedy',
+  admin_sessions: 'adminSession',
+  admin_recovery_codes: 'adminRecoveryCode',
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 33 tables, each under one owner', () => {
+  it('holds the ERD’s 39 tables, each under one owner (33 of Phase 0 and the six of T003)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(33);
-    expect(new Set(tables).size).toBe(33);
+    expect(tables).toHaveLength(39);
+    expect(new Set(tables).size).toBe(39);
   });
 
-  it('gives 33 distinct delegates, one per table', () => {
+  it('gives 39 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(33);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(39);
   });
 });
 
@@ -701,7 +708,7 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       ],
     },
     {
-      name: 'all 33 manifest tables, each reached through the delegate Prisma would generate',
+      name: 'all 39 manifest tables, each reached through the delegate Prisma would generate',
       code: [
         client(Object.values(expectedDelegates)),
         ...ownedTables.map(({ table }) => `prisma.${expectedDelegates[table]}.findMany();`),

@@ -3,7 +3,9 @@
     "contracts": {},
     "prisma": {
       "AccountStatus": ["active", "banned", "suspended", "verification_required"],
+      "AuthProvider": ["apple", "google"],
       "CancellationReason": [
+        "account_deleted",
         "admin",
         "checkout_abandoned",
         "gender_correction",
@@ -34,6 +36,7 @@
       "Gender": ["female", "male"],
       "GenderFlagStatus": ["corrected", "dismissed", "fraud_ban", "open"],
       "IdempotencyKeyStatus": ["completed", "in_progress"],
+      "IdentityDocumentType": ["national_id", "passport"],
       "IjazahMode": ["generated", "uploaded"],
       "IsnadVerificationStatus": ["unverified", "verified"],
       "Language": ["ar", "en"],
@@ -55,7 +58,8 @@
         "session_reminder",
         "teacher_application_status_changed"
       ],
-      "OtpPurpose": ["login", "password_reset", "signup"],
+      "OtpPurpose": ["account_deletion", "login", "password_reset", "signup"],
+      "PackageTrack": ["ijazah_track", "recitation"],
       "ParticipantEventType": ["joined", "left"],
       "PaymentEventType": [
         "expired",
@@ -67,8 +71,19 @@
       ],
       "PaymentGateway": ["fake"],
       "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
+      "RemedyKind": ["makeup", "refund"],
+      "RemedyStatus": ["awaiting_choice", "booked", "counter_proposed", "proposed", "refund_case"],
       "Role": ["student", "teacher"],
       "RoleStatus": ["active", "suspended"],
+      "SessionRevokedReason": [
+        "account_banned",
+        "account_deleted",
+        "account_suspended",
+        "admin_action",
+        "password_reset",
+        "reuse_detected",
+        "sign_out"
+      ],
       "SessionStatus": [
         "both_no_show",
         "cancelled_by_admin",
@@ -81,7 +96,16 @@
         "teacher_no_show",
         "under_threshold"
       ],
-      "TeacherVerificationStatus": ["approved", "banned", "pending", "rejected", "suspended"],
+      "TeacherApplicationStatus": ["approved", "banned", "in_review", "needs_document", "rejected"],
+      "TeacherCredentialStatus": ["approved", "needs_document", "pending", "rejected"],
+      "TeacherVerificationStatus": [
+        "approved",
+        "banned",
+        "pending",
+        "rejected",
+        "revoked",
+        "suspended"
+      ],
       "UserReportContext": ["chat", "profile", "session"],
       "UserReportStatus": ["actioned", "dismissed", "open"],
       "VerificationDocumentType": ["credential", "national_id", "other", "passport"],
