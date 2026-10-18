@@ -116,6 +116,30 @@ describe('ERD §15 rules 1–9, each refused by the database (T051, SC-007)', ()
     });
   });
 
+  // PR #77 review: the check behind rule 28's second half, a generation holds one or more names.
+  it('rule 28: a generation with no name, or a null one, is refused', async () => {
+    await inRollback(db, async () => {
+      const teacher = await makeUser(db);
+      const subject = await makeSubject(db);
+      const admin = await makeAdmin(db);
+      const credential = await makeCredential(db, {
+        teacherId: teacher,
+        subjectId: subject,
+        status: 'approved',
+        admin,
+      });
+      const entry = (names: readonly string[] | null) => ({
+        credential_id: credential,
+        position: 2,
+        names: names === null ? null : [...names],
+        created_by_admin_id: admin,
+      });
+      expect(await tryInsert('isnad_entries', entry([]))).toBe(SQLSTATE.checkViolation);
+      expect(await tryInsert('isnad_entries', entry(null))).toBe(SQLSTATE.checkViolation);
+      expect(await tryInsert('isnad_entries', entry(['Fourth']))).toBeNull();
+    });
+  });
+
   it('rule 8: a chat message with neither body nor attachment is refused', async () => {
     await inRollback(db, async () => {
       const enrollment = await makeEnrollment(db);

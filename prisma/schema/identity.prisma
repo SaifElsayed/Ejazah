@@ -8,8 +8,8 @@
 // `created_at`, and a table whose rows change after insert carries `updated_at` (ERD section 0).
 // What the schema language cannot say lives in the migrations: the phone-or-email check (T064,
 // rewritten for deleted rows by the Phase 1 pass), the partial uniques on phone and email (T066),
-// the revoked DELETE (T065), the live-row check of rule 32 and the partial index on live sessions
-// (Phase 1, T009, specs/002-identity/data-model.md §5).
+// the revoked DELETE (T065) and the live-row check of rule 32 (Phase 1, T009,
+// specs/002-identity/data-model.md §5).
 //
 // Phase 1 (T009): `user_sessions` and `auth_identities` join this domain; `display_name` and
 // `date_of_birth` become nullable so the one transaction of FR-141 can erase them, held NOT NULL for
@@ -104,9 +104,9 @@ model UserRole {
 // (R-DB-7); rotation keeps the retired hash for the grace window, and a presentation after it
 // revokes the row (reuse detection). No `deleted_at`: a session is a credential, destroyed, not a
 // record kept from view; the application role keeps DELETE. Rows are purged by
-// `purge-expired-sessions` after `session_purge_after_days`. The partial index
-// `(user_id) WHERE revoked_at IS NULL` ("revoke every session of the user") is hand-written in the
-// migration, in place of the full index the foreign-key rule would otherwise ask for.
+// `purge-expired-sessions` after `session_purge_after_days`. The foreign key carries its plain index
+// (ERD §14), which also serves "revoke every session of the user"; a partial index on the live rows
+// was considered and not kept (R-DB-9; PR #77 review).
 model UserSession {
   id                       String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
   userId                   String                @map("user_id") @db.Uuid
@@ -126,6 +126,7 @@ model UserSession {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("user_sessions")
 }
 

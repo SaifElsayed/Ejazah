@@ -94,7 +94,7 @@ A device's session: its refresh token as a hash, rotation, revocation (FR-AUTH-7
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| user_id | FK → users | Partial index `(user_id) WHERE revoked_at IS NULL`: "revoke every session of the user" reads the live ones |
+| user_id | FK → users | Plain index, as every foreign key (§14); it serves "revoke every session of the user" |
 | refresh_token_hash | text, unique | SHA-256 lookup hash of the current refresh token (R-DB-7; §15 rule 25) |
 | previous_refresh_token_hash | text, nullable | The hash rotation retired, kept for the grace window; a presentation after it revokes the row (reuse detection) |
 | device_label | text, nullable | What the device reported of itself; shown nowhere in Phase 1 |
@@ -383,7 +383,7 @@ What a session not consumed is owed (ADR 0018 D2 to D5, FR-MAKEUP-1..6). Added b
 | session_id | FK → sessions, unique | One row per session not consumed |
 | kind | enum makeup · refund | |
 | status | enum awaiting_choice · proposed · counter_proposed · booked · refund_case | |
-| proposed_date / counter_date | date, nullable | Calendar dates; the slot's time is the package's |
+| proposed_date / counter_date | date, nullable | Calendar dates in the enrollment's `snapshot_slot_timezone`; the counter's time of day (ADR 0018 D3 lets the student propose a date and time) is Phase 3's pass to add |
 | decided_at | timestamptz, nullable | |
 | case_id | FK → disputes, nullable | The refund case |
 | created_at / updated_at | timestamptz | |
@@ -809,7 +809,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 29. `audit_logs.target_label` NOT NULL and at most 200 characters — lands with the kernel batch of Phase 1 (B4), beside the writer that renders the label (ADR 0021 D2).
 30. `admin_users`: `locked_until_at IS NULL OR failed_sign_in_count > 0` — check constraint, so a lock never exists without the count that caused it (ADR 0019 D3; Phase 1 pass).
 31. `admin_users`: `is_active = (disabled_at IS NULL)` — check constraint, so the flag cannot drift from its source (Phase 1 pass).
-32. `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` — check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141; Phase 1 pass). The five credential tables (`auth_identities`, `user_sessions`, `admin_sessions`, `admin_recovery_codes`, `otp_codes`) keep DELETE for the application role: each is a credential or a key, not a record of something that happened.
+32. `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` — check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141; Phase 1 pass). The five credential tables (`auth_identities`, `user_sessions`, `admin_sessions`, `admin_recovery_codes`, `otp_codes`) keep DELETE for the application role: each is a credential or a key, not a record of something that happened. `teacher_credentials` and `session_remedies` keep it too by the default privileges, as every table without `deleted_at` that is not append-only does (`isnad_entries` is the precedent).
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 

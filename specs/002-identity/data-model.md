@@ -49,10 +49,13 @@ table-ownership rule (R-API-6) then refuses any other module's read. The
 | revoked_reason              | enum sign_out · reuse_detected · password_reset · account_deleted · account_suspended · account_banned · admin_action, nullable |                                                                                                       |
 | created_at / updated_at     | timestamptz                                                                                                                     |                                                                                                       |
 
-Index `(user_id) WHERE revoked_at IS NULL` for "revoke every session of the
-user". Rows are purged by `purge-expired-sessions` after
-`session_purge_after_days`; no `deleted_at`, since a session is not a record a
-person might need removed from view — it is a credential, and it is destroyed.
+The foreign key's plain index (ERD §14) serves "revoke every session of the
+user"; a partial index on the live rows was described here first and not kept
+(R-DB-9: a second index on the column waits for a measured slow query; amended
+2026-10-18 after the review of PR #77). Rows are purged by
+`purge-expired-sessions` after `session_purge_after_days`; no `deleted_at`,
+since a session is not a record a person might need removed from view — it is
+a credential, and it is destroyed.
 
 ### `auth_identities`
 
@@ -249,6 +252,10 @@ Rules 10 and 21 (no DELETE on the five tables; append-only on the three) are
 untouched. `auth_identities`, `user_sessions`, `admin_sessions`,
 `admin_recovery_codes` and `otp_codes` keep DELETE for the application role:
 each is a credential or a key, not a record of something that happened.
+`teacher_credentials` and `session_remedies` keep it too, by the default
+privileges, as every table without `deleted_at` that is not append-only does
+(`isnad_entries` is the Phase 0 precedent); nothing deletes their rows in this
+phase.
 
 Each new rule is demonstrated by a refused insert in `tests/db-integrity/`
 (SC-113).

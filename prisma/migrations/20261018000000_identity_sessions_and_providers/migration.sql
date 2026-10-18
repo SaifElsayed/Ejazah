@@ -6,8 +6,9 @@
 -- (ADR 0019 D1) and `users.photo_key`; `display_name` and `date_of_birth` nullable, so the one
 -- transaction of FR-141 can erase them, with rule 32 holding them NOT NULL for every live row;
 -- `account_deletion` on `otp_purpose` (FR-143); the `user_roles (user_id)` unique (rule 24, ADR 0016
--- D3); the `otp_codes (destination, purpose)` index (FR-107); the uniques of rules 22 and 25. No row of
--- `users` is deleted or erased here: every row is live, so rule 32 holds on arrival.
+-- D3); the `otp_codes (destination, purpose)` index (FR-107); the uniques of rules 22 and 25. Rule 32
+-- holds on arrival because every existing row is live and every live row has an email (ADR 0012 D2);
+-- a phone-only row in a developer's database would refuse the ADD CONSTRAINT, which is right.
 -- CreateEnum
 CREATE TYPE "auth_provider" AS ENUM ('google', 'apple');
 
@@ -57,6 +58,9 @@ CREATE TABLE "auth_identities" (
 CREATE UNIQUE INDEX "user_sessions_refresh_token_hash_key" ON "user_sessions"("refresh_token_hash");
 
 -- CreateIndex
+CREATE INDEX "user_sessions_user_id_idx" ON "user_sessions"("user_id");
+
+-- CreateIndex
 CREATE INDEX "auth_identities_user_id_idx" ON "auth_identities"("user_id");
 
 -- CreateIndex
@@ -87,10 +91,8 @@ ALTER TABLE "users" ADD CONSTRAINT "users_phone_or_email_check"
 ALTER TABLE "users" ADD CONSTRAINT "users_live_row_check"
     CHECK ("deleted_at" IS NOT NULL OR ("display_name" IS NOT NULL AND "date_of_birth" IS NOT NULL AND "email" IS NOT NULL));
 
--- "Revoke every session of the user" reads the live sessions only, so the index on the foreign key
--- is partial (data-model.md §1), in place of the full index the foreign-key rule would ask for.
-CREATE INDEX "user_sessions_user_id_live_idx" ON "user_sessions" ("user_id") WHERE "revoked_at" IS NULL;
-
 -- The two tables keep DELETE for the application role: a session and an identity are credentials,
 -- destroyed on sign-out and on account deletion (ADR 0015 D3), not records kept from view. The
 -- default privileges of `20261007000100_roles_and_privileges` grant it; nothing here revokes it.
+-- `user_sessions.user_id` carries its plain index above, as every foreign key does (ERD §14); the
+-- partial index on live rows that data-model.md §1 first described was not kept (R-DB-9).

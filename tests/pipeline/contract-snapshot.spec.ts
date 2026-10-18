@@ -188,7 +188,9 @@ function sources(variant: Variant = {}): SnapshotSources {
       ? {}
       : {
           settings: {
-            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(() => null),
+            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(
+              () => null,
+            ),
           },
         },
   );
