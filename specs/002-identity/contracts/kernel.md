@@ -20,7 +20,7 @@ Standing is resolved on every request; nothing is cached across requests
 (FR-108). A resolver never throws for a bad token: it yields null, and the
 kinds answer `UNAUTHENTICATED`.
 
-Both contexts gain `clientAddress`: the socket's peer address, or, when `TRUSTED_PROXY` (an optional platform key, T001) names the one proxy header to trust, that header's first hop. Before launch no proxy is configured (research R-18 left the host open), so it is the socket's; the hosting decision sets the key. It is the subject of the anonymous paths that have no better one (`auth.providerNonce`, `platform.publicConfig`, `catalog.subjects.list`, the four browser routes) and is never logged in full (R-SEC-2: the logger redacts it to its network).
+Both contexts gain `clientAddress`: the socket's peer address, or, when `TRUSTED_PROXY` (an optional platform key, T001) names the one proxy header to trust, that header's **last** hop — the one the trusted proxy appended, never the first, which the client writes itself (an appended `X-Forwarded-For` opens with whatever the caller sent). The key is set only when exactly one proxy stands in front; when it is set and the header is absent, the socket's peer. Before launch no proxy is configured (research R-18 left the host open), so it is the socket's; the hosting decision sets the key. It is the subject of the anonymous paths that have no better one (`auth.providerNonce`, `platform.publicConfig`, `catalog.subjects.list`, the four browser routes) and is never logged in full (R-SEC-2: the logger redacts it to its network).
 
 ## The caller kinds
 
