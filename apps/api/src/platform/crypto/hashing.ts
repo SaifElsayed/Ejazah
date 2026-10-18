@@ -23,9 +23,10 @@
 // ENCRYPTION_KEY by HKDF under `ijazah:otp-pepper:v1` (listed in encryption.ts), which is not in the
 // database. Passwords are not peppered: rotating the key would invalidate every password hash, and
 // no task owns a path to rehash them (note under T069).
-import { argon2, createHash, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { argon2, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { deriveSubkey, type HkdfLabel } from './encryption.js';
 
-export const OTP_PEPPER_LABEL = 'ijazah:otp-pepper:v1';
+export const OTP_PEPPER_LABEL = 'ijazah:otp-pepper:v1' satisfies HkdfLabel;
 
 /** Today's cost, the OWASP minimum for Argon2id. Memory in KiB. */
 export const ARGON2_COST = { memory: 19_456, passes: 2, parallelism: 1 } as const;
@@ -154,15 +155,7 @@ export class OtpHasher {
   readonly #pepper: Buffer;
 
   constructor(encryptionKey: string) {
-    this.#pepper = Buffer.from(
-      hkdfSync(
-        'sha256',
-        Buffer.from(encryptionKey, 'base64'),
-        Buffer.alloc(0),
-        OTP_PEPPER_LABEL,
-        32,
-      ),
-    );
+    this.#pepper = deriveSubkey(encryptionKey, OTP_PEPPER_LABEL);
   }
 
   hash(code: string): Promise<string> {

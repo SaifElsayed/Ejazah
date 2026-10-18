@@ -27,6 +27,7 @@ const required = {
   REDIS_URL: 'redis://127.0.0.1:6379',
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   PAYMENT_GATEWAY: 'fake',
+  SUPPORT_EMAIL: 'support@ijazah.invalid',
 };
 
 let root: string;

@@ -11,6 +11,8 @@ coverage/
 *.tsbuildinfo
 .expo/
 .expo-shared/
+# The API's copy of the design stylesheets, written by `pnpm tokens:build` (T004).
+apps/api/src/platform/web/assets/
 
 # Lockfiles are generated and never hand-edited (R-PROC-9).
 pnpm-lock.yaml

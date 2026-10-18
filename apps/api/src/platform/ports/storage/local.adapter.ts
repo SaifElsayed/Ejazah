@@ -11,10 +11,11 @@
 // (note under T116). The signing key is derived from ENCRYPTION_KEY by HKDF under its own label,
 // so no new secret is configured; only `node:crypto` primitives are used (R-SEC-7). Rotating
 // ENCRYPTION_KEY invalidates every local link already handed out, which development can afford.
-import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { addSeconds } from '@ijazah/time';
+import { deriveSubkey, type HkdfLabel } from '../../crypto/encryption.js';
 import {
   assertLinkLifetime,
   assertStorageKey,
@@ -22,16 +23,14 @@ import {
   type StoragePort,
 } from './storage.port.js';
 
-const LINK_KEY_LABEL = 'ijazah:storage-link:v1';
+const LINK_KEY_LABEL = 'ijazah:storage-link:v1' satisfies HkdfLabel;
 const LINK_PATH = '/files/';
 const LINK_BASE = 'http://link.invalid';
 const CANONICAL_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
-/** The key that signs local links: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256. */
+/** The key that signs local links: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256 (T005). */
 export function deriveLinkKey(encryptionKey: string): Buffer {
-  return Buffer.from(
-    hkdfSync('sha256', Buffer.from(encryptionKey, 'base64'), Buffer.alloc(0), LINK_KEY_LABEL, 32),
-  );
+  return deriveSubkey(encryptionKey, LINK_KEY_LABEL);
 }
 
 export interface LocalStorageOptions {

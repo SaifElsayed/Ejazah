@@ -29,7 +29,8 @@
 // alone while a rotation runs and fails to read values still under the previous one (n4).
 //
 // The key is not ENCRYPTION_KEY itself but a subkey derived from it by HKDF-SHA256 under a label of
-// its own. Every label derived from ENCRYPTION_KEY is listed here, so none is used twice:
+// its own. Every label derived from ENCRYPTION_KEY is listed here, in `HKDF_LABELS`, so none is used
+// twice, and every caller derives through `deriveSubkey` (T005), whose label type is that list:
 //   ijazah:storage-link:v1              platform/ports/storage/local.adapter.ts  signs local links (T116)
 //   ijazah:column-encryption:v1         this file                                encrypts columns (T068)
 //   ijazah:column-key-id:v1             this file                                names the key (T155)
@@ -37,13 +38,37 @@
 //   ijazah:payment-stand-in-webhook:v1  platform/ports/payment/index.ts          signs stand-in events (T121)
 //   ijazah:video-stand-in-webhook:v1    platform/ports/video/index.ts            signs stand-in events (T121)
 //   ijazah:rate-limit-subject:v1        platform/guards/rate-limit.guard.ts      hashes rate-limit subjects (T170)
+//   ijazah:access-token:v1              modules/identity (Phase 1, T044)         signs access tokens (data-model §7, R-101)
+//   ijazah:onboarding-token:v1          modules/identity (Phase 1, T043)         signs onboarding tokens (R-102)
+//   ijazah:admin-invite:v1              modules/admin (Phase 1, T066)            signs invite links (FR-174)
 // Only the column key protects a stored value; the rest protect short-lived values, so a rotation
 // re-encrypts the columns alone (T155).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import type { Config } from '../config/config.module.js';
 
-export const COLUMN_KEY_LABEL = 'ijazah:column-encryption:v1';
-export const COLUMN_KEY_ID_LABEL = 'ijazah:column-key-id:v1';
+/** Every HKDF label derived from ENCRYPTION_KEY, each once, in the order of the list above (T005). */
+export const HKDF_LABELS = [
+  'ijazah:storage-link:v1',
+  'ijazah:column-encryption:v1',
+  'ijazah:column-key-id:v1',
+  'ijazah:otp-pepper:v1',
+  'ijazah:payment-stand-in-webhook:v1',
+  'ijazah:video-stand-in-webhook:v1',
+  'ijazah:rate-limit-subject:v1',
+  'ijazah:access-token:v1',
+  'ijazah:onboarding-token:v1',
+  'ijazah:admin-invite:v1',
+] as const;
+
+/** A registered label: the only kind `deriveSubkey` takes, so an unlisted label does not compile. */
+export type HkdfLabel = (typeof HKDF_LABELS)[number];
+
+export const COLUMN_KEY_LABEL = 'ijazah:column-encryption:v1' satisfies HkdfLabel;
+export const COLUMN_KEY_ID_LABEL = 'ijazah:column-key-id:v1' satisfies HkdfLabel;
+/** The three Phase 1 labels (data-model.md §7 of specs/002-identity); their callers arrive with their tasks. */
+export const ACCESS_TOKEN_LABEL = 'ijazah:access-token:v1' satisfies HkdfLabel;
+export const ONBOARDING_TOKEN_LABEL = 'ijazah:onboarding-token:v1' satisfies HkdfLabel;
+export const ADMIN_INVITE_LABEL = 'ijazah:admin-invite:v1' satisfies HkdfLabel;
 
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
@@ -51,7 +76,20 @@ const TAG_BYTES = 16;
 const HEADER_BYTES = 1 + IV_BYTES + TAG_BYTES;
 const COLUMN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 
-function derive(encryptionKey: string, label: string, bytes: number): Buffer {
+/** The length every subkey has unless its caller needs another: 32 bytes, a SHA-256 output. */
+export const SUBKEY_BYTES = KEY_BYTES;
+
+/**
+ * A subkey of ENCRYPTION_KEY (base64) under one registered label: HKDF-SHA256 with no salt and the
+ * label as its info, `bytes` long. Two labels give two unrelated keys, so a value signed or encrypted
+ * under one proves nothing under another; the type of `label` is the list, so a caller cannot derive
+ * under a label the list does not hold (T005).
+ */
+export function deriveSubkey(
+  encryptionKey: string,
+  label: HkdfLabel,
+  bytes: number = SUBKEY_BYTES,
+): Buffer {
   return Buffer.from(
     hkdfSync('sha256', Buffer.from(encryptionKey, 'base64'), Buffer.alloc(0), label, bytes),
   );
@@ -59,12 +97,12 @@ function derive(encryptionKey: string, label: string, bytes: number): Buffer {
 
 /** The column key: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256. */
 export function deriveColumnKey(encryptionKey: string): Buffer {
-  return derive(encryptionKey, COLUMN_KEY_LABEL, KEY_BYTES);
+  return deriveSubkey(encryptionKey, COLUMN_KEY_LABEL, KEY_BYTES);
 }
 
 /** The key id a value written under ENCRYPTION_KEY (base64) carries: one byte, 0 to 255. */
 export function columnKeyId(encryptionKey: string): number {
-  return derive(encryptionKey, COLUMN_KEY_ID_LABEL, 1).readUInt8(0);
+  return deriveSubkey(encryptionKey, COLUMN_KEY_ID_LABEL, 1).readUInt8(0);
 }
 
 /** A stored value that is not one this cipher wrote for this column under one of its keys. */

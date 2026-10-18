@@ -184,6 +184,7 @@ describe('ADMIN_ALLOWED_ORIGINS (T135, FR-076)', () => {
     REDIS_URL: 'redis://localhost:6379',
     ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
     PAYMENT_GATEWAY: 'fake',
+    SUPPORT_EMAIL: 'support@ijazah.invalid',
   };
 
   function refusal(value: string): ConfigError {

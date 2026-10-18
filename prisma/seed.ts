@@ -76,6 +76,11 @@ const SUBJECTS = [
  * beside the one-time-code and authentication limits (T170), counted under one subject for every
  * caller, each owner-adjustable in the admin panel. The table of record is the note under T074 in
  * specs/001-foundations/tasks.md.
+ *
+ * Phase 1 (T002, specs/002-identity/data-model.md §4, R-MONEY-12): the twenty-six rows an identity
+ * or admin flow reads, from `admin_lockout_attempts` on, each at its default and named with its
+ * unit. The limits a person changes are in SRS §3.14; the purge windows and the refresh grace are
+ * operational and listed under it as such.
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
@@ -97,6 +102,32 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_payment_initiation', { limit: 10, window_seconds: 600 }],
   ['rate_limit_one_time_code_budget', { limit: 300, window_seconds: 3600 }],
   ['rate_limit_authentication_budget', { limit: 1000, window_seconds: 900 }],
+  ['admin_lockout_attempts', 5],
+  ['admin_lockout_minutes', 15],
+  ['makeup_choice_window_days', 7],
+  ['otp_code_ttl_minutes', 10],
+  ['otp_max_attempts', 5],
+  ['otp_purge_after_hours', 24],
+  ['onboarding_token_ttl_minutes', 15],
+  ['session_access_ttl_minutes', 15],
+  ['session_refresh_ttl_days', 30],
+  ['session_refresh_grace_seconds', 30],
+  ['session_purge_after_days', 30],
+  ['admin_session_idle_minutes', 60],
+  ['admin_session_max_hours', 12],
+  ['admin_invite_ttl_hours', 48],
+  ['push_token_stale_days', 90],
+  ['terms_version', '2026-10'],
+  ['upload_max_bytes', 10_485_760],
+  ['rate_limit_public_page', { limit: 60, window_seconds: 60 }],
+  ['rate_limit_upload', { limit: 20, window_seconds: 600 }],
+  ['admin_recovery_code_count', 10],
+  ['admin_home_latest_actions', 7],
+  ['admin_list_page_size', 25],
+  ['provider_nonce_ttl_minutes', 10],
+  ['document_link_ttl_seconds', 300],
+  ['rate_limit_token_refresh', { limit: 30, window_seconds: 60 }],
+  ['rate_limit_provider_nonce', { limit: 20, window_seconds: 60 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

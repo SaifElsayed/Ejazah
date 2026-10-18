@@ -12,6 +12,9 @@
 //                                                snapshot fails here, and a hand edit fails too.
 //   apps/mobile/src/design/tokens.ts and the      regenerated in memory from
 //   other files scripts/build-tokens.ts writes     packages/tokens/{tokens,icons}.json (ADR 0020)
+//                                                and, for the API's two stylesheets under
+//                                                apps/api/src/platform/web/assets/ (T004), from
+//                                                docs/design/frames/ds/ijazah/components.css too,
 //                                                and compared byte for byte, each one named.
 //   pnpm-lock.yaml                               two runs of pnpm's own `install --lockfile-only`,
 //                                                in a scratch copy of the workspace's manifests, so

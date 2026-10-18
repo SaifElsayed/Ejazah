@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigError, loadConfig, loadConfigOrExit } from './config.module.js';
 import { columnKeyId } from '../crypto/encryption.js';
-import { envKeys } from './env.schema.js';
+import { envKeys, platformKeys, providerKeys } from './env.schema.js';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
@@ -23,6 +23,7 @@ const validEnv: Record<string, string> = {
   STORAGE_DRIVER: 'local',
   STORAGE_LOCAL_ROOT: '.storage',
   PAYMENT_GATEWAY: 'fake',
+  SUPPORT_EMAIL: 'support@ijazah.invalid',
 };
 
 function without(env: Record<string, string>, ...keys: string[]): Record<string, string> {
@@ -93,8 +94,15 @@ describe('env.schema (T015, FR-039)', () => {
   // (T146), each on its own key, in every mode but development and test (T168). While every key's
   // only member is `fake`, such a configuration also carries PAYMENT_GATEWAY's refusal, so each case
   // asserts its key is among the offending ones; development and test accept every stand-in.
-  it.each(['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SMS_PROVIDER'])(
-    'refuses %s=fake in every mode but development and test, naming the key (T153, T168)',
+  // T001 (Phase 1) adds the sign-in and email selectors to the same rule (contracts/ports.md).
+  it.each([
+    'VIDEO_PROVIDER',
+    'PUSH_PROVIDER',
+    'SMS_PROVIDER',
+    'SIGN_IN_PROVIDER',
+    'EMAIL_PROVIDER',
+  ])(
+    'refuses %s=fake in every mode but development and test, naming the key (T153, T168, T001)',
     (key) => {
       for (const nodeEnv of modesOutsideDevelopmentAndTest) {
         for (const value of [{ [key]: 'fake' }, {}]) {
@@ -112,7 +120,16 @@ describe('env.schema (T015, FR-039)', () => {
 
       for (const nodeEnv of ['development', 'test']) {
         const config = loadConfig({ ...validEnv, NODE_ENV: nodeEnv, [key]: 'fake' });
-        expect(config[key as 'VIDEO_PROVIDER' | 'PUSH_PROVIDER' | 'SMS_PROVIDER']).toBe('fake');
+        expect(
+          config[
+            key as
+              | 'VIDEO_PROVIDER'
+              | 'PUSH_PROVIDER'
+              | 'SMS_PROVIDER'
+              | 'SIGN_IN_PROVIDER'
+              | 'EMAIL_PROVIDER'
+          ],
+        ).toBe('fake');
       }
     },
   );
@@ -160,11 +177,18 @@ describe('loadConfig (T015, FR-039)', () => {
         'S3_ACCESS_KEY_ID',
         'SENTRY_DSN',
         'PUBLIC_WEBHOOK_ORIGIN',
+        'GOOGLE_CLIENT_IDS',
+        'APPLE_CLIENT_ID',
+        'APPLE_TEAM_ID',
+        'APPLE_KEY_ID',
+        'APPLE_PRIVATE_KEY',
       ),
     );
 
     expect(config.PAYMENT_GATEWAY_API_KEY).toBeUndefined();
     expect(config.DAILY_WEBHOOK_SECRET).toBeUndefined();
+    expect(config.GOOGLE_CLIENT_IDS).toBeUndefined();
+    expect(config.APPLE_PRIVATE_KEY).toBeUndefined();
   });
 
   it('applies the declared defaults when a defaulted value is absent', () => {
@@ -406,15 +430,18 @@ describe('loadConfig (T015, FR-039)', () => {
     ['DATABASE_POOL_MAX', 10],
     ['DATABASE_STATEMENT_TIMEOUT_MS', 30_000],
     ['DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS', 60_000],
-  ] as const)('%s defaults to %i, takes a positive integer, and refuses anything else naming the key (T172)', (key, fallback) => {
-    expect(loadConfig(validEnv)[key]).toBe(fallback);
-    expect(loadConfig({ ...validEnv, [key]: '' })[key]).toBe(fallback);
-    expect(loadConfig({ ...validEnv, [key]: '7' })[key]).toBe(7);
-    for (const value of ['0', '-1', '1.5', 'ten-ish']) {
-      expect(() => loadConfig({ ...validEnv, [key]: value })).toThrow(new RegExp(key));
-    }
-    expect(() => loadConfig({ ...validEnv, [key]: 'ten-ish' })).not.toThrow(/ten-ish/);
-  });
+  ] as const)(
+    '%s defaults to %i, takes a positive integer, and refuses anything else naming the key (T172)',
+    (key, fallback) => {
+      expect(loadConfig(validEnv)[key]).toBe(fallback);
+      expect(loadConfig({ ...validEnv, [key]: '' })[key]).toBe(fallback);
+      expect(loadConfig({ ...validEnv, [key]: '7' })[key]).toBe(7);
+      for (const value of ['0', '-1', '1.5', 'ten-ish']) {
+        expect(() => loadConfig({ ...validEnv, [key]: value })).toThrow(new RegExp(key));
+      }
+      expect(() => loadConfig({ ...validEnv, [key]: 'ten-ish' })).not.toThrow(/ten-ish/);
+    },
+  );
 
   it('reports every offending key at once, and never a value (R-SEC-2)', () => {
     const env = without({ ...validEnv, PORT: 'abc', REDIS_URL: 'mysql://nope' }, 'ENCRYPTION_KEY');
@@ -432,6 +459,105 @@ describe('loadConfig (T015, FR-039)', () => {
     expect(message).not.toContain('abc');
     expect(message).not.toContain('mysql://nope');
     expect(message).not.toContain(thirtyTwoBytesBase64);
+  });
+});
+
+// T001 — the keys Phase 1 declares (specs/002-identity: FR-145, contracts/ports.md, contracts/kernel.md).
+describe('the Phase 1 keys (T001)', () => {
+  function failure(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('expected loadConfig to throw');
+  }
+
+  it('requires SUPPORT_EMAIL in every mode, naming it and never a value (FR-145)', () => {
+    for (const nodeEnv of ['development', 'test', 'production']) {
+      const error = failure(without({ ...validEnv, NODE_ENV: nodeEnv }, 'SUPPORT_EMAIL'));
+      expect(error.offendingKeys).toContain('SUPPORT_EMAIL');
+    }
+    expect(failure({ ...validEnv, SUPPORT_EMAIL: '' }).offendingKeys).toContain('SUPPORT_EMAIL');
+    const notAnAddress = 'help-desk-7f3e';
+    const error = failure({ ...validEnv, SUPPORT_EMAIL: notAnAddress });
+    expect(error.offendingKeys).toEqual(['SUPPORT_EMAIL']);
+    expect(error.message).not.toContain(notAnAddress);
+    expect(loadConfig(validEnv).SUPPORT_EMAIL).toBe('support@ijazah.invalid');
+  });
+
+  it('selects the sign-in and email stand-ins by default, and records a reserved sender', () => {
+    const config = loadConfig(validEnv);
+    expect(config.SIGN_IN_PROVIDER).toBe('fake');
+    expect(config.EMAIL_PROVIDER).toBe('fake');
+    expect(config.EMAIL_FROM).toBe('no-reply@ijazah.invalid');
+    expect(loadConfig({ ...validEnv, EMAIL_FROM: 'codes@ijazah.invalid' }).EMAIL_FROM).toBe(
+      'codes@ijazah.invalid',
+    );
+    const notAnAddress = 'the-platform';
+    const error = failure({ ...validEnv, EMAIL_FROM: notAnAddress });
+    expect(error.offendingKeys).toEqual(['EMAIL_FROM']);
+    expect(error.message).not.toContain(notAnAddress);
+    expect(failure({ ...validEnv, SIGN_IN_PROVIDER: 'google' }).offendingKeys).toEqual([
+      'SIGN_IN_PROVIDER',
+    ]);
+    expect(failure({ ...validEnv, EMAIL_PROVIDER: 'acme-mail' }).offendingKeys).toEqual([
+      'EMAIL_PROVIDER',
+    ]);
+  });
+
+  it('reads TRUSTED_PROXY as one header name, absent or empty as none (contracts/kernel.md)', () => {
+    expect(loadConfig(validEnv).TRUSTED_PROXY).toBeUndefined();
+    expect(loadConfig({ ...validEnv, TRUSTED_PROXY: '' }).TRUSTED_PROXY).toBeUndefined();
+    expect(loadConfig({ ...validEnv, TRUSTED_PROXY: 'X-Forwarded-For' }).TRUSTED_PROXY).toBe(
+      'X-Forwarded-For',
+    );
+    for (const value of ['X-Forwarded-For: 203.0.113.9', 'x forwarded for', '203.0.113.9']) {
+      const error = failure({ ...validEnv, TRUSTED_PROXY: value });
+      expect(error.offendingKeys).toEqual(['TRUSTED_PROXY']);
+      expect(error.message).not.toContain('203.0.113.9');
+    }
+  });
+
+  it('reads GOOGLE_CLIENT_IDS as a list of audiences and the Apple keys as they are', () => {
+    const config = loadConfig({
+      ...validEnv,
+      GOOGLE_CLIENT_IDS: ' one.apps.example , two.apps.example,',
+      APPLE_CLIENT_ID: 'com.example.ijazah',
+      APPLE_TEAM_ID: 'TEAM',
+      APPLE_KEY_ID: 'KEY',
+      APPLE_PRIVATE_KEY: 'apple-key-material-7f3e',
+    });
+    expect(config.GOOGLE_CLIENT_IDS).toEqual(['one.apps.example', 'two.apps.example']);
+    expect(config.APPLE_CLIENT_ID).toBe('com.example.ijazah');
+    expect(config.APPLE_PRIVATE_KEY).toBe('apple-key-material-7f3e');
+    expect(failure({ ...validEnv, GOOGLE_CLIENT_IDS: ' , ' }).offendingKeys).toEqual([
+      'GOOGLE_CLIENT_IDS',
+    ]);
+  });
+
+  it('classifies each new key once, so the test setup strips the provider ones and none else (T114)', () => {
+    for (const key of [
+      'GOOGLE_CLIENT_IDS',
+      'APPLE_CLIENT_ID',
+      'APPLE_TEAM_ID',
+      'APPLE_KEY_ID',
+      'APPLE_PRIVATE_KEY',
+    ]) {
+      expect(providerKeys).toContain(key);
+      expect(platformKeys).not.toContain(key);
+    }
+    for (const key of [
+      'SUPPORT_EMAIL',
+      'SIGN_IN_PROVIDER',
+      'EMAIL_PROVIDER',
+      'EMAIL_FROM',
+      'TRUSTED_PROXY',
+    ]) {
+      expect(platformKeys).toContain(key);
+      expect(providerKeys).not.toContain(key);
+    }
   });
 });
 

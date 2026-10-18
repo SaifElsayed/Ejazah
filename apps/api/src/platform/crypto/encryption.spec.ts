@@ -11,6 +11,8 @@
 // so two teachers' payout references swapped between their rows no longer decrypt.
 import { describe, expect, it } from 'vitest';
 import {
+  ACCESS_TOKEN_LABEL,
+  ADMIN_INVITE_LABEL,
   COLUMN_KEY_ID_LABEL,
   COLUMN_KEY_LABEL,
   ColumnCipher,
@@ -18,7 +20,11 @@ import {
   createColumnCipher,
   DecryptionError,
   deriveColumnKey,
+  deriveSubkey,
+  HKDF_LABELS,
+  ONBOARDING_TOKEN_LABEL,
   SharedKeyIdError,
+  SUBKEY_BYTES,
 } from './encryption.js';
 
 const KEY = Buffer.alloc(32, 7).toString('base64');
@@ -31,12 +37,7 @@ const OTHER_ROW = '0199c1a0-0000-7000-8000-000000000002';
 
 const cipher = new ColumnCipher(KEY);
 
-function refused(
-  stored: Uint8Array,
-  column = PAYOUT,
-  by = cipher,
-  rowId = ROW,
-): DecryptionError {
+function refused(stored: Uint8Array, column = PAYOUT, by = cipher, rowId = ROW): DecryptionError {
   let failure: unknown;
   try {
     by.decrypt(stored, column, rowId);
@@ -153,6 +154,46 @@ describe('column encryption (T068, FR-031, R-8)', () => {
   });
 });
 
+// T005 (Phase 1; specs/002-identity/data-model.md §7): every label derived from ENCRYPTION_KEY is
+// registered once, the three Phase 1 labels among them, and every caller derives through one
+// function whose label type is the registry.
+describe('the HKDF label registry and deriveSubkey (T005)', () => {
+  it('registers every label once, the three Phase 1 labels among them', () => {
+    expect(new Set(HKDF_LABELS).size).toBe(HKDF_LABELS.length);
+    expect(HKDF_LABELS).toContain(ACCESS_TOKEN_LABEL);
+    expect(HKDF_LABELS).toContain(ONBOARDING_TOKEN_LABEL);
+    expect(HKDF_LABELS).toContain(ADMIN_INVITE_LABEL);
+    expect(ACCESS_TOKEN_LABEL).toBe('ijazah:access-token:v1');
+    expect(ONBOARDING_TOKEN_LABEL).toBe('ijazah:onboarding-token:v1');
+    expect(ADMIN_INVITE_LABEL).toBe('ijazah:admin-invite:v1');
+    for (const label of HKDF_LABELS) expect(label).toMatch(/^ijazah:[a-z-]+:v1$/);
+  });
+
+  it('derives a different key under every label, none of them the key itself', () => {
+    const keys = HKDF_LABELS.map((label) => deriveSubkey(KEY, label));
+    for (const [index, derived] of keys.entries()) {
+      expect(derived).toHaveLength(SUBKEY_BYTES);
+      expect(derived.equals(Buffer.from(KEY, 'base64'))).toBe(false);
+      for (const other of keys.slice(index + 1)) expect(derived.equals(other)).toBe(false);
+    }
+  });
+
+  it('is deterministic for one key and label, and differs between keys', () => {
+    expect(
+      deriveSubkey(KEY, ACCESS_TOKEN_LABEL).equals(deriveSubkey(KEY, ACCESS_TOKEN_LABEL)),
+    ).toBe(true);
+    expect(
+      deriveSubkey(KEY, ACCESS_TOKEN_LABEL).equals(deriveSubkey(OTHER_KEY, ACCESS_TOKEN_LABEL)),
+    ).toBe(false);
+  });
+
+  it('is the derivation the column key and the key id already use, at their lengths', () => {
+    expect(deriveSubkey(KEY, COLUMN_KEY_LABEL).equals(deriveColumnKey(KEY))).toBe(true);
+    expect(deriveSubkey(KEY, COLUMN_KEY_ID_LABEL, 1).readUInt8(0)).toBe(columnKeyId(KEY));
+    expect(deriveSubkey(KEY, ADMIN_INVITE_LABEL, 16)).toHaveLength(16);
+  });
+});
+
 describe('rotating ENCRYPTION_KEY (T155, FR-031, R-DB-8, R-SEC-10)', () => {
   const rotating = new ColumnCipher(OTHER_KEY, KEY);
   const old = cipher.encrypt('rcp_0123456789', PAYOUT, ROW);
@@ -188,7 +229,9 @@ describe('rotating ENCRYPTION_KEY (T155, FR-031, R-DB-8, R-SEC-10)', () => {
   });
 
   it('leaves a value already under the current key as it is', () => {
-    expect(rotating.reencrypt(rotating.encrypt('current', PAYOUT, ROW), PAYOUT, ROW)).toBeUndefined();
+    expect(
+      rotating.reencrypt(rotating.encrypt('current', PAYOUT, ROW), PAYOUT, ROW),
+    ).toBeUndefined();
     expect(cipher.reencrypt(old, PAYOUT, ROW)).toBeUndefined();
   });
 

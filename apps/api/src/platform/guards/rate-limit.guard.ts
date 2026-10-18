@@ -44,9 +44,10 @@
 //
 // A REFUSAL is 429 `RATE_LIMITED` in the one error shape (T101; RFC 6585 §4), naming neither the
 // subject nor the limit.
-import { createHmac, hkdfSync } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { z } from 'zod';
+import { deriveSubkey, type HkdfLabel } from '../crypto/encryption.js';
 import { DomainError } from '../errors/domain-error.js';
 import type { Logger } from '../logging/logger.js';
 import type { SettingsReader } from '../settings/settings-reader.js';
@@ -68,21 +69,11 @@ export const defaultRateLimits = {
 export const BUDGET_SUBJECT = '*';
 
 /** The HKDF label of the key that hashes subjects; registered in platform/crypto/encryption.ts. */
-export const RATE_LIMIT_SUBJECT_LABEL = 'ijazah:rate-limit-subject:v1';
+export const RATE_LIMIT_SUBJECT_LABEL = 'ijazah:rate-limit-subject:v1' satisfies HkdfLabel;
 
-const SUBJECT_KEY_BYTES = 32;
-
-/** The key that hashes subjects: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256. */
+/** The key that hashes subjects: 32 bytes derived from ENCRYPTION_KEY (base64) by HKDF-SHA256 (T005). */
 export function deriveRateLimitSubjectKey(encryptionKey: string): Buffer {
-  return Buffer.from(
-    hkdfSync(
-      'sha256',
-      Buffer.from(encryptionKey, 'base64'),
-      Buffer.alloc(0),
-      RATE_LIMIT_SUBJECT_LABEL,
-      SUBJECT_KEY_BYTES,
-    ),
-  );
+  return deriveSubkey(encryptionKey, RATE_LIMIT_SUBJECT_LABEL);
 }
 
 /** What a limit's settings row must hold. */
