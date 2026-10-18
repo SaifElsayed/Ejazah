@@ -1,6 +1,6 @@
 # ADR 0005 — Phase 0 document amendments
 
-**Status:** accepted; decision D1 superseded by [ADR 0007](0007-direct-gateway-checkout.md) · **Date:** 2026-09-05 · **Task:** T126
+**Status:** accepted; decision D1 superseded by [ADR 0007](0007-direct-gateway-checkout.md), and with it D1's "no `PaymentPort`", "four ports" and "no `payments` module" (ADR 0007 D4 returned both, so the counts of D2 read "twelve modules", and the ports are seven since [ADR 0012](0012-sign-in-with-google-apple-or-email.md) added email and sign-in) · **Date:** 2026-09-05 · **Task:** T126
 
 ## Context
 

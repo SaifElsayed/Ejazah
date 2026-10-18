@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.3 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026*
+*Version 1.4 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end*
 
 ## 0. How to read this
 
@@ -29,21 +29,21 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 
 | Domain | Module | Tables |
 |---|---|---|
-| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` |
+| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `auth_identities` |
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
-| CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` |
+| CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
 | BOOKING | `booking` | `slot_holds` · `enrollments` |
 | PAYMENTS | `payments` | `payments` · `payment_events` |
-| SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` |
+| SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` |
 | CHAT | `chat` | `chat_messages` |
 | CERTIFICATION | `certification` | `ijazahs` · `ijazah_bars` |
 | REVIEWS | `reviews` | `reviews` |
 | MODERATION | `moderation` | `disputes` · `gender_flags` · `user_reports` |
 | NOTIFICATIONS | `notifications` | `notifications` |
-| ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` |
+| ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` · `admin_sessions` · `admin_recovery_codes` |
 | PLATFORM | `platform` (kernel, not a module) | `idempotency_keys` |
 
-Thirty-three tables. One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
+Thirty-nine tables: the thirty-three of Phase 0 and the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
 
 ## 2. Identity
 
@@ -771,6 +771,12 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | `sessions` GiST exclusion `(teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions for one teacher (§15.19); the teacher's calendar |
 | `sessions` GiST exclusion `(student_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions for one student (§15.19); the reservation check against the student's sessions |
 | `notifications (user_id, read_at)` | Notification centre badge |
+| `user_sessions (refresh_token_hash)` unique | Session resolution on every authenticated request (§15.25; Phase 1 pass) |
+| `user_sessions (user_id)` | The foreign key's plain index; "revoke every session of the user" (Phase 1 pass; the partial index on live rows was not kept, R-DB-9) |
+| `auth_identities (provider, provider_subject)` unique | The provider sign-in lookup; one provider account is one platform account (§15.22) |
+| `otp_codes (destination, purpose)` | The lookup every code verification and every purge makes (Phase 1 pass) |
+| `admin_sessions (token_hash)` unique | Administrator session resolution (§15.25) |
+| `teacher_credentials (teacher_user_id, subject_id) WHERE status = 'approved'` partial unique | One approved credential per teacher and subject (§15.23); the credentials page |
 
 Add nothing else until a query is measurably slow (Architecture §17).
 
@@ -815,7 +821,20 @@ Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purch
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 33 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 39 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+
+## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
+
+The design is `specs/002-identity/data-model.md`; the batch is PR #77 (tasks T003, T008 to T013 of `specs/002-identity/tasks.md`). Every item below is a forward migration generated from the schema and extended by hand only where the schema language cannot speak.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §2 `user_sessions` (a device's session, the refresh token as a hash, rotation and revocation; R-101) and `auth_identities` (a Google or Apple account keyed by the provider's subject; ADR 0012 D2); `users.certificate_name` (ADR 0019 D1) and `users.photo_key`; `display_name` and `date_of_birth` nullable for deleted rows with §15 rule 32 holding them for live rows, and rule 1 rewritten for deleted rows (FR-141); `account_deletion` on `otp_purpose`; `user_roles (user_id)` unique (rule 24, ADR 0016 D3); the `otp_codes (destination, purpose)` index; rules 22 and 25 | `20261018000000_identity_sessions_and_providers` |
+| 2 | §12 `admin_sessions` and `admin_recovery_codes` (ADR 0019 D3, R-107); `admin_users`: `password_hash` nullable from invite, `mfa_last_accepted_step`, `mfa_enrolled_at`, the lockout pair, the invite, password-set, disabled and last sign-in instants; rules 30 and 31 | `20261018000100_admin_sessions_mfa_lockout` |
+| 3 | §4 `teacher_credentials` (ADR 0017 D5) and `isnad_entries` re-keyed under the credential (`credential_id`, `names text[]`, `created_by_admin_id`; the former columns dropped, the table held no row); §2 `teacher_profiles`: the application columns, `identity_document_id` and `identity_document_type`, `approved_shown_at`, `payout_account_ref_hash` (rule 27), `payout_rejected_reason`; `revoked` on `teacher_verification_status`; §3 `verification_requests.document_id` and `document_type`; rules 23 and 28 | `20261018000200_teacher_credentials` |
+| 4 | §4 `packages.track` and §5 `enrollments.snapshot_track` (ADR 0018 D1, default `recitation` for the migration), `sessions.makeup_for_session_id` (ADR 0018 D3), `session_remedies` (ADR 0018 D2 to D5, columns only), `account_deleted` on `cancellation_reason` (ADR 0015 D4) | `20261018000300_tracks_remedies_account_deleted` |
+| 5 | §12 `audit_logs.target_label` (rule 29, ADR 0021 D2) and `idempotency_keys.actor_id` with the `(scope, actor_id, key)` unique (rule 26) land with their writers in batch B4 of Phase 1, as `20261018000500_audit_target_label` and `20261018000400_idempotency_actor` | B4 (T021, T018) |
+| 6 | §1 counts thirty-nine tables; §14 lists the new indexes; §15 rules 22 to 32 | this document pass (T014) |
 
 ## Changelog — v1.3 addendum (ADR 0021)
 

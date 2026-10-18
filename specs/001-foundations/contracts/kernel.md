@@ -1,5 +1,7 @@
 # Contract: Platform Kernel
 
+> **Phase 1 amends this contract.** The caller kinds (`userProcedure`, `teacherProcedure({ admits })`, `adminPublicProcedure`), session resolution, the client address, the idempotency actor, the audit label and the public web pages are in [`specs/002-identity/contracts/kernel.md`](../../002-identity/contracts/kernel.md); what is written here stands where that document does not say otherwise.
+
 What every request inherits without a feature author writing it. Each item below
 is a guarantee that exists once, in one place, because a guarantee implemented
 per-module is a guarantee that varies per-module.

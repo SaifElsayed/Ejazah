@@ -16,6 +16,7 @@ modules rather than reimplementing rules.
 - A module can be extracted into a service later without rewriting callers,
   because callers only ever saw its `index.ts`.
 - Swapping a video, push, storage or messaging vendor costs one adapter, not a
-  branch in every rule. (Payment is not a port: the platform does not process
-  payments — ADR 0005.)
+  branch in every rule. (Payment is a port since ADR 0007 D4, which brought direct gateway
+  checkout back after ADR 0005 had retired payment processing; it is the one
+  port whose stand-in is a second implementation from day one.)
 - The discipline is enforced by lint, not by memory.
