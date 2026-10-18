@@ -145,6 +145,14 @@ describe('column encryption (T068, FR-031, R-8)', () => {
     expect(() => cipher.decrypt(stored, PAYOUT, '')).toThrow(TypeError);
   });
 
+  // PR #75 review, follow-up 4: one fixed vector, so a change of hash, salt or info in the
+  // derivation is caught here before it orphans every encrypted column.
+  it('derives the column key as HKDF-SHA256 with no salt and the label as info: a fixed vector', () => {
+    expect(deriveColumnKey(KEY).toString('hex')).toBe(
+      '4b4afab9ed3dda54c56b3fe930d6a28a2b600239ee32970cfb850f38c28e6769',
+    );
+  });
+
   it('encrypts under a key derived for columns alone, unlike ENCRYPTION_KEY', () => {
     const columnKey = deriveColumnKey(KEY);
     expect(COLUMN_KEY_LABEL).toBe('ijazah:column-encryption:v1');
