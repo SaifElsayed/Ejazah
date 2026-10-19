@@ -4,9 +4,9 @@
 
 ## 0. How to read this
 
-This is the complete data model for the MVP — 33 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
+This is the complete data model for the MVP — 39 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
-> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defines **33**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
+> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
 Conventions, binding on every table:
 

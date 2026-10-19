@@ -101,11 +101,11 @@ display-name step is prefilled when the provider offers a name and typed
 otherwise.
 
 **D5 — Phone sign-up is deferred, not removed.** `users.phone`, its partial
-unique index and the phone-or-email check constraint stay as they are; every MVP
+unique index and the phone-or-email check constraint stay (the Phase 1 ERD pass
+rewrote the check for deleted rows, ERD §15 rules 1 and 32); every MVP
 account has an email (Google and Apple return one when it is verified; when a
 provider offers no verified email, onboarding collects and verifies one before
-the account is written, D2), so the check always holds for a live row (the Phase
-1 ERD pass rewrote it for deleted rows, ERD §15 rules 1 and 32). The SMS port and its stand-in stay. Phone sign-up returns as a new
+the account is written, D2), so the check always holds for a live row. The SMS port and its stand-in stay. Phone sign-up returns as a new
 decision when a sender ID is registered and its cost is accepted.
 
 ## Consequences

@@ -3,7 +3,7 @@
 **Version 1.4 — MVP Baseline (Buildable)**
 Supersedes v1.3, v1.2, v1.1 and v1.0. Date: September 2026.
 
-> **Amendment 2026-10-18 — the Phase 1 ERD pass and document pass ([PR #77](https://github.com/SaifElsayed/Ejazah/pull/77); `specs/002-identity/data-model.md`, tasks T014 and T015).** The ERD is v1.4: six tables (device sessions, provider identities, admin sessions, admin recovery codes, teacher credentials, session remedies) and the columns of Phase 1; §6.1 and §6.2 follow it. §2.5 says who builds the MVP (a team of one, PLAN.md). §3.14 lists the Phase 0 rate limits and budgets beside the Phase 1 rows. NFR-SEC-7 says which secret nets exist. The decision log's rows are in order; the stray spaces of FR-ADMIN-1 and NFR-SEC-6 are gone.
+> **Amendment 2026-10-18 — the Phase 1 ERD pass and document pass (batch B3, [PR #78](https://github.com/SaifElsayed/Ejazah/pull/78); `specs/002-identity/data-model.md`, tasks T014 and T015).** The ERD is v1.4: six tables (device sessions, provider identities, admin sessions, admin recovery codes, teacher credentials, session remedies) and the columns of Phase 1; §6.1 and §6.2 follow it. §2.5 says who builds the MVP (a team of one, PLAN.md). §3.14 lists the Phase 0 rate limits and budgets beside the Phase 1 rows. NFR-SEC-7 says which secret nets exist. The decision log's rows are in order; the stray spaces of FR-ADMIN-1 and NFR-SEC-6 are gone.
 
 > **Amendment 2026-10-17 — [ADR 0021](adr/0021-design-consequences-for-data-and-configuration.md).** What the design asks of the data and the configuration: a subject's English name is data shown on English pages; an audit entry records a non-personal label of its target at write time; every notification event is a named member of `notifications.type`; the support address is configuration served by a public query; the public web pages are routes of the API; discovery searches by Teacher name with track, rating and riwaya filters, and the Teacher's student list is searchable. Edits FR-DISC-1, FR-DISC-2, FR-BOOK-7, FR-ADMIN-17, FR-NOTIF-1 and FR-LOC-1, and adds DEC-60.
 
@@ -688,7 +688,7 @@ Both mobile experiences share one codebase; an account sees its one role's navig
 
 ## 6. Data Model
 
-Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.3 — 33 tables.
+Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.4 — 39 tables.
 
 ### 6.1 Entities
 
