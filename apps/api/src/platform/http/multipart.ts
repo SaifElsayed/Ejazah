@@ -14,9 +14,13 @@
 // is destroyed when the request closes before its end, which destroys the file stream and releases
 // a consumer waiting on it with the error. Only the client's departure destroys anything of the
 // request (round 2, finding A): `stream.pipeline` would destroy the request on a parser error too,
-// and a malformed body from a client still there must be answered 400, not read as an abort.
+// and a malformed body from a client still there must be answered 400, not read as an abort. The
+// departure is watched with `stream.finished`, not a `'close'` listener (round 2, finding B): the
+// route awaits the session and a setting before reading the body, and a client that resets in that
+// window has already closed when the body is read; `finished` calls back at once for a stream that
+// is already closed, a listener added then never fires.
 import type { IncomingMessage } from 'node:http';
-import type { Readable } from 'node:stream';
+import { finished, type Readable } from 'node:stream';
 import busboy from 'busboy';
 import { DomainError } from '../errors/domain-error.js';
 
@@ -100,9 +104,10 @@ export function firstFileOf(
         ),
       ),
     );
-    // The client gone before the body's end: the parser, and with it the file stream, are released.
-    request.once('close', () => {
-      if (!request.readableEnded) parser.destroy(new Error('The client went away mid-body.'));
+    // The client gone before the body's end, now or later: the parser, and with it the file stream,
+    // are released; a normal end hands no error and destroys nothing.
+    finished(request, { writable: false }, (error) => {
+      if (error !== undefined && error !== null) parser.destroy(error);
     });
     request.pipe(parser);
   });

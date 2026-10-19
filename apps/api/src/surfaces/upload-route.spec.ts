@@ -54,7 +54,14 @@ const sessionsByBearer: Readonly<Record<string, UserSession>> = {
   't-conflict': session('u-conflict', 'active'),
 };
 const sessions = {
-  user: async (bearer: string) => sessionsByBearer[bearer] ?? null,
+  user: async (bearer: string) => {
+    // A slow resolver: the window between the headers and the body's first read (round 2, B).
+    if (bearer === 't-slow') {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return session('u-slow', 'active');
+    }
+    return sessionsByBearer[bearer] ?? null;
+  },
   admin: async () => null,
 };
 const administration = {
@@ -318,6 +325,30 @@ describe('the upload route helper (T024, FR-151)', () => {
     expect(records.filter((line) => line.includes('Unexpected error on an upload route'))).toEqual(
       [],
     );
+  });
+
+  it('settles when the client aborts before the body is read, while the session is resolved (PR #80 review, round 2 B)', async () => {
+    const { body, contentType } = identityPdf();
+    const head = [
+      'POST /uploads/probe HTTP/1.1',
+      `Host: ${new URL(origin).host}`,
+      'Authorization: Bearer t-slow',
+      `Content-Type: ${contentType}`,
+      `Content-Length: ${body.byteLength}`,
+      '',
+      '',
+    ].join('\r\n');
+    const before = records.filter((line) => line.includes('Upload aborted by the client')).length;
+    // The head and nothing of the body; the socket destroyed while the resolver still waits.
+    await rawRequest(head, Buffer.alloc(0), 'abort');
+    for (let tick = 0; tick < 40; tick += 1) {
+      if (records.filter((line) => line.includes('Upload aborted by the client')).length > before)
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(
+      records.filter((line) => line.includes('Upload aborted by the client')).length,
+    ).toBeGreaterThan(before);
   });
 
   it('refuses a declared length over upload_max_bytes before reading a byte (PR #80 review, 3)', async () => {
