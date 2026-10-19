@@ -129,9 +129,20 @@ function limiterOf(limit: number): {
 
 const { limiter: rateLimiter } = limiterOf(1_000);
 
+// The services the user surface's context carries (T038): nothing here reads one.
+const services = {
+  settings: {
+    read: async () => {
+      throw new Error('no setting is read here');
+    },
+  },
+  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  subjects: { listActive: async () => [] },
+};
+
 /** The user surface's context for a fixture session, as the HTTP application builds one. */
 function appContext(session: UserSession | null, limiter: RateLimiter = rateLimiter) {
-  return createAppContext({ session, log, rateLimiter: limiter, clientAddress });
+  return createAppContext({ session, log, rateLimiter: limiter, clientAddress, services });
 }
 
 // An anonymous call, and a call refused before the handler, open no transaction and write nothing.

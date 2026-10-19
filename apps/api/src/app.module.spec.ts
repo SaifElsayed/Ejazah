@@ -22,6 +22,17 @@ import { RateLimiter } from './platform/guards/rate-limit.guard.js';
 // No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
 const sessions = { user: async () => null, admin: async () => null };
 
+// The services the user surface's context carries (T038): nothing here reads one.
+const services = {
+  settings: {
+    read: async () => {
+      throw new Error('no setting is read here');
+    },
+  },
+  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  subjects: { listActive: async () => [] },
+};
+
 import { createLogger } from './platform/logging/logger.js';
 import {
   adminProcedure,
@@ -101,6 +112,7 @@ beforeAll(async () => {
     administration,
     rateLimiter,
     sessions,
+    services,
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');
@@ -215,6 +227,7 @@ describe('the request body limit (T150, FR-077)', () => {
       administration,
       rateLimiter,
       sessions,
+      services,
       surfaces: { app: user, admin: readsFirst },
     });
     await wired.listen(0, '127.0.0.1');

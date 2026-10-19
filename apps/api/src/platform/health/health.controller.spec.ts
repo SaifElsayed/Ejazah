@@ -15,6 +15,16 @@ import { createLogger } from '../logging/logger.js';
 
 // No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
 const sessions = { user: async () => null, admin: async () => null };
+// The services the user surface's context carries (T038): nothing here reads one.
+const services = {
+  settings: {
+    read: async () => {
+      throw new Error('no setting is read here');
+    },
+  },
+  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  subjects: { listActive: async () => [] },
+};
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
 // it. Each part refuses if it is ever reached.
@@ -55,6 +65,7 @@ beforeAll(async () => {
     administration,
     rateLimiter,
     sessions,
+    services,
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

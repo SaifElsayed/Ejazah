@@ -34,7 +34,18 @@ const administration = {
 const rateLimiter = {} as RateLimiter;
 const clientAddress = '203.0.113.7';
 
-const appSource = { session: null, log, rateLimiter, clientAddress };
+// The services the user surface's context carries (T038): nothing here reads one.
+const services = {
+  settings: {
+    read: async () => {
+      throw new Error('no setting is read here');
+    },
+  },
+  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  subjects: { listActive: async () => [] },
+};
+
+const appSource = { session: null, log, rateLimiter, clientAddress, services };
 const adminSource = { session: null, log, administration, rateLimiter, clientAddress };
 
 describe('the user and administrator contexts (T162, R-SEC-8)', () => {

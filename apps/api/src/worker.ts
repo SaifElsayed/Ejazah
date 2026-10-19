@@ -5,9 +5,9 @@
 // configuration exactly as the request process does (T093). Everything else is loaded only after it
 // returns. Then reporting is started (T111), the logger created (T100), the database client opened
 // (T102), the admin module's settings reader bound (T113), each port's provider selected (T121),
-// the column cipher and every `_encrypted` column bound for the re-encryption sweep (T155), every
-// sweep registered on its schedule, and the queue's deliveries run through the registered jobs
-// (T112).
+// the column cipher and every `_encrypted` column bound for the re-encryption sweep (T155), the
+// purge stores of both modules bound for the three purge sweeps (T025), every sweep registered on
+// its schedule, and the queue's deliveries run through the registered jobs (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
 // injection, so each is handed what it needs here, and `dev:worker` runs this file under `tsx`.
@@ -30,6 +30,9 @@ const [
   { IdempotencyRepository },
   { expireIdempotencyKeys },
   { reencryptColumns },
+  { purgeOtpCodes },
+  { purgeStalePushTokens },
+  { purgeExpiredSessions },
   { selectPorts, selectPushPort },
   queueing,
 ] = await Promise.all([
@@ -46,6 +49,9 @@ const [
   import('./platform/idempotency/idempotency.repository.js'),
   import('./jobs/expire-idempotency-keys.js'),
   import('./jobs/reencrypt-columns.js'),
+  import('./jobs/purge-otp-codes.js'),
+  import('./jobs/purge-stale-push-tokens.js'),
+  import('./jobs/purge-expired-sessions.js'),
   import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
 ]);
@@ -81,10 +87,19 @@ const encryptedColumns = [
   ...verification.createEncryptedColumns(database),
 ];
 
+// The three purge sweeps (T025, FR-107) read their windows through the settings reader and delete
+// through the stores of the modules that own the tables; the admin module's store is handed in
+// here, as its column is, since a job may not import that module (R-API-4).
+const purge = identity.createPurgeStores(database);
+const adminSessions = admin.createAdminSessionPurgeStore(database);
+
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [
   expireIdempotencyKeys(idempotency),
   reencryptColumns({ cipher, columns: encryptedColumns, log }),
+  purgeOtpCodes({ store: purge.otpCodes, settings }),
+  purgeStalePushTokens({ store: purge.pushTokens, settings }),
+  purgeExpiredSessions({ stores: { user: purge.userSessions, admin: adminSessions }, settings }),
 ];
 
 const connection = queueing.connectionFor(config.REDIS_URL);

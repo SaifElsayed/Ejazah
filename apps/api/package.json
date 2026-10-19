@@ -27,6 +27,7 @@
     "@sentry/node": "11.4.0",
     "@trpc/server": "11.19.0",
     "bullmq": "6.3.11",
+    "busboy": "1.6.0",
     "helmet": "8.3.0",
     "ioredis": "5.11.1",
     "pg": "8.23.1",

@@ -6,10 +6,16 @@
 // accepts user-surface procedures only, so an administrator procedure does not compile here
 // (T107), and T098 checks the same at runtime. Mounted on its own path by the HTTP application
 // (T149), apart from the administrator surface. Each module's router joins this record as the
-// module gains procedures.
+// module gains procedures: `platform.publicConfig` (the kernel's, beside the surfaces) and
+// `catalog.subjects.list` (the catalog module's) since T038.
+import { subjectsRouter } from '../modules/catalog/index.js';
 import { createAppRouter } from './procedures.js';
+import { platformRouter } from './public-config.router.js';
 
-export const appRouter = createAppRouter({});
+export const appRouter = createAppRouter({
+  platform: platformRouter,
+  catalog: createAppRouter({ subjects: subjectsRouter }),
+});
 
 /** The user surface's type, the only one the mobile application may see. */
 export type AppRouter = typeof appRouter;

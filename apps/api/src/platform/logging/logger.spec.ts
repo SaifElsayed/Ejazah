@@ -68,6 +68,30 @@ describe('the declared redaction list (T095, FR-040)', () => {
     });
   });
 
+  it('redacts the text, html and subject of a mail object, and keeps the same names elsewhere (T023, R-SEC-2)', () => {
+    const out = redact({
+      mail: {
+        to: 'a@example.invalid',
+        subject: 'رمز الدخول',
+        text: 'الرمز 482913',
+        html: '<b>482913</b>',
+      },
+      mails: [{ subject: 's', text: 't' }],
+      emailDelivery: { subject: 'the subject', attempts: 2 },
+      subject: 'the rate-limit subject',
+      text: 'a log line',
+      html: false,
+    });
+    expect(out).toEqual({
+      mail: { to: 'a@example.invalid', subject: REDACTED, text: REDACTED, html: REDACTED },
+      mails: [{ subject: REDACTED, text: REDACTED }],
+      emailDelivery: { subject: REDACTED, attempts: 2 },
+      subject: 'the rate-limit subject',
+      text: 'a log line',
+      html: false,
+    });
+  });
+
   it('keeps the names the lint rule marks as loggable', () => {
     const kept = {
       sessionId: 's-1',

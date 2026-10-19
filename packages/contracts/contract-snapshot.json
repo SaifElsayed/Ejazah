@@ -1,6 +1,32 @@
 {
   "enums": {
-    "contracts": {},
+    "contracts": {
+      "accountStatus": ["active", "banned", "suspended", "verification_required"],
+      "authProvider": ["apple", "google"],
+      "deletionConfirmation": ["DELETE", "حذف"],
+      "gender": ["female", "male"],
+      "identityDocumentType": ["national_id", "passport"],
+      "landing": ["restricted", "student_home", "teacher_application", "teacher_home"],
+      "language": ["ar", "en"],
+      "role": ["student", "teacher"],
+      "signInMethod": ["apple", "email", "google"],
+      "teacherApplicationStatus": [
+        "approved",
+        "banned",
+        "in_review",
+        "needs_document",
+        "not_started",
+        "rejected"
+      ],
+      "teacherVerificationStatus": [
+        "approved",
+        "banned",
+        "pending",
+        "rejected",
+        "revoked",
+        "suspended"
+      ]
+    },
     "prisma": {
       "AccountStatus": ["active", "banned", "suspended", "verification_required"],
       "AuthProvider": ["apple", "google"],
@@ -112,5 +138,29 @@
       "VerificationRequestStatus": ["expired", "open", "satisfied"]
     }
   },
-  "procedures": { "admin": {}, "app": {} }
+  "procedures": {
+    "admin": {},
+    "app": {
+      "catalog.subjects.list": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "array" },
+          "$[]": { "type": "object" },
+          "$[].id": { "required": true, "type": "string" },
+          "$[].nameAr": { "required": true, "type": "string" },
+          "$[].nameEn": { "required": true, "type": "string" }
+        }
+      },
+      "platform.publicConfig": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.supportEmail": { "required": true, "type": "string" },
+          "$.termsVersion": { "required": true, "type": "string" }
+        }
+      }
+    }
+  }
 }

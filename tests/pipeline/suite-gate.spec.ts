@@ -33,6 +33,9 @@ describe('which paths each suite guards (scripts/suite-gate.paths.ts)', () => {
   it.each([
     ['apps/api/src/platform/guards/requester-gender.ts', GENDER],
     ['apps/api/src/modules/catalog/teacher-list.service.ts', GENDER],
+    // The discovery repository stays guarded while the non-discovery files are excepted (T038).
+    ['apps/api/src/modules/catalog/catalog.repository.ts', GENDER],
+    ['apps/api/src/modules/catalog/catalog.service.ts', GENDER],
     ['apps/api/src/modules/booking/gender-pairing.ts', GENDER],
     ['packages/contracts/src/gender-filter.ts', GENDER],
     ['packages/time/src/resolve.ts', TIME],
@@ -44,6 +47,15 @@ describe('which paths each suite guards (scripts/suite-gate.paths.ts)', () => {
     ['apps/api/src/modules/catalog/README.md', GENDER],
     ['apps/api/src/modules/catalog/catalog.service.spec.ts', GENDER],
     ['apps/api/src/modules/identity/identity.repository.ts', GENDER],
+    // T038 (owner's decision 2026-10-18, PR #76 review): the catalog files that serve no discovery,
+    // by basename, and the entry, which is an export list and filters nothing.
+    ['apps/api/src/modules/catalog/subjects.repository.ts', GENDER],
+    ['apps/api/src/modules/catalog/subjects.service.ts', GENDER],
+    ['apps/api/src/modules/catalog/subjects.router.ts', GENDER],
+    ['apps/api/src/modules/catalog/credentials.repository.ts', GENDER],
+    ['apps/api/src/modules/catalog/credential-review.service.ts', GENDER],
+    ['apps/api/src/modules/catalog/credentials-admin.router.ts', GENDER],
+    ['apps/api/src/modules/catalog/index.ts', GENDER],
     // PR #63 review, n1: identity captures gender and filters nothing; nor do the apps' steps.
     ['apps/api/src/modules/identity/gender-capture.ts', GENDER],
     ['apps/mobile/src/features/shared/onboarding/gender-step.tsx', GENDER],

@@ -1,0 +1,115 @@
+// T039 — `GET /terms` over real HTTP (FR-127, ADR 0021 D5, research R-111; public-pages.md "The
+// pages"). The Terms body is a pre-rendered HTML fragment per language, a server-built file
+// inserted with `raw()`, shown with the `terms_version` setting read on every request; the app's
+// Terms modal is a WebView of this route. The helper's guarantees (the strict policy, no cookie,
+// the anonymous limit, `?lang=en`) are T019's and are asserted here only as this page carries them.
+import type { INestApplication } from '@nestjs/common';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createApplication } from '../../../app.module.js';
+import { RateLimiter } from '../../guards/rate-limit.guard.js';
+import { createLogger } from '../../logging/logger.js';
+import { SettingError, type SettingsReader } from '../../settings/settings-reader.js';
+import { PUBLIC_PAGE_CSP } from '../route.js';
+import { TERMS_PATH, termsRoute } from './terms.controller.js';
+
+const administration = {
+  transactions: { run: () => Promise.reject(new Error('no administrative call is expected here')) },
+  auditWriter: {
+    write: () => Promise.reject(new Error('no administrative call is expected here')),
+  },
+};
+const sessions = { user: async () => null, admin: async () => null };
+const log = createLogger({ level: 'info', destination: { write: () => undefined } });
+
+/** The limiter admits every call; the limit itself is T019's. */
+const rateLimiter = new RateLimiter({
+  settings: { read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }) },
+  counter: { hit: async () => 1 },
+  subjectKey: Buffer.alloc(32, 1),
+});
+
+/** The version the page reads, changed per case; `null` is a store without the key. */
+let version: string | null = '2026-10';
+const settings: SettingsReader = {
+  read: async (key, schema) => {
+    if (key !== 'terms_version' || version === null) throw new SettingError(key, 'missing');
+    return schema.parse(version);
+  },
+};
+const services = {
+  settings,
+  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  subjects: { listActive: async () => [] },
+};
+
+let application: INestApplication;
+let origin: string;
+
+beforeAll(async () => {
+  application = await createApplication({
+    log,
+    readiness: { databaseReachable: async () => {} },
+    securityHeaders: { allowedOrigins: [], mode: 'test' },
+    maxRequestBodyBytes: 1024,
+    administration,
+    rateLimiter,
+    sessions,
+    services,
+    webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
+  });
+  await application.listen(0, '127.0.0.1');
+  origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');
+});
+
+afterAll(async () => {
+  await application.close();
+});
+
+describe('GET /terms (T039, FR-127)', () => {
+  it('renders the Arabic Terms with the version from the setting, under the page helper', async () => {
+    version = '2026-10';
+    const response = await fetch(`${origin}/terms`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(response.headers.get('content-security-policy')).toBe(PUBLIC_PAGE_CSP);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const page = await response.text();
+    expect(page).toContain('<html lang="ar" dir="rtl">');
+    expect(page).toContain('<title>الشروط والأحكام</title>');
+    expect(page).toContain('2026-10');
+    // The fragment's sections, inserted as markup: the drawn board's five, with their headings.
+    expect(page.match(/<h2/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(page).toContain('وسيط تقني');
+    // A draft, said so until counsel writes the text.
+    expect(page).toContain('المراجعة القانونية');
+    expect(page).not.toContain('<script');
+  });
+
+  it('renders the English fragment for ?lang=en, left to right', async () => {
+    version = '2026-10';
+    const page = await (await fetch(`${origin}/terms?lang=en`)).text();
+    expect(page).toContain('<html lang="en" dir="ltr">');
+    expect(page).toContain('<title>Terms and Conditions</title>');
+    expect(page).toContain('2026-10');
+    expect(page).toContain('technology intermediary');
+    expect(page).toContain('legal review');
+  });
+
+  it('escapes the version it shows, whatever the setting holds', async () => {
+    version = '2026-10<b>x</b>';
+    const page = await (await fetch(`${origin}/terms`)).text();
+    expect(page).toContain('2026-10&lt;b&gt;x&lt;/b&gt;');
+    expect(page).not.toContain('<b>x</b>');
+  });
+
+  it('answers the error page, not the page, when the version is not stored (FR-034)', async () => {
+    version = null;
+    const response = await fetch(`${origin}/terms`);
+    expect(response.status).toBe(500);
+    const page = await response.text();
+    expect(page).not.toContain('terms_version');
+    expect(page).not.toContain('<h2');
+    version = '2026-10';
+  });
+});

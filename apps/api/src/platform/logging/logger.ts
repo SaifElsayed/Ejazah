@@ -113,6 +113,28 @@ export const redactedKeys: readonly (readonly string[])[] = [
 export const redactedLastWords: readonly string[] = ['event'];
 
 /**
+ * The fields of a mail that are redacted, inside an object whose key names a mail (T023, R-SEC-2):
+ * a rendered mail's text, HTML and subject may carry a one-time code. The same names outside a
+ * mail object stay: a log line's `text`, a rate limit's `subject`. A mail object is one under a
+ * key whose words include `mail` or `email` (`mail`, `mails`, `emailDelivery`), an array of them
+ * included.
+ */
+export const mailObjectWords: readonly string[] = ['mail', 'email'];
+export const mailFieldWords: readonly string[] = ['text', 'html', 'subject'];
+
+/** Whether a key names a mail object, so its `text`, `html` and `subject` are redacted. */
+export function isMailKey(name: string): boolean {
+  const present = new Set(wordsOf(name).flatMap(formsOf));
+  return mailObjectWords.some((word) => present.has(word));
+}
+
+/** Whether a key, under a mail object, is one of the mail's redacted fields. */
+function isMailField(name: string): boolean {
+  const words = wordsOf(name);
+  return words.length === 1 && mailFieldWords.includes(words[0] ?? '');
+}
+
+/**
  * Keys that hold a client's address (T017, R-SEC-2): written as the address's network, never the
  * address, so a request can be told from its neighbours and no record names a person's address.
  * A key is one when its words include every word of one entry.
@@ -223,7 +245,7 @@ export function isRedactedKey(name: string): boolean {
  * reached twice side by side is written twice.
  */
 export function redact(value: unknown): unknown {
-  return redactValue(value, new Set(), false);
+  return redactValue(value, new Set(), false, false);
 }
 
 /** A key the serialized form of an Error keeps as written: its classification code. */
@@ -231,7 +253,12 @@ const ERROR_CLASSIFICATION_KEY = 'code';
 /** The key under which pino's serializer writes the next error of the cause chain. */
 const ERROR_CAUSE_KEY = 'cause';
 
-function redactValue(value: unknown, path: Set<object>, serializedError: boolean): unknown {
+function redactValue(
+  value: unknown,
+  path: Set<object>,
+  serializedError: boolean,
+  underMail: boolean,
+): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (path.has(value)) return '[circular]';
 
@@ -247,18 +274,20 @@ function redactValue(value: unknown, path: Set<object>, serializedError: boolean
 
   path.add(value);
   try {
-    if (Array.isArray(readable)) return readable.map((item) => redactValue(item, path, false));
+    if (Array.isArray(readable)) {
+      return readable.map((item) => redactValue(item, path, false, underMail));
+    }
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(readable as object)) {
       if (isError && key === ERROR_CLASSIFICATION_KEY) {
-        out[key] = redactValue(inner, path, false);
-      } else if (isRedactedKey(key)) {
+        out[key] = redactValue(inner, path, false, false);
+      } else if (isRedactedKey(key) || (underMail && isMailField(key))) {
         out[key] = REDACTED;
       } else if (isAddressKey(key)) {
         out[key] = networkOf(inner);
       } else {
         // The cause chain is a chain of serialized errors; any other object the error carries is not.
-        out[key] = redactValue(inner, path, isError && key === ERROR_CAUSE_KEY);
+        out[key] = redactValue(inner, path, isError && key === ERROR_CAUSE_KEY, isMailKey(key));
       }
     }
     return out;

@@ -51,6 +51,17 @@ const administration = {
 };
 const sessions = { user: async () => null, admin: async () => null };
 
+// The services the user surface's context carries (T038): nothing here reads one.
+const services = {
+  settings: {
+    read: async () => {
+      throw new Error('no setting is read here');
+    },
+  },
+  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  subjects: { listActive: async () => [] },
+};
+
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });
 
@@ -95,6 +106,7 @@ beforeAll(async () => {
     administration,
     rateLimiter: limited.limiter,
     sessions,
+    services,
     trustedProxyHeader: 'X-Forwarded-For',
     // The shorter path is declared first on purpose: the application mounts the longer first.
     webRoutes: { '/terms': terms, '/broken': broken, '/a': terms, '/a/b': broken },

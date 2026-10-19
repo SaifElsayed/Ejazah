@@ -11,7 +11,10 @@
 //   - any source file named for gender in the API or in the contracts package.
 // Left out: the identity module, which captures gender but serves no list (what it may read from a
 // client is R-GENDER-4's, held by T159's lint rule), and the mobile and admin apps, whose gender
-// step renders a choice and filters nothing (PR #63 review, n1). The tests that count are the
+// step renders a choice and filters nothing (PR #63 review, n1); and, by basename, the catalog files
+// that serve no discovery (the subjects list, the credential rows and their review, T038: the
+// owner's decision of 2026-10-18 on PR #76's review) and the module's entry, an export list that
+// filters nothing, while `catalog.repository.ts`, the discovery repository, stays guarded. The tests that count are the
 // adversarial suite's specs, not any file under its folder.
 //
 // Time (R-TIME-1/2: every session datetime is resolved in packages/time, across DST):
@@ -44,7 +47,14 @@ export const GENDER: Suite = {
     'apps/api/**/*gender*',
     'packages/contracts/**/*gender*',
   ],
-  except: ['apps/api/src/modules/identity/**'],
+  except: [
+    'apps/api/src/modules/identity/**',
+    'apps/api/src/modules/catalog/subjects*',
+    'apps/api/src/modules/catalog/credentials*',
+    'apps/api/src/modules/catalog/credential-review*',
+    'apps/api/src/modules/catalog/credentials-admin.router.ts',
+    'apps/api/src/modules/catalog/index.ts',
+  ],
   tests: ['tests/adversarial/**/*.spec.ts'],
   testsShown: 'the adversarial suite (tests/adversarial/**/*.spec.ts)',
 };

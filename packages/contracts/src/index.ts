@@ -5,9 +5,15 @@
 // Since T018 the package publishes built JavaScript to Node under `dist/` and its source under the
 // export condition `@ijazah/source` (as `@ijazah/time` does, T151), because the API's kernel reads
 // its lists at runtime; a test or a bundler resolves the source through the condition.
+export * from './account.js';
 export { AUDIT_LABEL_MAX_LENGTH } from './audit-label.js';
+export * from './auth.js';
+export { type AuthorityAllowList, authorityAllowList } from './authority-allow-list.js';
+export * from './catalog.js';
 export {
   type IdempotentProcedure,
   idempotentProcedures,
   isIdempotentProcedure,
 } from './idempotent-procedures.js';
+export * from './onboarding.js';
+export * from './platform.js';
