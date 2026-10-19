@@ -132,6 +132,10 @@ jobs:
       # application role; leaving them out here changes no covered path.
       - name: Unit and property tests with the 80% coverage floor (R-PROC-5)
         run: pnpm test -- --coverage --exclude 'tests/db-integrity/**'
+      # B6 — the phone's specs: Jest with jest-expo and React Native Testing Library, the toolchain
+      # Expo documents (owner's decision, 2026-10-19); Vitest cannot load React Native.
+      - name: Phone tests (Jest, apps/mobile)
+        run: pnpm --filter @ijazah/mobile test
 
   stage-3-type-aware-lint-schema-snapshot:
     runs-on: ubuntu-latest

@@ -50,5 +50,31 @@
     "tsx": "4.23.13",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "@react-native/jest-preset@0.88.0": {
+        "peerDependencies": {
+          "react-native": "*"
+        }
+      },
+      "react-native-svg@15.16.0": {
+        "peerDependencies": {
+          "@types/react": "*"
+        },
+        "peerDependenciesMeta": {
+          "@types/react": {
+            "optional": true
+          }
+        }
+      },
+      "react-native-css-interop@0.2.7": {
+        "dependencies": {
+          "@expo/config": "58.0.6",
+          "connect": "3.7.0",
+          "metro-transform-worker": "0.87.1"
+        }
+      }
+    }
   }
 }

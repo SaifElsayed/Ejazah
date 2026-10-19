@@ -8,6 +8,7 @@
 // linted file, and each set enables exactly the rules the plugin's catalog puts in it.
 const path = require('node:path');
 const tsParser = require('@typescript-eslint/parser');
+const typescriptPlugin = require('@typescript-eslint/eslint-plugin');
 const ijazah = require('./eslint-plugin-ijazah');
 const boundaries = require('./eslint.boundaries');
 
@@ -59,6 +60,30 @@ const fast = [
     files: lintedFiles,
     plugins: { ijazah },
     rules: ijazah.configs.fast.rules,
+  },
+  {
+    // B6 (owner's decision, 2026-10-19): the phone's tRPC client is typed by the API's router type,
+    // imported type-only (`apps/mobile/src/lib/client.ts`, the tRPC documentation's own pattern).
+    // A value import would bundle server code into the application, past the one network path
+    // (R-MOBILE-11), so the phone may import a type from the API and nothing else.
+    // `tests/lint-plugin/mobile-api-type-only.spec.ts` holds every spelling.
+    files: ['apps/mobile/**/*.{ts,tsx,mts,cts}'],
+    plugins: { '@typescript-eslint': typescriptPlugin },
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/api/src/**', '@ijazah/api', '@ijazah/api/**'],
+              allowTypeImports: true,
+              message:
+                'The phone imports only types from the API (`import type`): a value would bundle server code into the application R-MOBILE-11',
+            },
+          ],
+        },
+      ],
+    },
   },
 ];
 

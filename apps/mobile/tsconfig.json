@@ -8,8 +8,17 @@
     "outDir": "dist",
     "emitDeclarationOnly": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["src", "app.json"],
-  "references": [{ "path": "../../packages/contracts" }]
+  "include": ["src", "src/**/*.json", "app.json", "nativewind-env.d.ts"],
+  "references": [
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../api"
+    }
+  ]
 }
