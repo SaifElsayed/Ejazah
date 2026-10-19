@@ -37,6 +37,23 @@ export function expectDesignRules(root: Element): void {
   }
 }
 
+/**
+ * Clicks `link` with `modifiers` and answers whether the component took the click (prevented the
+ * browser's own navigation). The browser's default is stopped afterwards, on the document, so jsdom
+ * never tries to navigate (it cannot) once React has seen the event (review of B8, nit 5).
+ */
+export function clickTaken(link: Element, modifiers: MouseEventInit = {}): boolean {
+  let taken = false;
+  const record = (event: Event) => {
+    taken = event.defaultPrevented;
+    event.preventDefault();
+  };
+  document.addEventListener('click', record);
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...modifiers }));
+  document.removeEventListener('click', record);
+  return taken;
+}
+
 export interface DirectionPass {
   readonly locale: Locale;
   readonly dir: Direction;

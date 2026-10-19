@@ -2,7 +2,7 @@
 import { fireEvent, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { inBothDirections } from './__tests__/harness';
+import { clickTaken, inBothDirections } from './__tests__/harness';
 import { Button, Icon, IconButton, TextLink } from './index';
 
 describe('Icon', () => {
@@ -165,12 +165,10 @@ describe('TextLink', () => {
       () => <TextLink label="go" href="/audit" onPress={onPress} />,
       ({ view }) => {
         const link = view.getByRole('link', { name: 'go' });
-        fireEvent.click(link, { ctrlKey: true });
-        fireEvent.click(link, { metaKey: true });
+        expect(clickTaken(link, { ctrlKey: true })).toBe(false);
+        expect(clickTaken(link, { metaKey: true })).toBe(false);
         expect(onPress).not.toHaveBeenCalled();
-        const plain = new MouseEvent('click', { bubbles: true, cancelable: true });
-        link.dispatchEvent(plain);
-        expect(plain.defaultPrevented).toBe(true);
+        expect(clickTaken(link)).toBe(true);
         expect(onPress).toHaveBeenCalledTimes(1);
         onPress.mockClear();
       },

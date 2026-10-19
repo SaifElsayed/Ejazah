@@ -5,7 +5,7 @@ import { act, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getLocale, setLocale, translate } from '../../i18n';
-import { inBothDirections } from './__tests__/harness';
+import { clickTaken, inBothDirections } from './__tests__/harness';
 import {
   AuthCard,
   Console,
@@ -92,11 +92,9 @@ describe('NavItem', () => {
       () => <NavItem href="/audit" label="audit" icon="list" onNavigate={onNavigate} />,
       ({ view }) => {
         const link = view.getByRole('link', { name: 'audit' });
-        fireEvent.click(link, { ctrlKey: true });
+        expect(clickTaken(link, { ctrlKey: true })).toBe(false);
         expect(onNavigate).not.toHaveBeenCalled();
-        const plain = new MouseEvent('click', { bubbles: true, cancelable: true });
-        link.dispatchEvent(plain);
-        expect(plain.defaultPrevented).toBe(true);
+        expect(clickTaken(link)).toBe(true);
         expect(onNavigate).toHaveBeenCalledWith('/audit');
         onNavigate.mockClear();
       },
