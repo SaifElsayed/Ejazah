@@ -10,7 +10,9 @@ export default mergeConfig(
       // prohibition they prove (T026, R-PROC-10). Collected, they run as real tests: the `.only`
       // one passes and the `.skip` one reports skipped, and in CI Vitest refuses a `.only`
       // outright (`allowOnly`), failing the run.
-      exclude: [...configDefaults.exclude, 'tests/violations/fixtures/**'],
+      // B6: the phone's specs run on Jest with jest-expo (owner's decision, 2026-10-19), from
+      // `apps/mobile/jest.config.js` and the pipeline's own step; Vitest cannot load React Native.
+      exclude: [...configDefaults.exclude, 'tests/violations/fixtures/**', 'apps/mobile/**'],
       // T114 (PR #49 review m1): every run starts with no provider key (SC-005).
       setupFiles: ['tests/support/no-provider-keys.setup.ts'],
     },

@@ -2,14 +2,33 @@
   "extends": "../../packages/config/tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-native",
-    "lib": ["ES2023", "DOM"],
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "outDir": "dist",
     "emitDeclarationOnly": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
   },
-  "include": ["src", "app.json"],
-  "references": [{ "path": "../../packages/contracts" }]
+  "include": [
+    "src",
+    "src/**/*.json",
+    "app.json",
+    "nativewind-env.d.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../api"
+    }
+  ]
 }

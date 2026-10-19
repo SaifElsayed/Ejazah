@@ -1,14 +1,13 @@
 // Shared vocabulary of the primitive contracts (docs/design/components.md, ADR 0020). These files
-// are the CONTRACTS: the props a primitive accepts and the decisions it refuses to delegate. The
-// implementations arrive with Phase 1 and must satisfy them without widening them.
+// are the CONTRACTS: the props a primitive accepts and the decisions it refuses to delegate. T032
+// implements them beside each contract, in the same file, without widening them.
+import type { ReactNode } from 'react';
+
 import type { IconName } from '../icons';
 import type { ColorToken, IconSize, MediaSize, TextStyle } from '../tokens';
 
-/**
- * A rendered child (text, an element, a list of them). Stands for React's `ReactNode` until the
- * React types are installed with Phase 1; nothing in a contract depends on anything narrower.
- */
-export type Content = unknown;
+/** A rendered child (text, an element, a list of them): React's `ReactNode` (T032). */
+export type Content = ReactNode;
 
 /** A press handler. Never receives the event: a primitive decides what a press means. */
 export type Press = () => void;

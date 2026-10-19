@@ -105,5 +105,6 @@ export const identityVerificationSubmitInput = z.object({
 });
 
 export type MeOutput = z.infer<typeof meOutput>;
+export type TeacherApplicationStatus = z.infer<typeof teacherApplicationStatus>;
 export type AccountStatus = z.infer<typeof accountStatus>;
 export type SignInMethod = z.infer<typeof signInMethod>;

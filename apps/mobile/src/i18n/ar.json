@@ -207,6 +207,8 @@
       "back": "رجوع",
       "close": "إغلاق",
       "deleteFile": "حذف الملف",
+      "filters": "الفلاتر",
+      "filtersActive": "الفلاتر · {count} مفعّلة",
       "notifications": "الإشعارات",
       "notificationsUnread": "الإشعارات، توجد غير مقروءة",
       "report": "إبلاغ",
