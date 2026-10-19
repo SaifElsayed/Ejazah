@@ -14,16 +14,21 @@
 // WHAT IS READ. The committed contract snapshot (`packages/contracts/contract-snapshot.json`),
 // whose user-surface entries carry each procedure's caller kind from its meta (T028); an entry with
 // no caller kind is read as guarded, never as public. And the text of every `*.spec.ts` under
-// `apps/api/src/modules/`, comments removed, cut into tests at each `it(` or `test(`: a test names a
-// path when it holds it quoted (`'account.me'`, `"account.me"`, between backticks) or called
-// (`.account.me(`), and a refusal counts for that path only inside a test that names it, so a path
-// in a comment, or a refusal of another procedure in the same file, proves nothing (review of B7,
-// finding 3). The administrator surface is not read: every one of its procedures is the
+// `apps/api/src/modules/`, parsed with TypeScript into its tests: every call of `it`, `test`,
+// `it.each(…)`, `test.each(…)` or `it.concurrent`, printed without its comments; `.skip` and `.todo`
+// never run, so they never count (review of B7, round 2, finding 2). A test names a path when it
+// holds it quoted (`'account.me'`, `"account.me"`, between backticks) or called (`.account.me(`),
+// and a refusal counts for that path only inside a test that names it, so a path in a comment, or a
+// refusal of another procedure in the same file, proves nothing (review of B7, finding 3).
+// ACCOUNT_RESTRICTED is required of no kind: whether a procedure admits a restricted caller is not
+// in the snapshot, so its refusal is the module's test to choose, not this gate's to demand. The administrator surface is not read: every one of its procedures is the
 // administrator kind, and its refusals are the admin module's (T066).
 //
 // Exit 0 with a one-line count; 1 listing each refusal; 2 when the snapshot cannot be read.
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
+
+import ts from 'typescript';
 
 const repositoryRoot = join(__dirname, '..');
 const SNAPSHOT = join('packages', 'contracts', 'contract-snapshot.json');
@@ -37,8 +42,10 @@ export const REQUIRED_REFUSALS: Readonly<Record<string, readonly string[]>> = {
 };
 const ALL_REFUSALS = ['UNAUTHENTICATED', 'FORBIDDEN'];
 
-const COMMENTS = /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
-const TEST_START = /\b(?:it|test)(?:\.each\([^)]*\))?\s*\(/;
+/** The runners whose callback runs; `.skip`, `.todo` and anything else do not count. */
+const RUNNERS = new Set(['it', 'test']);
+const RUNNING_MODIFIERS = new Set(['each', 'concurrent', 'only']);
+const printer = ts.createPrinter({ removeComments: true });
 
 /** A procedure entry as this gate reads it from the snapshot. */
 export interface SnapshotProcedure {
@@ -67,9 +74,29 @@ function names(text: string, path: string): boolean {
   return quoted.test(text) || called.test(text);
 }
 
-/** The tests of a spec: its text without comments, cut at each `it(` or `test(`. */
+/** True when `callee` is `it`, `test`, or one of them through a running modifier (`it.each(…)`). */
+function isRunner(callee: ts.Expression): boolean {
+  if (ts.isIdentifier(callee)) return RUNNERS.has(callee.text);
+  if (ts.isCallExpression(callee)) return isRunner(callee.expression);
+  if (ts.isPropertyAccessExpression(callee)) {
+    return RUNNING_MODIFIERS.has(callee.name.text) && isRunner(callee.expression);
+  }
+  return false;
+}
+
+/** The tests of a spec, each printed without comments: every outermost runner call. */
 function testsOf(text: string): string[] {
-  return text.replace(COMMENTS, '').split(TEST_START).slice(1);
+  const source = ts.createSourceFile('spec.ts', text, ts.ScriptTarget.Latest, true);
+  const tests: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && isRunner(node.expression)) {
+      tests.push(printer.printNode(ts.EmitHint.Unspecified, node, source));
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return tests;
 }
 
 /** The refusals a procedure must prove and has not, across every test that names it. */

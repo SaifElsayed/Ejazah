@@ -118,6 +118,46 @@ describe('the authorization-test gate (T028)', () => {
     expect(findUntested(snapshot, onlyAnonymous)).toEqual(['teacher.application.submit']);
   });
 
+  it('reads a URL in a string as a string, not as a comment (review of B7, round 2, 2)', () => {
+    const withUrl = [
+      {
+        path: 'apps/api/src/modules/identity/account.spec.ts',
+        text: "it('refuses an anonymous caller', async () => {\n  const origin = 'https://api.test';\n  await expect(call(origin, 'account.me')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });\n});",
+      },
+    ];
+    expect(findUntested(snapshot, [...withUrl, ...covering.slice(1)])).toEqual([]);
+  });
+
+  it('never lets a glob in a string merge two tests (review of B7, round 2, 2)', () => {
+    const merged = [
+      {
+        path: 'apps/api/src/modules/identity/account.spec.ts',
+        text: "it('answers', () => { const files = '**/*.spec.ts'; return call('account.me'); });\nit('refuses another', () => { const end = '*/'; expect(call('account.other')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' }); });",
+      },
+    ];
+    expect(findUntested(snapshot, [...merged, ...covering.slice(1)])).toEqual(['account.me']);
+  });
+
+  it('never counts a skipped or a to-do test (review of B7, round 2, 2)', () => {
+    const skipped = [
+      {
+        path: 'apps/api/src/modules/identity/account.spec.ts',
+        text: "it('answers', () => call('account.me'));\nit.skip('refuses', () => expect(call('account.me')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' }));",
+      },
+    ];
+    expect(findUntested(snapshot, [...skipped, ...covering.slice(1)])).toEqual(['account.me']);
+  });
+
+  it('reads an it.each table as one test', () => {
+    const table = [
+      {
+        path: 'apps/api/src/modules/identity/account.spec.ts',
+        text: "it.each(['account.me'])('refuses an anonymous call of %s', async (path) => {\n  await expect(call(path)).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });\n});",
+      },
+    ];
+    expect(findUntested(snapshot, [...table, ...covering.slice(1)])).toEqual([]);
+  });
+
   it('names R-MOBILE-13 and each path', () => {
     const message = describeUntested(['account.me']);
     expect(message).toContain('account.me');

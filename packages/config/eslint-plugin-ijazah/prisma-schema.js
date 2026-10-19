@@ -61,8 +61,38 @@ function softDeletableRelations(models) {
   return byAccessor;
 }
 
+/**
+ * The models whose rows can reach a soft-deletable row through their relations, at any depth,
+ * computed to a fixpoint over the whole schema (relations form cycles, so a memo filled while a
+ * walk is in progress would keep a wrong answer; review of B7, round 2, finding 1).
+ *
+ * @param {ReturnType<typeof softDeletableRelations>} relations
+ * @returns {Set<string>} model names, `User` and not `user`
+ */
+function modelsReachingSoftDeleted(relations) {
+  const reaching = new Set();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [accessor, fields] of relations) {
+      const model = accessor.charAt(0).toUpperCase() + accessor.slice(1);
+      if (reaching.has(model)) continue;
+      for (const relation of fields.values()) {
+        if (relation.softDeletable || reaching.has(relation.target)) {
+          reaching.add(model);
+          grew = true;
+          break;
+        }
+      }
+    }
+  }
+  return reaching;
+}
+
 /** @type {ReturnType<typeof softDeletableRelations> | undefined} */
 let cached;
+/** @type {Set<string> | undefined} */
+let cachedReaching;
 
 /** The repository's schema, read once per process. */
 function readRelations() {
@@ -77,4 +107,16 @@ function readRelations() {
   return cached;
 }
 
-module.exports = { parseSchema, readRelations, softDeletableRelations };
+/** The models of the repository's schema that can reach a soft-deletable row, read once. */
+function readReaching() {
+  cachedReaching ??= modelsReachingSoftDeleted(readRelations());
+  return cachedReaching;
+}
+
+module.exports = {
+  modelsReachingSoftDeleted,
+  parseSchema,
+  readReaching,
+  readRelations,
+  softDeletableRelations,
+};

@@ -43,7 +43,7 @@
 // FR-214 does not name (a follow-up). A deliberate read of the deleted rows (an audit, the deletion
 // flow itself), or a shape the rule cannot read, takes a justified suppression (R-PROC-7), with its
 // ticket and its reason.
-const { readRelations } = require('../prisma-schema');
+const { readReaching, readRelations } = require('../prisma-schema');
 const { defineRule } = require('../rule');
 const { keyName, propertyName, unwrap } = require('../syntax');
 
@@ -156,6 +156,7 @@ module.exports = defineRule({
   create(context) {
     if (!isRepositoryFile(context.filename)) return {};
     const relations = readRelations();
+    const reaching = readReaching();
 
     /** The relation `name` of `model`, or by name alone when the model is unknown. */
     function relationOf(model, name) {
@@ -165,18 +166,11 @@ module.exports = defineRule({
 
     /**
      * True when a read of `model` can reach a soft-deletable row through its relations, at any
-     * depth; an unknown model is assumed to. An opaque shape on a model that cannot is harmless.
+     * depth (`readReaching`, a fixpoint over the whole schema); an unknown model is assumed to. An
+     * opaque shape on a model that cannot is harmless.
      */
-    const reach = new Map();
     function reachesSoftDeleted(model) {
-      if (model === undefined) return true;
-      if (reach.has(model)) return reach.get(model);
-      reach.set(model, false);
-      const found = [...(relations.get(accessorOf(model))?.values() ?? [])].some(
-        (relation) => relation.softDeletable || reachesSoftDeleted(relation.target),
-      );
-      reach.set(model, found);
-      return found;
+      return model === undefined || reaching.has(model);
     }
 
     /**

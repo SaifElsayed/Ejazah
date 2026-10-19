@@ -192,6 +192,15 @@ typescriptRuleTester().run(
         errors: [{ messageId: 'unfilteredSingle', data: { relation: 'student', model: 'User' } }],
       },
       {
+        name: 'an opaque include after an opaque query on a model of the same cycle (review of B7, round 2, 1)',
+        code: 'export const a = (tx, args) => tx.adminUser.findUnique(args);\nexport const b = (tx, inc) => tx.adminSession.findUnique({ where: { id: "s" }, include: inc });',
+        filename: repository,
+        errors: [
+          { messageId: 'opaqueArguments' },
+          { messageId: 'opaqueSelection', data: { key: 'include' } },
+        ],
+      },
+      {
         name: 'the rows a write returns',
         code: "export const r = (tx) => tx.enrollment.update({ where: { id: 'e' }, data: { status: 'active' }, include: { sessions: true } });",
         filename: repository,
