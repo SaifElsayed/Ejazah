@@ -9,8 +9,9 @@
 // list is replaced by running the script, never fetched at runtime. It lives in the kernel, outside
 // the magic-number gate's root; the password bounds live in `packages/contracts` (password.ts).
 //
-// A password is compared as typed, after NFKC (fullwidth letters are the letters a person sees);
-// its case is kept, as the published list keeps it.
+// A password is compared after NFKC (fullwidth letters are the letters a person sees) and without
+// the spaces around it; its case is kept, as the published list keeps it. The file is checked once
+// at first use: whole prefixes, sorted and distinct, or the process refuses to use it.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
@@ -62,11 +63,28 @@ export function contains(list: Buffer, prefix: Buffer): boolean {
 
 let loaded: Buffer | undefined;
 
-/** The committed list, read once per process. */
+/**
+ * Throws unless `list` is whole prefixes in strictly ascending order: an unsorted or damaged file
+ * would make the search miss its entries and the check pass every password (review of B7, 7).
+ */
+export function assertSorted(list: Buffer): void {
+  if (list.length % PREFIX_BYTES !== 0) {
+    throw new Error('breached passwords: the list is not a whole number of prefixes');
+  }
+  for (let at = PREFIX_BYTES; at < list.length; at += PREFIX_BYTES) {
+    const previous = list.subarray(at - PREFIX_BYTES, at);
+    if (Buffer.compare(previous, list.subarray(at, at + PREFIX_BYTES)) >= 0) {
+      throw new Error('breached passwords: the list is not sorted and distinct');
+    }
+  }
+}
+
+/** The committed list, read and checked once per process. */
 function list(): Buffer {
-  loaded ??= readFileSync(LIST_FILE);
-  if (loaded.length % PREFIX_BYTES !== 0) {
-    throw new Error('breached passwords: top-100k.bin is not a whole number of prefixes');
+  if (loaded === undefined) {
+    const read = readFileSync(LIST_FILE);
+    assertSorted(read);
+    loaded = read;
   }
   return loaded;
 }
@@ -76,7 +94,10 @@ export function listSize(): number {
   return list().length / PREFIX_BYTES;
 }
 
-/** True when `password` is on the bundled list of the most common breached passwords. */
+/**
+ * True when `password` is on the bundled list of the most common breached passwords. The spaces
+ * around it are dropped for the comparison, as the list's entries are (review of B7, 11).
+ */
 export function isBreached(password: string): boolean {
-  return contains(list(), prefixOf(password));
+  return contains(list(), prefixOf(password.trim()));
 }

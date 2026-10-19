@@ -3,8 +3,10 @@
 //
 //   pnpm exec tsx scripts/dev/build-breached-list.ts --input <path to the list>
 //
-// THE SOURCE (owner's decision, 2026-10-19). SecLists (MIT), the top 100,000 of the "10 million
-// passwords" list Mark Burnett published from public breaches, at a fixed commit:
+// THE SOURCE (owner's decision, 2026-10-19). SecLists, the top 100,000 of the "10 million passwords"
+// list Mark Burnett published from public breaches, at a fixed commit. SecLists is MIT-licensed,
+// Copyright (c) 2018 Daniel Miessler; the derived file the API ships carries that notice here:
+// https://github.com/danielmiessler/SecLists/blob/c205c36a445bff37f8e58a9ec829105cd4975c58/LICENSE
 //
 //   https://raw.githubusercontent.com/danielmiessler/SecLists/c205c36a445bff37f8e58a9ec829105cd4975c58/Passwords/Common-Credentials/xato-net-10-million-passwords-100000.txt
 //   100,000 lines, 781,879 bytes, SHA-256 1472aafa2561df5e3293aee252aee3ca660c12b399a283cf808bb01b39be388b
@@ -22,7 +24,7 @@ import {
   PREFIX_BYTES,
 } from '../../apps/api/src/platform/crypto/breached-passwords/index';
 
-export const SOURCE_SHA256 = '1472aafa2561df5e3293aee252aee3ca660c12b399a283cf808bb01b39be388b';
+const SOURCE_SHA256 = '1472aafa2561df5e3293aee252aee3ca660c12b399a283cf808bb01b39be388b';
 
 const OUTPUT = join(
   __dirname,

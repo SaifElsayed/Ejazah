@@ -245,6 +245,17 @@ describe('the snapshot records the published contract (T084, FR-063)', () => {
     expect(again.procedures.app['booking.create']?.caller).toBe('student');
   });
 
+  it('fails a caller kind that changes, as a kind does (review of B7, 6)', () => {
+    const base = snapshotOf(sources());
+    const head = JSON.parse(JSON.stringify(base)) as {
+      procedures: Record<string, Record<string, Record<string, unknown>>>;
+    };
+    const entry = head.procedures['app']?.['booking.create'];
+    if (entry !== undefined) entry['caller'] = 'public';
+    const changes = findRemovals(base, parseSnapshot(JSON.stringify(head)));
+    expect(changes).toEqual(['caller  app  booking.create  student → public']);
+  });
+
   it('passes a base committed before the caller kind was recorded (T028, additive)', () => {
     const base = snapshotOf(sources());
     const withoutCallers = JSON.parse(JSON.stringify(base)) as {

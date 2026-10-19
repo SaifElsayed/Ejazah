@@ -78,8 +78,8 @@ export interface ProcedureEntry {
   readonly kind: string;
   /**
    * The user surface's caller kind (`public`, `user`, `student`, `teacher`) from the procedure's
-   * meta, read by the R-MOBILE-13 gate (T028). Recorded, never compared: a base written before it
-   * was recorded passes, and the gate, not this file, judges what a kind requires.
+   * meta, read by the R-MOBILE-13 gate (T028). Compared once the base records it, as a kind is; a
+   * base written before it was recorded passes.
    */
   readonly caller?: string;
   readonly input: Fields;
@@ -507,6 +507,12 @@ export function findRemovals(base: ContractSnapshot, head: ContractSnapshot): st
       }
       if (now.kind !== procedure.kind) {
         removals.push(`kind  ${surface}  ${path}  ${procedure.kind} → ${now.kind}`);
+      }
+      // A caller kind is compared once the base records one: widening a procedure to `public`
+      // takes it out of the R-MOBILE-13 gate, and narrowing it refuses an old client (review of
+      // B7, finding 6). A base written before T028 recorded none and passes.
+      if (procedure.caller !== undefined && now.caller !== procedure.caller) {
+        removals.push(`caller  ${surface}  ${path}  ${procedure.caller} → ${now.caller ?? 'none'}`);
       }
       const where = ` ${surface}  ${path}`;
       for (const direction of DIRECTIONS) {

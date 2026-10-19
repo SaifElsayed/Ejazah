@@ -58,6 +58,26 @@ typescriptRuleTester().run(
         filename: repository,
       },
       {
+        name: 'a single relation nested in a single relation, filtered by the query (review of B7, 4)',
+        code: 'export const r = (tx) => tx.session.findMany({ where: { deletedAt: null, enrollment: { deletedAt: null, student: { deletedAt: null } } }, include: { enrollment: { include: { student: true } } } });',
+        filename: repository,
+      },
+      {
+        name: 'a nested single relation filtered through is (review of B7, 4)',
+        code: 'export const r = (tx) => tx.session.findMany({ where: { enrollment: { is: { deletedAt: null, student: { is: { deletedAt: null } } } } }, include: { enrollment: { include: { student: true } } } });',
+        filename: repository,
+      },
+      {
+        name: 'an optional single relation filtered on itself, which Prisma accepts (review of B7, 4)',
+        code: 'export const r = (tx) => tx.slotHold.findMany({ include: { enrollment: { where: { deletedAt: null } } } });',
+        filename: repository,
+      },
+      {
+        name: 'a selection held in a variable on a model that reaches no soft-deletable row (review of B7, 1)',
+        code: 'const storedKey = { id: true, status: true };\nexport const r = (tx) => tx.idempotencyKey.findUnique({ where: { id: "k" }, select: storedKey });',
+        filename: repository,
+      },
+      {
         name: 'a delegate held in a variable, reading scalars',
         code: 'export const r = (admins) => admins.findMany({ select: { id: true } });',
         filename: repository,
@@ -140,6 +160,36 @@ typescriptRuleTester().run(
         code: 'export const r = (tx) => tx.enrollment.findMany({ include: { _count: true } });',
         filename: repository,
         errors: [{ messageId: 'unfilteredCount', data: { model: 'Enrollment' } }],
+      },
+      {
+        name: 'an include held in a variable (review of B7, 1)',
+        code: 'const include = { sessions: true };\nexport const r = (tx) => tx.enrollment.findMany({ include });',
+        filename: repository,
+        errors: [{ messageId: 'opaqueSelection', data: { key: 'include' } }],
+      },
+      {
+        name: 'an include spread from elsewhere (review of B7, 1)',
+        code: 'const base = { sessions: true };\nexport const r = (tx) => tx.enrollment.findMany({ include: { ...base } });',
+        filename: repository,
+        errors: [{ messageId: 'opaqueSelection', data: { key: 'include' } }],
+      },
+      {
+        name: 'the whole argument held in a variable (review of B7, 1)',
+        code: 'export const r = (tx, args) => tx.enrollment.findMany(args);',
+        filename: repository,
+        errors: [{ messageId: 'opaqueArguments' }],
+      },
+      {
+        name: 'a nested relation selection held in a variable (review of B7, 1)',
+        code: 'const select = { id: true };\nexport const r = (tx) => tx.enrollment.findMany({ include: { sessions: { where: { deletedAt: null }, select } } });',
+        filename: repository,
+        errors: [{ messageId: 'opaqueSelection', data: { key: 'select' } }],
+      },
+      {
+        name: 'a nested single relation the query does not filter by (review of B7, 4)',
+        code: 'export const r = (tx) => tx.session.findMany({ where: { enrollment: { deletedAt: null } }, include: { enrollment: { include: { student: true } } } });',
+        filename: repository,
+        errors: [{ messageId: 'unfilteredSingle', data: { relation: 'student', model: 'User' } }],
       },
       {
         name: 'the rows a write returns',

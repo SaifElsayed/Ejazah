@@ -22,20 +22,27 @@
 //
 //   a list relation    without `where: { deletedAt: null, … }` on the relation itself
 //                      (`sessions: true`, `sessions: { where: { status } }`, `deletedAt: { not: null }`)
-//   a single relation  whose query does not filter its own rows by it: Prisma takes no `where` on
-//                      a single relation, so the object holding the `include` or `select` carries
-//                      `where: { <relation>: { deletedAt: null } }` or `{ <relation>: { is: {
-//                      deletedAt: null } } }`; at the top that is the query's own `where`, nested it
-//                      is the `where` of the list relation the single one sits in
+//   a single relation  that no `where` above it filters: Prisma takes no `where` on a required single
+//                      relation, so the nearest `where` that can name it carries `deletedAt: null`
+//                      along the relation path (`where: { enrollment: { student: { deletedAt: null }
+//                      } }` for `include: { enrollment: { include: { student: true } } }`), each step
+//                      written directly or through `is`; that `where` is the query's own at the top
+//                      and a list relation's own below it. An optional single relation (`T?`) may
+//                      carry its own `where: { deletedAt: null }` instead, which Prisma accepts there
 //   a count            `_count: { select: { <list relation>: true } }`, and `_count: true` on a
 //                      model with a list relation to a soft-deletable model
+//   an opaque shape    the query's arguments, an `include` or `select`, or a relation's entry that is
+//                      not an object literal (a variable, a spread), on a model whose relations can
+//                      reach a soft-deletable one at any depth: what it holds cannot be read, so it
+//                      is refused rather than passed (review of B7, finding 1); on a model that
+//                      reaches none (`idempotencyKey`), there is nothing to hide
 //
 // WHAT IS NOT REFUSED, and is review's. The query's own table (`tx.user.findMany` with no
 // `deletedAt` filter): the rule is about relations, the reads of the table itself are its
-// repository's to write and its tests' to prove. A filter assembled from a variable (`where:
-// filter`): the rule reads object literals only, so such a relation is refused and the escape is a
-// justified suppression (R-PROC-7). A deliberate read of the deleted rows (an audit, the deletion
-// flow itself) takes that same suppression, with its ticket and its reason.
+// repository's to write and its tests' to prove. The fluent API (`findUnique(…).sessions()`), which
+// FR-214 does not name (a follow-up). A deliberate read of the deleted rows (an audit, the deletion
+// flow itself), or a shape the rule cannot read, takes a justified suppression (R-PROC-7), with its
+// ticket and its reason.
 const { readRelations } = require('../prisma-schema');
 const { defineRule } = require('../rule');
 const { keyName, propertyName, unwrap } = require('../syntax');
@@ -86,13 +93,30 @@ function excludesDeleted(where) {
   return deletedAt !== undefined && isNull(deletedAt.value);
 }
 
-/** True when a `where` object literal filters its rows by a single relation's `deletedAt: null`. */
-function filtersBy(where, relation) {
-  const condition = propertiesOf(where).get(relation);
-  if (condition === undefined) return false;
-  if (excludesDeleted(condition.value)) return true;
-  const is = propertiesOf(condition.value).get('is');
-  return is !== undefined && excludesDeleted(is.value);
+/**
+ * True when a `where` object literal reaches `deletedAt: null` along `path`, one relation per step,
+ * each step written directly or through `is` (`{ enrollment: { is: { student: { … } } } }`).
+ */
+function filteredAlong(where, path) {
+  let node = where;
+  for (const step of path) {
+    const condition = propertiesOf(node).get(step);
+    if (condition === undefined) return false;
+    const is = propertiesOf(condition.value).get('is');
+    node = is === undefined ? condition.value : is.value;
+  }
+  return excludesDeleted(node);
+}
+
+/** A boolean literal, or an object literal with no spread: the shapes the rule can read. */
+function readable(node) {
+  const inner = unwrap(node);
+  if (inner === null || inner === undefined) return false;
+  if (inner.type === 'Literal' && typeof inner.value === 'boolean') return true;
+  return (
+    inner.type === 'ObjectExpression' &&
+    !inner.properties.some((property) => property.type === 'SpreadElement')
+  );
 }
 
 /**
@@ -121,9 +145,13 @@ module.exports = defineRule({
     unfilteredList:
       '"{{relation}}" reads {{model}} rows with the soft-deleted ones — give the relation where: { deletedAt: null }, because a deleted row is excluded from every ordinary read',
     unfilteredSingle:
-      '"{{relation}}" reads a {{model}} row that may be soft-deleted — filter the query\'s own rows with where: { {{relation}}: { deletedAt: null } }, because a single relation takes no where of its own',
+      '"{{relation}}" reads a {{model}} row that may be soft-deleted — filter the query\'s own rows with where: { {{relation}}: { deletedAt: null } }, through every relation above it, because a required single relation takes no where of its own',
     unfilteredCount:
       "_count: true counts the soft-deleted rows of {{model}}'s relations — count each relation with where: { deletedAt: null }",
+    opaqueSelection:
+      'this {{key}} is not an object literal the rule can read (a variable, a spread) — write it in place, or suppress with a ticket and the reason its relations exclude the deleted rows',
+    opaqueArguments:
+      "the query's arguments are not an object literal the rule can read (a variable, a spread) — write them in place, or suppress with a ticket and the reason their relations exclude the deleted rows",
   },
   create(context) {
     if (!isRepositoryFile(context.filename)) return {};
@@ -136,14 +164,35 @@ module.exports = defineRule({
     }
 
     /**
-     * Checks the `include` and `select` of one level of a query: `level` is the object that holds
-     * them and the `where` its single relations are filtered by; `model` is its model, if known.
+     * True when a read of `model` can reach a soft-deletable row through its relations, at any
+     * depth; an unknown model is assumed to. An opaque shape on a model that cannot is harmless.
      */
-    function checkLevel(level, model) {
-      const properties = propertiesOf(level);
-      const where = properties.get('where')?.value;
-      for (const [key, holder] of properties) {
+    const reach = new Map();
+    function reachesSoftDeleted(model) {
+      if (model === undefined) return true;
+      if (reach.has(model)) return reach.get(model);
+      reach.set(model, false);
+      const found = [...(relations.get(accessorOf(model))?.values() ?? [])].some(
+        (relation) => relation.softDeletable || reachesSoftDeleted(relation.target),
+      );
+      reach.set(model, found);
+      return found;
+    }
+
+    /**
+     * Checks the `include` and `select` of one level of a query. `model` is the level's model, if
+     * known; `filters` are the `where` objects that filter the level's rows, each with the relation
+     * path from its own level down to this one (the query's `where` at the top; a list relation's
+     * own `where` below it; a single relation adds itself to the path of every filter above).
+     */
+    function checkLevel(level, model, filters) {
+      for (const [key, holder] of propertiesOf(level)) {
         if (!SELECTIONS.has(key)) continue;
+        if (!readable(holder.value)) {
+          if (!reachesSoftDeleted(model)) continue;
+          context.report({ node: holder, messageId: 'opaqueSelection', data: { key } });
+          continue;
+        }
         for (const [name, entry] of propertiesOf(holder.value)) {
           if (name === '_count') {
             checkCount(entry, model);
@@ -151,24 +200,41 @@ module.exports = defineRule({
           }
           const relation = relationOf(model, name);
           if (relation === undefined) continue;
-          if (relation.softDeletable) {
-            if (relation.list) {
-              if (!excludesDeleted(propertiesOf(entry.value).get('where')?.value)) {
-                context.report({
-                  node: entry,
-                  messageId: 'unfilteredList',
-                  data: { relation: name, model: relation.target },
-                });
-              }
-            } else if (!filtersBy(where, name)) {
+          if (!readable(entry.value)) {
+            if (!relation.softDeletable && !reachesSoftDeleted(relation.target)) continue;
+            context.report({ node: entry, messageId: 'opaqueSelection', data: { key } });
+            continue;
+          }
+          const own = propertiesOf(entry.value).get('where')?.value;
+          if (relation.list) {
+            if (relation.softDeletable && !excludesDeleted(own)) {
               context.report({
                 node: entry,
-                messageId: 'unfilteredSingle',
+                messageId: 'unfilteredList',
                 data: { relation: name, model: relation.target },
               });
             }
+            checkLevel(entry.value, relation.target, [{ where: own, path: [] }]);
+            continue;
           }
-          checkLevel(entry.value, relation.target);
+          const below = filters.map((filter) => ({
+            where: filter.where,
+            path: [...filter.path, name],
+          }));
+          // Prisma takes a where on an optional single relation (`T?`), and on no required one.
+          const ownFilter =
+            relation.optional && own !== undefined ? [{ where: own, path: [] }] : [];
+          const filtered = [...below, ...ownFilter].some((filter) =>
+            filteredAlong(filter.where, filter.path),
+          );
+          if (relation.softDeletable && !filtered) {
+            context.report({
+              node: entry,
+              messageId: 'unfilteredSingle',
+              data: { relation: name, model: relation.target },
+            });
+          }
+          checkLevel(entry.value, relation.target, [...below, ...ownFilter]);
         }
       }
     }
@@ -213,7 +279,15 @@ module.exports = defineRule({
         const model = [...relations.keys()].includes(accessor ?? '')
           ? (accessor ?? '').charAt(0).toUpperCase() + (accessor ?? '').slice(1)
           : undefined;
-        checkLevel(argument, model);
+        // Arguments the rule cannot read may hold an include it would refuse (review of B7, 1).
+        if (!readable(argument)) {
+          if (!reachesSoftDeleted(model)) return;
+          context.report({ node: argument, messageId: 'opaqueArguments' });
+          return;
+        }
+        checkLevel(argument, model, [
+          { where: propertiesOf(argument).get('where')?.value, path: [] },
+        ]);
       },
     };
   },

@@ -23,18 +23,28 @@ const snapshot: SnapshotProcedures = {
   },
 };
 
+// Each kind's own refusals (kernel.md "Caller kinds"): a user procedure refuses an anonymous
+// caller (UNAUTHENTICATED); a student or teacher procedure refuses an anonymous caller and a caller
+// of the other role (UNAUTHENTICATED and FORBIDDEN). Each is asserted in a test that names the path.
 const covering: ModuleSpec[] = [
   {
     path: 'apps/api/src/modules/identity/account.spec.ts',
-    text: "it('refuses an anonymous caller', () => expect(call('account.me')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' }));",
+    text: "it('refuses an anonymous caller', async () => {\n  await expect(call('account.me')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });\n});",
   },
   {
     path: 'apps/api/src/modules/verification/application.spec.ts',
-    text: "await expect(student.teacher.application.submit(input)).rejects.toMatchObject({ code: 'FORBIDDEN' });",
+    text: [
+      "it('refuses an anonymous caller', async () => {",
+      "  await expect(anonymous.teacher.application.submit(input)).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });",
+      '});',
+      "it('refuses a student', async () => {",
+      "  await expect(student.teacher.application.submit(input)).rejects.toMatchObject({ code: 'FORBIDDEN' });",
+      '});',
+    ].join('\n'),
   },
   {
     path: 'apps/api/src/modules/booking/booking.spec.ts',
-    text: "const path = `booking.create`;\nexpect(error.code).toBe('ACCOUNT_RESTRICTED');",
+    text: "test('refuses the wrong callers of booking.create', async () => {\n  const path = `booking.create`;\n  expect(await codes(path)).toEqual(['UNAUTHENTICATED', 'FORBIDDEN']);\n});",
   },
 ];
 
@@ -74,6 +84,38 @@ describe('the authorization-test gate (T028)', () => {
       app: { 'account.delete': { kind: 'mutation' } },
     };
     expect(findUntested(unknown, [])).toEqual(['account.delete']);
+  });
+
+  it('fails a procedure named only in a comment (review of B7, 3)', () => {
+    const commented = [
+      {
+        path: 'apps/api/src/modules/identity/account.spec.ts',
+        text: "// covers 'account.me' too\nit('refuses', () => { expect(call('account.other')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' }); });",
+      },
+    ];
+    expect(findUntested(snapshot, [...commented, ...covering.slice(1)])).toEqual(['account.me']);
+  });
+
+  it('fails a procedure named in one test and refused in another (review of B7, 3)', () => {
+    const apart = [
+      {
+        path: 'apps/api/src/modules/identity/account.spec.ts',
+        text: "it('answers', () => call('account.me'));\nit('refuses', () => expect(call('account.other')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' }));",
+      },
+    ];
+    expect(findUntested(snapshot, [...apart, ...covering.slice(1)])).toEqual(['account.me']);
+  });
+
+  it('asks each kind for its own refusals: a teacher procedure refused only as anonymous fails (review of B7, 3)', () => {
+    const onlyAnonymous = [
+      covering[0] as ModuleSpec,
+      {
+        path: 'apps/api/src/modules/verification/application.spec.ts',
+        text: "it('refuses an anonymous caller', async () => {\n  await expect(anonymous.teacher.application.submit(input)).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });\n});",
+      },
+      covering[2] as ModuleSpec,
+    ];
+    expect(findUntested(snapshot, onlyAnonymous)).toEqual(['teacher.application.submit']);
   });
 
   it('names R-MOBILE-13 and each path', () => {

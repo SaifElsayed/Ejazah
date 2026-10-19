@@ -56,11 +56,18 @@ export function findLeaks(
   forbidden: readonly ForbiddenName[] = forbiddenOutputNames,
   allowed: readonly AllowedOutputField[] = allowedOutputFields,
 ): Leak[] {
-  const reasons = new Map(forbidden.map((entry) => [entry.name.toLowerCase(), entry.reason]));
+  const reasonFor = (name: string) =>
+    forbidden.find((entry) =>
+      entry.match === 'exact'
+        ? name === entry.name
+        : entry.match === 'prefix'
+          ? name.startsWith(entry.name)
+          : name.endsWith(entry.name),
+    )?.reason;
   const leaks: Leak[] = [];
   for (const [procedure, shape] of Object.entries(snapshot.procedures['app'] ?? {})) {
     for (const field of Object.keys(shape.output ?? {})) {
-      const reason = reasons.get(normalised(field));
+      const reason = reasonFor(normalised(field));
       if (reason === undefined) continue;
       if (allowed.some((entry) => entry.procedure === procedure && entry.field === field)) continue;
       leaks.push({ procedure, field, reason });
@@ -154,6 +161,29 @@ describe('the output leak test (T027)', () => {
       procedures: { app: { 'account.delete': { output: { '$.accessToken': {} } } } },
     };
     expect(findReplayedTokens(fixture, idempotentProcedures)).toHaveLength(1);
+  });
+
+  it('refuses every hash, every encrypted column, every storage key and recipient reference, as kernel.md lists them (review of B7, 2)', () => {
+    // The columns of the schema the exact names missed, and the families kernel.md names.
+    const leaking = [
+      '$.refreshTokenHash',
+      '$.previousRefreshTokenHash',
+      '$.verificationTokenHash',
+      '$.payoutAccountRefHash',
+      '$.certificateStorageKey',
+      '$.attachmentKey',
+      '$.tokenEncrypted',
+      '$.recipientRefId',
+      '$.mfaSecretBackup',
+      '$.password',
+    ];
+    const fixture: Snapshot = {
+      procedures: {
+        admin: {},
+        app: { 'teacher.profile.get': { output: Object.fromEntries(leaking.map((f) => [f, {}])) } },
+      },
+    };
+    expect(findLeaks(fixture).map((leak) => leak.field)).toEqual(leaking);
   });
 
   it('reads nothing the list does not name: a forbidden word inside a longer name passes', () => {

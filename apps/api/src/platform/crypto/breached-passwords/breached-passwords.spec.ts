@@ -3,7 +3,15 @@
 // names it), stored as sorted SHA-1 prefixes of the NFKC form.
 import { describe, expect, it } from 'vitest';
 
-import { buildList, contains, isBreached, listSize, PREFIX_BYTES, prefixOf } from './index.js';
+import {
+  assertSorted,
+  buildList,
+  contains,
+  isBreached,
+  listSize,
+  PREFIX_BYTES,
+  prefixOf,
+} from './index.js';
 
 describe('the breached-password list (T040)', () => {
   it('holds the passwords everyone tries first', () => {
@@ -17,9 +25,28 @@ describe('the breached-password list (T040)', () => {
     expect(isBreached('انا بحب القهوة الصبح')).toBe(false);
   });
 
-  it('compares the password as typed, case included', () => {
-    expect(isBreached('PASSWORD')).toBe(isBreached('PASSWORD'));
-    expect(isBreached('password')).toBe(true);
+  it('compares the password with its case, as the list keeps it (review of B7, 8)', () => {
+    expect(prefixOf('PASSWORD').equals(prefixOf('password'))).toBe(false);
+    // Both spellings are on the published list as their own entries; a mixed case that is not
+    // stays out.
+    expect(isBreached('PASSWORD')).toBe(true);
+    expect(isBreached('PaSsWoRd')).toBe(false);
+  });
+
+  it('reads a listed password with spaces around it as that password (review of B7, 11)', () => {
+    expect(isBreached(' 123456 ')).toBe(true);
+  });
+
+  it('refuses a list that is not sorted, rather than missing its entries (review of B7, 7)', () => {
+    const sorted = buildList(['apple', 'mango', 'zebra']);
+    expect(() => assertSorted(sorted)).not.toThrow();
+    const reversed = Buffer.concat(
+      [0, 1, 2]
+        .reverse()
+        .map((index) => sorted.subarray(index * PREFIX_BYTES, (index + 1) * PREFIX_BYTES)),
+    );
+    expect(() => assertSorted(reversed)).toThrow(/not sorted/);
+    expect(() => assertSorted(Buffer.alloc(PREFIX_BYTES + 1))).toThrow(/whole number/);
   });
 
   it('reads a compatibility form of a listed password as that password (NFKC)', () => {

@@ -25,8 +25,8 @@ function parseSchema(text) {
     for (const line of body.split('\n')) {
       const match = FIELD.exec(line);
       if (match === null || line.trim().startsWith('@@')) continue;
-      const [, field, type, list] = match;
-      fields.set(field, { type, list: list === '[]' });
+      const [, field, type, list, optional] = match;
+      fields.set(field, { type, list: list === '[]', optional: optional === '?' });
     }
     models.set(name, { fields, softDeletable: fields.has('deletedAt') });
   }
@@ -35,20 +35,25 @@ function parseSchema(text) {
 
 /**
  * Each model's relation fields, keyed by the client accessor (`user` for `User`): accessor →
- * relation → { target, list, softDeletable }, the last saying whether the target carries
- * `deletedAt`.
+ * relation → { target, list, optional, softDeletable }: `optional` for a single relation written
+ * `T?`, which Prisma lets filter on itself; `softDeletable` when the target carries `deletedAt`.
  *
  * @param {ReturnType<typeof parseSchema>} models
  */
 function softDeletableRelations(models) {
-  /** @type {Map<string, Map<string, { target: string, list: boolean, softDeletable: boolean }>>} */
+  /** @type {Map<string, Map<string, { target: string, list: boolean, optional: boolean, softDeletable: boolean }>>} */
   const byAccessor = new Map();
   for (const [name, model] of models) {
     const relations = new Map();
-    for (const [field, { type, list }] of model.fields) {
+    for (const [field, { type, list, optional }] of model.fields) {
       const target = models.get(type);
       if (target !== undefined) {
-        relations.set(field, { target: type, list, softDeletable: target.softDeletable });
+        relations.set(field, {
+          target: type,
+          list,
+          optional,
+          softDeletable: target.softDeletable,
+        });
       }
     }
     byAccessor.set(name.charAt(0).toLowerCase() + name.slice(1), relations);
