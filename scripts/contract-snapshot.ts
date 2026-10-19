@@ -6,6 +6,11 @@
 //   pnpm contract:snapshot --check --base <ref>  compares the head with the snapshot committed on
 //                                                <ref>; exits 1 naming R-API-9 on any break
 //
+// Both run tsx with `--conditions=@ijazah/source` (package.json), as the worker's dev script and
+// Vitest do: the routers import `@ijazah/contracts` and `@ijazah/time` at runtime, whose default
+// export condition is the built `dist/`, and the pipeline's stage 3 builds nothing (PR #80). The
+// same holds for `pnpm check:generated`, which regenerates the snapshot in this process.
+//
 // WHAT IS RECORDED (owner's decisions 1 and 2, 2026-10-10). For both surfaces (`app.router.ts` and
 // `admin.router.ts` in apps/api/src/surfaces), every procedure path with its kind, and the fields of
 // its input and output: every field path, nested (`$.slot.dayOfWeek`, `$.notes[]`, a record's
