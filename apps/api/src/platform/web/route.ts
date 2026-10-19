@@ -25,10 +25,12 @@
 //
 // THE DESIGN'S STYLESHEETS, `tokens.css` and `components.css`, are served under `/public/design/`
 // from the copies `scripts/build-tokens.ts` writes into `web/assets/` (under `check:generated`),
-// read once at start, immutable to the browser for a year: a change to the design is a new build
-// and a new deploy, never an edit in place. They are the only static files the API serves.
+// read once at start (`assets.ts`). A page links the content-hashed name, `tokens.<hash>.css`,
+// immutable to the browser for a year: a change to the design is a new build, a new name and a new
+// deploy, so no cache ever serves a stale design (PR #79 review; the owner's decision). The bare
+// name answers a hand-written link too, revalidated on every request (`no-cache` with the hash as
+// its ETag, 304 when it matches). They are the only static files the API serves.
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { clientAddressOf } from '../http/client-address.js';
 import type { Locale } from '../http/locale.js';
@@ -38,7 +40,8 @@ import { reportError } from '../errors/reporting.js';
 import type { RateLimiter, RateLimitKey } from '../guards/rate-limit.guard.js';
 import { type Logger, requestLogger } from '../logging/logger.js';
 import { html, type SafeHtml } from './html.js';
-import { DESIGN_ASSETS_PATH, DESIGN_STYLESHEETS, renderPage } from './page.js';
+import { DESIGN_ASSETS_PATH, findDesignAsset } from './assets.js';
+import { renderPage } from './page.js';
 
 /** The settings key of the anonymous limit every public page counts (contracts/README.md). */
 export const PUBLIC_PAGE_RATE_LIMIT = 'rate_limit_public_page' satisfies RateLimitKey;
@@ -213,42 +216,43 @@ export function notFound(): never {
   throw new DomainError('NOT_FOUND');
 }
 
-/** The stylesheets' source: the copies the token build writes beside this file (apps/api/src/…). */
-const ASSETS_DIRECTORY = new URL('../../../src/platform/web/assets/', import.meta.url);
-
-/** The two stylesheets, read once; a missing file is a build that did not run, and stops the start. */
-function readStylesheets(): ReadonlyMap<string, string> {
-  return new Map(
-    DESIGN_STYLESHEETS.map((file) => [file, readFileSync(new URL(file, ASSETS_DIRECTORY), 'utf8')]),
-  );
-}
-
 const ONE_YEAR_SECONDS = 31_536_000;
 
 /**
- * `GET /public/design/<file>` for the two stylesheets: immutable for a year, since a change is a
- * new build. Mounted by the HTTP application under `DESIGN_ASSETS_PATH`.
+ * `GET /public/design/<file>` for the two stylesheets: the hashed name immutable for a year, the
+ * bare name revalidated every time. Mounted by the HTTP application under `DESIGN_ASSETS_PATH`.
  */
 export function designAssetsRoute(): NodeHandler {
-  const stylesheets = readStylesheets();
   return (incoming, outgoing) => {
     const response = withoutCookies(outgoing);
     const { path, query } = pathOf(incoming);
-    const file = path.replace(/^\//, '');
-    const stylesheet = stylesheets.get(file);
     const lang = languageOf(query);
     if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
       sendPage(response, lang, 405, errorPage(lang, 405), { allow: 'GET, HEAD' });
       return;
     }
-    if (stylesheet === undefined) {
+    const found = findDesignAsset(path.replace(/^\//, ''));
+    if (found === undefined) {
       sendPage(response, lang, 404, errorPage(lang, 404));
       return;
     }
+    const { asset, immutable } = found;
+    const etag = `"${asset.hash}"`;
     response.setHeader('content-type', 'text/css; charset=utf-8');
-    response.setHeader('cache-control', `public, max-age=${ONE_YEAR_SECONDS}, immutable`);
+    response.setHeader('etag', etag);
+    if (immutable) {
+      response.setHeader('cache-control', `public, max-age=${ONE_YEAR_SECONDS}, immutable`);
+    } else {
+      // The bare name: the browser asks every time and is told "unchanged" while the hash holds.
+      response.setHeader('cache-control', 'no-cache');
+      if (incoming.headers['if-none-match'] === etag) {
+        response.statusCode = 304;
+        response.end();
+        return;
+      }
+    }
     response.statusCode = 200;
-    response.end(incoming.method === 'HEAD' ? undefined : stylesheet);
+    response.end(incoming.method === 'HEAD' ? undefined : asset.body);
   };
 }
 

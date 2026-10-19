@@ -13,6 +13,7 @@ import { createLogger } from '../logging/logger.js';
 import { SettingError, type SettingsReader } from '../settings/settings-reader.js';
 import { html } from './html.js';
 import { renderPage } from './page.js';
+import { designAssets } from './assets.js';
 import { PUBLIC_PAGE_CSP, PUBLIC_PAGE_RATE_LIMIT, type WebRoute } from './route.js';
 
 /** A limiter over an in-memory counter, `limit` calls per subject on every key (T170). */
@@ -220,15 +221,38 @@ describe('the public-page helper (T019, FR-144)', () => {
 });
 
 describe('the design’s stylesheets (T019, public-pages.md)', () => {
-  it('serves the two stylesheets under /public/design/, immutable, as CSS', async () => {
-    for (const file of ['tokens.css', 'components.css']) {
-      const response = await fetch(`${origin}/public/design/${file}`);
+  it('serves the two stylesheets by their hashed names, immutable for a year, as CSS', async () => {
+    for (const asset of designAssets()) {
+      expect(asset.hashedName).toMatch(/^(tokens|components)\.[0-9a-f]{16}\.css$/);
+      const response = await fetch(`${origin}/public/design/${asset.hashedName}`);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toBe('text/css; charset=utf-8');
       expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+      expect(response.headers.get('etag')).toBe(`"${asset.hash}"`);
       expect(response.headers.get('set-cookie')).toBeNull();
-      expect((await response.text()).length).toBeGreaterThan(0);
+      expect(await response.text()).toBe(asset.body);
     }
+    // The page links exactly those names.
+    const page = await (await get('/terms', '203.0.113.50')).text();
+    for (const asset of designAssets())
+      expect(page).toContain(`/public/design/${asset.hashedName}`);
+  });
+
+  it('answers the bare name revalidated every time, never immutable: no-cache, an ETag, 304 when it matches', async () => {
+    const [tokens] = designAssets();
+    if (tokens === undefined) throw new Error('no assets');
+    const first = await fetch(`${origin}/public/design/tokens.css`);
+    expect(first.status).toBe(200);
+    expect(first.headers.get('cache-control')).toBe('no-cache');
+    expect(first.headers.get('etag')).toBe(`"${tokens.hash}"`);
+    expect(await first.text()).toBe(tokens.body);
+    const again = await fetch(`${origin}/public/design/tokens.css`, {
+      headers: { 'if-none-match': `"${tokens.hash}"` },
+    });
+    expect(again.status).toBe(304);
+    expect(await again.text()).toBe('');
+    // A stale hash in the name is not a file: the old build's link is gone, not served.
+    expect((await fetch(`${origin}/public/design/tokens.0000000000000000.css`)).status).toBe(404);
   });
 
   it('serves nothing else there', async () => {

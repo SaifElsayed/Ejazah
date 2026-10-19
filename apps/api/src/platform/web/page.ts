@@ -3,18 +3,14 @@
 //
 // The document's language and direction come from the route's `lang` (`ar` and `dir="rtl"` unless
 // `?lang=en`), the stylesheets are the design's two, served by this API under `/public/design/`
-// (`route.ts`), and nothing is inline: no `<script>`, no `style=` attribute, no `<style>` element,
+// by their content-hashed names (`assets.ts`: a new build is a new name, so the year-long immutable
+// cache never serves a stale design), and nothing is inline: no `<script>`, no `style=` attribute, no `<style>` element,
 // so the strict Content-Security-Policy the route helper sends (`default-src 'none'; style-src
 // 'self'; …`) is what the page needs and no more. A page's body is a `SafeHtml` built by the
 // escaping template, and its title is escaped here like any other value.
 import type { Locale } from '../http/locale.js';
+import { designStylesheetHrefs } from './assets.js';
 import { html, type SafeHtml } from './html.js';
-
-/** Where the design's stylesheets are served (public-pages.md "The pages"). */
-export const DESIGN_ASSETS_PATH = '/public/design';
-
-/** The two stylesheets every page links, in order: the tokens, then the components. */
-export const DESIGN_STYLESHEETS = ['tokens.css', 'components.css'] as const;
 
 export interface Page {
   readonly lang: Locale;
@@ -31,8 +27,8 @@ export function directionOf(lang: Locale): 'rtl' | 'ltr' {
 
 /** The whole document for one page. */
 export function renderPage({ lang, title, body }: Page): SafeHtml {
-  const stylesheets = DESIGN_STYLESHEETS.map(
-    (file) => html`<link rel="stylesheet" href="${DESIGN_ASSETS_PATH}/${file}" />`,
+  const stylesheets = designStylesheetHrefs().map(
+    (href) => html`<link rel="stylesheet" href="${href}" />`,
   );
   return html`<!doctype html>
     <html lang="${lang}" dir="${directionOf(lang)}">

@@ -50,8 +50,14 @@ describe('the page layout (T019)', () => {
   it('names the language and its direction, links the two stylesheets, and carries no inline script or style', () => {
     const arabic = renderPage({ lang: 'ar', title: 'الشروط', body: html`<p>نص</p>` }).toString();
     expect(arabic).toContain('<html lang="ar" dir="rtl">');
-    expect(arabic).toContain('<link rel="stylesheet" href="/public/design/tokens.css" />');
-    expect(arabic).toContain('<link rel="stylesheet" href="/public/design/components.css" />');
+    // The links carry the content hash, so an immutable cache never serves a stale design.
+    expect(arabic).toMatch(
+      /<link rel="stylesheet" href="\/public\/design\/tokens\.[0-9a-f]{16}\.css" \/>/,
+    );
+    expect(arabic).toMatch(
+      /<link rel="stylesheet" href="\/public\/design\/components\.[0-9a-f]{16}\.css" \/>/,
+    );
+    expect(arabic).not.toContain('href="/public/design/tokens.css"');
     expect(arabic).toContain('<title>الشروط</title>');
     expect(arabic).not.toMatch(/<script/i);
     expect(arabic).not.toMatch(/<style/i);
