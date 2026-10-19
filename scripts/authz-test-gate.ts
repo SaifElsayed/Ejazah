@@ -16,7 +16,9 @@
 // no caller kind is read as guarded, never as public. And the text of every `*.spec.ts` under
 // `apps/api/src/modules/`, parsed with TypeScript into its tests: every call of `it`, `test`,
 // `it.each(…)`, `test.each(…)` or `it.concurrent`, printed without its comments; `.skip` and `.todo`
-// never run, so they never count (review of B7, round 2, finding 2). A test names a path when it
+// never run, so they never count (review of B7, round 2, finding 2). Only those spellings are read:
+// a tagged-template table (`it.each`…``) or a conditional runner (`it.runIf`, `it.skipIf`) is not, so a
+// refusal written that way is reported missing (the safe side) until the runner list grows. A test names a path when it
 // holds it quoted (`'account.me'`, `"account.me"`, between backticks) or called (`.account.me(`),
 // and a refusal counts for that path only inside a test that names it, so a path in a comment, or a
 // refusal of another procedure in the same file, proves nothing (review of B7, finding 3).
