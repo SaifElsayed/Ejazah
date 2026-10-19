@@ -53,7 +53,8 @@ The foreign key's plain index (ERD §14) serves "revoke every session of the
 user"; a partial index on the live rows was described here first and not kept
 (R-DB-9: a second index on the column waits for a measured slow query; amended
 2026-10-18 after the review of PR #77). Rows are purged by
-`purge-expired-sessions` after `session_purge_after_days`; no `deleted_at`,
+`purge-expired-sessions`: an expired row at once, a revoked row after
+`session_purge_after_days`, kept that long for reuse detection (R-118); no `deleted_at`,
 since a session is not a record a person might need removed from view — it is
 a credential, and it is destroyed.
 

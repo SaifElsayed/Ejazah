@@ -5,6 +5,7 @@
 // written over it (`modules/verification/uploads.controller.ts`, `modules/identity/
 // photo-upload.controller.ts`); what is proved here is the helper, with a handler that echoes.
 import type { INestApplication } from '@nestjs/common';
+import { connect } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApplication } from '../app.module.js';
 import { DomainError } from '../platform/errors/domain-error.js';
@@ -139,6 +140,41 @@ const identityPdf = () =>
     { name: 'file', filename: 'id.pdf', type: 'application/pdf', bytes: pdfBytes() },
   ]);
 
+/** One raw request on a fresh socket: the head, then `body`, then the socket destroyed or the answer read. */
+function rawRequest(head: string, body: Buffer, mode: 'abort' | 'answer'): Promise<string> {
+  const { hostname, port } = new URL(origin);
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: hostname, port: Number(port) }, () => {
+      socket.write(head);
+      socket.write(body);
+      if (mode === 'abort') {
+        // The client goes away mid-body.
+        setTimeout(() => {
+          socket.destroy();
+          resolve('');
+        }, 50);
+      }
+    });
+    let answer = '';
+    socket.on('data', (chunk: Buffer) => {
+      answer += chunk.toString('latin1');
+    });
+    socket.on('close', () => resolve(answer));
+    socket.on('error', (error: NodeJS.ErrnoException) =>
+      mode === 'abort' || error.code === 'ECONNRESET' ? resolve(answer) : reject(error),
+    );
+  });
+}
+
+/** Waits until a logged line contains `text`, or fails after a bounded time. */
+async function loggedSoon(text: string): Promise<void> {
+  for (let tick = 0; tick < 40; tick += 1) {
+    if (records.some((line) => line.includes(text))) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`nothing logged containing "${text}"`);
+}
+
 describe('the upload route helper (T024, FR-151)', () => {
   it('accepts one multipart file behind the bearer and hands the handler the sniffed type and the bytes', async () => {
     const response = await post('/uploads/probe', 't-active', identityPdf());
@@ -187,7 +223,7 @@ describe('the upload route helper (T024, FR-151)', () => {
     expect(response.headers.get('allow')).toBe('POST');
   });
 
-  it('refuses a body that is not multipart, one with no file, and an unknown kind as a validation failure', async () => {
+  it('refuses a body that is not multipart as a validation failure', async () => {
     const plain = await fetch(`${origin}/uploads/probe`, {
       method: 'POST',
       headers: { authorization: 'Bearer t-active', 'content-type': 'application/pdf' },
@@ -195,14 +231,18 @@ describe('the upload route helper (T024, FR-151)', () => {
     });
     expect(plain.status).toBe(400);
     await expect(plain.json()).resolves.toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+  });
 
+  it('refuses a body with no file as a validation failure', async () => {
     const noFile = await post(
       '/uploads/probe',
       't-active',
       multipart([{ name: 'kind', value: 'identity' }]),
     );
     expect(noFile.status).toBe(400);
+  });
 
+  it('refuses an unknown kind as a validation failure naming the field', async () => {
     const wrongKind = await post(
       '/uploads/probe',
       't-active',
@@ -259,6 +299,47 @@ describe('the upload route helper (T024, FR-151)', () => {
       statuses.push((await post('/uploads/probe', 't-fresh', identityPdf())).status);
     }
     expect(statuses).toEqual([201, 201, 201, 429]);
+  });
+
+  it('settles when the client aborts mid-body, logging the abort and holding nothing (PR #80 review, 1)', async () => {
+    const { body, contentType } = identityPdf();
+    const head = [
+      'POST /uploads/probe HTTP/1.1',
+      `Host: ${new URL(origin).host}`,
+      'Authorization: Bearer t-active',
+      `Content-Type: ${contentType}`,
+      `Content-Length: ${body.byteLength}`,
+      '',
+      '',
+    ].join('\r\n');
+    // Half the body: the kind field and the file's head, never its end.
+    await rawRequest(head, body.subarray(0, Math.floor(body.byteLength / 2)), 'abort');
+    await loggedSoon('Upload aborted by the client');
+    expect(records.filter((line) => line.includes('Unexpected error on an upload route'))).toEqual(
+      [],
+    );
+  });
+
+  it('refuses a declared length over upload_max_bytes before reading a byte (PR #80 review, 3)', async () => {
+    const { contentType } = identityPdf();
+    const head = [
+      'POST /uploads/probe HTTP/1.1',
+      `Host: ${new URL(origin).host}`,
+      'Authorization: Bearer t-active',
+      `Content-Type: ${contentType}`,
+      `Content-Length: ${LIMIT_BYTES * 1000}`,
+      '',
+      '',
+    ].join('\r\n');
+    const answer = await rawRequest(head, Buffer.alloc(0), 'answer');
+    expect(answer).toMatch(/^HTTP\/1\.1 413 /);
+    expect(answer).toContain('PAYLOAD_TOO_LARGE');
+  });
+
+  it('answers a deeper path under the route with 404, as the pages do (PR #80 review, 7)', async () => {
+    const response = await post('/uploads/probe/extra', 't-active', identityPdf());
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'NOT_FOUND' } });
   });
 
   it('answers a handler failure in the one error shape, with nothing of an unexpected cause', async () => {

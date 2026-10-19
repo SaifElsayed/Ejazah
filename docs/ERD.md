@@ -105,7 +105,7 @@ A device's session: its refresh token as a hash, rotation, revocation (FR-AUTH-7
 | revoked_reason | enum sign_out · reuse_detected · password_reset · account_deleted · account_suspended · account_banned · admin_action, nullable | |
 | created_at / updated_at | timestamptz | |
 
-No `deleted_at`: a session is a credential, destroyed, not a record kept from view; the application role keeps DELETE. Rows are purged by `purge-expired-sessions` after `session_purge_after_days`.
+No `deleted_at`: a session is a credential, destroyed, not a record kept from view; the application role keeps DELETE. Rows are purged by `purge-expired-sessions`: an expired row at once, a revoked row after `session_purge_after_days`, kept that long for reuse detection (research R-118 of Phase 1).
 
 ### `user_roles`
 

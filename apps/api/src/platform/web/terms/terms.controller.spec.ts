@@ -86,6 +86,18 @@ describe('GET /terms (T039, FR-127)', () => {
     expect(page).not.toContain('<script');
   });
 
+  it('states what FR-AUTH-11 and FR-PAYG-9 require, in both languages (PR #80 review, 6)', async () => {
+    version = '2026-10';
+    const arabic = await (await fetch(`${origin}/terms`)).text();
+    for (const statement of ['في أي وقت', 'حظر الحساب', 'إدارة المنصة']) {
+      expect(arabic).toContain(statement);
+    }
+    const english = await (await fetch(`${origin}/terms?lang=en`)).text();
+    for (const statement of ['at any time', 'grounds for banning', 'Platform Administration']) {
+      expect(english).toContain(statement);
+    }
+  });
+
   it('renders the English fragment for ?lang=en, left to right', async () => {
     version = '2026-10';
     const page = await (await fetch(`${origin}/terms?lang=en`)).text();

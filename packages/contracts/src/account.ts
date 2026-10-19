@@ -4,7 +4,7 @@
 // nothing of another person; the date of birth is the caller's own (FR-138). No input names
 // gender, role or user id (R-GENDER-4) and none names a timestamp (R-TIME-6).
 import { z } from 'zod';
-import { password } from './auth.js';
+import { identityToken, nonce, password } from './auth.js';
 import { calendarDate, displayName, gender, role, timeZone } from './onboarding.js';
 import { emailAddress } from './platform.js';
 
@@ -79,11 +79,7 @@ export const deletionConfirmation = z.enum(['حذف', 'DELETE']);
 
 /** A fresh proof that must be the caller's own (ADR 0015 D2). */
 export const deletionReauth = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('provider'),
-    identityToken: z.string().min(1),
-    nonce: z.string().min(1),
-  }),
+  z.object({ kind: z.literal('provider'), identityToken, nonce }),
   z.object({ kind: z.literal('password'), password }),
 ]);
 

@@ -487,6 +487,39 @@ describe('the Phase 1 keys (T001)', () => {
     expect(loadConfig(validEnv).SUPPORT_EMAIL).toBe('support@ijazah.invalid');
   });
 
+  it('refuses a SUPPORT_EMAIL or EMAIL_FROM under a reserved domain outside development and test, naming the key and never the value (T023, PR #75 follow-up 3)', () => {
+    const production = { ...validEnv, NODE_ENV: 'production' };
+    const error = failure(production);
+    expect(error.offendingKeys).toContain('SUPPORT_EMAIL');
+    expect(error.offendingKeys).toContain('EMAIL_FROM');
+    expect(error.message).not.toContain('ijazah.invalid');
+    for (const reserved of [
+      'help@ijazah.test',
+      'help@ijazah.example',
+      'help@ijazah.localhost',
+      'help@example.com',
+      'help@mail.example.net',
+      'help@example.org',
+    ]) {
+      expect(failure({ ...production, SUPPORT_EMAIL: reserved }).offendingKeys).toContain(
+        'SUPPORT_EMAIL',
+      );
+    }
+    const real = {
+      ...production,
+      SUPPORT_EMAIL: 'help@ijazah.app',
+      EMAIL_FROM: 'no-reply@ijazah.app',
+    };
+    const remaining = failure(real).offendingKeys;
+    expect(remaining).not.toContain('SUPPORT_EMAIL');
+    expect(remaining).not.toContain('EMAIL_FROM');
+    // Development and test keep the placeholders, as they keep the stand-ins.
+    expect(loadConfig(validEnv).SUPPORT_EMAIL).toBe('support@ijazah.invalid');
+    expect(loadConfig({ ...validEnv, NODE_ENV: 'development' }).EMAIL_FROM).toBe(
+      'no-reply@ijazah.invalid',
+    );
+  });
+
   it('selects the sign-in and email stand-ins by default, and records a reserved sender', () => {
     const config = loadConfig(validEnv);
     expect(config.SIGN_IN_PROVIDER).toBe('fake');

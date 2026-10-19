@@ -154,7 +154,8 @@ export const UPLOAD_MAX_BYTES_SETTING = 'upload_max_bytes';
 /** The settings key of the per-user upload limit (contracts/README.md "Rate limits"). */
 export const UPLOAD_RATE_LIMIT = 'rate_limit_upload' satisfies RateLimitKey;
 
-const uploadMaxBytes = z.int().positive();
+/** The `upload_max_bytes` setting's schema: whole bytes, at least one. */
+export const uploadMaxBytes = z.int().positive();
 
 /** What the kinds' guard reads its limits from. */
 export interface UploadGuard {

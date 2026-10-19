@@ -8,8 +8,13 @@
 // multipart, one that ends without a file, and a field past the small limits a form's text fields
 // need. A second file is ignored (busboy's `files: 1` skips it), and a field after the file is not
 // read: the `kind` precedes the file, as the phone app sends it.
+//
+// The request is piped through `stream.pipeline`, not `pipe` (PR #80 review, finding 1): a client
+// that goes away mid-body ends nothing, and `pipe` would leave the parser and the file stream open
+// with whatever the route had buffered; `pipeline` destroys the parser on the premature close,
+// which destroys the file stream, so a consumer waiting on it is released with the error.
 import type { IncomingMessage } from 'node:http';
-import type { Readable } from 'node:stream';
+import { pipeline, type Readable } from 'node:stream';
 import busboy from 'busboy';
 import { DomainError } from '../errors/domain-error.js';
 
@@ -93,6 +98,9 @@ export function firstFileOf(
         ),
       ),
     );
-    request.pipe(parser);
+    // A premature close of the request (the client gone) or a parser failure destroys both.
+    pipeline(request, parser, (error) => {
+      if (error !== null && error !== undefined) settle(() => reject(notMultipart()));
+    });
   });
 }

@@ -92,6 +92,20 @@ const s3Keys = [
 /** The two modes in which a stand-in adapter may run (T168, review finding SEC-1). */
 const standInModes: readonly string[] = ['development', 'test'];
 
+// T023 (B5's watch line; PR #75 review, follow-up 3): the reserved domains an address may carry in
+// development and test only, as `.env.example` spells them. Outside those modes an address under
+// one is refused as a stand-in is: a copied example would otherwise show the placeholder on four
+// screens and send from it. RFC 2606 and RFC 6761 name them.
+const reservedTopLevelDomains = /\.(invalid|test|example|localhost)$/;
+const reservedExampleDomains = /(^|\.)example\.(com|net|org)$/;
+const addressKeys = ['SUPPORT_EMAIL', 'EMAIL_FROM'] as const;
+
+/** Whether `address` is under a reserved domain. */
+function isReservedAddress(address: string): boolean {
+  const domain = address.slice(address.lastIndexOf('@') + 1).toLowerCase();
+  return reservedTopLevelDomains.test(domain) || reservedExampleDomains.test(domain);
+}
+
 const envObject = z.object({
   // T168: no default. A configuration copied onto a server without it used to run as development,
   // where every stand-in is accepted; now it is refused naming the key (FR-039, R-HONEST-1).
@@ -319,6 +333,19 @@ export const envSchema = envObject.superRefine((env, ctx) => {
           code: 'custom',
           path: [key],
           message: 'the stand-in is refused outside development and test (FR-056)',
+        });
+      }
+    }
+  }
+
+  // T023: a reserved address is for development and test only; the key is named, never the value.
+  if (!standInsAllowed) {
+    for (const key of addressKeys) {
+      if (isReservedAddress(env[key])) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'is under a reserved domain, refused outside development and test (T023)',
         });
       }
     }

@@ -9,6 +9,17 @@ import { emailAddress } from './platform.js';
 /** The providers a person may sign in with (ADR 0012 D2). */
 export const authProvider = z.enum(['google', 'apple']);
 
+// Every token a client sends is bounded (PR #80 review, finding 5): a provider's identity token is
+// a JWT of a few kilobytes, an opaque token of this platform far less, a nonce or a code less still.
+/** An identity token a provider issued to the device. */
+export const identityToken = z.string().min(1).max(4096);
+/** A nonce `auth.providerNonce` minted. */
+export const nonce = z.string().min(1).max(256);
+/** Apple's authorization code. */
+export const authorizationCode = z.string().min(1).max(2048);
+/** A token this platform issued: access, refresh or onboarding. */
+export const platformToken = z.string().min(1).max(4096);
+
 /** A password: length only, no composition rule; the breached check is the service's (FR-128). */
 export const password = z.string().min(8).max(128);
 
@@ -25,23 +36,23 @@ export const landing = z.enum([
 
 /** A session: the two tokens and where to land. */
 export const sessionOutput = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
+  accessToken: platformToken,
+  refreshToken: platformToken,
   landing,
 });
 
 /** `auth.providerNonce` → the nonce the next provider sign-in must carry, and when it lapses. */
 export const providerNonceOutput = z.object({
-  nonce: z.string().min(1),
+  nonce,
   expiresAt: z.iso.datetime(),
 });
 
 export const signInWithProviderInput = z.object({
   provider: authProvider,
-  identityToken: z.string().min(1),
-  nonce: z.string().min(1),
+  identityToken,
+  nonce,
   /** Apple's authorization code, exchanged at once for the refresh token (TN3194). */
-  authorizationCode: z.string().min(1).optional(),
+  authorizationCode: authorizationCode.optional(),
 });
 
 /** What the provider offered, for the onboarding form to prefill; the email only when verified. */
@@ -55,7 +66,7 @@ export const signInWithProviderOutput = z.discriminatedUnion('outcome', [
   sessionOutput.extend({ outcome: z.literal('session') }),
   z.object({
     outcome: z.literal('onboarding'),
-    onboardingToken: z.string().min(1),
+    onboardingToken: platformToken,
     prefill: signInPrefill,
   }),
 ]);
@@ -64,7 +75,7 @@ export const requestSignUpCodeInput = z.object({ email: emailAddress });
 
 export const verifySignUpCodeInput = z.object({ email: emailAddress, code: oneTimeCode });
 
-export const verifySignUpCodeOutput = z.object({ onboardingToken: z.string().min(1) });
+export const verifySignUpCodeOutput = z.object({ onboardingToken: platformToken });
 
 export const emailSignInInput = z.object({ email: emailAddress, password });
 
@@ -76,11 +87,11 @@ export const resetPasswordInput = z.object({
   newPassword: password,
 });
 
-export const refreshInput = z.object({ refreshToken: z.string().min(1) });
+export const refreshInput = z.object({ refreshToken: platformToken });
 
 export const refreshOutput = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
+  accessToken: platformToken,
+  refreshToken: platformToken,
 });
 
 export type AuthProvider = z.infer<typeof authProvider>;

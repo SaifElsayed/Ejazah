@@ -11,7 +11,11 @@
 // request's logger and reported, and the client sees the internal error.
 //
 // After a refusal the socket is closed once the answer is flushed (`Connection: close`): the
-// client may still be sending the file, and a refused body is not read to its end.
+// client may still be sending the file, and a refused body is not read to its end. A declared
+// length over `upload_max_bytes` is refused before a byte of the body is read (PR #80 review,
+// finding 3; the multipart body is a little longer than its file, so this is the conservative
+// side), a client that goes away mid-body releases the route with a logged line and no answer
+// (finding 1), and a path deeper than the mount is 404, as the pages answer (finding 7).
 //
 // It lives beside the surfaces, as the public-configuration router does, because it reads the
 // session types and the bearer the surfaces define, and the kernel depends on nothing above it.
@@ -23,8 +27,10 @@ import { reportError } from '../platform/errors/reporting.js';
 import {
   acceptUploadOfKind,
   type SniffedType,
+  UPLOAD_MAX_BYTES_SETTING,
   type UploadGuard,
   type UploadKind,
+  uploadMaxBytes,
 } from '../platform/guards/upload.middleware.js';
 import { firstFileOf } from '../platform/http/multipart.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
@@ -138,6 +144,8 @@ export function uploadRoute<TKind extends UploadKind>(
     const requestLog = requestLogger(log, correlationId).child({ clientAddress });
     void (async () => {
       try {
+        const { pathname } = new URL(request.url ?? '/', 'http://local');
+        if (pathname !== '/' && pathname !== '') throw new DomainError('NOT_FOUND');
         if (request.method !== 'POST') {
           // The kernel's shape for a method the route does not take, under 405 (as the pages answer).
           refuse(
@@ -156,9 +164,15 @@ export function uploadRoute<TKind extends UploadKind>(
             details: [{ path: 'accountStatus', code: session.accountStatus }],
           });
         }
+        const declaredLength = declaredLengthOf(request);
+        if (declaredLength !== undefined) {
+          const limit = await guard.settings.read(UPLOAD_MAX_BYTES_SETTING, uploadMaxBytes);
+          if (declaredLength > limit) {
+            throw new DomainError('PAYLOAD_TOO_LARGE', 'The file is larger than allowed.');
+          }
+        }
         const file = await firstFileOf(request, FIELD_LIMITS);
         const kind = route.kindOf(file.fields);
-        const declaredLength = declaredLengthOf(request);
         const upload = await acceptUploadOfKind(guard, {
           kind,
           uploaderId: session.userId,
@@ -180,6 +194,13 @@ export function uploadRoute<TKind extends UploadKind>(
         });
         sendJson(response, 201, result);
       } catch (error: unknown) {
+        // Destroyed or errored before its end: a request that ended normally is closed too, and is
+        // not an abort.
+        if (request.readableAborted) {
+          // The client went away mid-body: nothing to answer, nothing to report.
+          requestLog.info({}, 'Upload aborted by the client');
+          return;
+        }
         const mapped = mapError(error);
         if (mapped.unexpected) {
           requestLog.error({ err: error }, 'Unexpected error on an upload route');
