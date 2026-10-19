@@ -19,6 +19,8 @@ const ALLOW_LIST_PATH = path.join(
 const OBJECT_START = /export const authorityAllowList\s*=\s*\{/;
 const ENTRY = /^\s*(\w+):\s*\[([^\]]*)\]/gm;
 const FIELD = /'([^']+)'/g;
+const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
+const LINE_COMMENT = /\/\/[^\n]*/g;
 
 /**
  * Schema name → the authority fields that schema alone may carry, read from the body of the
@@ -35,7 +37,8 @@ function parseAllowList(text) {
   const bodyStart = start.index + start[0].length;
   const bodyEnd = text.indexOf('}', bodyStart);
   if (bodyEnd === -1) throw new Error('authorityAllowList is not closed');
-  const body = text.slice(bodyStart, bodyEnd);
+  // A comment inside the braces is not an entry either (round 2 of PR #80's review).
+  const body = text.slice(bodyStart, bodyEnd).replace(BLOCK_COMMENT, '').replace(LINE_COMMENT, '');
   const list = new Map();
   for (const [, schema, fields] of body.matchAll(ENTRY)) {
     list.set(schema, new Set([...fields.matchAll(FIELD)].map(([, field]) => field)));

@@ -336,6 +336,25 @@ describe('the upload route helper (T024, FR-151)', () => {
     expect(answer).toContain('PAYLOAD_TOO_LARGE');
   });
 
+  it('answers a malformed multipart body with 400 and closes, never reading it as an abort (PR #80 review, round 2 A)', async () => {
+    const boundary = 'ijazah-boundary-7f3e';
+    const body = Buffer.from(
+      `--${boundary}\r\nthis is not a header\r\n\r\nx\r\n--${boundary}--\r\n`,
+    );
+    const head = [
+      'POST /uploads/probe HTTP/1.1',
+      `Host: ${new URL(origin).host}`,
+      'Authorization: Bearer t-active',
+      `Content-Type: multipart/form-data; boundary=${boundary}`,
+      `Content-Length: ${body.byteLength}`,
+      '',
+      '',
+    ].join('\r\n');
+    const answer = await rawRequest(head, body, 'answer');
+    expect(answer).toMatch(/^HTTP\/1\.1 400 /);
+    expect(answer).toContain('VALIDATION_FAILED');
+  });
+
   it('answers a deeper path under the route with 404, as the pages do (PR #80 review, 7)', async () => {
     const response = await post('/uploads/probe/extra', 't-active', identityPdf());
     expect(response.status).toBe(404);

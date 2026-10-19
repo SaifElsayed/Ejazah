@@ -45,6 +45,18 @@ const after = {
     expect([...parsed.keys()]).toEqual(['onboardingCompleteInput']);
   });
 
+  it('ignores a comment inside the object too (PR #80 review, round 2)', () => {
+    const parsed = parseAllowList(`export const authorityAllowList = {
+  /*
+  sneakyInput: ['gender'],
+  */
+  // hiddenInput: ['role'],
+  onboardingCompleteInput: ['gender', 'role'],
+} as const;
+`);
+    expect([...parsed.keys()]).toEqual(['onboardingCompleteInput']);
+  });
+
   it('refuses a file with no exported object, so a broken list never reads as an empty one', () => {
     expect(() => parseAllowList('export const something = 1;')).toThrow(/authorityAllowList/);
   });

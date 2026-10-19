@@ -9,12 +9,14 @@
 // need. A second file is ignored (busboy's `files: 1` skips it), and a field after the file is not
 // read: the `kind` precedes the file, as the phone app sends it.
 //
-// The request is piped through `stream.pipeline`, not `pipe` (PR #80 review, finding 1): a client
-// that goes away mid-body ends nothing, and `pipe` would leave the parser and the file stream open
-// with whatever the route had buffered; `pipeline` destroys the parser on the premature close,
-// which destroys the file stream, so a consumer waiting on it is released with the error.
+// A client that goes away mid-body ends nothing, and `pipe` alone would leave the parser and the
+// file stream open with whatever the route had buffered (PR #80 review, finding 1): so the parser
+// is destroyed when the request closes before its end, which destroys the file stream and releases
+// a consumer waiting on it with the error. Only the client's departure destroys anything of the
+// request (round 2, finding A): `stream.pipeline` would destroy the request on a parser error too,
+// and a malformed body from a client still there must be answered 400, not read as an abort.
 import type { IncomingMessage } from 'node:http';
-import { pipeline, type Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import busboy from 'busboy';
 import { DomainError } from '../errors/domain-error.js';
 
@@ -98,9 +100,10 @@ export function firstFileOf(
         ),
       ),
     );
-    // A premature close of the request (the client gone) or a parser failure destroys both.
-    pipeline(request, parser, (error) => {
-      if (error !== null && error !== undefined) settle(() => reject(notMultipart()));
+    // The client gone before the body's end: the parser, and with it the file stream, are released.
+    request.once('close', () => {
+      if (!request.readableEnded) parser.destroy(new Error('The client went away mid-body.'));
     });
+    request.pipe(parser);
   });
 }
