@@ -1,6 +1,8 @@
 # Contract: Port Interfaces
 
-Five ports: payment, storage, video, push, sms. Each is named in the project's
+> **Phase 1 adds two ports.** The sign-in port (Google and Apple identity tokens, a server-minted nonce) and the email port (`deliver(to, mail)`) are in [`specs/002-identity/contracts/ports.md`](../../002-identity/contracts/ports.md), which also states how Phase 1 calls the payment port's recipient operations; seven ports in all.
+
+Five ports in Phase 0: payment, storage, video, push, sms. Each is named in the project's
 own domain terms; none names a vendor (R-API-5). Each ships in Phase 0 as an
 interface plus a working stand-in; only storage ships real implementations here. Each ships in Phase 0 as an interface plus a working stand-in. Only
 storage ships with real implementations, because Phase 1 uploads documents the

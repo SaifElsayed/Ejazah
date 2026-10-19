@@ -1,7 +1,8 @@
 # Ijazah — System Architecture
 
-_Version 3.2 · Companion to SRS v1.4, ERD v1.3, Constitution 2.3 · September 2026_
+_Version 3.2 · Companion to SRS v1.4, ERD v1.4, Constitution 2.3 · September 2026_
 _Adds ports-and-adapters for external capabilities. Supersedes v3.0. Amended by [ADR 0007](adr/0007-direct-gateway-checkout.md): direct gateway checkout with 0% commission and zero custody, payment port and payments module, post-approval payout gate; by [ADR 0005](adr/0005-phase-0-document-amendments.md): eleven modules with unified table ownership, worker as a second process of the API, `surfaces/` router directory, per-path coverage floor, `develop` as the integration branch; by [ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md): a session's local time is the schedule and its UTC instants are recomputed when time zone rules change; and by [ADR 0010](adr/0010-database-refuses-double-booking.md): the database refuses double booking, the slot hold outlives the gateway order, and the payment port can cancel an unpaid order._
+_Amended 2026-10-18 by the Phase 1 ERD pass and document pass (batch B3, [PR #78](https://github.com/SaifElsayed/Ejazah/pull/78), `specs/002-identity/`, tasks T014 and T015): §3.2 gains the sign-in port and §3.4 counts seven ports; §4 lists the six Phase 1 tables under their modules; §7.2 states the caller kinds Phase 1 adds; §12 says what `/ready` checks today; §14 names the secret nets that exist._
 
 ## 0. How to use this document
 
@@ -64,6 +65,7 @@ A port with exactly one implementation, forever, is an extra file, an extra indi
 | Push                                                | ✓     | Expo Notifications now, direct FCM/APNs later.                                                                                                        |
 | File storage                                        | ✓     | Local disk in dev, S3-compatible in prod. Two implementations from day one.                                                                           |
 | Email                                               | ✓     | One-time codes for email verification and password reset (ADR 0012). Providers change on price; a stand-in in development. Built in Phase 1. |
+| Sign-in (Google, Apple)                             | ✓     | Identity tokens verified on the server against the providers' published keys (ADR 0012 D2); the device holds no provider secret. The live adapter and the stand-in share one interface (`specs/002-identity/contracts/ports.md`); the stand-in is what development and tests run. Built in Phase 1. |
 | SMS / OTP                                           | ✓     | Providers change on price. Trivial interface. Unused in MVP: phone sign-up is deferred (ADR 0012); the port and its stand-in stay.                                                                                                         |
 | Chat                                                | ✗     | Built in-house on Postgres + WebSocket. A port would abstract your own code from itself. Add one if Stream or Sendbird ever becomes real.             |
 | Search                                              | ✗     | A filtered Postgres query. The repository already is the port. Moving to Meilisearch means swapping the repository implementation — that seam exists. |
@@ -92,10 +94,11 @@ apps/api/src/platform/ports/
 ├── video/    video.port.ts · daily.adapter.ts · fake.adapter.ts
 ├── push/     push.port.ts · expo.adapter.ts · fake.adapter.ts
 ├── email/    email.port.ts · provider.adapter.ts · fake.adapter.ts   (Phase 1, ADR 0012)
+├── sign-in/  sign-in.port.ts · live.adapter.ts · fake.adapter.ts      (Phase 1, ADR 0012 D2)
 └── sms/      sms.port.ts · provider.adapter.ts · fake.adapter.ts
 ```
 
-Five ports, six once Phase 1 adds email (ADR 0012). Selection is configuration, never a code change:
+Seven ports: the five of Phase 0, email since ADR 0012, and sign-in since the Phase 1 ports contract (`specs/002-identity/contracts/ports.md`). Selection is configuration, never a code change:
 
 ```ts
 providers: [
@@ -148,18 +151,18 @@ Each module has a service (all rules), a repository (all queries), a router (thi
 
 | Module        | Owns                                                                                                                                                                     | Tables                                                                                             |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| identity      | users, roles, auth, tokens, gender declaration, teacher profile record incl. payout readiness columns (written via its public entry by `payments`)                       | `users` `user_roles` `teacher_profiles` `otp_codes` `device_push_tokens` `terms_acceptances`       |
+| identity      | users, roles, auth, device sessions and provider identities, gender declaration, teacher profile record incl. the application state and the payout readiness columns (written via its public entry by `verification` and `payments`) | `users` `user_roles` `teacher_profiles` `otp_codes` `device_push_tokens` `terms_acceptances` `user_sessions` `auth_identities` |
 | verification  | teacher applications, documents, admin decisions                                                                                                                         | `verification_documents` `verification_requests`                                                   |
-| catalog       | subjects, packages, availability, isnad chain, signatures; **discovery** (search and browse — gender filter enforced in its repository signatures)                       | `subjects` `teacher_subjects` `packages` `availability_slots` `isnad_entries` `teacher_signatures` |
+| catalog       | subjects, packages, availability, teacher credentials and the isnad chain under them (ADR 0017), signatures; **discovery** (search and browse — gender filter enforced in its repository signatures) | `subjects` `teacher_subjects` `packages` `availability_slots` `isnad_entries` `teacher_signatures` `teacher_credentials` |
 | booking       | slot holds, enrollments, enrollment confirmation (called by `payments` on a paid event)                                                                                  | `slot_holds` `enrollments`                                                                         |
 | payments      | gateway orders, signed-webhook ingestion (raw-body HTTP endpoint outside tRPC), payout recipient onboarding, the `confirm-enrollment` and `expire-pending-payments` jobs | `payments` `payment_events`                                                                        |
-| sessions      | session generation, live lifecycle, attendance evidence, mutual cancellation, completion                                                                                 | `sessions` `session_participant_events` `cancellation_requests`                                    |
+| sessions      | session generation, live lifecycle, attendance evidence, mutual cancellation, completion, remedies for a session not consumed (ADR 0018)                                  | `sessions` `session_participant_events` `cancellation_requests` `session_remedies`                 |
 | chat          | in-session messaging, retention, moderation access                                                                                                                       | `chat_messages`                                                                                    |
 | certification | ijazah granting, PDF, public verification, bars                                                                                                                          | `ijazahs` `ijazah_bars`                                                                            |
 | reviews       | ratings, aggregates, moderation                                                                                                                                          | `reviews`                                                                                          |
 | moderation    | disputes, compensation cases (opened automatically on termination), gender flags, reports, admin actions                                                                 | `disputes` `gender_flags` `user_reports`                                                           |
 | notifications | templating, delivery, notification centre                                                                                                                                | `notifications`                                                                                    |
-| admin         | admin auth, queues, settings, audit log                                                                                                                                  | `admin_users` `audit_logs` `settings`                                                              |
+| admin         | admin auth with its own sessions and recovery codes, queues, settings, audit log                                                                                         | `admin_users` `audit_logs` `settings` `admin_sessions` `admin_recovery_codes`                      |
 | platform      | config (incl. `SUPPORT_EMAIL`, served by `platform.publicConfig`, ADR 0021 D4), logging, errors, db, idempotency, guards, PORTS (§3)                                     | `idempotency_keys` (ADR 0008 D2)                                                                   |
 
 Discovery is a service inside `catalog`, not a module: search is a filtered query over catalog's own tables (§3.2), and a module owning no tables would have to read another module's tables to do anything, which R-API-6 forbids. Session generation is triggered by `booking` when an enrollment is marked paid, but the rows are written by `sessions` through its public entry — `booking` never touches the `sessions` table. Certification reads the isnad chain through `catalog`'s public entry. `payments` is the only module with an HTTP endpoint outside tRPC: the gateway's webhook is a plain POST whose raw body must reach the signature check untouched (§8).
@@ -186,7 +189,7 @@ ijazah/
 │   │   │   ├── app.router.ts        user surface (mobile)
 │   │   │   ├── admin.router.ts      administrator surface — mounted SEPARATELY
 │   │   │   ├── context.ts           identity, role, gender, locale, correlation id — all server-resolved
-│   │   │   └── procedures.ts        public / student / teacher / admin caller kinds
+│   │   │   └── procedures.ts        the six caller kinds (§7.2)
 │   │   ├── platform/
 │   │   │   ├── ports/               §3.4
 │   │   │   └── config/ logging/ errors/ guards/ crypto/ db/ idempotency/ health/
@@ -229,7 +232,7 @@ ijazah/
 └── docs/             SRS · ARCHITECTURE · ERD · RUNBOOK · adr/ · design/ (design.md · components.md · screens.md · frames/ · source/)
 ```
 
-Why the schema is split per module: thirty-three tables in one file, edited daily by three people, produces constant merge conflicts in the most dangerous file in the repo. Prisma's multi-file schema folder removes that entirely, and the file boundaries reinforce module ownership.
+Why the schema is split per module: thirty-nine tables in one file, edited daily by three people, produces constant merge conflicts in the most dangerous file in the repo. Prisma's multi-file schema folder removes that entirely, and the file boundaries reinforce module ownership.
 
 **The public web pages are routes of the API (ADR 0021 D5).** The certificate verification page (`/verify/:code`, `?lang=en` for English), the account deletion page (`/delete-account`, its code step and its done step) and the Terms body (the version FR-AUTH-11 records in `terms_acceptances`) are server-rendered pages of `apps/api` on its own origin, under their own paths and never mixed with the procedure routes. They are rendered from templates that escape every value by default (a name, a code, a reason are untrusted data) and load the design stylesheet (§6.3); they send the NFR-SEC-11 (its header set and the CORS origin allowlist) header set with a strict `Content-Security-Policy`, set no cookie, and run under the same rate limits as the anonymous procedures. An unknown or malformed verification code answers 404; a revoked ijazah answers 200 with its revocation state and the public reason (FR-IJAZAH-8). The signed PDF URLs and the deletion code come from the same services the procedures use. No separate deploy, no public route in the admin SPA, no paid hosting before launch; moving the pages to a static site later relocates templates, nothing else.
 
@@ -333,18 +336,20 @@ tRPC procedure → NestJS service → repository → Prisma
 
 A tRPC procedure contains no business logic. Validate, call one service method, return. If a procedure has an `if` about business rules, that logic is in the wrong file.
 
-### 7.2 Two routers, four procedure types
+### 7.2 Two routers, six caller kinds
 
 `appRouter` and `adminRouter` are entirely separate surfaces. An admin capability is unreachable from mobile even with a forged role claim, because the procedure does not exist there.
 
-| Procedure          | Guarantees                                                |
-| ------------------ | --------------------------------------------------------- |
-| `publicProcedure`  | No auth. Signup, login, certificate verification.         |
-| `studentProcedure` | Authed, Student role active. Injects gender into context. |
-| `teacherProcedure` | Authed, Teacher role active and approved.                 |
-| `adminProcedure`   | Admin router only. MFA. Writes an audit entry.            |
+| Procedure              | Guarantees                                                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `publicProcedure`      | No auth. Signup, login, certificate verification. Declares its rate limit (ADR 0011 D3).                                                                                                                            |
+| `userProcedure`        | Authed, either role (Phase 1): the account's own data, language, deletion.                                                                                                                                         |
+| `studentProcedure`     | Authed, Student role active. Injects gender into context.                                                                                                                                                           |
+| `teacherProcedure`     | Authed, Teacher role, and declares what standing it admits — `admits: 'applicant' \| 'approved' \| 'publishable'` — so an applicant reaches only the application, and a teacher without a verified payout account cannot publish (Phase 1, `specs/002-identity/contracts/kernel.md`). |
+| `adminPublicProcedure` | Admin router only, no session, rate-limited: the administrator's sign-in, the second factor, the password-set link (Phase 1).                                                                                        |
+| `adminProcedure`       | Admin router only. A session whose second factor passed. Writes an audit entry.                                                                                                                                     |
 
-Role and gender come from the server-held session, never from client input.
+Role, standing and gender come from the server-held session, resolved on every request, never from client input; every kind that carries an account refuses a suspended or banned one unless it says it admits one.
 
 The audit entry an `adminProcedure` writes carries a non-personal label of its target (ADR 0021 D2). The audit writer in `admin` renders `targetLabel` in Arabic once, at write time, from the target's type and id — the kind word and the stable identifier or public number — never from a name or anything a user or an admin typed, and refuses an empty label or one over 200 characters. The label is never rewritten (ERD §15 rule 21). The admin audit query resolves the target's current display name at read time, beside the stored label, and shows the role word for a person whose account was deleted; the fused Arabic forms («للشيخ …») are produced by that server-side renderer, which also owns the two other fused labels the design found (`admin.credentials.a11y.documentPage`, `admin.dialogs.mfaReset.title`).
 
@@ -461,7 +466,7 @@ Three people, no ops experience. Without this, your first production bug is a us
 
 - **Error tracking:** Sentry (free tier) in API, worker, mobile and admin. Source maps uploaded on build.
 - **Structured logging:** JSON, with a request ID threaded through every log line in a request. Never log full request bodies — payment payloads, OTPs and document URLs end up in logs, and logs end up in screenshots.
-- **Health endpoints:** `/health` (process alive) and `/ready` (database and Redis reachable).
+- **Health endpoints:** `/health` (process alive) and `/ready` (the database reachable as the application role). Redis is not checked by `/ready` today (note under T110 in `specs/001-foundations/tasks.md`); adding it, with a cheaper path than a round trip per call, is open.
 - **Alerts that matter at your size:** unhandled exception rate, failed job count, webhook signature failures (gateway and video), payments `paid` with the enrollment still `pending_payment` after five minutes. Four alerts you'll actually read beats forty you'll mute.
 
 ## 13. Testing
@@ -482,8 +487,7 @@ Vitest throughout. React Native Testing Library on mobile.
 
 ## 14. Security baseline — week one, before feature code
 
-- GitHub push protection + secret scanning at org level.
-- Gitleaks pre-commit and in CI. A key-shaped string does not land.
+- Gitleaks pre-commit and in CI. A key-shaped string does not land. GitHub's push protection is not available to this private, personally owned repository (RUNBOOK, "Leaked credential"); it is revisited when the repository moves to an organisation.
 - `.env` gitignored from commit one; `.env.example` committed empty.
 - Branch protection on `main` and `develop`: no direct pushes, one review, CI green. Feature branches (`specs/NNN-*` names) merge into `develop`; `develop` merges into `main` by release PR (ADR 0005 D9).
 - Secrets in the host's secret manager, injected at runtime. Never in repo, Slack, Jira or a screenshot.
