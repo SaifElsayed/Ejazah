@@ -13,6 +13,8 @@ coverage/
 .expo-shared/
 # The API's copy of the design stylesheets, written by `pnpm tokens:build` (T004).
 apps/api/src/platform/web/assets/
+# The admin panel's copy of the design's component stylesheet, written by `pnpm tokens:build` (T036).
+apps/admin/src/design/components.css
 
 # Lockfiles are generated and never hand-edited (R-PROC-9).
 pnpm-lock.yaml

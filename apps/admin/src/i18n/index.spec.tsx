@@ -94,9 +94,7 @@ describe('a change of language', () => {
   it('re-renders every screen that reads the catalogue, with no reload', () => {
     function Probe() {
       const translateNow = useT();
-      return (
-        <p data-locale={useLocale()}>{translateNow('admin.nav.items.home')}</p>
-      );
+      return <p data-locale={useLocale()}>{translateNow('admin.nav.items.home')}</p>;
     }
     render(<Probe />);
     expect(screen.getByText('نظرة عامة').dataset['locale']).toBe('ar');

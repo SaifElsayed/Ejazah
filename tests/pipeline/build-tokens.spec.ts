@@ -218,6 +218,17 @@ describe('the API’s stylesheets (T004)', () => {
   });
 });
 
+// T036 (B8): the admin panel's components are drawn with the design's own classes, so the panel
+// imports the same copy of components.css the API serves, under the same check.
+describe('the admin panel’s components.css (T036)', () => {
+  it('is among the generated files, the same copy the API serves', async () => {
+    expect(GENERATED_FILES).toContain('apps/admin/src/design/components.css');
+    const text = '.a { color: red; }\n';
+    const files = await generate(root, source(), icons, '{}', '{}', text);
+    expect(files['apps/admin/src/design/components.css']).toBe(renderComponentsCss(text));
+  });
+});
+
 describe('this repository’s sources', () => {
   it('generate every file, each marked as generated', async () => {
     const files = await generateFromRepository(root);

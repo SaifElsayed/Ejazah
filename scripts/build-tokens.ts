@@ -16,6 +16,8 @@
 //   apps/admin/src/design/tokens.css            the CSS custom properties the admin panel reads
 //                                               (ADR 0014): light, dark and the compact density
 //   apps/admin/src/design/icons.ts              the same icon lists for the admin panel
+//   apps/admin/src/design/components.css        the copy of components.css the API serves, which the
+//                                               admin panel's components draw with (T036)
 //   docs/design/frames/ds/ijazah/tokens.json    the design canvas's copy of the source
 //   docs/design/frames/ds/ijazah/tokens.css     the stylesheet the design boards load
 //   docs/design/frames/ds/ijazah/icons.json     the design canvas's copy of the icon registry
@@ -50,6 +52,7 @@ export const GENERATED_FILES = [
   'apps/mobile/src/design/icons.ts',
   'apps/admin/src/design/tokens.css',
   'apps/admin/src/design/icons.ts',
+  'apps/admin/src/design/components.css',
   'docs/design/frames/ds/ijazah/tokens.json',
   'docs/design/frames/ds/ijazah/tokens.css',
   'docs/design/frames/ds/ijazah/icons.json',
@@ -541,6 +544,7 @@ export async function generate(
       'apps/admin/src/design/icons.ts',
       renderIconsTs(icons, 'admin'),
     ),
+    'apps/admin/src/design/components.css': renderComponentsCss(componentsText),
     'docs/design/frames/ds/ijazah/tokens.json': sourceText,
     'docs/design/frames/ds/ijazah/tokens.css': css,
     'docs/design/frames/ds/ijazah/icons.json': iconsText,

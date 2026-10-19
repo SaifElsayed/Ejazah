@@ -50,6 +50,9 @@ export default mergeConfig(
             include: ['apps/admin/src/**/*.spec.{ts,tsx}'],
             exclude: [...configDefaults.exclude, '**/dist/**'],
             setupFiles: ['apps/admin/src/test/setup.ts'],
+            // The render harness reads the design's stylesheet as text (`components.css?raw`) to
+            // know every class it defines; Vitest blanks a stylesheet it is not told to process.
+            css: { include: [/components\.css/] },
           },
         },
       ],
