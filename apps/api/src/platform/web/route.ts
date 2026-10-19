@@ -40,7 +40,7 @@ import { reportError } from '../errors/reporting.js';
 import type { RateLimiter, RateLimitKey } from '../guards/rate-limit.guard.js';
 import { type Logger, requestLogger } from '../logging/logger.js';
 import { html, type SafeHtml } from './html.js';
-import { DESIGN_ASSETS_PATH, findDesignAsset } from './assets.js';
+import { DESIGN_ASSETS_PATH, designAssets, findDesignAsset } from './assets.js';
 import { renderPage } from './page.js';
 
 /** The settings key of the anonymous limit every public page counts (contracts/README.md). */
@@ -223,6 +223,8 @@ const ONE_YEAR_SECONDS = 31_536_000;
  * bare name revalidated every time. Mounted by the HTTP application under `DESIGN_ASSETS_PATH`.
  */
 export function designAssetsRoute(): NodeHandler {
+  // Read at mount time, so a missing copy stops the start rather than the first page (as before).
+  designAssets();
   return (incoming, outgoing) => {
     const response = withoutCookies(outgoing);
     const { path, query } = pathOf(incoming);
