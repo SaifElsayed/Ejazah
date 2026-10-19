@@ -32,16 +32,20 @@ export class SafeHtml {
   toString(): string {
     return this.#markup;
   }
+}
 
-  /** @internal The one factory; `raw()` is the public name for a server-built string. */
-  static of(markup: string): SafeHtml {
-    return new SafeHtml(markup, FACTORY);
-  }
+/** The one factory, private to this module: `raw()` and the template are its only callers. */
+function safe(markup: string): SafeHtml {
+  // The class keeps the constructor private in the type; the symbol keeps it private at runtime.
+  return new (SafeHtml as unknown as new (markup: string, key: symbol) => SafeHtml)(
+    markup,
+    FACTORY,
+  );
 }
 
 /** Marks a string the server built as markup. Never for a value that came from outside. */
 export function raw(markup: string): SafeHtml {
-  return SafeHtml.of(markup);
+  return safe(markup);
 }
 
 const references: Readonly<Record<string, string>> = {
@@ -75,5 +79,5 @@ export function html(strings: TemplateStringsArray, ...values: readonly Interpol
     markup += part;
     if (index < values.length) markup += write(values[index]);
   });
-  return SafeHtml.of(markup);
+  return safe(markup);
 }

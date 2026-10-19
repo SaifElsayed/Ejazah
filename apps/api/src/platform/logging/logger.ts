@@ -122,11 +122,20 @@ export const addressKeys: readonly (readonly string[])[] = [
   ['remote', 'address'],
   ['peer', 'address'],
   ['ip'],
+  // The proxy-header spellings (PR #79 review): `forwardedFor`, `x-forwarded-for`, `forwarded`.
+  ['forwarded'],
+  ['addr'],
 ];
 
 /** Whether a key's value is an address, to be written as its network. */
 export function isAddressKey(name: string): boolean {
-  const present = new Set(wordsOf(name).flatMap(formsOf));
+  const words = wordsOf(name);
+  const first = words[0];
+  const last = words[words.length - 1];
+  if (first === undefined || last === undefined) return false;
+  // A name that says how many or whether (`ipCount`, `hasIp`) holds no address, as for a secret.
+  if (FACT_LAST_WORDS.has(last) || FACT_FIRST_WORDS.has(first)) return false;
+  const present = new Set(words.flatMap(formsOf));
   return addressKeys.some((entry) => entry.every((word) => present.has(word)));
 }
 

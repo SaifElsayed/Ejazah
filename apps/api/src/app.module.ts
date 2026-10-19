@@ -337,7 +337,11 @@ export async function createApplication({
     log,
     ...(trustedProxyHeader === undefined ? {} : { trustedProxyHeader }),
   };
-  for (const [path, route] of Object.entries(webRoutes)) {
+  // Express matches a mount by prefix, so the longest path is mounted first: `/delete-account/
+  // confirm` reaches its own handler ahead of `/delete-account`, whatever order the pages are
+  // declared in (PR #79 review, finding 2).
+  const longestFirst = Object.entries(webRoutes).sort(([a], [b]) => b.length - a.length);
+  for (const [path, route] of longestFirst) {
     application.use(path, webRoute(pages, route));
   }
   return application;

@@ -49,6 +49,25 @@ describe('the declared redaction list (T095, FR-040)', () => {
   // The words are the ones `sec/no-body-logging` reads (its header, "DOMAIN VOCABULARY" and
   // "AMBIGUOUS NAMES"): a teaching session's id, a classification code and a name that says when or
   // whether are what a log line is for, and stay.
+  it('writes an address-named key as its network, under every spelling of the address (T017, R-SEC-2)', () => {
+    const out = redact({
+      clientAddress: '203.0.113.77',
+      remoteAddr: '::ffff:198.51.100.9',
+      forwardedFor: '2001:db8:85a3:8d3:1319:8a2e:370:7348',
+      'x-forwarded-for': '203.0.113.1, 203.0.113.2',
+      ip: 'not an address',
+      ipCount: 3,
+    });
+    expect(out).toEqual({
+      clientAddress: '203.0.113.0/24',
+      remoteAddr: '198.51.100.0/24',
+      forwardedFor: '2001:db8:85a3::/48',
+      'x-forwarded-for': REDACTED,
+      ip: REDACTED,
+      ipCount: 3,
+    });
+  });
+
   it('keeps the names the lint rule marks as loggable', () => {
     const kept = {
       sessionId: 's-1',

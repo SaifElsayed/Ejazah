@@ -95,7 +95,8 @@ beforeAll(async () => {
     rateLimiter: limited.limiter,
     sessions,
     trustedProxyHeader: 'X-Forwarded-For',
-    webRoutes: { '/terms': terms, '/broken': broken },
+    // The shorter path is declared first on purpose: the application mounts the longer first.
+    webRoutes: { '/terms': terms, '/broken': broken, '/a': terms, '/a/b': broken },
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');
@@ -177,9 +178,24 @@ describe('the public-page helper (T019, FR-144)', () => {
   it('answers a method the page does not take with 405, a deeper path with 404, both as pages', async () => {
     const post = await get('/terms', '203.0.113.6', { method: 'POST' });
     expect(post.status).toBe(405);
-    expect(post.headers.get('allow')).toBe('GET');
+    expect(post.headers.get('allow')).toBe('GET, HEAD');
     expect(post.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect((await get('/terms/deeper', '203.0.113.6')).status).toBe(404);
+  });
+
+  it('answers HEAD as GET without a body, with the same headers', async () => {
+    const head = await get('/terms', '203.0.113.40', { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-security-policy')).toBe(PUBLIC_PAGE_CSP);
+    expect(head.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(await head.text()).toBe('');
+  });
+
+  it('a page under another page’s path reaches its own handler, whatever the declaration order', async () => {
+    // `/a/b` is the broken fixture (GET throws unexpectedly → 500), `/a` the terms page.
+    expect((await get('/a/b', '203.0.113.41')).status).toBe(500);
+    expect((await get('/a', '203.0.113.42')).status).toBe(200);
+    expect((await get('/a/c', '203.0.113.43')).status).toBe(404);
   });
 
   it('answers a handler’s error as a page with the kernel’s status, and says nothing of an unexpected one', async () => {
@@ -218,8 +234,8 @@ describe('the design’s stylesheets (T019, public-pages.md)', () => {
   it('serves nothing else there', async () => {
     expect((await fetch(`${origin}/public/design/other.css`)).status).toBe(404);
     expect((await fetch(`${origin}/public/design/../../main.js`)).status).toBe(404);
-    expect((await fetch(`${origin}/public/design/tokens.css`, { method: 'POST' })).status).toBe(
-      404,
-    );
+    const post = await fetch(`${origin}/public/design/tokens.css`, { method: 'POST' });
+    expect(post.status).toBe(405);
+    expect(post.headers.get('allow')).toBe('GET, HEAD');
   });
 });

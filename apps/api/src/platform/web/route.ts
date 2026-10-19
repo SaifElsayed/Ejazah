@@ -30,7 +30,8 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { clientAddressOf, type Locale } from '../../surfaces/context.js';
+import { clientAddressOf } from '../http/client-address.js';
+import type { Locale } from '../http/locale.js';
 import { DomainError } from '../errors/domain-error.js';
 import { mapError } from '../errors/error-filter.js';
 import { reportError } from '../errors/reporting.js';
@@ -131,6 +132,7 @@ function sendPage(
   status: number,
   page: SafeHtml,
   headers: Readonly<Record<string, string>> = {},
+  headOnly = false,
 ): void {
   for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
   response.setHeader('content-security-policy', PUBLIC_PAGE_CSP);
@@ -138,7 +140,7 @@ function sendPage(
   response.setHeader('content-language', lang);
   response.setHeader('cache-control', 'no-store');
   response.statusCode = status;
-  response.end(page.toString());
+  response.end(headOnly ? undefined : page.toString());
 }
 
 /** The path of a mounted route: what follows the mount, without its query. */
@@ -172,9 +174,11 @@ export function webRoute(
           sendPage(response, lang, 404, errorPage(lang, 404));
           return;
         }
-        const method = incoming.method ?? 'GET';
+        // HEAD is GET without the body (PR #79 review): monitors and link checkers get 200.
+        const headOnly = incoming.method === 'HEAD';
+        const method = headOnly ? 'GET' : (incoming.method ?? 'GET');
         if (!(methods as readonly string[]).includes(method)) {
-          sendPage(response, lang, 405, errorPage(lang, 405), { allow: methods.join(', ') });
+          sendPage(response, lang, 405, errorPage(lang, 405), { allow: allowOf(methods) });
           return;
         }
         await rateLimiter.check(PUBLIC_PAGE_RATE_LIMIT, clientAddress);
@@ -186,7 +190,7 @@ export function webRoute(
           correlationId,
           log: requestLog,
         });
-        sendPage(response, lang, answer.status ?? 200, answer.page, answer.headers);
+        sendPage(response, lang, answer.status ?? 200, answer.page, answer.headers, headOnly);
       } catch (error: unknown) {
         const mapped = mapError(error);
         if (mapped.unexpected) {
@@ -197,6 +201,11 @@ export function webRoute(
       }
     })();
   };
+}
+
+/** The `Allow` header of a page: its methods, and HEAD beside GET. */
+function allowOf(methods: readonly WebMethod[]): string {
+  return methods.flatMap((method) => (method === 'GET' ? ['GET', 'HEAD'] : [method])).join(', ');
 }
 
 /** The route helper's refusal of what it cannot answer, for a handler that must refuse itself. */
@@ -227,8 +236,13 @@ export function designAssetsRoute(): NodeHandler {
     const { path, query } = pathOf(incoming);
     const file = path.replace(/^\//, '');
     const stylesheet = stylesheets.get(file);
-    if (stylesheet === undefined || (incoming.method !== 'GET' && incoming.method !== 'HEAD')) {
-      sendPage(response, languageOf(query), 404, errorPage(languageOf(query), 404));
+    const lang = languageOf(query);
+    if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
+      sendPage(response, lang, 405, errorPage(lang, 405), { allow: 'GET, HEAD' });
+      return;
+    }
+    if (stylesheet === undefined) {
+      sendPage(response, lang, 404, errorPage(lang, 404));
       return;
     }
     response.setHeader('content-type', 'text/css; charset=utf-8');

@@ -7,7 +7,7 @@
 // so the strict Content-Security-Policy the route helper sends (`default-src 'none'; style-src
 // 'self'; …`) is what the page needs and no more. A page's body is a `SafeHtml` built by the
 // escaping template, and its title is escaped here like any other value.
-import type { Locale } from '../../surfaces/context.js';
+import type { Locale } from '../http/locale.js';
 import { html, type SafeHtml } from './html.js';
 
 /** Where the design's stylesheets are served (public-pages.md "The pages"). */
