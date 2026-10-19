@@ -8,6 +8,6 @@
     "outDir": "dist",
     "emitDeclarationOnly": true
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src", "src/**/*.json", "vite.config.ts"],
   "references": [{ "path": "../../packages/contracts" }]
 }
