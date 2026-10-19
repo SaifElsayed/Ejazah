@@ -151,7 +151,26 @@ describe('Otp', () => {
           colour('light', 'surface'),
         );
         expect(styleOf(cells[2] ?? { props: {} })['borderColor']).toBe(colour('light', 'primary'));
-        expect(screen.getByText('1')).toBeTruthy();
+        // Drawn, and hidden from the screen reader: the field carries the code.
+        expect(screen.getByText('1', { includeHiddenElements: true })).toBeTruthy();
+      },
+    );
+  });
+
+  it('takes its name from the Field and its value from the code; the cells are not read (review of B6, 7)', async () => {
+    await inBothDirections(
+      () => (
+        <Field label="رمز التحقق">
+          <Otp value="12" onChange={() => undefined} />
+        </Field>
+      ),
+      (rendered) => {
+        const input = screen.getByLabelText('رمز التحقق');
+        expect(input.props['accessibilityValue']).toEqual({ text: '12' });
+        expect(
+          nodesOf(rendered).filter((node) => styleOf(node)['width'] === tokens.size['otp-width']),
+        ).toHaveLength(6);
+        expect(screen.queryByText('1')).toBeNull();
       },
     );
   });

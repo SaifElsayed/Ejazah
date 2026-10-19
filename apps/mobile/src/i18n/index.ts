@@ -98,7 +98,8 @@ export function translate(locale: Locale, key: MessageKey, values?: MessageValue
     compiled.set(cacheKey, format);
   }
   const text = format.format(values);
-  if (typeof text !== 'string') throw new MissingMessageError(locale, key);
+  // The catalogue holds no rich-text tag, so a template always formats to a string.
+  if (typeof text !== 'string') throw new TypeError(`i18n: "${key}" did not format to text`);
   return text;
 }
 

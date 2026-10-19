@@ -18,7 +18,7 @@ export default function RootLayout() {
       <DirectionProvider>
         <QueryClientProvider client={queries}>
           <ApiProvider>
-            <SessionGuard />
+            <SessionGuard queries={queries} />
           </ApiProvider>
         </QueryClientProvider>
       </DirectionProvider>
@@ -26,10 +26,14 @@ export default function RootLayout() {
   );
 }
 
-function SessionGuard() {
+function SessionGuard({ queries }: { readonly queries: QueryClient }) {
   const session = useSession();
   const segments = useSegments();
   useRestoreSession();
+  // What one account read is never shown to the next on a shared device (review of B6, finding 4).
+  useEffect(() => {
+    if (session.kind === 'signed-out') queries.clear();
+  }, [session.kind, queries]);
   const destination = destinationFor(session);
   if (destination === null) return <Waiting />;
   if (!allows(session, segments)) return <Redirect href={destination as never} />;

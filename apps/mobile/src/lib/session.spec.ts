@@ -40,10 +40,15 @@ describe('destinationFor', () => {
         { kind: 'signed-in', landing: 'teacher_application', applicationStatus: 'banned' },
         '/restricted',
       ],
-      [{ kind: 'signed-in', landing: 'teacher_application' }, '/(teacher)/application/subjects'],
     ];
     for (const [state, destination] of cases) expect(destinationFor(state)).toBe(destination);
   });
+});
+
+it('refuses, by type, an applicant without the application status (review of B6, 3)', () => {
+  // @ts-expect-error -- T034 the status is required for the application landing
+  const missing: SessionState = { kind: 'signed-in', landing: 'teacher_application' };
+  expect(missing.kind).toBe('signed-in');
 });
 
 describe('allows', () => {

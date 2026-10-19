@@ -284,12 +284,18 @@ const NOT_A_DIGIT = /[^0-9]/g;
  */
 export function Otp({ value, onChange, error = false }: OtpProps) {
   const { color } = useTheme();
+  const field = useContext(FieldContext);
   const digits = value.replace(NOT_A_DIGIT, '').slice(0, OTP_LENGTH);
   // The cell the next digit goes into; none once the code is complete.
   const next = digits.length < OTP_LENGTH ? digits.length : -1;
   return (
     <View style={{ direction: 'ltr', alignSelf: 'center' }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space['2'] }}>
+      {/* The cells draw the code; the field below is what a screen reader reads (review of B6, 7). */}
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ flexDirection: 'row', justifyContent: 'center', gap: space['2'] }}
+      >
         {Array.from({ length: OTP_LENGTH }, (_, index) => {
           const filled = index < digits.length;
           const active = index === next;
@@ -322,6 +328,8 @@ export function Otp({ value, onChange, error = false }: OtpProps) {
       </View>
       <TextInput
         testID="otp-input"
+        {...(field.label === undefined ? {} : { accessibilityLabel: field.label })}
+        accessibilityValue={{ text: digits }}
         value={digits}
         onChangeText={(typed) => onChange(typed.replace(NOT_A_DIGIT, '').slice(0, OTP_LENGTH))}
         keyboardType="number-pad"

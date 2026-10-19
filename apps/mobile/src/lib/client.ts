@@ -5,8 +5,9 @@
 // THE SESSION. The access token travels as a bearer. An answer whose code is UNAUTHENTICATED is
 // refreshed once through `auth.refresh` with the stored refresh token (the schemas T038 publishes in
 // contracts/auth.ts) and the call is sent again with the new token; calls refused together share
-// one refresh. A refresh the server refuses clears the session and calls `onSignedOut`; a refresh
-// that cannot reach the server keeps the session, and the call fails as any offline call does. The
+// one refresh. A refresh the server refuses (UNAUTHENTICATED) clears the session and calls
+// `onSignedOut`; any other failure of the refresh (INTERNAL, RATE_LIMITED, offline) keeps the
+// session, and the call fails as any offline call does. The
 // decision is made on the error's `code`, never on the HTTP status: SIGN_IN_FAILED and
 // ONBOARDING_TOKEN_INVALID are 401 too (note under T018). `auth.refresh` is mounted in B10, so it
 // is called by name through an untyped client and its answer parsed with `refreshOutput`.
@@ -70,8 +71,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       await sessions.write(refreshOutput.parse(answer));
       return true;
     } catch (error) {
-      // An answer from the server is a refusal; anything else (offline, a timeout) keeps the session.
-      if (errorCodeOf(error) !== undefined) {
+      // Only a refused token signs out (FR-135 answers every refusal UNAUTHENTICATED); a failure of
+      // the server, a throttle, or no answer at all keeps the session (review of B6, finding 1).
+      if (errorCodeOf(error) === UNAUTHENTICATED) {
         await sessions.clear();
         onSignedOut();
         return false;

@@ -161,6 +161,30 @@ describe('the API client', () => {
     expect(onSignedOut).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['INTERNAL', 500],
+    ['RATE_LIMITED', 429],
+    ['VALIDATION_FAILED', 400],
+  ])(
+    'keeps the session when the refresh answers %s, a failure and not a refusal (review of B6, 1)',
+    async (code, status) => {
+      const server = fakeServer((call) =>
+        call.path === 'auth.refresh' ? refused(code, status) : refused('UNAUTHENTICATED'),
+      );
+      const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });
+      const onSignedOut = jest.fn();
+      const client = createApiClient({
+        url,
+        sessions: sessions.store,
+        onSignedOut,
+        fetch: server.fetch,
+      });
+      await expect(client.api.catalog.subjects.list.query()).rejects.toBeDefined();
+      expect(sessions.current()).toEqual({ accessToken: 'a1', refreshToken: 'r1' });
+      expect(onSignedOut).not.toHaveBeenCalled();
+    },
+  );
+
   it('never refreshes on another 401 code', async () => {
     const server = fakeServer(() => refused('SIGN_IN_FAILED'));
     const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });

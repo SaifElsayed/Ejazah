@@ -191,7 +191,6 @@ export function Toast({ message, icon }: ToastProps) {
   }, [shown]);
   return (
     <Animated.View
-      accessibilityLiveRegion="polite"
       accessibilityRole="alert"
       style={{
         position: 'absolute',

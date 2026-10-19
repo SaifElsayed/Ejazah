@@ -2,6 +2,7 @@
 // Spinner, in both directions.
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 
 import { tokens } from '../tokens';
 import { colour, inBothDirections, nodesOf, styleOf } from './__tests__/harness';
@@ -73,7 +74,8 @@ describe('Banner', () => {
 });
 
 describe('Toast', () => {
-  it('is the inverted confirmation, announced politely', async () => {
+  it('is the inverted confirmation, announced once', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     await inBothDirections(
       () => <Toast message="أُرسل البلاغ" icon={{ name: 'circle-check' }} />,
       (rendered) => {
@@ -82,7 +84,9 @@ describe('Toast', () => {
         const surface = nodesOf(rendered).find(
           (node) => styleOf(node)['backgroundColor'] === colour('light', 'text'),
         );
-        expect(surface?.props['accessibilityLiveRegion']).toBe('polite');
+        // The explicit announcement only: no live region repeats it (review of B6, finding 9).
+        expect(surface?.props['accessibilityLiveRegion']).toBeUndefined();
+        expect(announce).toHaveBeenLastCalledWith('أُرسل البلاغ');
       },
     );
   });

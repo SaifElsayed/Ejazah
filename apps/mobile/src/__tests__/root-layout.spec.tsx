@@ -3,6 +3,7 @@
 // It lives outside `app/`, where every file is a route.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen } from '@testing-library/react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { renderRouter } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
@@ -97,6 +98,25 @@ describe('the root layout', () => {
     expect(await screen.findByText('لا جلسات في هذا اليوم')).toBeTruthy();
     await act(async () => setSession({ kind: 'signed-out' }));
     expect(await screen.findByText('welcome')).toBeTruthy();
+  });
+
+  it('clears what the queries hold when the person signs out (review of B6, 4)', async () => {
+    const Remember = () => {
+      useQueryClient().setQueryData(['account'], 'the previous account');
+      return <Text>remembered</Text>;
+    };
+    const Recall = () => {
+      const held = useQueryClient().getQueryData<string>(['account']);
+      return <Text>{held ?? 'nothing held'}</Text>;
+    };
+    setSession({ kind: 'signed-in', landing: 'restricted' });
+    await renderRouter(
+      { ...routes, restricted: Remember, '(auth)/welcome': Recall },
+      { initialUrl: '/restricted' },
+    );
+    expect(await screen.findByText('remembered')).toBeTruthy();
+    await act(async () => setSession({ kind: 'signed-out' }));
+    expect(await screen.findByText('nothing held')).toBeTruthy();
   });
 
   it('switches tabs through the bar', async () => {

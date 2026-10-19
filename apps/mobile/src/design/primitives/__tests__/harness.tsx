@@ -32,19 +32,25 @@ export async function renderIn(
 
 /**
  * Renders `ui` in both directions, runs the two checks on each render, then `check`; every
- * primitive's render test goes through here.
+ * primitive's render test goes through here. `check` runs in `scheme` (light unless a spec asks
+ * for dark); the two checks run in the other scheme as well, so a literal that only equals a token
+ * of one scheme is caught (review of B6, finding 6).
  */
 export async function inBothDirections(
   ui: () => ReactElement,
   check: (rendered: Rendered, direction: Direction) => void | Promise<void> = () => undefined,
   scheme: ColorScheme = 'light',
 ): Promise<void> {
+  const other: ColorScheme = scheme === 'light' ? 'dark' : 'light';
   for (const direction of directions) {
     const rendered = await renderIn(direction, ui(), scheme);
     expectLogicalOnly(rendered);
     expectTokenColours(rendered, scheme);
     await check(rendered, direction);
     await rendered.unmount();
+    const again = await renderIn(direction, ui(), other);
+    expectTokenColours(again, other);
+    await again.unmount();
   }
 }
 
@@ -108,6 +114,16 @@ export function expectLogicalOnly(rendered: Rendered): void {
   expect(found).toEqual([]);
 }
 
+/** The colour props React Native's controls take besides their style. */
+const COLOUR_PROPS = [
+  'placeholderTextColor',
+  'selectionColor',
+  'cursorColor',
+  'underlayColor',
+  'tintColor',
+  'color',
+] as const;
+
 /** Every colour of the tree is a semantic colour of `scheme` (R-MOBILE-4). */
 export function expectTokenColours(rendered: Rendered, scheme: ColorScheme): void {
   const allowed = new Set<unknown>([...Object.values(tokens.color[scheme]), 'transparent']);
@@ -128,6 +144,10 @@ export function expectTokenColours(rendered: Rendered, scheme: ColorScheme): voi
           check(`${node.type}.boxShadow`, (layer as { color?: unknown }).color);
       }
     }
+    // A colour handed to a control as a prop rather than a style.
+    for (const prop of COLOUR_PROPS) check(`${node.type}.${prop}`, node.props[prop]);
+    const ripple = node.props['android_ripple'] as { color?: unknown } | undefined;
+    check(`${node.type}.android_ripple`, ripple?.color);
     // An icon's drawing colour is a prop of the SVG root.
     if (node.type === 'RNSVGSvgView') {
       check(`${node.type}.stroke`, node.props['stroke']);

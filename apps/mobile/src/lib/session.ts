@@ -14,9 +14,16 @@ export type SessionState =
   | { readonly kind: 'signed-out' }
   | {
       readonly kind: 'signed-in';
-      readonly landing: Landing;
-      /** The teacher's application, when the landing is the application. */
-      readonly applicationStatus?: TeacherApplicationStatus;
+      readonly landing: Exclude<Landing, 'teacher_application'>;
+    }
+  | {
+      readonly kind: 'signed-in';
+      readonly landing: 'teacher_application';
+      /**
+       * The application's status (`account.me`): required, so an applicant is never landed on a
+       * new application form for want of it (review of B6, finding 3).
+       */
+      readonly applicationStatus: TeacherApplicationStatus;
     };
 
 const WELCOME = '/(auth)/welcome';
@@ -50,7 +57,7 @@ export function destinationFor(state: SessionState): string | null {
         case 'restricted':
           return RESTRICTED;
         case 'teacher_application':
-          return applicationRoute[state.applicationStatus ?? 'not_started'];
+          return applicationRoute[state.applicationStatus];
       }
   }
 }

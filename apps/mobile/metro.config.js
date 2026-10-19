@@ -10,7 +10,7 @@
 //   declares it. The fallback is the copy NativeWind itself depends on.
 // - A relative `./x.js` inside a workspace package's TypeScript source resolves to `./x.ts`: the
 //   packages are written for Node's module resolution (NodeNext), which names the emitted file, and
-//   Metro reads the source. Only files under `packages/*/src` are rewritten.
+//   Metro reads the source. Only files under this repository's `packages/*/src` are rewritten.
 const path = require('node:path');
 
 const { getDefaultConfig } = require('expo/metro-config');
@@ -26,7 +26,10 @@ config.resolver.unstable_conditionNames = [
   '@ijazah/source',
   ...(config.resolver.unstable_conditionNames ?? []),
 ];
-const WORKSPACE_SOURCE = /\/packages\/[^/]+\/src\//;
+// Anchored at this repository's `packages/`, so a dependency laid out the same way under
+// `node_modules` is never rewritten (review of B6, finding 14).
+const packagesRoot = `${path.resolve(__dirname, '..', '..').split(path.sep).join('/')}/packages/`;
+const WORKSPACE_SOURCE = /^[^/]+\/src\//;
 const JS_EXTENSION = /\.js$/;
 const resolveDefault = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
@@ -35,7 +38,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (
     moduleName.startsWith('.') &&
     JS_EXTENSION.test(moduleName) &&
-    WORKSPACE_SOURCE.test(origin)
+    origin.startsWith(packagesRoot) &&
+    WORKSPACE_SOURCE.test(origin.slice(packagesRoot.length))
   ) {
     return resolve(context, moduleName.replace(JS_EXTENSION, '.ts'), platform);
   }

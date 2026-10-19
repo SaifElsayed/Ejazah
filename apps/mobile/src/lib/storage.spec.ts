@@ -51,6 +51,17 @@ describe('the session store', () => {
     expect(items.size).toBe(0);
   });
 
+  // Each value stays small (a Keychain item over 2 KB may fail on iOS), so the two keys stay and the
+  // operations run one at a time (review of B6, finding 2).
+  it('never loses a sign-in to a read that runs while it is written', async () => {
+    const { store } = fakeSecureStore();
+    const sessions = createSessionStore(store);
+    await sessions.clear();
+    const [, during] = await Promise.all([sessions.write(tokens), sessions.read()]);
+    expect([null, tokens]).toContainEqual(during);
+    expect(await sessions.read()).toEqual(tokens);
+  });
+
   it('clears both tokens', async () => {
     const { store, items } = fakeSecureStore();
     const sessions = createSessionStore(store);
