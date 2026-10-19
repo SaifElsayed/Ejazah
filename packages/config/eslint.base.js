@@ -85,6 +85,27 @@ const fast = [
       ],
     },
   },
+  {
+    // B8 (T037): the admin panel's client is typed by the administrator router the same way
+    // (`apps/admin/src/lib/client.ts`), so the panel may import a type from the API and nothing else.
+    files: ['apps/admin/**/*.{ts,tsx,mts,cts}'],
+    plugins: { '@typescript-eslint': typescriptPlugin },
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/api/src/**', '@ijazah/api', '@ijazah/api/**'],
+              allowTypeImports: true,
+              message:
+                'The admin panel imports only types from the API (`import type`): a value would bundle server code into the panel',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 const typeAware = [

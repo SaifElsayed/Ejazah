@@ -45,12 +45,37 @@ describe('the phone imports only types from the API', () => {
     expect(messages[0]?.message).toContain('R-MOBILE-11');
   });
 
-  it('reads the phone only, so the API and the admin are untouched', async () => {
+  it('reads the two clients only, so the API is untouched', async () => {
     expect(
       await messagesFor(
         "import { appRouter } from '../surfaces/app.router';\nexport const r = appRouter;\n",
         'apps/api/src/main.ts',
       ),
     ).toEqual([]);
+  });
+});
+
+// B8 (T037): the admin panel's client is typed by the administrator router the same way, under the
+// same rule: a value import would bundle server code into the panel.
+describe('the admin panel imports only types from the API', () => {
+  const adminClient = 'apps/admin/src/lib/client.ts';
+
+  it('lets a type-only import of the router type through', async () => {
+    expect(
+      await messagesFor(
+        "import type { AdminRouter } from '../../../api/src/surfaces/admin.router';\nexport type R = AdminRouter;\n",
+        adminClient,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    "import { adminRouter } from '../../../api/src/surfaces/admin.router';\nexport const r = adminRouter;\n",
+    "export { adminRouter } from '../../../api/src/surfaces/admin.router';\n",
+    "import { createApplication } from '@ijazah/api';\nexport const r = createApplication;\n",
+  ])('refuses a value import from the API: %s', async (code) => {
+    const messages = await messagesFor(code, adminClient);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.message).toContain('admin panel');
   });
 });
