@@ -679,7 +679,8 @@ Owned by the platform kernel (`apps/api/src/platform/idempotency`), not by `admi
 |---|---|---|
 | id | uuid | PK |
 | scope | text | The procedure or job the key applies to |
-| key | text | Client-supplied idempotency key; unique with `scope` (§15.16) |
+| actor_id | text | The server-resolved principal the key belongs to, never the client's word; the key is unique with `scope` and `actor_id` (§15.26; Phase 1, T018) |
+| key | text | Client-supplied idempotency key; unique with `scope` and `actor_id` (§15.26, which replaced §15.16) |
 | request_hash | text | Hash of the canonical request; a reuse with a different hash is refused |
 | response | jsonb, nullable | The first outcome, replayed on repeat |
 | status | enum in_progress · completed | `in_progress` blocks a concurrent duplicate |
@@ -774,6 +775,7 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | `user_sessions (refresh_token_hash)` unique | Session resolution on every authenticated request (§15.25; Phase 1 pass) |
 | `user_sessions (user_id)` | The foreign key's plain index; "revoke every session of the user" (Phase 1 pass; the partial index on live rows was not kept, R-DB-9) |
 | `auth_identities (provider, provider_subject)` unique | The provider sign-in lookup; one provider account is one platform account (§15.22) |
+| `idempotency_keys (scope, actor_id, key)` unique | The key is the actor's: the claim and the replay of a retried mutation (§15.26, replacing the `(scope, key)` unique of §15.16; Phase 1, T018) |
 | `otp_codes (destination, purpose)` | The lookup every code verification and every purge makes (Phase 1 pass) |
 | `admin_sessions (token_hash)` unique | Administrator session resolution (§15.25) |
 | `teacher_credentials (teacher_user_id, subject_id) WHERE status = 'approved'` partial unique | One approved credential per teacher and subject (§15.23); the credentials page |
@@ -799,7 +801,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 13. `payment_events.provider_event_id` unique and NOT NULL — gateway webhook replay safety (FR-PAYG-4, R-MONEY-8, ADR 0007).
 14. `payments.gateway_order_id` unique; `payments.gateway_transaction_id` unique where present — one platform record per gateway order.
 15. `enrollments.confirmed_at` is written only by the confirm-enrollment job; no application path sets `status = 'confirmed'` without a `paid` event row for that enrollment. Held at the service layer and by the CI test of R-HONEST-1, since the database cannot express the cross-table dependency without a trigger (research R-5).
-16. `idempotency_keys (scope, key)` unique — a repeated client mutation returns the first outcome and never repeats the effect (FR-042, R-API-14, ADR 0008).
+16. `idempotency_keys (scope, key)` unique — a repeated client mutation returns the first outcome and never repeats the effect (FR-042, R-API-14, ADR 0008). Replaced by rule 26 (Phase 1, T018): the key is the actor's.
 17. `slot_holds (slot_id)` unique `WHERE released_at IS NULL` — one active hold per slot, so two students cannot hold the same slot at once (FR-BOOK-9, ADR 0010 D1). An expired hold still counts until `released_at` is set; the service releases the expired holds on the slot, and the student's own expired hold, in the same transaction before it inserts, then checks the existing sessions after the insert (ADR 0010 D3).
 18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time; a new checkout ends the student's own unexpired hold first, at once when no order on it is still payable (`created`) and otherwise only once the gateway has cancelled that order (FR-BOOK-12, ADR 0010 D6).
 19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a system termination (FR-NOSHOW-4, FR-SESS-16, FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run with `SET CONSTRAINTS … DEFERRED` (raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another session of the same teacher or the same student that these constraints count, restores them to their previous instants and reports them to error tracking (FR-051) for an operator, so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010).

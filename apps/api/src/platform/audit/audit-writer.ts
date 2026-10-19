@@ -20,6 +20,13 @@
 //
 // Snapshots go to the database as written: a handler puts no secret in `before` or `after`
 // (R-SEC-2), as it would log none.
+//
+// THE TARGET LABEL IS THE WRITER'S (T021, FR-180, ADR 0021 D2): the admin module's implementation
+// renders `target_label` itself from `targetType` and `targetId` (`modules/admin/labels/`) and
+// refuses an empty or over-long one by throwing before the insert, so the kind rolls the action
+// back. `AuditEntry` cannot carry a label: the field is typed `never`, so a handler that tries to
+// pass one does not compile, and the invariant "never a name, never typed text" holds by
+// construction rather than by review.
 import type { Transaction } from '../db/prisma.repository.js';
 
 /** A JSON value, as a snapshot column stores it. */
@@ -41,6 +48,8 @@ export interface AuditEntry {
   readonly reason?: string;
   readonly before?: AuditSnapshot;
   readonly after?: AuditSnapshot;
+  /** Never set by a handler: the writer renders the label from the type and the id (T021). */
+  readonly targetLabel?: never;
 }
 
 /** One audit row: an entry and the administrator who acted, from the session. */

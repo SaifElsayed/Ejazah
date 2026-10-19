@@ -18,7 +18,8 @@ const NOW = new Date('2026-10-08T09:00:00Z');
 function row(id: string, expiresAt: string): StoredKey {
   return {
     id,
-    scope: 'booking.startCheckout',
+    scope: 'teacher.application.submit',
+    actorId: '0199c4a8-0000-7000-8000-00000000000a',
     key: `client-key-${id}-0000`,
     requestHash: 'hash',
     status: 'completed',

@@ -10,6 +10,15 @@
 // and applies both parsers, so a procedure cannot be declared without an output schema, zod strips
 // what the schema does not name before it leaves, and an output that fails its schema is the
 // internal error, unexpected, never a 400 carrying the response's own paths.
+//
+// T016 (Phase 1, specs/002-identity/contracts/kernel.md "The caller kinds"): the session carries one
+// role and the account's standing, resolved on every request (FR-108). `userProcedure` admits either
+// role; `teacherProcedure` declares what it admits (R-106) and a declaration without `admits` does
+// not compile; every user kind refuses a suspended or banned account with `ACCOUNT_RESTRICTED`
+// unless it says `admitsRestricted` (FR-137); the administrator kind refuses a session whose second
+// factor is unverified with `MFA_REQUIRED` (FR-170); `adminPublicProcedure` is anonymous, exists on
+// the administrator instance only and names its rate limit, applied from the limiter the
+// administrator context carries.
 import { type AnyProcedure, TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import { z, ZodError } from 'zod';
@@ -21,9 +30,15 @@ import {
 } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../platform/settings/settings-reader.js';
-import { createAdminContext, createAppContext, type UserSession } from './context.js';
+import {
+  type AdminSession,
+  createAdminContext,
+  createAppContext,
+  type UserSession,
+} from './context.js';
 import {
   adminProcedure,
+  adminPublicProcedure,
   createAdminCallerFactory,
   createAdminRouter,
   createAppCallerFactory,
@@ -32,21 +47,64 @@ import {
   studentProcedure,
   teacherProcedure,
   toErrorShape,
+  userProcedure,
 } from './procedures.js';
 
 const log = createLogger({ level: 'fatal' });
+const clientAddress = '203.0.113.7';
 
 const student: UserSession = {
   userId: 'student-1',
-  activeRoles: ['student'],
+  sessionId: 'session-1',
+  role: 'student',
+  accountStatus: 'active',
   gender: 'female',
   preferredLanguage: 'en',
 };
 
+/** A teacher-role holder whose application is still in review: standing `applicant` only. */
+const applicant: UserSession = {
+  userId: 'teacher-1',
+  sessionId: 'session-2',
+  role: 'teacher',
+  accountStatus: 'active',
+  gender: 'female',
+  preferredLanguage: 'ar',
+  teacher: { verificationStatus: 'pending', payoutVerified: false, applicationStatus: 'in_review' },
+};
+
+const approved: UserSession = {
+  ...applicant,
+  userId: 'teacher-2',
+  sessionId: 'session-3',
+  teacher: { verificationStatus: 'approved', payoutVerified: false, applicationStatus: 'approved' },
+};
+
+const publishable: UserSession = {
+  ...approved,
+  userId: 'teacher-3',
+  sessionId: 'session-4',
+  teacher: { verificationStatus: 'approved', payoutVerified: true, applicationStatus: 'approved' },
+};
+
+const suspended: UserSession = { ...student, userId: 'student-2', accountStatus: 'suspended' };
+const banned: UserSession = { ...student, userId: 'student-3', accountStatus: 'banned' };
+const verificationRequired: UserSession = {
+  ...student,
+  userId: 'student-4',
+  accountStatus: 'verification_required',
+};
+
+const verifiedAdmin: AdminSession = { adminId: 'admin-1', mfaVerified: true };
+const unverifiedAdmin: AdminSession = { adminId: 'admin-1', mfaVerified: false };
+
 const secret = 'date-of-birth-1990-01-01';
 
 /** A limiter over an in-memory counter and one settings row per key (T170). */
-function limiterOf(limit: number): { limiter: RateLimiter; counter: RateLimitCounter & { hits: number } } {
+function limiterOf(limit: number): {
+  limiter: RateLimiter;
+  counter: RateLimitCounter & { hits: number };
+} {
   const settings: SettingsReader = {
     read: async (key, schema) => {
       if (!key.startsWith('rate_limit_')) throw new SettingError(key, 'missing');
@@ -63,10 +121,29 @@ function limiterOf(limit: number): { limiter: RateLimiter; counter: RateLimitCou
       return count;
     },
   };
-  return { limiter: new RateLimiter({ settings, counter, subjectKey: Buffer.alloc(32, 1) }), counter };
+  return {
+    limiter: new RateLimiter({ settings, counter, subjectKey: Buffer.alloc(32, 1) }),
+    counter,
+  };
 }
 
 const { limiter: rateLimiter } = limiterOf(1_000);
+
+/** The user surface's context for a fixture session, as the HTTP application builds one. */
+function appContext(session: UserSession | null, limiter: RateLimiter = rateLimiter) {
+  return createAppContext({ session, log, rateLimiter: limiter, clientAddress });
+}
+
+// An anonymous call, and a call refused before the handler, open no transaction and write nothing.
+const administration = {
+  transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },
+  auditWriter: { write: () => Promise.reject(new Error('no audit write is expected here')) },
+};
+
+/** The administrator surface's context for a fixture session. */
+function adminContext(session: AdminSession | null, limiter: RateLimiter = rateLimiter) {
+  return createAdminContext({ session, log, administration, rateLimiter: limiter, clientAddress });
+}
 
 /** A public procedure's declaration where the case is not about limiting. */
 const unlimitedInTest = { key: defaultRateLimits.search, subjectOf: () => 'anyone' } as const;
@@ -81,7 +158,28 @@ const user = createAppRouter({
     // A field the output schema does not name: stripped before it leaves (R-HONEST-4).
     dateOfBirth: secret,
   })),
-  mySlots: teacherProcedure({ input: z.void(), output: z.string() }).query(() => 'slots'),
+  mySlots: teacherProcedure({ admits: 'applicant', input: z.void(), output: z.string() }).query(
+    () => 'slots',
+  ),
+  publish: teacherProcedure({ admits: 'approved', input: z.void(), output: z.string() }).query(
+    () => 'published',
+  ),
+  listPackages: teacherProcedure({
+    admits: 'publishable',
+    input: z.void(),
+    output: z.string(),
+  }).query(() => 'packages'),
+  // What both roles share: the account read, sign-out, deletion (contracts/kernel.md).
+  account: userProcedure({
+    input: z.void(),
+    output: z.object({ userId: z.string(), role: z.enum(['student', 'teacher']) }),
+  }).query(({ ctx }) => ({ userId: ctx.caller.userId, role: ctx.caller.role })),
+  // The restricted screen's data: a suspended account may still read it (FR-137).
+  standing: userProcedure({
+    admitsRestricted: true,
+    input: z.void(),
+    output: z.string(),
+  }).query(({ ctx }) => ctx.caller.accountStatus),
   echo: publicProcedure({
     input: z.object({ n: z.number() }),
     output: z.object({ n: z.number(), locale: z.string() }),
@@ -95,17 +193,18 @@ const user = createAppRouter({
   }).query(() => ({ count: 'seven' }) as unknown as { count: number }),
 });
 
-const approved = vi.fn(() => 'approved');
-// An anonymous call is refused before a transaction is opened, so neither part is reached.
-const administration = {
-  transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },
-  auditWriter: { write: () => Promise.reject(new Error('no audit write is expected here')) },
-};
+const approve = vi.fn(() => 'approved');
+const signIn = vi.fn(() => 'signed in');
 const administrator = createAdminRouter({
   approve: adminProcedure({
     input: z.object({ teacherId: z.string() }),
     output: z.string(),
-  }).mutation(approved),
+  }).mutation(approve),
+  signIn: adminPublicProcedure({
+    input: z.object({ email: z.string() }),
+    output: z.string(),
+    rateLimit: { key: defaultRateLimits.authentication, subjectOf: ({ input }) => input.email },
+  }).mutation(signIn),
 });
 
 const callUser = createAppCallerFactory(user);
@@ -127,7 +226,7 @@ async function refusal(
 
 describe('the caller kinds (T107)', () => {
   it('a student or teacher kind refuses an anonymous caller with 401, before the role check', async () => {
-    const anonymous = callUser(createAppContext({ session: null, log, rateLimiter }));
+    const anonymous = callUser(appContext(null));
     expect(await refusal(() => anonymous.whoAmI())).toMatchObject({
       status: 401,
       code: 'UNAUTHENTICATED',
@@ -138,21 +237,26 @@ describe('the caller kinds (T107)', () => {
     });
   });
 
-  it('a caller without the role active is refused with 403', async () => {
-    const caller = callUser(createAppContext({ session: student, log, rateLimiter }));
+  it('a caller without the role is refused with 403', async () => {
+    const caller = callUser(appContext(student));
     expect(await refusal(() => caller.mySlots())).toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+    const teacher = callUser(appContext(applicant));
+    expect(await refusal(() => teacher.whoAmI())).toMatchObject({
       status: 403,
       code: 'FORBIDDEN',
     });
   });
 
   it('a caller holding the role reaches the handler with the narrowed caller', async () => {
-    const caller = callUser(createAppContext({ session: student, log, rateLimiter }));
+    const caller = callUser(appContext(student));
     expect(await caller.whoAmI()).toEqual({ userId: 'student-1', gender: 'female' });
   });
 
   it('every kind validates its input before the handler', async () => {
-    const caller = callUser(createAppContext({ session: null, log, rateLimiter }));
+    const caller = callUser(appContext(null));
     expect(await caller.echo({ n: 7 })).toEqual({ n: 7, locale: 'ar' });
     expect(await refusal(() => caller.echo({ n: 'seven' } as never))).toMatchObject({
       status: 400,
@@ -166,13 +270,137 @@ describe('the caller kinds (T107)', () => {
     expect(() => publicProcedure({ output: z.void(), rateLimit: unlimitedInTest })).toThrow();
   });
 
-  it('the administrator kind refuses an anonymous request with 401, and carries no limiter', async () => {
-    const anonymous = callAdministrator(createAdminContext({ session: null, log, administration }));
+  it('the administrator kind refuses an anonymous request with 401', async () => {
+    const anonymous = callAdministrator(adminContext(null));
     expect(await refusal(() => anonymous.approve({ teacherId: 't1' }))).toMatchObject({
       status: 401,
       code: 'UNAUTHENTICATED',
     });
-    expect(approved).not.toHaveBeenCalled();
+    expect(approve).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Phase 1 kinds (T016, FR-108, FR-137, FR-170; contracts/kernel.md)', () => {
+  it('`userProcedure` admits either role and refuses an anonymous caller', async () => {
+    expect(await callUser(appContext(student)).account()).toEqual({
+      userId: 'student-1',
+      role: 'student',
+    });
+    expect(await callUser(appContext(applicant)).account()).toEqual({
+      userId: 'teacher-1',
+      role: 'teacher',
+    });
+    expect(await refusal(() => callUser(appContext(null)).account())).toMatchObject({
+      status: 401,
+      code: 'UNAUTHENTICATED',
+    });
+  });
+
+  it('a teacher kind cannot be declared without `admits`', () => {
+    // @ts-expect-error -- T016, R-106: a teacher procedure declares what standing it admits
+    expect(() => teacherProcedure({ input: z.void(), output: z.string() })).toThrow(/admits/);
+  });
+
+  it("an applicant is refused by `admits: 'approved'`, and an approved teacher by `'publishable'`", async () => {
+    const asApplicant = callUser(appContext(applicant));
+    expect(await asApplicant.mySlots()).toBe('slots');
+    expect(await refusal(() => asApplicant.publish())).toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(await refusal(() => asApplicant.listPackages())).toMatchObject({ status: 403 });
+
+    const asApproved = callUser(appContext(approved));
+    expect(await asApproved.publish()).toBe('published');
+    expect(await refusal(() => asApproved.listPackages())).toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+
+    expect(await callUser(appContext(publishable)).listPackages()).toBe('packages');
+  });
+
+  it('a suspended account is refused with `ACCOUNT_RESTRICTED` unless the procedure `admitsRestricted`', async () => {
+    for (const session of [suspended, banned]) {
+      const caller = callUser(appContext(session));
+      const refused = await refusal(() => caller.whoAmI());
+      expect(refused).toMatchObject({
+        status: 403,
+        code: 'ACCOUNT_RESTRICTED',
+        details: [{ path: 'accountStatus', code: session.accountStatus }],
+        unexpected: false,
+      });
+      expect(await refusal(() => caller.account())).toMatchObject({ code: 'ACCOUNT_RESTRICTED' });
+      // The restricted screen reads its own standing.
+      expect(await caller.standing()).toBe(session.accountStatus);
+    }
+    // Every kind of this phase admits a `verification_required` account (Phase 2's booking kind
+    // refuses it, FR-137).
+    expect(await callUser(appContext(verificationRequired)).whoAmI()).toMatchObject({
+      userId: 'student-4',
+    });
+    // The role is checked first: a suspended teacher's teacher procedure is the restricted refusal,
+    // a suspended teacher's student procedure is the role's.
+    const suspendedTeacher: UserSession = { ...applicant, accountStatus: 'suspended' };
+    expect(await refusal(() => callUser(appContext(suspendedTeacher)).mySlots())).toMatchObject({
+      code: 'ACCOUNT_RESTRICTED',
+    });
+    expect(await refusal(() => callUser(appContext(suspendedTeacher)).whoAmI())).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('an admin procedure refuses a session whose second factor is unverified with `MFA_REQUIRED`', async () => {
+    const unverified = callAdministrator(adminContext(unverifiedAdmin));
+    expect(await refusal(() => unverified.approve({ teacherId: 't1' }))).toMatchObject({
+      status: 403,
+      code: 'MFA_REQUIRED',
+      unexpected: false,
+    });
+    expect(approve).not.toHaveBeenCalled();
+    // A verified session reaches the transaction (refused here by the fixture, so unexpected).
+    const verified = callAdministrator(adminContext(verifiedAdmin));
+    expect(await refusal(() => verified.approve({ teacherId: 't1' }))).toMatchObject({
+      status: 500,
+      unexpected: true,
+    });
+  });
+
+  it('`adminPublicProcedure` requires a rate limit and exists only on the admin instance', async () => {
+    // @ts-expect-error -- T016: an anonymous administrator endpoint declares its rate limit (R-SEC-6)
+    expect(() => adminPublicProcedure({ input: z.void(), output: z.string() })).toThrow(
+      /rate limit/,
+    );
+
+    const anonymousSignIn = adminPublicProcedure({
+      input: z.void(),
+      output: z.string(),
+      rateLimit: {
+        key: defaultRateLimits.authentication,
+        subjectOf: ({ ctx }) => ctx.clientAddress,
+      },
+    }).mutation(() => 'in');
+    // @ts-expect-error -- T016: an administrator-surface procedure cannot be mounted on the user surface (R-API-11)
+    expect(() => createAppRouter({ anonymousSignIn })).not.toThrow();
+    const metaOf = (path: string) =>
+      (administrator._def.procedures as Record<string, AnyProcedure>)[path]?._def.meta;
+    expect(metaOf('signIn')).toEqual({ surface: 'admin', rateLimit: 'rate_limit_authentication' });
+
+    // Anonymous: the call reaches the handler.
+    expect(await callAdministrator(adminContext(null)).signIn({ email: 'a@b.c' })).toBe(
+      'signed in',
+    );
+    expect(signIn).toHaveBeenCalledTimes(1);
+
+    // Its limit is applied from the limiter the administrator context carries.
+    const { limiter, counter } = limiterOf(1);
+    const limited = callAdministrator(adminContext(null, limiter));
+    expect(await limited.signIn({ email: 'x@y.z' })).toBe('signed in');
+    expect(await refusal(() => limited.signIn({ email: 'x@y.z' }))).toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    expect(counter.hits).toBe(2);
   });
 });
 
@@ -183,7 +411,9 @@ describe('every kind applies its output schema (T169, R-HONEST-4, R-API-9)', () 
     // @ts-expect-error -- T169: every caller kind requires its output schema
     expect(() => studentProcedure({ input: z.void() })).toThrow();
     // @ts-expect-error -- T169: every caller kind requires its output schema
-    expect(() => teacherProcedure({ input: z.void() })).toThrow();
+    expect(() => teacherProcedure({ admits: 'applicant', input: z.void() })).toThrow();
+    // @ts-expect-error -- T169: every caller kind requires its output schema
+    expect(() => userProcedure({ input: z.void() })).toThrow();
     // @ts-expect-error -- T169: every caller kind requires its output schema
     expect(() => adminProcedure({ input: z.void() })).toThrow();
     // @ts-expect-error -- T107, T169: a kind takes its two schemas, not a bare input
@@ -191,7 +421,7 @@ describe('every kind applies its output schema (T169, R-HONEST-4, R-API-9)', () 
   });
 
   it('parses the handler’s result through it, so a field the schema does not name is stripped', async () => {
-    const caller = callUser(createAppContext({ session: student, log, rateLimiter }));
+    const caller = callUser(appContext(student));
     const answer = await caller.whoAmI();
     expect(answer).toEqual({ userId: 'student-1', gender: 'female' });
     expect(JSON.stringify(answer)).not.toContain(secret);
@@ -199,7 +429,7 @@ describe('every kind applies its output schema (T169, R-HONEST-4, R-API-9)', () 
   });
 
   it('answers an output that fails its schema as the internal error, unexpected, never 400 with the response’s paths', async () => {
-    const caller = callUser(createAppContext({ session: null, log, rateLimiter }));
+    const caller = callUser(appContext(null));
     const answer = await refusal(() => caller.broken());
     expect(answer).toEqual({ status: 500, code: 'INTERNAL', details: undefined, unexpected: true });
   });
@@ -261,11 +491,20 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
         output: z.string(),
         rateLimit: { key: defaultRateLimits.search, subjectOf: ({ ctx }) => ctx.caller.userId },
       }).query(() => 'mine'),
+      // The user kind accepts a declaration as the student and teacher kinds do (`account.delete`).
+      erase: userProcedure({
+        input: z.void(),
+        output: z.string(),
+        rateLimit: {
+          key: defaultRateLimits.authentication,
+          subjectOf: ({ ctx }) => ctx.caller.userId,
+        },
+      }).mutation(() => 'erased'),
     });
     const { limiter, counter } = limiterOf(1);
     const call = createAppCallerFactory(limited);
-    const anonymous = call(createAppContext({ session: null, log, rateLimiter: limiter }));
-    const signedIn = call(createAppContext({ session: student, log, rateLimiter: limiter }));
+    const anonymous = call(appContext(null, limiter));
+    const signedIn = call(appContext(student, limiter));
 
     expect(await anonymous.requestCode({ phone: '+201001234567' })).toBe('sent');
     expect(await refusal(() => anonymous.requestCode({ phone: '+201001234567' }))).toMatchObject({
@@ -277,7 +516,9 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
 
     expect(await signedIn.mine()).toBe('mine');
     expect(await refusal(() => signedIn.mine())).toMatchObject({ status: 429 });
-    expect(counter.hits).toBe(4);
+    expect(await signedIn.erase()).toBe('erased');
+    expect(await refusal(() => signedIn.erase())).toMatchObject({ status: 429 });
+    expect(counter.hits).toBe(6);
   });
 
   it('stamps the key in the procedure’s meta, beside the surface', () => {

@@ -6,7 +6,7 @@
 // answers exactly as an absent one does: 404, never 403, with an identical body.
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { DomainError, ForbiddenProfileError } from './domain-error.js';
+import { DomainError, errorCodes, ForbiddenProfileError } from './domain-error.js';
 import { mapError } from './error-filter.js';
 
 const internals = [
@@ -107,6 +107,75 @@ describe('one shape out (T094, FR-041)', () => {
     expectOneShape(mapped.body);
     expect(JSON.stringify(mapped.body)).not.toContain('not-an-email');
     expectNoInternals(mapped.body);
+  });
+});
+
+describe('the Phase 1 codes (T018; specs/002-identity/contracts/README.md "Errors")', () => {
+  it.each([
+    ['ACCOUNT_RESTRICTED', 403],
+    ['EMAIL_IN_USE_BY_OTHER_METHOD', 409],
+    ['SIGN_IN_FAILED', 401],
+    ['CODE_INVALID', 400],
+    ['ONBOARDING_TOKEN_INVALID', 401],
+    ['PASSWORD_WEAK', 400],
+    ['ADMIN_SIGN_IN_FAILED', 401],
+    ['MFA_REQUIRED', 403],
+    ['MFA_SETUP_REQUIRED', 403],
+    ['APPROVAL_BLOCKED', 409],
+    ['APPLICATION_INCOMPLETE', 409],
+    ['DOCUMENT_NOT_OWNED', 403],
+  ] as const)('%s is a stable code with one message, answered %i', (code, status) => {
+    const mapped = mapError(new DomainError(code));
+    expect(mapped.status).toBe(status);
+    expect(mapped.body).toEqual({ code, message: errorCodes[code].message });
+    expect(mapped.unexpected).toBe(false);
+    expectOneShape(mapped.body);
+    expectNoInternals(mapped.body);
+  });
+
+  it('carries the contract’s details as field issues: the standing, the method, the blocking reasons', () => {
+    const restricted = mapError(
+      new DomainError('ACCOUNT_RESTRICTED', undefined, {
+        details: [{ path: 'accountStatus', code: 'suspended' }],
+      }),
+    );
+    expect(restricted.body).toEqual({
+      code: 'ACCOUNT_RESTRICTED',
+      message: 'This account is restricted.',
+      details: [{ path: 'accountStatus', code: 'suspended' }],
+    });
+    const inUse = mapError(
+      new DomainError('EMAIL_IN_USE_BY_OTHER_METHOD', undefined, {
+        details: [{ path: 'email', code: 'google' }],
+      }),
+    );
+    expect(inUse.body.details).toEqual([{ path: 'email', code: 'google' }]);
+    const blocked = mapError(
+      new DomainError('APPROVAL_BLOCKED', undefined, {
+        details: [
+          { path: 'application', code: 'call_not_recorded' },
+          { path: 'application', code: 'no_approved_credential' },
+        ],
+      }),
+    );
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.details).toHaveLength(2);
+    expectOneShape(blocked.body);
+  });
+
+  it('the one-message codes carry no cause: which of several failures applied is not told', () => {
+    for (const code of [
+      'SIGN_IN_FAILED',
+      'CODE_INVALID',
+      'PASSWORD_WEAK',
+      'ADMIN_SIGN_IN_FAILED',
+    ] as const) {
+      const mapped = mapError(
+        new DomainError(code, undefined, { cause: new Error('locked_until 2026') }),
+      );
+      expect(JSON.stringify(mapped.body)).not.toContain('locked');
+      expect(mapped.body).not.toHaveProperty('cause');
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 // platform kernel domain (T134, ERD section 12, ADR 0008 D2). Owned by apps/api/src/platform/idempotency.
-// idempotency_keys: unique (scope, key), request_hash, response jsonb, status in_progress · completed, expires_at.
+// idempotency_keys: unique (scope, actor_id, key) since Phase 1 (T018, ERD §15 rule 26), request_hash, response jsonb, status in_progress · completed, expires_at.
 // Not the webhook replay mechanism (that is provider_event_id on payment_events / session_participant_events).
 
 // A client-retried mutation and its effect commit in one transaction (FR-042, research R-14).
@@ -7,6 +7,8 @@ model IdempotencyKey {
   id          String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
   // The procedure or job the key applies to.
   scope       String
+  // The server-resolved principal the key belongs to; never the client's word (T018, FR-106).
+  actorId     String               @map("actor_id")
   // The client-supplied key.
   key         String
   // Hash of the canonical request; a reuse with a different hash is refused.
@@ -20,7 +22,8 @@ model IdempotencyKey {
   // `created_at` plus the retention setting; swept by `expire-idempotency-keys` (T102).
   expiresAt   DateTime             @map("expires_at") @db.Timestamptz(6)
 
-  // A repeated client mutation returns the first outcome and never repeats the effect (ERD section 15.16).
-  @@unique([scope, key])
+  // A repeated client mutation by the same actor returns the first outcome and never repeats the
+  // effect; two actors with one key each have their own row (ERD section 15.26, which replaced 15.16).
+  @@unique([scope, actorId, key])
   @@map("idempotency_keys")
 }

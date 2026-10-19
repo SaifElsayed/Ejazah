@@ -6,9 +6,37 @@
 // A page is rows holding a value, in id order, after the last row of the page before. A value is
 // replaced only where the row still holds the one read, so a value written meanwhile is kept.
 import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encryption.js';
-import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 
 type Client = Pick<Database, 'teacherProfile' | 'devicePushToken' | 'authIdentity'>;
+
+/** What the admin module's label renderer reads of a person at read time (T021, FR-181, R-108). */
+export interface TargetPerson {
+  readonly displayName: string | null;
+  readonly role: 'student' | 'teacher' | null;
+  /** The row is soft-deleted: the name is gone and the person reads under the role word. */
+  readonly deleted: boolean;
+}
+
+/**
+ * The person an audit target names, on the reading transaction: the display name while the row
+ * is live, the role once it is deleted (the ordinary client hides a deleted row, so a role row
+ * without its user is a deleted person; FR-141 keeps the role row). Null when no such person
+ * ever existed.
+ */
+export async function readTargetPerson(
+  tx: Pick<Transaction, 'user' | 'userRole'>,
+  userId: string,
+): Promise<TargetPerson | null> {
+  const [user, role] = await Promise.all([
+    tx.user.findUnique({ where: { id: userId }, select: { displayName: true } }),
+    tx.userRole.findUnique({ where: { userId }, select: { role: true } }),
+  ]);
+  if (user !== null)
+    return { displayName: user.displayName, role: role?.role ?? null, deleted: false };
+  if (role !== null) return { displayName: null, role: role.role, deleted: true };
+  return null;
+}
 
 const afterRow = (after: string | undefined) => (after === undefined ? {} : { id: { gt: after } });
 

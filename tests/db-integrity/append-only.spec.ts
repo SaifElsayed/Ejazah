@@ -44,6 +44,7 @@ const appendOnly: ReadonlyArray<{
         action: 'probe.recorded',
         target_type: 'probe',
         target_id: adminId,
+        target_label: `مشرف · ${adminId}`,
       });
     },
   },

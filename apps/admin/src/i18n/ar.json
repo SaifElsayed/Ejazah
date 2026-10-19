@@ -134,13 +134,6 @@
         "label": "بحث",
         "placeholder": "الهدف أو السبب"
       },
-      "targets": {
-        "application": "طلب انضمام {name}",
-        "chatReport": "بلاغ محادثة",
-        "credential": "إجازة {subject} · {teacher}",
-        "ijazah": "إجازة {student} · {code}",
-        "review": "تقييم {student} لـ{teacher}"
-      },
       "title": "سجل التدقيق"
     },
     "chatLog": {
@@ -344,7 +337,6 @@
       "a11y": {
         "correctChain": "تصحيح السند",
         "deleteGeneration": "حذف الجيل {n}",
-        "documentPage": "إجازة {subject} لـ{teacher}، الصفحة {page}",
         "documentPages": "صفحات الإجازة",
         "openFull": "فتح الوثيقة بالحجم الكامل",
         "queueAndDocument": "الطابور والوثيقة",
@@ -770,7 +762,6 @@
         "reasonLabel": "سبب إعادة الضبط (إلزامي)",
         "reasonPlaceholder": "مثلًا: فقد هاتفه، وتحققت من هويته بمكالمة",
         "subtitle": "{email} · مشرف منذ {date}",
-        "title": "إعادة ضبط التحقق بخطوتين لـ{name}",
         "verifyHint": "تحقّق من هوية المشرف خارج اللوحة قبل التأكيد."
       },
       "requireId": {

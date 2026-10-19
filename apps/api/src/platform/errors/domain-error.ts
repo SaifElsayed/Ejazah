@@ -5,6 +5,13 @@
 // stable codes below, and the error filter turns it, and everything else, into the one shape. The
 // codes are the machine strings a client switches on, so they are never a database or vendor code;
 // the message is safe to display and the client localises by code.
+//
+// T018 (Phase 1, specs/002-identity/contracts/README.md "Errors"): the codes the identity phase
+// adds, each a stable string with one message, so what the client is told never depends on which
+// of several causes applied (a wrong email or a wrong password, a wrong, expired or spent code, a
+// short, long or breached password, wrong credentials or a locked account). Where the contract
+// says "with … in details", the detail travels as a `FieldIssue` — `path` names what the detail
+// is about and `code` carries it — so the shape stays the one shape (R-API-9).
 
 /** One field-level validation problem: where, and what kind. Never the value that was sent. */
 export interface FieldIssue {
@@ -29,6 +36,24 @@ export const errorCodes = {
   PAYLOAD_TOO_LARGE: { status: 413, message: 'The request is too large.' },
   RATE_LIMITED: { status: 429, message: 'Too many requests. Try again later.' },
   INTERNAL: { status: 500, message: 'Something went wrong. Try again later.' },
+  // Phase 1 (T018). The restricted standing travels as `details: [{ path: 'accountStatus', code }]`.
+  ACCOUNT_RESTRICTED: { status: 403, message: 'This account is restricted.' },
+  // The method travels as `details: [{ path: 'email', code: 'google' | 'apple' | 'email' }]`.
+  EMAIL_IN_USE_BY_OTHER_METHOD: {
+    status: 409,
+    message: 'This email is already used with another sign-in method.',
+  },
+  SIGN_IN_FAILED: { status: 401, message: 'The email or password is not correct.' },
+  CODE_INVALID: { status: 400, message: 'The code is not valid.' },
+  ONBOARDING_TOKEN_INVALID: { status: 401, message: 'Start the sign-in again.' },
+  PASSWORD_WEAK: { status: 400, message: 'Choose a stronger password.' },
+  ADMIN_SIGN_IN_FAILED: { status: 401, message: 'Sign-in failed.' },
+  MFA_REQUIRED: { status: 403, message: 'Verify the second factor to continue.' },
+  MFA_SETUP_REQUIRED: { status: 403, message: 'Set up two-step verification to continue.' },
+  // The blocking reasons travel as `details: [{ path: 'application', code: reason }, …]`.
+  APPROVAL_BLOCKED: { status: 409, message: 'The application cannot be approved yet.' },
+  APPLICATION_INCOMPLETE: { status: 409, message: 'The application is not complete.' },
+  DOCUMENT_NOT_OWNED: { status: 403, message: 'This document is not yours.' },
 } as const satisfies Record<string, { status: number; message: string }>;
 
 export type ErrorCode = keyof typeof errorCodes;

@@ -75,11 +75,14 @@ const OTHER_PHONE = '+201009876543';
 const THIRD_PHONE = '+201005555555';
 const REPORT_LIMIT = 'rate_limit_report_user';
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
+const clientAddress = '203.0.113.7';
 const OTHER_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
 
 const student: UserSession = {
   userId: '0199c1a0-0000-7000-8000-000000000001',
-  activeRoles: ['student'],
+  sessionId: '0199c1a0-0000-7000-8000-000000000002',
+  role: 'student',
+  accountStatus: 'active',
   gender: 'male',
   preferredLanguage: 'ar',
 };
@@ -162,9 +165,10 @@ function fixture(
 
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const callerFor = createAppCallerFactory(router);
-  const anonymous = () => callerFor(createAppContext({ session: null, log, rateLimiter: limiter }));
+  const anonymous = () =>
+    callerFor(createAppContext({ session: null, log, rateLimiter: limiter, clientAddress }));
   const signedIn = () =>
-    callerFor(createAppContext({ session: student, log, rateLimiter: limiter }));
+    callerFor(createAppContext({ session: student, log, rateLimiter: limiter, clientAddress }));
   return { settings, counter, limiter, anonymous, signedIn };
 }
 
@@ -392,7 +396,9 @@ describe('a platform-wide budget beside the per-subject limit (T170, review find
     );
     expect(budgetKey).toBeDefined();
     expect(f.counter.counts.get(budgetKey ?? '')).toBe(5);
-    expect(f.settings.reads.filter((key) => key === defaultRateLimits.authenticationBudget)).toHaveLength(5);
+    expect(
+      f.settings.reads.filter((key) => key === defaultRateLimits.authenticationBudget),
+    ).toHaveLength(5);
   });
 
   it('is checked first, so a refused budget counts nothing against the caller’s own subject', async () => {

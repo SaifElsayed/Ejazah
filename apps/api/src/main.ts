@@ -80,6 +80,15 @@ const administration = {
 // (R-API-15).
 const ports = selectPorts(config);
 
+// Stand-in session resolvers (T017): every request is anonymous until the identity module's
+// `resolveUserSession` (T047) and the admin module's `resolveAdminSession` (T066) replace them.
+// Each answers null, as a resolver does for a token it does not know (kernel.md "Session
+// resolution"), so the built entrypoint boots and serves exactly what it served before.
+const sessions = {
+  user: async () => null,
+  admin: async () => null,
+};
+
 const application = await createApplication({
   log,
   readiness: new ReadinessRepository(database),
@@ -87,6 +96,9 @@ const application = await createApplication({
   maxRequestBodyBytes: config.MAX_REQUEST_BODY_BYTES,
   administration,
   rateLimiter,
+  sessions,
+  // The one proxy header whose last hop is the client's address; unset before a host is chosen.
+  ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
 });
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');

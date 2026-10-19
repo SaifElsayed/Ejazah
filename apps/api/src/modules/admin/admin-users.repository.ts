@@ -5,9 +5,21 @@
 // A page is rows in id order, after the last row of the page before. A value is replaced only where
 // the row still holds the one read, so a value written meanwhile is kept.
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
-import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 
 type Client = Pick<Database, 'adminUser'>;
+
+/** An administrator's display name at read time, for the audit pages (T021, FR-181); null if none. */
+export async function readAdministratorName(
+  tx: Pick<Transaction, 'adminUser'>,
+  adminId: string,
+): Promise<string | null> {
+  const row = await tx.adminUser.findUnique({
+    where: { id: adminId },
+    select: { displayName: true },
+  });
+  return row?.displayName ?? null;
+}
 
 export class AdminUsersRepository {
   readonly #database: Client;

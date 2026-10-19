@@ -24,6 +24,9 @@ import { ConfigError, loadConfig } from '../config/config.module.js';
 import { createLogger } from '../logging/logger.js';
 import { RateLimiter } from './rate-limit.guard.js';
 
+// No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
+const sessions = { user: async () => null, admin: async () => null };
+
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
 // it. Each part refuses if it is ever reached.
 const administration = {
@@ -73,6 +76,7 @@ async function start(mode: Mode): Promise<{ application: INestApplication; origi
     maxRequestBodyBytes: 1_048_576,
     administration,
     rateLimiter,
+    sessions,
   });
   await application.listen(0, '127.0.0.1');
   const origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

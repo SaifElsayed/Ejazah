@@ -153,6 +153,7 @@ function sources(variant: Variant = {}): SnapshotSources {
   };
   const availability = {
     set: teacherProcedure({
+      admits: 'approved',
       input: z.object({ isActive: z.boolean() }),
       output: z.null(),
     }).mutation(() => null),
@@ -188,9 +189,7 @@ function sources(variant: Variant = {}): SnapshotSources {
       ? {}
       : {
           settings: {
-            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(
-              () => null,
-            ),
+            update: adminProcedure({ input: settingsInput, output: z.null() }).mutation(() => null),
           },
         },
   );

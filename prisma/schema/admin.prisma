@@ -113,6 +113,9 @@ model AuditLog {
   // by text and every settings change is audited (T172, FR-ADMIN-17, ADR 0011).
   targetType String   @map("target_type")
   targetId   String   @map("target_id")
+  // The target's kind word and identifier, rendered once at write time by the audit writer, never a
+  // name and never typed text; at most 200 characters by rule 29 (T021, FR-180, ADR 0021 D2).
+  targetLabel String  @map("target_label")
   // Mandatory for destructive actions.
   reason     String?
   // State snapshots.

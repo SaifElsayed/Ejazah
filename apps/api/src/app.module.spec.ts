@@ -18,6 +18,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createApplication, type Surfaces, surfacePaths } from './app.module.js';
 import { RateLimiter } from './platform/guards/rate-limit.guard.js';
+
+// No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
+const sessions = { user: async () => null, admin: async () => null };
+
 import { createLogger } from './platform/logging/logger.js';
 import {
   adminProcedure,
@@ -96,6 +100,7 @@ beforeAll(async () => {
     maxRequestBodyBytes: BODY_LIMIT,
     administration,
     rateLimiter,
+    sessions,
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');
@@ -209,6 +214,7 @@ describe('the request body limit (T150, FR-077)', () => {
       maxRequestBodyBytes: BODY_LIMIT,
       administration,
       rateLimiter,
+      sessions,
       surfaces: { app: user, admin: readsFirst },
     });
     await wired.listen(0, '127.0.0.1');

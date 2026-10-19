@@ -15,11 +15,21 @@
 //
 // THE BODY IS STREAMED. `sniffUpload` reads only the leading bytes it needs from the stream and
 // hands back a body that replays them, then the rest, unchanged, so the file is never held whole
-// here. Which types a path accepts, and how large a file may be (NFR-SEC-9), are the upload
-// route's, written by the phase that uploads the first file; this is the check every such route
-// puts in front of storage.
+// here.
+//
+// THE UPLOAD KINDS (T020, FR-151, research R-109; specs/002-identity/contracts/public-pages.md
+// "The uploads route"). A route names the kind of what it takes, and the kind decides the types:
+// `identity` and `credential` are PDF only, `photo` JPEG and PNG. `acceptUploadOfKind` is what the
+// uploads route puts in front of storage: it counts the uploader under `rate_limit_upload` first,
+// reads `upload_max_bytes` through the settings reader (FR-034: never a constant, and a missing
+// setting fails closed), decides the type by content as above, and hands back a body that refuses
+// the file as it streams past the limit, with the kernel's one error shape (413
+// `PAYLOAD_TOO_LARGE`), so an oversized file is never held or stored whole either.
 import { Buffer } from 'node:buffer';
+import { z } from 'zod';
 import { DomainError } from '../errors/domain-error.js';
+import type { RateLimiter, RateLimitKey } from './rate-limit.guard.js';
+import type { SettingsReader } from '../settings/settings-reader.js';
 
 /** The types content sniffing can recognise. */
 export type SniffedType =
@@ -127,6 +137,67 @@ export async function sniffUpload(body: AsyncIterable<Uint8Array>): Promise<Snif
   }
   const leading = Buffer.concat(head).subarray(0, HEAD_BYTES);
   return { type: sniffContentType(leading), body: replay(head, ended ? undefined : source) };
+}
+
+/** The kinds of upload this phase takes, and the types each admits (FR-151). */
+export type UploadKind = 'identity' | 'credential' | 'photo';
+
+export const uploadKinds: Readonly<Record<UploadKind, readonly SniffedType[]>> = {
+  identity: ['application/pdf'],
+  credential: ['application/pdf'],
+  photo: ['image/jpeg', 'image/png'],
+};
+
+/** The settings key of the largest file accepted (SRS §3.14, NFR-SEC-9). */
+export const UPLOAD_MAX_BYTES_SETTING = 'upload_max_bytes';
+
+/** The settings key of the per-user upload limit (contracts/README.md "Rate limits"). */
+export const UPLOAD_RATE_LIMIT = 'rate_limit_upload' satisfies RateLimitKey;
+
+const uploadMaxBytes = z.int().positive();
+
+/** What the kinds' guard reads its limits from. */
+export interface UploadGuard {
+  readonly settings: SettingsReader;
+  readonly rateLimiter: RateLimiter;
+}
+
+export interface UploadOfKind {
+  readonly kind: UploadKind;
+  /** The uploader, as the server resolved it; the subject of the per-user limit. */
+  readonly uploaderId: string;
+  readonly body: AsyncIterable<Uint8Array>;
+  /** The request's declared length, when it has one: refused before a byte is read if over. */
+  readonly declaredLength?: number;
+}
+
+function tooLarge(): DomainError {
+  return new DomainError('PAYLOAD_TOO_LARGE', 'The file is larger than allowed.');
+}
+
+/** `body` up to `limit` bytes; the chunk that crosses it is refused and nothing after it is read. */
+async function* within(body: AsyncIterable<Uint8Array>, limit: number): AsyncIterable<Uint8Array> {
+  let total = 0;
+  for await (const chunk of body) {
+    total += chunk.byteLength;
+    if (total > limit) throw tooLarge();
+    yield chunk;
+  }
+}
+
+/**
+ * The upload a route of `kind` accepts: counted, bounded by the setting, typed by content. The
+ * body handed back is the whole file, refused as it streams once it passes the limit.
+ */
+export async function acceptUploadOfKind(
+  { settings, rateLimiter }: UploadGuard,
+  { kind, uploaderId, body, declaredLength }: UploadOfKind,
+): Promise<SniffedUpload<SniffedType>> {
+  await rateLimiter.check(UPLOAD_RATE_LIMIT, uploaderId);
+  const limit = await settings.read(UPLOAD_MAX_BYTES_SETTING, uploadMaxBytes);
+  if (declaredLength !== undefined && declaredLength > limit) throw tooLarge();
+  const upload = await acceptUpload(body, uploadKinds[kind]);
+  return { type: upload.type, body: within(upload.body, limit) };
 }
 
 /** The upload, when its content is one of `accepted`; otherwise refused as a validation failure. */

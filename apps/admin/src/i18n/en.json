@@ -134,13 +134,6 @@
         "label": "Search",
         "placeholder": "Target or reason"
       },
-      "targets": {
-        "application": "Application of {name}",
-        "chatReport": "Chat report",
-        "credential": "{subject} ijazah · {teacher}",
-        "ijazah": "Ijazah of {student} · {code}",
-        "review": "Review by {student} of {teacher}"
-      },
       "title": "Audit log"
     },
     "chatLog": {
@@ -344,7 +337,6 @@
       "a11y": {
         "correctChain": "Correct the chain",
         "deleteGeneration": "Delete generation {n}",
-        "documentPage": "{subject} ijazah of {teacher}, page {page}",
         "documentPages": "Ijazah pages",
         "openFull": "Open the document at full size",
         "queueAndDocument": "Queue and document",
@@ -770,7 +762,6 @@
         "reasonLabel": "Reason for the reset (required)",
         "reasonPlaceholder": "For example: lost their phone, and I verified their identity by a call",
         "subtitle": "{email} · admin since {date}",
-        "title": "Reset two-step verification for {name}",
         "verifyHint": "Verify the admin's identity outside the panel before confirming."
       },
       "requireId": {

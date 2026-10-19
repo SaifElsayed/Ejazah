@@ -3,6 +3,9 @@ import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import { IdentityRepository } from './identity.repository.js';
 
+/** The person an audit target names, for the admin module's read-time name (T021, R-108). */
+export { readTargetPerson, type TargetPerson } from './identity.repository.js';
+
 /** The identity module's `_encrypted` columns, for the `reencrypt-columns` job (T155, R-API-6; the third since T013). */
 export function createEncryptedColumns(
   database: Pick<Database, 'teacherProfile' | 'devicePushToken' | 'authIdentity'>,

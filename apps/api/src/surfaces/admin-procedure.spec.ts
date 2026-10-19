@@ -21,6 +21,7 @@ import {
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import { DomainError } from '../platform/errors/domain-error.js';
+import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { createAdminContext } from './context.js';
 import {
@@ -84,6 +85,14 @@ const approval = {
 
 const handlerRan = vi.fn();
 
+/** A record whose target is of a kind the label renderer knows (T021). */
+const disabling = {
+  action: 'admin.disable',
+  targetType: 'admin',
+  targetId: '0199d0a0-0000-7000-8000-000000000007',
+  reason: 'left the team',
+} as const;
+
 /** A fixture administrator surface; every handler writes through the transaction it is handed. */
 function surfaceOver(database: FakeDatabase) {
   const approvalCall = { input: z.object({ teacherId: z.string() }), output: z.string() };
@@ -114,14 +123,28 @@ function surfaceOver(database: FakeDatabase) {
       return input.teacherIds.length;
     }),
     viewUnaudited: adminProcedure({ input: z.void(), output: z.string() }).query(() => 'seen'),
+    disable: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
+      database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
+      ctx.audit.record(disabling);
+      return 'disabled';
+    }),
+    disableUnlabelled: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
+      database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
+      // A target the renderer refuses: no identifier at all.
+      ctx.audit.record({ ...disabling, targetId: '' });
+      return 'disabled';
+    }),
   });
 }
 
 function callerOver(database: FakeDatabase, auditWriter: AuditWriter, adminId: string | null) {
   const context = createAdminContext({
-    session: adminId === null ? null : { adminId },
+    // The second factor is verified on every session here; its refusal is T016's, in procedures.spec.ts.
+    session: adminId === null ? null : { adminId, mfaVerified: true },
     log,
     administration: { transactions: database, auditWriter },
+    rateLimiter: {} as RateLimiter,
+    clientAddress: '203.0.113.7',
   });
   return createAdminCallerFactory(surfaceOver(database))(context);
 }
@@ -240,6 +263,55 @@ describe('the administrator caller kind writes its own audit record (T099, FR-04
       code: 'VALIDATION_FAILED',
     });
     expect(database.opened).toBe(0);
+  });
+});
+
+describe('an empty label rolls the action back (T021, FR-180)', () => {
+  /**
+   * A writer that refuses as the admin module's does (`modules/admin/audit.repository.ts`, proven
+   * in its own spec): the label is rendered from the type and the id before the insert, and a
+   * target without an identifier is thrown at, not written. The surfaces may not import the admin
+   * module (R-API-3, R-API-4), so the refusal is mirrored here and the kind's answer is the case.
+   */
+  function labelling(database: FakeDatabase) {
+    const inserts: Array<Record<string, unknown>> = [];
+    const writer: AuditWriter = {
+      write: async (tx, record) => {
+        if (record.targetId === '') {
+          throw new Error('The audit target label was refused: the identifier is empty (FR-180).');
+        }
+        inserts.push({ ...record, targetLabel: `مشرف · ${record.targetId}` });
+        database.stage(tx, { table: 'audit_logs', record });
+      },
+    };
+    return { writer, inserts };
+  }
+
+  it('a labelled action commits with its record', async () => {
+    const database = new FakeDatabase();
+    const { writer, inserts } = labelling(database);
+    await callerOver(database, writer, 'admin-1').disable({ teacherId: 't-1' });
+    expect(inserts).toHaveLength(1);
+    expect(database.committed).toHaveLength(2);
+  });
+
+  it('an empty label rolls the action back: refused before the insert, nothing committed, answered as unexpected', async () => {
+    const database = new FakeDatabase();
+    const { writer, inserts } = labelling(database);
+    const caller = callerOver(database, writer, 'admin-1');
+    expect(await refusal(() => caller.disableUnlabelled({ teacherId: 't-2' }))).toEqual({
+      status: 500,
+      code: 'INTERNAL',
+    });
+    expect(inserts).toEqual([]);
+    expect(database.committed).toEqual([]);
+    expect(database.opened).toBe(1);
+  });
+
+  it('a handler cannot pass a label', () => {
+    // @ts-expect-error -- T021: `AuditEntry.targetLabel` is `never`; the writer renders it.
+    const entry: AuditRecord = { ...disabling, adminId: 'admin-1', targetLabel: 'مشرف · typed' };
+    expect(entry.targetLabel).toBe('مشرف · typed');
   });
 });
 
