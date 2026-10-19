@@ -62,10 +62,14 @@ describe('platform.publicConfig (T038, FR-145)', () => {
     expect(check).toHaveBeenCalledWith(PUBLIC_PAGE_RATE_LIMIT, CLIENT);
     const procedures = router._def.procedures as unknown as Record<
       string,
-      { _def: { meta?: { surface: string; rateLimit?: string } } }
+      { _def: { meta?: { surface: string; caller?: string; rateLimit?: string } } }
     >;
     const procedure = procedures['platform.publicConfig'];
-    expect(procedure?._def.meta).toEqual({ surface: 'app', rateLimit: PUBLIC_PAGE_RATE_LIMIT });
+    expect(procedure?._def.meta).toEqual({
+      surface: 'app',
+      caller: 'public',
+      rateLimit: PUBLIC_PAGE_RATE_LIMIT,
+    });
   });
 
   it('fails closed when the terms version is not stored or is not a version (FR-034)', async () => {

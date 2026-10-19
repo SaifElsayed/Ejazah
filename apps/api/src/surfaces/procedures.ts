@@ -90,8 +90,16 @@ import type {
 } from './context.js';
 
 /** The meta of every user-surface procedure. */
+/** The user surface's caller kinds, as the meta names them. */
+export type AppCallerKind = 'public' | 'user' | 'student' | 'teacher';
+
 export interface AppMeta {
   readonly surface: 'app';
+  /**
+   * The procedure's caller kind, recorded in the contract snapshot so the R-MOBILE-13 gate reads
+   * which procedures are not public from a file (T028, research R-115).
+   */
+  readonly caller: AppCallerKind;
   /** The settings key of the procedure's declared rate limit, when it declares one (T170). */
   readonly rateLimit?: RateLimitKey;
 }
@@ -141,7 +149,9 @@ const formatter = {
 const app = initTRPC
   .context<AppContext>()
   .meta<AppMeta>()
-  .create({ ...formatter, defaultMeta: { surface: 'app' }, isServer: true });
+  // Every kind stamps its caller; the default is the guarded one, so a procedure that somehow
+  // skipped a kind would be held by the R-MOBILE-13 gate rather than read as public (T028).
+  .create({ ...formatter, defaultMeta: { surface: 'app', caller: 'user' }, isServer: true });
 
 const admin = initTRPC
   .context<AdminContext>()
@@ -252,10 +262,13 @@ export interface AdminPublicProcedureDeclaration<
 }
 
 /** The meta a user-surface procedure is stamped with: its surface, and its limit's key when declared. */
-function appMeta(rateLimit: RateLimitDeclaration<never, never> | undefined): AppMeta {
+function appMeta(
+  caller: AppCallerKind,
+  rateLimit: RateLimitDeclaration<never, never> | undefined,
+): AppMeta {
   return rateLimit === undefined
-    ? { surface: 'app' }
-    : { surface: 'app', rateLimit: rateLimit.key };
+    ? { surface: 'app', caller }
+    : { surface: 'app', caller, rateLimit: rateLimit.key };
 }
 
 /** The two standings every user kind refuses unless it says otherwise (FR-137, kernel.md). */
@@ -326,7 +339,7 @@ export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
     throw new Error('A public procedure declares its rate limit (R-SEC-6, T170).');
   }
   return app.procedure
-    .meta(appMeta(rateLimit))
+    .meta(appMeta('public', rateLimit))
     .input(input)
     .output(output)
     .use(throttle(rateLimit));
@@ -343,7 +356,7 @@ function signedIn<TIn, TInOut, TOutIn, TOutOut>(
   role: Role | undefined,
 ): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
   const builder = app.procedure
-    .meta(appMeta(rateLimit))
+    .meta(appMeta(role ?? 'user', rateLimit))
     .use(requireUser({ role, admitsRestricted }))
     .input(input)
     .output(output);
@@ -386,7 +399,7 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
   }
   const { input, output, rateLimit, admitsRestricted = false } = declaration;
   const builder = app.procedure
-    .meta(appMeta(rateLimit))
+    .meta(appMeta('teacher', rateLimit))
     .use(requireUser({ role: 'teacher', admitsRestricted }))
     .use(requireStanding(admits))
     .input(input)

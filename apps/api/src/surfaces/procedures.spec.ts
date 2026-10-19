@@ -532,7 +532,7 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
     expect(counter.hits).toBe(6);
   });
 
-  it('stamps the key in the procedure’s meta, beside the surface', () => {
+  it('stamps the key in the procedure’s meta, beside the surface and the caller kind', () => {
     const limited = createAppRouter({
       search: studentProcedure({
         input: z.void(),
@@ -543,7 +543,39 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
     });
     const metaOf = (path: string) =>
       (limited._def.procedures as Record<string, AnyProcedure>)[path]?._def.meta;
-    expect(metaOf('search')).toEqual({ surface: 'app', rateLimit: 'rate_limit_search' });
-    expect(metaOf('unlimited')).toEqual({ surface: 'app' });
+    expect(metaOf('search')).toEqual({
+      surface: 'app',
+      caller: 'student',
+      rateLimit: 'rate_limit_search',
+    });
+    expect(metaOf('unlimited')).toEqual({ surface: 'app', caller: 'student' });
+  });
+
+  it('names each kind in the meta, so the R-MOBILE-13 gate reads it from the snapshot (T028)', () => {
+    const router = createAppRouter({
+      open: publicProcedure({
+        input: z.void(),
+        output: z.string(),
+        rateLimit: unlimitedInTest,
+      }).query(() => 'open'),
+      any: userProcedure({ input: z.void(), output: z.string() }).query(() => 'any'),
+      learner: studentProcedure({ input: z.void(), output: z.string() }).query(() => 'learner'),
+      teaching: teacherProcedure({
+        input: z.void(),
+        output: z.string(),
+        admits: 'applicant',
+      }).query(() => 'teaching'),
+    });
+    const callerOf = (path: string) =>
+      (
+        (router._def.procedures as Record<string, AnyProcedure>)[path]?._def.meta as
+          { caller?: string } | undefined
+      )?.caller;
+    expect(['open', 'any', 'learner', 'teaching'].map(callerOf)).toEqual([
+      'public',
+      'user',
+      'student',
+      'teacher',
+    ]);
   });
 });

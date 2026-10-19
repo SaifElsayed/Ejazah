@@ -140,14 +140,18 @@ describe('the two surfaces share nothing (T098)', () => {
 
   // T170: a declared rate limit is stamped in the procedure's meta beside its surface, so what a
   // surface serves can be read for its limits as it is read for its surface.
-  it('a procedure’s meta names its surface and, when declared, its rate limit (T170)', () => {
+  it('a procedure’s meta names its surface, its caller kind (T028) and, when declared, its rate limit (T170)', () => {
     const user = createAppRouter({ catalogue: { list: catalogue }, booking, availability });
     const metaOf = (path: string) =>
       (proceduresOf(user).get(path)?._def.meta ?? undefined) as
         { surface: string; rateLimit?: string } | undefined;
-    expect(metaOf('catalogue.list')).toEqual({ surface: 'app', rateLimit: 'rate_limit_search' });
-    expect(metaOf('booking')).toEqual({ surface: 'app' });
-    expect(metaOf('availability')).toEqual({ surface: 'app' });
+    expect(metaOf('catalogue.list')).toEqual({
+      surface: 'app',
+      caller: 'public',
+      rateLimit: 'rate_limit_search',
+    });
+    expect(metaOf('booking')).toEqual({ surface: 'app', caller: 'student' });
+    expect(metaOf('availability')).toEqual({ surface: 'app', caller: 'teacher' });
   });
 
   it('the type collector finds a procedure of the named surface at any depth', () => {

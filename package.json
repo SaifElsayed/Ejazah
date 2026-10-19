@@ -34,6 +34,7 @@
     "check:i18n": "tsx scripts/i18n-key-parity.ts",
     "check:i18n:admin": "tsx scripts/i18n-key-parity.ts --ar apps/admin/src/i18n/ar.json --en apps/admin/src/i18n/en.json",
     "check:suites": "tsx scripts/suite-gate.ts",
+    "check:authz": "tsx scripts/authz-test-gate.ts",
     "prepare": "husky"
   },
   "devDependencies": {

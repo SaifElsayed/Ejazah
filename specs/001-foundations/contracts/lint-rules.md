@@ -42,6 +42,7 @@ needed.
 | `sec/no-disabled-tls` | Disabling transport security verification or strict HTTP parsing, in any environment | R-SEC-11 |
 | `sec/no-body-logging` | Logger call receiving a raw request body | R-SEC-2 |
 | `db/no-weak-random` | Non-cryptographic randomness | R-DB-6 |
+| `db/no-unfiltered-relation-read` | In a `*.repository.ts` file, an `include` or `select` of a relation to a soft-deletable model (read from `prisma/schema/`) that does not exclude its deleted rows: a list relation without `where: { deletedAt: null }`, a single relation whose query does not filter by it, an unfiltered count (Phase 1, T026, research R-116) | R-DB-3 |
 | `api/no-push-outside-job` | Notification delivery reached outside the queued job | R-API-15 |
 | `api/require-escape-hatch-reason` | `any`, `as any` or `@ts-ignore` with no justification comment and ticket | R-API-10 |
 | `proc/require-suppression-reason` | An `eslint-disable` directive or an inline `eslint` configuration comment carrying no justification and ticket | R-PROC-7 |

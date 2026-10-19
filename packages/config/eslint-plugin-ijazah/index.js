@@ -76,6 +76,11 @@ const catalog = [
   { id: 'sec/no-disabled-tls', set: FAST, rule: require('./rules/no-disabled-tls') },
   { id: 'sec/no-body-logging', set: FAST, rule: require('./rules/no-body-logging') },
   { id: 'db/no-weak-random', set: FAST, rule: require('./rules/no-weak-random') },
+  {
+    id: 'db/no-unfiltered-relation-read',
+    set: FAST,
+    rule: require('./rules/no-unfiltered-relation-read'),
+  },
   { id: 'api/no-push-outside-job', set: FAST, rule: require('./rules/no-push-outside-job') },
   {
     id: 'api/require-escape-hatch-reason',

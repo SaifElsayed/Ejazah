@@ -233,6 +233,30 @@ describe('the snapshot records the published contract (T084, FR-063)', () => {
     expect(snapshot.procedures.admin['settings.update']?.kind).toBe('mutation');
   });
 
+  it('records each user-surface procedure’s caller kind, which the R-MOBILE-13 gate reads (T028)', () => {
+    const snapshot = snapshotOf(sources());
+    expect(snapshot.procedures.app['booking.create']?.caller).toBe('student');
+    expect(snapshot.procedures.app['profile.get']?.caller).toBe('public');
+    expect(snapshot.procedures.app['availability.set']?.caller).toBe('teacher');
+    // The administrator surface's meta names no caller kind; nothing is recorded for it.
+    expect(snapshot.procedures.admin['settings.update']?.caller).toBeUndefined();
+    // And a committed snapshot reads it back.
+    const again = parseSnapshot(JSON.stringify(snapshot));
+    expect(again.procedures.app['booking.create']?.caller).toBe('student');
+  });
+
+  it('passes a base committed before the caller kind was recorded (T028, additive)', () => {
+    const base = snapshotOf(sources());
+    const withoutCallers = JSON.parse(JSON.stringify(base)) as {
+      procedures: Record<string, Record<string, Record<string, unknown>>>;
+    };
+    for (const surface of Object.values(withoutCallers.procedures)) {
+      for (const entry of Object.values(surface)) delete entry['caller'];
+    }
+    const old = parseSnapshot(JSON.stringify(withoutCallers));
+    expect(findRemovals(old, base)).toEqual([]);
+  });
+
   it('records the fields of an input, nested, with their types and whether each is required', () => {
     const snapshot = base();
     expect(snapshot.procedures.app['booking.create']?.input).toEqual({

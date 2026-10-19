@@ -78,9 +78,13 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
     expect(check).toHaveBeenCalledWith(PUBLIC_PAGE_RATE_LIMIT, CLIENT);
     const procedures = router._def.procedures as unknown as Record<
       string,
-      { _def: { meta?: { surface: string; rateLimit?: string } } }
+      { _def: { meta?: { surface: string; caller?: string; rateLimit?: string } } }
     >;
     const procedure = procedures['catalog.subjects.list'];
-    expect(procedure?._def.meta).toEqual({ surface: 'app', rateLimit: PUBLIC_PAGE_RATE_LIMIT });
+    expect(procedure?._def.meta).toEqual({
+      surface: 'app',
+      caller: 'public',
+      rateLimit: PUBLIC_PAGE_RATE_LIMIT,
+    });
   });
 });

@@ -6,7 +6,8 @@
 // per-path coverage floors (T086) hold the "unit tests" half; this gate holds the other. Against the
 // base, every changed file is read (committed, uncommitted and untracked, as the migration check
 // reads them), and for each suite in scripts/suite-gate.paths.ts a change under its guarded paths
-// with no change under its tests is refused, naming R-PROC-5, the files and the tests expected.
+// with no change under its tests is refused, naming the suite's rule (R-PROC-5; R-MOBILE-13 for the
+// phone's coupling, T028), the files and the tests expected.
 // One suite never stands in for the other.
 //
 // WHAT "CHANGED" IS. `git diff --no-renames --name-only <base>` against the working tree, plus the
@@ -59,7 +60,7 @@ export function judge(changed: readonly string[]): string[] {
     if (guarded.length === 0) continue;
     if (changed.some((path) => matches(path, suite.tests))) continue;
     refusals.push(
-      `R-PROC-5: a ${suite.name} change with no change to ${suite.testsShown}: ${guarded.join(', ')}. Update those tests in the same change.`,
+      `${suite.rule}: a ${suite.name} change with no change to ${suite.testsShown}: ${guarded.join(', ')}. Update those tests in the same change.`,
     );
   }
   return refusals;

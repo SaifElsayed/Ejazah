@@ -73,7 +73,8 @@ const { RULE_SETS } = require(path.join(pluginPath, 'rule.js')) as {
 const contractMarkdown = readFileSync(contractPath, 'utf8');
 const contractRules = parseContractRules(contractMarkdown);
 
-// Every row of both rule tables, unfiltered: the plugin registers all thirty.
+// Every row of both rule tables, unfiltered: the plugin registers all thirty-one (T026 added
+// `db/no-unfiltered-relation-read`).
 const publishedRules = contractRules;
 const contractRuleById = new Map(publishedRules.map((rule) => [rule.ruleId, rule]));
 

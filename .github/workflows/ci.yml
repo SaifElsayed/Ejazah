@@ -208,6 +208,10 @@ jobs:
       # guarded paths and their tests are listed in scripts/suite-gate.paths.ts.
       - name: Suite gate against the base (R-PROC-5)
         run: pnpm check:suites --base "$COMPARE_BASE"
+      # T028 — every user-surface procedure that is not public has a module spec naming its path and
+      # asserting the wrong caller's refusal, read from the committed contract snapshot (FR-210).
+      - name: Authorization-test gate (R-MOBILE-13)
+        run: pnpm check:authz
       - name: Create the application role, as docker/initdb does locally (T065)
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
