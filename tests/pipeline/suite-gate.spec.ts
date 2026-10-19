@@ -18,7 +18,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { guards, judge, main, matches } from '../../scripts/suite-gate';
-import { GENDER, TIME } from '../../scripts/suite-gate.paths';
+import { GENDER, MOBILE, TIME } from '../../scripts/suite-gate.paths';
 
 const root = join(__dirname, '..', '..');
 
@@ -169,6 +169,42 @@ function run(cwd: string, argv: readonly string[]) {
   const code = main(argv, cwd, { out: () => undefined, err: (text) => err.push(text) });
   return { code, err: err.join('') };
 }
+
+describe('the mobile coupling (T028, R-MOBILE-13, FR-210)', () => {
+  it('guards the mobile feature trees and counts the API module specs', () => {
+    expect(MOBILE.changes).toEqual(['apps/mobile/src/features/**']);
+    expect(MOBILE.tests).toEqual(['apps/api/src/modules/**/*.spec.ts']);
+  });
+
+  it('refuses a screen change with no module spec change, naming R-MOBILE-13 and the file', () => {
+    const refusals = judge([
+      'apps/mobile/src/features/teacher/application/screens/ApplySubjects.tsx',
+    ]);
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toMatch(/^R-MOBILE-13: /);
+    expect(refusals[0]).toContain('ApplySubjects.tsx');
+    expect(refusals[0]).toContain('apps/api/src/modules/**/*.spec.ts');
+  });
+
+  it('passes the same change once a module spec changes with it', () => {
+    expect(
+      judge([
+        'apps/mobile/src/features/teacher/application/screens/ApplySubjects.tsx',
+        'apps/api/src/modules/verification/application.spec.ts',
+      ]),
+    ).toEqual([]);
+  });
+
+  it('leaves the phone’s own specs and the rest of the app out', () => {
+    expect(
+      judge([
+        'apps/mobile/src/features/student/shells.spec.tsx',
+        'apps/mobile/src/design/primitives/Button.tsx',
+        'apps/mobile/src/lib/client.ts',
+      ]),
+    ).toEqual([]);
+  });
+});
 
 describe('the suite gate against a base, through git (T163)', () => {
   it('reads committed, uncommitted and untracked changes against the base', () => {

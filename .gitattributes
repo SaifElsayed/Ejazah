@@ -2,3 +2,5 @@
 *.png binary
 *.jpg binary
 *.pdf binary
+# The bundled breached-password list (T040): never a text diff, never a line-ending change.
+*.bin binary

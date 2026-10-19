@@ -5,6 +5,7 @@
 // UTC (contracts/README.md "Dates").
 import { z } from 'zod';
 import { emailAddress } from './platform.js';
+import { password } from './password.js';
 
 /** The providers a person may sign in with (ADR 0012 D2). */
 export const authProvider = z.enum(['google', 'apple']);
@@ -19,9 +20,6 @@ export const nonce = z.string().min(1).max(256);
 export const authorizationCode = z.string().min(1).max(2048);
 /** A token this platform issued: access, refresh or onboarding. */
 export const platformToken = z.string().min(1).max(4096);
-
-/** A password: length only, no composition rule; the breached check is the service's (FR-128). */
-export const password = z.string().min(8).max(128);
 
 /** A one-time code as the person types it: six digits (research R-104). */
 export const oneTimeCode = z.string().regex(/^[0-9]{6}$/);

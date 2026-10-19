@@ -12,7 +12,8 @@
 // same holds for `pnpm check:generated`, which regenerates the snapshot in this process.
 //
 // WHAT IS RECORDED (owner's decisions 1 and 2, 2026-10-10). For both surfaces (`app.router.ts` and
-// `admin.router.ts` in apps/api/src/surfaces), every procedure path with its kind, and the fields of
+// `admin.router.ts` in apps/api/src/surfaces), every procedure path with its kind (and, on the user
+// surface, its caller kind from the meta, T028), and the fields of
 // its input and output: every field path, nested (`$.slot.dayOfWeek`, `$.notes[]`, a record's
 // values as `$.meta.*`), with its JSON type, for an enum field its values, and `required` for an
 // object property its parent's JSON Schema lists as required. Fields are read
@@ -75,6 +76,12 @@ export type Fields = Readonly<Record<string, FieldEntry>>;
 
 export interface ProcedureEntry {
   readonly kind: string;
+  /**
+   * The user surface's caller kind (`public`, `user`, `student`, `teacher`) from the procedure's
+   * meta, read by the R-MOBILE-13 gate (T028). Compared once the base records it, as a kind is; a
+   * base written before it was recorded passes.
+   */
+  readonly caller?: string;
   readonly input: Fields;
   readonly output: Fields;
 }
@@ -291,9 +298,13 @@ function proceduresOf(router: RouterLike, surface: Surface): Record<string, Proc
         `contract snapshot: ${where} has no output parser, so nothing it returns can be recorded; every caller kind takes \`{ input, output }\` (R-API-9, T169)`,
       );
     }
+    const meta = definition['meta'];
+    const caller =
+      isObject(meta) && typeof meta['caller'] === 'string' ? meta['caller'] : undefined;
     entries.push([
       path,
       {
+        ...(caller === undefined ? {} : { caller }),
         kind,
         input: fieldsOfParsers(inputs, 'input', where),
         output: fieldsOfParsers([output], 'output', where),
@@ -423,9 +434,13 @@ export function parseSnapshot(text: string): ContractSnapshot {
           const entry = recordAt(value, where);
           const kind = entry['kind'];
           if (typeof kind !== 'string') fail(`${where} kind`, 'a string');
+          const caller = entry['caller'];
+          if (caller !== undefined && typeof caller !== 'string')
+            fail(`${where} caller`, 'a string');
           return [
             path,
             {
+              ...(caller === undefined ? {} : { caller }),
               kind,
               input: fieldsAt(entry['input'], `${where} input`),
               output: fieldsAt(entry['output'], `${where} output`),
@@ -492,6 +507,12 @@ export function findRemovals(base: ContractSnapshot, head: ContractSnapshot): st
       }
       if (now.kind !== procedure.kind) {
         removals.push(`kind  ${surface}  ${path}  ${procedure.kind} → ${now.kind}`);
+      }
+      // A caller kind is compared once the base records one: widening a procedure to `public`
+      // takes it out of the R-MOBILE-13 gate, and narrowing it refuses an old client (review of
+      // B7, finding 6). A base written before T028 recorded none and passes.
+      if (procedure.caller !== undefined && now.caller !== procedure.caller) {
+        removals.push(`caller  ${surface}  ${path}  ${procedure.caller} → ${now.caller ?? 'none'}`);
       }
       const where = ` ${surface}  ${path}`;
       for (const direction of DIRECTIONS) {

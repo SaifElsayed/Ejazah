@@ -9,7 +9,8 @@
 // birth is a calendar date, never an instant (R-TIME-6, contracts/README.md "Dates").
 import { z } from 'zod';
 import { emailAddress, termsVersion } from './platform.js';
-import { oneTimeCode, password, platformToken, sessionOutput } from './auth.js';
+import { oneTimeCode, platformToken, sessionOutput } from './auth.js';
+import { password } from './password.js';
 
 /** The signed, stateless token a proven identity rides in until `complete` (research R-102). */
 export const onboardingToken = platformToken;

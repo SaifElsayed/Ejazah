@@ -20,10 +20,20 @@
 // Time (R-TIME-1/2: every session datetime is resolved in packages/time, across DST):
 //   - the source of packages/time, whose DST specs are its own *.spec.ts files.
 // Phase 3 adds the sessions module and its recurrence specs here when that code lands.
+//
+// Mobile (R-MOBILE-13, FR-210, research R-115: hiding an action in the UI is not authorization):
+//   - the phone's feature trees, where a screen reaches a procedure; a change there carries a
+//     change to the API module specs, where the refusal of the wrong caller is proved, so the
+//     server test exists in the same pull request. The phone's own specs are `IGNORED` as every
+//     spec is; the design system, the client and the routes are left out, since no action is hidden
+//     there. The coupling is by path, as the gate is: a screen-only change carries a module spec
+//     change too. Which spec holds which refusal is `pnpm check:authz`'s (T028).
 
 /** Paths whose change must carry a change to `tests`. */
 export interface Suite {
   readonly name: string;
+  /** The constitution rule a refusal names: R-PROC-5 for the test suites, R-MOBILE-13 for the phone (FR-210). */
+  readonly rule: string;
   readonly changes: readonly string[];
   /** Paths `changes` reaches that the suite leaves out. */
   readonly except: readonly string[];
@@ -41,6 +51,7 @@ export const IGNORED: readonly string[] = [
 
 export const GENDER: Suite = {
   name: 'gender',
+  rule: 'R-PROC-5',
   changes: [
     'apps/api/src/platform/guards/requester-gender.ts',
     'apps/api/src/modules/catalog/**',
@@ -61,10 +72,20 @@ export const GENDER: Suite = {
 
 export const TIME: Suite = {
   name: 'time',
+  rule: 'R-PROC-5',
   changes: ['packages/time/src/**'],
   except: [],
   tests: ['packages/time/src/**/*.spec.ts'],
   testsShown: 'the DST specs of packages/time (packages/time/src/**/*.spec.ts)',
 };
 
-export const SUITES: readonly Suite[] = [GENDER, TIME];
+export const MOBILE: Suite = {
+  name: 'mobile',
+  rule: 'R-MOBILE-13',
+  changes: ['apps/mobile/src/features/**'],
+  except: [],
+  tests: ['apps/api/src/modules/**/*.spec.ts'],
+  testsShown: 'the API module specs that prove the refusals (apps/api/src/modules/**/*.spec.ts)',
+};
+
+export const SUITES: readonly Suite[] = [GENDER, TIME, MOBILE];

@@ -61,6 +61,15 @@ const layerViolations: readonly ViolationCase[] = [
     fixture: 'apps/api/src/modules/booking/notify-inline.ts',
     refuses: 'a module sending a notification inline instead of enqueueing the delivery job',
   },
+  {
+    // Added with T026 (Phase 1, research R-116). The query is on `enrollments`, booking's table in
+    // packages/config/module-tables.json, so `api/table-ownership` (R-API-6) has nothing to say.
+    constitutionId: 'R-DB-3',
+    ruleId: 'db/no-unfiltered-relation-read',
+    ruleSet: 'fast',
+    fixture: 'apps/api/src/modules/booking/enrollment-sessions.repository.ts',
+    refuses: 'a relation to a soft-deletable model read with the deleted rows',
+  },
 ];
 
 describeViolations('T021 layer violations', layerViolations);

@@ -142,6 +142,7 @@
     "admin": {},
     "app": {
       "catalog.subjects.list": {
+        "caller": "public",
         "input": { "$": { "type": "unknown" } },
         "kind": "query",
         "output": {
@@ -153,6 +154,7 @@
         }
       },
       "platform.publicConfig": {
+        "caller": "public",
         "input": { "$": { "type": "unknown" } },
         "kind": "query",
         "output": {
