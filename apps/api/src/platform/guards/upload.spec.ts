@@ -10,7 +10,18 @@
 import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../errors/domain-error.js';
-import { acceptUpload, sniffContentType, sniffUpload } from './upload.middleware.js';
+import { mapError } from '../errors/error-filter.js';
+import { SettingError, type SettingsReader } from '../settings/settings-reader.js';
+import { type RateLimitCounter, RateLimiter } from './rate-limit.guard.js';
+import {
+  acceptUpload,
+  acceptUploadOfKind,
+  sniffContentType,
+  sniffUpload,
+  UPLOAD_MAX_BYTES_SETTING,
+  UPLOAD_RATE_LIMIT,
+  type UploadGuard,
+} from './upload.middleware.js';
 
 // A real 1×1 PNG.
 const PNG = Buffer.from(
@@ -133,5 +144,149 @@ describe('content sniffing (T097, FR-044)', () => {
 
     expect((await collect(upload.body)).equals(data)).toBe(true);
     expect(delivered).toBe(data.byteLength);
+  });
+});
+
+// T020 (FR-151, research R-109): the kinds, the setting, the per-user limit, the one error shape.
+describe('the upload kinds (T020, FR-151)', () => {
+  // A PDF of 128 bytes: its signature, then padding, as the size cases need.
+  const PDF = Buffer.concat([ascii('%PDF-1.7\n'), Buffer.alloc(119, 0x20)]);
+
+  /** A guard over an in-memory limiter (`uploads` per user) and a settings row for the size. */
+  function guardOf(
+    options: { uploads?: number; maxBytes?: number | undefined } = {},
+  ): UploadGuard & {
+    reads: string[];
+    counter: RateLimitCounter & { hits: number };
+  } {
+    const uploads = options.uploads ?? 100;
+    const maxBytes = 'maxBytes' in options ? options.maxBytes : 1_000;
+    const reads: string[] = [];
+    const settings: SettingsReader = {
+      read: async (key, schema) => {
+        reads.push(key);
+        if (key === UPLOAD_RATE_LIMIT) return schema.parse({ limit: uploads, window_seconds: 600 });
+        if (key === UPLOAD_MAX_BYTES_SETTING && maxBytes !== undefined)
+          return schema.parse(maxBytes);
+        throw new SettingError(key, 'missing');
+      },
+    };
+    const counts = new Map<string, number>();
+    const counter = {
+      hits: 0,
+      hit: async (key: string) => {
+        counter.hits += 1;
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        return count;
+      },
+    };
+    const rateLimiter = new RateLimiter({ settings, counter, subjectKey: Buffer.alloc(32, 1) });
+    return { settings, rateLimiter, reads, counter };
+  }
+
+  const uploader = '0199d0a0-0000-7000-8000-000000000001';
+
+  it('refuses a renamed image on a PDF kind, by its content, and accepts it as a photo', async () => {
+    const guard = guardOf();
+    for (const kind of ['identity', 'credential'] as const) {
+      await expect(
+        acceptUploadOfKind(guard, { kind, uploaderId: uploader, body: chunks(PNG, 7) }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    }
+    const photo = await acceptUploadOfKind(guard, {
+      kind: 'photo',
+      uploaderId: uploader,
+      body: chunks(PNG, 7),
+    });
+    expect(photo.type).toBe('image/png');
+    expect(await collect(photo.body)).toEqual(PNG);
+    // A PDF is not a photo.
+    await expect(
+      acceptUploadOfKind(guard, { kind: 'photo', uploaderId: uploader, body: chunks(PDF, 16) }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('refuses an oversized file with the one error shape, as it streams, and never holds it whole', async () => {
+    const guard = guardOf({ maxBytes: 32 });
+    const upload = await acceptUploadOfKind(guard, {
+      kind: 'identity',
+      uploaderId: uploader,
+      body: chunks(PDF, 8),
+    });
+    expect(upload.type).toBe('application/pdf');
+    const received: Uint8Array[] = [];
+    const failure = await (async () => {
+      try {
+        for await (const chunk of upload.body) received.push(chunk);
+      } catch (error: unknown) {
+        return error;
+      }
+      throw new Error('expected the body to be refused');
+    })();
+    expect(failure).toBeInstanceOf(DomainError);
+    const mapped = mapError(failure);
+    expect(mapped.status).toBe(413);
+    expect(mapped.body).toEqual({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'The file is larger than allowed.',
+    });
+    // Four chunks of eight fit; the fifth crosses the limit and nothing after it is read.
+    expect(received).toHaveLength(4);
+
+    // A declared length over the limit is refused before a byte is read.
+    let read = false;
+    const unread = (async function* () {
+      read = true;
+      yield PDF;
+    })();
+    await expect(
+      acceptUploadOfKind(guard, {
+        kind: 'identity',
+        uploaderId: uploader,
+        body: unread,
+        declaredLength: 33,
+      }),
+    ).rejects.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+    expect(read).toBe(false);
+  });
+
+  it('reads the size limit from the settings reader on every upload, and fails closed without it', async () => {
+    const guard = guardOf({ maxBytes: 64 });
+    const exact = await acceptUploadOfKind(guard, {
+      kind: 'credential',
+      uploaderId: uploader,
+      body: chunks(PDF.subarray(0, 64), 16),
+    });
+    expect(await collect(exact.body)).toHaveLength(64);
+    expect(guard.reads.filter((key) => key === UPLOAD_MAX_BYTES_SETTING)).toHaveLength(1);
+
+    const missing = guardOf({ maxBytes: undefined });
+    await expect(
+      acceptUploadOfKind(missing, {
+        kind: 'credential',
+        uploaderId: uploader,
+        body: chunks(PDF, 16),
+      }),
+    ).rejects.toMatchObject({ key: UPLOAD_MAX_BYTES_SETTING, problem: 'missing' });
+  });
+
+  it('counts each uploader under rate_limit_upload before anything is read', async () => {
+    const guard = guardOf({ uploads: 1 });
+    await acceptUploadOfKind(guard, {
+      kind: 'identity',
+      uploaderId: uploader,
+      body: chunks(PDF, 16),
+    });
+    await expect(
+      acceptUploadOfKind(guard, { kind: 'identity', uploaderId: uploader, body: chunks(PDF, 16) }),
+    ).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    // Another uploader is another subject.
+    await acceptUploadOfKind(guard, {
+      kind: 'identity',
+      uploaderId: '0199d0a0-0000-7000-8000-000000000002',
+      body: chunks(PDF, 16),
+    });
+    expect(guard.counter.hits).toBe(3);
   });
 });

@@ -4,8 +4,20 @@
 // TWO MOUNTS. The user surface (T109 `appRouter`) is served under `/trpc` and the administrator
 // surface (`adminRouter`) under `/admin/trpc`, each by its own tRPC handler with its own context
 // factory (T106), so no request on one path can reach a procedure of the other. Neither path is a
-// prefix of the other. Sessions are not resolved yet: both factories receive none, so every request
-// is anonymous until the identity work resolves the user and the administrator sessions.
+// prefix of the other.
+//
+// SESSIONS (T017; specs/002-identity/contracts/kernel.md "Session resolution"). The application
+// takes two resolvers at construction, `sessions.user` and `sessions.admin`, handed in by
+// `main.ts` from the identity and admin modules' public entries, and calls the surface's one per
+// request with the bearer token of the `Authorization` header before the context is built; a
+// request without a bearer, or one the resolver answers null for, is anonymous. Standing is read on
+// every request, nothing is cached (FR-108). Until the identity work lands its resolvers (T047,
+// T066), `main.ts` passes stand-ins that answer null, so every request is anonymous in production
+// and `tests/pipeline/built-entrypoints.spec.ts` boots the built `main.js` as before.
+//
+// THE CLIENT'S ADDRESS (T017) is read once per request by `clientAddressOf`: the socket's peer,
+// or the last hop of the one proxy header `TRUSTED_PROXY` names, never the first hop the client
+// writes itself. Both contexts carry it, and the public-page helper (T019) counts its limit by it.
 //
 // ONE ERROR SHAPE OUT. On a surface, tRPC sends T107's `toErrorShape`, and the HTTP status is set
 // from the same mapping (tRPC would otherwise answer 500 for every error thrown in a procedure).
@@ -35,6 +47,11 @@
 //
 // BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
 // any route, so every response carries them, on either surface, on the health routes or elsewhere.
+//
+// PUBLIC PAGES (T019, ADR 0021 D5). The design's two stylesheets are always served under
+// `/public/design/`, and each page of `webRoutes` is mounted under its own path through the
+// kernel's helper (`platform/web/route.ts`): the strict policy, no cookie, the anonymous limit per
+// client address, `?lang=en`. Neither is a surface, and a surface's path is never a page's.
 //
 // SHUTDOWN HOOKS. The application listens for SIGTERM and SIGINT itself (T173), so a provider's
 // `onApplicationShutdown` runs on a signal and `close()` is never run twice: Nest runs one shutdown
@@ -71,14 +88,24 @@ import {
   type Readiness,
 } from './platform/health/health.controller.js';
 import type { Logger } from './platform/logging/logger.js';
+import {
+  DESIGN_ASSETS_PATH,
+  designAssetsRoute,
+  webRoute,
+  type WebRoute,
+} from './platform/web/route.js';
 import { adminRouter } from './surfaces/admin.router.js';
 import { appRouter } from './surfaces/app.router.js';
 import {
   type AdminContext,
   type AppContext,
   type Administration,
+  bearerOf,
+  clientAddressOf,
   createAdminContext,
   createAppContext,
+  type SessionResolver,
+  type SessionResolvers,
 } from './surfaces/context.js';
 import { toErrorShape } from './surfaces/procedures.js';
 
@@ -122,10 +149,16 @@ export interface ApplicationOptions {
   readonly maxRequestBodyBytes: number;
   /** The transactions and the bound audit writer every administrative call runs with (T108). */
   readonly administration: Administration;
-  /** The process's rate limiter, which every user-surface call carries (T170). */
+  /** The process's rate limiter, which every call of either surface carries (T170, T017). */
   readonly rateLimiter: RateLimiter;
+  /** The two session resolvers, called once per request from the bearer token (T017). */
+  readonly sessions: SessionResolvers;
+  /** `TRUSTED_PROXY`: the one proxy header whose last hop is the client's address, when set (T017). */
+  readonly trustedProxyHeader?: string;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
+  /** The public pages, each under its own path (T019); the stylesheets are served regardless. */
+  readonly webRoutes?: Readonly<Record<string, WebRoute>>;
 }
 
 /** Nest's own records, written through the kernel logger. */
@@ -199,7 +232,7 @@ interface Correlated {
 /** One surface's tRPC handler, mounted by Nest under the surface's path. */
 function surfaceHandler<TContext extends Correlated>(
   router: SurfaceRouter<TContext>,
-  createContext: () => TContext,
+  createContext: (request: IncomingMessage) => Promise<TContext>,
   log: Logger,
   maxBodySize: number,
 ): (request: IncomingMessage, response: ServerResponse) => void {
@@ -208,7 +241,8 @@ function surfaceHandler<TContext extends Correlated>(
     // A body past the limit is refused as it streams in, never read whole (T150, FR-077):
     // tRPC's PAYLOAD_TOO_LARGE, answered 413 in the one shape and not reported as unexpected.
     maxBodySize,
-    createContext: () => createContext() as inferRouterContext<SurfaceRouter<TContext>>,
+    createContext: async ({ req }) =>
+      (await createContext(req)) as inferRouterContext<SurfaceRouter<TContext>>,
     onError: ({ error, ctx }) => {
       if (!toErrorShape(error).unexpected) return;
       const cause = error.cause ?? error;
@@ -237,8 +271,24 @@ export async function createApplication({
   maxRequestBodyBytes,
   administration,
   rateLimiter,
+  sessions,
+  trustedProxyHeader,
   surfaces = { app: appRouter, admin: adminRouter },
+  webRoutes = {},
 }: ApplicationOptions): Promise<INestApplication> {
+  const clientAddress = (request: IncomingMessage): string =>
+    clientAddressOf(
+      { remoteAddress: request.socket.remoteAddress, headers: request.headers },
+      trustedProxyHeader,
+    );
+  // The surface's resolver, once per request, from the bearer token; no bearer, no call.
+  const resolve = async <TSession>(
+    resolver: SessionResolver<TSession>,
+    request: IncomingMessage,
+  ): Promise<TSession | null> => {
+    const bearer = bearerOf(request.headers);
+    return bearer === null ? null : resolver(bearer);
+  };
   const application = await NestFactory.create(AppModule.with({ readiness }), {
     bodyParser: false,
     logger: new KernelLoggerForNest(log),
@@ -253,7 +303,13 @@ export async function createApplication({
     surfacePaths.app,
     surfaceHandler(
       surfaces.app,
-      () => createAppContext({ session: null, log, rateLimiter }),
+      async (request) =>
+        createAppContext({
+          session: await resolve(sessions.user, request),
+          log,
+          rateLimiter,
+          clientAddress: clientAddress(request),
+        }),
       log,
       maxRequestBodyBytes,
     ),
@@ -262,10 +318,27 @@ export async function createApplication({
     surfacePaths.admin,
     surfaceHandler(
       surfaces.admin,
-      () => createAdminContext({ session: null, log, administration }),
+      async (request) =>
+        createAdminContext({
+          session: await resolve(sessions.admin, request),
+          log,
+          administration,
+          rateLimiter,
+          clientAddress: clientAddress(request),
+        }),
       log,
       maxRequestBodyBytes,
     ),
   );
+  // The public pages and the design's stylesheets, beside the surfaces (T019, ADR 0021 D5).
+  application.use(DESIGN_ASSETS_PATH, designAssetsRoute());
+  const pages = {
+    rateLimiter,
+    log,
+    ...(trustedProxyHeader === undefined ? {} : { trustedProxyHeader }),
+  };
+  for (const [path, route] of Object.entries(webRoutes)) {
+    application.use(path, webRoute(pages, route));
+  }
   return application;
 }

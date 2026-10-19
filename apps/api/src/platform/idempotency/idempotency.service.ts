@@ -9,14 +9,22 @@
 //     again;
 //   - a crash or a failed effect rolls the claim back with everything else, so the client is never
 //     locked out of its own retry for the length of the retention;
-//   - a concurrent duplicate waits on the unique index on (scope, key) until the first commits,
-//     is refused there (`KeyTakenError`), and is then answered from the committed row. No lock is
-//     taken by hand: the database refuses the second claim (ERD §15.16).
+//   - a concurrent duplicate waits on the unique index on (scope, actor_id, key) until the first
+//     commits, is refused there (`KeyTakenError`), and is then answered from the committed row. No
+//     lock is taken by hand: the database refuses the second claim (ERD §15.26).
 //
-// WHOSE REQUEST. A key is the client's, so it says nothing about who sent it. The row stores a
-// SHA-256 over the canonical JSON of the server-resolved actor, the scope and the input; a reuse
-// whose hash differs — another actor, or the same actor with another input — is refused with
-// CONFLICT and never receives the stored outcome. The outcome is never logged, nor is the row.
+// WHOSE REQUEST (T018, FR-106; specs/002-identity/contracts/kernel.md "Idempotency"). The key is
+// the actor's: the row is keyed by (scope, actor_id, key), where `actor_id` is the server-resolved
+// principal and never the client's word, so two actors who send the same key each get their own
+// row and neither sees the other's outcome. The kernel refuses to key an anonymous mutation. The row
+// also stores a SHA-256 over the canonical JSON of the scope and the input; a reuse by the same
+// actor whose hash differs — the same key with another input — is refused with CONFLICT. The
+// outcome is never logged, nor is the row.
+//
+// THE SCOPE is one of the keyed procedures `packages/contracts` lists (`idempotent-procedures.ts`)
+// and nothing else: keying is a call the handler makes, and the list is what the pipeline's output
+// leak test reads (T027), so a procedure that keys without being listed is a programming error,
+// thrown as one.
 //
 // THE KEY is 16 to 128 characters of `A–Z a–z 0–9 _ -`: a UUID or a base64url string fits, a
 // key short enough to collide by accident with another client's in the same scope does not.
@@ -31,6 +39,7 @@
 // holds a database connection for as long as it runs. So an effect writes rows and does nothing
 // slow: a consumer keeps a gateway or any other network call outside it (ARCHITECTURE §8.1).
 import { createHash } from 'node:crypto';
+import { type IdempotentProcedure, isIdempotentProcedure } from '@ijazah/contracts';
 import { addSeconds } from '@ijazah/time';
 import { z } from 'zod';
 import { DomainError } from '../errors/domain-error.js';
@@ -58,6 +67,7 @@ export interface StoredOutcome {
 export interface StoredKey {
   readonly id: string;
   readonly scope: string;
+  readonly actorId: string;
   readonly key: string;
   readonly requestHash: string;
   readonly status: 'in_progress' | 'completed';
@@ -67,12 +77,13 @@ export interface StoredKey {
 
 export interface NewKey {
   readonly scope: string;
+  readonly actorId: string;
   readonly key: string;
   readonly requestHash: string;
   readonly expiresAt: Date;
 }
 
-/** A claim refused because another transaction committed the same (scope, key) first. */
+/** A claim refused because another transaction committed the same (scope, actor, key) first. */
 export class KeyTakenError extends Error {
   constructor() {
     super('The idempotency key was claimed by a transaction that committed first');
@@ -84,8 +95,8 @@ export class KeyTakenError extends Error {
 export interface IdempotencyStore<TTransaction> {
   /** Runs `work` in one transaction: all of it commits, or none of it does. */
   transaction<T>(work: (tx: TTransaction) => Promise<T>): Promise<T>;
-  find(tx: TTransaction, scope: string, key: string): Promise<StoredKey | null>;
-  /** Inserts the key `in_progress`. Throws `KeyTakenError` when the (scope, key) is taken. */
+  find(tx: TTransaction, scope: string, actorId: string, key: string): Promise<StoredKey | null>;
+  /** Inserts the key `in_progress`. Throws `KeyTakenError` when the (scope, actor, key) is taken. */
   claim(tx: TTransaction, key: NewKey): Promise<string>;
   complete(tx: TTransaction, id: string, response: StoredOutcome): Promise<void>;
   remove(tx: TTransaction, id: string): Promise<void>;
@@ -94,8 +105,8 @@ export interface IdempotencyStore<TTransaction> {
 }
 
 export interface IdempotentRequest {
-  /** The procedure or job the key applies to. */
-  readonly scope: string;
+  /** The keyed procedure the key applies to: one of `packages/contracts`' list. */
+  readonly scope: IdempotentProcedure;
   /** The client's idempotency key, as received. */
   readonly key: string;
   /** Who is asking, as the server resolved it (the request context), never as the client said. */
@@ -121,10 +132,9 @@ function canonicalJson(value: unknown): string {
   });
 }
 
-export function requestHash({ actorId, scope, input }: IdempotentRequest): string {
-  return createHash('sha256')
-    .update(canonicalJson({ actor: actorId, scope, input }))
-    .digest('hex');
+/** The hash of what was asked: the scope and the input. The actor is the row's key, not its hash. */
+export function requestHash({ scope, input }: Pick<IdempotentRequest, 'scope' | 'input'>): string {
+  return createHash('sha256').update(canonicalJson({ scope, input })).digest('hex');
 }
 
 function parseKey(key: string): string {
@@ -134,6 +144,22 @@ function parseKey(key: string): string {
   throw new DomainError('VALIDATION_FAILED', undefined, {
     details: [{ path: 'idempotencyKey', code }],
   });
+}
+
+/** The scope and the actor as the kernel accepts them; either refusal is a programming error. */
+function parsePrincipal({ scope, actorId }: IdempotentRequest): {
+  scope: IdempotentProcedure;
+  actorId: string;
+} {
+  if (!isIdempotentProcedure(scope)) {
+    throw new Error(
+      `Idempotency: "${String(scope)}" is not a keyed procedure of packages/contracts (T018).`,
+    );
+  }
+  if (typeof actorId !== 'string' || actorId === '') {
+    throw new Error('Idempotency: an anonymous mutation cannot be keyed (FR-106, T018).');
+  }
+  return { scope, actorId };
 }
 
 function outcomeOf(row: StoredKey): JsonValue {
@@ -161,17 +187,20 @@ export class IdempotencyService<TTransaction> {
 
   /**
    * Runs `effect` once for this request, in the transaction it is handed, and answers its outcome;
-   * a repeat of the same request answers the stored outcome without running it again.
+   * a repeat of the same request by the same actor answers the stored outcome without running it
+   * again.
    */
   async run<TResult extends JsonValue>(
     request: IdempotentRequest,
     effect: (tx: TTransaction) => Promise<TResult>,
   ): Promise<TResult> {
+    const { scope, actorId } = parsePrincipal(request);
     const key = parseKey(request.key);
     const hours = await this.#settings.read(IDEMPOTENCY_RETENTION_SETTING, retentionHours);
     const now = this.#clock();
     const claim: NewKey = {
-      scope: request.scope,
+      scope,
+      actorId,
       key,
       requestHash: requestHash(request),
       expiresAt: new Date(addSeconds(now, hours * SECONDS_PER_HOUR)),
@@ -183,7 +212,7 @@ export class IdempotencyService<TTransaction> {
       if (!(error instanceof KeyTakenError)) throw error;
       // A duplicate committed first; its row is the answer.
       return this.#store.transaction(async (tx) => {
-        const row = await this.#store.find(tx, claim.scope, claim.key);
+        const row = await this.#store.find(tx, claim.scope, claim.actorId, claim.key);
         if (row === null) throw error;
         return this.#replay<TResult>(row, claim.requestHash);
       });
@@ -201,7 +230,7 @@ export class IdempotencyService<TTransaction> {
     now: Date,
     effect: (tx: TTransaction) => Promise<TResult>,
   ): Promise<TResult> {
-    const existing = await this.#store.find(tx, claim.scope, claim.key);
+    const existing = await this.#store.find(tx, claim.scope, claim.actorId, claim.key);
     if (existing !== null) {
       if (existing.expiresAt > now) return this.#replay<TResult>(existing, claim.requestHash);
       await this.#store.remove(tx, existing.id);

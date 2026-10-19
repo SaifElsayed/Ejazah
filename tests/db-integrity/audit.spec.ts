@@ -35,6 +35,7 @@ describe('audit_logs is append-only (T054)', () => {
         action: 'probe.recorded',
         target_type: 'probe',
         target_id: adminId,
+        target_label: `مشرف · ${adminId}`,
       });
 
       expect(await attempt(db, 'DELETE FROM "audit_logs" WHERE id = $1', [auditId])).toBe(

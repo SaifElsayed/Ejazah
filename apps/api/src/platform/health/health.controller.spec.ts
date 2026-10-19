@@ -13,6 +13,9 @@ import { createApplication, surfacePaths } from '../../app.module.js';
 import { RateLimiter } from '../guards/rate-limit.guard.js';
 import { createLogger } from '../logging/logger.js';
 
+// No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
+const sessions = { user: async () => null, admin: async () => null };
+
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
 // it. Each part refuses if it is ever reached.
 const administration = {
@@ -51,6 +54,7 @@ beforeAll(async () => {
     maxRequestBodyBytes: 1_048_576,
     administration,
     rateLimiter,
+    sessions,
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

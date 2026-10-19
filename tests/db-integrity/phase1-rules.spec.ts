@@ -1,9 +1,9 @@
 // T008 — the integrity rules Phase 1 adds, each shown by an insert the database refuses (SC-113;
 // specs/002-identity/data-model.md §5, ERD §15 rules 22 to 32).
 //
-// Rules 22, 23, 24, 25, 27, 30, 31 and 32 are probed here. Rule 26 (the idempotency actor) and
-// rule 29 (the audit label) ride with their writers in batch B4 (T018, T021), since the Phase 0
-// repositories and probes write those rows without the new columns until then; rule 28 is rule 7
+// Rules 22, 23, 24, 25, 27, 30, 31 and 32 were probed by B2; rule 26 (the idempotency actor) and
+// rule 29 (the audit label) joined in batch B4 with their writers (T018, T021), since the Phase 0
+// repositories and probes wrote those rows without the new columns until then; rule 28 is rule 7
 // as re-keyed, in `constraints.spec.ts`. The last cases prove the five credential tables keep
 // DELETE for the application role: a session, an identity, a code, a recovery code is a
 // credential or a key, not a record of something that happened (data-model §5).
@@ -235,6 +235,45 @@ describe('ERD §15 rules 22 to 32, each refused by the database (T008, SC-113)',
           }),
         ),
       ).toBeNull();
+    });
+  });
+
+  // T018 (batch B4): the column and its writer arrive together (conflict review, 2026-10-18).
+  it('rule 26: an idempotency key is the actor’s: two actors may share one key, one actor cannot reuse it, and no row is anonymous (FR-106)', async () => {
+    await inRollback(db, async () => {
+      const key = `probe-key-${randomUUID()}`;
+      const row = (actor: string | null) => ({
+        scope: 'teacher.application.submit',
+        actor_id: actor,
+        key,
+        request_hash: 'probe-hash',
+        status: 'completed',
+        expires_at: LATER,
+      });
+      expect(await tryInsert('idempotency_keys', row('probe-actor-1'))).toBeNull();
+      expect(await tryInsert('idempotency_keys', row('probe-actor-2'))).toBeNull();
+      expect(await tryInsert('idempotency_keys', row('probe-actor-1'))).toBe(
+        SQLSTATE.uniqueViolation,
+      );
+      expect(await tryInsert('idempotency_keys', row(null))).toBe(SQLSTATE.notNullViolation);
+    });
+  });
+
+  // T021 (batch B4): the column and its writer arrive together (conflict review, 2026-10-18).
+  it('rule 29: an audit entry carries a target label of at most 200 characters, and never none (FR-180)', async () => {
+    await inRollback(db, async () => {
+      const adminId = await makeAdmin(db);
+      const entry = (label: string | null) => ({
+        admin_id: adminId,
+        action: 'probe.recorded',
+        target_type: 'admin',
+        target_id: adminId,
+        target_label: label,
+      });
+      expect(await tryInsert('audit_logs', entry(`مشرف · ${adminId}`))).toBeNull();
+      expect(await tryInsert('audit_logs', entry('م'.repeat(200)))).toBeNull();
+      expect(await tryInsert('audit_logs', entry('م'.repeat(201)))).toBe(SQLSTATE.checkViolation);
+      expect(await tryInsert('audit_logs', entry(null))).toBe(SQLSTATE.notNullViolation);
     });
   });
 });

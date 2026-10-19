@@ -1,6 +1,7 @@
-// T107: the four caller kinds — public, student, teacher, administrator — and the only way to
-// declare a procedure (FR-047, FR-050, R-API-11, R-API-12, R-SEC-8; contracts/kernel.md
-// "Caller kinds", ARCHITECTURE §7.2).
+// T107: the caller kinds — public, student, user, teacher, administrator, administrator-public — and
+// the only way to declare a procedure (FR-047, FR-050, R-API-11, R-API-12, R-SEC-8;
+// contracts/kernel.md "Caller kinds", specs/002-identity/contracts/kernel.md "The caller kinds",
+// ARCHITECTURE §7.2).
 //
 // EACH KIND TAKES ITS TWO SCHEMAS, `{ input, output }`, so a procedure cannot be declared without
 // either and neither validation can be skipped: a procedure that takes nothing says so with
@@ -11,15 +12,21 @@
 // error, unexpected, never a validation failure carrying the response's own paths. The base
 // builders are not exported, so a procedure cannot be built around the kinds.
 //
-// A KIND NARROWS THE CONTEXT, it never mints: the student and teacher kinds refuse an anonymous
-// caller (401) and a caller without the role active (403), then hand the handler a context whose
-// `caller` is not null. The gender it carries is the `RequesterGender` the request context minted
-// from the session (T106); nothing here builds one.
+// A KIND NARROWS THE CONTEXT, it never mints: the signed-in kinds refuse an anonymous caller (401),
+// a caller without the role (403) and, unless the procedure says `admitsRestricted`, a suspended or
+// banned account (`ACCOUNT_RESTRICTED`, FR-137; T017), then hand the handler a context whose
+// `caller` is not null. The teacher kind also declares the standing it admits (R-106, FR-108,
+// FR-192): `admits: 'applicant'` is any teacher-role holder, `'approved'` a verified one,
+// `'publishable'` a verified one with a verified payout account; a procedure without the
+// declaration does not compile, and the standing below the declared one is refused with
+// `FORBIDDEN`. Standing comes from the session the resolver read on this request (FR-108), so a
+// suspension takes effect on the next call. The gender it carries is the `RequesterGender` the
+// request context minted from the session (T106); nothing here builds one.
 //
 // A RATE LIMIT IS DECLARED ON THE KIND, never applied by hand (T170, FR-043, R-SEC-6):
-// `rateLimit: { key, subjectOf, budget? }`, required on `publicProcedure` (an anonymous endpoint
-// without one does not compile) and accepted by the student and teacher kinds. After the input is
-// validated, the kind applies `throttle` from the limiter the request context carries, budget
+// `rateLimit: { key, subjectOf, budget? }`, required on the two anonymous kinds (an anonymous
+// endpoint without one does not compile) and accepted by the signed-in user kinds. After the input
+// is validated, the kind applies `throttle` from the limiter the request context carries, budget
 // first and then the subject, and stamps the key in the procedure's meta beside its surface, so
 // what a surface serves can be read for its limits (surfaces.spec.ts).
 //
@@ -29,6 +36,10 @@
 // the administrator instance, and the user instance's meta type cannot express it. Each surface's
 // router accepts only its own surface's procedures (`SurfaceRecord`), so a procedure of the other
 // surface, or one built on any other tRPC instance, does not compile where it is mounted.
+//
+// THE ADMINISTRATOR KIND REQUIRES THE SECOND FACTOR (T017, FR-170): a session whose second factor
+// is unverified is refused with `MFA_REQUIRED` before any transaction opens; `MFA_SETUP_REQUIRED`
+// is the sign-in's answer for an unenrolled administrator, who holds no verified session either.
 //
 // THE ADMINISTRATOR KIND WRITES ITS OWN AUDIT RECORD (T108, FR-049, R-API-12). After authenticating
 // the administrator and validating the input, it opens one transaction through `platform/db/` and
@@ -41,15 +52,16 @@
 // `modules/admin` nor queries `audit_logs` (R-API-4, R-API-6): the writer is the admin module's,
 // reached through the context.
 //
+// THE ADMINISTRATOR-PUBLIC KIND (T017) is the administrator surface's anonymous kind: sign-in, the
+// second factor and the password-set link, and nothing else (a test of the admin router asserts
+// its public procedures are exactly `auth.*`). It names its rate limit as the user surface's public
+// kind does, applied from the limiter the administrator context carries.
+//
 // ONE ERROR FORMATTER on both instances: `toErrorShape`, which sends T101's `mapError` result and
 // nothing else, so a tRPC error carries no stack, path or default shape (FR-041, R-API-8). tRPC
 // wraps an input that failed its schema as `BAD_REQUEST` with the `ZodError` as cause, and an
 // output that failed its schema as `INTERNAL_SERVER_ERROR` with the `ZodError` as cause; the first
 // is the validation failure with its paths, the second the internal error (T169).
-//
-// The teacher kind admits a caller holding the teacher role, as the kernel contract words it.
-// Whether an unapproved teacher's role counts as active is the session's to say when identity
-// resolves sessions.
 import {
   type AnyTRPCProcedure,
   type AnyTRPCRouter,
@@ -68,7 +80,14 @@ import {
   type RateLimitKey,
   throttle,
 } from '../platform/guards/rate-limit.guard.js';
-import type { AdminContext, AdministratorCaller, AppContext, Role, UserCaller } from './context.js';
+import type {
+  AccountStatus,
+  AdminContext,
+  AdministratorCaller,
+  AppContext,
+  Role,
+  UserCaller,
+} from './context.js';
 
 /** The meta of every user-surface procedure. */
 export interface AppMeta {
@@ -80,6 +99,8 @@ export interface AppMeta {
 /** The meta of every administrator-surface procedure: what makes it an administrative capability. */
 export interface AdminMeta {
   readonly surface: 'admin';
+  /** The settings key of the anonymous kind's rate limit (T017). */
+  readonly rateLimit?: RateLimitKey;
 }
 
 /** tRPC's own failures that carry no error of ours, by the kernel code they answer with. */
@@ -181,36 +202,109 @@ export interface ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
 /** The context a signed-in user's procedure reads: the surface's, with its caller present. */
 type SignedInContext = AppContext & { readonly caller: UserCaller };
 
-/** What a user-surface kind takes: its schemas and, for a public kind always, its rate limit (T170). */
-export interface AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, TContext>
-  extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
+/**
+ * What a signed-in user kind takes: its schemas, its rate limit when it has one (T170), and
+ * whether a suspended or banned account may call it (FR-137; the account read, sign-out, deletion
+ * and the restricted screen's data say so; nothing else does).
+ */
+export interface AppProcedureDeclaration<
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut,
+  TContext,
+> extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
   readonly rateLimit?: RateLimitDeclaration<TContext, TInOut>;
+  readonly admitsRestricted?: boolean;
+}
+
+/** The standings the teacher kind can admit, lowest first (R-106). */
+export type TeacherStandingAdmitted = 'applicant' | 'approved' | 'publishable';
+
+/** The teacher kind's declaration: `admits` is required, so no teacher procedure has two meanings. */
+export interface TeacherProcedureDeclaration<
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut,
+> extends AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext> {
+  readonly admits: TeacherStandingAdmitted;
 }
 
 /** The public kind's declaration: an anonymous endpoint always names its limit (R-SEC-6). */
-export interface PublicProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>
-  extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
+export interface PublicProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut> extends ProcedureSchemas<
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
   readonly rateLimit: RateLimitDeclaration<AppContext, TInOut>;
+}
+
+/** The administrator surface's anonymous kind: the same rule as the user surface's (R-SEC-6). */
+export interface AdminPublicProcedureDeclaration<
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut,
+> extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
+  readonly rateLimit: RateLimitDeclaration<AdminContext, TInOut>;
 }
 
 /** The meta a user-surface procedure is stamped with: its surface, and its limit's key when declared. */
 function appMeta(rateLimit: RateLimitDeclaration<never, never> | undefined): AppMeta {
-  return rateLimit === undefined ? { surface: 'app' } : { surface: 'app', rateLimit: rateLimit.key };
+  return rateLimit === undefined
+    ? { surface: 'app' }
+    : { surface: 'app', rateLimit: rateLimit.key };
 }
 
-/** Admits an authenticated user holding `role`, and narrows the context to that caller. */
-function requireRole(role: Role) {
+/** The two standings every user kind refuses unless it says otherwise (FR-137, kernel.md). */
+const RESTRICTED_STANDINGS: ReadonlySet<AccountStatus> = new Set(['suspended', 'banned']);
+
+/**
+ * Admits an authenticated user, of `role` when one is named, whose account is not restricted
+ * unless the procedure admits one; narrows the context to that caller. The order is the
+ * contract's: anonymous first (401), then the role (403), then the standing (`ACCOUNT_RESTRICTED`).
+ */
+function requireUser({
+  role,
+  admitsRestricted,
+}: {
+  role: Role | undefined;
+  admitsRestricted: boolean;
+}) {
   return app.middleware(({ ctx, next }) => {
     if (ctx.caller === null) throw new DomainError('UNAUTHENTICATED');
-    if (!ctx.caller.activeRoles.has(role)) throw new DomainError('FORBIDDEN');
+    if (role !== undefined && ctx.caller.role !== role) throw new DomainError('FORBIDDEN');
+    if (!admitsRestricted && RESTRICTED_STANDINGS.has(ctx.caller.accountStatus)) {
+      throw new DomainError('ACCOUNT_RESTRICTED', undefined, {
+        details: [{ path: 'accountStatus', code: ctx.caller.accountStatus }],
+      });
+    }
     const caller: UserCaller = ctx.caller;
     return next({ ctx: { caller } });
   });
 }
 
+/** After the teacher role: refuses the standing below the declared one with `FORBIDDEN` (R-106). */
+function requireStanding(admits: TeacherStandingAdmitted) {
+  return app.middleware(({ ctx, next }) => {
+    const caller = ctx.caller;
+    if (caller === null) throw new DomainError('UNAUTHENTICATED');
+    const approved = caller.teacher?.verificationStatus === 'approved';
+    const publishable = approved && caller.teacher?.payoutVerified === true;
+    if (admits === 'approved' && !approved) throw new DomainError('FORBIDDEN');
+    if (admits === 'publishable' && !publishable) throw new DomainError('FORBIDDEN');
+    return next({ ctx: { caller } });
+  });
+}
+
+/** An authenticated administrator whose second factor was verified on this session (FR-170). */
 const requireAdministrator = admin.middleware(({ ctx, next }) => {
   if (ctx.administrator === null) throw new DomainError('UNAUTHENTICATED');
-  return next({ ctx: { administrator: ctx.administrator } });
+  if (!ctx.administrator.mfaVerified) throw new DomainError('MFA_REQUIRED');
+  const administrator: AdministratorCaller = ctx.administrator;
+  return next({ ctx: { administrator } });
 });
 
 /** Anyone, authenticated or not; always rate limited, by the declaration it carries. */
@@ -238,34 +332,46 @@ export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
     .use(throttle(rateLimit));
 }
 
-/** A caller holding the student role, active. */
-export function studentProcedure<TIn, TInOut, TOutIn, TOutOut>({
-  input,
-  output,
-  rateLimit,
-}: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>): CallerKind<
-  AppContext,
-  AppMeta,
-  { caller: UserCaller },
-  TIn,
-  TInOut,
-  TOutIn,
-  TOutOut
-> {
+/** A signed-in kind's builder: the user middleware, the schemas, the limit when declared. */
+function signedIn<TIn, TInOut, TOutIn, TOutOut>(
+  {
+    input,
+    output,
+    rateLimit,
+    admitsRestricted = false,
+  }: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>,
+  role: Role | undefined,
+): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
   const builder = app.procedure
     .meta(appMeta(rateLimit))
-    .use(requireRole('student'))
+    .use(requireUser({ role, admitsRestricted }))
     .input(input)
     .output(output);
   return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
 }
 
-/** A caller holding the teacher role, active. */
+/** A caller holding the student role. */
+export function studentProcedure<TIn, TInOut, TOutIn, TOutOut>(
+  declaration: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>,
+): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
+  return signedIn(declaration, 'student');
+}
+
+/**
+ * Any authenticated person of either role, for what both roles share: the account, sign-out,
+ * deletion, identity verification (T017; specs/002-identity/contracts/kernel.md).
+ */
+export function userProcedure<TIn, TInOut, TOutIn, TOutOut>(
+  declaration: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>,
+): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
+  return signedIn(declaration, undefined);
+}
+
+/** A caller holding the teacher role, of the standing the declaration admits (R-106). */
 export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
-  input,
-  output,
-  rateLimit,
-}: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>): CallerKind<
+  admits,
+  ...declaration
+}: TeacherProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
   AppContext,
   AppMeta,
   { caller: UserCaller },
@@ -274,9 +380,15 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
   TOutIn,
   TOutOut
 > {
+  // The type already requires it; a declaration that slipped past the compiler is refused here.
+  if (admits === undefined) {
+    throw new Error('A teacher procedure declares the standing it admits (R-106, T017).');
+  }
+  const { input, output, rateLimit, admitsRestricted = false } = declaration;
   const builder = app.procedure
     .meta(appMeta(rateLimit))
-    .use(requireRole('teacher'))
+    .use(requireUser({ role: 'teacher', admitsRestricted }))
+    .use(requireStanding(admits))
     .input(input)
     .output(output);
   return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
@@ -292,8 +404,8 @@ export interface AuditedCall {
 }
 
 /**
- * An authenticated administrator, every call audited in its own transaction (FR-049, R-API-12).
- * Exists on the administrator surface only (R-API-11).
+ * An authenticated administrator with the second factor verified, every call audited in its own
+ * transaction (FR-049, FR-170, R-API-12). Exists on the administrator surface only (R-API-11).
  */
 export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
@@ -330,4 +442,33 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
         return result;
       });
     });
+}
+
+/**
+ * Anyone, on the administrator surface: sign-in, the second factor and the password-set link
+ * (T017). Always rate limited, by the declaration it carries, from the administrator context's
+ * limiter. Exists on the administrator surface only (R-API-11).
+ */
+export function adminPublicProcedure<TIn, TInOut, TOutIn, TOutOut>({
+  input,
+  output,
+  rateLimit,
+}: AdminPublicProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  AdminContext,
+  AdminMeta,
+  object,
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
+  // The type already requires it; a declaration that slipped past the compiler is refused here.
+  if (rateLimit === undefined) {
+    throw new Error('An administrator-public procedure declares its rate limit (R-SEC-6, T017).');
+  }
+  return admin.procedure
+    .meta({ surface: 'admin', rateLimit: rateLimit.key })
+    .input(input)
+    .output(output)
+    .use(throttle(rateLimit));
 }

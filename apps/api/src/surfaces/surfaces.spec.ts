@@ -100,9 +100,11 @@ const booking = studentProcedure({
   input: z.object({ slotId: z.string() }),
   output: z.string(),
 }).mutation(() => 'held');
-const availability = teacherProcedure({ input: z.void(), output: z.string() }).query(
-  () => 'slots',
-);
+const availability = teacherProcedure({
+  admits: 'applicant',
+  input: z.void(),
+  output: z.string(),
+}).query(() => 'slots');
 const approval = adminProcedure({
   input: z.object({ teacherId: z.string() }),
   output: z.string(),
@@ -142,8 +144,7 @@ describe('the two surfaces share nothing (T098)', () => {
     const user = createAppRouter({ catalogue: { list: catalogue }, booking, availability });
     const metaOf = (path: string) =>
       (proceduresOf(user).get(path)?._def.meta ?? undefined) as
-        | { surface: string; rateLimit?: string }
-        | undefined;
+        { surface: string; rateLimit?: string } | undefined;
     expect(metaOf('catalogue.list')).toEqual({ surface: 'app', rateLimit: 'rate_limit_search' });
     expect(metaOf('booking')).toEqual({ surface: 'app' });
     expect(metaOf('availability')).toEqual({ surface: 'app' });

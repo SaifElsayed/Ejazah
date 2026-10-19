@@ -3,7 +3,7 @@
 // idempotency.service.ts; this file only reads and writes rows.
 //
 // The transaction is Prisma's interactive one on the process's single client, at Postgres's
-// default READ COMMITTED: a concurrent claim of the same (scope, key) waits on the unique index
+// default READ COMMITTED: a concurrent claim of the same (scope, actor_id, key) waits on the unique index
 // until the first transaction ends, then fails with a unique violation (P2002) if it committed,
 // which is answered here as `KeyTakenError`. Nothing in this file logs a row or its `response`.
 import { Prisma } from '@prisma/client';
@@ -21,6 +21,7 @@ const UNIQUE_VIOLATION = 'P2002';
 const storedKey = {
   id: true,
   scope: true,
+  actorId: true,
   key: true,
   requestHash: true,
   status: true,
@@ -39,9 +40,14 @@ export class IdempotencyRepository implements IdempotencyStore<Transaction> {
     return this.#database.$transaction(work);
   }
 
-  async find(tx: Transaction, scope: string, key: string): Promise<StoredKey | null> {
+  async find(
+    tx: Transaction,
+    scope: string,
+    actorId: string,
+    key: string,
+  ): Promise<StoredKey | null> {
     return tx.idempotencyKey.findUnique({
-      where: { scope_key: { scope, key } },
+      where: { scope_actorId_key: { scope, actorId, key } },
       select: storedKey,
     });
   }

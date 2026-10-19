@@ -112,6 +112,51 @@ export const redactedKeys: readonly (readonly string[])[] = [
  */
 export const redactedLastWords: readonly string[] = ['event'];
 
+/**
+ * Keys that hold a client's address (T017, R-SEC-2): written as the address's network, never the
+ * address, so a request can be told from its neighbours and no record names a person's address.
+ * A key is one when its words include every word of one entry.
+ */
+export const addressKeys: readonly (readonly string[])[] = [
+  ['client', 'address'],
+  ['remote', 'address'],
+  ['peer', 'address'],
+  ['ip'],
+];
+
+/** Whether a key's value is an address, to be written as its network. */
+export function isAddressKey(name: string): boolean {
+  const present = new Set(wordsOf(name).flatMap(formsOf));
+  return addressKeys.some((entry) => entry.every((word) => present.has(word)));
+}
+
+/** The eight groups of an IPv6 address, each as written, or null when the text is not one. */
+function ipv6Groups(address: string): string[] | null {
+  const halves = address.split('::');
+  if (halves.length > 2) return null;
+  const left = halves[0] === '' ? [] : (halves[0] ?? '').split(':');
+  const right = halves.length === 2 && halves[1] !== '' ? (halves[1] ?? '').split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
+  const groups = [...left, ...Array.from({ length: missing }, () => '0'), ...right];
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/i.test(group))) return null;
+  return groups.map((group) => group.toLowerCase().replace(/^0+(?=.)/, ''));
+}
+
+/**
+ * The network an address belongs to: the /24 of an IPv4 address (an IPv4-mapped IPv6 address
+ * included), the /48 of an IPv6 address; anything else is redacted outright.
+ */
+export function networkOf(address: unknown): string {
+  if (typeof address !== 'string') return REDACTED;
+  const text = address.trim().replace(/^::ffff:/i, '');
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/.exec(text);
+  if (v4 !== null) return `${v4[1]}.${v4[2]}.${v4[3]}.0/24`;
+  const groups = ipv6Groups(text);
+  if (groups === null) return REDACTED;
+  return `${groups[0]}:${groups[1]}:${groups[2]}::/48`;
+}
+
 // A name ending or starting with one of these says when, how many or whether, not the value.
 const FACT_LAST_WORDS = new Set(['at', 'count', 'attempts']);
 const FACT_FIRST_WORDS = new Set(['has', 'is']);
@@ -200,6 +245,8 @@ function redactValue(value: unknown, path: Set<object>, serializedError: boolean
         out[key] = redactValue(inner, path, false);
       } else if (isRedactedKey(key)) {
         out[key] = REDACTED;
+      } else if (isAddressKey(key)) {
+        out[key] = networkOf(inner);
       } else {
         // The cause chain is a chain of serialized errors; any other object the error carries is not.
         out[key] = redactValue(inner, path, isError && key === ERROR_CAUSE_KEY);

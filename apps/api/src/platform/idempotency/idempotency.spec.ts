@@ -5,11 +5,13 @@
 // same database transaction as the operation's own writes. These cases hold it to that over an
 // in-memory store whose transactions behave as Postgres's do for this purpose: what a transaction
 // writes is seen by others only once it commits, nothing of it remains when it throws, and a key
-// another transaction committed first refuses the claim, as the unique index on (scope, key) does.
+// another transaction committed first refuses the claim, as the unique index on (scope, actor_id,
+// key) does (T018: the key is the actor's, so another actor's same key is another row).
 // The settings reader is a fake too, so the retention it answers can be changed or withheld.
 //
 // "The effect" is what the operation writes inside the transaction it is handed. It is read from
 // the committed store, so an effect that ran in a transaction that rolled back did not happen.
+import type { IdempotentProcedure } from '@ijazah/contracts';
 import { addSeconds } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -25,12 +27,13 @@ import {
 } from './idempotency.service.js';
 
 interface FakeTransaction {
-  /** What this transaction wrote, by (scope, key); null where it removed a row. */
+  /** What this transaction wrote, by (scope, actor, key); null where it removed a row. */
   readonly writes: Map<string, StoredKey | null>;
   readonly effects: string[];
 }
 
-const slot = (scope: string, key: string) => `${scope}\u0000${key}`;
+const slot = (scope: string, actorId: string, key: string) =>
+  `${scope}\u0000${actorId}\u0000${key}`;
 
 /** A store whose transactions commit on success and leave nothing behind on a throw. */
 class FakeStore implements IdempotencyStore<FakeTransaction> {
@@ -50,8 +53,13 @@ class FakeStore implements IdempotencyStore<FakeTransaction> {
     return result;
   }
 
-  async find(tx: FakeTransaction, scope: string, key: string): Promise<StoredKey | null> {
-    const name = slot(scope, key);
+  async find(
+    tx: FakeTransaction,
+    scope: string,
+    actorId: string,
+    key: string,
+  ): Promise<StoredKey | null> {
+    const name = slot(scope, actorId, key);
     if (tx.writes.has(name)) return tx.writes.get(name) ?? null;
     return this.committed.keys.get(name) ?? null;
   }
@@ -60,7 +68,7 @@ class FakeStore implements IdempotencyStore<FakeTransaction> {
     const competitor = this.beforeClaim;
     this.beforeClaim = undefined;
     await competitor?.();
-    const name = slot(row.scope, row.key);
+    const name = slot(row.scope, row.actorId, row.key);
     const removedHere = tx.writes.has(name) && tx.writes.get(name) === null;
     if (this.committed.keys.has(name) && !removedHere) throw new KeyTakenError();
     this.#ids += 1;
@@ -110,7 +118,8 @@ const NOW = new Date('2026-10-08T09:00:00Z');
 const KEY = 'checkout-attempt-0001';
 const STUDENT = '0199c4a8-0000-7000-8000-00000000000a';
 const OTHER_STUDENT = '0199c4a8-0000-7000-8000-00000000000b';
-const SCOPE = 'booking.startCheckout';
+// A keyed procedure of this phase (packages/contracts, idempotent-procedures.ts).
+const SCOPE: IdempotentProcedure = 'teacher.application.submit';
 const INPUT = { packageId: 'pkg-1', slotId: 'slot-9' };
 
 function setUp() {
@@ -137,7 +146,7 @@ function setUp() {
 }
 
 interface Request {
-  readonly scope: string;
+  readonly scope: IdempotentProcedure;
   readonly key: string;
   readonly actorId: string;
   readonly input: unknown;
@@ -184,25 +193,31 @@ describe('a repeated operation (T096, FR-042)', () => {
   it('keeps a key in one scope apart from the same key in another scope', async () => {
     const { service, effect, runs } = setUp();
     await service.run(request(), effect);
-    await service.run(request({ scope: 'reviews.submit' }), effect);
+    await service.run(request({ scope: 'account.delete' }), effect);
     expect(runs()).toBe(2);
   });
 });
 
-describe('a key reused by someone else, or for something else (T096)', () => {
-  it('refuses another actor’s replay with CONFLICT and never hands over the first actor’s outcome', async () => {
+describe('the key is the actor’s (T016, FR-106; contracts/kernel.md "Idempotency")', () => {
+  it('two actors, one key, one scope: both accepted; one actor twice: the first outcome', async () => {
     const { store, service, effect, runs } = setUp();
-    await service.run(request(), effect);
 
-    const failure = await refusal(service.run(request({ actorId: OTHER_STUDENT }), effect));
+    const first = await service.run(request(), effect);
+    const other = await service.run(request({ actorId: OTHER_STUDENT }), effect);
+    const again = await service.run(request(), effect);
 
-    expect(failure).toBeInstanceOf(DomainError);
-    expect(failure).toMatchObject({ code: 'CONFLICT' });
-    expect((failure as Error).message).not.toContain('checkout-1');
-    expect(JSON.stringify(failure)).not.toContain('checkout-1');
-    expect(runs()).toBe(1);
-    expect(store.committed.effects).toEqual(['checkout 1']);
+    // The other actor's key is their own row: their effect ran, and they never saw the first outcome.
+    expect(other).toEqual({ checkoutId: 'checkout-2' });
+    expect(again).toEqual(first);
+    expect(runs()).toBe(2);
+    expect(store.committed.effects).toEqual(['checkout 1', 'checkout 2']);
+    expect(store.committed.keys.size).toBe(2);
   });
+});
+
+describe('a key reused by someone else, or for something else (T096)', () => {
+  // Another actor's same key is that actor's own row (T018; the case under T016 above), so the
+  // only reuse refused here is the same actor's with another input.
 
   it('refuses the same key with a different input with CONFLICT', async () => {
     const { service, effect, runs } = setUp();
@@ -214,6 +229,38 @@ describe('a key reused by someone else, or for something else (T096)', () => {
 
     expect(failure).toMatchObject({ code: 'CONFLICT' });
     expect(runs()).toBe(1);
+  });
+});
+
+describe('the scope and the actor (T018, FR-106)', () => {
+  it('refuses a scope that is not a keyed procedure of the contracts package, before anything is read or written', async () => {
+    const { store, settings, service, effect, runs } = setUp();
+    const failure = await refusal(
+      service.run(request({ scope: 'booking.startCheckout' as IdempotentProcedure }), effect),
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(DomainError);
+    expect((failure as Error).message).toMatch(/not a keyed procedure/);
+    expect(runs()).toBe(0);
+    expect(settings.reads).toBe(0);
+    expect(store.committed.keys.size).toBe(0);
+  });
+
+  it('refuses to key an anonymous mutation, before anything is read or written', async () => {
+    const { store, settings, service, effect, runs } = setUp();
+    const failure = await refusal(service.run(request({ actorId: '' }), effect));
+    expect((failure as Error).message).toMatch(/anonymous/);
+    expect(runs()).toBe(0);
+    expect(settings.reads).toBe(0);
+    expect(store.committed.keys.size).toBe(0);
+  });
+
+  it('stores the actor on the row as the key’s own, and hashes the scope and the input', async () => {
+    const { store, service, effect } = setUp();
+    await service.run(request(), effect);
+    const [row] = [...store.committed.keys.values()];
+    expect(row).toMatchObject({ scope: SCOPE, actorId: STUDENT, key: KEY });
+    expect(row?.requestHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

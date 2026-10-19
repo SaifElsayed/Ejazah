@@ -89,8 +89,8 @@ describe('the seed checksum (T075)', () => {
     ).not.toBe(seeded);
     expect(
       await inRollback(
-        `INSERT INTO idempotency_keys (scope, key, request_hash, status, created_at, updated_at, expires_at)
-         VALUES ('probe', 'probe-key-0000000000', 'hash', 'completed', now(), now(), now())`,
+        `INSERT INTO idempotency_keys (scope, actor_id, key, request_hash, status, created_at, updated_at, expires_at)
+         VALUES ('probe', 'probe-actor', 'probe-key-0000000000', 'hash', 'completed', now(), now(), now())`,
       ),
     ).not.toBe(seeded);
   });

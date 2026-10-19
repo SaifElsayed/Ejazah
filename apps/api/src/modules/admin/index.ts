@@ -9,6 +9,10 @@ import { AuditRepository } from './audit.repository.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
 
+/** The audit label's read-time name and the Arabic of the moved catalogue keys (T021, R-108). */
+export { resolveTargetName, arabic as auditArabic, withLam } from './labels/target-name.js';
+export { type AuditTargetType, targetLabel } from './labels/target-label.js';
+
 /** The admin module's settings reader over the `settings` table, for the kernel to read through (T113). */
 export function createSettingsReader(database: Database): SettingsReader {
   return new SettingsService(new SettingsRepository(database));
