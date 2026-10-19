@@ -139,7 +139,12 @@ describe('retry, bounded failure and concurrency (T171, FR-052, R-API-14)', () =
   });
 
   it('builds the worker with the configured concurrency, listening for failures', () => {
-    const worker = startWorker({ connection, jobs: [], log: silent, concurrency: 7 }) as unknown as {
+    const worker = startWorker({
+      connection,
+      jobs: [],
+      log: silent,
+      concurrency: 7,
+    }) as unknown as {
       name: string;
       opts: unknown;
       listeners: string[];

@@ -47,6 +47,8 @@ import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { DEFAULT_LOCALE, type Locale } from '../platform/http/locale.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
+import type { SettingsReader } from '../platform/settings/settings-reader.js';
+import type { SubjectsReader } from '../modules/catalog/index.js';
 
 // The request's language and the client's address are the kernel's (`platform/http/`, PR #79
 // review, finding 1: `platform` depends on nothing above it); they are re-exported here for the
@@ -128,6 +130,20 @@ export interface SessionResolvers {
   readonly admin: SessionResolver<AdminSession>;
 }
 
+/**
+ * What a user-surface procedure reads beyond its caller (T038): bound once by `main.ts` and
+ * carried by every request, so a router stays a static value the contract snapshot reads. A member
+ * joins here with the task whose procedure first reads it.
+ */
+export interface AppServices {
+  /** Every operational number a procedure reads (FR-034). */
+  readonly settings: SettingsReader;
+  /** `platform.publicConfig`: the support address from the configuration (FR-145). */
+  readonly publicConfig: { readonly supportEmail: string };
+  /** `catalog.subjects.list`: the catalog module's subjects read (FR-182). */
+  readonly subjects: SubjectsReader;
+}
+
 /** The context of the user surface. `caller` is null for an anonymous request. */
 export interface AppContext {
   /** Which surface this is; never 'admin', so an administrator context cannot stand in (T162, R-SEC-8). */
@@ -140,6 +156,8 @@ export interface AppContext {
   readonly rateLimiter: RateLimiter;
   /** The client's address as `clientAddressOf` read it; a subject for anonymous limits, never logged whole. */
   readonly clientAddress: string;
+  /** The services the surface's procedures read (T038). */
+  readonly services: AppServices;
 }
 
 /** What the administrator caller kind needs to audit every call (T108). */
@@ -183,7 +201,9 @@ function correlated(log: Logger, clientAddress: string): { correlationId: string
   return { correlationId, log: requestLogger(log, correlationId).child({ clientAddress }) };
 }
 
-export type AppContextSource = ContextSource<UserSession>;
+export interface AppContextSource extends ContextSource<UserSession> {
+  readonly services: AppServices;
+}
 
 /** The user surface's context for one request. */
 export function createAppContext({
@@ -191,6 +211,7 @@ export function createAppContext({
   log,
   rateLimiter,
   clientAddress,
+  services,
 }: AppContextSource): AppContext {
   const caller: UserCaller | null =
     session === null
@@ -211,6 +232,7 @@ export function createAppContext({
     ...correlated(log, clientAddress),
     rateLimiter,
     clientAddress,
+    services,
   };
 }
 

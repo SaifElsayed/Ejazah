@@ -204,6 +204,7 @@ ijazah/
 │   │   └── jobs/               expire-holds · expire-pending-payments · confirm-enrollment · expire-idempotency-keys
 │   │                           evaluate-session · send-reminder · render-certificate
 │   │                           purge-chat · deliver-notification · reencrypt-columns
+│   │                           purge-otp-codes · purge-stale-push-tokens · purge-expired-sessions (Phase 1)
 │   ├── mobile/             §6
 │   └── admin/              §6.5
 │

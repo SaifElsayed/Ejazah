@@ -48,6 +48,10 @@
 // BROWSER HEADERS. The security headers and the CORS origin allowlist (T136) are registered before
 // any route, so every response carries them, on either surface, on the health routes or elsewhere.
 //
+// UPLOAD ROUTES (T024). Each handler of `routes` is mounted under its own path, beside the
+// surfaces and the pages: the two multipart upload routes, each written over the surfaces' upload
+// helper, which applies the bearer, the standing and the kinds guard itself.
+//
 // PUBLIC PAGES (T019, ADR 0021 D5). The design's two stylesheets are always served under
 // `/public/design/`, and each page of `webRoutes` is mounted under its own path through the
 // kernel's helper (`platform/web/route.ts`): the strict policy, no cookie, the anonymous limit per
@@ -91,6 +95,7 @@ import type { Logger } from './platform/logging/logger.js';
 import {
   DESIGN_ASSETS_PATH,
   designAssetsRoute,
+  type NodeHandler,
   webRoute,
   type WebRoute,
 } from './platform/web/route.js';
@@ -99,6 +104,7 @@ import { appRouter } from './surfaces/app.router.js';
 import {
   type AdminContext,
   type AppContext,
+  type AppServices,
   type Administration,
   bearerOf,
   clientAddressOf,
@@ -153,12 +159,16 @@ export interface ApplicationOptions {
   readonly rateLimiter: RateLimiter;
   /** The two session resolvers, called once per request from the bearer token (T017). */
   readonly sessions: SessionResolvers;
+  /** The services the user surface's procedures read, bound once by `main.ts` (T038). */
+  readonly services: AppServices;
   /** `TRUSTED_PROXY`: the one proxy header whose last hop is the client's address, when set (T017). */
   readonly trustedProxyHeader?: string;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
   /** The public pages, each under its own path (T019); the stylesheets are served regardless. */
   readonly webRoutes?: Readonly<Record<string, WebRoute>>;
+  /** The upload routes, each a handler under its own path (T024). */
+  readonly routes?: Readonly<Record<string, NodeHandler>>;
 }
 
 /** Nest's own records, written through the kernel logger. */
@@ -272,9 +282,11 @@ export async function createApplication({
   administration,
   rateLimiter,
   sessions,
+  services,
   trustedProxyHeader,
   surfaces = { app: appRouter, admin: adminRouter },
   webRoutes = {},
+  routes = {},
 }: ApplicationOptions): Promise<INestApplication> {
   const clientAddress = (request: IncomingMessage): string =>
     clientAddressOf(
@@ -309,6 +321,7 @@ export async function createApplication({
           log,
           rateLimiter,
           clientAddress: clientAddress(request),
+          services,
         }),
       log,
       maxRequestBodyBytes,
@@ -343,6 +356,11 @@ export async function createApplication({
   const longestFirst = Object.entries(webRoutes).sort(([a], [b]) => b.length - a.length);
   for (const [path, route] of longestFirst) {
     application.use(path, webRoute(pages, route));
+  }
+  // The upload routes (T024), longest path first for the same reason.
+  const handlersLongestFirst = Object.entries(routes).sort(([a], [b]) => b.length - a.length);
+  for (const [path, handler] of handlersLongestFirst) {
+    application.use(path, handler);
   }
   return application;
 }

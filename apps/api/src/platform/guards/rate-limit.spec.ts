@@ -164,11 +164,25 @@ function fixture(
   });
 
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
+  // The services the user surface's context carries (T038): nothing here reads one.
+  const services = {
+    settings: {
+      read: async () => {
+        throw new Error('no setting is read here');
+      },
+    },
+    publicConfig: { supportEmail: 'support@ijazah.invalid' },
+    subjects: { listActive: async () => [] },
+  };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>
-    callerFor(createAppContext({ session: null, log, rateLimiter: limiter, clientAddress }));
+    callerFor(
+      createAppContext({ session: null, log, rateLimiter: limiter, clientAddress, services }),
+    );
   const signedIn = () =>
-    callerFor(createAppContext({ session: student, log, rateLimiter: limiter, clientAddress }));
+    callerFor(
+      createAppContext({ session: student, log, rateLimiter: limiter, clientAddress, services }),
+    );
   return { settings, counter, limiter, anonymous, signedIn };
 }
 

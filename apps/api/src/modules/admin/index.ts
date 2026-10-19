@@ -4,6 +4,7 @@ import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { AdminSessionsRepository } from './admin-sessions.repository.js';
 import { AdminUsersRepository } from './admin-users.repository.js';
 import { AuditRepository } from './audit.repository.js';
 import { SettingsRepository } from './settings.repository.js';
@@ -24,6 +25,13 @@ export function createSettingsReader(database: Database): SettingsReader {
  */
 export function createAuditWriter(): AuditWriter {
   return new AuditRepository();
+}
+
+/** The admin module's `admin_sessions` store, for the `purge-expired-sessions` sweep (T025, R-API-6). */
+export function createAdminSessionPurgeStore(
+  database: Pick<Database, 'adminSession'>,
+): AdminSessionsRepository {
+  return new AdminSessionsRepository(database);
 }
 
 /** The admin module's `_encrypted` column, for the `reencrypt-columns` job (T155, R-API-6). */

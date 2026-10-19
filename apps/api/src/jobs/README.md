@@ -1,7 +1,9 @@
 # jobs
 
 Queued work executed by `src/worker.ts`. Arrives with the phase that needs it:
-`expire-idempotency-keys` (Phase 0, with T102), `reencrypt-columns` (Phase 0, with T155), `expire-holds`, `expire-pending-payments`, `confirm-enrollment` (Phase 2), `evaluate-session`, `purge-chat`, `send-reminder` (Phase 3),
+`expire-idempotency-keys` (Phase 0, with T102), `reencrypt-columns` (Phase 0, with T155), `purge-otp-codes`,
+`purge-stale-push-tokens`, `purge-expired-sessions` (Phase 1, with T025; research R-118), `expire-holds`,
+`expire-pending-payments`, `confirm-enrollment` (Phase 2), `evaluate-session`, `purge-chat`, `send-reminder` (Phase 3),
 `render-certificate`, `deliver-notification` (Phase 4).
 
 Every job is idempotent and proves it with a double-run assertion in its own test (R-API-14, FR-052).
@@ -14,6 +16,11 @@ Push delivery is reachable only from the queued notification job (R-API-15).
 - `double-run.ts` — `runOnceAndTwice({ world, run, observe })`. A job's spec calls the handler directly, no queue, and asserts `expect(twice).toEqual(once)`.
 
 A job reads and writes through the modules' public entries and the kernel; it never queries a table itself (R-API-6).
+A sweep that deletes rows declares the store it needs (`purge-otp-codes.ts`'s `OtpCodePurgeStore`), the owning module
+implements it over its table and exports a factory from its entry, and `worker.ts` hands the store in; the admin
+module's store is handed in the same way, since a job may not import `modules/admin`
+(`boundaries/no-upward-admin-import`). A window is a settings key, read on every run (FR-034), and the instant
+arithmetic goes through `packages/time` (`window.ts`, R-TIME-1).
 
 ## Retry, bounded failure and concurrency (T171)
 

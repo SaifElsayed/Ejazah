@@ -25,7 +25,12 @@ const [
   { transactionsOver },
   { requireAuditWriter },
   { createAuditWriter, createSettingsReader },
+  catalog,
+  identity,
+  verification,
+  { createColumnCipher },
   { selectPorts },
+  { TERMS_PATH, termsRoute },
   { createApplication },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
@@ -38,7 +43,12 @@ const [
   import('./platform/db/transaction.repository.js'),
   import('./platform/audit/audit-writer.js'),
   import('./modules/admin/index.js'),
+  import('./modules/catalog/index.js'),
+  import('./modules/identity/index.js'),
+  import('./modules/verification/index.js'),
+  import('./platform/crypto/encryption.js'),
   import('./platform/ports/ports.module.js'),
+  import('./platform/web/terms/terms.controller.js'),
   import('./app.module.js'),
 ]);
 
@@ -89,6 +99,38 @@ const sessions = {
   admin: async () => null,
 };
 
+// What the user surface's procedures read (T038): the settings reader, the support address from
+// the configuration (FR-145, never an admin setting) and the catalog module's subjects read.
+const services = {
+  settings,
+  publicConfig: { supportEmail: config.SUPPORT_EMAIL },
+  subjects: catalog.createSubjectsService(database),
+};
+
+// The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
+// helper with the user session resolver, T020's guard and the storage port; the documents route
+// encrypts its key with the column cipher (R-DB-8).
+const uploads = {
+  sessions: sessions.user,
+  guard: { settings, rateLimiter },
+  log,
+  ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
+};
+const routes = {
+  [verification.DOCUMENTS_UPLOAD_PATH]: verification.createDocumentsUploadRoute({
+    ...uploads,
+    storage: ports.storage,
+    cipher: createColumnCipher(config),
+    database,
+  }),
+  [identity.PHOTOS_UPLOAD_PATH]: identity.createPhotoUploadRoute({
+    ...uploads,
+    storage: ports.storage,
+    settings,
+    database,
+  }),
+};
+
 const application = await createApplication({
   log,
   readiness: new ReadinessRepository(database),
@@ -97,6 +139,10 @@ const application = await createApplication({
   administration,
   rateLimiter,
   sessions,
+  services,
+  // The public pages (T019, ADR 0021 D5): the Terms (T039); the deletion pages join with T052.
+  webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
+  routes,
   // The one proxy header whose last hop is the client's address; unset before a host is chosen.
   ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
 });
