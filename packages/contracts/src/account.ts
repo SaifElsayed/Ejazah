@@ -4,7 +4,8 @@
 // nothing of another person; the date of birth is the caller's own (FR-138). No input names
 // gender, role or user id (R-GENDER-4) and none names a timestamp (R-TIME-6).
 import { z } from 'zod';
-import { identityToken, nonce, password } from './auth.js';
+import { identityToken, nonce } from './auth.js';
+import { password } from './password.js';
 import { calendarDate, displayName, gender, role, timeZone } from './onboarding.js';
 import { emailAddress } from './platform.js';
 

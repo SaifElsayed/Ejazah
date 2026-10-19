@@ -16,4 +16,5 @@ export {
   isIdempotentProcedure,
 } from './idempotent-procedures.js';
 export * from './onboarding.js';
+export * from './password.js';
 export * from './platform.js';
