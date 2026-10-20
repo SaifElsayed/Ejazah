@@ -14,6 +14,9 @@
 // VERIFYING. Wrong, expired, spent and over-the-cap codes are one refusal, CODE_INVALID, with one
 // message. Each attempt is counted before the hash is compared, and only below `otp_max_attempts`,
 // so the cap holds under concurrent guesses; the code is consumed by the one call that matches.
+// Every verification compares one Argon2id hash, a decoy where no usable code exists (none sent,
+// lapsed, spent, over the cap), so a wrong code takes the same work whether the address has an
+// account or not, and the save step of a reset is no oracle either (review of B9, M1).
 import { generateOneTimeCode } from '../../platform/guards/identifiers.js';
 import { OtpHasher, type Verification } from '../../platform/crypto/hashing.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
@@ -66,6 +69,8 @@ export class OneTimeCodes {
   readonly #log: WarningLog;
   readonly #now: () => Date;
   readonly #hasher: CodeHasher;
+  /** The hash a verification without a usable code compares against, made once. */
+  readonly #decoyHash: Promise<string>;
 
   constructor(dependencies: OneTimeCodesDependencies) {
     this.#codes = new OtpCodesRepository(dependencies.database);
@@ -75,6 +80,9 @@ export class OneTimeCodes {
     this.#log = dependencies.log;
     this.#now = dependencies.now ?? (() => new Date());
     this.#hasher = dependencies.hasher ?? new OtpHasher(dependencies.encryptionKey);
+    this.#decoyHash = this.#hasher.hash(generateOneTimeCode());
+    // Handled here so a failure is never unhandled; `verify` awaits it and meets the failure there.
+    this.#decoyHash.catch(() => undefined);
   }
 
   /** Writes a fresh code for `destination` and mails it once the row has committed. */
@@ -105,10 +113,13 @@ export class OneTimeCodes {
     const max = await this.#settings.read(OTP_MAX_ATTEMPTS_SETTING, positiveWhole);
     const now = this.#now();
     const row = await this.#codes.findLatest(destination, purpose);
-    if (row === null || row.consumedAt !== null || row.expiresAt <= now) throw invalidCode();
-    if (!(await this.#codes.countAttempt(row.id, max))) throw invalidCode();
-    const { valid } = await this.#hasher.verify(code, row.codeHash);
-    if (!valid || !(await this.#codes.consume(row.id, now))) throw invalidCode();
+    const live = row !== null && row.consumedAt === null && now < row.expiresAt ? row : null;
+    const counted = live !== null && (await this.#codes.countAttempt(live.id, max)) ? live : null;
+    // One Argon2id comparison on every path: the code's own hash, or the decoy's.
+    const { valid } = await this.#hasher.verify(code, counted?.codeHash ?? (await this.#decoyHash));
+    if (counted === null || !valid || !(await this.#codes.consume(counted.id, now))) {
+      throw invalidCode();
+    }
   }
 }
 

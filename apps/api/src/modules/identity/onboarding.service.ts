@@ -95,8 +95,6 @@ export interface OnboardingDependencies extends IdentityDependencies {
   readonly marks: SingleUseMarks;
   readonly sessions: Pick<SessionService, 'issue'>;
   readonly codes: Pick<OneTimeCodes, 'send' | 'verify'>;
-  /** The key a rotation retires, so a token minted under it still reads (research R-8). */
-  readonly encryptionKeyPrevious?: string | undefined;
 }
 
 const invalidToken = () => new DomainError('ONBOARDING_TOKEN_INVALID');
@@ -117,7 +115,10 @@ export class OnboardingService {
     this.#accounts = new AccountsRepository(dependencies.database);
     this.#transactions = transactionsOver(dependencies.database);
     this.#key = deriveSubkey(dependencies.encryptionKey, ONBOARDING_TOKEN_LABEL);
-    this.#cipher = new ColumnCipher(dependencies.encryptionKey, dependencies.encryptionKeyPrevious);
+    // The current key only: the token's HMAC is under the current key too, so a token minted before
+    // a rotation fails its signature first, and costs the person one more sign-in (R-102; review of
+    // B9, finding 1).
+    this.#cipher = new ColumnCipher(dependencies.encryptionKey);
     this.#now = dependencies.now ?? (() => new Date());
   }
 

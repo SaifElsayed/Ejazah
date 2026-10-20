@@ -264,6 +264,35 @@ describe('auth.email.resetPassword', () => {
     return codeMailedTo(identity.mails(), address);
   }
 
+  it('does the same code work for every address, so a wrong code says nothing of the account (review of B9, M1)', async () => {
+    const account = await emailAccount();
+    const provider = await createAccount(database, {
+      provider: { provider: 'google', subject: uniqueSubject() },
+    });
+    const code = await resetCode(account.email);
+    const wrong = code === '000000' ? '111111' : '000000';
+    // A wrong code for an email account, an unknown address, a provider address, and an email
+    // account past its attempt cap: one code verification each, then one refusal.
+    for (const address of [account.email, uniqueEmail(), provider.email]) {
+      await identity.emailAuth.requestPasswordReset(address);
+      hashers.codeHasher.verify.mockClear();
+      await expect(
+        identity.emailAuth.resetPassword(address, wrong, 'a new long passphrase'),
+      ).rejects.toMatchObject({ code: 'CODE_INVALID' });
+      expect(hashers.codeHasher.verify, address).toHaveBeenCalledTimes(1);
+    }
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await identity.emailAuth
+        .resetPassword(account.email, wrong, 'a new long passphrase')
+        .catch(() => undefined);
+    }
+    hashers.codeHasher.verify.mockClear();
+    await expect(
+      identity.emailAuth.resetPassword(account.email, wrong, 'a new long passphrase'),
+    ).rejects.toMatchObject({ code: 'CODE_INVALID' });
+    expect(hashers.codeHasher.verify).toHaveBeenCalledTimes(1);
+  });
+
   it('sets the new password, signs in, and revokes every other session', async () => {
     const account = await emailAccount();
     const other = await identity.sessions.issue(account.userId);
