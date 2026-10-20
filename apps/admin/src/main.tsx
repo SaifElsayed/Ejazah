@@ -1,2 +1,35 @@
-// Admin entrypoint (T007). Consumes ONLY the admin surface of @ijazah/contracts. Mandatory MFA arrives in Phase 1.
-export {};
+// T037: the panel's entry. It reads the language the browser keeps (T035), creates the one session
+// store over the tab's sessionStorage and the one client for the administrator surface, and renders
+// the router. It consumes only the administrator surface (`/admin/trpc`): an admin capability is
+// unreachable from the phone and an app procedure from here (ADR 0014 D3).
+//
+// `VITE_API_URL` is the API's origin, read by Vite at build time; the panel refuses to start
+// without it, rather than call a guessed host.
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router';
+
+import { App } from './App';
+import { loadStoredLocale } from './i18n';
+import { createAdminClient } from './lib/client';
+import { createSessionStore } from './lib/session';
+
+const apiUrl = import.meta.env.VITE_API_URL;
+if (apiUrl === undefined || apiUrl === '') {
+  throw new Error('admin: VITE_API_URL is not set; it names the API the panel calls');
+}
+
+const root = document.getElementById('root');
+if (root === null) throw new Error('admin: index.html has no #root');
+
+loadStoredLocale();
+const sessions = createSessionStore(() => window.sessionStorage);
+const client = createAdminClient({ url: `${apiUrl.replace(/\/+$/, '')}/admin/trpc`, sessions });
+
+createRoot(root).render(
+  <StrictMode>
+    <BrowserRouter>
+      <App client={client} sessions={sessions} />
+    </BrowserRouter>
+  </StrictMode>,
+);

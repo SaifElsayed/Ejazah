@@ -1,0 +1,73 @@
+// T037: AdminNav, the sidebar of every console page (screens.md, `AdminNav`), with the entries of
+// this phase only (FR-176): a navigation entry whose page lands in a later phase is not rendered
+// until that phase adds it here. The groups and the order are the board's; the settings entry leads
+// to `/settings/admins`, the one settings page this phase builds (FR-174).
+//
+// Not yet here, each with the task that brings it: the signed-in administrator's name (`auth.me`,
+// T066, read by the page tasks of B14) and the queues' open counts (the home's service, T065).
+import { useLocation, useNavigate } from 'react-router';
+
+import { Sidebar } from '../../design/components';
+import type { IconName } from '../../design/icons';
+import { type MessageKey, useT } from '../../i18n';
+import { useAdmin } from '../../lib/admin-context';
+
+interface NavEntry {
+  readonly path: string;
+  readonly label: MessageKey;
+  readonly icon: IconName;
+}
+
+/** The entries of this phase, in the board's groups and order. */
+export const NAV_GROUPS: readonly {
+  readonly label: MessageKey;
+  readonly entries: readonly NavEntry[];
+}[] = [
+  {
+    label: 'admin.nav.groups.queues',
+    entries: [
+      { path: '/', label: 'admin.nav.items.home', icon: 'house' },
+      { path: '/applications', label: 'admin.nav.items.applications', icon: 'user-check' },
+      { path: '/credentials', label: 'admin.nav.items.credentials', icon: 'file-text' },
+    ],
+  },
+  {
+    label: 'admin.nav.groups.records',
+    entries: [
+      { path: '/settings/admins', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
+      { path: '/audit', label: 'admin.nav.items.audit', icon: 'list' },
+    ],
+  },
+];
+
+/** True when `pathname` is `path`'s page or one below it; home only on its own path. */
+function isCurrent(path: string, pathname: string): boolean {
+  if (path === '/') return pathname === '/';
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+export function AdminNav() {
+  const t = useT();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { client } = useAdmin();
+  return (
+    <Sidebar
+      groups={NAV_GROUPS.map((group) => ({
+        label: t(group.label),
+        items: group.entries.map((entry) => ({
+          href: entry.path,
+          label: t(entry.label),
+          icon: entry.icon,
+          active: isCurrent(entry.path, pathname),
+        })),
+      }))}
+      onNavigate={(href) => {
+        void navigate(href);
+      }}
+      onSignOut={() => {
+        void client.signOut();
+      }}
+    />
+  );
+}
