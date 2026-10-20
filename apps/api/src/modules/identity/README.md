@@ -16,7 +16,7 @@ Trust client-supplied role or gender (R-GENDER-4). Store a bare secret column (R
 
 ## Shape
 
-`identity.service.ts` holds every rule. `identity.repository.ts` holds every query. `identity.router.ts` is thin: validate, call one service method, return. `index.ts` is the only import path. Arrives with the phase that first needs it (see PLAN.md).
+The rules live in the services (Phase 1, T047): `sign-in.service.ts` (the provider nonce and sign-in), `onboarding.service.ts` (the onboarding token and the account's one transaction), `session.service.ts` (the two tokens, rotation, `resolveUserSession`, `revokeAll`), `email-auth.service.ts` (the email account), and `one-time-codes.ts` with the mails in `mail/`. The queries live in a `*.repository.ts` per table: `identity.repository.ts` (the accounts and the encrypted columns), `user-sessions.repository.ts`, `otp-codes.repository.ts`, `users.repository.ts`, `push-tokens.repository.ts`. A router is thin: validate, call one service method, return. `index.ts` is the only import path.
 
 ## Requirement ids
 

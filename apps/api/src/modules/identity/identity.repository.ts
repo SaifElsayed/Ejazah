@@ -126,3 +126,166 @@ export class IdentityRepository {
     };
   }
 }
+
+// T047: the accounts the sign-in, onboarding and email services read and write (FR-120 to FR-129).
+// An address is compared without its case: `users.email` is `citext`. A soft-deleted person is
+// left out of every read by the client's extension, so an address or an identity of a deleted
+// account matches nothing here (its identities are deleted with it, ADR 0015 D3).
+
+type AccountsClient = Pick<Database, 'user' | 'authIdentity'>;
+type AccountsWriter = Pick<Transaction, 'user' | 'authIdentity' | 'userRole' | 'termsAcceptance'>;
+
+/** How an account signs in: a provider, or an email and a password (FR-123). */
+export type SignInMethod = 'google' | 'apple' | 'email';
+
+/** An account an address belongs to. */
+export interface AccountByEmail {
+  readonly userId: string;
+  /** Null for a provider account. */
+  readonly passwordHash: string | null;
+  readonly method: SignInMethod;
+}
+
+/** What a landing reads of an account (FR-130, FR-137). */
+export interface AccountStanding {
+  readonly role: 'student' | 'teacher';
+  readonly accountStatus: 'active' | 'suspended' | 'verification_required' | 'banned';
+  readonly teacher?: {
+    readonly verificationStatus:
+      'pending' | 'approved' | 'rejected' | 'suspended' | 'banned' | 'revoked';
+  };
+}
+
+/** What `onboarding.complete` writes (FR-125). */
+export interface NewAccount {
+  readonly email: string;
+  readonly passwordHash: string | null;
+  readonly displayName: string;
+  readonly gender: 'male' | 'female';
+  /** `YYYY-MM-DD`, written as a `date`. */
+  readonly dateOfBirth: string;
+  readonly timezone: string;
+  readonly preferredLanguage: 'ar' | 'en';
+  readonly role: 'student' | 'teacher';
+  readonly termsVersion: string;
+  readonly acceptedAt: Date;
+  /** The provider identity, with Apple's grant already encrypted to `id`, its row. */
+  readonly identity?: {
+    readonly id: string;
+    readonly provider: 'google' | 'apple';
+    readonly subject: string;
+    readonly grantEncrypted: Uint8Array | null;
+  };
+}
+
+export class AccountsRepository {
+  readonly #database: AccountsClient;
+
+  constructor(database: AccountsClient) {
+    this.#database = database;
+  }
+
+  /** The live person a provider identity belongs to, or null. */
+  async findUserIdByIdentity(
+    provider: 'google' | 'apple',
+    subject: string,
+  ): Promise<string | null> {
+    const identity = await this.#database.authIdentity.findUnique({
+      where: { provider_providerSubject: { provider, providerSubject: subject } },
+      select: { userId: true },
+    });
+    if (identity === null) return null;
+    const user = await this.#database.user.findUnique({
+      where: { id: identity.userId },
+      select: { id: true },
+    });
+    return user?.id ?? null;
+  }
+
+  /** The live account `email` belongs to, compared without case, and how it signs in. */
+  async findByEmail(email: string): Promise<AccountByEmail | null> {
+    const user = await this.#database.user.findFirst({
+      where: { email },
+      select: { id: true, passwordHash: true, authIdentities: { select: { provider: true } } },
+    });
+    if (user === null) return null;
+    return {
+      userId: user.id,
+      passwordHash: user.passwordHash,
+      method: user.passwordHash === null ? (user.authIdentities[0]?.provider ?? 'email') : 'email',
+    };
+  }
+
+  /** The role and the standing a landing reads, inside `tx` when one is given. */
+  async readStanding(
+    userId: string,
+    tx?: Pick<Transaction, 'user'>,
+  ): Promise<AccountStanding | null> {
+    const user = await (tx ?? this.#database).user.findUnique({
+      where: { id: userId },
+      select: {
+        accountStatus: true,
+        roles: { select: { role: true } },
+        teacherProfile: { select: { verificationStatus: true } },
+      },
+    });
+    const role = user?.roles[0]?.role;
+    if (user === null || role === undefined) return null;
+    return {
+      role,
+      accountStatus: user.accountStatus,
+      ...(user.teacherProfile === null ? {} : { teacher: user.teacherProfile }),
+    };
+  }
+
+  /** Writes the account, its identity, its one role and its terms acceptance; its id. */
+  async create(tx: AccountsWriter, account: NewAccount): Promise<string> {
+    const { id: userId } = await tx.user.create({
+      data: {
+        email: account.email,
+        passwordHash: account.passwordHash,
+        displayName: account.displayName,
+        gender: account.gender,
+        // A date-only ISO string is read as midnight UTC, the calendar date itself (R-TIME-6).
+        dateOfBirth: new Date(account.dateOfBirth),
+        timezone: account.timezone,
+        preferredLanguage: account.preferredLanguage,
+        accountStatus: 'active',
+      },
+      select: { id: true },
+    });
+    if (account.identity !== undefined) {
+      await tx.authIdentity.create({
+        data: {
+          id: account.identity.id,
+          userId,
+          provider: account.identity.provider,
+          providerSubject: account.identity.subject,
+          providerRefreshTokenEncrypted:
+            account.identity.grantEncrypted === null
+              ? null
+              : Uint8Array.from(account.identity.grantEncrypted),
+        },
+        select: { id: true },
+      });
+    }
+    await tx.userRole.create({
+      data: { userId, role: account.role, status: 'active' },
+      select: { id: true },
+    });
+    await tx.termsAcceptance.create({
+      data: { userId, termsVersion: account.termsVersion, acceptedAt: account.acceptedAt },
+      select: { id: true },
+    });
+    return userId;
+  }
+
+  /** Sets the account's password hash. */
+  async setPasswordHash(
+    tx: Pick<Transaction, 'user'>,
+    userId: string,
+    passwordHash: string,
+  ): Promise<void> {
+    await tx.user.update({ where: { id: userId }, data: { passwordHash }, select: { id: true } });
+  }
+}
