@@ -20,13 +20,16 @@ import {
   type NewDocument,
 } from './uploads.controller.js';
 import { DOCUMENT_STORAGE_KEY_COLUMN } from './verification.repository.js';
+import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MAX_UNREFERENCED = 3;
 
 const settings: SettingsReader = {
   read: async (key, schema) => {
     if (key === 'upload_max_bytes') return schema.parse(65_536);
     if (key === 'rate_limit_upload') return schema.parse({ limit: 100, window_seconds: 60 });
+    if (key === 'document_unreferenced_max_per_user') return schema.parse(MAX_UNREFERENCED);
     throw new SettingError(key, 'missing');
   },
 };
@@ -57,6 +60,7 @@ const services = {
   settings,
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const cipher = new ColumnCipher(Buffer.alloc(32, 9).toString('base64'));
@@ -64,10 +68,17 @@ const storage = storageStub();
 
 const written: NewDocument[] = [];
 let failInsert = false;
+/** How many documents nothing points at the uploader holds, as the verification store counts them. */
+let held = 0;
+const counted: string[] = [];
 const documents = {
   createDocument: async (row: NewDocument) => {
     if (failInsert) throw new Error('the insert failed');
     written.push(row);
+  },
+  countUnreferencedOf: async (userId: string) => {
+    counted.push(userId);
+    return held;
   },
 };
 
@@ -92,6 +103,7 @@ beforeAll(async () => {
         storage,
         cipher,
         documents,
+        settings,
       }),
     },
   });
@@ -106,6 +118,8 @@ afterAll(async () => {
 beforeEach(() => {
   written.length = 0;
   failInsert = false;
+  held = 0;
+  counted.length = 0;
 });
 
 function upload(kind: string, bytes: Buffer, bearer = 't-a'): Promise<Response> {
@@ -178,5 +192,27 @@ describe('POST /uploads/documents (T024, FR-151)', () => {
     expect(after).toEqual(['put', 'remove']);
     const [put, remove] = storage.calls.slice(before);
     expect(remove?.args[0]).toBe(put?.args[0]);
+  });
+});
+
+describe('the per-user cap on unreferenced documents (T093)', () => {
+  it('refuses a further upload with CONFLICT while the person holds the cap, storing nothing', async () => {
+    held = MAX_UNREFERENCED;
+    const before = storage.calls.length;
+    const response = await upload('credential', pdfBytes());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'CONFLICT', details: [{ path: 'documents', code: 'too_many' }] },
+    });
+    expect(counted).toEqual([session.userId]);
+    expect(storage.calls.slice(before)).toEqual([]);
+    expect(written).toEqual([]);
+  });
+
+  it('admits an upload below the cap', async () => {
+    held = MAX_UNREFERENCED - 1;
+    const response = await upload('credential', pdfBytes());
+    expect(response.status).toBe(201);
+    expect(written).toHaveLength(1);
   });
 });

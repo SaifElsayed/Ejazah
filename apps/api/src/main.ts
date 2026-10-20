@@ -29,6 +29,7 @@ const [
   identity,
   verification,
   { createColumnCipher },
+  { createRedisSingleUseMarks },
   { selectPorts },
   { TERMS_PATH, termsRoute },
   { createApplication },
@@ -47,6 +48,7 @@ const [
   import('./modules/identity/index.js'),
   import('./modules/verification/index.js'),
   import('./platform/crypto/encryption.js'),
+  import('./platform/redis/single-use-marks.js'),
   import('./platform/ports/ports.module.js'),
   import('./platform/web/terms/terms.controller.js'),
   import('./app.module.js'),
@@ -90,26 +92,53 @@ const administration = {
 // (R-API-15).
 const ports = selectPorts(config);
 
-// Stand-in session resolvers (T017): every request is anonymous until the identity module's
-// `resolveUserSession` (T047) and the admin module's `resolveAdminSession` (T066) replace them.
-// Each answers null, as a resolver does for a token it does not know (kernel.md "Session
-// resolution"), so the built entrypoint boots and serves exactly what it served before.
+// What the identity module's services are built over (T048): the database, the settings, the key
+// its tokens are signed under, and the single-use marks of nonces and onboarding tokens in Redis,
+// which connect on their first mark and report a lost connection as the limiter does.
+const identityBase = {
+  database,
+  settings,
+  encryptionKey: config.ENCRYPTION_KEY,
+};
+
+// The session resolvers (T017): the identity module's `resolveUserSession` (T047) reads a user's
+// session and standing on every request. The administrator's stays a stand-in answering null, as a
+// resolver does for a token it does not know (kernel.md "Session resolution"), until the admin
+// module's `resolveAdminSession` (T066) replaces it.
 const sessions = {
-  user: async () => null,
+  user: identity.resolveUserSession(identityBase),
   admin: async () => null,
 };
 
 // What the user surface's procedures read (T038): the settings reader, the support address from
-// the configuration (FR-145, never an admin setting) and the catalog module's subjects read.
+// the configuration (FR-145, never an admin setting), the catalog module's subjects read, and the
+// identity module's services behind `auth`, `onboarding` and `account` (T048, T049).
 const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
   subjects: catalog.createSubjectsService(database),
+  identity: identity.createIdentityServices({
+    ...identityBase,
+    marks: createRedisSingleUseMarks({
+      redisUrl: config.REDIS_URL,
+      onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
+    }),
+    signIn: ports.signIn,
+    email: ports.email,
+    storage: ports.storage,
+    log,
+  }),
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
 // helper with the user session resolver, T020's guard and the storage port; the documents route
-// encrypts its key with the column cipher (R-DB-8).
+// encrypts its key with the column cipher (R-DB-8) and refuses an uploader holding
+// `document_unreferenced_max_per_user` documents nothing points at, read through the identity and
+// catalog modules' pointers (T093, R-API-6).
+const documentReferences = [
+  identity.createDocumentReferences(database),
+  catalog.createDocumentReferences(database),
+];
 const uploads = {
   sessions: sessions.user,
   guard: { settings, rateLimiter },
@@ -122,6 +151,8 @@ const routes = {
     storage: ports.storage,
     cipher: createColumnCipher(config),
     database,
+    settings,
+    references: documentReferences,
   }),
   [identity.PHOTOS_UPLOAD_PATH]: identity.createPhotoUploadRoute({
     ...uploads,
@@ -140,7 +171,7 @@ const application = await createApplication({
   rateLimiter,
   sessions,
   services,
-  // The public pages (T019, ADR 0021 D5): the Terms (T039); the deletion pages join with T052.
+  // The public pages (T019, ADR 0021 D5): the Terms (T039); the deletion pages join with T083.
   webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
   routes,
   // The one proxy header whose last hop is the client's address; unset before a host is chosen.

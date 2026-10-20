@@ -31,6 +31,7 @@ const services = {
   },
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 
 import { createLogger } from './platform/logging/logger.js';
@@ -42,6 +43,7 @@ import {
   studentProcedure,
   toErrorShape,
 } from './surfaces/procedures.js';
+import { unusedIdentityServices } from './surfaces/services.fixtures.js';
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests
 // it. Each part refuses if it is ever reached.

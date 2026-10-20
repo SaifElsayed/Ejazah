@@ -4,10 +4,42 @@
 // where it still holds the key that was read, and read again when another upload got there first,
 // so the key the caller is told it replaced is the one it did replace and no object is orphaned in
 // storage. The database decides the race, not the order of two statements.
+//
+// T049 adds the account's own reads and writes (`account.*`): the row `me` answers, with the role,
+// how the account signs in and a teacher's profile standing, and the four settings a person changes.
+// The device's time zone is written only where `timezone_overridden_at` is null, in the same
+// statement, so a zone chosen by hand at the same moment is never overwritten (FR-AUTH-10).
 import type { Database } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 
 type Client = Pick<Database, 'user'>;
+
+/** What `account.me` reads of the caller's own account. */
+export interface OwnAccountRow {
+  readonly id: string;
+  readonly email: string | null;
+  readonly passwordHash: string | null;
+  readonly gender: 'male' | 'female';
+  readonly dateOfBirth: Date | null;
+  readonly displayName: string | null;
+  readonly photoKey: string | null;
+  readonly preferredLanguage: 'ar' | 'en';
+  readonly timezone: string;
+  readonly accountStatus: 'active' | 'suspended' | 'verification_required' | 'banned';
+  readonly createdAt: Date;
+  readonly role: 'student' | 'teacher' | undefined;
+  readonly providers: readonly ('google' | 'apple')[];
+  /** The teacher's profile standing; null before the application exists. */
+  readonly profile: {
+    readonly verificationStatus:
+      'pending' | 'approved' | 'rejected' | 'suspended' | 'banned' | 'revoked';
+    readonly applicationStatus:
+      'in_review' | 'needs_document' | 'rejected' | 'banned' | 'approved' | null;
+    readonly payoutConfiguredAt: Date | null;
+    readonly payoutVerifiedAt: Date | null;
+    readonly payoutRejectedReason: string | null;
+  } | null;
+}
 
 export class UsersRepository {
   readonly #database: Client;
@@ -30,5 +62,77 @@ export class UsersRepository {
       });
       if (count === 1) return before.photoKey;
     }
+  }
+
+  /** The caller's own account as `me` answers it, or null when it no longer exists. */
+  async readOwn(userId: string): Promise<OwnAccountRow | null> {
+    const user = await this.#database.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        gender: true,
+        dateOfBirth: true,
+        displayName: true,
+        photoKey: true,
+        preferredLanguage: true,
+        timezone: true,
+        accountStatus: true,
+        createdAt: true,
+        roles: { select: { role: true } },
+        authIdentities: { select: { provider: true } },
+        teacherProfile: {
+          select: {
+            verificationStatus: true,
+            applicationStatus: true,
+            payoutConfiguredAt: true,
+            payoutVerifiedAt: true,
+            payoutRejectedReason: true,
+          },
+        },
+      },
+    });
+    if (user === null) return null;
+    const { roles, authIdentities, teacherProfile, ...account } = user;
+    return {
+      ...account,
+      role: roles[0]?.role,
+      providers: authIdentities.map(({ provider }) => provider),
+      profile: teacherProfile,
+    };
+  }
+
+  async setDisplayName(userId: string, displayName: string): Promise<void> {
+    await this.#database.user.update({
+      where: { id: userId },
+      data: { displayName },
+      select: { id: true },
+    });
+  }
+
+  async setLanguage(userId: string, preferredLanguage: 'ar' | 'en'): Promise<void> {
+    await this.#database.user.update({
+      where: { id: userId },
+      data: { preferredLanguage },
+      select: { id: true },
+    });
+  }
+
+  /** The zone chosen by hand, and when: the device's report leaves it from now on. */
+  async overrideTimezone(userId: string, timezone: string, at: Date): Promise<void> {
+    await this.#database.user.update({
+      where: { id: userId },
+      data: { timezone, timezoneOverriddenAt: at },
+      select: { id: true },
+    });
+  }
+
+  /** The device's zone, written only while no zone was chosen by hand. */
+  async reportDeviceTimezone(userId: string, timezone: string): Promise<void> {
+    await this.#database.user.updateMany({
+      where: { id: userId, timezoneOverriddenAt: null },
+      data: { timezone },
+    });
   }
 }

@@ -11,6 +11,7 @@ import { createLogger } from '../../logging/logger.js';
 import { SettingError, type SettingsReader } from '../../settings/settings-reader.js';
 import { PUBLIC_PAGE_CSP } from '../route.js';
 import { TERMS_PATH, termsRoute } from './terms.controller.js';
+import { unusedIdentityServices } from '../../../surfaces/services.fixtures.js';
 
 const administration = {
   transactions: { run: () => Promise.reject(new Error('no administrative call is expected here')) },
@@ -40,6 +41,7 @@ const services = {
   settings,
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 
 let application: INestApplication;

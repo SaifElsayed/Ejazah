@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApplication, surfacePaths } from '../../app.module.js';
 import { RateLimiter } from '../guards/rate-limit.guard.js';
 import { createLogger } from '../logging/logger.js';
+import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
 
 // No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
 const sessions = { user: async () => null, admin: async () => null };
@@ -24,6 +25,7 @@ const services = {
   },
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests

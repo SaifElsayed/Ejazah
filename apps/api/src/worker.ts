@@ -6,8 +6,10 @@
 // returns. Then reporting is started (T111), the logger created (T100), the database client opened
 // (T102), the admin module's settings reader bound (T113), each port's provider selected (T121),
 // the column cipher and every `_encrypted` column bound for the re-encryption sweep (T155), the
-// purge stores of both modules bound for the three purge sweeps (T025), every sweep registered on
-// its schedule, and the queue's deliveries run through the registered jobs (T112).
+// purge stores of both modules bound for the three purge sweeps (T025), the verification module's
+// store of unreferenced documents over the identity and catalog modules' pointers (Phase 1's T093),
+// every sweep registered on its schedule, and the queue's deliveries run through the registered
+// jobs (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
 // injection, so each is handed what it needs here, and `dev:worker` runs this file under `tsx`.
@@ -33,6 +35,8 @@ const [
   { purgeOtpCodes },
   { purgeStalePushTokens },
   { purgeExpiredSessions },
+  { purgeUnreferencedDocuments },
+  catalog,
   { selectPorts, selectPushPort },
   queueing,
 ] = await Promise.all([
@@ -52,6 +56,8 @@ const [
   import('./jobs/purge-otp-codes.js'),
   import('./jobs/purge-stale-push-tokens.js'),
   import('./jobs/purge-expired-sessions.js'),
+  import('./jobs/purge-unreferenced-documents.js'),
+  import('./modules/catalog/index.js'),
   import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
 ]);
@@ -93,6 +99,17 @@ const encryptedColumns = [
 const purge = identity.createPurgeStores(database);
 const adminSessions = admin.createAdminSessionPurgeStore(database);
 
+// The unreferenced documents (T093): the verification module's store over the identity and catalog
+// modules' pointers, the cipher decrypting each key for the one removal through the storage port.
+const unreferencedDocuments = verification.createUnreferencedDocuments({
+  database,
+  cipher,
+  references: [
+    identity.createDocumentReferences(database),
+    catalog.createDocumentReferences(database),
+  ],
+});
+
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [
   expireIdempotencyKeys(idempotency),
@@ -100,6 +117,7 @@ const jobs: readonly Job[] = [
   purgeOtpCodes({ store: purge.otpCodes, settings }),
   purgeStalePushTokens({ store: purge.pushTokens, settings }),
   purgeExpiredSessions({ stores: { user: purge.userSessions, admin: adminSessions }, settings }),
+  purgeUnreferencedDocuments({ store: unreferencedDocuments, storage: ports.storage, settings }),
 ];
 
 const connection = queueing.connectionFor(config.REDIS_URL);

@@ -16,33 +16,36 @@
 // every live row by rule 32; `certificate_name` (ADR 0019 D1) and `photo_key` (decision 46) arrive.
 
 model User {
-  id                String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id                   String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
   // E.164. Unique only among rows not soft-deleted (T066, ERD section 15.11).
-  phone             String?
+  phone                String?
   // citext, so two spellings of one address are one address. Partially unique as `phone` (T066).
-  email             String?       @db.Citext
+  email                String?       @db.Citext
   // Null for an account that signs in by one-time code only.
-  passwordHash      String?       @map("password_hash")
+  passwordHash         String?       @map("password_hash")
   // Self-declared (FR-AUTH-3); changed only through an administrator (FR-GENDER-5).
-  gender            Gender
+  gender               Gender
   // Minor status is derived from this on read, never stored (R-DB-4). Nullable only for a deleted
   // row (FR-141); rule 32 keeps it NOT NULL while the row is live (T009).
-  dateOfBirth       DateTime?     @map("date_of_birth") @db.Date
+  dateOfBirth          DateTime?     @map("date_of_birth") @db.Date
   // Nullable only for a deleted row, as `date_of_birth` (rule 32).
-  displayName       String?       @map("display_name")
+  displayName          String?       @map("display_name")
   // The full name printed on certificates, asked once at the first ijazah request (ADR 0019 D1);
   // Phase 4 writes it; erased on deletion.
-  certificateName   String?       @map("certificate_name")
+  certificateName      String?       @map("certificate_name")
   // The profile photo of either role, a storage key served by a signed link; erased on deletion.
-  photoKey          String?       @map("photo_key")
-  preferredLanguage Language      @map("preferred_language")
+  photoKey             String?       @map("photo_key")
+  preferredLanguage    Language      @map("preferred_language")
   // IANA zone, device-reported with a manual override (FR-AUTH-10).
-  timezone          String
-  accountStatus     AccountStatus @map("account_status")
+  timezone             String
+  // When the person chose the zone by hand (`account.setTimezone`); while null, the zone the device
+  // reports on launch replaces it (`account.reportDeviceTimezone`, FR-AUTH-10, T049).
+  timezoneOverriddenAt DateTime?     @map("timezone_overridden_at") @db.Timestamptz(6)
+  accountStatus        AccountStatus @map("account_status")
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
-  deletedAt         DateTime?     @map("deleted_at") @db.Timestamptz(6)
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt            DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   roles                 UserRole[]
   teacherProfile        TeacherProfile?

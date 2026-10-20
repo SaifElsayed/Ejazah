@@ -294,4 +294,20 @@ export function addDays(from: Date, days: number): UtcInstant {
   return addSeconds(from, days * SECONDS_PER_DAY);
 }
 
+/**
+ * The calendar date a `date` column holds (T049: a person's date of birth on `account.me`). The
+ * driver reads such a column as midnight UTC, so the date is the instant's in UTC, never in the
+ * host's zone, which could move it a day (R-TIME-6).
+ */
+export function calendarDateOf(date: Date): LocalDate {
+  const epochMilliseconds = date.getTime();
+  if (Number.isNaN(epochMilliseconds)) {
+    throw new TimeError('date', String(date), 'not an instant');
+  }
+  return Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
+    .toZonedDateTimeISO('UTC')
+    .toPlainDate()
+    .toString();
+}
+
 export * from './resolve.js';

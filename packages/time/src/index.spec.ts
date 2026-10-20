@@ -11,6 +11,7 @@ import {
   addMinutes,
   addSeconds,
   assertTimeZone,
+  calendarDateOf,
   assertLocalDate,
   resolveLocalDateTime,
   resolveOccurrences,
@@ -364,6 +365,19 @@ describe('T044 addMinutes and addDays: a session’s lifetimes, counted from an 
     );
     expect(() => addDays(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
       expect.objectContaining({ name: 'TimeError', offendingField: 'days' }),
+    );
+  });
+});
+
+describe('T049 calendarDateOf: the calendar date a `date` column holds (R-TIME-6)', () => {
+  it('answers the date of a value read as midnight UTC, whatever the host zone', () => {
+    expect(calendarDateOf(new Date('1990-04-12'))).toBe('1990-04-12');
+    expect(calendarDateOf(new Date('2000-02-29T00:00:00Z'))).toBe('2000-02-29');
+  });
+
+  it('refuses a value that is not an instant, naming the field', () => {
+    expect(() => calendarDateOf(new Date('not a date'))).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'date' }),
     );
   });
 });

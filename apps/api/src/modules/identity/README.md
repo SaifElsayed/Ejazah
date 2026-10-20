@@ -16,7 +16,7 @@ Trust client-supplied role or gender (R-GENDER-4). Store a bare secret column (R
 
 ## Shape
 
-The rules live in the services (Phase 1, T047): `sign-in.service.ts` (the provider nonce and sign-in), `onboarding.service.ts` (the onboarding token and the account's one transaction), `session.service.ts` (the two tokens, rotation, `resolveUserSession`, `revokeAll`), `email-auth.service.ts` (the email account), and `one-time-codes.ts` with the mails in `mail/`. The queries live in a `*.repository.ts` per table: `identity.repository.ts` (the accounts and the encrypted columns), `user-sessions.repository.ts`, `otp-codes.repository.ts`, `users.repository.ts`, `push-tokens.repository.ts`. A router is thin: validate, call one service method, return. `index.ts` is the only import path.
+The rules live in the services (Phase 1, T047): `sign-in.service.ts` (the provider nonce and sign-in), `onboarding.service.ts` (the onboarding token and the account's one transaction), `session.service.ts` (the two tokens, rotation, `resolveUserSession`, `revokeAll`), `email-auth.service.ts` (the email account), `account.service.ts` (the signed-in person's own account, T049), and `one-time-codes.ts` with the mails in `mail/`. The queries live in a `*.repository.ts` per table: `identity.repository.ts` (the accounts and the encrypted columns), `user-sessions.repository.ts`, `otp-codes.repository.ts`, `users.repository.ts`, `push-tokens.repository.ts`. A router is thin: validate, call one service method, return: `auth.router.ts`, `onboarding.router.ts` and `account.router.ts` (T048, T049), over the services `createIdentityServices` builds for `AppServices.identity`. `index.ts` is the only import path.
 
 ## Requirement ids
 

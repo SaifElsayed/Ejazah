@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.5 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog*
+*Version 1.6 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog*
 
 ## 0. How to read this
 
@@ -64,6 +64,7 @@ The root identity. One row per human, with exactly one role (ADR 0016).
 | photo_key | text, nullable | The profile photo of either role (decision 46), a storage key served by a signed link; erased on deletion. `teacher_profiles.photo_key` is unused since (Phase 1 pass) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
+| timezone_overridden_at | timestamptz, nullable | When the person chose the zone by hand; while null, the device's report replaces `timezone` (FR-AUTH-10, v1.6) |
 | account_status | enum active · suspended · verification_required · banned | |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10). Account deletion (FR-AUTH-14, ADR 0015) sets it and erases `display_name`, `email`, `phone`, `password_hash` and `date_of_birth` in the same transaction; history rows that point to the user stay |
 | created_at / updated_at | timestamptz | |
@@ -946,3 +947,11 @@ The decision is the owner's on the review of PR #84 (observation 9): research R-
 |---|---|---|
 | 1 | §2 `user_session_retired_tokens`; `user_sessions.previous_refresh_token_hash` reads for the grace window only | `20261020000000_user_session_retired_tokens` |
 | 2 | §1 counts forty tables; §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
+
+## Changelog — v1.5 → v1.6 (the manual time zone kept, 2026-10-20)
+
+FR-131 keeps a zone the person chose by hand while the device's zone is re-read on every launch (FR-AUTH-10), and no column recorded which of the two `users.timezone` holds. The decision is the owner's (2026-10-20, the conflict check of batch B10): a column, so the choice survives a reinstall and another device. The task is T049 of `specs/002-identity/tasks.md`; the count of tables is unchanged.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §2 `users.timezone_overridden_at`: set by `account.setTimezone`; `account.reportDeviceTimezone` writes `timezone` only while it is null | `20261020000100_users_timezone_overridden_at` |

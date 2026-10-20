@@ -11,8 +11,18 @@
 // that points at it (`teacher.application.submit`, `account.identityVerification.submit`) and which
 // is recorded on the pointing row. The object is stored before the row and removed again when the
 // row cannot be written, so no key names a stored file nobody owns.
+//
+// T093: before anything is stored, the route counts the uploader's documents nothing points at and
+// refuses a further one with `CONFLICT` (`documents`, `too_many`) once they hold
+// `document_unreferenced_max_per_user`, read on every upload (FR-034). The sweep
+// `purge-unreferenced-documents` removes those left unsubmitted. Two uploads at the same instant may
+// both pass the count; the cap bounds an abuse, it is not an exact quota.
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import {
@@ -36,27 +46,44 @@ const documentTypeOf: Readonly<Record<DocumentKind, NewDocument['documentType']>
   credential: 'credential',
 };
 
-/** What the route asks of the verification repository. */
+/** The settings key of how many unreferenced documents a person may hold (T093, data-model §4). */
+export const DOCUMENT_UNREFERENCED_MAX_PER_USER_SETTING = 'document_unreferenced_max_per_user';
+
+/** What the route asks of the verification module: the row it writes and the uploader's count. */
 export interface DocumentsWriter {
   createDocument(row: NewDocument): Promise<void>;
+  /** How many of the person's documents nothing points at (T093). */
+  countUnreferencedOf(userId: string): Promise<number>;
 }
 
 export interface DocumentsUploadDependencies extends UploadRouteDependencies {
   readonly storage: Pick<StoragePort, 'put' | 'remove'>;
   readonly cipher: Pick<ColumnCipher, 'encrypt'>;
   readonly documents: DocumentsWriter;
+  readonly settings: SettingsReader;
 }
 
 export function documentsUploadRoute({
   storage,
   cipher,
   documents,
+  settings,
   ...dependencies
 }: DocumentsUploadDependencies): NodeHandler {
   return uploadRoute<DocumentKind>(dependencies, {
     kindOf: kindField(DOCUMENT_KINDS),
     refuses: ['banned'],
     handle: async ({ uploader, kind, type, bytes }) => {
+      // Read before the object is stored, so a refused upload leaves nothing behind (T093).
+      const most = await settings.read(
+        DOCUMENT_UNREFERENCED_MAX_PER_USER_SETTING,
+        z.int().positive(),
+      );
+      if ((await documents.countUnreferencedOf(uploader.userId)) >= most) {
+        throw new DomainError('CONFLICT', undefined, {
+          details: [{ path: 'documents', code: 'too_many' }],
+        });
+      }
       const documentId = randomUUID();
       const key = `documents/${documentId}.pdf`;
       await storage.put(key, bytes, type);
