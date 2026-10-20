@@ -15,10 +15,11 @@ import {
   type Identity,
   openSpecDatabase,
   rowsNaming,
+  rowsOf,
   specIdentityToken,
   uniqueEmail,
   uniqueSubject,
-} from './identity.fixtures.js';
+} from './__fixtures__/identity.js';
 
 const database = openSpecDatabase();
 afterAll(() => closeDatabase(database));
@@ -205,9 +206,7 @@ describe('an email that belongs to another account (FR-123)', () => {
         details: [{ path: 'email', code: method }],
       });
       await expect(rowsNaming([subject])).resolves.toEqual([]);
-      await expect(database.userSession.count({ where: { userId: account.userId } })).resolves.toBe(
-        0,
-      );
+      await expect(rowsOf(database).sessionCount(account.userId)).resolves.toBe(0);
     },
   );
 

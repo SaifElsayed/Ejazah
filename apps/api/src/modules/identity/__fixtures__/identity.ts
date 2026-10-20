@@ -12,8 +12,8 @@ import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 import { z } from 'zod';
 
-import { openDatabase, type Database } from '../../platform/db/prisma.repository.js';
-import type { EmailPort, Mail } from '../../platform/ports/email/email.port.js';
+import { openDatabase, type Database } from '../../../platform/db/prisma.repository.js';
+import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
 import {
   type AuthorizationExchange,
   IdentityTokenError,
@@ -22,14 +22,15 @@ import {
   type ProviderIdentity,
   type SignInPort,
   type SignInProvider,
-} from '../../platform/ports/sign-in/sign-in.port.js';
-import { MemorySingleUseMarks } from '../../platform/redis/single-use-marks.fixtures.js';
-import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
-import { EmailAuthService, type PasswordHashing } from './email-auth.service.js';
-import { OnboardingService } from './onboarding.service.js';
-import { type CodeHasher, OneTimeCodes } from './one-time-codes.js';
-import { SessionService } from './session.service.js';
-import { SignInService } from './sign-in.service.js';
+} from '../../../platform/ports/sign-in/sign-in.port.js';
+import { MemorySingleUseMarks } from '../../../platform/redis/single-use-marks.fixtures.js';
+import { SettingError, type SettingsReader } from '../../../platform/settings/settings-reader.js';
+import { EmailAuthService, type PasswordHashing } from '../email-auth.service.js';
+import { OnboardingService } from '../onboarding.service.js';
+import { type CodeHasher, OneTimeCodes } from '../one-time-codes.js';
+import { SessionService } from '../session.service.js';
+import { SignInService } from '../sign-in.service.js';
+import { type SpecAccount, SpecRows } from './rows.repository.js';
 
 /** The seeded values the services read (prisma/seed.ts, data-model §4). */
 export const SEEDED_SETTINGS: Readonly<Record<string, unknown>> = {
@@ -247,68 +248,28 @@ export function buildIdentity(
 
 export type Identity = ReturnType<typeof buildIdentity>;
 
+/** The identity rows a spec writes and reads (`rows.repository.ts`). */
+export function rowsOf(database: Database): SpecRows {
+  return new SpecRows(database);
+}
+
 /** Writes an account straight to its tables, as `onboarding.complete` would have. */
 export async function createAccount(
   database: Database,
-  {
-    email = uniqueEmail(),
-    role = 'student',
-    gender = 'female',
-    accountStatus = 'active',
-    passwordHash = null,
-    provider,
-  }: {
-    readonly email?: string;
-    readonly role?: 'student' | 'teacher';
-    readonly gender?: 'male' | 'female';
-    readonly accountStatus?: 'active' | 'suspended' | 'verification_required' | 'banned';
-    readonly passwordHash?: string | null;
-    readonly provider?: { readonly provider: 'google' | 'apple'; readonly subject: string };
-  } = {},
+  account: Partial<SpecAccount> = {},
 ): Promise<{ readonly userId: string; readonly email: string }> {
-  const user = await database.user.create({
-    data: {
-      email,
-      passwordHash,
-      gender,
-      dateOfBirth: new Date('1990-04-12'),
-      displayName: 'Spec Person',
-      preferredLanguage: 'ar',
-      timezone: 'Africa/Cairo',
-      accountStatus,
-    },
-    select: { id: true },
-  });
-  await database.userRole.create({ data: { userId: user.id, role, status: 'active' } });
-  if (provider !== undefined) {
-    await database.authIdentity.create({
-      data: { userId: user.id, provider: provider.provider, providerSubject: provider.subject },
-    });
-  }
-  return { userId: user.id, email };
+  const email = account.email ?? uniqueEmail();
+  const userId = await new SpecRows(database).createAccount({ ...account, email });
+  return { userId, email };
 }
 
 /** A teacher's profile at a given standing. */
-export async function createTeacherProfile(
+export function createTeacherProfile(
   database: Database,
   userId: string,
-  standing: {
-    readonly verificationStatus:
-      'pending' | 'approved' | 'rejected' | 'suspended' | 'banned' | 'revoked';
-    readonly applicationStatus: 'in_review' | 'needs_document' | 'rejected' | 'banned' | 'approved';
-    readonly payoutVerifiedAt?: Date | null;
-  },
+  standing: Parameters<SpecRows['createTeacherProfile']>[1],
 ): Promise<void> {
-  await database.teacherProfile.create({
-    data: {
-      userId,
-      bio: '',
-      qualificationSummary: '',
-      verificationStatus: standing.verificationStatus,
-      applicationStatus: standing.applicationStatus,
-      payoutVerifiedAt: standing.payoutVerifiedAt ?? null,
-    },
-  });
+  return new SpecRows(database).createTeacherProfile(userId, standing);
 }
 
 /**

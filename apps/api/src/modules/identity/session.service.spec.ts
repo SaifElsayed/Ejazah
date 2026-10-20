@@ -17,8 +17,9 @@ import {
   createTeacherProfile,
   type Identity,
   openSpecDatabase,
+  rowsOf,
   SPEC_ENCRYPTION_KEY,
-} from './identity.fixtures.js';
+} from './__fixtures__/identity.js';
 import { landingFor } from './session.service.js';
 
 const database = openSpecDatabase();
@@ -38,15 +39,14 @@ async function signedIn(options: Parameters<typeof createAccount>[1] = {}) {
   return { ...account, ...tokens };
 }
 
-const rowsOf = (userId: string) =>
-  database.userSession.findMany({ where: { userId }, orderBy: { issuedAt: 'asc' } });
+const sessionRows = (userId: string) => rowsOf(database).sessions(userId);
 
 const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
 
 describe('issue', () => {
   it('signs a short access token that points at the row, and stores the refresh token as its hash', async () => {
     const { userId, accessToken, refreshToken } = await signedIn();
-    const [row] = await rowsOf(userId);
+    const [row] = await sessionRows(userId);
     const [version, sessionId, expiry, mac] = accessToken.split('.');
     expect(version).toBe('v1');
     expect(sessionId).toBe(row?.id);
@@ -66,7 +66,7 @@ describe('issue', () => {
 describe('resolveUserSession', () => {
   it('yields the standing of data-model §6 for a live session', async () => {
     const { userId, accessToken } = await signedIn({ gender: 'male' });
-    const [row] = await rowsOf(userId);
+    const [row] = await sessionRows(userId);
     await expect(identity.sessions.resolveUserSession(accessToken)).resolves.toEqual({
       userId,
       sessionId: row?.id,
@@ -97,7 +97,7 @@ describe('resolveUserSession', () => {
 
   it('reads the standing on every call, so a suspension shows at once', async () => {
     const { userId, accessToken } = await signedIn();
-    await database.user.update({ where: { id: userId }, data: { accountStatus: 'suspended' } });
+    await rowsOf(database).setAccountStatus(userId, 'suspended');
     expect((await identity.sessions.resolveUserSession(accessToken))?.accountStatus).toBe(
       'suspended',
     );
@@ -134,7 +134,7 @@ describe('resolveUserSession', () => {
 
   it('answers null for a deleted account’s session', async () => {
     const { userId, accessToken } = await signedIn();
-    await database.user.update({ where: { id: userId }, data: { deletedAt: new Date() } });
+    await rowsOf(database).softDelete(userId);
     await expect(identity.sessions.resolveUserSession(accessToken)).resolves.toBeNull();
   });
 });
@@ -172,7 +172,7 @@ describe('refresh', () => {
     await expect(identity.sessions.resolveUserSession(next.accessToken)).resolves.toMatchObject({
       userId,
     });
-    const [row] = await rowsOf(userId);
+    const [row] = await sessionRows(userId);
     expect(row?.refreshTokenHash).toBe(sha256(next.refreshToken));
     expect(row?.previousRefreshTokenHash).toBe(sha256(refreshToken));
     expect(row?.refreshedAt?.toISOString()).toBe('2026-10-21T08:00:00.000Z');
@@ -203,7 +203,7 @@ describe('refresh', () => {
     await expect(identity.sessions.refresh(refreshToken)).rejects.toMatchObject({
       code: 'UNAUTHENTICATED',
     });
-    const [row] = await rowsOf(userId);
+    const [row] = await sessionRows(userId);
     expect(row?.revokedReason).toBe('reuse_detected');
     await expect(identity.sessions.refresh(next.refreshToken)).rejects.toMatchObject({
       code: 'UNAUTHENTICATED',
@@ -233,24 +233,27 @@ describe('refresh', () => {
 describe('sign-out and revokeAll', () => {
   it('signs out one device and leaves the others', async () => {
     const { userId, accessToken } = await signedIn();
+    identity.clock.advance(1);
     const other = await identity.sessions.issue(userId);
     const resolved = await identity.sessions.resolveUserSession(accessToken);
     await identity.sessions.signOut(resolved?.sessionId ?? '');
     await expect(identity.sessions.resolveUserSession(accessToken)).resolves.toBeNull();
     await expect(identity.sessions.resolveUserSession(other.accessToken)).resolves.not.toBeNull();
-    const reasons = (await rowsOf(userId)).map((row) => row.revokedReason);
+    const reasons = (await sessionRows(userId)).map((row) => row.revokedReason);
     expect(reasons).toEqual(['sign_out', null]);
   });
 
   it('revokes every session of the person with the reason, keeping one when told', async () => {
     const { userId } = await signedIn();
+    identity.clock.advance(1);
     await identity.sessions.issue(userId);
+    identity.clock.advance(1);
     const kept = await identity.sessions.issue(userId);
     const keptId = (await identity.sessions.resolveUserSession(kept.accessToken))?.sessionId;
     await expect(
       identity.sessions.revokeAll(userId, 'password_reset', { except: keptId }),
     ).resolves.toBe(2);
-    const rows = await rowsOf(userId);
+    const rows = await sessionRows(userId);
     expect(rows.map((row) => row.revokedReason)).toEqual([
       'password_reset',
       'password_reset',

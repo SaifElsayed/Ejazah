@@ -5,7 +5,12 @@
 // Distinctness over ten thousand draws is a smoke test of the source, not a proof of randomness:
 // a sequence, a timestamp or a fixed seed would repeat or collide long before that.
 import { describe, expect, it } from 'vitest';
-import { generateCertificateNumber, generateVerificationToken } from './identifiers.js';
+import {
+  generateCertificateNumber,
+  generateOneTimeCode,
+  generateSecretToken,
+  generateVerificationToken,
+} from './identifiers.js';
 
 const DRAWS = 10_000;
 
@@ -38,5 +43,19 @@ describe('public identifiers (T105)', () => {
     const tokens = new Set<string>();
     for (let draw = 0; draw < DRAWS; draw += 1) tokens.add(generateVerificationToken());
     expect(tokens.size).toBe(DRAWS);
+  });
+});
+
+describe('secrets the identity module hands out (B9, T047)', () => {
+  it('draws a secret token of 32 random bytes in base64url, a fresh one each time', () => {
+    const tokens = new Set(Array.from({ length: 50 }, () => generateSecretToken()));
+    expect(tokens.size).toBe(50);
+    for (const token of tokens) expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('draws a one-time code of six digits, leading zeros kept, every digit reachable', () => {
+    const codes = Array.from({ length: 400 }, () => generateOneTimeCode());
+    for (const code of codes) expect(code).toMatch(/^\d{6}$/);
+    expect(new Set(codes.join('')).size).toBe(10);
   });
 });

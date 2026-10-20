@@ -19,11 +19,12 @@ import {
   type Identity,
   openSpecDatabase,
   rowsNaming,
+  rowsOf,
   specIdentityToken,
   SPEC_ENCRYPTION_KEY,
   uniqueEmail,
   uniqueSubject,
-} from './identity.fixtures.js';
+} from './__fixtures__/identity.js';
 import { OnboardingService } from './onboarding.service.js';
 import type { SessionService } from './session.service.js';
 
@@ -117,7 +118,7 @@ describe('complete', () => {
     const session = await identity.sessions.resolveUserSession(answer.accessToken);
     expect(session).toMatchObject({ role: 'student', gender: 'female', accountStatus: 'active' });
     const userId = session?.userId ?? '';
-    const user = await database.user.findUnique({ where: { id: userId } });
+    const user = await rowsOf(database).user(userId);
     expect(user).toMatchObject({
       email,
       passwordHash: null,
@@ -126,16 +127,14 @@ describe('complete', () => {
       preferredLanguage: 'ar',
     });
     expect(user?.dateOfBirth?.toISOString()).toBe('1990-04-12T00:00:00.000Z');
-    await expect(
-      database.authIdentity.findMany({
-        where: { userId },
-        select: { provider: true, providerSubject: true },
-      }),
-    ).resolves.toEqual([{ provider: 'google', providerSubject: subject }]);
-    await expect(
-      database.userRole.findMany({ where: { userId }, select: { role: true, status: true } }),
-    ).resolves.toEqual([{ role: 'student', status: 'active' }]);
-    const terms = await database.termsAcceptance.findMany({ where: { userId } });
+    const identities = await rowsOf(database).identities(userId);
+    expect(
+      identities.map(({ provider, providerSubject }) => ({ provider, providerSubject })),
+    ).toEqual([{ provider: 'google', providerSubject: subject }]);
+    await expect(rowsOf(database).roles(userId)).resolves.toEqual([
+      { role: 'student', status: 'active' },
+    ]);
+    const terms = await rowsOf(database).terms(userId);
     expect(terms.map((row) => row.termsVersion)).toEqual(['2026-10']);
     expect(terms[0]?.acceptedAt.toISOString()).toBe('2026-10-20T08:00:00.000Z');
   });
@@ -151,7 +150,7 @@ describe('complete', () => {
     const { onboardingToken } = await providerToken('apple', { authorizationCode: 'code-1' });
     const answer = await identity.onboarding.complete({ ...answers, onboardingToken });
     const userId = (await identity.sessions.resolveUserSession(answer.accessToken))?.userId ?? '';
-    const [row] = await database.authIdentity.findMany({ where: { userId } });
+    const [row] = await rowsOf(database).identities(userId);
     const cipher = createColumnCipher({ ENCRYPTION_KEY: SPEC_ENCRYPTION_KEY });
     expect(
       cipher.decrypt(
@@ -172,9 +171,9 @@ describe('complete', () => {
       onboardingToken,
       password: 'a long passphrase',
     });
-    const user = await database.user.findFirst({ where: { email } });
+    const user = await rowsOf(database).userByEmail(email);
     expect((await verifyPassword('a long passphrase', user?.passwordHash ?? '')).valid).toBe(true);
-    await expect(database.authIdentity.count({ where: { userId: user?.id } })).resolves.toBe(0);
+    await expect(rowsOf(database).identities(user?.id ?? '')).resolves.toEqual([]);
     const provider = await providerToken('google');
     await expect(
       identity.onboarding.complete({
@@ -257,7 +256,7 @@ describe('an identity without a verified email (FR-122)', () => {
       emailCode: code,
     });
     const userId = (await identity.sessions.resolveUserSession(answer.accessToken))?.userId;
-    await expect(database.user.findUnique({ where: { id: userId ?? '' } })).resolves.toMatchObject({
+    await expect(rowsOf(database).user(userId ?? '')).resolves.toMatchObject({
       email: address,
     });
   });

@@ -163,6 +163,27 @@ function assertAreaLocation(value: TimeZoneId): void {
   }
 }
 
+/**
+ * `value` when it is a zone a person may live by: a continent/city name the IANA database knows,
+ * the same refusals a slot's zone meets (T043: `onboarding.complete` and the account's time zone,
+ * FR-126). A `TimeError` naming `field` otherwise.
+ */
+export function assertTimeZone(field: string, value: TimeZoneId): TimeZoneId {
+  if (!/^[A-Za-z]/.test(value)) {
+    throw new TimeError(field, value, 'expected an IANA zone identifier, not a fixed offset');
+  }
+  try {
+    Temporal.Now.instant().toZonedDateTimeISO(value);
+  } catch (error: unknown) {
+    throw new TimeError(field, value, 'not a zone in the IANA database', { cause: error });
+  }
+  const [area, location] = value.split('/');
+  if (area === undefined || location === undefined || !IANA_AREAS.has(area)) {
+    throw new TimeError(field, value, 'expected a continent/city IANA zone');
+  }
+  return value;
+}
+
 /** Canonical UTC render: no fractional seconds, `Z` rather than `+00:00`. */
 function toUtcInstant(zoned: Temporal.ZonedDateTime): UtcInstant {
   return zoned.toInstant().toString({ smallestUnit: 'second' });
@@ -245,6 +266,32 @@ export function addSeconds(from: Date, seconds: number): UtcInstant {
   return Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
     .add({ seconds })
     .toString({ smallestUnit: 'second' });
+}
+
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_DAY = 86_400;
+
+/**
+ * The instant `minutes` whole minutes after `from` (T044: an access token's and a one-time code's
+ * lifetimes, read in minutes from settings). The conversion lives here, beside `addSeconds`, so no
+ * module carries a unit's number (the magic-number gate, FR-034).
+ */
+export function addMinutes(from: Date, minutes: number): UtcInstant {
+  if (!Number.isSafeInteger(minutes)) {
+    throw new TimeError('minutes', String(minutes), 'expected a whole number of minutes');
+  }
+  return addSeconds(from, minutes * SECONDS_PER_MINUTE);
+}
+
+/**
+ * The instant `days` days of 24 hours after `from` (T044: a refresh token's absolute lifetime). An
+ * instant's day, never a wall-clock day: a clock change in between does not move it.
+ */
+export function addDays(from: Date, days: number): UtcInstant {
+  if (!Number.isSafeInteger(days)) {
+    throw new TimeError('days', String(days), 'expected a whole number of days');
+  }
+  return addSeconds(from, days * SECONDS_PER_DAY);
 }
 
 export * from './resolve.js';

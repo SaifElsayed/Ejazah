@@ -7,7 +7,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  addDays,
+  addMinutes,
   addSeconds,
+  assertTimeZone,
   assertLocalDate,
   resolveLocalDateTime,
   resolveOccurrences,
@@ -322,6 +325,45 @@ describe('T116 addSeconds: a lifetime counted from an instant (R-TIME-1)', () =>
   it('refuses a Date that holds no instant', () => {
     expect(() => addSeconds(new Date('not a date'), 1)).toThrow(
       expect.objectContaining({ name: 'TimeError', offendingField: 'from' }),
+    );
+  });
+});
+
+describe('T043 assertTimeZone: the zones a person may choose (FR-126, onboarding.complete)', () => {
+  it('admits a continent/city zone the IANA database knows', () => {
+    expect(assertTimeZone('timezone', CAIRO)).toBe(CAIRO);
+    expect(assertTimeZone('timezone', 'America/Argentina/Buenos_Aires')).toBe(
+      'America/Argentina/Buenos_Aires',
+    );
+  });
+
+  it.each(['+02:00', 'UTC', 'Etc/GMT-2', 'Egypt', 'Africa/Atlantis', 'africa/cairo', ''])(
+    'refuses %j, naming the field',
+    (zone) => {
+      expect(() => assertTimeZone('timezone', zone)).toThrow(TimeError);
+      try {
+        assertTimeZone('timezone', zone);
+      } catch (error) {
+        expect((error as TimeError).offendingField).toBe('timezone');
+      }
+    },
+  );
+});
+
+describe('T044 addMinutes and addDays: a session’s lifetimes, counted from an instant (R-101)', () => {
+  it('adds whole minutes and whole days of 24 hours, in canonical UTC', () => {
+    expect(addMinutes(new Date('2026-10-20T08:00:00Z'), 15)).toBe('2026-10-20T08:15:00Z');
+    expect(addDays(new Date('2026-10-20T08:00:00Z'), 30)).toBe('2026-11-19T08:00:00Z');
+    // A day is 24 hours of an instant, never a wall-clock day: Cairo's clock change does not move it.
+    expect(addDays(new Date('2026-10-29T21:30:00Z'), 1)).toBe('2026-10-30T21:30:00Z');
+  });
+
+  it.each([1.5, Number.NaN])('refuses %s, naming the field', (amount) => {
+    expect(() => addMinutes(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'minutes' }),
+    );
+    expect(() => addDays(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'days' }),
     );
   });
 });

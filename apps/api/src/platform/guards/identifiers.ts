@@ -13,7 +13,7 @@
 //
 // VERIFICATION TOKEN — carried by the QR code and never typed, so it is long: 32 random bytes
 // (256 bits) in base64url, 43 characters. The database stores only its hash (R-DB-7, T069).
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 
 /** Crockford's base32 alphabet: 32 symbols, none of them easily misread as another. */
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -46,5 +46,24 @@ export function generateCertificateNumber(): string {
 
 /** A new verification token: 32 random bytes in base64url, for the QR code. Store only its hash. */
 export function generateVerificationToken(): string {
+  return generateSecretToken();
+}
+
+/**
+ * A new secret token: 32 random bytes in base64url, 43 characters (B9, T047): a refresh token
+ * (stored as its hash), a provider nonce, an onboarding token's `jti`. Unguessable by construction,
+ * so a single-use mark or a hash lookup is all the server needs to hold.
+ */
+export function generateSecretToken(): string {
   return randomBytes(VERIFICATION_TOKEN_BYTES).toString('base64url');
+}
+
+const ONE_TIME_CODE_DIGITS = 6;
+
+/**
+ * A new one-time code: six digits drawn uniformly by `randomInt` (no modulo bias), leading zeros
+ * kept (research R-104). Hashed before it is stored; only the mail carries it.
+ */
+export function generateOneTimeCode(): string {
+  return String(randomInt(10 ** ONE_TIME_CODE_DIGITS)).padStart(ONE_TIME_CODE_DIGITS, '0');
 }

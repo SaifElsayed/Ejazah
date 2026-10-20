@@ -17,10 +17,11 @@ import {
   createAccount,
   type Identity,
   openSpecDatabase,
+  rowsOf,
   SPEC_ENCRYPTION_KEY,
   uniqueEmail,
   uniqueSubject,
-} from './identity.fixtures.js';
+} from './__fixtures__/identity.js';
 
 const database = openSpecDatabase();
 afterAll(() => closeDatabase(database));
@@ -64,7 +65,7 @@ describe('the sign-up code', () => {
     await identity.emailAuth.requestSignUpCode(address);
     await vi.waitFor(() => expect(identity.mails()).toHaveLength(1));
     const code = codeMailedTo(identity.mails(), address);
-    const rows = await database.otpCode.findMany({ where: { destination: address } });
+    const rows = await rowsOf(database).codes(address);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.codeHash).toMatch(/^\$argon2id\$/);
     expect(JSON.stringify(rows)).not.toContain(code);
@@ -240,9 +241,7 @@ describe('the password reset request', () => {
     }
     await vi.waitFor(() => expect(identity.mails()).toHaveLength(1));
     expect(identity.mails()[0]?.to).toBe(account.email);
-    await expect(database.otpCode.count({ where: { destination: provider.email } })).resolves.toBe(
-      0,
-    );
+    await expect(rowsOf(database).codes(provider.email)).resolves.toEqual([]);
   });
 
   it('does not wait for the mail, and a mail that fails fails nothing', async () => {
@@ -278,11 +277,10 @@ describe('auth.email.resetPassword', () => {
       userId: account.userId,
     });
     await expect(identity.sessions.resolveUserSession(other.accessToken)).resolves.toBeNull();
-    const reasons = await database.userSession.findMany({
-      where: { userId: account.userId, revokedAt: { not: null } },
-      select: { revokedReason: true },
-    });
-    expect(reasons).toEqual([{ revokedReason: 'password_reset' }]);
+    const reasons = (await rowsOf(database).sessions(account.userId)).map(
+      (row) => row.revokedReason,
+    );
+    expect(reasons.filter((reason) => reason !== null)).toEqual(['password_reset']);
     await expect(identity.emailAuth.signIn(account.email, PASSWORD)).rejects.toMatchObject({
       code: 'SIGN_IN_FAILED',
     });
