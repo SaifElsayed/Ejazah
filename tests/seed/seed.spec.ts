@@ -85,7 +85,7 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_provider_nonce: { limit: 20, window_seconds: 60 },
   // T093: how long an upload waits for its submission, and how many unsubmitted ones a person holds.
   document_unreferenced_purge_after_hours: 72,
-  document_unreferenced_max_per_user: 20,
+  document_unreferenced_max_per_user: 30,
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);

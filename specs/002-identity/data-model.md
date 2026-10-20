@@ -228,7 +228,7 @@ follows.
 | `rate_limit_token_refresh`                | `{ limit: 30, window_seconds: 60 }`  | FR-135 (`auth.refresh`, by the token's hash)                                                                                                                    |
 | `rate_limit_provider_nonce`               | `{ limit: 20, window_seconds: 60 }`  | FR-121 (`auth.providerNonce`, by the client address; the authentication budget caps the path)                                                                   |
 | `document_unreferenced_purge_after_hours` | 72                                   | `purge-unreferenced-documents` (T093): an upload no submission points at is deleted after it                                                                    |
-| `document_unreferenced_max_per_user`      | 20                                   | `POST /uploads/documents` (T093): the unreferenced documents a person may hold; an application needs eleven at most (ten credentials and the identity document) |
+| `document_unreferenced_max_per_user`      | 30                                   | `POST /uploads/documents` (T093): the unreferenced documents a person may hold; an application needs eleven at most (ten credentials and the identity document) |
 
 SRS §3.14's table gains the rows a person would change (the admin lockout pair
 is already there; the session, code and upload limits join it); the purge

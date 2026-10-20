@@ -129,7 +129,7 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_token_refresh', { limit: 30, window_seconds: 60 }],
   ['rate_limit_provider_nonce', { limit: 20, window_seconds: 60 }],
   ['document_unreferenced_purge_after_hours', 72],
-  ['document_unreferenced_max_per_user', 20],
+  ['document_unreferenced_max_per_user', 30],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';
