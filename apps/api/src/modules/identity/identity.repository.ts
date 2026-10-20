@@ -132,7 +132,7 @@ export class IdentityRepository {
 // left out of every read by the client's extension, so an address or an identity of a deleted
 // account matches nothing here (its identities are deleted with it, ADR 0015 D3).
 
-type AccountsClient = Pick<Database, 'user' | 'authIdentity'>;
+type AccountsClient = Pick<Database, 'user' | 'authIdentity' | 'teacherProfile'>;
 type AccountsWriter = Pick<Transaction, 'user' | 'authIdentity' | 'userRole' | 'termsAcceptance'>;
 
 /** How an account signs in: a provider, or an email and a password (FR-123). */
@@ -278,6 +278,15 @@ export class AccountsRepository {
       select: { id: true },
     });
     return userId;
+  }
+
+  /** Of `documentIds`, those a teacher profile names as its identity document (T093). */
+  async identityDocumentsAmong(documentIds: readonly string[]): Promise<ReadonlySet<string>> {
+    const rows = await this.#database.teacherProfile.findMany({
+      where: { identityDocumentId: { in: [...documentIds] } },
+      select: { identityDocumentId: true },
+    });
+    return new Set(rows.flatMap(({ identityDocumentId }) => identityDocumentId ?? []));
   }
 
   /** Sets the account's password hash. */

@@ -49,6 +49,7 @@ import {
   toErrorShape,
   userProcedure,
 } from './procedures.js';
+import { unusedIdentityServices } from './services.fixtures.js';
 
 const log = createLogger({ level: 'fatal' });
 const clientAddress = '203.0.113.7';
@@ -138,6 +139,7 @@ const services = {
   },
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 
 /** The user surface's context for a fixture session, as the HTTP application builds one. */

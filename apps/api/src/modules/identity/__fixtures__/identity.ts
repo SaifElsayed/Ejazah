@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { openDatabase, type Database } from '../../../platform/db/prisma.repository.js';
 import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
+import type { StoragePort } from '../../../platform/ports/storage/storage.port.js';
 import {
   type AuthorizationExchange,
   IdentityTokenError,
@@ -25,6 +26,7 @@ import {
 } from '../../../platform/ports/sign-in/sign-in.port.js';
 import { MemorySingleUseMarks } from '../../../platform/redis/single-use-marks.fixtures.js';
 import { SettingError, type SettingsReader } from '../../../platform/settings/settings-reader.js';
+import { AccountService } from '../account.service.js';
 import { EmailAuthService, type PasswordHashing } from '../email-auth.service.js';
 import { OnboardingService } from '../onboarding.service.js';
 import { type CodeHasher, OneTimeCodes } from '../one-time-codes.js';
@@ -42,6 +44,7 @@ export const SEEDED_SETTINGS: Readonly<Record<string, unknown>> = {
   session_refresh_grace_seconds: 30,
   provider_nonce_ttl_minutes: 10,
   terms_version: '2026-10',
+  document_link_ttl_seconds: 300,
 };
 
 /** A settings reader over `values`, failing closed as the real one does. */
@@ -183,6 +186,13 @@ export class SpecEmail implements EmailPort {
   }
 }
 
+/** The storage port's link, as a spec reads it back: the key and the lifetime it was asked for. */
+export class SpecStorage implements Pick<StoragePort, 'temporaryLink'> {
+  async temporaryLink(key: string, expiresInSeconds: number): Promise<string> {
+    return `https://storage.invalid/${key}?expires=${expiresInSeconds}`;
+  }
+}
+
 /** The six-digit code the last mail to `to` carried. */
 export function codeMailedTo(mails: readonly Mail[], to: string): string {
   const mail = [...mails].reverse().find((each) => each.to === to);
@@ -229,8 +239,10 @@ export function buildIdentity(
     sessions,
     ...(overrides.passwords === undefined ? {} : { passwords: overrides.passwords }),
   });
+  const account = new AccountService({ ...base, storage: new SpecStorage() });
   const mails = () => recorder.mails;
   return {
+    account,
     clock,
     settings,
     marks,

@@ -1,5 +1,5 @@
 // PUBLIC ENTRY of the verification module (T017). Other modules import this file and nothing below it (R-API-3).
-import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
+import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import {
@@ -7,6 +7,11 @@ import {
   type DocumentsUploadDependencies,
   documentsUploadRoute,
 } from './uploads.controller.js';
+import {
+  type DocumentReferences,
+  UnreferencedDocuments,
+  type UnreferencedDocumentsDependencies,
+} from './unreferenced-documents.js';
 import { VerificationRepository } from './verification.repository.js';
 
 export { DOCUMENTS_UPLOAD_PATH };
@@ -16,14 +21,46 @@ export {
   VerificationService,
 } from './verification.service.js';
 
-/** `POST /uploads/documents`, over this module's repository (T024). */
+/**
+ * `POST /uploads/documents`, over this module's repository (T024) and its count of the uploader's
+ * unreferenced documents, read through the other modules' pointers handed in (T093).
+ */
 export function createDocumentsUploadRoute({
   database,
+  references,
+  cipher,
   ...dependencies
-}: Omit<DocumentsUploadDependencies, 'documents'> & {
-  readonly database: Pick<Database, 'verificationDocument'>;
+}: Omit<DocumentsUploadDependencies, 'documents' | 'cipher'> & {
+  readonly database: Database;
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
+  readonly references: readonly DocumentReferences[];
 }): NodeHandler {
-  return documentsUploadRoute({ ...dependencies, documents: new VerificationRepository(database) });
+  const repository = new VerificationRepository(database);
+  const unreferenced = new UnreferencedDocuments({ database, cipher, references });
+  return documentsUploadRoute({
+    ...dependencies,
+    cipher,
+    documents: {
+      createDocument: (row) => repository.createDocument(row),
+      countUnreferencedOf: (userId) => unreferenced.countOf(userId),
+    },
+  });
+}
+
+export {
+  type DocumentReferences,
+  type UnreferencedDocument,
+  UnreferencedDocuments,
+} from './unreferenced-documents.js';
+
+/**
+ * The documents nothing points at (T093): the `purge-unreferenced-documents` sweep's store and the
+ * uploads route's per-user count, over the other modules' pointers the composition hands in.
+ */
+export function createUnreferencedDocuments(
+  dependencies: UnreferencedDocumentsDependencies,
+): UnreferencedDocuments {
+  return new UnreferencedDocuments(dependencies);
 }
 
 /** The verification module's `_encrypted` column, for the `reencrypt-columns` job (T155, R-API-6). */

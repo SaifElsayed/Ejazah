@@ -62,6 +62,8 @@ export class SpecRows {
       readonly applicationStatus:
         'in_review' | 'needs_document' | 'rejected' | 'banned' | 'approved';
       readonly payoutVerifiedAt?: Date | null;
+      readonly payoutConfiguredAt?: Date | null;
+      readonly payoutRejectedReason?: string | null;
     },
   ): Promise<void> {
     await this.#database.teacherProfile.create({
@@ -72,7 +74,20 @@ export class SpecRows {
         verificationStatus: standing.verificationStatus,
         applicationStatus: standing.applicationStatus,
         payoutVerifiedAt: standing.payoutVerifiedAt ?? null,
+        payoutConfiguredAt: standing.payoutConfiguredAt ?? null,
+        payoutRejectedReason: standing.payoutRejectedReason ?? null,
       },
+    });
+  }
+
+  setPhotoKey(userId: string, photoKey: string) {
+    return this.#database.user.update({ where: { id: userId }, data: { photoKey } });
+  }
+
+  setTimezone(userId: string, timezone: string, timezoneOverriddenAt: Date | null) {
+    return this.#database.user.update({
+      where: { id: userId },
+      data: { timezone, timezoneOverriddenAt },
     });
   }
 

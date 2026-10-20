@@ -25,6 +25,7 @@ import {
   createAppContext,
   type UserSession,
 } from './context.js';
+import { unusedIdentityServices } from './services.fixtures.js';
 
 const log = createLogger({ level: 'fatal' });
 const administration = {
@@ -43,6 +44,7 @@ const services = {
   },
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 
 const appSource = { session: null, log, rateLimiter, clientAddress, services };

@@ -83,6 +83,9 @@ const SETTINGS: Record<string, unknown> = {
   document_link_ttl_seconds: 300,
   rate_limit_token_refresh: { limit: 30, window_seconds: 60 },
   rate_limit_provider_nonce: { limit: 20, window_seconds: 60 },
+  // T093: how long an upload waits for its submission, and how many unsubmitted ones a person holds.
+  document_unreferenced_purge_after_hours: 72,
+  document_unreferenced_max_per_user: 20,
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -209,6 +212,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '45', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '47', admins: '1' }]);
   });
 });

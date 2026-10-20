@@ -141,6 +141,209 @@
   "procedures": {
     "admin": {},
     "app": {
+      "account.me": {
+        "caller": "user",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.accountStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "banned", "suspended", "verification_required"]
+          },
+          "$.dateOfBirth": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.email": { "required": true, "type": "null|string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.memberSince": { "required": true, "type": "string" },
+          "$.photoUrl": { "type": "string" },
+          "$.preferredLanguage": { "required": true, "type": "string", "values": ["ar", "en"] },
+          "$.role": { "required": true, "type": "string", "values": ["student", "teacher"] },
+          "$.signInMethod": {
+            "required": true,
+            "type": "string",
+            "values": ["apple", "email", "google"]
+          },
+          "$.teacher": { "type": "object" },
+          "$.teacher.applicationStatus": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "approved",
+              "banned",
+              "in_review",
+              "needs_document",
+              "not_started",
+              "rejected"
+            ]
+          },
+          "$.teacher.payout": { "required": true, "type": "object" },
+          "$.teacher.payout.configured": { "required": true, "type": "boolean" },
+          "$.teacher.payout.rejectedReason": { "type": "string" },
+          "$.teacher.payout.verified": { "required": true, "type": "boolean" },
+          "$.teacher.verificationStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "banned", "pending", "rejected", "revoked", "suspended"]
+          },
+          "$.timezone": { "required": true, "type": "string" },
+          "$.userId": { "required": true, "type": "string" }
+        }
+      },
+      "account.reportDeviceTimezone": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.timezone": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "account.setLanguage": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.language": { "required": true, "type": "string", "values": ["ar", "en"] }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "account.setTimezone": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.timezone": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "account.updateProfile": {
+        "caller": "user",
+        "input": { "$": { "type": "object" }, "$.displayName": { "type": "string" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "auth.email.requestPasswordReset": {
+        "caller": "public",
+        "input": { "$": { "type": "object" }, "$.email": { "required": true, "type": "string" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "auth.email.requestSignUpCode": {
+        "caller": "public",
+        "input": { "$": { "type": "object" }, "$.email": { "required": true, "type": "string" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "auth.email.resetPassword": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.code": { "required": true, "type": "string" },
+          "$.email": { "required": true, "type": "string" },
+          "$.newPassword": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.accessToken": { "required": true, "type": "string" },
+          "$.landing": {
+            "required": true,
+            "type": "string",
+            "values": ["restricted", "student_home", "teacher_application", "teacher_home"]
+          },
+          "$.refreshToken": { "required": true, "type": "string" }
+        }
+      },
+      "auth.email.signIn": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.email": { "required": true, "type": "string" },
+          "$.password": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.accessToken": { "required": true, "type": "string" },
+          "$.landing": {
+            "required": true,
+            "type": "string",
+            "values": ["restricted", "student_home", "teacher_application", "teacher_home"]
+          },
+          "$.refreshToken": { "required": true, "type": "string" }
+        }
+      },
+      "auth.email.verifySignUpCode": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.code": { "required": true, "type": "string" },
+          "$.email": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.onboardingToken": { "required": true, "type": "string" }
+        }
+      },
+      "auth.providerNonce": {
+        "caller": "public",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.nonce": { "required": true, "type": "string" }
+        }
+      },
+      "auth.refresh": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.refreshToken": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.accessToken": { "required": true, "type": "string" },
+          "$.refreshToken": { "required": true, "type": "string" }
+        }
+      },
+      "auth.signInWithProvider": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.authorizationCode": { "type": "string" },
+          "$.identityToken": { "required": true, "type": "string" },
+          "$.nonce": { "required": true, "type": "string" },
+          "$.provider": { "required": true, "type": "string", "values": ["apple", "google"] }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.accessToken": { "required": true, "type": "string" },
+          "$.landing": {
+            "required": true,
+            "type": "string",
+            "values": ["restricted", "student_home", "teacher_application", "teacher_home"]
+          },
+          "$.onboardingToken": { "required": true, "type": "string" },
+          "$.outcome": { "required": true, "type": "string", "values": ["onboarding", "session"] },
+          "$.prefill": { "required": true, "type": "object" },
+          "$.prefill.displayName": { "type": "string" },
+          "$.prefill.email": { "type": "string" },
+          "$.prefill.emailVerified": { "required": true, "type": "boolean" },
+          "$.refreshToken": { "required": true, "type": "string" }
+        }
+      },
+      "auth.signOut": {
+        "caller": "user",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "catalog.subjects.list": {
         "caller": "public",
         "input": { "$": { "type": "unknown" } },
@@ -152,6 +355,43 @@
           "$[].nameAr": { "required": true, "type": "string" },
           "$[].nameEn": { "required": true, "type": "string" }
         }
+      },
+      "onboarding.complete": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.dateOfBirth": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.email": { "type": "string" },
+          "$.emailCode": { "type": "string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.onboardingToken": { "required": true, "type": "string" },
+          "$.password": { "type": "string" },
+          "$.role": { "required": true, "type": "string", "values": ["student", "teacher"] },
+          "$.termsVersion": { "required": true, "type": "string" },
+          "$.timezone": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.accessToken": { "required": true, "type": "string" },
+          "$.landing": {
+            "required": true,
+            "type": "string",
+            "values": ["restricted", "student_home", "teacher_application", "teacher_home"]
+          },
+          "$.refreshToken": { "required": true, "type": "string" }
+        }
+      },
+      "onboarding.requestEmailCode": {
+        "caller": "public",
+        "input": {
+          "$": { "type": "object" },
+          "$.email": { "required": true, "type": "string" },
+          "$.onboardingToken": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       },
       "platform.publicConfig": {
         "caller": "public",

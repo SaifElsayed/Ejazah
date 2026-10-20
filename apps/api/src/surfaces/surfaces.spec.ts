@@ -23,6 +23,11 @@
 // proving anything. The fixtures below therefore build routers holding a real procedure of each
 // kind: a pair that keeps the surfaces apart, which passes, and routers that leak, which fail, so
 // the checks are shown to bite before the real routers give them anything to read.
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { authorityAllowList, onboardingCompleteInput } from '@ijazah/contracts';
 import { type AnyProcedure, type AnyRouter, initTRPC } from '@trpc/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
@@ -208,5 +213,50 @@ describe('the two surfaces share nothing (T098)', () => {
       notOfAdministratorSurface: ['stray'],
       mountedOnBoth: ['stray'],
     });
+  });
+});
+
+// T029 — no user-surface input carries `gender` but `onboarding.complete` (R-GENDER-6, FR-139;
+// app-surface.md "What every procedure of this surface guarantees").
+//
+// The lint rule `gender/no-authority-in-input` reads the per-schema allow-list T038 added; this test
+// ties that list to the procedure it serves and to what the surface actually takes. The list is
+// keyed by schema name, so the schema it names is mapped to its path on the real router (the one
+// procedure whose input is that schema object), and the committed contract snapshot, which records
+// every input field of every procedure, is read for the authority fields: only that procedure takes
+// any, and exactly the two the list names. So a second schema added to the list, a field added to
+// the entry, or a procedure taking `gender` through a schema the lint did not see each turns this red.
+describe('no user-surface input carries gender but onboarding.complete (T029, R-GENDER-6)', () => {
+  const AUTHORITY_FIELDS = new Set(['gender', 'role', 'userId', 'user_id']);
+  const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+  const snapshot = JSON.parse(
+    readFileSync(resolve(repositoryRoot, 'packages/contracts/contract-snapshot.json'), 'utf8'),
+  ) as {
+    readonly procedures: {
+      readonly app: Readonly<Record<string, { readonly input: Readonly<Record<string, unknown>> }>>;
+    };
+  };
+
+  /** The authority fields an input takes at any depth, by the last segment of each field path. */
+  function authorityFieldsOf(input: Readonly<Record<string, unknown>>): string[] {
+    return Object.keys(input)
+      .map((path) => path.split('.').at(-1)?.replace('[]', '') ?? '')
+      .filter((field) => AUTHORITY_FIELDS.has(field))
+      .sort();
+  }
+
+  it('the allow-list holds one schema with gender and role, and it is the input of onboarding.complete alone', () => {
+    expect(authorityAllowList).toEqual({ onboardingCompleteInput: ['gender', 'role'] });
+    const takingIt = [...proceduresOf(appRouter)]
+      .filter(([, procedure]) => procedure._def.inputs.includes(onboardingCompleteInput))
+      .map(([path]) => path);
+    expect(takingIt).toEqual(['onboarding.complete']);
+  });
+
+  it('the committed snapshot: only onboarding.complete takes an authority field, exactly gender and role', () => {
+    const taking = Object.entries(snapshot.procedures.app)
+      .map(([path, { input }]) => [path, authorityFieldsOf(input)] as const)
+      .filter(([, fields]) => fields.length > 0);
+    expect(Object.fromEntries(taking)).toEqual({ 'onboarding.complete': ['gender', 'role'] });
   });
 });

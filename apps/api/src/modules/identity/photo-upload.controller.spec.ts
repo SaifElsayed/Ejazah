@@ -12,6 +12,7 @@ import { SettingError, type SettingsReader } from '../../platform/settings/setti
 import type { UserSession } from '../../surfaces/context.js';
 import { multipart, pdfBytes, storageStub } from '../../surfaces/upload-fixtures.js';
 import { PHOTOS_UPLOAD_PATH, photoUploadRoute } from './photo-upload.controller.js';
+import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
 
 const settings: SettingsReader = {
   read: async (key, schema) => {
@@ -54,6 +55,7 @@ const services = {
   settings,
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
+  identity: unusedIdentityServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const storage = storageStub();

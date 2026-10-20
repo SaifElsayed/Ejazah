@@ -5,8 +5,24 @@
 //
 // A page is rows in id order, after the last row of the page before. A value is replaced only where
 // the row still holds the one read, so a value written meanwhile is kept.
+//
+// T093 adds the unreferenced documents' reads and their deletion: this table's own pointer
+// (`verification_requests.document_id`) is read here, the other modules' through their entries
+// (`unreferenced-documents.ts`), and a deletion another module's row would orphan is refused by its
+// foreign key (`ON DELETE RESTRICT`), which `isStillPointedAt` recognises.
+import { Prisma } from '@prisma/client';
+
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+
+const FOREIGN_KEY_VIOLATION = 'P2003';
+
+/** Whether a document's deletion was refused because another module's row points at it (T093). */
+export function isStillPointedAt(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === FOREIGN_KEY_VIOLATION
+  );
+}
 
 type Client = Pick<Database, 'verificationDocument'>;
 
@@ -26,6 +42,20 @@ export interface StoredDocument {
   readonly id: string;
   readonly userId: string;
   readonly storageKeyEncrypted: Uint8Array;
+}
+
+/**
+ * Deletes the document on `tx` while no verification request points at it (T093); whether it did.
+ * A row another module points at is refused by its foreign key, which fails the transaction.
+ */
+export async function deleteDocumentWithoutRequest(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  id: string,
+): Promise<boolean> {
+  const { count } = await tx.verificationDocument.deleteMany({
+    where: { id, verificationRequests: { none: {} } },
+  });
+  return count === 1;
 }
 
 /** The document, on the reading transaction; null when there is none. */
@@ -56,6 +86,27 @@ export class VerificationRepository {
         storageKeyEncrypted: Uint8Array.from(row.storageKeyEncrypted),
       },
     });
+  }
+
+  /**
+   * The documents uploaded before `uploadedBefore` that no verification request points at (T093);
+   * the other modules' pointers are theirs to read.
+   */
+  async listWithoutRequestUploadedBefore(uploadedBefore: Date): Promise<StoredDocument[]> {
+    return this.#database.verificationDocument.findMany({
+      where: { uploadedAt: { lt: uploadedBefore }, verificationRequests: { none: {} } },
+      orderBy: { id: 'asc' },
+      select: { id: true, userId: true, storageKeyEncrypted: true },
+    });
+  }
+
+  /** The ids of `userId`'s documents that no verification request points at (T093). */
+  async idsWithoutRequestOf(userId: string): Promise<string[]> {
+    const rows = await this.#database.verificationDocument.findMany({
+      where: { userId, verificationRequests: { none: {} } },
+      select: { id: true },
+    });
+    return rows.map(({ id }) => id);
   }
 
   /** `verification_documents.storage_key_encrypted`: an identity document's storage key. */
