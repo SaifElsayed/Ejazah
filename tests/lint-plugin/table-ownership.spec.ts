@@ -107,6 +107,7 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   idempotency_keys: 'idempotencyKey',
   // Phase 1 (T003, specs/002-identity/data-model.md §1).
   user_sessions: 'userSession',
+  user_session_retired_tokens: 'userSessionRetiredToken',
   auth_identities: 'authIdentity',
   teacher_credentials: 'teacherCredential',
   session_remedies: 'sessionRemedy',
@@ -115,17 +116,17 @@ const expectedDelegates: Readonly<Record<string, string>> = {
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 39 tables, each under one owner (33 of Phase 0 and the six of T003)', () => {
+  it('holds the ERD’s 40 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(39);
-    expect(new Set(tables).size).toBe(39);
+    expect(tables).toHaveLength(40);
+    expect(new Set(tables).size).toBe(40);
   });
 
-  it('gives 39 distinct delegates, one per table', () => {
+  it('gives 40 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(39);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(40);
   });
 });
 
@@ -708,7 +709,7 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       ],
     },
     {
-      name: 'all 39 manifest tables, each reached through the delegate Prisma would generate',
+      name: 'all 40 manifest tables, each reached through the delegate Prisma would generate',
       code: [
         client(Object.values(expectedDelegates)),
         ...ownedTables.map(({ table }) => `prisma.${expectedDelegates[table]}.findMany();`),

@@ -187,13 +187,53 @@ describe('refresh', () => {
     await expect(identity.sessions.resolveUserSession(again.accessToken)).resolves.toMatchObject({
       userId,
     });
-    await expect(identity.sessions.refresh(refreshToken)).rejects.toMatchObject({
-      code: 'UNAUTHENTICATED',
-    });
     const latest = await identity.sessions.refresh(again.refreshToken);
     await expect(identity.sessions.resolveUserSession(latest.accessToken)).resolves.toMatchObject({
       userId,
     });
+  });
+
+  it('revokes the session when a token already answered once comes back, even within the grace (T094)', async () => {
+    const { userId, refreshToken } = await signedIn();
+    await identity.sessions.refresh(refreshToken);
+    identity.clock.advance(10);
+    const again = await identity.sessions.refresh(refreshToken);
+    identity.clock.advance(5);
+    await expect(identity.sessions.refresh(refreshToken)).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+    });
+    expect((await sessionRows(userId))[0]?.revokedReason).toBe('reuse_detected');
+    await expect(identity.sessions.resolveUserSession(again.accessToken)).resolves.toBeNull();
+  });
+
+  it('catches a stolen token rotated twice: the device’s token then revokes the session for both (T094)', async () => {
+    const { userId, refreshToken: devices } = await signedIn();
+    // The thief presents the stolen token first, twice in a row, so the device's token is no longer
+    // the one the row remembers as retired.
+    const first = await identity.sessions.refresh(devices);
+    const thiefs = await identity.sessions.refresh(first.refreshToken);
+    identity.clock.advance(15 * MINUTE);
+    await expect(identity.sessions.refresh(devices)).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+    });
+    expect((await sessionRows(userId))[0]?.revokedReason).toBe('reuse_detected');
+    await expect(identity.sessions.refresh(thiefs.refreshToken)).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+    });
+    await expect(identity.sessions.resolveUserSession(thiefs.accessToken)).resolves.toBeNull();
+  });
+
+  it('keeps every hash a rotation retires, and only its hash (T094)', async () => {
+    const { userId, refreshToken } = await signedIn();
+    const first = await identity.sessions.refresh(refreshToken);
+    await identity.sessions.refresh(first.refreshToken);
+    const [session] = await sessionRows(userId);
+    const retired = await rowsOf(database).retiredTokens(session?.id ?? '');
+    expect(retired.map((row) => row.tokenHash)).toEqual([
+      sha256(refreshToken),
+      sha256(first.refreshToken),
+    ]);
+    expect(JSON.stringify(retired)).not.toContain(refreshToken);
   });
 
   it('revokes the whole session when the retired token comes back after the grace', async () => {

@@ -124,10 +124,32 @@ model UserSession {
   createdAt                DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user User @relation(fields: [userId], references: [id])
+  user          User                      @relation(fields: [userId], references: [id])
+  retiredTokens UserSessionRetiredToken[]
 
   @@index([userId])
   @@map("user_sessions")
+}
+
+// Phase 1 (T094, R-101): every hash a session's rotations retired. The one
+// `previous_refresh_token_hash` column remembers only the last, so a stolen token rotated twice
+// would evict the device's token undetected; here every retired hash still names its session, and
+// one presented again (but the last, once, within the grace) revokes it (reuse detection across
+// every rotation; review of B9, observation 9). A row never changes, so it carries no `updated_at`.
+// It goes with its session (ON DELETE CASCADE): a credential's history is destroyed with it, and
+// the application role keeps DELETE.
+model UserSessionRetiredToken {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  // SHA-256 lookup hash of the retired refresh token (R-DB-7); one hash names one session (rule 33).
+  tokenHash String   @unique @map("token_hash")
+  retiredAt DateTime @map("retired_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session UserSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("user_session_retired_tokens")
 }
 
 // Phase 1 (T009, ADR 0012 D2): a Google or Apple account, keyed by the provider's subject, never by

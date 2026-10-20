@@ -122,4 +122,12 @@ export class SpecRows {
   terms(userId: string) {
     return this.#database.termsAcceptance.findMany({ where: { userId } });
   }
+
+  /** The hashes a session's rotations retired, oldest first (T094). */
+  retiredTokens(sessionId: string) {
+    return this.#database.userSessionRetiredToken.findMany({
+      where: { sessionId },
+      orderBy: { retiredAt: 'asc' },
+    });
+  }
 }

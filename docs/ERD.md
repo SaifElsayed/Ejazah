@@ -1,12 +1,12 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.4 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end*
+*Version 1.5 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog*
 
 ## 0. How to read this
 
-This is the complete data model for the MVP — 39 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
+This is the complete data model for the MVP — 40 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
-> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
+> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
 Conventions, binding on every table:
 
@@ -29,7 +29,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 
 | Domain | Module | Tables |
 |---|---|---|
-| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `auth_identities` |
+| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` |
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
 | CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
 | BOOKING | `booking` | `slot_holds` · `enrollments` |
@@ -43,7 +43,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` · `admin_sessions` · `admin_recovery_codes` |
 | PLATFORM | `platform` (kernel, not a module) | `idempotency_keys` |
 
-Thirty-nine tables: the thirty-three of Phase 0 and the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
+Forty tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), and `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
 
 ## 2. Identity
 
@@ -96,7 +96,7 @@ A device's session: its refresh token as a hash, rotation, revocation (FR-AUTH-7
 | id | uuid | PK |
 | user_id | FK → users | Plain index, as every foreign key (§14); it serves "revoke every session of the user" |
 | refresh_token_hash | text, unique | SHA-256 lookup hash of the current refresh token (R-DB-7; §15 rule 25) |
-| previous_refresh_token_hash | text, nullable | The hash rotation retired, kept for the grace window; a presentation after it revokes the row (reuse detection) |
+| previous_refresh_token_hash | text, nullable | The hash the last rotation retired, read for the grace window; every retired hash is also kept in `user_session_retired_tokens` (reuse detection) |
 | device_label | text, nullable | What the device reported of itself; shown nowhere in Phase 1 |
 | issued_at | timestamptz | |
 | refreshed_at | timestamptz, nullable | The last rotation |
@@ -106,6 +106,20 @@ A device's session: its refresh token as a hash, rotation, revocation (FR-AUTH-7
 | created_at / updated_at | timestamptz | |
 
 No `deleted_at`: a session is a credential, destroyed, not a record kept from view; the application role keeps DELETE. Rows are purged by `purge-expired-sessions`: an expired row at once, a revoked row after `session_purge_after_days`, kept that long for reuse detection (research R-118 of Phase 1).
+
+### `user_session_retired_tokens`
+
+Every hash a session's rotations retired, so a retired refresh token presented again names its session and revokes it, whichever rotation retired it (research R-101 of Phase 1; T094). The one `previous_refresh_token_hash` remembers only the last: a stolen token rotated twice would otherwise evict the device's token undetected. Added by migration `20261020000000`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| session_id | FK → user_sessions, ON DELETE CASCADE | Plain index, as every foreign key (§14); the retired hashes go with their session |
+| token_hash | text, unique | SHA-256 lookup hash of a retired refresh token (R-DB-7; §15 rule 33) |
+| retired_at | timestamptz | The rotation that retired it |
+| created_at | timestamptz | |
+
+A row never changes, so it carries no `updated_at`. No `deleted_at`: a credential's history, destroyed with the session; the application role keeps DELETE.
 
 ### `user_roles`
 
@@ -774,6 +788,8 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | `notifications (user_id, read_at)` | Notification centre badge |
 | `user_sessions (refresh_token_hash)` unique | Session resolution on every authenticated request (§15.25; Phase 1 pass) |
 | `user_sessions (user_id)` | The foreign key's plain index; "revoke every session of the user" (Phase 1 pass; the partial index on live rows was not kept, R-DB-9) |
+| `user_session_retired_tokens (token_hash)` unique | A retired refresh token presented again names its session (§15.33; Phase 1, T094) |
+| `user_session_retired_tokens (session_id)` | The foreign key's plain index; the cascade from a purged session (Phase 1, T094) |
 | `auth_identities (provider, provider_subject)` unique | The provider sign-in lookup; one provider account is one platform account (§15.22) |
 | `idempotency_keys (scope, actor_id, key)` unique | The key is the actor's: the claim and the replay of a retried mutation (§15.26, replacing the `(scope, key)` unique of §15.16; Phase 1, T018) |
 | `otp_codes (destination, purpose)` | The lookup every code verification and every purge makes (Phase 1 pass) |
@@ -819,11 +835,13 @@ Rules that must hold even if application code is buggy — so they live in the s
 31. `admin_users`: `is_active = (disabled_at IS NULL)` — check constraint, so the flag cannot drift from its source (Phase 1 pass).
 32. `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` — check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141; Phase 1 pass). The five credential tables (`auth_identities`, `user_sessions`, `admin_sessions`, `admin_recovery_codes`, `otp_codes`) keep DELETE for the application role: each is a credential or a key, not a record of something that happened. `teacher_credentials` and `session_remedies` keep it too by the default privileges, as every table without `deleted_at` that is not append-only does (`isnad_entries` is the precedent).
 
+33. `user_session_retired_tokens.token_hash` unique — a retired refresh token names one session, so a presentation of it after the grace finds the session to revoke (research R-101; Phase 1, T094).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 39 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 40 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -919,3 +937,12 @@ Six deltas, all reconciling this model with `.specify/memory/constitution.md`, w
 | 6 | Table count corrected from 36 to 35, matching what the document has always defined. | — |
 
 One conflict raised during review was **withdrawn**: the `settings` table was read as failing R-PROC-11's word "prospectively" by holding a single current value per key with no effective-dating or history. That was an over-reading. The rule requires only that no operational number is hardcoded, that values are read from this table, and that changes go through the admin surface and are audit-logged. A change applies from when it is made, and terms already agreed are protected by the snapshot columns on `enrollments`. `settings` is unchanged.
+
+## Changelog — v1.4 → v1.5 (refresh-token reuse detection, 2026-10-20)
+
+The decision is the owner's on the review of PR #84 (observation 9): research R-101 promises that a retired refresh token presented after a later rotation revokes the session, which one retired-hash column cannot keep. The task is T094 of `specs/002-identity/tasks.md`, batch B9a.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §2 `user_session_retired_tokens`; `user_sessions.previous_refresh_token_hash` reads for the grace window only | `20261020000000_user_session_retired_tokens` |
+| 2 | §1 counts forty tables; §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |

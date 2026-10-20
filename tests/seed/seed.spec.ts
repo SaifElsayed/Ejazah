@@ -181,8 +181,8 @@ describe('the seed (T074)', () => {
           AND table_name <> '_prisma_migrations'`,
     );
     const others = rows.map((row) => row.table_name).filter((name) => !SEEDED_TABLES.has(name));
-    // 39 tables (T003) less the three seeded ones.
-    expect(others).toHaveLength(36);
+    // 40 tables (T003, T094) less the three seeded ones.
+    expect(others).toHaveLength(37);
     for (const table of others) {
       const { rows: present } = await db.query(
         `SELECT 1 FROM ${pg.escapeIdentifier(table)} LIMIT 1`,

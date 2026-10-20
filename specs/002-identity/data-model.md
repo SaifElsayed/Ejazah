@@ -14,20 +14,22 @@ says it as the model.
 
 Everything below lands by forward migrations after `20261014000000`, immutable
 once merged (R-DB-1), each applied clean from an empty database (SC-113). The
-count rises from thirty-three tables to thirty-nine.
+count rises from thirty-three tables to thirty-nine, and to forty with
+`user_session_retired_tokens` (T094).
 
 ---
 
 ## 1. New tables, and who owns them
 
-| Table                  | Owner    | Why it exists                                                                                            |
-| ---------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `user_sessions`        | identity | A device's session: its refresh token as a hash, rotation, revocation (FR-101, R-101)                    |
-| `auth_identities`      | identity | A Google or Apple account keyed by the provider's subject (FR-102, ADR 0012 D2)                          |
-| `admin_sessions`       | admin    | An administrator's session, a different principal in a different table (FR-101, R-SEC-8)                 |
-| `admin_recovery_codes` | admin    | Ten single-use codes per administrator, hashed (FR-105, ADR 0019 D3)                                     |
-| `teacher_credentials`  | catalog  | One ijazah PDF per subject with its transcription; the chain hangs under it (FR-104, ADR 0017 D5)        |
-| `session_remedies`     | sessions | What a session not consumed is owed (FR-105, ADR 0018); the columns land now, the behaviour is Phase 3's |
+| Table                         | Owner    | Why it exists                                                                                            |
+| ----------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `user_sessions`               | identity | A device's session: its refresh token as a hash, rotation, revocation (FR-101, R-101)                    |
+| `user_session_retired_tokens` | identity | Every hash a session's rotations retired, so reuse is caught across every rotation (R-101, T094)         |
+| `auth_identities`             | identity | A Google or Apple account keyed by the provider's subject (FR-102, ADR 0012 D2)                          |
+| `admin_sessions`              | admin    | An administrator's session, a different principal in a different table (FR-101, R-SEC-8)                 |
+| `admin_recovery_codes`        | admin    | Ten single-use codes per administrator, hashed (FR-105, ADR 0019 D3)                                     |
+| `teacher_credentials`         | catalog  | One ijazah PDF per subject with its transcription; the chain hangs under it (FR-104, ADR 0017 D5)        |
+| `session_remedies`            | sessions | What a session not consumed is owed (FR-105, ADR 0018); the columns land now, the behaviour is Phase 3's |
 
 `packages/config/module-tables.json` gains each under its owner; the
 table-ownership rule (R-API-6) then refuses any other module's read. The
@@ -248,9 +250,10 @@ Zod `.max()`; conversions in `@ijazah/time`.
 | 30  | `admin_users`: `locked_until_at IS NULL OR failed_sign_in_count > 0`                                                | check constraint, so a lock never exists without the count that caused it                            |
 | 31  | `admin_users`: `is_active = (disabled_at IS NULL)`                                                                  | check constraint, so the flag cannot drift from its source                                           |
 | 32  | `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` | check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141) |
+| 33  | `user_session_retired_tokens.token_hash` unique                                                                     | unique index (T094)                                                                                  |
 
 Rules 10 and 21 (no DELETE on the five tables; append-only on the three) are
-untouched. `auth_identities`, `user_sessions`, `admin_sessions`,
+untouched. `auth_identities`, `user_sessions`, `user_session_retired_tokens`, `admin_sessions`,
 `admin_recovery_codes` and `otp_codes` keep DELETE for the application role:
 each is a credential or a key, not a record of something that happened.
 `teacher_credentials` and `session_remedies` keep it too, by the default
@@ -291,16 +294,16 @@ mfaVerified }`; the admin kind refuses `mfaVerified: false`.
 
 ## 7. Secrets, by regime (R-DB-7, R-DB-8)
 
-| Value                                             | Regime                                                       | Where                                |
-| ------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------ |
-| User refresh token, admin session token           | SHA-256 lookup hash                                          | `user_sessions`, `admin_sessions`    |
-| One-time code, admin recovery code                | Peppered Argon2id                                            | `otp_codes`, `admin_recovery_codes`  |
-| Password (user, admin)                            | Argon2id, salted                                             | `users`, `admin_users`               |
-| Apple refresh token                               | Column cipher, row-bound                                     | `auth_identities`                    |
-| MFA secret                                        | Column cipher, row-bound                                     | `admin_users` (unchanged)            |
-| Recipient reference                               | Column cipher plus a lookup hash                             | `teacher_profiles`                   |
-| Identity document storage key                     | Column cipher                                                | `verification_documents` (unchanged) |
-| Access token, onboarding token, admin invite link | Not stored: signed, verified by HMAC under their HKDF labels | —                                    |
+| Value                                                         | Regime                                                       | Where                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| User refresh token (current and retired), admin session token | SHA-256 lookup hash                                          | `user_sessions`, `user_session_retired_tokens`, `admin_sessions` |
+| One-time code, admin recovery code                            | Peppered Argon2id                                            | `otp_codes`, `admin_recovery_codes`                              |
+| Password (user, admin)                                        | Argon2id, salted                                             | `users`, `admin_users`                                           |
+| Apple refresh token                                           | Column cipher, row-bound                                     | `auth_identities`                                                |
+| MFA secret                                                    | Column cipher, row-bound                                     | `admin_users` (unchanged)                                        |
+| Recipient reference                                           | Column cipher plus a lookup hash                             | `teacher_profiles`                                               |
+| Identity document storage key                                 | Column cipher                                                | `verification_documents` (unchanged)                             |
+| Access token, onboarding token, admin invite link             | Not stored: signed, verified by HMAC under their HKDF labels | —                                                                |
 
 The three new HKDF labels (`ijazah:access-token:v1`,
 `ijazah:onboarding-token:v1`, `ijazah:admin-invite:v1`) join the list in
@@ -319,6 +322,7 @@ as it reads the old (`*_hash`, `*_encrypted`).
 | `20261018000300_tracks_remedies_account_deleted` | ADR 0018's columns and `session_remedies`; `account_deleted` on the reason enum                                                                                                                                                                                       |
 | `20261018000400_idempotency_actor`               | `idempotency_keys.actor_id` and the new unique (rule 26); batch B4 with T018, the service that writes the column                                                                                                                                                      |
 | `20261018000500_audit_target_label`              | `audit_logs.target_label`, rule 29; batch B4 with T021, the writer that renders the label                                                                                                                                                                             |
+| `20261020000000_user_session_retired_tokens`     | `user_session_retired_tokens`, rule 33; batch B9a with T094, the rotation that writes it                                                                                                                                                                              |
 
 The first four land in B2; the last two ride with their writers in B4, since the
 repositories and three Phase 0 probes write those rows without the new columns
