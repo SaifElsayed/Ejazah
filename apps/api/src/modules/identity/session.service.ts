@@ -8,12 +8,16 @@
 //
 // THE REFRESH TOKEN is 32 random bytes in base64url, stored only as its SHA-256 lookup hash, with
 // an absolute lifetime of `session_refresh_ttl_days` from issue that rotation never extends. Each
-// refresh rotates it and keeps the retired hash on the row. The retired token presented within
+// refresh rotates it, keeps the retired hash on the row for the grace window, and keeps it for good
+// among the session's retired hashes (T094). The last retired token presented within
 // `session_refresh_grace_seconds` of the rotation is answered once more, with another rotation
 // that retires the token it had been given in the meantime (a device that lost the first answer is
-// not signed out); presented after the grace, it revokes the session (`reuse_detected`). A token
-// that is neither the current nor the retired one, or names a revoked or expired session, is
-// refused with UNAUTHENTICATED and nothing else, so a refusal never says why (FR-135).
+// not signed out). Any other retired token, whichever rotation retired it, revokes the session
+// (`reuse_detected`): so a stolen token rotated twice to evict the device's is caught the moment the
+// device presents its own (review of B9, observation 9; owner's decision 2026-10-20, the safe
+// option, at the price of a device that lost two answers in a row signing in again). A token that
+// is no session's, or names a revoked or expired one, is refused with UNAUTHENTICATED and nothing
+// else, so a refusal never says why (FR-135).
 //
 // Sign-out revokes the device's row; `revokeAll` revokes every live row of the person, but the one
 // a password reset just issued, for deletion, ban, suspension, a reset and an administrator action.
@@ -146,30 +150,27 @@ export class SessionService {
     const now = this.#now();
     const presented = hashLookupToken(refreshToken);
     const current = await this.#sessions.findByRefreshHash(presented);
-    if (current !== null) return this.#rotate(current.id, presented, presented, now);
-    const retired = await this.#sessions.findByPreviousHash(presented);
-    if (retired === null || retired.revokedAt !== null || retired.expiresAt <= now) {
-      throw refused();
+    if (current !== null) return this.#rotate(current.id, presented, now);
+    const last = await this.#sessions.findByPreviousHash(presented);
+    if (last !== null && last.revokedAt === null && now < last.expiresAt) {
+      const grace = await this.#settings.read(REFRESH_GRACE_SETTING, positiveWhole);
+      if (last.refreshedAt !== null && now < new Date(addSeconds(last.refreshedAt, grace))) {
+        // Answered once: the token handed out meanwhile is retired in its place, so this one is no
+        // longer the last retired, and a further presentation of it revokes the session.
+        return this.#rotate(last.id, last.refreshTokenHash, now);
+      }
     }
-    const grace = await this.#settings.read(REFRESH_GRACE_SETTING, positiveWhole);
-    const graceEnds =
-      retired.refreshedAt === null ? now : new Date(addSeconds(retired.refreshedAt, grace));
-    if (now < graceEnds) {
-      // Answered once: the token handed out meanwhile is retired in its place, so a third
-      // presentation of this one matches nothing.
-      return this.#rotate(retired.id, retired.refreshTokenHash, retired.refreshTokenHash, now);
-    }
-    await this.#sessions.revoke(retired.id, 'reuse_detected', now);
+    const reused = await this.#sessions.findSessionByRetiredHash(presented);
+    if (reused !== null) await this.#sessions.revoke(reused, 'reuse_detected', now);
     throw refused();
   }
 
-  async #rotate(id: string, from: string, retired: string, now: Date): Promise<SessionTokens> {
+  async #rotate(id: string, from: string, now: Date): Promise<SessionTokens> {
     const refreshToken = generateSecretToken();
-    const rotated = await this.#sessions.rotate(id, from, {
-      to: hashLookupToken(refreshToken),
-      retired,
-      at: now,
-    });
+    const to = hashLookupToken(refreshToken);
+    const rotated = await this.#transactions.run((tx) =>
+      this.#sessions.rotate(tx, id, from, { to, at: now }),
+    );
     if (!rotated) throw refused();
     return { accessToken: await this.#accessToken(id), refreshToken };
   }

@@ -278,10 +278,35 @@ describe('ERD §15 rules 22 to 32, each refused by the database (T008, SC-113)',
   });
 });
 
+describe('a session keeps every hash its rotations retired (T094, ERD §15 rule 33)', () => {
+  it('rule 33: a retired hash names one session, and the retired rows go with their session', async () => {
+    await inRollback(db, async () => {
+      const user = await makeUser(db);
+      const { rows } = await db.query<{ id: string }>(
+        `INSERT INTO user_sessions (user_id, refresh_token_hash, issued_at, expires_at, updated_at)
+         VALUES ($1, $2, $3, $4, now()) RETURNING id`,
+        [user, `hash-${randomUUID()}`, INSTANT, LATER],
+      );
+      const sessionId = rows[0]?.id;
+      const retired = `retired-${randomUUID()}`;
+      const row = { session_id: sessionId, token_hash: retired, retired_at: INSTANT };
+      expect(await tryInsert('user_session_retired_tokens', row)).toBeNull();
+      expect(await tryInsert('user_session_retired_tokens', row)).toBe(SQLSTATE.uniqueViolation);
+      expect(await attempt(db, 'DELETE FROM user_sessions WHERE id = $1', [sessionId])).toBeNull();
+      const { rows: left } = await db.query<{ n: string }>(
+        'SELECT count(*)::text AS n FROM user_session_retired_tokens WHERE token_hash = $1',
+        [retired],
+      );
+      expect(left).toEqual([{ n: '0' }]);
+    });
+  });
+});
+
 describe('the credential tables keep DELETE for the application role (T008, data-model §5)', () => {
   const credentialTables = [
     'auth_identities',
     'user_sessions',
+    'user_session_retired_tokens',
     'admin_sessions',
     'admin_recovery_codes',
     'otp_codes',

@@ -1,13 +1,16 @@
 // T025: the identity module's `user_sessions` rows as the `purge-expired-sessions` sweep reaches
 // them (R-API-6). T047 adds the queries the session service needs (research R-101): the row a
 // refresh token's hash names, the conditional rotation and revocation, and the one read a request's
-// session resolution makes (data-model §6). Queries only; the service decides what a token means.
-// A session is a credential, deleted outright: the application role keeps DELETE on this table
-// (ERD §6, data-model.md §2).
+// session resolution makes (data-model §6). T094 keeps every hash a rotation retires in
+// `user_session_retired_tokens`, written in the rotation's own transaction, and finds the session
+// any of them names. Queries only; the service decides what a token means. A session is a
+// credential, deleted outright: the application role keeps DELETE on both tables (ERD §2,
+// data-model.md §2), and a session's retired hashes go with it (ON DELETE CASCADE).
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 
-type Client = Pick<Database, 'userSession'>;
+type Client = Pick<Database, 'userSession' | 'userSessionRetiredToken'>;
 type Writer = Pick<Transaction, 'userSession'>;
+type Rotator = Pick<Transaction, 'userSession' | 'userSessionRetiredToken'>;
 
 /** Why a session ended (ERD §2, `session_revoked_reason`). */
 export type SessionRevokedReason =
@@ -103,20 +106,36 @@ export class UserSessionsRepository {
   }
 
   /**
-   * Rotates the row from the refresh token hashing to `from` to the one hashing to `to`, keeping
-   * `retired` for the grace window; only where the row is live and still holds `from`, so of two
-   * rotations racing on one token exactly one is applied. True when it was.
+   * Rotates the row, inside `tx`, from the refresh token hashing to `from` to the one hashing to
+   * `to`: `from` becomes the retired hash the grace window reads, and joins the session's retired
+   * hashes for good (T094). Only where the row is live and still holds `from`, so of two rotations
+   * racing on one token exactly one is applied. True when it was.
    */
   async rotate(
+    tx: Rotator,
     id: string,
     from: string,
-    { to, retired, at }: { readonly to: string; readonly retired: string; readonly at: Date },
+    { to, at }: { readonly to: string; readonly at: Date },
   ): Promise<boolean> {
-    const { count } = await this.#database.userSession.updateMany({
+    const { count } = await tx.userSession.updateMany({
       where: { id, refreshTokenHash: from, revokedAt: null, expiresAt: { gt: at } },
-      data: { refreshTokenHash: to, previousRefreshTokenHash: retired, refreshedAt: at },
+      data: { refreshTokenHash: to, previousRefreshTokenHash: from, refreshedAt: at },
     });
-    return count === 1;
+    if (count !== 1) return false;
+    await tx.userSessionRetiredToken.create({
+      data: { sessionId: id, tokenHash: from, retiredAt: at },
+      select: { id: true },
+    });
+    return true;
+  }
+
+  /** The session a retired refresh token's hash names, whichever rotation retired it (T094). */
+  async findSessionByRetiredHash(hash: string): Promise<string | null> {
+    const row = await this.#database.userSessionRetiredToken.findUnique({
+      where: { tokenHash: hash },
+      select: { sessionId: true },
+    });
+    return row?.sessionId ?? null;
   }
 
   /** Revokes one live row. */

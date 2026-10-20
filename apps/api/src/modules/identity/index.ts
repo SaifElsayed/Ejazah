@@ -61,7 +61,10 @@ export function createPhotoUploadRoute({
 
 /** The identity module's stores for the three purge sweeps (T025, FR-107, R-API-6). */
 export function createPurgeStores(
-  database: Pick<Database, 'otpCode' | 'devicePushToken' | 'userSession'>,
+  database: Pick<
+    Database,
+    'otpCode' | 'devicePushToken' | 'userSession' | 'userSessionRetiredToken'
+  >,
 ): {
   readonly otpCodes: OtpCodesRepository;
   readonly pushTokens: PushTokensRepository;
