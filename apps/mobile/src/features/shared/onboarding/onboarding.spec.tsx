@@ -213,6 +213,35 @@ describe('OnboardProfile', () => {
     expect(getDraft()).toBeNull();
     // Created in Arabic, the language it was made in: nothing to set.
     expect(mockApi.api.account.setLanguage.mutate).not.toHaveBeenCalled();
+    // The device's own zone: the launch report keeps following the device.
+    expect(mockApi.api.account.setTimezone.mutate).not.toHaveBeenCalled();
+  });
+
+  // Review of B10b, round 1, finding 1: `complete` stamps no override, so a city chosen on this
+  // step would be replaced by the device's at the launch report unless it is kept as the choice.
+  it('keeps a city chosen on the step as the manual choice, before the account lands', async () => {
+    updateDraft({ role: 'student', timezone: 'Asia/Riyadh' });
+    mockApi.api.onboarding.complete.mutate.mockResolvedValue({
+      ...tokens,
+      landing: 'student_home',
+    });
+    let landedWhenSet: unknown = null;
+    mockApi.api.account.setTimezone.mutate.mockImplementation(async () => {
+      landedWhenSet = getSession();
+      return undefined;
+    });
+    await renderIn('rtl', <OnboardProfile />);
+    await fillProfile();
+    await fireEvent.press(screen.getByRole('checkbox'));
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    await waitFor(() => expect(getSession()).toEqual({ kind: 'restoring' }));
+    expect(mockApi.api.account.setTimezone.mutate).toHaveBeenCalledWith({
+      timezone: 'Asia/Riyadh',
+    });
+    expect(landedWhenSet).toEqual({ kind: 'signed-out' });
   });
 
   it('sends the email account its password, and keeps an English choice on the account', async () => {

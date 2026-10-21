@@ -12,6 +12,7 @@ import type { SessionStore } from '../../../lib/storage';
 import { deviceTimeZone } from '../../../lib/time-zone';
 import { startOnboarding } from '../onboarding/draft';
 import { DEV_EMAIL, devIdentityToken } from './dev-sign-in';
+import { clearPendingEmail } from './pending';
 import { nativeIdentity } from './providers';
 
 /** What a sign-in came to. */
@@ -108,6 +109,8 @@ export function useAuthApi() {
             password,
             timezone: deviceTimeZone(),
           });
+          // The draft holds the password now; nothing else keeps it (review of B10b, round 1).
+          clearPendingEmail();
           return { kind: 'onboarding' };
         } catch (error: unknown) {
           const method = conflictMethodOf(error);
@@ -121,10 +124,9 @@ export function useAuthApi() {
       },
 
       async resetPassword(email: string, code: string, newPassword: string): Promise<void> {
-        await beginSession(
-          sessions,
-          await api.auth.email.resetPassword.mutate({ email, code, newPassword }),
-        );
+        const session = await api.auth.email.resetPassword.mutate({ email, code, newPassword });
+        clearPendingEmail();
+        await beginSession(sessions, session);
       },
     };
   }, [client, sessions]);

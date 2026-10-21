@@ -4,12 +4,17 @@
 // default language of an anonymous call (`ar`), so a person onboarding in English sets it once the
 // session exists (FR-131); a failure there leaves the account in Arabic and the screen in English,
 // and the account tab sets it again on the next switch.
+//
+// A city chosen on the step is kept the same way: `complete` stamps no override, so without
+// `account.setTimezone` the launch report would replace it with the device's zone (review of B10b,
+// round 1, finding 1). The device's own zone is left to that report.
 import type { OnboardingCompleteInput } from '@ijazah/contracts';
 import { useMemo } from 'react';
 
 import { getLocale } from '../../../i18n';
 import { useApi } from '../../../lib/api';
 import { setSession } from '../../../lib/session';
+import { deviceTimeZone } from '../../../lib/time-zone';
 import { clearDraft, type OnboardingDraft } from './draft';
 
 /** A draft complete enough to create the account from. */
@@ -55,6 +60,11 @@ export function useOnboardingApi() {
         const language = getLocale();
         if (language !== 'ar') {
           await client.api.account.setLanguage.mutate({ language }).catch(() => undefined);
+        }
+        if (draft.timezone !== deviceTimeZone()) {
+          await client.api.account.setTimezone
+            .mutate({ timezone: draft.timezone })
+            .catch(() => undefined);
         }
         clearDraft();
         // The guard lands the new account through `account.me`, as after any sign-in (T052).
