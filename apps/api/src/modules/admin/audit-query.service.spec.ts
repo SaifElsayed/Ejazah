@@ -221,6 +221,24 @@ describe('audit.list', () => {
     expect(byAdmin.total).toBe(0);
   });
 
+  it('answers a zone the time package refuses with VALIDATION_FAILED naming timeZone, never the internal error', async () => {
+    for (const timeZone of ['UTC', 'Etc/UTC', 'Mars/Olympus']) {
+      const error = await rolledBack(database, (tx) =>
+        query()
+          .list(tx, { from: '2026-10-01', timeZone, page: 1 })
+          .then(
+            () => null,
+            (thrown: unknown) => thrown,
+          ),
+      );
+      expect(error).toBeInstanceOf(DomainError);
+      expect(error).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        details: [{ path: 'timeZone', code: 'unknown' }],
+      });
+    }
+  });
+
   it('takes % and _ in a search as the characters themselves, never as a pattern', async () => {
     const token = randomUUID().slice(0, 8);
     const [percent, underscore, literal] = await rolledBack(database, async (tx) => {

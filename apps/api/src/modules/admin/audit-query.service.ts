@@ -10,7 +10,7 @@
 // Everything runs on the administrator kind's transaction (`tx`), so the read and the call's own
 // audit entry are one unit.
 import type { auditGetOutput } from '@ijazah/contracts/admin';
-import { endOfLocalDay, startOfLocalDay } from '@ijazah/time';
+import { endOfLocalDay, startOfLocalDay, TimeError } from '@ijazah/time';
 import { z } from 'zod';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -77,7 +77,19 @@ export class AuditQueryService {
     query: AuditQuery,
   ): Promise<{ readonly rows: AuditListRow[]; readonly total: number }> {
     const size = await this.#settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
-    const filter = filterOf(query);
+    let filter: AuditFilter;
+    try {
+      filter = filterOf(query);
+    } catch (error: unknown) {
+      // A zone the time package refuses (`UTC`, an unknown name) is the caller's input, never the
+      // internal error (B12b review, finding 1); the identity module answers its zones the same way.
+      if (error instanceof TimeError) {
+        throw new DomainError('VALIDATION_FAILED', undefined, {
+          details: [{ path: 'timeZone', code: 'unknown' }],
+        });
+      }
+      throw error;
+    }
     const [entries, total] = await Promise.all([
       this.#entries.page(tx, filter, (query.page - 1) * size, size),
       this.#entries.count(tx, filter),
