@@ -72,7 +72,13 @@ export function ApplicationMoreInfo() {
       header={
         <NavHeader
           title={t('teacher.application.moreInfo.title')}
-          back={{ kind: 'back', onPress: () => router.back() }}
+          back={{
+            kind: 'back',
+            // The guard lands an applicant waiting on a document here directly, with no history
+            // (review of B11b, round 1, finding 1).
+            onPress: () =>
+              router.canGoBack() ? router.back() : router.replace('/(teacher)/application/status'),
+          }}
         />
       }
       footer={

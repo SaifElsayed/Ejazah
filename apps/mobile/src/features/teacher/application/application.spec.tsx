@@ -515,6 +515,13 @@ describe('ApplicationMoreInfo (FR-152)', () => {
     );
   });
 
+  it('goes back to the status when the guard opened it with nothing to go back to', async () => {
+    await renderIn('rtl', withQueries(() => <ApplicationMoreInfo />)());
+    await screen.findByText('نحتاج نسخة أوضح من إجازة الحفظ');
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
+    expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/application/status');
+  });
+
   it('resubmits once every asked-for PDF is replaced, and returns to the status', async () => {
     mockPick.mockResolvedValue(pdf('hifz-clear.pdf'));
     await renderIn('rtl', withQueries(() => <ApplicationMoreInfo />)());

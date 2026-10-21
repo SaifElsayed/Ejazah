@@ -79,7 +79,11 @@ export function PdfField({
   return (
     <View style={{ gap: tokens.space['2'] }}>
       {state === 'uploading' ? (
-        <View accessibilityRole="progressbar" style={{ alignItems: 'center' }}>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel={label}
+          style={{ alignItems: 'center' }}
+        >
           <Spinner size="sm" />
         </View>
       ) : file === undefined ? (
