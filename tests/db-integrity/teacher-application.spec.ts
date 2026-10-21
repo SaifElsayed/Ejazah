@@ -223,7 +223,7 @@ describe('the application over the tables (T056)', () => {
     });
   });
 
-  it('reapplies from rejected: the earlier credentials kept, the call record cleared, the status pending', async () => {
+  it('reapplies from rejected: the earlier credentials kept, the call record and the approved screen cleared, the status pending', async () => {
     const { userId, application } = await applicant();
     await services.application.submit(userId, { ...application, idempotencyKey: key() });
     await db.query(
@@ -231,9 +231,11 @@ describe('the application over the tables (T056)', () => {
                     reviewed_by_admin_id = $2, reviewed_at = now() WHERE teacher_user_id = $1`,
       [userId, await makeAdmin(db)],
     );
+    // A revoked approval, its once-only screen already shown, then rejected (admin-surface
+    // `teachers.revokeApproval` sets `rejected`, B13).
     await db.query(
-      `UPDATE teacher_profiles SET verification_status = 'rejected', verification_call_completed_at = now()
-        WHERE user_id = $1`,
+      `UPDATE teacher_profiles SET verification_status = 'revoked', verification_call_completed_at = now(),
+              approved_shown_at = now() WHERE user_id = $1`,
       [userId],
     );
     await decide(userId, 'rejected', 'الوثائق لا تطابق الاسم');
@@ -256,6 +258,11 @@ describe('the application over the tables (T056)', () => {
       verification_call_completed_at: null,
       identity_document_type: 'passport',
     });
+    const { rows: shown } = await db.query(
+      'SELECT approved_shown_at FROM teacher_profiles WHERE user_id = $1',
+      [userId],
+    );
+    expect(shown).toEqual([{ approved_shown_at: null }]);
     expect((await credentialsOf(userId)).map(({ status }) => status)).toEqual([
       'rejected',
       'rejected',
