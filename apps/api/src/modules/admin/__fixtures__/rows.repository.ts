@@ -3,7 +3,9 @@
 // the specs reach them through this one, as the services reach them through theirs.
 import { randomUUID } from 'node:crypto';
 
-import type { Database } from '../../../platform/db/prisma.repository.js';
+import type { AuditSnapshot } from '../../../platform/audit/audit-writer.js';
+import type { Database, Transaction } from '../../../platform/db/prisma.repository.js';
+import { targetLabel } from '../labels/target-label.js';
 
 export interface SpecAdministrator {
   readonly email: string;
@@ -18,7 +20,20 @@ export interface SpecAdministrator {
   readonly invitedAt?: Date | null;
   readonly invitedByAdminId?: string | null;
   readonly passwordSetAt?: Date | null;
+  readonly displayName?: string;
   readonly now: Date;
+}
+
+/** An audit entry a reading spec (T065) writes at the instant it chooses, its label the writer's. */
+export interface SpecAuditEntry {
+  readonly adminId: string;
+  readonly action: string;
+  readonly targetType: string;
+  readonly targetId: string;
+  readonly occurredAt: Date;
+  readonly reason?: string;
+  readonly before?: AuditSnapshot;
+  readonly after?: AuditSnapshot;
 }
 
 export class SpecAdminRows {
@@ -41,6 +56,7 @@ export class SpecAdminRows {
     invitedAt = null,
     invitedByAdminId = null,
     passwordSetAt,
+    displayName = 'Spec Administrator',
     now,
   }: SpecAdministrator): Promise<string> {
     await this.#database.adminUser.create({
@@ -49,7 +65,7 @@ export class SpecAdminRows {
         email,
         passwordHash,
         mfaSecretEncrypted: Uint8Array.from(mfaSecretEncrypted),
-        displayName: 'Spec Administrator',
+        displayName,
         isActive,
         disabledAt: isActive ? null : now,
         mfaEnrolledAt: enrolled ? now : null,
@@ -98,5 +114,35 @@ export class SpecAdminRows {
     },
   ): Promise<void> {
     await this.#database.adminUser.update({ where: { id }, data });
+  }
+
+  /**
+   * Writes an audit entry inside `tx` at `occurredAt`, which the writer leaves to the database: a
+   * reading spec places its entries where no other spec's rows are, then rolls them back.
+   */
+  async auditEntry(tx: Transaction, entry: SpecAuditEntry): Promise<string> {
+    const { id } = await tx.auditLog.create({
+      data: {
+        adminId: entry.adminId,
+        action: entry.action,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        targetLabel: targetLabel(entry.targetType, entry.targetId),
+        reason: entry.reason ?? null,
+        occurredAt: entry.occurredAt,
+        ...(entry.before === undefined ? {} : { before: entry.before }),
+        ...(entry.after === undefined ? {} : { after: entry.after }),
+      },
+      select: { id: true },
+    });
+    return id;
+  }
+
+  /** The audit entries of one target, newest first, as written. */
+  auditEntriesOf(targetId: string) {
+    return this.#database.auditLog.findMany({
+      where: { targetId },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    });
   }
 }

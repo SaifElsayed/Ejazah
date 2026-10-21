@@ -16,6 +16,7 @@ import { renderPage } from './page.js';
 import { designAssets } from './assets.js';
 import { PUBLIC_PAGE_CSP, PUBLIC_PAGE_RATE_LIMIT, type WebRoute } from './route.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -113,6 +114,7 @@ beforeAll(async () => {
     rateLimiter: limited.limiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
     trustedProxyHeader: 'X-Forwarded-For',
     // The shorter path is declared first on purpose: the application mounts the longer first.
     webRoutes: { '/terms': terms, '/broken': broken, '/a': terms, '/a/b': broken },

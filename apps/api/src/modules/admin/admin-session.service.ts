@@ -105,16 +105,19 @@ export class AdminSessionService {
     return { adminId: row.adminId, sessionId: row.id };
   }
 
-  /** Marks the second factor passed on the session; CONFLICT if it was ended or marked meanwhile. */
+  /**
+   * Marks the second factor passed on the session. A session ended or marked meanwhile answers
+   * `ADMIN_SIGN_IN_FAILED`, the one the panel starts again on (B12a review, follow-up 6).
+   */
   async markVerified(sessionId: string, tx: Pick<Transaction, 'adminSession'>): Promise<void> {
     if (!(await this.#sessions.markVerified(tx, sessionId, this.#now()))) {
-      throw new DomainError('CONFLICT');
+      throw new DomainError('ADMIN_SIGN_IN_FAILED');
     }
   }
 
-  /** Ends the one session (T061). Ending it again changes nothing. */
-  async signOut(sessionId: string): Promise<void> {
-    await this.#sessions.revoke(sessionId, this.#now());
+  /** Ends the one session (T061) on the sign-out call's transaction. Ending it again changes nothing. */
+  async signOut(sessionId: string, tx: Pick<Transaction, 'adminSession'>): Promise<void> {
+    await this.#sessions.revoke(tx, sessionId, this.#now());
   }
 
   /** Ends every open session of the administrator; how many. */

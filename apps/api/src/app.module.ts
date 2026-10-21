@@ -103,6 +103,7 @@ import { adminRouter } from './surfaces/admin.router.js';
 import { appRouter } from './surfaces/app.router.js';
 import {
   type AdminContext,
+  type AdminSurfaceServices,
   type AppContext,
   type AppServices,
   type Administration,
@@ -161,6 +162,8 @@ export interface ApplicationOptions {
   readonly sessions: SessionResolvers;
   /** The services the user surface's procedures read, bound once by `main.ts` (T038). */
   readonly services: AppServices;
+  /** The admin module's services the administrator surface's procedures read, bound by `main.ts` (T067). */
+  readonly adminServices: AdminSurfaceServices;
   /** `TRUSTED_PROXY`: the one proxy header whose last hop is the client's address, when set (T017). */
   readonly trustedProxyHeader?: string;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
@@ -283,6 +286,7 @@ export async function createApplication({
   rateLimiter,
   sessions,
   services,
+  adminServices,
   trustedProxyHeader,
   surfaces = { app: appRouter, admin: adminRouter },
   webRoutes = {},
@@ -336,6 +340,7 @@ export async function createApplication({
           session: await resolve(sessions.admin, request),
           log,
           administration,
+          services: adminServices,
           rateLimiter,
           clientAddress: clientAddress(request),
         }),

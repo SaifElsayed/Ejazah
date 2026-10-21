@@ -1,6 +1,7 @@
 // T056: the application's columns of `teacher_profiles` (data-model §3: the application is a state
 // of the profile, not a table), as the verification module reaches them through this module's entry
 // (R-121). Queries only, each on the transaction it is handed; `identity.service.ts` holds the rules.
+// T065 adds the admin home's applications card, counted on the administrator kind's transaction.
 //
 // A write is conditional on the state it moves from, decided by the database: the first application
 // creates the profile (the unique `user_id` refuses a second one written meanwhile), a reapplication
@@ -132,4 +133,29 @@ export class ApplicationRepository {
     });
     return count === 1;
   }
+}
+
+/**
+ * The admin home's applications card (T065, FR-176): how many applications are in review and when
+ * the oldest of them was submitted, and how many wait on the applicant for a document. Counts only:
+ * no person leaves this module.
+ */
+export async function readApplicationQueue(tx: Client): Promise<{
+  readonly open: number;
+  readonly oldestSubmittedAt: Date | null;
+  readonly waitingOnApplicant: number;
+}> {
+  const [open, waitingOnApplicant] = await Promise.all([
+    tx.teacherProfile.aggregate({
+      where: { applicationStatus: 'in_review' },
+      _count: { _all: true },
+      _min: { applicationSubmittedAt: true },
+    }),
+    tx.teacherProfile.count({ where: { applicationStatus: 'needs_document' } }),
+  ]);
+  return {
+    open: open._count._all,
+    oldestSubmittedAt: open._min.applicationSubmittedAt,
+    waitingOnApplicant,
+  };
 }

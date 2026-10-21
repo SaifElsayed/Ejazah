@@ -16,7 +16,7 @@ export function createSubjectsService(database: Pick<Database, 'subject'>): Subj
 /**
  * The credential rows and the subjects as the verification module's application and credentials
  * read and write them, each on the caller's transaction (T056, T057, R-121); `grantSubjects` is the
- * approval's (admin-surface `credentials.approve`).
+ * approval's (admin-surface `credentials.approve`); `readCredentialQueue` is the admin home's card (T065).
  */
 export {
   addCredential,
@@ -24,6 +24,7 @@ export {
   grantSubjects,
   listCredentials,
   type NewCredentialRow,
+  readCredentialQueue,
   replaceCredentialDocument,
 } from './credentials.repository.js';
 export { activeSubjectsAmong } from './subjects.repository.js';

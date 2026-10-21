@@ -453,10 +453,13 @@ describe('setPassword: the invite link, single use by password_set_at', () => {
   it('refuses a link altered in any part, or signed under another key', async () => {
     const { admin, token } = await invited();
     const [version, adminId, expiry, mac = ''] = token.split('.');
+    // Each alteration differs from what was signed whatever the random id and MAC hold: a
+    // character replaced by one it is not (CI found the id starting with "0" one time in sixteen).
+    const other = (character: string) => (character === '0' ? '1' : '0');
     const altered = [
       [version, adminId, '2099-01-01T00:00:00Z', mac].join('.'),
-      [version, admin.adminId.replace(/^./, '0'), expiry, mac].join('.'),
-      [version, adminId, expiry, `${mac.slice(0, -2)}AA`].join('.'),
+      [version, admin.adminId.replace(/^./, other), expiry, mac].join('.'),
+      [version, adminId, expiry, mac.replace(/.$/, (last) => (last === 'A' ? 'B' : 'A'))].join('.'),
       'not-a-token',
     ];
     for (const candidate of altered) {

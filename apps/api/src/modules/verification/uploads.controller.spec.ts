@@ -21,6 +21,7 @@ import {
 } from './uploads.controller.js';
 import { DOCUMENT_STORAGE_KEY_COLUMN } from './verification.repository.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -99,6 +100,7 @@ beforeAll(async () => {
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
     routes: {
       [DOCUMENTS_UPLOAD_PATH]: documentsUploadRoute({
         sessions: sessions.user,

@@ -89,8 +89,8 @@ export class AdminSessionsRepository {
   }
 
   /** Ends one session, where it is still open. */
-  async revoke(id: string, now: Date): Promise<void> {
-    await this.#database.adminSession.updateMany({
+  async revoke(tx: Writer, id: string, now: Date): Promise<void> {
+    await tx.adminSession.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: now },
     });

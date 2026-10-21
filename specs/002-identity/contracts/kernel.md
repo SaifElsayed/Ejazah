@@ -33,6 +33,10 @@ Both contexts gain `clientAddress`: the socket's peer address, or, when `TRUSTED
 | `adminProcedure`             | Requires `mfaVerified`; otherwise `MFA_REQUIRED` (or `MFA_SETUP_REQUIRED` when the administrator is unenrolled). Unchanged otherwise: one transaction, the audit record                                                                                                                                                      |
 | `adminPublicProcedure` (new) | On the administrator tRPC instance, anonymous, with a required `rateLimit` declaration like the user surface's public kind; the admin context gains the rate limiter for it. Exists for sign-in, the second factor and the password-set link only; a test asserts the admin surface's public procedures are exactly `auth.*` |
 
+The administrator context also carries the admin module's services through a port the surfaces
+declare (`AdminSurfaceServices`, in the contract's types), which the admin module implements and
+`main.ts` binds, as the audit writer is: the context may not import `modules/admin` (T067).
+
 A `verification_required` account is admitted by every kind of this phase; Phase 2's booking kind refuses it (FR-137). Only `suspended` and `banned` are the restricted standings.
 
 The `UserSession` the context carries gains `accountStatus`, `role` (one, not

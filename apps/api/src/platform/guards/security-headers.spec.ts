@@ -24,6 +24,7 @@ import { ConfigError, loadConfig } from '../config/config.module.js';
 import { createLogger } from '../logging/logger.js';
 import { RateLimiter } from './rate-limit.guard.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -94,6 +95,7 @@ async function start(mode: Mode): Promise<{ application: INestApplication; origi
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
   });
   await application.listen(0, '127.0.0.1');
   const origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

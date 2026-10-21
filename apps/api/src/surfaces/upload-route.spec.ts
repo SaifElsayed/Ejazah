@@ -16,7 +16,11 @@ import { SettingError, type SettingsReader } from '../platform/settings/settings
 import type { UserSession } from './context.js';
 import { multipart, pdfBytes } from './upload-fixtures.js';
 import { kindField, uploadRoute } from './upload-route.js';
-import { unusedIdentityServices, unusedVerificationServices } from './services.fixtures.js';
+import {
+  unusedAdminServices,
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from './services.fixtures.js';
 
 const LIMIT_BYTES = 4096;
 
@@ -94,6 +98,7 @@ beforeAll(async () => {
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
     routes: {
       '/uploads/probe': uploadRoute(
         { sessions: sessions.user, guard: { settings, rateLimiter }, log },

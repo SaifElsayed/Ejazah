@@ -11,6 +11,8 @@
 //   every session, so the next sign-in repeats the setup (FR-173). Neither may be turned on oneself
 //   (`FORBIDDEN`): a last administrator could lock everyone out.
 // - `regenerateRecoveryCodes` replaces the caller's own set and shows the new codes once.
+// - `me` is the sidebar's administrator, and `list` the admins page's tab (T067): by name, a page
+//   of `admin_list_page_size`, the search over the name and the address as typed.
 import { randomUUID } from 'node:crypto';
 
 import { z } from 'zod';
@@ -28,7 +30,12 @@ import {
 } from './admin-auth.service.js';
 import { AdminRecoveryCodesRepository } from './admin-recovery-codes.repository.js';
 import type { AdminSessionService } from './admin-session.service.js';
-import { AdminUsersRepository, MFA_SECRET_COLUMN } from './admin-users.repository.js';
+import {
+  type AdministratorListRow,
+  AdminUsersRepository,
+  MFA_SECRET_COLUMN,
+} from './admin-users.repository.js';
+import { LIST_PAGE_SIZE_SETTING } from './audit-query.service.js';
 
 const positiveWhole = z.int().positive();
 
@@ -114,13 +121,41 @@ export class AdminsService {
   async regenerateRecoveryCodes(
     tx: Tx,
     adminId: string,
-  ): Promise<{ readonly recoveryCodes: readonly string[] }> {
+  ): Promise<{ readonly recoveryCodes: string[] }> {
     const admin = await this.#existing(tx, adminId);
     if (admin.mfaEnrolledAt === null) throw new DomainError('MFA_SETUP_REQUIRED');
     const count = await this.#settings.read(RECOVERY_CODE_COUNT_SETTING, positiveWhole);
     const { codes, hashes } = await drawRecoveryCodes(this.#recoveryHasher, count);
     await this.#recoveryCodes.replace(tx, adminId, hashes);
     return { recoveryCodes: codes };
+  }
+
+  /** `auth.me`: the sidebar's administrator. */
+  async me(
+    tx: Tx,
+    adminId: string,
+  ): Promise<{ readonly adminId: string; readonly displayName: string; readonly email: string }> {
+    const admin = await this.#existing(tx, adminId);
+    return { adminId: admin.id, displayName: admin.displayName, email: admin.email };
+  }
+
+  /** `admins.list`: one page of the tab, by name, and how many there are. */
+  async list(
+    tx: Tx,
+    readerId: string,
+    query: {
+      readonly tab: 'active' | 'disabled';
+      readonly search?: string | undefined;
+      readonly page: number;
+    },
+  ): Promise<{ readonly rows: AdminsListRow[]; readonly total: number }> {
+    const size = await this.#settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
+    const filter = { active: query.tab === 'active', search: query.search };
+    const [rows, total] = await Promise.all([
+      this.#administrators.page(tx, filter, (query.page - 1) * size, size),
+      this.#administrators.count(tx, filter),
+    ]);
+    return { rows: rows.map((row) => listRowOf(row, readerId)), total };
   }
 
   async #existing(tx: Tx, adminId: string) {
@@ -133,4 +168,33 @@ export class AdminsService {
   #freshSecret(adminId: string): Uint8Array {
     return this.#cipher.encrypt(generateTotpSecret(), MFA_SECRET_COLUMN, adminId);
   }
+}
+
+/** One row of the admins page as `admins.list` answers it. */
+export interface AdminsListRow {
+  readonly adminId: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly self: boolean;
+  readonly mfaEnrolled: boolean;
+  readonly lastSignInAt?: string;
+  readonly invitedAt?: string;
+  readonly invitedByName?: string;
+  readonly recoveryCodesLeft: number;
+  readonly disabledAt?: string;
+}
+
+function listRowOf(row: AdministratorListRow, readerId: string): AdminsListRow {
+  return {
+    adminId: row.id,
+    displayName: row.displayName,
+    email: row.email,
+    self: row.id === readerId,
+    mfaEnrolled: row.mfaEnrolledAt !== null,
+    ...(row.lastSignInAt === null ? {} : { lastSignInAt: row.lastSignInAt.toISOString() }),
+    ...(row.invitedAt === null ? {} : { invitedAt: row.invitedAt.toISOString() }),
+    ...(row.invitedBy === null ? {} : { invitedByName: row.invitedBy.displayName }),
+    recoveryCodesLeft: row._count.recoveryCodes,
+    ...(row.disabledAt === null ? {} : { disabledAt: row.disabledAt.toISOString() }),
+  };
 }

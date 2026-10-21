@@ -31,6 +31,8 @@ export const SEEDED_ADMIN_SETTINGS: Readonly<Record<string, unknown>> = {
   admin_session_max_hours: 12,
   admin_invite_ttl_hours: 48,
   admin_recovery_code_count: 10,
+  admin_list_page_size: 25,
+  admin_home_latest_actions: 7,
 };
 
 /** A settings reader over `values`, failing closed as the real one does. */
@@ -130,10 +132,12 @@ export function buildAdmin(
       readonly invitedAt: Date | null;
       readonly passwordSetAt: Date | null;
       readonly invitedByAdminId: string | null;
+      readonly email: string;
+      readonly displayName: string;
     }> = {},
   ): Promise<SpecAdmin> {
     const adminId = randomUUID();
-    const address = uniqueEmail();
+    const address = options.email ?? uniqueEmail();
     const secret = generateTotpSecret();
     const password = options.password === undefined ? SPEC_PASSWORD : options.password;
     await rows.createAdministrator({
@@ -153,6 +157,7 @@ export function buildAdmin(
       ...(options.invitedByAdminId === undefined
         ? {}
         : { invitedByAdminId: options.invitedByAdminId }),
+      ...(options.displayName === undefined ? {} : { displayName: options.displayName }),
     });
     return { adminId, email: address, password: password ?? '', secret };
   }
@@ -199,4 +204,27 @@ export type AdminWorld = ReturnType<typeof buildAdmin>;
 /** Runs `work` in one transaction, as the administrator caller kind does. */
 export function inTransaction<T>(database: Database, work: (tx: Transaction) => Promise<T>): Promise<T> {
   return database.$transaction(work);
+}
+
+const ROLLED_BACK = Symbol('rolled back');
+
+/**
+ * Runs `work` in one transaction and rolls it back, answering what `work` answered: a reading spec
+ * writes its rows, reads them and leaves nothing for the next run.
+ */
+export async function rolledBack<T>(
+  database: Database,
+  work: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+  let answer: { readonly value: T } | undefined;
+  try {
+    await database.$transaction(async (tx) => {
+      answer = { value: await work(tx) };
+      throw ROLLED_BACK;
+    });
+  } catch (thrown) {
+    if (thrown !== ROLLED_BACK) throw thrown;
+  }
+  if (answer === undefined) throw new Error('rolledBack: the work answered nothing');
+  return answer.value;
 }

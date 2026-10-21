@@ -13,6 +13,7 @@ import { createApplication, surfacePaths } from '../../app.module.js';
 import { RateLimiter } from '../guards/rate-limit.guard.js';
 import { createLogger } from '../logging/logger.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -72,6 +73,7 @@ beforeAll(async () => {
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
   });
   await application.listen(0, '127.0.0.1');
   origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');

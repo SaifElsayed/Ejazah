@@ -25,7 +25,11 @@ import {
   createAppContext,
   type UserSession,
 } from './context.js';
-import { unusedIdentityServices, unusedVerificationServices } from './services.fixtures.js';
+import {
+  unusedAdminServices,
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from './services.fixtures.js';
 
 const log = createLogger({ level: 'fatal' });
 const administration = {
@@ -49,7 +53,14 @@ const services = {
 };
 
 const appSource = { session: null, log, rateLimiter, clientAddress, services };
-const adminSource = { session: null, log, administration, rateLimiter, clientAddress };
+const adminSource = {
+  session: null,
+  log,
+  administration,
+  services: unusedAdminServices,
+  rateLimiter,
+  clientAddress,
+};
 
 describe('the user and administrator contexts (T162, R-SEC-8)', () => {
   it('each names its surface, set by its own factory', () => {

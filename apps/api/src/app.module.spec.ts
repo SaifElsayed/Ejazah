@@ -45,6 +45,7 @@ import {
   toErrorShape,
 } from './surfaces/procedures.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from './surfaces/services.fixtures.js';
@@ -119,6 +120,7 @@ beforeAll(async () => {
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
     surfaces: { app: user, admin: administrator },
   });
   await application.listen(0, '127.0.0.1');
@@ -234,6 +236,7 @@ describe('the request body limit (T150, FR-077)', () => {
       rateLimiter,
       sessions,
       services,
+      adminServices: unusedAdminServices,
       surfaces: { app: user, admin: readsFirst },
     });
     await wired.listen(0, '127.0.0.1');

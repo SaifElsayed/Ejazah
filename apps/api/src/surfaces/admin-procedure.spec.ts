@@ -24,6 +24,7 @@ import { DomainError } from '../platform/errors/domain-error.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { createAdminContext } from './context.js';
+import { unusedAdminServices } from './services.fixtures.js';
 import {
   adminProcedure,
   createAdminCallerFactory,
@@ -143,6 +144,7 @@ function callerOver(database: FakeDatabase, auditWriter: AuditWriter, adminId: s
     session: adminId === null ? null : { adminId, sessionId: 'session-1', mfaVerified: true },
     log,
     administration: { transactions: database, auditWriter },
+    services: unusedAdminServices,
     rateLimiter: {} as RateLimiter,
     clientAddress: '203.0.113.7',
   });
