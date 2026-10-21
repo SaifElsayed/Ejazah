@@ -1,5 +1,6 @@
 // T105: cryptographic identifier generation for the two identifiers the public sees: certificate
-// numbers and verification tokens (FR-045, R-DB-6; contracts/kernel.md "Guards applied by default").
+// numbers and verification tokens (FR-045, R-DB-6; contracts/kernel.md "Guards applied by default"),
+// and the secrets the services hand out: tokens, one-time codes and recovery codes (B9, T066).
 //
 // Both are drawn from Node's cryptographic generator, never from a sequence, a timestamp or
 // `Math.random` (refused at build time by `db/no-weak-random`), so a person who holds one
@@ -28,20 +29,36 @@ const VERIFICATION_TOKEN_BYTES = 32;
  * probability; there is no modulo step to bias it.
  */
 export function generateCertificateNumber(): string {
-  const bytes = randomBytes((CERTIFICATE_NUMBER_LENGTH * 5) / 8);
+  return crockfordOf(randomBytes((CERTIFICATE_NUMBER_LENGTH * 5) / 8), CERTIFICATE_NUMBER_LENGTH);
+}
+
+/** The symbols of an administrator's recovery code (research R-107). */
+export const RECOVERY_CODE_LENGTH = 10;
+
+/**
+ * A new recovery code (T066, R-107): ten Crockford base32 symbols, 50 random bits, typed by an
+ * administrator who lost the authenticator. Seven bytes are drawn and their first fifty bits used,
+ * each symbol five whole bits, so none is likelier than another. Stored peppered and hashed.
+ */
+export function generateRecoveryCode(): string {
+  return crockfordOf(randomBytes(Math.ceil((RECOVERY_CODE_LENGTH * 5) / 8)), RECOVERY_CODE_LENGTH);
+}
+
+/** The first `length` 5-bit groups of `bytes`, as Crockford symbols. */
+function crockfordOf(bytes: Buffer, length: number): string {
   let bits = 0;
   let pending = 0;
-  let number = '';
+  let symbols = '';
   for (const byte of bytes) {
     pending = (pending << 8) | byte;
     bits += 8;
-    while (bits >= 5) {
+    while (bits >= 5 && symbols.length < length) {
       bits -= 5;
-      number += CROCKFORD.charAt((pending >> bits) & 0b11111);
+      symbols += CROCKFORD.charAt((pending >> bits) & 0b11111);
     }
     pending &= (1 << bits) - 1;
   }
-  return number;
+  return symbols;
 }
 
 /** A new verification token: 32 random bytes in base64url, for the QR code. Store only its hash. */

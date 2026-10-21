@@ -8,8 +8,10 @@ import { describe, expect, it } from 'vitest';
 import {
   generateCertificateNumber,
   generateOneTimeCode,
+  generateRecoveryCode,
   generateSecretToken,
   generateVerificationToken,
+  RECOVERY_CODE_LENGTH,
 } from './identifiers.js';
 
 const DRAWS = 10_000;
@@ -57,5 +59,15 @@ describe('secrets the identity module hands out (B9, T047)', () => {
     const codes = Array.from({ length: 400 }, () => generateOneTimeCode());
     for (const code of codes) expect(code).toMatch(/^\d{6}$/);
     expect(new Set(codes.join('')).size).toBe(10);
+  });
+});
+
+describe('an administrator’s recovery codes (T066, research R-107)', () => {
+  it('draws ten symbols of Crockford base32, every symbol reachable, none repeated', () => {
+    expect(RECOVERY_CODE_LENGTH).toBe(10);
+    const codes = Array.from({ length: 2000 }, () => generateRecoveryCode());
+    for (const code of codes) expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{10}$/);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(new Set(codes.join('')).size).toBe(32);
   });
 });

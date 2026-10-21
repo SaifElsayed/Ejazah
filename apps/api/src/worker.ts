@@ -8,8 +8,9 @@
 // the column cipher and every `_encrypted` column bound for the re-encryption sweep (T155), the
 // purge stores of both modules bound for the three purge sweeps (T025), the verification module's
 // store of unreferenced documents over the identity and catalog modules' pointers (Phase 1's T093),
-// every sweep registered on its schedule, and the queue's deliveries run through the registered
-// jobs (T112).
+// the admin module's invites with the email port and the invite marks for `deliver-admin-invite`
+// (T066), every sweep registered on its schedule, and the queue's deliveries run through the
+// registered jobs (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
 // injection, so each is handed what it needs here, and `dev:worker` runs this file under `tsx`.
@@ -36,6 +37,8 @@ const [
   { purgeStalePushTokens },
   { purgeExpiredSessions },
   { purgeUnreferencedDocuments },
+  { deliverAdminInvite },
+  { createRedisSingleUseMarks },
   catalog,
   { selectPorts, selectPushPort },
   queueing,
@@ -57,6 +60,8 @@ const [
   import('./jobs/purge-stale-push-tokens.js'),
   import('./jobs/purge-expired-sessions.js'),
   import('./jobs/purge-unreferenced-documents.js'),
+  import('./jobs/deliver-admin-invite.js'),
+  import('./platform/redis/single-use-marks.js'),
   import('./modules/catalog/index.js'),
   import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
@@ -110,6 +115,19 @@ const unreferencedDocuments = verification.createUnreferencedDocuments({
   ],
 });
 
+// The administrator's invite (T066, R-110): the admin module prepares each mail, the link pointing
+// at the panel's origin, and the job marks each one sent in Redis so a redelivery sends nothing more.
+const adminInvites = admin.createAdminInvites({
+  database,
+  settings,
+  encryptionKey: config.ENCRYPTION_KEY,
+  panelOrigin: config.ADMIN_PANEL_ORIGIN,
+});
+const inviteMarks = createRedisSingleUseMarks({
+  redisUrl: config.REDIS_URL,
+  onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
+});
+
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [
   expireIdempotencyKeys(idempotency),
@@ -118,6 +136,7 @@ const jobs: readonly Job[] = [
   purgeStalePushTokens({ store: purge.pushTokens, settings }),
   purgeExpiredSessions({ stores: { user: purge.userSessions, admin: adminSessions }, settings }),
   purgeUnreferencedDocuments({ store: unreferencedDocuments, storage: ports.storage, settings }),
+  deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
 ];
 
 const connection = queueing.connectionFor(config.REDIS_URL);

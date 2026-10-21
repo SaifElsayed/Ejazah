@@ -32,7 +32,8 @@ happened to return (R-HONEST-4).
   spent; one message), `ONBOARDING_TOKEN_INVALID`, `PASSWORD_WEAK` (too short,
   too long, or breached; one message), `ADMIN_SIGN_IN_FAILED` (wrong
   credentials or locked; one message, one timing), `MFA_REQUIRED`,
-  `MFA_SETUP_REQUIRED`, `APPROVAL_BLOCKED` (with the blocking reasons in details:
+  `MFA_SETUP_REQUIRED`, `INVITE_INVALID` (an administrator's password-set link
+  altered, expired, used, or for a disabled account; T066), `APPROVAL_BLOCKED` (with the blocking reasons in details:
   `call_not_recorded`, `credential_undecided`, `no_approved_credential`),
   `APPLICATION_INCOMPLETE`, `DOCUMENT_NOT_OWNED`, `CONFLICT`.
 - **Dates.** Instants cross the wire as ISO-8601 strings in UTC; a date of birth

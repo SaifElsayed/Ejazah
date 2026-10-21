@@ -24,7 +24,7 @@ const [
   { createRateLimiter },
   { transactionsOver },
   { requireAuditWriter },
-  { createAuditWriter, createSettingsReader },
+  { createAuditWriter, createSettingsReader, resolveAdminSession },
   catalog,
   identity,
   verification,
@@ -106,12 +106,11 @@ const identityBase = {
 };
 
 // The session resolvers (T017): the identity module's `resolveUserSession` (T047) reads a user's
-// session and standing on every request. The administrator's stays a stand-in answering null, as a
-// resolver does for a token it does not know (kernel.md "Session resolution"), until the admin
-// module's `resolveAdminSession` (T066) replaces it.
+// session and standing on every request, and the admin module's `resolveAdminSession` (T066) an
+// administrator's session, whether its second factor passed, and the administrator's standing.
 const sessions = {
   user: identity.resolveUserSession(identityBase),
-  admin: async () => null,
+  admin: resolveAdminSession({ database, settings }),
 };
 
 // The column cipher (R-DB-8): the documents route encrypts a document's storage key with it, and

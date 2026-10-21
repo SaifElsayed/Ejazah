@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addDays,
+  addHours,
   addMinutes,
   addSeconds,
   assertTimeZone,
@@ -16,6 +17,7 @@ import {
   resolveLocalDateTime,
   resolveOccurrences,
   TimeError,
+  unixSeconds,
   type RecurringSlot,
 } from './index.js';
 
@@ -365,6 +367,33 @@ describe('T044 addMinutes and addDays: a session’s lifetimes, counted from an 
     );
     expect(() => addDays(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
       expect.objectContaining({ name: 'TimeError', offendingField: 'days' }),
+    );
+  });
+});
+
+describe('T066 addHours: an administrator session’s and an invite link’s lifetimes (R-107, R-110)', () => {
+  it('adds whole hours of an instant, in canonical UTC', () => {
+    expect(addHours(new Date('2026-10-20T08:00:00Z'), 12)).toBe('2026-10-20T20:00:00Z');
+    // An hour of an instant: Cairo's clock change in between does not move it.
+    expect(addHours(new Date('2026-10-29T21:30:00Z'), 48)).toBe('2026-10-31T21:30:00Z');
+  });
+
+  it.each([1.5, Number.NaN])('refuses %s, naming the field', (amount) => {
+    expect(() => addHours(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'hours' }),
+    );
+  });
+});
+
+describe('T066 unixSeconds: the whole seconds since the epoch an RFC 6238 time step counts', () => {
+  it('answers the whole seconds, a fraction dropped', () => {
+    expect(unixSeconds(new Date('1970-01-01T00:00:59Z'))).toBe(59);
+    expect(unixSeconds(new Date('2009-02-13T23:31:30.999Z'))).toBe(1_234_567_890);
+  });
+
+  it('refuses a Date that holds no instant', () => {
+    expect(() => unixSeconds(new Date(Number.NaN))).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'at' }),
     );
   });
 });

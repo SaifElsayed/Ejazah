@@ -396,6 +396,16 @@ describe('loadConfig (T015, FR-039)', () => {
     );
   });
 
+  it('accepts ADMIN_PANEL_ORIGIN only as a bare origin, and leaves it unset by default (T066)', () => {
+    expect(loadConfig(validEnv).ADMIN_PANEL_ORIGIN).toBeUndefined();
+    expect(
+      loadConfig({ ...validEnv, ADMIN_PANEL_ORIGIN: 'https://admin.example' }).ADMIN_PANEL_ORIGIN,
+    ).toBe('https://admin.example');
+    expect(() =>
+      loadConfig({ ...validEnv, ADMIN_PANEL_ORIGIN: 'https://admin.example/set-password' }),
+    ).toThrow(/ADMIN_PANEL_ORIGIN/);
+  });
+
   it('limits a request body to 1 MiB by default, and refuses a limit that is not a positive integer (T150)', () => {
     expect(loadConfig(validEnv).MAX_REQUEST_BODY_BYTES).toBe(1_048_576);
     expect(loadConfig({ ...validEnv, MAX_REQUEST_BODY_BYTES: '2048' }).MAX_REQUEST_BODY_BYTES).toBe(

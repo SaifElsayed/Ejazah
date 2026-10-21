@@ -129,9 +129,9 @@ describe('what the contexts read of a session (T016, FR-108, data-model §6)', (
   it('the administrator caller carries whether the second factor was verified, and the context the limiter', () => {
     const context = createAdminContext({
       ...adminSource,
-      session: { adminId: 'admin-1', mfaVerified: false },
+      session: { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: false },
     });
-    expect(context.administrator).toEqual({ adminId: 'admin-1', mfaVerified: false });
+    expect(context.administrator).toEqual({ adminId: 'admin-1', sessionId: 'session-1', mfaVerified: false });
     expect(context.rateLimiter).toBe(rateLimiter);
     expect(context.clientAddress).toBe(clientAddress);
   });

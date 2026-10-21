@@ -100,6 +100,8 @@ export interface UserSession {
 /** What a server-held administrator session records. A different principal, not a user role. */
 export interface AdminSession {
   readonly adminId: string;
+  /** The session the bearer names, so `auth.signOut` ends this one (T061, T066). */
+  readonly sessionId: string;
   /** Whether the second factor was verified on this session (`mfa_verified_at` set, FR-170). */
   readonly mfaVerified: boolean;
 }
@@ -117,6 +119,7 @@ export interface UserCaller {
 /** The authenticated administrator making the request. */
 export interface AdministratorCaller {
   readonly adminId: string;
+  readonly sessionId: string;
   readonly mfaVerified: boolean;
 }
 
@@ -257,7 +260,13 @@ export function createAdminContext({
   return {
     surface: 'admin',
     administrator:
-      session === null ? null : { adminId: session.adminId, mfaVerified: session.mfaVerified },
+      session === null
+        ? null
+        : {
+            adminId: session.adminId,
+            sessionId: session.sessionId,
+            mfaVerified: session.mfaVerified,
+          },
     ...correlated(log, clientAddress),
     administration,
     rateLimiter,

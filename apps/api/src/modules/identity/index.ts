@@ -98,6 +98,9 @@ export {
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
 
+/** The administrator's invite mail, which the admin module sends through its job (T066, R-110). */
+export { renderAdminInviteMail } from './mail/admin-invite-mail.js';
+
 export { PHOTOS_UPLOAD_PATH };
 
 export type { IdentityDependencies, ResolvedUserSession, RevokeAllOptions, SessionRevokedReason };
