@@ -4,6 +4,8 @@ import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { readCredentialQueue } from '../catalog/index.js';
+import { readApplicationQueue } from '../identity/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import {
@@ -13,9 +15,17 @@ import {
 import { AdminSessionsRepository } from './admin-sessions.repository.js';
 import { AdminUsersRepository } from './admin-users.repository.js';
 import { type AdminInviteQueue, AdminsService } from './admins.service.js';
+import { AuditQueryService } from './audit-query.service.js';
 import { AuditRepository } from './audit.repository.js';
+import { HomeService } from './home.service.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
+
+/** The four namespaces of the administrator surface, mounted by `admin.router.ts` (T067). */
+export { adminsRouter } from './admins.router.js';
+export { auditRouter } from './audit.router.js';
+export { authRouter } from './auth.router.js';
+export { homeRouter } from './home.router.js';
 
 /** The administrator's session resolver, bound by `main.ts` for the HTTP application (T066). */
 export { resolveAdminSession, type ResolvedAdminSession } from './admin-session.service.js';
@@ -23,14 +33,23 @@ export type { AdminInviteQueue, SignInNextStep };
 
 type SignInNextStep = Awaited<ReturnType<AdminAuthService['signIn']>>['next'];
 
-/** The admin module's services, for the administrator surface's routers (T066; mounted by T067). */
+/**
+ * The admin module's services, for the administrator surface's routers (T066, T067). `main.ts` binds
+ * them to the surface's port (`AdminSurfaceServices` in `surfaces/context.ts`), which this module
+ * may not name; a drift between the two fails that binding at type-check time.
+ */
 export interface AdminServices {
   readonly auth: Pick<
     AdminAuthService,
     'signIn' | 'verifyMfa' | 'recover' | 'beginSetup' | 'confirmSetup' | 'setPassword'
   >;
   readonly sessions: Pick<AdminSessionService, 'signOut'>;
-  readonly admins: Pick<AdminsService, 'add' | 'disable' | 'resetMfa' | 'regenerateRecoveryCodes'>;
+  readonly admins: Pick<
+    AdminsService,
+    'me' | 'list' | 'add' | 'disable' | 'resetMfa' | 'regenerateRecoveryCodes'
+  >;
+  readonly audit: Pick<AuditQueryService, 'list' | 'get'>;
+  readonly home: Pick<HomeService, 'summary'>;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -40,10 +59,19 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
   const sessions = new AdminSessionService(dependencies);
+  const audit = new AuditQueryService(dependencies);
   return {
     auth: new AdminAuthService({ ...dependencies, sessions }),
     sessions,
     admins: new AdminsService({ ...dependencies, sessions }),
+    audit,
+    // The home's two queues are the identity and catalog modules' tables, read through their
+    // entries on the call's transaction (T065, R-API-6).
+    home: new HomeService({
+      ...dependencies,
+      audit,
+      queues: { applications: readApplicationQueue, credentials: readCredentialQueue },
+    }),
   };
 }
 

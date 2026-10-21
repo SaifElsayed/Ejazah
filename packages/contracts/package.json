@@ -11,6 +11,11 @@
       "@ijazah/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./admin": {
+      "@ijazah/source": "./src/admin/index.ts",
+      "types": "./dist/admin/index.d.ts",
+      "default": "./dist/admin/index.js"
     }
   },
   "dependencies": {

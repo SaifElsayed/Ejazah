@@ -5,9 +5,13 @@
 // from, so a request that lost a race changes nothing and is told so by a false or a zero.
 //
 // A page is rows in id order, after the last row of the page before. A value is replaced only where
-// the row still holds the one read, so a value written meanwhile is kept.
+// the row still holds the one read, so a value written meanwhile is kept. T067 adds the admins
+// page's list: one tab, a search over the name and the address as typed, ordered by name.
+import type { Prisma } from '@prisma/client';
+
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import { likeLiteral } from './like-literal.js';
 
 type Client = Pick<Database, 'adminUser'>;
 type Writer = Pick<Transaction, 'adminUser'>;
@@ -89,6 +93,37 @@ export class AdminUsersRepository {
         passwordSetAt: true,
       },
     });
+  }
+
+  /** One page of the admins page's tab, by name, with who invited and the unused codes left. */
+  page(
+    tx: Writer,
+    filter: AdministratorFilter,
+    skip: number,
+    take: number,
+  ): Promise<AdministratorListRow[]> {
+    return tx.adminUser.findMany({
+      where: listWhere(filter),
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      skip,
+      take,
+      select: {
+        id: true,
+        displayName: true,
+        email: true,
+        mfaEnrolledAt: true,
+        lastSignInAt: true,
+        invitedAt: true,
+        disabledAt: true,
+        invitedBy: { select: { displayName: true } },
+        _count: { select: { recoveryCodes: { where: { usedAt: null } } } },
+      },
+    });
+  }
+
+  /** How many administrators the tab and the search admit. */
+  count(tx: Writer, filter: AdministratorFilter): Promise<number> {
+    return tx.adminUser.count({ where: listWhere(filter) });
   }
 
   /** Clears a lock that has run out, with its count (research R-107: an expired lock resets). */
@@ -204,6 +239,36 @@ export class AdminUsersRepository {
   }
 }
 
+/** The admins page's tab and search (T067). */
+export interface AdministratorFilter {
+  readonly active: boolean;
+  readonly search?: string | undefined;
+}
+
+function listWhere({ active, search }: AdministratorFilter): Prisma.AdminUserWhereInput {
+  if (search === undefined) return { isActive: active };
+  const typed = likeLiteral(search);
+  return {
+    isActive: active,
+    OR: [
+      { displayName: { contains: typed, mode: 'insensitive' } },
+      { email: { contains: typed, mode: 'insensitive' } },
+    ],
+  };
+}
+
+/** One row of the admins page as stored. */
+export interface AdministratorListRow {
+  readonly id: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly mfaEnrolledAt: Date | null;
+  readonly lastSignInAt: Date | null;
+  readonly invitedAt: Date | null;
+  readonly disabledAt: Date | null;
+  readonly invitedBy: { readonly displayName: string } | null;
+  readonly _count: { readonly recoveryCodes: number };
+}
 
 export interface AdministratorRow {
   readonly id: string;

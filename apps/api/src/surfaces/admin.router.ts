@@ -4,11 +4,19 @@
 // Built only from `adminProcedure`, on the administrator surface's own tRPC instance and context,
 // and mounted by the HTTP application (T149) on its own path, apart from the user surface; its
 // capabilities never appear in the user surface's type (T098). This is one of the three composition
-// files that may import the admin module's public entry (T143): the module's router joins this
-// record once the module exports one.
+// files that may import the admin module's public entry (T143): the admin module's four namespaces
+// since T067, `auth`, `admins`, `audit` and `home`; the verification and catalog modules'
+// namespaces join with T068 and T069. Its anonymous procedures are exactly the six of `auth.*` that
+// sign an administrator in (`admin.router.spec.ts`).
+import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
 import { createAdminRouter } from './procedures.js';
 
-export const adminRouter = createAdminRouter({});
+export const adminRouter = createAdminRouter({
+  auth: authRouter,
+  admins: adminsRouter,
+  audit: auditRouter,
+  home: homeRouter,
+});
 
 /** The administrator surface's type, for apps/admin only. */
 export type AdminRouter = typeof adminRouter;

@@ -141,7 +141,275 @@
     }
   },
   "procedures": {
-    "admin": {},
+    "admin": {
+      "admins.add": {
+        "input": {
+          "$": { "type": "object" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.email": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "object" }, "$.adminId": { "required": true, "type": "string" } }
+      },
+      "admins.disable": {
+        "input": {
+          "$": { "type": "object" },
+          "$.adminId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "admins.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.page": { "required": true, "type": "integer" },
+          "$.search": { "type": "string" },
+          "$.tab": { "required": true, "type": "string", "values": ["active", "disabled"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.rows": { "required": true, "type": "array" },
+          "$.rows[]": { "type": "object" },
+          "$.rows[].adminId": { "required": true, "type": "string" },
+          "$.rows[].disabledAt": { "type": "string" },
+          "$.rows[].displayName": { "required": true, "type": "string" },
+          "$.rows[].email": { "required": true, "type": "string" },
+          "$.rows[].invitedAt": { "type": "string" },
+          "$.rows[].invitedByName": { "type": "string" },
+          "$.rows[].lastSignInAt": { "type": "string" },
+          "$.rows[].mfaEnrolled": { "required": true, "type": "boolean" },
+          "$.rows[].recoveryCodesLeft": { "required": true, "type": "integer" },
+          "$.rows[].self": { "required": true, "type": "boolean" },
+          "$.total": { "required": true, "type": "integer" }
+        }
+      },
+      "admins.regenerateRecoveryCodes": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.recoveryCodes": { "required": true, "type": "array" },
+          "$.recoveryCodes[]": { "type": "string" }
+        }
+      },
+      "admins.resetMfa": {
+        "input": {
+          "$": { "type": "object" },
+          "$.adminId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "audit.get": {
+        "input": { "$": { "type": "object" }, "$.entryId": { "required": true, "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.action": { "required": true, "type": "string" },
+          "$.adminName": { "required": true, "type": "string" },
+          "$.after": { "type": "array|boolean|null|number|object|string" },
+          "$.after.*": { "type": "recursive" },
+          "$.after[]": { "type": "recursive" },
+          "$.before": { "type": "array|boolean|null|number|object|string" },
+          "$.before.*": { "type": "recursive" },
+          "$.before[]": { "type": "recursive" },
+          "$.entryId": { "required": true, "type": "string" },
+          "$.occurredAt": { "required": true, "type": "string" },
+          "$.reason": { "type": "string" },
+          "$.targetId": { "required": true, "type": "string" },
+          "$.targetLabel": { "required": true, "type": "string" },
+          "$.targetName": { "type": "string" },
+          "$.targetType": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "admin",
+              "credential",
+              "document",
+              "setting",
+              "teacher_application",
+              "user",
+              "verification_request"
+            ]
+          }
+        }
+      },
+      "audit.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.from": { "type": "string" },
+          "$.page": { "required": true, "type": "integer" },
+          "$.search": { "type": "string" },
+          "$.targetId": { "type": "string" },
+          "$.targetType": {
+            "type": "string",
+            "values": [
+              "admin",
+              "credential",
+              "document",
+              "setting",
+              "teacher_application",
+              "user",
+              "verification_request"
+            ]
+          },
+          "$.timeZone": { "type": "string" },
+          "$.to": { "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.rows": { "required": true, "type": "array" },
+          "$.rows[]": { "type": "object" },
+          "$.rows[].action": { "required": true, "type": "string" },
+          "$.rows[].adminName": { "required": true, "type": "string" },
+          "$.rows[].entryId": { "required": true, "type": "string" },
+          "$.rows[].occurredAt": { "required": true, "type": "string" },
+          "$.rows[].reason": { "type": "string" },
+          "$.rows[].targetId": { "required": true, "type": "string" },
+          "$.rows[].targetLabel": { "required": true, "type": "string" },
+          "$.rows[].targetName": { "type": "string" },
+          "$.rows[].targetType": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "admin",
+              "credential",
+              "document",
+              "setting",
+              "teacher_application",
+              "user",
+              "verification_request"
+            ]
+          },
+          "$.total": { "required": true, "type": "integer" }
+        }
+      },
+      "auth.me": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.adminId": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.email": { "required": true, "type": "string" }
+        }
+      },
+      "auth.mfa.recover": {
+        "input": {
+          "$": { "type": "object" },
+          "$.recoveryCode": { "required": true, "type": "string" },
+          "$.sessionToken": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.remainingCodes": { "required": true, "type": "integer" }
+        }
+      },
+      "auth.mfa.setup.begin": {
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionToken": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.manualKey": { "required": true, "type": "string" },
+          "$.otpauthUri": { "required": true, "type": "string" }
+        }
+      },
+      "auth.mfa.setup.confirm": {
+        "input": {
+          "$": { "type": "object" },
+          "$.code": { "required": true, "type": "string" },
+          "$.sessionToken": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.recoveryCodes": { "required": true, "type": "array" },
+          "$.recoveryCodes[]": { "type": "string" }
+        }
+      },
+      "auth.mfa.verify": {
+        "input": {
+          "$": { "type": "object" },
+          "$.code": { "required": true, "type": "string" },
+          "$.sessionToken": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "auth.setPassword": {
+        "input": {
+          "$": { "type": "object" },
+          "$.inviteToken": { "required": true, "type": "string" },
+          "$.password": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "auth.signIn": {
+        "input": {
+          "$": { "type": "object" },
+          "$.email": { "required": true, "type": "string" },
+          "$.password": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.next": { "required": true, "type": "string", "values": ["mfa", "setup"] },
+          "$.sessionToken": { "required": true, "type": "string" }
+        }
+      },
+      "auth.signOut": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "home.summary": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.latestActions": { "required": true, "type": "array" },
+          "$.latestActions[]": { "type": "object" },
+          "$.latestActions[].action": { "required": true, "type": "string" },
+          "$.latestActions[].adminName": { "required": true, "type": "string" },
+          "$.latestActions[].entryId": { "required": true, "type": "string" },
+          "$.latestActions[].occurredAt": { "required": true, "type": "string" },
+          "$.latestActions[].reason": { "type": "string" },
+          "$.latestActions[].targetId": { "required": true, "type": "string" },
+          "$.latestActions[].targetLabel": { "required": true, "type": "string" },
+          "$.latestActions[].targetName": { "type": "string" },
+          "$.latestActions[].targetType": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "admin",
+              "credential",
+              "document",
+              "setting",
+              "teacher_application",
+              "user",
+              "verification_request"
+            ]
+          },
+          "$.queues": { "required": true, "type": "object" },
+          "$.queues.applications": { "required": true, "type": "object" },
+          "$.queues.applications.oldestAgeHours": { "type": "integer" },
+          "$.queues.applications.open": { "required": true, "type": "integer" },
+          "$.queues.applications.waitingOnApplicant": { "required": true, "type": "integer" },
+          "$.queues.credentials": { "required": true, "type": "object" },
+          "$.queues.credentials.addedSubjects": { "required": true, "type": "integer" },
+          "$.queues.credentials.open": { "required": true, "type": "integer" }
+        }
+      }
+    },
     "app": {
       "account.me": {
         "caller": "user",

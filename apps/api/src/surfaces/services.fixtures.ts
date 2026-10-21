@@ -1,9 +1,10 @@
 // T048: the user surface's services for a spec that reaches only some of them. A member a spec does
 // not hand in answers every call by throwing, so a procedure reaching a service its spec did not
 // expect fails loudly instead of answering from a stand-in nobody wrote. T056 adds the
-// verification module's.
+// verification module's, T067 the administrator surface's.
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
+import type { AdminSurfaceServices } from './context.js';
 
 function unreached(name: string): never {
   throw new Error(`${name}: not reached by this spec`);
@@ -30,3 +31,6 @@ export const unusedVerificationServices = new Proxy(
   {},
   unused('verification'),
 ) as VerificationServices;
+
+/** The administrator surface's services, none of which the spec calls. */
+export const unusedAdminServices = new Proxy({}, unused('admin')) as AdminSurfaceServices;

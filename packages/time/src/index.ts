@@ -321,6 +321,49 @@ export function unixSeconds(at: Date): number {
 }
 
 /**
+ * The first instant of `localDate` in `timezone` (T067: the audit log's date filter, which the
+ * admin panel sends as calendar days in the browser's zone, R-TIME-6). A day whose midnight a clock
+ * change skipped starts at the first instant it has.
+ */
+export function startOfLocalDay(localDate: LocalDate, timezone: TimeZoneId): UtcInstant {
+  const date = Temporal.PlainDate.from(assertLocalDate('localDate', localDate));
+  return toUtcInstant(zonedStartOf(date, timezone));
+}
+
+/** The first instant after `localDate` in `timezone`: the day's end, exclusive (T067). */
+export function endOfLocalDay(localDate: LocalDate, timezone: TimeZoneId): UtcInstant {
+  const date = Temporal.PlainDate.from(assertLocalDate('localDate', localDate)).add({ days: 1 });
+  return toUtcInstant(zonedStartOf(date, timezone));
+}
+
+function zonedStartOf(date: Temporal.PlainDate, timezone: TimeZoneId): Temporal.ZonedDateTime {
+  const zone = assertTimeZoneShape(timezone);
+  let start: Temporal.ZonedDateTime;
+  try {
+    start = date.toZonedDateTime({ timeZone: zone });
+  } catch (error: unknown) {
+    throw new TimeError('timezone', zone, 'not a zone in the IANA database', { cause: error });
+  }
+  assertAreaLocation(zone);
+  return start;
+}
+
+const MILLISECONDS_PER_HOUR = SECONDS_PER_HOUR * MILLISECONDS_PER_SECOND;
+
+/**
+ * The whole hours from `from` to `now`, a part of an hour dropped and never below zero (T065: the
+ * age of the oldest application in the admin home's queue). The reader passes its own `now`, as
+ * every caller of this package does; nothing here reads the clock.
+ */
+export function wholeHoursSince(from: Date, now: Date): number {
+  const start = from.getTime();
+  if (Number.isNaN(start)) throw new TimeError('from', String(from), 'not an instant');
+  const end = now.getTime();
+  if (Number.isNaN(end)) throw new TimeError('now', String(now), 'not an instant');
+  return Math.max(0, Math.floor((end - start) / MILLISECONDS_PER_HOUR));
+}
+
+/**
  * The calendar date a `date` column holds (T049: a person's date of birth on `account.me`). The
  * driver reads such a column as midnight UTC, so the date is the instant's in UTC, never in the
  * host's zone, which could move it a day (R-TIME-6).

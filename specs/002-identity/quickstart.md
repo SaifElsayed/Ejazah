@@ -74,6 +74,11 @@ with the fake provider, choose teacher, confirm, and apply with two subjects,
 one identity PDF and two credential PDFs. Time it; under ten minutes. Record
 the run.
 
+The seeded admin has no usable password until it is invited: with the worker
+running and `ADMIN_PANEL_ORIGIN` set, run
+`pnpm exec tsx scripts/dev/admin-invite.ts` (development and the stand-in email
+only), open the link in the mail under `.storage/mail/` and set the password.
+
 In the admin panel (`http://localhost:5173`, the seeded admin, the second factor
 set up on first sign-in — save the ten codes):
 

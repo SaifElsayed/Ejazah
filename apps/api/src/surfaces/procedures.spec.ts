@@ -49,7 +49,11 @@ import {
   toErrorShape,
   userProcedure,
 } from './procedures.js';
-import { unusedIdentityServices, unusedVerificationServices } from './services.fixtures.js';
+import {
+  unusedAdminServices,
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from './services.fixtures.js';
 
 const log = createLogger({ level: 'fatal' });
 const clientAddress = '203.0.113.7';
@@ -156,7 +160,14 @@ const administration = {
 
 /** The administrator surface's context for a fixture session. */
 function adminContext(session: AdminSession | null, limiter: RateLimiter = rateLimiter) {
-  return createAdminContext({ session, log, administration, rateLimiter: limiter, clientAddress });
+  return createAdminContext({
+    session,
+    log,
+    administration,
+    services: unusedAdminServices,
+    rateLimiter: limiter,
+    clientAddress,
+  });
 }
 
 /** A public procedure's declaration where the case is not about limiting. */

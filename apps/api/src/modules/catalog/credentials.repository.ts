@@ -4,7 +4,8 @@
 // entry (R-121): a teacher's credentials with their subject and, once approved, their chain; a new
 // pending credential; a new PDF for one waiting on a document, conditional on that state so two
 // requests cannot both take it; and the subjects an approved credential grants (`teacher_subjects`,
-// for the admin's approval). Queries only, each on the client or transaction it is handed.
+// for the admin's approval). Queries only, each on the client or transaction it is handed. T065 adds
+// the admin home's credentials card, counts only.
 // It returns no teacher, only a teacher's own rows, so it is excepted from the gender suite gate by
 // name (`apps/api/src/modules/catalog/credentials*`, `scripts/suite-gate.paths.ts`).
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -123,4 +124,18 @@ export class CredentialsRepository {
     });
     return new Set(rows.map(({ documentId }) => documentId));
   }
+}
+
+/**
+ * The admin home's credentials card (T065, FR-176): how many credentials wait for review, and how
+ * many of them are for a subject added after approval rather than sent with the application.
+ */
+export async function readCredentialQueue(
+  tx: Pick<Transaction, 'teacherCredential'>,
+): Promise<{ readonly open: number; readonly addedSubjects: number }> {
+  const [open, addedSubjects] = await Promise.all([
+    tx.teacherCredential.count({ where: { status: 'pending' } }),
+    tx.teacherCredential.count({ where: { status: 'pending', submittedWithApplication: false } }),
+  ]);
+  return { open, addedSubjects };
 }

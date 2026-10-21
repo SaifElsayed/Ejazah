@@ -95,6 +95,9 @@ export {
   setApplication,
 } from './identity.service.js';
 
+/** The admin home's applications card, counted on the administrator's transaction (T065, R-API-6). */
+export { readApplicationQueue } from './application.repository.js';
+
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
 

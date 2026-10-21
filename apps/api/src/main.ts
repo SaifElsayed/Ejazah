@@ -24,7 +24,7 @@ const [
   { createRateLimiter },
   { transactionsOver },
   { requireAuditWriter },
-  { createAuditWriter, createSettingsReader, resolveAdminSession },
+  { createAdminServices, createAuditWriter, createSettingsReader, resolveAdminSession },
   catalog,
   identity,
   verification,
@@ -35,6 +35,8 @@ const [
   { selectPorts },
   { TERMS_PATH, termsRoute },
   { createApplication },
+  { connectionFor, openQueue },
+  { DELIVER_ADMIN_INVITE },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -56,6 +58,8 @@ const [
   import('./platform/ports/ports.module.js'),
   import('./platform/web/terms/terms.controller.js'),
   import('./app.module.js'),
+  import('./jobs/queue.js'),
+  import('./jobs/deliver-admin-invite.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -178,6 +182,22 @@ const routes = {
   }),
 };
 
+// The admin module's services behind the administrator surface (T067), bound to the surface's port.
+// `admins.add` queues `deliver-admin-invite` with the id alone (R-110); the queue is opened on the
+// first add, so a process that never adds an administrator never connects to it for that.
+let inviteQueue: ReturnType<typeof openQueue> | undefined;
+const adminServices = createAdminServices({
+  database,
+  settings,
+  encryptionKey: config.ENCRYPTION_KEY,
+  inviteQueue: {
+    queue: async (adminId) => {
+      inviteQueue ??= openQueue(connectionFor(config.REDIS_URL));
+      await inviteQueue.add(DELIVER_ADMIN_INVITE, { adminId });
+    },
+  },
+});
+
 const application = await createApplication({
   log,
   readiness: new ReadinessRepository(database),
@@ -187,6 +207,7 @@ const application = await createApplication({
   rateLimiter,
   sessions,
   services,
+  adminServices,
   // The public pages (T019, ADR 0021 D5): the Terms (T039); the deletion pages join with T083.
   webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
   routes,
@@ -197,11 +218,12 @@ await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
 
 // Once, however many signals arrive: stop listening and close the application (Nest's shutdown
-// hooks are enabled by the application, so its providers hear it too), then close the database;
-// exit 0 when both closed, 1 when either failed (T173).
+// hooks are enabled by the application, so its providers hear it too), then the invite queue when
+// an add opened it (T067), then the database; exit 0 when all closed, 1 when any failed (T173).
 onShutdown(
   async () => {
     await application.close();
+    await inviteQueue?.close();
     await closeDatabase(database);
   },
   { log },

@@ -55,7 +55,7 @@ export interface SeedOptions {
 /** The one instant every seeded row carries, and the timestamp inside every seeded identifier. */
 const SEEDED_AT = '2026-10-10T00:00:00Z';
 
-const ADMINISTRATOR = {
+export const ADMINISTRATOR = {
   id: '01a1231c-0000-7000-8000-000000000001',
   email: 'admin@ijazah.invalid',
   displayName: 'Administrator',

@@ -92,7 +92,7 @@ export function normalizeAdminEmail(email: string): string {
 export async function drawRecoveryCodes(
   hasher: Pick<OtpHasher, 'hash'>,
   count: number,
-): Promise<{ readonly codes: readonly string[]; readonly hashes: readonly string[] }> {
+): Promise<{ readonly codes: string[]; readonly hashes: readonly string[] }> {
   const codes = Array.from({ length: count }, () => generateRecoveryCode());
   return { codes, hashes: await Promise.all(codes.map((code) => hasher.hash(code))) };
 }
@@ -208,7 +208,7 @@ export class AdminAuthService {
   async confirmSetup(
     sessionToken: string,
     code: string,
-  ): Promise<{ readonly recoveryCodes: readonly string[] }> {
+  ): Promise<{ readonly recoveryCodes: string[] }> {
     const { sessionId, admin } = await this.#waiting(sessionToken);
     if (admin.mfaEnrolledAt !== null) throw new DomainError('FORBIDDEN');
     const accepted = await verifyTotp(this.#secretOf(admin), code, this.#now(), admin.mfaLastAcceptedStep);

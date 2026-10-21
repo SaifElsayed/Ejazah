@@ -12,6 +12,7 @@ import { SettingError, type SettingsReader } from '../../settings/settings-reade
 import { PUBLIC_PAGE_CSP } from '../route.js';
 import { TERMS_PATH, termsRoute } from './terms.controller.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -61,6 +62,7 @@ beforeAll(async () => {
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
     webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
   });
   await application.listen(0, '127.0.0.1');

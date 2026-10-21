@@ -13,6 +13,7 @@ import type { UserSession } from '../../surfaces/context.js';
 import { multipart, pdfBytes, storageStub } from '../../surfaces/upload-fixtures.js';
 import { PHOTOS_UPLOAD_PATH, photoUploadRoute } from './photo-upload.controller.js';
 import {
+  unusedAdminServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -86,6 +87,7 @@ beforeAll(async () => {
     rateLimiter,
     sessions,
     services,
+    adminServices: unusedAdminServices,
     routes: {
       [PHOTOS_UPLOAD_PATH]: photoUploadRoute({
         sessions: sessions.user,

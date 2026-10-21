@@ -14,10 +14,13 @@ import {
   assertTimeZone,
   calendarDateOf,
   assertLocalDate,
+  endOfLocalDay,
   resolveLocalDateTime,
+  startOfLocalDay,
   resolveOccurrences,
   TimeError,
   unixSeconds,
+  wholeHoursSince,
   type RecurringSlot,
 } from './index.js';
 
@@ -394,6 +397,55 @@ describe('T066 unixSeconds: the whole seconds since the epoch an RFC 6238 time s
   it('refuses a Date that holds no instant', () => {
     expect(() => unixSeconds(new Date(Number.NaN))).toThrow(
       expect.objectContaining({ name: 'TimeError', offendingField: 'at' }),
+    );
+  });
+});
+
+describe('T065 wholeHoursSince: the age of a queue item in whole hours, the reader passing now', () => {
+  it('answers the whole hours from `from` to `now`, a part of an hour dropped', () => {
+    const now = new Date('2026-10-21T12:00:00Z');
+    expect(wholeHoursSince(new Date('2026-10-21T12:00:00Z'), now)).toBe(0);
+    expect(wholeHoursSince(new Date('2026-10-21T11:00:01Z'), now)).toBe(0);
+    expect(wholeHoursSince(new Date('2026-10-21T11:00:00Z'), now)).toBe(1);
+    expect(wholeHoursSince(new Date('2026-10-18T09:30:00Z'), now)).toBe(74);
+  });
+
+  it('answers zero for an instant after now, never a negative age', () => {
+    expect(
+      wholeHoursSince(new Date('2026-10-21T15:00:00Z'), new Date('2026-10-21T12:00:00Z')),
+    ).toBe(0);
+  });
+
+  it('refuses a Date that holds no instant, naming the field', () => {
+    expect(() => wholeHoursSince(new Date(Number.NaN), new Date())).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'from' }),
+    );
+    expect(() => wholeHoursSince(new Date(), new Date(Number.NaN))).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'now' }),
+    );
+  });
+});
+
+describe('T067 startOfLocalDay and endOfLocalDay: a calendar day in a zone as the instants that bound it', () => {
+  it('answers the first instant of the day and the first of the next, in the zone given', () => {
+    expect(startOfLocalDay('2026-10-21', CAIRO)).toBe('2026-10-20T21:00:00Z');
+    expect(endOfLocalDay('2026-10-21', CAIRO)).toBe('2026-10-21T21:00:00Z');
+    expect(startOfLocalDay('2026-10-21', 'Asia/Riyadh')).toBe('2026-10-20T21:00:00Z');
+    expect(endOfLocalDay('2026-12-31', 'Europe/London')).toBe('2027-01-01T00:00:00Z');
+  });
+
+  it('starts a day whose midnight a clock change skipped at the first instant that exists', () => {
+    // Cairo moved its clocks from 00:00 to 01:00 on 2025-04-25 (Egypt's DST start, Law 24/2023).
+    expect(startOfLocalDay('2025-04-25', CAIRO)).toBe('2025-04-24T22:00:00Z');
+    expect(endOfLocalDay('2025-04-24', CAIRO)).toBe('2025-04-24T22:00:00Z');
+  });
+
+  it('refuses a date or a zone that is not one, naming the field', () => {
+    expect(() => startOfLocalDay('2026-02-30', CAIRO)).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'localDate' }),
+    );
+    expect(() => endOfLocalDay('2026-10-21', 'Mars/Olympus')).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'timezone' }),
     );
   });
 });

@@ -115,7 +115,7 @@ describe('resolve', () => {
     expect(await world.sessions.resolve('unknown')).toBeNull();
 
     const revoked = await signedIn();
-    await world.sessions.signOut(revoked.sessionId);
+    await inTransaction(database, (tx) => world.sessions.signOut(revoked.sessionId, tx));
     expect(await world.sessions.resolve(revoked.token)).toBeNull();
 
     const disabled = await world.createAdministrator({ isActive: false });
@@ -143,19 +143,31 @@ describe('sign-out and revoke-all', () => {
   it('sign-out ends that session and leaves the administrator’s others', async () => {
     const { adminId, token, sessionId } = await signedIn();
     const other = await world.sessions.issue(adminId);
-    await world.sessions.signOut(sessionId);
+    await inTransaction(database, (tx) => world.sessions.signOut(sessionId, tx));
     expect(await world.sessions.resolve(token)).toBeNull();
     expect(await world.sessions.resolve(other.token)).not.toBeNull();
     const rows = await world.rows.sessions(adminId);
     expect(rows.find(({ id }) => id === sessionId)?.revokedAt).toEqual(world.clock.now());
   });
 
+  it('a second factor passed on a session ended meanwhile answers ADMIN_SIGN_IN_FAILED, so the panel starts again', async () => {
+    const { sessionId } = await signedIn();
+    await inTransaction(database, (tx) => world.sessions.signOut(sessionId, tx));
+    const error = await inTransaction(database, (tx) =>
+      world.sessions.markVerified(sessionId, tx),
+    ).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    expect(error).toMatchObject({ code: 'ADMIN_SIGN_IN_FAILED' });
+  });
+
   it('signing out twice changes nothing the first did not', async () => {
     const { adminId, sessionId } = await signedIn();
-    await world.sessions.signOut(sessionId);
+    await inTransaction(database, (tx) => world.sessions.signOut(sessionId, tx));
     const [first] = await world.rows.sessions(adminId);
     world.clock.advance(MINUTE);
-    await world.sessions.signOut(sessionId);
+    await inTransaction(database, (tx) => world.sessions.signOut(sessionId, tx));
     const [second] = await world.rows.sessions(adminId);
     expect(second?.revokedAt).toEqual(first?.revokedAt);
   });

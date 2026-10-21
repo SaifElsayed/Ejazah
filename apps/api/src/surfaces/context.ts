@@ -28,6 +28,12 @@
 // transaction and write its audit record there (FR-049). Both are handed in by the HTTP application,
 // which `main.ts` builds with the admin module's writer.
 //
+// THE ADMINISTRATOR CONTEXT CARRIES THE ADMIN MODULE'S SERVICES (T067) through a port declared here,
+// `AdminSurfaceServices`, in the contract's types: this file may not import `modules/admin`, not even
+// a type (`boundaries/no-upward-admin-import`), so the admin module implements the port and `main.ts`
+// binds it, as the audit writer is bound (owner's decision 2026-10-21 at the conflict check of B12b).
+// A drift between the two fails the binding in `main.ts` at type-check time.
+//
 // BOTH CONTEXTS CARRY THE PROCESS'S RATE LIMITER (T170, T017): the caller kinds apply a procedure's
 // declared limit from it, so a limit is declared on the procedure and never applied by hand. The
 // administrator context gained it for `adminPublicProcedure`, the anonymous kind of that surface.
@@ -41,7 +47,24 @@
 // `RequesterGender` is minted here and nowhere else outside a spec file (R-GENDER-5): from the
 // session's gender, never from input. A caller kind narrows this context; it never mints (T107).
 import { randomUUID } from 'node:crypto';
+import type {
+  adminMeOutput,
+  adminMfaRecoverOutput,
+  adminMfaSetupBeginOutput,
+  adminRecoveryCodesOutput,
+  adminSignInOutput,
+  adminsAddInput,
+  adminsAddOutput,
+  adminsListInput,
+  adminsListOutput,
+  auditGetOutput,
+  auditListInput,
+  auditListOutput,
+  homeSummaryOutput,
+} from '@ijazah/contracts/admin';
+import type { z } from 'zod';
 import type { AuditWriter } from '../platform/audit/audit-writer.js';
+import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { DEFAULT_LOCALE, type Locale } from '../platform/http/locale.js';
@@ -177,6 +200,59 @@ export interface Administration {
   readonly auditWriter: AuditWriter;
 }
 
+/** What a service answers: the value its procedure's output schema parses. */
+type Answer<TSchema extends z.ZodType> = Promise<z.input<TSchema>>;
+
+/**
+ * The admin module's services as the administrator surface's procedures call them (T067): the port
+ * this file declares and `modules/admin` implements, bound once by `main.ts`. Each administrator
+ * kind's call hands in its own transaction (`tx`) and, where the action is someone's, the acting
+ * administrator from the session, never from the input.
+ */
+export interface AdminSurfaceServices {
+  /** The sign-in, the second factor and the password-set link: the anonymous kind's (FR-170 to FR-172). */
+  readonly auth: {
+    signIn(email: string, password: string): Answer<typeof adminSignInOutput>;
+    verifyMfa(sessionToken: string, code: string): Promise<void>;
+    recover(sessionToken: string, recoveryCode: string): Answer<typeof adminMfaRecoverOutput>;
+    beginSetup(sessionToken: string): Answer<typeof adminMfaSetupBeginOutput>;
+    confirmSetup(sessionToken: string, code: string): Answer<typeof adminRecoveryCodesOutput>;
+    setPassword(inviteToken: string, password: string): Promise<void>;
+  };
+  /** `auth.signOut`: ends the one session the request came on (T061). */
+  readonly sessions: {
+    signOut(sessionId: string, tx: Transaction): Promise<void>;
+  };
+  /** `auth.me` and the admins page (FR-173, FR-174). */
+  readonly admins: {
+    me(tx: Transaction, adminId: string): Answer<typeof adminMeOutput>;
+    list(
+      tx: Transaction,
+      readerId: string,
+      query: z.output<typeof adminsListInput>,
+    ): Answer<typeof adminsListOutput>;
+    add(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminsAddInput>,
+    ): Answer<typeof adminsAddOutput>;
+    disable(tx: Transaction, actorId: string, adminId: string): Promise<void>;
+    resetMfa(tx: Transaction, actorId: string, adminId: string): Promise<void>;
+    regenerateRecoveryCodes(
+      tx: Transaction,
+      adminId: string,
+    ): Answer<typeof adminRecoveryCodesOutput>;
+  };
+  /** The audit log page and the home (FR-176, FR-181; T065). */
+  readonly audit: {
+    list(tx: Transaction, query: z.output<typeof auditListInput>): Answer<typeof auditListOutput>;
+    get(tx: Transaction, entryId: string): Answer<typeof auditGetOutput>;
+  };
+  readonly home: {
+    summary(tx: Transaction): Answer<typeof homeSummaryOutput>;
+  };
+}
+
 /**
  * The context of the administrator surface. No locale: the admin application's language is the
  * browser's, not a session's. `administrator` is null for an unauthenticated request.
@@ -188,6 +264,8 @@ export interface AdminContext {
   readonly correlationId: string;
   readonly log: Logger;
   readonly administration: Administration;
+  /** The admin module's services, bound once by `main.ts` (T067). */
+  readonly services: AdminSurfaceServices;
   /** The process's limiter, for the surface's anonymous kind (`adminPublicProcedure`, T017). */
   readonly rateLimiter: RateLimiter;
   readonly clientAddress: string;
@@ -247,6 +325,7 @@ export function createAppContext({
 
 export interface AdminContextSource extends ContextSource<AdminSession> {
   readonly administration: Administration;
+  readonly services: AdminSurfaceServices;
 }
 
 /** The administrator surface's context for one request. */
@@ -254,6 +333,7 @@ export function createAdminContext({
   session,
   log,
   administration,
+  services,
   rateLimiter,
   clientAddress,
 }: AdminContextSource): AdminContext {
@@ -269,6 +349,7 @@ export function createAdminContext({
           },
     ...correlated(log, clientAddress),
     administration,
+    services,
     rateLimiter,
     clientAddress,
   };
