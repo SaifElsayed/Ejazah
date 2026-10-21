@@ -1,4 +1,5 @@
-// B10b: the API as the screens' specs see it. `useApi()` is replaced by a client whose procedures
+// B10b: the API as the screens' specs see it (B11b adds the teacher's application and credentials,
+// the subjects, and the documents upload). `useApi()` is replaced by a client whose procedures
 // are mocks answering what each case says, and a session store in memory; an API refusal is the
 // tRPC client error the real client raises, carrying the code and details the screens read.
 import { jest } from '@jest/globals';
@@ -10,7 +11,7 @@ export type Procedure = jest.Mock<(input?: unknown) => Promise<unknown>>;
 
 const procedure = (): Procedure => jest.fn(async () => undefined);
 
-/** Every procedure the B10b screens call, each a mock. */
+/** Every procedure the B10b and B11b screens call, each a mock. */
 export function fakeProcedures() {
   return {
     auth: {
@@ -34,6 +35,22 @@ export function fakeProcedures() {
       setLanguage: { mutate: procedure() },
       setTimezone: { mutate: procedure() },
       reportDeviceTimezone: { mutate: procedure() },
+    },
+    catalog: { subjects: { list: { query: procedure() } } },
+    teacher: {
+      application: {
+        get: { query: procedure() },
+        submit: { mutate: procedure() },
+        resubmit: { mutate: procedure() },
+        reapply: { mutate: procedure() },
+        markApprovedShown: { mutate: procedure() },
+      },
+      credentials: {
+        list: { query: procedure() },
+        add: { mutate: procedure() },
+        replaceDocument: { mutate: procedure() },
+        documentLink: { query: procedure() },
+      },
     },
   };
 }
@@ -65,6 +82,10 @@ export interface FakeApi {
       readonly publicConfig: jest.Mock<
         () => Promise<{ supportEmail: string; termsVersion: string }>
       >;
+      /** The documents upload: a fresh document id for each file unless a case says otherwise. */
+      readonly uploadDocument: jest.Mock<
+        (kind: 'identity' | 'credential', file: { uri: string; name: string }) => Promise<string>
+      >;
     };
     readonly sessions: SessionStore;
   };
@@ -75,7 +96,18 @@ export function fakeApi(termsVersion = '2026-10'): FakeApi {
   const api = fakeProcedures();
   const sessions = memorySessions();
   const publicConfig = jest.fn(async () => ({ supportEmail: 'support@ijazah.test', termsVersion }));
-  return { api, sessions, value: { client: { api, publicConfig }, sessions: sessions.store } };
+  let uploaded = 0;
+  const uploadDocument = jest.fn(
+    async (_kind: 'identity' | 'credential', _file: { uri: string; name: string }) => {
+      uploaded += 1;
+      return `0193a6f0-0000-7000-8000-${String(uploaded).padStart(12, '0')}`;
+    },
+  );
+  return {
+    api,
+    sessions,
+    value: { client: { api, publicConfig, uploadDocument }, sessions: sessions.store },
+  };
 }
 
 /** The error the client raises for an API refusal of `code`. */

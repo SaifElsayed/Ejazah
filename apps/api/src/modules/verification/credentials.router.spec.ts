@@ -4,8 +4,9 @@
 // Every procedure is the teacher kind. `list` admits an applicant (the credentials page is
 // reachable from the status screen); `add`, `replaceDocument` and `documentLink` admit an approved
 // teacher only, so an applicant is FORBIDDEN as a student is. An anonymous caller is
-// UNAUTHENTICATED, a suspended teacher ACCOUNT_RESTRICTED. The authorization gate (T028,
-// R-MOBILE-13) reads these cases by path. What the service answers is credentials.service.spec.ts's.
+// UNAUTHENTICATED, a suspended or banned teacher ACCOUNT_RESTRICTED, which the phone's credentials
+// pages (T059, B11b) rely on. The authorization gate (T028, R-MOBILE-13) reads these cases by
+// path. What the service answers is credentials.service.spec.ts's.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CALLER, metaOf, recordingServices, surfaceOf } from './__fixtures__/surface.js';
@@ -75,9 +76,11 @@ describe('the namespace', () => {
     expect(services.calls).toEqual([['credentials.list', CALLER]]);
   });
 
-  it('refuses a suspended teacher ACCOUNT_RESTRICTED', async () => {
-    for (const [path, call] of Object.entries(calls(surface.as('suspended applicant')))) {
-      await expect(call(), path).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+  it('refuses a suspended or a banned teacher ACCOUNT_RESTRICTED: the phone’s credentials page (T059) is never reached', async () => {
+    for (const standing of ['suspended applicant', 'banned teacher'] as const) {
+      for (const [path, call] of Object.entries(calls(surface.as(standing)))) {
+        await expect(call(), path).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+      }
     }
     expect(services.calls).toEqual([]);
   });

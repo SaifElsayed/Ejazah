@@ -1266,7 +1266,8 @@
     },
     "credentials": {
       "a11y": {
-        "chain": "Chain of transmission"
+        "chain": "Chain of transmission",
+        "openFile": "Open the file"
       },
       "add": {
         "note": "The subject becomes available to you after review.",
@@ -1282,13 +1283,16 @@
         "yourIjazah": "Your ijazah in this subject"
       },
       "chainMore": "… {count, plural, one {# generation} other {# generations}}",
+      "chainNamesSeparator": ", ",
       "credential": {
         "currentFile": "Current file",
         "heading": "The reviewer asked for another file",
         "title": "{subject} ijazah",
         "uploadAnother": "Upload another file"
       },
+      "fileName": "{subject} ijazah.pdf",
       "riwayaLine": "Riwaya of {riwaya} · by the tariq of {tariq}",
+      "riwayaOnly": "Riwaya of {riwaya}",
       "submittedOn": "Submitted {date}",
       "title": "My ijazahs",
       "verifiedOn": "Verified {date} · chain of {count, plural, one {# generation} other {# generations}}"
