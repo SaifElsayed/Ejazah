@@ -42,7 +42,10 @@ import {
   RateLimiter,
   RedisRateLimitCounter,
 } from './rate-limit.guard.js';
-import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
+import {
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from '../../surfaces/services.fixtures.js';
 
 /** The settings store, as the admin module answers it: missing or refused rows fail closed. */
 class FakeSettings implements SettingsReader {
@@ -175,6 +178,7 @@ function fixture(
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
     subjects: { listActive: async () => [] },
     identity: unusedIdentityServices,
+    verification: unusedVerificationServices,
   };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>

@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.6 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog*
+*Version 1.7 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog*
 
 ## 0. How to read this
 
@@ -158,7 +158,7 @@ Exists only for users holding the teacher role. 1:1 with the role.
 | application_submitted_at | timestamptz, nullable | The current application's submission; reapplying after a rejection sets it again (Phase 1 pass, migration `20261018000200`; specs/002-identity/data-model.md §3: the application is a state of the profile, not a table) |
 | application_status | enum in_review · needs_document · rejected · banned · approved, nullable | What the applicant sees, the queue's tab; `verification_status` stays the product's status. Null before the first submission |
 | application_note | text, nullable | The reviewer's latest note to the applicant (the request for a document, the rejection) |
-| application_decided_at / application_decided_by_admin_id | timestamptz, nullable; FK → admin_users, nullable | |
+| application_decided_at / application_decided_by_admin_id | timestamptz, nullable; FK → admin_users, nullable | The reviewer's latest action on the application: a request for a document, a rejection, an approval or a ban each writes both; it dates the note the applicant reads (v1.7) |
 | identity_document_id | FK → verification_documents, nullable | The identity document of the current application |
 | identity_document_type | enum national_id · passport, nullable | One type shared with `verification_requests.document_type` |
 | approved_shown_at | timestamptz, nullable | The once-only `ApplicationApproved` was shown (FR-152 of Phase 1) |
@@ -215,6 +215,7 @@ Uploaded identity and credential documents (FR-VERIFY-1). Admin: view only, neve
 | user_id | FK → users | Teacher applicants and any user under FR-VERIFY-10 |
 | document_type | enum national_id · passport · credential · other | |
 | storage_key_encrypted | bytea | Identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only (NFR-SEC-2/3) |
+| size_bytes | int, nullable | The PDF's size as the upload accepted it; null for a document uploaded before it was recorded. The file's name is never stored (it may carry the person's name) (v1.7) |
 | uploaded_at | timestamptz | |
 
 ### `verification_requests`
@@ -955,3 +956,12 @@ FR-131 keeps a zone the person chose by hand while the device's zone is re-read 
 | # | Change | Migration |
 |---|---|---|
 | 1 | §2 `users.timezone_overridden_at`: set by `account.setTimezone`; `account.reportDeviceTimezone` writes `timezone` only while it is null | `20261020000100_users_timezone_overridden_at` |
+
+## Changelog — v1.6 → v1.7 (the credentials page and the reviewer's note, 2026-10-21)
+
+The teacher's credentials page shows each PDF with its size (FR-153), and no column held one; the application's status screen dates the reviewer's note, and no column said what `application_decided_at` records. The decisions are the owner's (2026-10-21, the conflict check of batch B11): the size in a nullable column the upload route fills, the file's name never stored (the phone names the PDF after its subject), and the decision instant as the note's date. The tasks are T056 and T057 of `specs/002-identity/tasks.md`; the count of tables is unchanged.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §2 `verification_documents.size_bytes`: written by the documents upload route, read by `teacher.credentials.list` | `20261021000000_verification_documents_size_bytes` |
+| 2 | §2 `teacher_profiles.application_decided_at`: the reviewer's latest action (request for a document, rejection, approval, ban) | this document pass (T056) |

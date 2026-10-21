@@ -23,7 +23,10 @@ import {
 import { ConfigError, loadConfig } from '../config/config.module.js';
 import { createLogger } from '../logging/logger.js';
 import { RateLimiter } from './rate-limit.guard.js';
-import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
+import {
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from '../../surfaces/services.fixtures.js';
 
 // No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
 const sessions = { user: async () => null, admin: async () => null };
@@ -37,6 +40,7 @@ const services = {
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
+  verification: unusedVerificationServices,
 };
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests

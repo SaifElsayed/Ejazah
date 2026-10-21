@@ -18,3 +18,5 @@ export {
 export * from './onboarding.js';
 export * from './password.js';
 export * from './platform.js';
+export * from './teacher-application.js';
+export * from './teacher-credentials.js';

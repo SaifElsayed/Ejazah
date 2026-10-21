@@ -15,7 +15,10 @@ import { html } from './html.js';
 import { renderPage } from './page.js';
 import { designAssets } from './assets.js';
 import { PUBLIC_PAGE_CSP, PUBLIC_PAGE_RATE_LIMIT, type WebRoute } from './route.js';
-import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
+import {
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from '../../surfaces/services.fixtures.js';
 
 /** A limiter over an in-memory counter, `limit` calls per subject on every key (T170). */
 function limiterOf(limit: number): {
@@ -62,6 +65,7 @@ const services = {
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
+  verification: unusedVerificationServices,
 };
 
 const records: string[] = [];

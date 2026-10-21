@@ -16,7 +16,7 @@ import { SettingError, type SettingsReader } from '../platform/settings/settings
 import type { UserSession } from './context.js';
 import { multipart, pdfBytes } from './upload-fixtures.js';
 import { kindField, uploadRoute } from './upload-route.js';
-import { unusedIdentityServices } from './services.fixtures.js';
+import { unusedIdentityServices, unusedVerificationServices } from './services.fixtures.js';
 
 const LIMIT_BYTES = 4096;
 
@@ -76,6 +76,7 @@ const services = {
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
+  verification: unusedVerificationServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

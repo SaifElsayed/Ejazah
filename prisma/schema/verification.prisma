@@ -10,6 +10,9 @@ model VerificationDocument {
   documentType        VerificationDocumentType @map("document_type")
   // An identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only.
   storageKeyEncrypted Bytes                    @map("storage_key_encrypted")
+  // The PDF's size in bytes, recorded at upload (T057, owner's decision 2026-10-21); null for a document
+  // uploaded before it was recorded. The file's name is never stored (it may carry the person's name).
+  sizeBytes           Int?                     @map("size_bytes")
   uploadedAt          DateTime                 @default(now()) @map("uploaded_at") @db.Timestamptz(6)
   createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
 
