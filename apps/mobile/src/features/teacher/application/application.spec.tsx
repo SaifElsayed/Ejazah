@@ -29,12 +29,13 @@ let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 
 const mockNavigate = jest.fn();
+let mockCanGoBack = false;
 jest.mock('expo-router', () => ({
   router: {
     push: (route: unknown) => mockNavigate(route),
     replace: (route: unknown) => mockNavigate(route),
     back: () => mockNavigate('back'),
-    canGoBack: () => false,
+    canGoBack: () => mockCanGoBack,
   },
   Redirect: ({ href }: { href: string }) => {
     mockNavigate(href);
@@ -103,6 +104,7 @@ beforeEach(() => {
   mockApi.api.catalog.subjects.list.query.mockResolvedValue([QURAN, TAJWEED]);
   mockApi.api.account.me.query.mockResolvedValue(me);
   mockNavigate.mockReset();
+  mockCanGoBack = false;
   mockPick.mockReset();
   queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queries.setQueryData(ME_QUERY_KEY, me);
@@ -520,6 +522,15 @@ describe('ApplicationMoreInfo (FR-152)', () => {
     await screen.findByText('نحتاج نسخة أوضح من إجازة الحفظ');
     await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
     expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/application/status');
+  });
+
+  it('goes back the way it came when the status screen pushed it', async () => {
+    mockCanGoBack = true;
+    await renderIn('rtl', withQueries(() => <ApplicationMoreInfo />)());
+    await screen.findByText('نحتاج نسخة أوضح من إجازة الحفظ');
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
+    expect(mockNavigate).toHaveBeenCalledWith('back');
+    expect(mockNavigate).not.toHaveBeenCalledWith('/(teacher)/application/status');
   });
 
   it('resubmits once every asked-for PDF is replaced, and returns to the status', async () => {
