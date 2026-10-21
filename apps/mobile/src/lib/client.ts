@@ -146,11 +146,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       const body = new FormData();
       body.append('kind', kind);
       // React Native's FormData takes a file as its uri, name and type.
-      body.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: 'application/pdf',
-      } as unknown as Blob);
+      body.append('file', filePart(file) as unknown as Blob);
       const response = await sessionFetch(target, { method: 'POST', body });
       const answer: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new ApiRefusal(answer);
@@ -216,6 +212,18 @@ export function errorDetailsOf(error: unknown): readonly ErrorDetail[] {
       typeof (detail as ErrorDetail).path === 'string' &&
       typeof (detail as ErrorDetail).code === 'string',
   );
+}
+
+/** The name every upload carries: the server discards it, and the person's file name stays here. */
+export const UPLOAD_FILE_NAME = 'document.pdf';
+
+/**
+ * The multipart file part of an upload: where the file is, and a fixed name rather than the
+ * person's, which may carry their name (owner's decision 2026-10-21; review of B11b, round 1,
+ * finding 3).
+ */
+export function filePart(file: LocalFile): { uri: string; name: string; type: string } {
+  return { uri: file.uri, name: UPLOAD_FILE_NAME, type: 'application/pdf' };
 }
 
 /** The uploads route's answer: the document's id. */

@@ -1,8 +1,8 @@
 // T058: a PDF the person picks from the device, for an upload (FR-151). The system picker is asked
 // for PDFs only; the server decides the type again by the file's content (T020), so the filter is a
 // convenience, not the check. The name and the size are the picker's, shown on the file row and
-// never sent as data: the upload names the file to the multipart body only, and the server stores
-// neither (owner's decision 2026-10-21, B11).
+// never sent: the upload names every file `document.pdf` (`filePart` in client.ts), and the server
+// stores no name (owner's decisions 2026-10-21, B11 and B11b).
 import * as DocumentPicker from 'expo-document-picker';
 
 import type { LocalFile } from './client';

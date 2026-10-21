@@ -5,7 +5,7 @@
 // (note under T018). `platform.publicConfig` is read once and cached.
 import { describe, expect, it, jest } from '@jest/globals';
 
-import { createApiClient, errorCodeOf, errorDetailsOf } from './client';
+import { createApiClient, errorCodeOf, errorDetailsOf, filePart, UPLOAD_FILE_NAME } from './client';
 import type { SessionStore, SessionTokens } from './storage';
 
 const url = 'https://api.test/trpc';
@@ -406,6 +406,15 @@ describe('the documents upload', () => {
       .catch((error: unknown) => error);
     expect(errorCodeOf(refusal)).toBe('CONFLICT');
     expect(errorDetailsOf(refusal)).toEqual([{ path: 'documents', code: 'too_many' }]);
+  });
+
+  it('names every file document.pdf, never the person’s file name', () => {
+    expect(UPLOAD_FILE_NAME).toBe('document.pdf');
+    expect(filePart({ uri: 'file:///cache/sara-adel-id.pdf', name: 'sara-adel-id.pdf' })).toEqual({
+      uri: 'file:///cache/sara-adel-id.pdf',
+      name: 'document.pdf',
+      type: 'application/pdf',
+    });
   });
 
   it('refuses to upload when the client was given no uploads address', async () => {
