@@ -19,6 +19,7 @@ import { DOCUMENT_LINK_TTL_SETTING } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SignInMethod } from './identity.repository.js';
+import { landingFor } from './session.service.js';
 import { type OwnAccountRow, UsersRepository } from './users.repository.js';
 
 export interface AccountDependencies {
@@ -41,6 +42,7 @@ export interface OwnAccount {
   readonly signInMethod: SignInMethod;
   readonly memberSince: string;
   readonly accountStatus: 'active' | 'suspended' | 'verification_required' | 'banned';
+  readonly landing: 'student_home' | 'teacher_application' | 'teacher_home' | 'restricted';
   readonly photoUrl?: string;
   readonly teacher?: {
     readonly applicationStatus:
@@ -107,6 +109,7 @@ export class AccountService {
       throw new DomainError('UNAUTHENTICATED');
     }
     const photoUrl = await this.#photoUrl(row.photoKey);
+    const teacher = row.role === 'teacher' ? teacherOf(row) : undefined;
     return {
       userId: row.id,
       role: row.role,
@@ -119,8 +122,13 @@ export class AccountService {
       signInMethod: signInMethodOf(row),
       memberSince: row.createdAt.toISOString(),
       accountStatus: row.accountStatus,
+      landing: landingFor({
+        role: row.role,
+        accountStatus: row.accountStatus,
+        ...(teacher === undefined ? {} : { teacher }),
+      }),
       ...(photoUrl === undefined ? {} : { photoUrl }),
-      ...(row.role === 'teacher' ? { teacher: teacherOf(row) } : {}),
+      ...(teacher === undefined ? {} : { teacher }),
     };
   }
 

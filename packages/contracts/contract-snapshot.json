@@ -156,6 +156,11 @@
           "$.displayName": { "required": true, "type": "string" },
           "$.email": { "required": true, "type": "null|string" },
           "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.landing": {
+            "required": true,
+            "type": "string",
+            "values": ["restricted", "student_home", "teacher_application", "teacher_home"]
+          },
           "$.memberSince": { "required": true, "type": "string" },
           "$.photoUrl": { "type": "string" },
           "$.preferredLanguage": { "required": true, "type": "string", "values": ["ar", "en"] },

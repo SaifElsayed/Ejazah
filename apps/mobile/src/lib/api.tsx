@@ -12,12 +12,17 @@ const ApiContext = createContext<{
   readonly sessions: SessionStore;
 } | null>(null);
 
-/** The user surface's endpoint from the build's environment. */
-export function apiUrl(origin: string | undefined = process.env['EXPO_PUBLIC_API_URL']): string {
+/** The API's origin from the build's environment (its pages too: the Terms, T051). */
+export function apiOrigin(origin: string | undefined = process.env['EXPO_PUBLIC_API_URL']): string {
   if (origin === undefined || origin === '') {
     throw new Error('EXPO_PUBLIC_API_URL is not set: the app has no API to call');
   }
-  return `${origin.replace(/\/+$/, '')}/trpc`;
+  return origin.replace(/\/+$/, '');
+}
+
+/** The user surface's endpoint from the build's environment. */
+export function apiUrl(origin: string | undefined = process.env['EXPO_PUBLIC_API_URL']): string {
+  return `${apiOrigin(origin)}/trpc`;
 }
 
 export function ApiProvider({ children }: { readonly children: ReactNode }) {

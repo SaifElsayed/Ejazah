@@ -149,6 +149,33 @@ export function errorCodeOf(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
+/** One detail of an API error: the field and the reason (contracts/README.md "Errors"). */
+export interface ErrorDetail {
+  readonly path: string;
+  readonly code: string;
+}
+
+/**
+ * The details a failed call carries (`EMAIL_IN_USE_BY_OTHER_METHOD`'s method, a refused field), or
+ * none when the error never came from the API or carried none.
+ */
+export function errorDetailsOf(error: unknown): readonly ErrorDetail[] {
+  if (!(error instanceof TRPCClientError)) return [];
+  const body: unknown = error.meta?.['responseJSON'] ?? error.cause;
+  if (typeof body !== 'object' || body === null || !('error' in body)) return [];
+  const { error: answer } = body;
+  if (typeof answer !== 'object' || answer === null || !('details' in answer)) return [];
+  const { details } = answer;
+  if (!Array.isArray(details)) return [];
+  return details.filter(
+    (detail): detail is ErrorDetail =>
+      typeof detail === 'object' &&
+      detail !== null &&
+      typeof (detail as ErrorDetail).path === 'string' &&
+      typeof (detail as ErrorDetail).code === 'string',
+  );
+}
+
 /** True when the answer's tRPC error carries the UNAUTHENTICATED code. */
 async function isUnauthenticated(response: Response): Promise<boolean> {
   try {

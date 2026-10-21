@@ -1,12 +1,14 @@
 // T034: the root layout: the providers and the session guard, over a mock route tree whose screens
-// stand for the ones later batches add (welcome in B10, the application in B11, restricted in B13).
-// It lives outside `app/`, where every file is a route.
+// stand for the ones later batches add (the application in B11, restricted in B13). It lives outside
+// `app/`, where every file is a route. T052 (B10b): a restored session lands where `account.me`
+// says, and the device's zone is reported when it is one a person lives by.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { renderRouter } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
+import { fakeProcedures } from '../features/shared/__tests__/api-double';
 import { setLocale } from '../i18n';
 import { setSession } from '../lib/session';
 import RootLayout from '../app/_layout';
@@ -17,6 +19,31 @@ jest.mock('../lib/direction', () => ({
   ...jest.requireActual<typeof import('../lib/direction')>('../lib/direction'),
   syncNativeDirection: () => false,
 }));
+
+let mockApi = fakeProcedures();
+jest.mock('../lib/client', () => ({
+  ...jest.requireActual<typeof import('../lib/client')>('../lib/client'),
+  createApiClient: () => ({ api: mockApi, publicConfig: jest.fn() }),
+}));
+
+let mockDeviceZone: string | null = 'Africa/Cairo';
+jest.mock('../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
+
+const account = (landing: string, extra: Record<string, unknown> = {}) => ({
+  userId: '0193a6f0-0000-7000-8000-000000000001',
+  role: 'student',
+  displayName: 'أمل',
+  email: null,
+  gender: 'female',
+  dateOfBirth: '2004-03-12',
+  preferredLanguage: 'ar',
+  timezone: 'Africa/Cairo',
+  signInMethod: 'google',
+  memberSince: '2026-02-02T09:00:00Z',
+  accountStatus: 'active',
+  landing,
+  ...extra,
+});
 
 const stand = (name: string) => () => <Text>{name}</Text>;
 
@@ -44,6 +71,10 @@ const routes = {
 };
 
 beforeEach(() => {
+  mockApi = fakeProcedures();
+  // Unless a case says otherwise, `account.me` is still on its way.
+  mockApi.account.me.query.mockReturnValue(new Promise(() => undefined));
+  mockDeviceZone = 'Africa/Cairo';
   process.env['EXPO_PUBLIC_API_URL'] = 'https://api.test';
   setLocale('ar');
 });
@@ -117,6 +148,65 @@ describe('the root layout', () => {
     expect(await screen.findByText('remembered')).toBeTruthy();
     await act(async () => setSession({ kind: 'signed-out' }));
     expect(await screen.findByText('nothing held')).toBeTruthy();
+  });
+
+  it('lands a restored session where account.me says, an applicant by its status (T052)', async () => {
+    mockApi.account.me.query.mockResolvedValue(
+      account('teacher_application', {
+        role: 'teacher',
+        teacher: {
+          applicationStatus: 'in_review',
+          verificationStatus: 'pending',
+          payout: { configured: false, verified: false },
+        },
+      }),
+    );
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('application status')).toBeTruthy();
+  });
+
+  it('says a launch whose account cannot be read, and retries it', async () => {
+    mockApi.account.me.query.mockRejectedValue(new Error('offline'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(
+      await screen.findByText('تعذّر تحميل البيانات. حاول مرة أخرى.', {}, { timeout: 10000 }),
+    ).toBeTruthy();
+    mockApi.account.me.query.mockResolvedValue(account('restricted'));
+    await fireEvent.press(screen.getByRole('button', { name: 'إعادة المحاولة' }));
+    expect(await screen.findByText('restricted')).toBeTruthy();
+  }, 20000);
+
+  it("reports the device's zone once when it differs from the account's (FR-131)", async () => {
+    mockApi.account.me.query.mockResolvedValue(
+      account('student_home', { timezone: 'Asia/Riyadh' }),
+    );
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    await waitFor(() =>
+      expect(mockApi.account.reportDeviceTimezone.mutate).toHaveBeenCalledWith({
+        timezone: 'Africa/Cairo',
+      }),
+    );
+    expect(mockApi.account.reportDeviceTimezone.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports nothing for a device on UTC, nor for the zone the account already has', async () => {
+    mockDeviceZone = null;
+    mockApi.account.me.query.mockResolvedValue(
+      account('student_home', { timezone: 'Asia/Riyadh' }),
+    );
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('اختر معلمًا وباقة تناسبك')).toBeTruthy();
+    expect(mockApi.account.reportDeviceTimezone.mutate).not.toHaveBeenCalled();
+  });
+
+  it('lets a signed-out person open the time-zone picker during the onboarding (T051)', async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter({ ...routes, 'time-zone': stand('picker') }, { initialUrl: '/time-zone' });
+    expect(await screen.findByText('picker')).toBeTruthy();
   });
 
   it('switches tabs through the bar', async () => {

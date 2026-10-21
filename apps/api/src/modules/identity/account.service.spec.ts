@@ -47,6 +47,7 @@ describe('me', () => {
       signInMethod: 'email',
       memberSince: user?.createdAt.toISOString(),
       accountStatus: 'active',
+      landing: 'student_home',
     });
   });
 
@@ -72,6 +73,7 @@ describe('me', () => {
     const { userId } = await createAccount(database, { role: 'teacher' });
     await expect(identity.account.me(userId)).resolves.toMatchObject({
       role: 'teacher',
+      landing: 'teacher_application',
       teacher: {
         applicationStatus: 'not_started',
         verificationStatus: 'pending',
@@ -94,12 +96,14 @@ describe('me', () => {
       verificationStatus: 'approved',
       payout: { configured: true, verified: false, rejectedReason: 'The name does not match' },
     });
+    expect(me.landing).toBe('teacher_home');
   });
 
   it('answers a restricted account, which still reads its own standing (FR-137)', async () => {
     const { userId } = await createAccount(database, { accountStatus: 'suspended' });
     await expect(identity.account.me(userId)).resolves.toMatchObject({
       accountStatus: 'suspended',
+      landing: 'restricted',
     });
   });
 

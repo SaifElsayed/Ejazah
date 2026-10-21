@@ -3,7 +3,7 @@
 // tokens at launch, the client signs out on a refused refresh (lib/client.ts), and B10 wires the
 // sign-in procedures and `account.me` that say where a session lands (`landing`, contracts/auth.ts).
 // The guard reads it through `useSession()` and decides with `destinationFor` and `allows`.
-import type { Landing, TeacherApplicationStatus } from '@ijazah/contracts';
+import type { Landing, MeOutput, TeacherApplicationStatus } from '@ijazah/contracts';
 import { useSyncExternalStore } from 'react';
 
 export type SessionState =
@@ -62,6 +62,27 @@ export function destinationFor(state: SessionState): string | null {
   }
 }
 
+/**
+ * The guard's state for a signed-in account, from `account.me` (T052): the landing is the server's
+ * rule, read, never recomputed here; an applicant carries its application's status.
+ */
+export function signedInAs(
+  me: Pick<MeOutput, 'landing'> & Partial<Pick<MeOutput, 'teacher'>>,
+): SessionState {
+  if (me.landing !== 'teacher_application') return { kind: 'signed-in', landing: me.landing };
+  if (me.teacher === undefined) {
+    throw new TypeError('session: an applicant landing without the teacher standing');
+  }
+  return {
+    kind: 'signed-in',
+    landing: 'teacher_application',
+    applicationStatus: me.teacher.applicationStatus,
+  };
+}
+
+/** The routes a signed-out person reaches: sign-in and onboarding, and their two modals (T051). */
+const SIGNED_OUT = new Set(['(auth)', 'terms', 'time-zone']);
+
 /** The routes outside the role groups every signed-in person reaches (screens.md "Routes"). */
 const SHARED = new Set([
   'session',
@@ -76,7 +97,7 @@ const SHARED = new Set([
 export function allows(state: SessionState, segments: readonly string[]): boolean {
   const [root, next] = segments;
   if (root === undefined) return false;
-  if (state.kind === 'signed-out') return root === '(auth)' || root === 'terms';
+  if (state.kind === 'signed-out') return SIGNED_OUT.has(root);
   if (state.kind !== 'signed-in') return false;
   const destination = destinationFor(state);
   if (destination === RESTRICTED) return root === 'restricted';

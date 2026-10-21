@@ -1,0 +1,91 @@
+// B10b: the API as the screens' specs see it. `useApi()` is replaced by a client whose procedures
+// are mocks answering what each case says, and a session store in memory; an API refusal is the
+// tRPC client error the real client raises, carrying the code and details the screens read.
+import { jest } from '@jest/globals';
+import { TRPCClientError } from '@trpc/client';
+
+import type { SessionStore, SessionTokens } from '../../../lib/storage';
+
+export type Procedure = jest.Mock<(input?: unknown) => Promise<unknown>>;
+
+const procedure = (): Procedure => jest.fn(async () => undefined);
+
+/** Every procedure the B10b screens call, each a mock. */
+export function fakeProcedures() {
+  return {
+    auth: {
+      providerNonce: { mutate: procedure() },
+      signInWithProvider: { mutate: procedure() },
+      signOut: { mutate: procedure() },
+      email: {
+        requestSignUpCode: { mutate: procedure() },
+        verifySignUpCode: { mutate: procedure() },
+        signIn: { mutate: procedure() },
+        requestPasswordReset: { mutate: procedure() },
+        resetPassword: { mutate: procedure() },
+      },
+    },
+    onboarding: {
+      requestEmailCode: { mutate: procedure() },
+      complete: { mutate: procedure() },
+    },
+    account: {
+      me: { query: procedure() },
+      setLanguage: { mutate: procedure() },
+      setTimezone: { mutate: procedure() },
+      reportDeviceTimezone: { mutate: procedure() },
+    },
+  };
+}
+
+export type FakeProcedures = ReturnType<typeof fakeProcedures>;
+
+/** The session store in memory, with what it holds. */
+export function memorySessions(initial: SessionTokens | null = null) {
+  let current = initial;
+  const store: SessionStore = {
+    read: async () => current,
+    write: async (tokens) => {
+      current = tokens;
+    },
+    clear: async () => {
+      current = null;
+    },
+  };
+  return { store, current: () => current };
+}
+
+export interface FakeApi {
+  readonly api: FakeProcedures;
+  readonly sessions: ReturnType<typeof memorySessions>;
+  /** What `useApi()` returns. */
+  readonly value: {
+    readonly client: {
+      readonly api: FakeProcedures;
+      readonly publicConfig: jest.Mock<
+        () => Promise<{ supportEmail: string; termsVersion: string }>
+      >;
+    };
+    readonly sessions: SessionStore;
+  };
+}
+
+/** What `useApi()` answers in a spec. */
+export function fakeApi(termsVersion = '2026-10'): FakeApi {
+  const api = fakeProcedures();
+  const sessions = memorySessions();
+  const publicConfig = jest.fn(async () => ({ supportEmail: 'support@ijazah.test', termsVersion }));
+  return { api, sessions, value: { client: { api, publicConfig }, sessions: sessions.store } };
+}
+
+/** The error the client raises for an API refusal of `code`. */
+export function apiError(
+  code: string,
+  details: readonly { path: string; code: string }[] = [],
+): TRPCClientError<never> {
+  return new TRPCClientError('refused', {
+    meta: { responseJSON: { error: { code, message: 'refused', details } } },
+  });
+}
+
+export const tokens = { accessToken: 'access-1', refreshToken: 'refresh-1' };

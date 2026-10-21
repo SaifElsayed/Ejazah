@@ -4,7 +4,7 @@
 // nothing of another person; the date of birth is the caller's own (FR-138). No input names
 // gender, role or user id (R-GENDER-4) and none names a timestamp (R-TIME-6).
 import { z } from 'zod';
-import { identityToken, nonce } from './auth.js';
+import { identityToken, landing, nonce } from './auth.js';
 import { password } from './password.js';
 import { calendarDate, displayName, gender, role, timeZone } from './onboarding.js';
 import { emailAddress } from './platform.js';
@@ -56,6 +56,11 @@ export const meOutput = z.object({
   signInMethod,
   memberSince: z.iso.datetime(),
   accountStatus,
+  /**
+   * Where the app lands this account now, by the rule a sign-in answers with (T052: the guard's
+   * landing at launch reads it here, so the rule lives on the server only).
+   */
+  landing,
   /** A signed, expiring link to the profile photo, when one is set. */
   photoUrl: z.string().optional(),
   teacher: z
