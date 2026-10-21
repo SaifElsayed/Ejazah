@@ -10,6 +10,9 @@
 // (`verification_requests.document_id`) is read here, the other modules' through their entries
 // (`unreferenced-documents.ts`), and a deletion another module's row would orphan is refused by its
 // foreign key (`ON DELETE RESTRICT`), which `isStillPointedAt` recognises.
+//
+// T056, T057 add the reads the application and the credentials make on their transaction: which of
+// a set of documents a person uploaded, and the size each upload recorded.
 import { Prisma } from '@prisma/client';
 
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
@@ -35,6 +38,8 @@ export interface NewDocument {
   readonly userId: string;
   readonly documentType: 'credential' | 'other';
   readonly storageKeyEncrypted: Uint8Array;
+  /** The PDF's size in bytes, as the route accepted it (T057). */
+  readonly sizeBytes: number;
 }
 
 /** A document row as the link minting reads it (T024). */
@@ -56,6 +61,33 @@ export async function deleteDocumentWithoutRequest(
     where: { id, verificationRequests: { none: {} } },
   });
   return count === 1;
+}
+
+/** Of `ids`, the documents `userId` uploaded, on `tx` (T056: an application names only its own). */
+export async function documentsOwnedAmong(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  userId: string,
+  ids: readonly string[],
+): Promise<ReadonlySet<string>> {
+  const rows = await tx.verificationDocument.findMany({
+    where: { id: { in: [...ids] }, userId },
+    select: { id: true },
+  });
+  return new Set(rows.map(({ id }) => id));
+}
+
+/** The recorded size of each of `ids` that has one, on `tx` (T057). */
+export async function documentSizes(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  ids: readonly string[],
+): Promise<ReadonlyMap<string, number>> {
+  const rows = await tx.verificationDocument.findMany({
+    where: { id: { in: [...ids] }, sizeBytes: { not: null } },
+    select: { id: true, sizeBytes: true },
+  });
+  return new Map(
+    rows.flatMap(({ id, sizeBytes }) => (sizeBytes === null ? [] : [[id, sizeBytes]])),
+  );
 }
 
 /** The document, on the reading transaction; null when there is none. */
@@ -84,6 +116,7 @@ export class VerificationRepository {
         userId: row.userId,
         documentType: row.documentType,
         storageKeyEncrypted: Uint8Array.from(row.storageKeyEncrypted),
+        sizeBytes: row.sizeBytes,
       },
     });
   }

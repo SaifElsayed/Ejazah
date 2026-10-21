@@ -20,7 +20,10 @@ import {
   type NewDocument,
 } from './uploads.controller.js';
 import { DOCUMENT_STORAGE_KEY_COLUMN } from './verification.repository.js';
-import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
+import {
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from '../../surfaces/services.fixtures.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_UNREFERENCED = 3;
@@ -61,6 +64,7 @@ const services = {
   publicConfig: { supportEmail: 'support@ijazah.invalid' },
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
+  verification: unusedVerificationServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const cipher = new ColumnCipher(Buffer.alloc(32, 9).toString('base64'));
@@ -165,6 +169,18 @@ describe('POST /uploads/documents (T024, FR-151)', () => {
   it('records a credential as such', async () => {
     await upload('credential', pdfBytes());
     expect(written[0]).toMatchObject({ documentType: 'credential' });
+  });
+
+  it('records the size the route accepted, and nothing of the file’s name (T057)', async () => {
+    await upload('credential', pdfBytes(3000));
+    expect(written[0]).toMatchObject({ sizeBytes: 3000 });
+    expect(Object.keys(written[0] ?? {}).sort()).toEqual([
+      'documentType',
+      'id',
+      'sizeBytes',
+      'storageKeyEncrypted',
+      'userId',
+    ]);
   });
 
   it('admits PDF only, decided by content, and only the two document kinds', async () => {

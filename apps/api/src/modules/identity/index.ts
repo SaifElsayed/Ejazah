@@ -83,6 +83,18 @@ export function createIdentityServices({
   };
 }
 
+/**
+ * The teacher's application, a state of this module's `teacher_profiles` row, as the verification
+ * module reads and moves it on its own transaction (T056, data-model §3, R-121).
+ */
+export {
+  type ApplicationChange,
+  type ApplicationRecord,
+  type ApplicationStatus,
+  readApplication,
+  setApplication,
+} from './identity.service.js';
+
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
 

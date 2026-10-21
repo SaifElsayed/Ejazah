@@ -15,7 +15,10 @@ import { type AppServices, createAppContext } from '../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../surfaces/procedures.js';
 import { createSubjectsService, subjectsRouter, type SubjectsReader } from './index.js';
 import { SubjectsRepository } from './subjects.repository.js';
-import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
+import {
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from '../../surfaces/services.fixtures.js';
 
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const CLIENT = '203.0.113.9';
@@ -61,6 +64,7 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
       publicConfig: { supportEmail: 'support@ijazah.invalid' },
       subjects: { listActive: async () => rows },
       identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
     };
     const router = createAppRouter({ catalog: createAppRouter({ subjects: subjectsRouter }) });
     const caller = createAppCallerFactory(router)(

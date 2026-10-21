@@ -2,7 +2,9 @@
   "enums": {
     "contracts": {
       "accountStatus": ["active", "banned", "suspended", "verification_required"],
+      "applicationStatus": ["approved", "in_review", "needs_document", "not_started", "rejected"],
       "authProvider": ["apple", "google"],
+      "credentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "deletionConfirmation": ["DELETE", "حذف"],
       "gender": ["female", "male"],
       "identityDocumentType": ["national_id", "passport"],
@@ -407,6 +409,157 @@
           "$.supportEmail": { "required": true, "type": "string" },
           "$.termsVersion": { "required": true, "type": "string" }
         }
+      },
+      "teacher.application.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.approvedShown": { "required": true, "type": "boolean" },
+          "$.callRecorded": { "required": true, "type": "boolean" },
+          "$.decidedAt": { "type": "string" },
+          "$.note": { "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "in_review", "needs_document", "not_started", "rejected"]
+          },
+          "$.subjectCount": { "type": "integer" },
+          "$.submittedAt": { "type": "string" }
+        }
+      },
+      "teacher.application.markApprovedShown": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.application.reapply": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.credentials": { "required": true, "type": "array" },
+          "$.credentials[]": { "type": "object" },
+          "$.credentials[].documentId": { "required": true, "type": "string" },
+          "$.credentials[].subjectId": { "required": true, "type": "string" },
+          "$.identityDocument": { "required": true, "type": "object" },
+          "$.identityDocument.documentId": { "required": true, "type": "string" },
+          "$.identityDocument.type": {
+            "required": true,
+            "type": "string",
+            "values": ["national_id", "passport"]
+          },
+          "$.qualificationSummary": { "required": true, "type": "string" },
+          "$.subjectIds": { "required": true, "type": "array" },
+          "$.subjectIds[]": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.application.resubmit": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.credentials": { "type": "array" },
+          "$.credentials[]": { "type": "object" },
+          "$.credentials[].credentialId": { "required": true, "type": "string" },
+          "$.credentials[].documentId": { "required": true, "type": "string" },
+          "$.identityDocumentId": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.application.submit": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.credentials": { "required": true, "type": "array" },
+          "$.credentials[]": { "type": "object" },
+          "$.credentials[].documentId": { "required": true, "type": "string" },
+          "$.credentials[].subjectId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.identityDocument": { "required": true, "type": "object" },
+          "$.identityDocument.documentId": { "required": true, "type": "string" },
+          "$.identityDocument.type": {
+            "required": true,
+            "type": "string",
+            "values": ["national_id", "passport"]
+          },
+          "$.qualificationSummary": { "required": true, "type": "string" },
+          "$.subjectIds": { "required": true, "type": "array" },
+          "$.subjectIds[]": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.credentials.add": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.documentId": { "required": true, "type": "string" },
+          "$.subjectId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.credentialId": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.credentials.documentLink": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.credentialId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.url": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.credentials.list": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "array" },
+          "$[]": { "type": "object" },
+          "$[].chain": { "type": "array" },
+          "$[].chain[]": { "type": "object" },
+          "$[].chain[].names": { "required": true, "type": "array" },
+          "$[].chain[].names[]": { "type": "string" },
+          "$[].chain[].position": { "required": true, "type": "integer" },
+          "$[].credentialId": { "required": true, "type": "string" },
+          "$[].document": { "required": true, "type": "object" },
+          "$[].document.sizeBytes": { "type": "integer" },
+          "$[].holderName": { "type": "string" },
+          "$[].note": { "type": "string" },
+          "$[].reviewedAt": { "type": "string" },
+          "$[].riwaya": { "type": "string" },
+          "$[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "needs_document", "pending", "rejected"]
+          },
+          "$[].subject": { "required": true, "type": "object" },
+          "$[].subject.id": { "required": true, "type": "string" },
+          "$[].subject.nameAr": { "required": true, "type": "string" },
+          "$[].subject.nameEn": { "required": true, "type": "string" },
+          "$[].submittedAt": { "required": true, "type": "string" },
+          "$[].tariq": { "type": "string" }
+        }
+      },
+      "teacher.credentials.replaceDocument": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.credentialId": { "required": true, "type": "string" },
+          "$.documentId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       }
     }
   }

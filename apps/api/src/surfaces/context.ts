@@ -50,6 +50,7 @@ import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { SubjectsReader } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
+import type { VerificationServices } from '../modules/verification/index.js';
 
 // The request's language and the client's address are the kernel's (`platform/http/`, PR #79
 // review, finding 1: `platform` depends on nothing above it); they are re-exported here for the
@@ -145,6 +146,8 @@ export interface AppServices {
   readonly subjects: SubjectsReader;
   /** `auth.*`, `onboarding.*` and `account.*`: the identity module's services (T048, T049). */
   readonly identity: IdentityServices;
+  /** `teacher.application.*` and `teacher.credentials.*`: the verification module's services (T056, T057). */
+  readonly verification: VerificationServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */

@@ -12,14 +12,63 @@ import {
   UnreferencedDocuments,
   type UnreferencedDocumentsDependencies,
 } from './unreferenced-documents.js';
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { ApplicationService } from './application.service.js';
+import { CredentialsService } from './credentials.service.js';
+import { createVerificationStores } from './stores.js';
 import { VerificationRepository } from './verification.repository.js';
+import { VerificationService } from './verification.service.js';
 
 export { DOCUMENTS_UPLOAD_PATH };
-export {
-  type DocumentLink,
-  type DocumentViewer,
-  VerificationService,
-} from './verification.service.js';
+export type { DocumentLink, DocumentViewer } from './verification.service.js';
+export { VerificationService };
+
+/** The module's two namespaces of the user surface (T056, T057), mounted under `teacher` by `app.router.ts`. */
+export { applicationRouter } from './application.router.js';
+export { credentialsRouter } from './credentials.router.js';
+
+/** What the module's routers call, carried by every request in `AppServices.verification`. */
+export interface VerificationServices {
+  readonly application: Pick<
+    ApplicationService,
+    'get' | 'submit' | 'resubmit' | 'reapply' | 'markApprovedShown'
+  >;
+  readonly credentials: Pick<
+    CredentialsService,
+    'list' | 'add' | 'replaceDocument' | 'documentLink'
+  >;
+}
+
+/** What the module's services are built over, bound once by `main.ts`. */
+export interface VerificationServiceDependencies {
+  readonly database: Database;
+  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+  readonly settings: SettingsReader;
+  /** The kernel's keyed transactions, for `teacher.application.submit` (FR-106). */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+}
+
+/** The application and the credentials services over the owners' entries (T056, T057, R-121). */
+export function createVerificationServices({
+  database,
+  storage,
+  cipher,
+  settings,
+  idempotency,
+}: VerificationServiceDependencies): VerificationServices {
+  const stores = createVerificationStores(database);
+  return {
+    application: new ApplicationService({ stores, idempotency }),
+    credentials: new CredentialsService({
+      stores,
+      links: new VerificationService({ storage, cipher, settings }),
+    }),
+  };
+}
 
 /**
  * `POST /uploads/documents`, over this module's repository (T024) and its count of the uploader's

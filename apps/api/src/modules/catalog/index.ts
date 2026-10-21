@@ -14,6 +14,21 @@ export function createSubjectsService(database: Pick<Database, 'subject'>): Subj
 }
 
 /**
+ * The credential rows and the subjects as the verification module's application and credentials
+ * read and write them, each on the caller's transaction (T056, T057, R-121); `grantSubjects` is the
+ * approval's (admin-surface `credentials.approve`).
+ */
+export {
+  addCredential,
+  type CredentialRow,
+  grantSubjects,
+  listCredentials,
+  type NewCredentialRow,
+  replaceCredentialDocument,
+} from './credentials.repository.js';
+export { activeSubjectsAmong } from './subjects.repository.js';
+
+/**
  * The documents this module's rows point at, `teacher_credentials.document_id`, for the
  * verification module's unreferenced documents (T093, R-API-6).
  */

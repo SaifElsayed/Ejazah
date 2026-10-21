@@ -29,6 +29,8 @@ const [
   identity,
   verification,
   { createColumnCipher },
+  { IdempotencyService },
+  { IdempotencyRepository },
   { createRedisSingleUseMarks },
   { selectPorts },
   { TERMS_PATH, termsRoute },
@@ -48,6 +50,8 @@ const [
   import('./modules/identity/index.js'),
   import('./modules/verification/index.js'),
   import('./platform/crypto/encryption.js'),
+  import('./platform/idempotency/idempotency.service.js'),
+  import('./platform/idempotency/idempotency.repository.js'),
   import('./platform/redis/single-use-marks.js'),
   import('./platform/ports/ports.module.js'),
   import('./platform/web/terms/terms.controller.js'),
@@ -110,9 +114,15 @@ const sessions = {
   admin: async () => null,
 };
 
+// The column cipher (R-DB-8): the documents route encrypts a document's storage key with it, and
+// the credentials' links decrypt it (T024, T057).
+const cipher = createColumnCipher(config);
+
 // What the user surface's procedures read (T038): the settings reader, the support address from
-// the configuration (FR-145, never an admin setting), the catalog module's subjects read, and the
-// identity module's services behind `auth`, `onboarding` and `account` (T048, T049).
+// the configuration (FR-145, never an admin setting), the catalog module's subjects read, the
+// identity module's services behind `auth`, `onboarding` and `account` (T048, T049), and the
+// verification module's behind `teacher.application` and `teacher.credentials` (T056, T057), the
+// application's submission keyed through the kernel's idempotency (FR-106).
 const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
@@ -127,6 +137,13 @@ const services = {
     email: ports.email,
     storage: ports.storage,
     log,
+  }),
+  verification: verification.createVerificationServices({
+    database,
+    storage: ports.storage,
+    cipher,
+    settings,
+    idempotency: new IdempotencyService({ store: new IdempotencyRepository(database), settings }),
   }),
 };
 
@@ -149,7 +166,7 @@ const routes = {
   [verification.DOCUMENTS_UPLOAD_PATH]: verification.createDocumentsUploadRoute({
     ...uploads,
     storage: ports.storage,
-    cipher: createColumnCipher(config),
+    cipher,
     database,
     settings,
     references: documentReferences,

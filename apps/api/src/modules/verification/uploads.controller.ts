@@ -10,7 +10,9 @@
 // identity document, whose kind (`national_id`, `passport`) the person declares with the submission
 // that points at it (`teacher.application.submit`, `account.identityVerification.submit`) and which
 // is recorded on the pointing row. The object is stored before the row and removed again when the
-// row cannot be written, so no key names a stored file nobody owns.
+// row cannot be written, so no key names a stored file nobody owns. The row records the size the route
+// accepted (T057), for the credentials page; the file's name is never recorded, since it may carry
+// the person's name.
 //
 // T093: before anything is stored, the route counts the uploader's documents nothing points at and
 // refuses a further one with `CONFLICT` (`documents`, `too_many`) once they hold
@@ -93,6 +95,7 @@ export function documentsUploadRoute({
           userId: uploader.userId,
           documentType: documentTypeOf[kind],
           storageKeyEncrypted: cipher.encrypt(key, DOCUMENT_STORAGE_KEY_COLUMN, documentId),
+          sizeBytes: bytes.byteLength,
         });
       } catch (error: unknown) {
         await storage.remove(key).catch(() => undefined);
