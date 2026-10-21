@@ -164,7 +164,9 @@ describe('the authorization-test gate (T028)', () => {
     expect(message).toContain('R-MOBILE-13');
   });
 
-  it('passes this repository today, exit 0', () => {
+  // It reads the whole repository; under the pipeline's coverage and parallel database specs it
+  // has taken over five seconds (PR #91), so it is given room the default does not leave.
+  it('passes this repository today, exit 0', { timeout: 15_000 }, () => {
     const output: string[] = [];
     const code = main([], { out: (text) => output.push(text), err: (text) => output.push(text) });
     expect(code, output.join('')).toBe(0);

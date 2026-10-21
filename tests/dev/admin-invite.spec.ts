@@ -3,7 +3,8 @@
 // whose email is the stand-in, so it never sends a real mail, and without the panel's origin the
 // link needs; it marks the invitation and queues `deliver-admin-invite` with the id alone, and does
 // neither for an administrator who already set a password. Over the real database, in a
-// transaction rolled back, with the queue a recorder.
+// transaction rolled back, with the queue a recorder. The pipeline's database is migrated, not
+// seeded, so each case plants the seeded administrator's row itself, in the state it needs.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ADMINISTRATOR } from '../../prisma/seed';
@@ -42,6 +43,21 @@ describe('the guard', () => {
   });
 });
 
+/**
+ * The seeded administrator's row as the seed leaves it (no password, never invited, active),
+ * written where it is absent and put back in that state where it is not; inside the case's rollback.
+ */
+async function plantSeededAdministrator(db: Db): Promise<void> {
+  await db.query(
+    `INSERT INTO admin_users
+       (id, email, password_hash, mfa_secret_encrypted, display_name, is_active, created_at, updated_at)
+     VALUES ($1, $2, 'unusable', $3, $4, true, now(), now())
+     ON CONFLICT (id) DO UPDATE
+       SET is_active = true, disabled_at = NULL, password_set_at = NULL, invited_at = NULL`,
+    [ADMINISTRATOR.id, ADMINISTRATOR.email, Buffer.from('probe'), ADMINISTRATOR.displayName],
+  );
+}
+
 describe('the invite', () => {
   let db: Db;
   beforeAll(async () => {
@@ -54,10 +70,7 @@ describe('the invite', () => {
   it('marks the seeded administrator invited now and queues deliver-admin-invite with the id alone', async () => {
     const queued: unknown[][] = [];
     await inRollback(db, async () => {
-      await db.query(
-        'UPDATE admin_users SET password_set_at = NULL, invited_at = NULL WHERE id = $1',
-        [ADMINISTRATOR.id],
-      );
+      await plantSeededAdministrator(db);
       expect(
         await inviteSeededAdministrator(db, { add: async (...args) => queued.push(args) }),
       ).toBe(true);
@@ -73,6 +86,7 @@ describe('the invite', () => {
   it('queues nothing for an administrator who already set a password', async () => {
     const queued: unknown[][] = [];
     await inRollback(db, async () => {
+      await plantSeededAdministrator(db);
       await db.query('UPDATE admin_users SET password_set_at = now() WHERE id = $1', [
         ADMINISTRATOR.id,
       ]);
