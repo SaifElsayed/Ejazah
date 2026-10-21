@@ -140,7 +140,7 @@ function surfaceOver(database: FakeDatabase) {
 function callerOver(database: FakeDatabase, auditWriter: AuditWriter, adminId: string | null) {
   const context = createAdminContext({
     // The second factor is verified on every session here; its refusal is T016's, in procedures.spec.ts.
-    session: adminId === null ? null : { adminId, mfaVerified: true },
+    session: adminId === null ? null : { adminId, sessionId: 'session-1', mfaVerified: true },
     log,
     administration: { transactions: database, auditWriter },
     rateLimiter: {} as RateLimiter,

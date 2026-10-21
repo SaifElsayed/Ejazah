@@ -283,6 +283,20 @@ export function addMinutes(from: Date, minutes: number): UtcInstant {
   return addSeconds(from, minutes * SECONDS_PER_MINUTE);
 }
 
+const SECONDS_PER_HOUR = 3_600;
+
+/**
+ * The instant `hours` whole hours after `from` (T066: an administrator session's absolute lifetime
+ * and an invite link's, read in hours from settings). An instant's hour: a clock change in between
+ * does not move it.
+ */
+export function addHours(from: Date, hours: number): UtcInstant {
+  if (!Number.isSafeInteger(hours)) {
+    throw new TimeError('hours', String(hours), 'expected a whole number of hours');
+  }
+  return addSeconds(from, hours * SECONDS_PER_HOUR);
+}
+
 /**
  * The instant `days` days of 24 hours after `from` (T044: a refresh token's absolute lifetime). An
  * instant's day, never a wall-clock day: a clock change in between does not move it.
@@ -292,6 +306,18 @@ export function addDays(from: Date, days: number): UtcInstant {
     throw new TimeError('days', String(days), 'expected a whole number of days');
   }
   return addSeconds(from, days * SECONDS_PER_DAY);
+}
+
+const MILLISECONDS_PER_SECOND = 1_000;
+
+/**
+ * The whole seconds from the epoch to `at`, a fraction dropped (T066: the time an RFC 6238 code is
+ * counted from). The one place an instant becomes a count of seconds, so no caller divides a Date.
+ */
+export function unixSeconds(at: Date): number {
+  const epochMilliseconds = at.getTime();
+  if (Number.isNaN(epochMilliseconds)) throw new TimeError('at', String(at), 'not an instant');
+  return Math.floor(epochMilliseconds / MILLISECONDS_PER_SECOND);
 }
 
 /**

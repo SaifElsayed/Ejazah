@@ -195,6 +195,10 @@ const envObject = z.object({
 
   ADMIN_ALLOWED_ORIGINS: allowedOrigins.default([]),
 
+  // T066 (research R-110): the Admin panel's own origin, where an invited administrator's password-set
+  // link points. Unset, the invite job fails each delivery, visibly, rather than mail a dead link.
+  ADMIN_PANEL_ORIGIN: origin.optional(),
+
   SENTRY_DSN: httpUrl.optional(),
 });
 
@@ -249,6 +253,7 @@ const envKeyKinds = {
   APPLE_PRIVATE_KEY: 'provider',
   PUBLIC_WEBHOOK_ORIGIN: 'provider',
   ADMIN_ALLOWED_ORIGINS: 'platform',
+  ADMIN_PANEL_ORIGIN: 'platform',
   SENTRY_DSN: 'provider',
 } as const satisfies Record<keyof typeof envObject.shape, 'provider' | 'platform'>;
 

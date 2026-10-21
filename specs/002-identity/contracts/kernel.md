@@ -14,7 +14,7 @@ request before the context is built:
 | Surface       | Resolver                      | Reads                                                                                                   | Yields                                |
 | ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | User          | `resolveUserSession(bearer)`  | the access token's HMAC, then one query over `user_sessions`, `users`, `user_roles`, `teacher_profiles` | `UserSession` (data-model §6) or null |
-| Administrator | `resolveAdminSession(bearer)` | the token's lookup hash, then `admin_sessions` and `admin_users`                                        | `{ adminId, mfaVerified }` or null    |
+| Administrator | `resolveAdminSession(bearer)` | the token's lookup hash, then `admin_sessions` and `admin_users`                                        | `{ adminId, sessionId, mfaVerified }` or null |
 
 Standing is resolved on every request; nothing is cached across requests
 (FR-108). A resolver never throws for a bad token: it yields null, and the

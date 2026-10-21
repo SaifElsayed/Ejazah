@@ -17,7 +17,7 @@
 import { Redis } from 'ioredis';
 
 /** What a mark is for: each kind its own key space. */
-export type MarkKind = 'provider-nonce' | 'onboarding';
+export type MarkKind = 'provider-nonce' | 'onboarding' | 'admin-invite';
 
 export interface SingleUseMarks {
   /** Places the mark until `expiresAt`; true when it was not there already. */

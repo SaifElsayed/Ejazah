@@ -24,7 +24,8 @@ vi.mock('node:crypto', async (original) => {
   };
 });
 
-const { generateCertificateNumber, generateVerificationToken } = await import('./identifiers.js');
+const { generateCertificateNumber, generateRecoveryCode, generateVerificationToken } =
+  await import('./identifiers.js');
 
 afterEach(() => {
   answered.bytes.length = 0;
@@ -49,5 +50,16 @@ describe('public identifiers come from node:crypto alone (T166, R-DB-6)', () => 
     expect(generateVerificationToken()).toBe(drawn.toString('base64url'));
     expect(generateVerificationToken()).toBe(Buffer.alloc(32, 0xfb).toString('base64url'));
     expect(answered.sizes).toEqual([32, 32]);
+  });
+
+  it('a recovery code is the Crockford base32 of the first fifty bits of the seven bytes drawn (T066)', () => {
+    answered.bytes.push(Buffer.alloc(7, 0x00), Buffer.alloc(7, 0xff));
+    expect(generateRecoveryCode()).toBe('0000000000');
+    expect(generateRecoveryCode()).toBe('ZZZZZZZZZZ');
+
+    // 0x08 0x86 0x42 0x98 0xE8 0x86 0x42 = 00001 00010 00011 00100 00101 00110 00111 01000 10000 11001 …
+    answered.bytes.push(Buffer.from('08864298e88642', 'hex'));
+    expect(generateRecoveryCode()).toBe('12345678GS');
+    expect(answered.sizes).toEqual([7, 7, 7]);
   });
 });

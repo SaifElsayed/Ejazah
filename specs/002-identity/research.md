@@ -214,13 +214,14 @@ omission).
 
 ---
 
-## R-107: Administrator sign-in — TOTP from `node:crypto`, hashed single-use recovery codes, lockout as a column pair behind the throttle (FR-170 to FR-173)
+## R-107: Administrator sign-in — TOTP through `otplib`, hashed single-use recovery codes, lockout as a column pair behind the throttle (FR-170 to FR-173)
 
 **Decision**: The second factor is RFC 6238 TOTP (SHA-1, six digits, thirty
 seconds, one step of drift either way), computed by `otplib` (a proven library, R-SEC-7) behind the kernel
 primitive `platform/crypto/totp.ts`, checked against RFC 6238's vectors; the secret is generated at invite, encrypted with the column cipher
-(`mfa_secret_encrypted`, already NOT NULL) and shown once as an `otpauth://` QR
-and a manual key on the setup page; `mfa_enrolled_at` is null until the first
+(`mfa_secret_encrypted`, already NOT NULL), and drawn afresh on every setup begin
+while the administrator is not enrolled (owner's decision 2026-10-21, T066), shown
+once as an `otpauth://` QR and a manual key on the setup page; `mfa_enrolled_at` is null until the first
 code is confirmed, and an unenrolled administrator reaches nothing but setup.
 `admin_recovery_code_count` recovery codes (ten) of ten Crockford base32 symbols are drawn from the
 identifiers module, shown once, stored peppered-and-hashed in

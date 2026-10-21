@@ -50,6 +50,8 @@ export const errorCodes = {
   ADMIN_SIGN_IN_FAILED: { status: 401, message: 'Sign-in failed.' },
   MFA_REQUIRED: { status: 403, message: 'Verify the second factor to continue.' },
   MFA_SETUP_REQUIRED: { status: 403, message: 'Set up two-step verification to continue.' },
+  // T066: the administrator's password-set link altered, expired, used, or for a disabled account.
+  INVITE_INVALID: { status: 400, message: 'This link is not valid. Ask for a new invitation.' },
   // The blocking reasons travel as `details: [{ path: 'application', code: reason }, …]`.
   APPROVAL_BLOCKED: { status: 409, message: 'The application cannot be approved yet.' },
   APPLICATION_INCOMPLETE: { status: 409, message: 'The application is not complete.' },

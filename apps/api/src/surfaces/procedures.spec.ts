@@ -96,8 +96,8 @@ const verificationRequired: UserSession = {
   accountStatus: 'verification_required',
 };
 
-const verifiedAdmin: AdminSession = { adminId: 'admin-1', mfaVerified: true };
-const unverifiedAdmin: AdminSession = { adminId: 'admin-1', mfaVerified: false };
+const verifiedAdmin: AdminSession = { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: true };
+const unverifiedAdmin: AdminSession = { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: false };
 
 const secret = 'date-of-birth-1990-01-01';
 

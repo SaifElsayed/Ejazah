@@ -4,11 +4,53 @@ import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { AdminAuthService } from './admin-auth.service.js';
+import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
+import {
+  AdminSessionService,
+  type AdminSessionDependencies,
+} from './admin-session.service.js';
 import { AdminSessionsRepository } from './admin-sessions.repository.js';
 import { AdminUsersRepository } from './admin-users.repository.js';
+import { type AdminInviteQueue, AdminsService } from './admins.service.js';
 import { AuditRepository } from './audit.repository.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
+
+/** The administrator's session resolver, bound by `main.ts` for the HTTP application (T066). */
+export { resolveAdminSession, type ResolvedAdminSession } from './admin-session.service.js';
+export type { AdminInviteQueue, SignInNextStep };
+
+type SignInNextStep = Awaited<ReturnType<AdminAuthService['signIn']>>['next'];
+
+/** The admin module's services, for the administrator surface's routers (T066; mounted by T067). */
+export interface AdminServices {
+  readonly auth: Pick<
+    AdminAuthService,
+    'signIn' | 'verifyMfa' | 'recover' | 'beginSetup' | 'confirmSetup' | 'setPassword'
+  >;
+  readonly sessions: Pick<AdminSessionService, 'signOut'>;
+  readonly admins: Pick<AdminsService, 'add' | 'disable' | 'resetMfa' | 'regenerateRecoveryCodes'>;
+}
+
+export interface AdminServiceDependencies extends AdminSessionDependencies {
+  readonly encryptionKey: string;
+  readonly inviteQueue: AdminInviteQueue;
+}
+
+export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
+  const sessions = new AdminSessionService(dependencies);
+  return {
+    auth: new AdminAuthService({ ...dependencies, sessions }),
+    sessions,
+    admins: new AdminsService({ ...dependencies, sessions }),
+  };
+}
+
+/** The invites `deliver-admin-invite` sends, handed to the job by `worker.ts` (T066, R-110). */
+export function createAdminInvites(dependencies: AdminInviteDependencies): AdminInvites {
+  return new AdminInvites(dependencies);
+}
 
 /** The audit label's read-time name and the Arabic of the moved catalogue keys (T021, R-108). */
 export { resolveTargetName, arabic as auditArabic, withLam } from './labels/target-name.js';

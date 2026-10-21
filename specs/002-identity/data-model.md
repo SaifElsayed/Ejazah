@@ -291,8 +291,9 @@ kind requires role student; `teacherProcedure({ admits })` requires role
 teacher and the declared standing (R-106); every kind refuses suspended and
 banned unless it `admitsRestricted`. Administrators: `resolveAdminSession`
 joins `admin_sessions` (not revoked, idle and absolute limits) to `admin_users`
-(active, `mfa_enrolled_at`, `password_set_at`), yielding `{ adminId,
-mfaVerified }`; the admin kind refuses `mfaVerified: false`.
+(active, `mfa_enrolled_at`, `password_set_at`), yielding `{ adminId, sessionId,
+mfaVerified }` (`sessionId` so `auth.signOut` ends this session, T061); the admin
+kind refuses `mfaVerified: false`.
 
 ---
 

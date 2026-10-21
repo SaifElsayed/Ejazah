@@ -4,7 +4,11 @@ Every procedure below is mounted on `adminRouter`. The sign-in procedures are
 on the new `adminPublicProcedure` kind (kernel.md); everything else is
 `adminProcedure`, which runs in one transaction and writes the audit record
 the handler describes, with the non-personal `targetLabel` rendered by the
-writer from the target's type and id (FR-180). A read is audited like a write.
+writer from the target's type and id (FR-180). A read is audited like a write:
+its action ends in `.read` (`applications.read`, `audit.read`, `home.read`,
+`admins.read`), a read with no single target names the reading administrator
+(`targetType: 'admin'`), and the home's latest actions and `audit.list` leave out
+the actions ending in `.read` and nothing else (owner's decision 2026-10-21, T065).
 
 ## `auth` — sign-in and the second factor (FR-170 to FR-174)
 
@@ -13,7 +17,7 @@ writer from the target's type and id (FR-180). A read is audited like a write.
 | `auth.signIn`            | admin public, `rate_limit_authentication` with budget | `{ email, password }`            | `{ next: 'mfa' \| 'setup', sessionToken }`                          | `ADMIN_SIGN_IN_FAILED` for an unknown email, a wrong password, a disabled account, an unset password or a locked account — one message, one timing (R-107). The token is a session with `mfa_verified_at` null |
 | `auth.mfa.verify`        | admin public, `rate_limit_authentication`             | `{ sessionToken, code }`         | `void`                                                              | Marks the session verified; a wrong code counts toward the lockout; a code already accepted in its time step is refused (RFC 6238 §5.2, `admin_users.mfa_last_accepted_step`)                                  |
 | `auth.mfa.recover`       | admin public, `rate_limit_authentication`             | `{ sessionToken, recoveryCode }` | `{ remainingCodes }`                                                | Consumes one code and marks the session verified; a wrong code counts toward the lockout                                                                                                                       |
-| `auth.mfa.setup.begin`   | admin public, `rate_limit_authentication`             | `{ sessionToken }`               | `{ otpauthUri, manualKey }`                                         | Only while `mfa_enrolled_at` is null; the secret is the row's                                                                                                                                                  |
+| `auth.mfa.setup.begin`   | admin public, `rate_limit_authentication`             | `{ sessionToken }`               | `{ otpauthUri, manualKey }`                                         | Only while `mfa_enrolled_at` is null; a fresh secret is drawn and written to the row on every begin, valid for that sign-in only (FR-171; owner's decision 2026-10-21, T066)                                                                                                                                                  |
 | `auth.mfa.setup.confirm` | admin public, `rate_limit_authentication`             | `{ sessionToken, code }`         | `{ recoveryCodes: string[] }` (`admin_recovery_code_count` of them) | Sets `mfa_enrolled_at`, issues the codes once, marks the session verified                                                                                                                                      |
 | `auth.setPassword`       | admin public, `rate_limit_authentication`             | `{ inviteToken, password }`      | `void`                                                              | The password-set link (R-110); single use by `password_set_at`; `PASSWORD_WEAK` by R-105                                                                                                                       |
 | `auth.signOut`           | admin                                                 | `void`                           | `void`                                                              | Revokes the session                                                                                                                                                                                            |
@@ -76,7 +80,7 @@ writer from the target's type and id (FR-180). A read is audited like a write.
 | -------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `audit.list`   | `{ search?, targetType?, targetId?, from?, to?, page }` | `{ rows: [{ entryId, occurredAt, adminName, action, targetLabel, targetName?, targetType, targetId, reason? }], total }`                                                              | read; `targetName` resolved at read time, the role word for a deleted person |
 | `audit.get`    | `{ entryId }`                                           | `{ …the list row, before?, after? }` (the two snapshots as stored JSON)                                                                                                               | read                                                                         |
-| `home.summary` | `void`                                                  | `{ queues: { applications: { open, oldestAgeHours?, waitingOnApplicant }, credentials: { open, addedSubjects } }, latestActions: [audit rows, `admin_home_latest_actions` of them] }` | read; the other six queue cards are absent until their phases                |
+| `home.summary` | `void`                                                  | `{ queues: { applications: { open, oldestAgeHours?, waitingOnApplicant }, credentials: { open, addedSubjects } }, latestActions: [audit rows, `admin_home_latest_actions` of them] }` | read; the other six queue cards are absent until their phases; the latest actions leave out `.read` |
 
 ## Dialog variants
 
