@@ -5,7 +5,7 @@
 // (note under T018). `platform.publicConfig` is read once and cached.
 import { describe, expect, it, jest } from '@jest/globals';
 
-import { createApiClient, errorCodeOf, errorDetailsOf } from './client';
+import { createApiClient, errorCodeOf, errorDetailsOf, filePart, UPLOAD_FILE_NAME } from './client';
 import type { SessionStore, SessionTokens } from './storage';
 
 const url = 'https://api.test/trpc';
@@ -314,5 +314,115 @@ describe('the API client', () => {
       fetch: server.fetch,
     });
     await expect(client.publicConfig()).rejects.toBeDefined();
+  });
+});
+
+// T058: `POST /uploads/documents` through the same session. The route reads the `kind` before the
+// file (apps/api/src/platform/http/multipart.ts), so the order is part of the contract; the answer
+// is the document's id, and a refusal in the API's one error shape is read as a call's is (review
+// of B11b, round 1, finding 2).
+describe('the documents upload', () => {
+  const uploadsUrl = 'https://api.test/uploads/documents';
+  const file = { uri: 'file:///cache/ijazah.pdf', name: 'ijazah.pdf' };
+
+  /** The multipart parts as the client appended them, in order: React Native's FormData, or Node's under Jest. */
+  function partsOf(body: unknown): [string, unknown][] {
+    const form = body as {
+      readonly _parts?: [string, unknown][];
+      readonly entries?: () => Iterable<[string, unknown]>;
+    };
+    if (form._parts !== undefined) return form._parts;
+    if (form.entries !== undefined) return [...form.entries()];
+    throw new Error('the upload was not sent as multipart');
+  }
+
+  /** The tRPC server for the refresh, and the uploads route beside it. */
+  function server(upload: (bearer: string | null) => { status: number; body: unknown }) {
+    const uploads: { bearer: string | null; parts: [string, unknown][] }[] = [];
+    const trpc = fakeServer((call) =>
+      call.path === 'auth.refresh' ? ok({ accessToken: 'a2', refreshToken: 'r2' }) : ok(subjects),
+    );
+    const fetchImpl = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) !== uploadsUrl) return trpc.fetch(input, init);
+      const authorization = new Headers(init?.headers).get('authorization');
+      const bearer = authorization === null ? null : authorization.replace(/^Bearer /, '');
+      uploads.push({ bearer, parts: partsOf(init?.body) });
+      const { status, body } = upload(bearer);
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    return { uploads, trpc, fetch: fetchImpl as unknown as typeof fetch };
+  }
+
+  function clientOver(fetchImpl: typeof fetch, withUrl = true) {
+    const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });
+    const client = createApiClient({
+      url,
+      sessions: sessions.store,
+      ...(withUrl ? { documentsUploadUrl: uploadsUrl } : {}),
+      onSignedOut: jest.fn(),
+      fetch: fetchImpl,
+    });
+    return { client, sessions };
+  }
+
+  it('posts the kind before the file, with the bearer, and answers the document id', async () => {
+    const fake = server(() => ({ status: 201, body: { documentId: 'd-1' } }));
+    const { client } = clientOver(fake.fetch);
+    await expect(client.uploadDocument('credential', file)).resolves.toBe('d-1');
+    expect(fake.uploads).toHaveLength(1);
+    expect(fake.uploads[0]?.bearer).toBe('a1');
+    expect(fake.uploads[0]?.parts.map(([name]) => name)).toEqual(['kind', 'file']);
+    expect(fake.uploads[0]?.parts[0]?.[1]).toBe('credential');
+  });
+
+  it('refreshes once on UNAUTHENTICATED and sends the file again with the new bearer', async () => {
+    const fake = server((bearer) =>
+      bearer === 'a1' ? refused('UNAUTHENTICATED') : { status: 201, body: { documentId: 'd-2' } },
+    );
+    const { client, sessions } = clientOver(fake.fetch);
+    await expect(client.uploadDocument('identity', file)).resolves.toBe('d-2');
+    expect(fake.uploads.map(({ bearer }) => bearer)).toEqual(['a1', 'a2']);
+    expect(fake.trpc.calls.map(({ path }) => path)).toEqual(['auth.refresh']);
+    expect(sessions.current()).toEqual({ accessToken: 'a2', refreshToken: 'r2' });
+  });
+
+  it('raises a refusal whose code and details are read as a call’s are', async () => {
+    const fake = server(() => ({
+      status: 409,
+      body: {
+        error: {
+          code: 'CONFLICT',
+          message: 'refused',
+          details: [{ path: 'documents', code: 'too_many' }],
+        },
+      },
+    }));
+    const { client } = clientOver(fake.fetch);
+    const refusal = await client
+      .uploadDocument('credential', file)
+      .catch((error: unknown) => error);
+    expect(errorCodeOf(refusal)).toBe('CONFLICT');
+    expect(errorDetailsOf(refusal)).toEqual([{ path: 'documents', code: 'too_many' }]);
+  });
+
+  it('names every file document.pdf, never the person’s file name', () => {
+    expect(UPLOAD_FILE_NAME).toBe('document.pdf');
+    expect(filePart({ uri: 'file:///cache/sara-adel-id.pdf', name: 'sara-adel-id.pdf' })).toEqual({
+      uri: 'file:///cache/sara-adel-id.pdf',
+      name: 'document.pdf',
+      type: 'application/pdf',
+    });
+  });
+
+  it('refuses to upload when the client was given no uploads address', async () => {
+    const fake = server(() => ({ status: 201, body: { documentId: 'd-3' } }));
+    const { client } = clientOver(fake.fetch, false);
+    await expect(client.uploadDocument('credential', file)).rejects.toThrow(
+      'no documents upload URL',
+    );
+    expect(fake.uploads).toEqual([]);
   });
 });

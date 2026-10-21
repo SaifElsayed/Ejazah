@@ -1266,7 +1266,8 @@
     },
     "credentials": {
       "a11y": {
-        "chain": "السند"
+        "chain": "السند",
+        "openFile": "فتح الملف"
       },
       "add": {
         "note": "تصبح المادة متاحة لك بعد المراجعة.",
@@ -1282,13 +1283,16 @@
         "yourIjazah": "إجازتك في هذه المادة"
       },
       "chainMore": "… {count, plural, one {جيل واحد} two {جيلان} few {# أجيال} many {# جيلًا} other {# جيل}}",
+      "chainNamesSeparator": "، ",
       "credential": {
         "currentFile": "الملف الحالي",
         "heading": "طلب المشرف ملفًا آخر",
         "title": "إجازة {subject}",
         "uploadAnother": "رفع ملف آخر"
       },
+      "fileName": "إجازة {subject}.pdf",
       "riwayaLine": "برواية {riwaya} · من طريق {tariq}",
+      "riwayaOnly": "برواية {riwaya}",
       "submittedOn": "أُرسلت {date}",
       "title": "إجازاتي",
       "verifiedOn": "وُثّقت {date} · السند {count, plural, one {جيل واحد} two {جيلان} few {# أجيال} many {# جيلًا} other {# جيل}}"

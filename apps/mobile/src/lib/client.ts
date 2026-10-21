@@ -18,6 +18,11 @@
 // reads the code from the answer's body the error keeps; screens switch on it, never on a message
 // or a status.
 //
+// THE UPLOADS (T058). A PDF goes to `POST /uploads/documents` as multipart, the `kind` before the
+// file (public-pages.md "The uploads route"), through the same bearer and the same one refresh as
+// a call; the answer is the document's id. A refusal arrives in the API's one error shape and is
+// raised as `ApiRefusal`, whose code `errorCodeOf` reads as it reads a call's.
+//
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
 import { type PublicConfig, publicConfigOutput, refreshOutput } from '@ijazah/contracts';
@@ -36,6 +41,8 @@ export interface ApiClientOptions {
   /** The user surface's tRPC endpoint: the API's origin and `/trpc`. */
   readonly url: string;
   readonly sessions: SessionStore;
+  /** `POST /uploads/documents` on the API's origin (T058). */
+  readonly documentsUploadUrl?: string;
   /** Called once when the server refuses the session's refresh. */
   readonly onSignedOut: () => void;
   /** The transport; the platform's own unless a test hands one in. */
@@ -46,6 +53,28 @@ export interface ApiClient {
   readonly api: TRPCClient<AppRouter>;
   /** The support address and the Terms version, read once per launch. */
   publicConfig(): Promise<PublicConfig>;
+  /** Uploads a PDF the person picked; the document's id (T058). */
+  uploadDocument(kind: DocumentKind, file: LocalFile): Promise<string>;
+}
+
+/** What an upload is for: the identity document or an ijazah (`POST /uploads/documents`). */
+export type DocumentKind = 'identity' | 'credential';
+
+/** A file on the device, as the document picker hands it. */
+export interface LocalFile {
+  readonly uri: string;
+  readonly name: string;
+}
+
+/** A refusal of a call made outside tRPC (an upload), in the API's one error shape. */
+export class ApiRefusal extends Error {
+  readonly body: unknown;
+
+  constructor(body: unknown) {
+    super('The API refused the request');
+    this.name = 'ApiRefusal';
+    this.body = body;
+  }
 }
 
 const UNAUTHENTICATED = 'UNAUTHENTICATED';
@@ -111,6 +140,18 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   let config: Promise<PublicConfig> | null = null;
   return {
     api,
+    async uploadDocument(kind, file) {
+      const target = options.documentsUploadUrl;
+      if (target === undefined) throw new Error('uploadDocument: no documents upload URL');
+      const body = new FormData();
+      body.append('kind', kind);
+      // React Native's FormData takes a file as its uri, name and type.
+      body.append('file', filePart(file) as unknown as Blob);
+      const response = await sessionFetch(target, { method: 'POST', body });
+      const answer: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new ApiRefusal(answer);
+      return documentIdOf(answer);
+    },
     publicConfig() {
       config ??= api.platform.publicConfig
         .query()
@@ -143,9 +184,7 @@ function asFetchEsque(
  * carries, or undefined when the error never came from the API (offline, a timeout, a bug).
  */
 export function errorCodeOf(error: unknown): string | undefined {
-  if (!(error instanceof TRPCClientError)) return undefined;
-  const body: unknown = error.meta?.['responseJSON'] ?? error.cause;
-  const code = codeOf(body);
+  const code = codeOf(bodyOf(error));
   return typeof code === 'string' ? code : undefined;
 }
 
@@ -160,8 +199,7 @@ export interface ErrorDetail {
  * none when the error never came from the API or carried none.
  */
 export function errorDetailsOf(error: unknown): readonly ErrorDetail[] {
-  if (!(error instanceof TRPCClientError)) return [];
-  const body: unknown = error.meta?.['responseJSON'] ?? error.cause;
+  const body = bodyOf(error);
   if (typeof body !== 'object' || body === null || !('error' in body)) return [];
   const { error: answer } = body;
   if (typeof answer !== 'object' || answer === null || !('details' in answer)) return [];
@@ -174,6 +212,34 @@ export function errorDetailsOf(error: unknown): readonly ErrorDetail[] {
       typeof (detail as ErrorDetail).path === 'string' &&
       typeof (detail as ErrorDetail).code === 'string',
   );
+}
+
+/** The name every upload carries: the server discards it, and the person's file name stays here. */
+export const UPLOAD_FILE_NAME = 'document.pdf';
+
+/**
+ * The multipart file part of an upload: where the file is, and a fixed name rather than the
+ * person's, which may carry their name (owner's decision 2026-10-21; review of B11b, round 1,
+ * finding 3).
+ */
+export function filePart(file: LocalFile): { uri: string; name: string; type: string } {
+  return { uri: file.uri, name: UPLOAD_FILE_NAME, type: 'application/pdf' };
+}
+
+/** The uploads route's answer: the document's id. */
+function documentIdOf(answer: unknown): string {
+  if (typeof answer === 'object' && answer !== null && 'documentId' in answer) {
+    const { documentId } = answer;
+    if (typeof documentId === 'string') return documentId;
+  }
+  throw new Error('uploadDocument: the answer carries no document id');
+}
+
+/** The answer's body a refusal keeps, or undefined when the error never came from the API. */
+function bodyOf(error: unknown): unknown {
+  if (error instanceof ApiRefusal) return error.body;
+  if (!(error instanceof TRPCClientError)) return undefined;
+  return error.meta?.['responseJSON'] ?? error.cause;
 }
 
 /** True when the answer's tRPC error carries the UNAUTHENTICATED code. */

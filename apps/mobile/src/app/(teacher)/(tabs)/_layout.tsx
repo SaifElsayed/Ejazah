@@ -1,12 +1,14 @@
 // T034: the teacher's tab bar (screens.md `TeacherTabs`): the active tab root above one TabBar of five
 // items. The teacher bar navigates. The tab roots of this phase hold no state, so the active one renders in a Slot;
-// the top inset is drawn here once for every tab root.
+// the top inset is drawn here once for every tab root. T058: an approved teacher who has not yet
+// seen `ApplicationApproved` is sent to it once (FR-152), from here, where an approval lands.
 import { Slot, useSegments } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabBar } from '../../../design/primitives';
 import { useTheme } from '../../../design/theme';
+import { ApprovedOnce } from '../../../features/teacher/application';
 import { useT } from '../../../i18n';
 
 export default function TabsLayout() {
@@ -47,6 +49,7 @@ export default function TabsLayout() {
         <Slot />
       </View>
       <TabBar items={items} activeRoute={`/${segments.join('/')}`} />
+      <ApprovedOnce />
     </View>
   );
 }

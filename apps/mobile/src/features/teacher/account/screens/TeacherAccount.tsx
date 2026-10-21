@@ -1,13 +1,24 @@
 // T052 (FR-PROFILE-6, FR-AUTH-5, FR-LOC-3, FR-AUTH-10, FR-GENDER-5, FR-AUTH-11, FR-AUTH-7): the
 // teacher's account tab (TeacherAccount): sign-out in the header, the avatar and name with the
 // approved badge, and the settings the student's tab has. The teaching list and the delete row are
-// added with their screens (owner's decision, 2026-10-20): «إجازاتي» with B11, «حساب الاستلام»
-// with B15, «حذف الحساب» with B16, the public profile, the signature and the rating with their
-// phases; the notifications with theirs.
+// added with their screens (owner's decision, 2026-10-20): «إجازاتي» since B11b (T059), with the
+// count waiting for review from `teacher.credentials.list`; «حساب الاستلام» with B15, «حذف الحساب»
+// with B16, the public profile, the signature and the rating with their phases; the notifications
+// with theirs.
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { AppHeader, Avatar, Badge, Card, IconButton, Text } from '../../../../design/primitives';
+import {
+  AppHeader,
+  Avatar,
+  Badge,
+  Card,
+  IconButton,
+  List,
+  ListRow,
+  Text,
+} from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
@@ -19,12 +30,15 @@ import {
   SignOutSheet,
 } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
+import { useCredentials } from '../../credentials';
 
 export function TeacherAccount() {
   const t = useT();
   const me = useMe();
+  const credentials = useCredentials();
   const [signingOut, setSigningOut] = useState(false);
   const account = me.data;
+  const waiting = (credentials.data ?? []).filter(({ status }) => status === 'pending').length;
   return (
     <TabScreen
       header={
@@ -65,6 +79,22 @@ export function TeacherAccount() {
               ) : null}
             </View>
           </Card>
+          <List header={t('teacher.account.teaching')}>
+            <ListRow
+              label={t('teacher.account.credentials')}
+              {...(waiting === 0
+                ? {}
+                : {
+                    trailing: (
+                      <Badge
+                        label={t('teacher.account.credentialsPending', { count: waiting })}
+                        tone="neutral"
+                      />
+                    ),
+                  })}
+              onPress={() => router.push('/(teacher)/credentials')}
+            />
+          </List>
           <AccountSettings me={account} />
           <SignOutSheet
             open={signingOut}
