@@ -4,7 +4,14 @@
 import { describe, expect, it } from '@jest/globals';
 import { act, renderHook } from '@testing-library/react-native';
 
-import { allows, destinationFor, setSession, type SessionState, useSession } from './session';
+import {
+  allows,
+  destinationFor,
+  setSession,
+  type SessionState,
+  signedInAs,
+  useSession,
+} from './session';
 
 describe('destinationFor', () => {
   it('lands each state where the inventory says', () => {
@@ -51,6 +58,37 @@ it('refuses, by type, an applicant without the application status (review of B6,
   expect(missing.kind).toBe('signed-in');
 });
 
+describe('signedInAs', () => {
+  it('lands an account where `account.me` says, the applicant by its status (T052)', () => {
+    expect(signedInAs({ landing: 'student_home' })).toEqual({
+      kind: 'signed-in',
+      landing: 'student_home',
+    });
+    expect(signedInAs({ landing: 'restricted' })).toEqual({
+      kind: 'signed-in',
+      landing: 'restricted',
+    });
+    expect(
+      signedInAs({
+        landing: 'teacher_application',
+        teacher: {
+          applicationStatus: 'not_started',
+          verificationStatus: 'pending',
+          payout: { configured: false, verified: false },
+        },
+      }),
+    ).toEqual({
+      kind: 'signed-in',
+      landing: 'teacher_application',
+      applicationStatus: 'not_started',
+    });
+  });
+
+  it('refuses an applicant landing without the teacher standing, never guessing a status', () => {
+    expect(() => signedInAs({ landing: 'teacher_application' })).toThrow(TypeError);
+  });
+});
+
 describe('allows', () => {
   const student: SessionState = { kind: 'signed-in', landing: 'student_home' };
   const applicant: SessionState = {
@@ -63,6 +101,8 @@ describe('allows', () => {
     const out: SessionState = { kind: 'signed-out' };
     expect(allows(out, ['(auth)', 'email-sign-in'])).toBe(true);
     expect(allows(out, ['terms'])).toBe(true);
+    // The onboarding form opens the time-zone picker before any account exists (T051).
+    expect(allows(out, ['time-zone'])).toBe(true);
     expect(allows(out, ['(student)', '(tabs)'])).toBe(false);
     expect(allows(out, [])).toBe(false);
   });

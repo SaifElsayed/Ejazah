@@ -2,7 +2,14 @@
 // the screen through these functions only, with the locale's words and the digits the boards draw.
 import { describe, expect, it } from '@jest/globals';
 
-import { formatDate, formatNumber, formatTime, formatWeekdayDate } from './formatters';
+import {
+  formatCalendarDate,
+  formatDate,
+  formatFullDate,
+  formatNumber,
+  formatTime,
+  formatWeekdayDate,
+} from './formatters';
 
 const instant = '2026-10-15T07:02:00Z';
 const cairo = 'Africa/Cairo';
@@ -28,6 +35,17 @@ describe('formatters', () => {
   it('formats a weekday and a date', () => {
     expect(formatWeekdayDate(instant, cairo, 'ar')).toBe('الخميس، 15 أكتوبر');
     expect(formatWeekdayDate(instant, cairo, 'en')).toBe('Thursday, October 15');
+  });
+
+  it('formats a date with its year, as the account draws «منذ 2 فبراير 2026»', () => {
+    expect(formatFullDate('2026-02-02T09:00:00Z', cairo, 'ar')).toBe('2 فبراير 2026');
+    expect(formatFullDate('2026-02-02T09:00:00Z', cairo, 'en')).toBe('February 2, 2026');
+  });
+
+  it('formats a calendar date, which belongs to no zone, as the profile draws «12 مارس 2004»', () => {
+    expect(formatCalendarDate('2004-03-12', 'ar')).toBe('12 مارس 2004');
+    expect(formatCalendarDate('2004-03-12', 'en')).toBe('March 12, 2004');
+    expect(() => formatCalendarDate('2004-02-30', 'ar')).toThrow(RangeError);
   });
 
   it('refuses an instant that does not parse, never printing "Invalid Date"', () => {

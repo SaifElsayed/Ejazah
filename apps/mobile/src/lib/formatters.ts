@@ -24,6 +24,32 @@ export function formatWeekdayDate(instant: string, timeZone: string, locale: Loc
   );
 }
 
+/** The day, month and year of `instant` in `timeZone`: «2 فبراير 2026», "February 2, 2026". */
+export function formatFullDate(instant: string, timeZone: string, locale: Locale): string {
+  return dateTime(locale, timeZone, { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    parse(instant),
+  );
+}
+
+/**
+ * A calendar date (`YYYY-MM-DD`, a date of birth), which belongs to no zone: «12 مارس 2004». It is
+ * read and written in UTC so no zone moves it; a date that does not exist throws.
+ */
+export function formatCalendarDate(date: string, locale: Locale): string {
+  return dateTime(locale, 'UTC', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    parseCalendarDate(date),
+  );
+}
+
+/** `date` as the UTC midnight that starts it; a malformed or non-existent date throws. */
+export function parseCalendarDate(date: string): Date {
+  const parsed = parse(`${date}T00:00:00Z`);
+  if (parsed.toISOString().slice(0, date.length) !== date) {
+    throw new RangeError(`formatters: "${date}" is not a calendar date`);
+  }
+  return parsed;
+}
+
 /** The time with the locale's day period: «10:02 ص», "10:02 AM". */
 export function formatTime(instant: string, timeZone: string, locale: Locale): string {
   return dateTime(locale, timeZone, { hour: 'numeric', minute: '2-digit' }).format(parse(instant));
@@ -53,6 +79,8 @@ export function useFormatters() {
     () => ({
       number: (value: number) => formatNumber(value, locale),
       date: (instant: string, timeZone: string) => formatDate(instant, timeZone, locale),
+      fullDate: (instant: string, timeZone: string) => formatFullDate(instant, timeZone, locale),
+      calendarDate: (date: string) => formatCalendarDate(date, locale),
       weekdayDate: (instant: string, timeZone: string) =>
         formatWeekdayDate(instant, timeZone, locale),
       time: (instant: string, timeZone: string) => formatTime(instant, timeZone, locale),

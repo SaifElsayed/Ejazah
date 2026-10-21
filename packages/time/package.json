@@ -11,6 +11,16 @@
       "@ijazah/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./cities": {
+      "@ijazah/source": "./src/cities.ts",
+      "types": "./dist/cities.d.ts",
+      "default": "./dist/cities.js"
+    },
+    "./calendar": {
+      "@ijazah/source": "./src/calendar.ts",
+      "types": "./dist/calendar.d.ts",
+      "default": "./dist/calendar.js"
     }
   },
   "scripts": {

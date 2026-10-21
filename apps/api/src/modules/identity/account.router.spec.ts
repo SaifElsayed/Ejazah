@@ -132,4 +132,16 @@ describe('account.reportDeviceTimezone', () => {
       restricted.caller.account.reportDeviceTimezone({ timezone: 'Asia/Dubai' }),
     ).rejects.toMatchObject(refused('ACCOUNT_RESTRICTED'));
   });
+
+  // Review of B10, finding 5: a device set to UTC or a fixed offset reports a zone no person lives
+  // by; it is refused and the zone kept, so the phone does not send it (B10b, `@ijazah/time/cities`).
+  it('refuses a UTC or fixed-offset device zone and keeps the zone the account has', async () => {
+    const { userId, caller } = await signedIn();
+    for (const timezone of ['UTC', 'Etc/UTC', 'Etc/GMT-2']) {
+      await expect(caller.account.reportDeviceTimezone({ timezone })).rejects.toMatchObject(
+        refused('VALIDATION_FAILED'),
+      );
+    }
+    expect((await rowsOf(database).user(userId))?.timezone).toBe('Africa/Cairo');
+  });
 });

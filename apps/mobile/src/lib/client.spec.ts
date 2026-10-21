@@ -5,7 +5,7 @@
 // (note under T018). `platform.publicConfig` is read once and cached.
 import { describe, expect, it, jest } from '@jest/globals';
 
-import { createApiClient, errorCodeOf } from './client';
+import { createApiClient, errorCodeOf, errorDetailsOf } from './client';
 import type { SessionStore, SessionTokens } from './storage';
 
 const url = 'https://api.test/trpc';
@@ -247,6 +247,28 @@ describe('the API client', () => {
     expect(await codeOfRejection(client.api.catalog.subjects.list.query())).toBe('NOT_FOUND');
     expect(await codeOfRejection(client.api.platform.publicConfig.query())).toBeUndefined();
     expect(errorCodeOf(new Error('plain'))).toBeUndefined();
+  });
+
+  it("reads the details of an API error, the sign-in conflict's method among them (T050)", async () => {
+    const server = fakeServer(() => ({
+      status: 409,
+      body: {
+        error: {
+          code: 'EMAIL_IN_USE_BY_OTHER_METHOD',
+          message: 'refused',
+          details: [{ path: 'email', code: 'google' }],
+        },
+      },
+    }));
+    const client = createApiClient({
+      url,
+      sessions: memorySessions(null).store,
+      onSignedOut: jest.fn(),
+      fetch: server.fetch,
+    });
+    const error = await client.api.catalog.subjects.list.query().catch((caught: unknown) => caught);
+    expect(errorDetailsOf(error)).toEqual([{ path: 'email', code: 'google' }]);
+    expect(errorDetailsOf(new Error('plain'))).toEqual([]);
   });
 
   it('reads the public configuration once and caches it', async () => {

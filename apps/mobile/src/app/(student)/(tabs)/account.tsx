@@ -1,4 +1,4 @@
-// T034 (FR-202): the account tab; T052 (B10) draws the account.
-import { StudentAccountShell } from '../../../features/student/account';
+// T034 (FR-202): the account tab, drawn by T052 (B10b).
+import { StudentAccount } from '../../../features/student/account';
 
-export default StudentAccountShell;
+export default StudentAccount;
