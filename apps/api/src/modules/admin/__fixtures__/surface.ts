@@ -17,6 +17,7 @@ import {
   createAdminContext,
 } from '../../../surfaces/context.js';
 import { createAdminCallerFactory, createAdminRouter } from '../../../surfaces/procedures.js';
+import { unusedAdminServices } from '../../../surfaces/services.fixtures.js';
 import { AuditQueryService } from '../audit-query.service.js';
 import { AuditRepository } from '../audit.repository.js';
 import { adminsRouter } from '../admins.router.js';
@@ -87,6 +88,8 @@ export function surfaceOf(
       },
       now: world.clock.now,
     }),
+    // The catalog module's review has its own router spec (`catalog/credentials-admin.router.spec.ts`).
+    credentials: unusedAdminServices.credentials,
   };
   const administration = {
     transactions: transactionsOver(database),

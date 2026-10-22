@@ -371,6 +371,131 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "credentials.approve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.chain": { "required": true, "type": "array" },
+          "$.chain[]": { "type": "object" },
+          "$.chain[].names": { "required": true, "type": "array" },
+          "$.chain[].names[]": { "type": "string" },
+          "$.credentialId": { "required": true, "type": "string" },
+          "$.holderName": { "required": true, "type": "string" },
+          "$.note": { "type": "string" },
+          "$.riwaya": { "required": true, "type": "string" },
+          "$.tariq": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "credentials.correct": {
+        "input": {
+          "$": { "type": "object" },
+          "$.chain": { "type": "array" },
+          "$.chain[]": { "type": "object" },
+          "$.chain[].names": { "required": true, "type": "array" },
+          "$.chain[].names[]": { "type": "string" },
+          "$.credentialId": { "required": true, "type": "string" },
+          "$.holderName": { "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.riwaya": { "type": "string" },
+          "$.tariq": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "credentials.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.credentialId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.chain": { "type": "array" },
+          "$.chain[]": { "type": "object" },
+          "$.chain[].names": { "required": true, "type": "array" },
+          "$.chain[].names[]": { "type": "string" },
+          "$.chain[].position": { "required": true, "type": "integer" },
+          "$.credentialId": { "required": true, "type": "string" },
+          "$.documentId": { "required": true, "type": "string" },
+          "$.holderName": { "type": "string" },
+          "$.origin": { "required": true, "type": "string", "values": ["added", "application"] },
+          "$.reviewReason": { "type": "string" },
+          "$.reviewedAt": { "type": "string" },
+          "$.reviewedByName": { "type": "string" },
+          "$.riwaya": { "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "needs_document", "pending", "rejected"]
+          },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.submittedAt": { "required": true, "type": "string" },
+          "$.tariq": { "type": "string" },
+          "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.displayName": { "required": true, "type": "string" },
+          "$.teacher.userId": { "required": true, "type": "string" }
+        }
+      },
+      "credentials.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.page": { "required": true, "type": "integer" },
+          "$.search": { "type": "string" },
+          "$.tab": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "needs_document", "pending", "rejected"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.rows": { "required": true, "type": "array" },
+          "$.rows[]": { "type": "object" },
+          "$.rows[].credentialId": { "required": true, "type": "string" },
+          "$.rows[].origin": {
+            "required": true,
+            "type": "string",
+            "values": ["added", "application"]
+          },
+          "$.rows[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "needs_document", "pending", "rejected"]
+          },
+          "$.rows[].subject": { "required": true, "type": "object" },
+          "$.rows[].subject.id": { "required": true, "type": "string" },
+          "$.rows[].subject.nameAr": { "required": true, "type": "string" },
+          "$.rows[].subject.nameEn": { "required": true, "type": "string" },
+          "$.rows[].submittedAt": { "required": true, "type": "string" },
+          "$.rows[].teacher": { "required": true, "type": "object" },
+          "$.rows[].teacher.displayName": { "required": true, "type": "string" },
+          "$.rows[].teacher.userId": { "required": true, "type": "string" },
+          "$.total": { "required": true, "type": "integer" }
+        }
+      },
+      "credentials.reject": {
+        "input": {
+          "$": { "type": "object" },
+          "$.credentialId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "credentials.requestDocument": {
+        "input": {
+          "$": { "type": "object" },
+          "$.credentialId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "home.summary": {
         "input": { "$": { "type": "unknown" } },
         "kind": "query",

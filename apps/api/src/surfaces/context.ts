@@ -51,6 +51,15 @@ import type {
   adminMeOutput,
   adminMfaRecoverOutput,
   adminMfaSetupBeginOutput,
+  adminCredentialCorrection,
+  adminCredentialsApproveInput,
+  adminCredentialsCorrectInput,
+  adminCredentialsGetOutput,
+  adminCredentialsListInput,
+  adminCredentialsListOutput,
+  adminCredentialsRejectInput,
+  adminCredentialsRequestDocumentInput,
+  adminCredentialTranscription,
   adminRecoveryCodesOutput,
   adminSignInOutput,
   adminsAddInput,
@@ -250,6 +259,38 @@ export interface AdminSurfaceServices {
   };
   readonly home: {
     summary(tx: Transaction): Answer<typeof homeSummaryOutput>;
+  };
+  /**
+   * The credential review (FR-163, FR-164; T069), the catalog module's, composed into the admin
+   * module's services. Approval answers the transcription and a correction the transcription before
+   * and after, for the call's audit entry.
+   */
+  readonly credentials: {
+    list(
+      tx: Transaction,
+      query: z.output<typeof adminCredentialsListInput>,
+    ): Answer<typeof adminCredentialsListOutput>;
+    get(tx: Transaction, credentialId: string): Answer<typeof adminCredentialsGetOutput>;
+    approve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminCredentialsApproveInput>,
+    ): Answer<typeof adminCredentialTranscription>;
+    reject(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminCredentialsRejectInput>,
+    ): Promise<void>;
+    requestDocument(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminCredentialsRequestDocumentInput>,
+    ): Promise<void>;
+    correct(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminCredentialsCorrectInput>,
+    ): Answer<typeof adminCredentialCorrection>;
   };
 }
 

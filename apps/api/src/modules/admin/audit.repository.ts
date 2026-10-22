@@ -15,7 +15,7 @@ import type { Prisma } from '@prisma/client';
 import type { AuditRecord, AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { targetLabel } from './labels/target-label.js';
-import { likeLiteral } from './like-literal.js';
+import { likeLiteral } from '../../platform/db/like-literal.js';
 
 /** What the admin pages filter the log by (T065); every bound optional. */
 export interface AuditFilter {
