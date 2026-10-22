@@ -2,9 +2,10 @@
 // `account.identityVerification.*`; FR-166). `requireIdentity` opens the request with its reason and
 // sets the account `verification_required` (through the standing); the user's `submit` attaches the
 // document they uploaded to the open request; `accept` closes it and reactivates the account (only
-// from `verification_required`, owner's decision 2026-10-22); `requestAnother` keeps it open, the
-// document cleared and the note the new reason the user reads. The admin views a document through a
-// signed link (`documents.link`). Over a store held in memory that keeps the database's rules.
+// from `verification_required`, owner's decision 2026-10-22); `requestAnother` closes it as
+// `replaced`, keeping its document, and opens one whose reason is the note the user reads (B13b,
+// round 1). The admin views a document through a signed link (`documents.link`). Over a store held
+// in memory that keeps the database's rules.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -129,6 +130,16 @@ describe("the user's side", () => {
       requestedAt: NOW.toISOString(),
       documentType: 'national_id',
       submittedAt: UPLOADED.toISOString(),
+    });
+  });
+
+  it('get answers the new request with no document after requestAnother, so the phone asks again (T074)', async () => {
+    const { userId, requestId } = await requested(true);
+    await service.requestAnother(TX, ADMIN, { requestId, note: 'الصورة غير واضحة' });
+    expect(await person.get(userId)).toEqual({
+      open: true,
+      reason: 'الصورة غير واضحة',
+      requestedAt: NOW.toISOString(),
     });
   });
 

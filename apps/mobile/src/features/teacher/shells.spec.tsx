@@ -2,6 +2,7 @@
 // no data path, in both directions, from the catalogue only.
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
+import { Text } from 'react-native';
 
 import { inBothDirections } from '../../design/primitives/__tests__/harness';
 import { translate } from '../../i18n';
@@ -30,6 +31,15 @@ describe('TeacherHomeEmpty', () => {
       },
     );
     expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/(tabs)/availability');
+  });
+
+  it('draws the notice it is given above the empty day (the identity request, T074)', async () => {
+    await inBothDirections(
+      () => <TeacherHomeEmpty notice={<Text>notice</Text>} />,
+      () => {
+        expect(screen.getByText('notice')).toBeTruthy();
+      },
+    );
   });
 });
 

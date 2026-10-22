@@ -423,6 +423,14 @@ describe('ApplicationStatus (FR-152)', () => {
     );
   });
 
+  it('shows the identity request above the status while the account is under one (T074)', async () => {
+    status({ status: 'in_review', submittedAt: SUBMITTED, subjectCount: 1 });
+    queries.setQueryData(ME_QUERY_KEY, { ...me, accountStatus: 'verification_required' });
+    await renderIn('rtl', withQueries(() => <ApplicationStatus />)());
+    await fireEvent.press(await screen.findByText(ar('account.verifyIdentity.card.title')));
+    expect(mockNavigate).toHaveBeenCalledWith('/verify-identity');
+  });
+
   it('says so and offers a retry when the status cannot be read', async () => {
     mockApi.api.teacher.application.get.query.mockRejectedValue(apiError('INTERNAL'));
     await renderIn('rtl', withQueries(() => <ApplicationStatus />)());

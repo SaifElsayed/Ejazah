@@ -88,18 +88,30 @@
         "strong": "You cannot book a new package until we review the document.",
         "text": "Your upcoming sessions continue."
       },
+      "card": {
+        "text": "Upload an identity document so we can review your account.",
+        "title": "Confirm your identity"
+      },
       "docType": "Document type",
       "docTypes": {
         "nationalId": "National ID card",
         "passport": "Passport"
       },
       "intro": "We need an identity document to confirm your account details.",
+      "none": "There is no identity request on your account now.",
+      "reasonTitle": "Why we ask",
       "submit": "Send for review",
+      "submitted": {
+        "text": "We will review it and let you know.",
+        "title": "We received your document"
+      },
       "tip": "Photograph it whole and clearly.",
       "title": "Identity confirmation",
       "upload": {
         "nationalId": "Upload the national ID card",
-        "nationalIdHint": "One PDF file with both sides of the card"
+        "nationalIdHint": "One PDF file with both sides of the card",
+        "passport": "Upload your passport",
+        "passportHint": "One PDF of the photo page"
       }
     }
   },
@@ -1542,7 +1554,6 @@
       "bannedTitle": "Your account is banned",
       "finalLede": "You will not return to the platform. The reason reached you in the notification.",
       "lede": "The administration suspended your account until the review ends. The reason was sent to you in a notification.",
-      "revokedTitle": "Your approval was revoked",
       "stoppedDiscovery": "Visibility to students and new bookings",
       "stoppedSessions": "Joining sessions, including those in progress now",
       "stoppedTitle": "Stopped now",

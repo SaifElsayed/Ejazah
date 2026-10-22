@@ -4,7 +4,8 @@
 // a document asked for adds the warning card that opens the request. Rejected: the reviewer's note
 // with its date and the way to reapply (FR-155). Approved: `ApplicationApproved`, shown once
 // (`approvedShown`), then the tabs. With no application yet, the first step; a banned account never
-// reaches this screen (the guard lands it on the restricted screen, FR-137).
+// reaches this screen (the guard lands it on the restricted screen, FR-137). T074: the identity
+// request's card comes first while the account is under one.
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -24,7 +25,7 @@ import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
-import { AccountFailed, SignOutSheet } from '../../../shared/account';
+import { AccountFailed, IdentityRequestCard, SignOutSheet } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
 import { useApplicationStatus } from '../api';
 import { startApplication } from '../draft';
@@ -67,6 +68,7 @@ export function ApplicationStatus() {
         />
       }
     >
+      <IdentityRequestCard />
       {answer === undefined ? (
         application.isError ? (
           <AccountFailed onRetry={() => void application.refetch()} />

@@ -9,6 +9,8 @@
 // server keeps a zone chosen by hand). The routes are a stack: `time-zone` and `terms` are modals
 // whose back arrow dismisses (screens.md "Routing"); the sign-in screens and the two modals take the
 // device's insets here, the tab groups in their own layouts.
+//
+// T074: `restricted` and `verify-identity` sit outside the role groups and take the insets here.
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Redirect, Stack, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -86,6 +88,8 @@ function Routes() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" options={framed} />
+      <Stack.Screen name="restricted" options={framed} />
+      <Stack.Screen name="verify-identity" options={framed} />
       <Stack.Screen name="time-zone" options={modal} />
       <Stack.Screen name="terms" options={modal} />
     </Stack>

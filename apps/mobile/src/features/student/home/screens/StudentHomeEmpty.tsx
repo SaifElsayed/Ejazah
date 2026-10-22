@@ -1,7 +1,9 @@
 // T034 (FR-202): the student's home before the first enrollment (`StudentHomeEmpty`), drawn with
 // no data path: the brand, the first step with its three lines, and the way to discovery. The
-// greeting by name and the subject chips are data and arrive with the home in Phase 2.
+// greeting by name and the subject chips are data and arrive with the home in Phase 2. T074: the
+// route hands it the identity request's card, drawn first while the account is under one.
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { AppHeader, Button, Card, Text } from '../../../../design/primitives';
@@ -17,12 +19,13 @@ const STEPS: readonly MessageKey[] = [
   'student.home.empty.step3',
 ];
 
-export function StudentHomeEmpty() {
+export function StudentHomeEmpty({ notice }: { readonly notice?: ReactNode }) {
   const t = useT();
   const format = useFormatters();
   const { color } = useTheme();
   return (
     <TabScreen header={<AppHeader brand />}>
+      {notice}
       <Card variant="hero">
         <Text variant="callout" tone="muted">
           {t('student.home.empty.kicker')}
