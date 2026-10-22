@@ -72,6 +72,8 @@ export function VerifyIdentity() {
           title={t('account.verifyIdentity.title')}
           back={{
             kind: 'back',
+            // With nothing behind it (opened from a notification), `/` is no route of its own, so
+            // the guard lands the session where it belongs (lib/session.ts `allows`).
             onPress: () => (router.canGoBack() ? router.back() : router.replace('/')),
           }}
         />

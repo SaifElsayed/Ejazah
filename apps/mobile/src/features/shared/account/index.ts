@@ -11,4 +11,3 @@ export { AccountRestricted, Restricted, TeacherRestricted } from './components/R
 export { SignOutSheet } from './components/SignOutSheet';
 export { VerifyIdentity } from './components/VerifyIdentity';
 export { useAccountActions } from './hooks';
-export { IDENTITY_REQUEST_QUERY_KEY, useIdentityRequest } from './identity';
