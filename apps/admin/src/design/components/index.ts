@@ -17,6 +17,8 @@ export {
   type TextLinkProps,
 } from './Button';
 export {
+  CheckRow,
+  type CheckRowProps,
   Chip,
   type ChipProps,
   FilterChips,
@@ -74,6 +76,7 @@ export { Dialog, type DialogProps } from './Dialog';
 export {
   AuthCard,
   type AuthCardProps,
+  Brand,
   Console,
   type ConsoleProps,
   DocThumb,

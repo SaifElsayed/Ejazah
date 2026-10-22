@@ -1,10 +1,10 @@
-// T036: Segmented, Chip, FilterChips (docs/design/components.md, "Primitives").
+// T036: Segmented, Chip, FilterChips (docs/design/components.md, "Primitives"). T070: CheckRow.
 import { fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { translate } from '../../i18n';
 import { inBothDirections } from './__tests__/harness';
-import { Chip, FilterChips, Segmented } from './index';
+import { CheckRow, Chip, FilterChips, Segmented } from './index';
 
 describe('Segmented', () => {
   it('is a labelled group with one pressed option, and reports a choice', () => {
@@ -77,5 +77,20 @@ describe('FilterChips', () => {
     );
     expect(onRemove).toHaveBeenCalledTimes(2);
     expect(onClearAll).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CheckRow', () => {
+  it('is a checkbox labelled by its sentence, and reports a change', () => {
+    const onChange = vi.fn();
+    inBothDirections(
+      () => <CheckRow label="saved" checked={false} onChange={onChange} />,
+      ({ view }) => {
+        const box = view.getByRole('checkbox', { name: 'saved' });
+        expect(box).toHaveProperty('checked', false);
+        fireEvent.click(box);
+      },
+    );
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 });
