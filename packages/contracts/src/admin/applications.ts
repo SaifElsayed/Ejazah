@@ -1,0 +1,132 @@
+// T068: the administrator surface's `applications` namespace (admin-surface.md "`applications` — the
+// verification queue"; FR-160 to FR-162, FR-166). The queue's three tabs (in review, waiting on the
+// applicant, decided), searchable by the applicant's name or email as typed; the detail with the
+// documents, the subjects, the qualification and the call record; the four decisions. A decision's
+// choices are the dialog's (screens.md "AdminDecisionDialog"); its note is mandatory except an
+// approval's and reaches the applicant as `application_note`. The call is known by its day: the
+// panel sends the day and its zone, the zone used only to refuse a day after today there (owner's
+// decision 2026-10-22).
+import { z } from 'zod';
+
+import { identityDocumentType, teacherApplicationStatus } from '../account.js';
+import { subjectSummary } from '../catalog.js';
+import { calendarDate, gender, timeZone } from '../onboarding.js';
+import { credentialStatus } from '../teacher-credentials.js';
+import { adminPage, adminReason, adminSearch } from './admins.js';
+
+export const applicationsTab = z.enum(['in_review', 'waiting', 'decided']);
+
+export const callOutcome = z.enum(['suitable', 'unsuitable']);
+
+/** `AdminDecisionDialog` «سبب الرفض». */
+export const rejectReasonChoice = z.enum([
+  'name_mismatch',
+  'qualification_gap',
+  'call_unsuitable',
+  'other',
+]);
+
+/** `AdminDecisionDialogInfo` «ما المطلوب». */
+export const requestInfoChoice = z.enum([
+  'id_unclear',
+  'ijazah_unreadable',
+  'name_mismatch',
+  'other',
+]);
+
+/** `AdminDecisionDialog` «سبب الحظر». */
+export const banReasonChoice = z.enum(['forged_documents', 'impersonation', 'call_fraud', 'other']);
+
+export const applicationsListInput = z.object({
+  tab: applicationsTab,
+  search: adminSearch.optional(),
+  page: adminPage,
+});
+
+export const applicationsListRow = z.object({
+  teacherUserId: z.uuid(),
+  displayName: z.string(),
+  email: z.string(),
+  gender,
+  /** Under eighteen today, computed on read and stored nowhere (FR-132). */
+  isMinor: z.boolean(),
+  subjects: z.array(subjectSummary),
+  callRecordedOn: calendarDate.optional(),
+  submittedAt: z.iso.datetime(),
+  status: teacherApplicationStatus.exclude(['not_started']),
+});
+
+export const applicationsListOutput = z.object({
+  rows: z.array(applicationsListRow),
+  total: z.int().min(0),
+});
+
+export const applicationsGetInput = z.object({ teacherUserId: z.uuid() });
+
+/** An identity request open on the applicant (`users.requireIdentity`, FR-166), for its two actions. */
+export const openIdentityRequest = z.object({
+  requestId: z.uuid(),
+  reason: z.string(),
+  requestedAt: z.iso.datetime(),
+  document: z
+    .object({ documentId: z.uuid(), type: identityDocumentType, submittedAt: z.iso.datetime() })
+    .optional(),
+});
+
+export const applicationsGetOutput = applicationsListRow.extend({
+  qualificationSummary: z.string(),
+  /** The applicant's IANA zone, which the panel shows as its city. */
+  timezoneCity: z.string(),
+  identityDocument: z.object({
+    documentId: z.uuid(),
+    type: identityDocumentType,
+    uploadedAt: z.iso.datetime(),
+  }),
+  credentials: z.array(
+    z.object({
+      credentialId: z.uuid(),
+      subject: subjectSummary,
+      status: credentialStatus,
+      documentId: z.uuid(),
+    }),
+  ),
+  call: z.object({
+    completedOn: calendarDate.optional(),
+    outcome: callOutcome.optional(),
+    notes: z.string().optional(),
+  }),
+  note: z.string().optional(),
+  identityRequest: openIdentityRequest.optional(),
+});
+
+export const applicationsRecordCallInput = z.object({
+  teacherUserId: z.uuid(),
+  completedOn: calendarDate,
+  /** The panel's zone: the day may not be after today there. */
+  timeZone,
+  outcome: callOutcome,
+  notes: z.string().trim().min(1).max(2000),
+});
+
+export const applicationsApproveInput = z.object({
+  teacherUserId: z.uuid(),
+  note: adminReason.optional(),
+});
+
+export const applicationsRejectInput = z.object({
+  teacherUserId: z.uuid(),
+  reasonChoice: rejectReasonChoice,
+  note: adminReason,
+});
+
+export const applicationsRequestInfoInput = z.object({
+  teacherUserId: z.uuid(),
+  needed: z.array(requestInfoChoice).min(1),
+  note: adminReason,
+});
+
+export const applicationsBanInput = z.object({
+  teacherUserId: z.uuid(),
+  reasonChoice: banReasonChoice,
+  note: adminReason,
+});

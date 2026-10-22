@@ -100,7 +100,8 @@ async function applicant() {
 async function profileOf(userId: string) {
   const { rows } = await db.query(
     `SELECT verification_status, application_status, qualification_summary, identity_document_id,
-            identity_document_type, application_note, verification_call_completed_at
+            identity_document_type, application_note, verification_call_completed_on,
+            verification_call_outcome
        FROM teacher_profiles WHERE user_id = $1`,
     [userId],
   );
@@ -147,7 +148,8 @@ describe('the application over the tables (T056)', () => {
         identity_document_id: application.identityDocument.documentId,
         identity_document_type: 'national_id',
         application_note: null,
-        verification_call_completed_at: null,
+        verification_call_completed_on: null,
+        verification_call_outcome: null,
       },
     ]);
     expect(
@@ -234,8 +236,9 @@ describe('the application over the tables (T056)', () => {
     // A revoked approval, its once-only screen already shown, then rejected (admin-surface
     // `teachers.revokeApproval` sets `rejected`, B13).
     await db.query(
-      `UPDATE teacher_profiles SET verification_status = 'revoked', verification_call_completed_at = now(),
-              approved_shown_at = now() WHERE user_id = $1`,
+      `UPDATE teacher_profiles SET verification_status = 'revoked', verification_call_completed_on = current_date,
+              verification_call_outcome = 'suitable', approved_shown_at = now()
+        WHERE user_id = $1`,
       [userId],
     );
     await decide(userId, 'rejected', 'الوثائق لا تطابق الاسم');
@@ -255,7 +258,8 @@ describe('the application over the tables (T056)', () => {
       verification_status: 'pending',
       application_status: 'in_review',
       application_note: null,
-      verification_call_completed_at: null,
+      verification_call_completed_on: null,
+      verification_call_outcome: null,
       identity_document_type: 'passport',
     });
     const { rows: shown } = await db.query(

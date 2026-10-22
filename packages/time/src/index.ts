@@ -380,3 +380,49 @@ export function calendarDateOf(date: Date): LocalDate {
 }
 
 export * from './resolve.js';
+
+/** The age from which a person is an adult (SRS FR-AUTH-4: "accounts under 18 shall be flagged"). */
+const AGE_OF_MAJORITY_YEARS = 18;
+
+/**
+ * Whether a person born on `dateOfBirth` is under eighteen on `today`, both calendar dates (T068:
+ * the admin's minor flag, computed on read and stored nowhere, FR-132). A 29 February birthday is
+ * reached on 28 February in a common year, as Temporal constrains the date.
+ */
+export function isMinorOn(dateOfBirth: LocalDate, today: LocalDate): boolean {
+  assertLocalDate('dateOfBirth', dateOfBirth);
+  assertLocalDate('today', today);
+  const adulthood = Temporal.PlainDate.from(dateOfBirth).add({ years: AGE_OF_MAJORITY_YEARS });
+  return Temporal.PlainDate.compare(Temporal.PlainDate.from(today), adulthood) < 0;
+}
+
+/**
+ * The calendar day `at` falls on in `timezone` (T068: the verification call's day may not be after
+ * today in the panel's zone). The zone is checked as `startOfLocalDay` checks it: a continent/city
+ * IANA zone, so `UTC` is refused.
+ */
+export function localDateIn(at: Date, timezone: TimeZoneId): LocalDate {
+  const epochMilliseconds = at.getTime();
+  if (Number.isNaN(epochMilliseconds)) throw new TimeError('at', String(at), 'not an instant');
+  const zone = assertTimeZoneShape(timezone);
+  let day: Temporal.PlainDate;
+  try {
+    day = Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
+      .toZonedDateTimeISO(zone)
+      .toPlainDate();
+  } catch (error: unknown) {
+    throw new TimeError('timezone', zone, 'not a zone in the IANA database', { cause: error });
+  }
+  assertAreaLocation(zone);
+  return day.toString();
+}
+
+/**
+ * A calendar day as a `date` column is written: its midnight in UTC, which `calendarDateOf` reads
+ * back as the same day (T068: `teacher_profiles.verification_call_completed_on`).
+ */
+export function dateColumnOf(localDate: LocalDate): Date {
+  assertLocalDate('localDate', localDate);
+  const day = Temporal.PlainDate.from(localDate);
+  return new Date(day.toZonedDateTime({ timeZone: 'UTC' }).epochMilliseconds);
+}

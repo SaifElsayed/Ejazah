@@ -1,5 +1,5 @@
-// T056, T057: the verification module's two namespaces as the user surface serves them, for the
-// router specs. Each call goes through the caller kinds' middleware exactly as over HTTP (the input
+// T056, T057, T068: the verification module's namespaces of the user surface as it serves them, for
+// the router specs. Each call goes through the caller kinds' middleware exactly as over HTTP (the input
 // schema, the kind's refusals, the output schema); the session is the one a bearer would resolve
 // to, written here by standing, and the services record what reached them.
 import { vi } from 'vitest';
@@ -11,15 +11,17 @@ import { createAppCallerFactory, createAppRouter } from '../../../surfaces/proce
 import { unusedIdentityServices } from '../../../surfaces/services.fixtures.js';
 import { applicationRouter } from '../application.router.js';
 import { credentialsRouter } from '../credentials.router.js';
+import { identityVerificationRouter } from '../identity-verification.router.js';
 import type { VerificationServices } from '../index.js';
 
 export const CALLER = '0199d0a0-0000-7000-8000-00000000000a';
 
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 
-/** The two namespaces, mounted as `app.router.ts` mounts them. */
+/** The namespaces, mounted as `app.router.ts` mounts them. */
 const teacherRouter = createAppRouter({
   teacher: createAppRouter({ application: applicationRouter, credentials: credentialsRouter }),
+  account: createAppRouter({ identityVerification: identityVerificationRouter }),
 });
 
 /** A procedure's meta, as the contract snapshot and the gates read it. */
@@ -102,6 +104,10 @@ export function recordingServices() {
         url: 'https://storage.invalid/documents/one.pdf?signature=abc',
         expiresAt: '2026-10-21T09:05:00.000Z',
       }),
+    },
+    identityVerification: {
+      get: recorded('identityVerification.get', { open: false }),
+      submit: recorded('identityVerification.submit', undefined),
     },
   };
   return { calls, verification };

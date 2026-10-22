@@ -139,3 +139,45 @@ export async function readCredentialQueue(
   ]);
   return { open, addedSubjects };
 }
+
+/**
+ * The credentials of several teachers at once, oldest first, for the applications queue (T068): the
+ * verification module keeps those sent with each current application (FR-160).
+ */
+export async function credentialsOfTeachers(
+  tx: Pick<Transaction, 'teacherCredential'>,
+  teacherUserIds: readonly string[],
+): Promise<(CredentialRow & { readonly teacherUserId: string })[]> {
+  const rows = await tx.teacherCredential.findMany({
+    where: { teacherUserId: { in: [...teacherUserIds] } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      teacherUserId: true,
+      subjectId: true,
+      subject: { select: { id: true, nameAr: true, nameEn: true } },
+      documentId: true,
+      status: true,
+      submittedWithApplication: true,
+      createdAt: true,
+      reviewedAt: true,
+      reviewReason: true,
+      holderName: true,
+      riwaya: true,
+      tariq: true,
+      isnadEntries: { orderBy: { position: 'asc' }, select: { position: true, names: true } },
+    },
+  });
+  return rows.map(({ isnadEntries, ...row }) => ({ ...row, chain: isnadEntries }));
+}
+
+/**
+ * Removes every subject of the teacher (T068, `teachers.revokeApproval`): a subject is the
+ * teacher's only while approved (FR-153); a new approval grants them again.
+ */
+export async function revokeSubjects(
+  tx: Pick<Transaction, 'teacherSubject'>,
+  teacherUserId: string,
+): Promise<void> {
+  await tx.teacherSubject.deleteMany({ where: { teacherUserId } });
+}

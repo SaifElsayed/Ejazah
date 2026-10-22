@@ -1,7 +1,7 @@
-// T056, T057: what the application and the credentials services read and write, in one place, and
-// the real stores composed from the owners' entries (R-121, R-API-6): the application's columns are
-// the identity module's (`teacher_profiles`), the credential rows and the subjects the catalog
-// module's, the documents this module's own. Every method runs on the transaction it is handed, so
+// T056, T057, T068: what the application, the credentials, the review and the identity requests read
+// and write, in one place, and the real stores composed from the owners' entries (R-121, R-API-6):
+// the application's columns are the identity module's (`teacher_profiles`), the credential rows and
+// the subjects the catalog module's, the documents and the requests this module's own. Every method runs on the transaction it is handed, so
 // a call's reads and writes commit together; a conditional write answers whether it wrote.
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
@@ -9,17 +9,36 @@ import {
   activeSubjectsAmong,
   addCredential,
   type CredentialRow,
+  credentialsOfTeachers,
+  grantSubjects,
   listCredentials,
   type NewCredentialRow,
   replaceCredentialDocument,
 } from '../catalog/index.js';
 import {
+  applicantsCount,
+  applicantsPage,
   type ApplicationChange,
   type ApplicationRecord,
+  decideApplication,
+  readApplicant,
   readApplication,
+  readStanding,
+  recordApplicationCall,
   setApplication,
 } from '../identity/index.js';
+import type { ApplicationReviewStore } from './application-review.service.js';
+import type { IdentityRequestStore } from './verification-request.service.js';
 import { documentSizes, documentsOwnedAmong } from './verification.repository.js';
+import {
+  askAnotherDocument,
+  attachDocument,
+  documentUploadedAt,
+  openRequest,
+  openRequestOf,
+  readRequest,
+  resolveRequest,
+} from './verification-requests.repository.js';
 
 export type { ApplicationChange, ApplicationRecord };
 
@@ -69,5 +88,65 @@ export function createVerificationStores(database: Database): VerificationStores
     replaceCredentialDocument,
     documentsOwnedAmong,
     documentSizes,
+  };
+}
+
+/**
+ * The application review's store (T068): the applicants and their decisions are identity's, the
+ * credentials and the subjects catalog's, the identity document and the requests this module's own.
+ */
+export function createApplicationReviewStore(): ApplicationReviewStore {
+  return {
+    page: applicantsPage,
+    count: applicantsCount,
+    read: readApplicant,
+    credentialsOf: async (tx, userIds) =>
+      (await credentialsOfTeachers(tx, userIds)).map((row) => ({
+        credentialId: row.id,
+        teacherUserId: row.teacherUserId,
+        subject: row.subject,
+        status: row.status,
+        documentId: row.documentId,
+        submittedWithApplication: row.submittedWithApplication,
+        createdAt: row.createdAt,
+      })),
+    documentUploadedAt,
+    openRequestOf: async (tx, userId) => {
+      const request = await openRequestOf(tx, userId);
+      if (request === null) return null;
+      return {
+        requestId: request.requestId,
+        reason: request.reason,
+        requestedAt: request.requestedAt.toISOString(),
+        ...(request.document === null
+          ? {}
+          : {
+              document: {
+                documentId: request.document.documentId,
+                type: request.document.type,
+                submittedAt: request.document.submittedAt.toISOString(),
+              },
+            }),
+      };
+    },
+    recordCall: recordApplicationCall,
+    decide: decideApplication,
+    grantSubjects,
+  };
+}
+
+/** The identity requests' store (T068), the account's status read through identity's entry. */
+export function createIdentityRequestStore(database: Database): IdentityRequestStore {
+  const { run } = transactionsOver(database);
+  return {
+    run,
+    accountStatusOf: async (tx, userId) => (await readStanding(tx, userId))?.accountStatus ?? null,
+    openRequestOf,
+    readRequest,
+    openRequest,
+    attachDocument,
+    resolve: resolveRequest,
+    askAnother: askAnotherDocument,
+    documentsOwnedAmong,
   };
 }

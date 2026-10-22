@@ -181,6 +181,12 @@ export function createAdminRouter<TRecord extends SurfaceRecord<AdminMeta>>(reco
   return admin.router(record);
 }
 
+/**
+ * Merges user-surface routers into one namespace (T068: `account` is identity's router and the
+ * verification module's `identityVerification`, R-121).
+ */
+export const mergeAppRouters = app.mergeRouters;
+
 /** Calls a user-surface router in process, through the same middleware as over HTTP. */
 export const createAppCallerFactory = app.createCallerFactory;
 

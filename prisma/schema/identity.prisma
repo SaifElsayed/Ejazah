@@ -186,8 +186,10 @@ model TeacherProfile {
   photoKey                    String?                   @map("photo_key")
   qualificationSummary        String                    @map("qualification_summary")
   verificationStatus          TeacherVerificationStatus @map("verification_status")
-  // The gate on approval (FR-VERIFY-5).
-  verificationCallCompletedAt DateTime?                 @map("verification_call_completed_at") @db.Timestamptz(6)
+  // The gate on approval (FR-VERIFY-5): the day the verification call took place, known by its day
+  // and not its instant (Phase 1, T068, owner's decision 2026-10-22), and its outcome (FR-161).
+  verificationCallCompletedOn DateTime?                 @map("verification_call_completed_on") @db.Date
+  verificationCallOutcome     VerificationCallOutcome?  @map("verification_call_outcome")
   verificationCallNotes       String?                   @map("verification_call_notes")
   approvedByAdminId           String?                   @map("approved_by_admin_id") @db.Uuid
   approvedAt                  DateTime?                 @map("approved_at") @db.Timestamptz(6)

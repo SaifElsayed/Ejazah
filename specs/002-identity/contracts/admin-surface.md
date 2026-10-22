@@ -27,13 +27,35 @@ the actions ending in `.read` and nothing else (owner's decision 2026-10-21, T06
 
 | Procedure                  | Input                                                                                             | Output                                                                                                                                                                                                                                                                                                   | Audit                                                                                                                                                                                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `applications.list`        | `{ tab: 'in_review' \| 'waiting' \| 'decided', search?, page }` (pages of `admin_list_page_size`) | `{ rows: [{ teacherUserId, displayName, email, gender, isMinor, subjects: [{ id, nameAr, nameEn }], callRecordedAt?, submittedAt, status }], total }`                                                                                                                                                    | read                                                                                                                                                                                                                                   |
-| `applications.get`         | `{ teacherUserId }`                                                                               | `{ …row, qualificationSummary, timezoneCity, identityDocument: { documentId, type, uploadedAt }, credentials: [{ credentialId, subject, status, documentId }], call: { completedAt?, outcome?, notes? }, note? }`; the decision history is `audit.list({ targetType: 'teacher_application', targetId })` | read                                                                                                                                                                                                                                   |
-| `applications.recordCall`  | `{ teacherUserId, completedOn: 'YYYY-MM-DD', outcome: 'suitable' \| 'unsuitable', notes }`        | `void`                                                                                                                                                                                                                                                                                                   | `application.record_call`                                                                                                                                                                                                              |
+| `applications.list`        | `{ tab: 'in_review' \| 'waiting' \| 'decided', search?, page }` (pages of `admin_list_page_size`) | `{ rows: [{ teacherUserId, displayName, email, gender, isMinor, subjects: [{ id, nameAr, nameEn }], callRecordedOn?, submittedAt, status }], total }`                                                                                                                                                    | read                                                                                                                                                                                                                                   |
+| `applications.get`         | `{ teacherUserId }`                                                                               | `{ …row, qualificationSummary, timezoneCity, identityDocument: { documentId, type, uploadedAt }, credentials: [{ credentialId, subject, status, documentId }], call: { completedOn?, outcome?, notes? }, note?, identityRequest? }`; the decision history is `audit.list({ targetType: 'teacher_application', targetId })` | read                                                                                                                                                                                                                                   |
+| `applications.recordCall`  | `{ teacherUserId, completedOn: 'YYYY-MM-DD', timeZone, outcome: 'suitable' \| 'unsuitable', notes }`        | `void`                                                                                                                                                                                                                                                                                                   | `application.record_call`                                                                                                                                                                                                              |
 | `applications.approve`     | `{ teacherUserId, note? }`                                                                        | `void`                                                                                                                                                                                                                                                                                                   | `application.approve`; `APPROVAL_BLOCKED` with the reasons (FR-161); sets `verification_status = approved`, `application_status = approved`, `approved_by`/`approved_at`; the approved credentials' subjects become `teacher_subjects` |
 | `applications.reject`      | `{ teacherUserId, reasonChoice, note }`                                                           | `void`                                                                                                                                                                                                                                                                                                   | `application.reject`; note mandatory, reaches the applicant                                                                                                                                                                            |
 | `applications.requestInfo` | `{ teacherUserId, needed: [choice], note }`                                                       | `void`                                                                                                                                                                                                                                                                                                   | `application.request_info`; `needs_document`                                                                                                                                                                                           |
 | `applications.ban`         | `{ teacherUserId, reasonChoice, note }`                                                           | `void`                                                                                                                                                                                                                                                                                                   | `application.ban`; `users.account_status = banned`, every session revoked, no reapply                                                                                                                                                  |
+
+The review's states and answers (T068, batch B13b; owner's decisions at B13's conflict check, 2026-10-22):
+
+- **Tabs and search.** `in_review` is `in_review`, `waiting` is `needs_document`, and `decided` is `rejected`, `banned` or `approved`. Every tab lists the oldest submission first. `search` is the name or the email as typed. `subjects` are those sent with the current application. `isMinor` is computed on read (FR-132).
+- **The call.** `callRecordedOn` and `call.completedOn` are calendar days (`verification_call_completed_on date`). `recordCall`'s `timeZone` is used only to refuse a day after today there (`VALIDATION_FAILED` on `completedOn`, code `future`); a zone the time package refuses is `VALIDATION_FAILED` on `timeZone`. A call is recorded on an open application (`in_review` or `needs_document`). `outcome: 'unsuitable'` blocks nothing.
+- **`identityRequest?`.** `{ requestId, reason, requestedAt, document?: { documentId, type, submittedAt } }`, the applicant's open identity request. It lets the panel reach `documents.accept` and `documents.requestAnother` from the detail (FR-166).
+- **The choices.**
+  - `reject`'s `reasonChoice` is `name_mismatch · qualification_gap · call_unsuitable · other`.
+  - `requestInfo`'s `needed` is one or more of `id_unclear · ijazah_unreadable · name_mismatch · other`.
+  - `ban`'s `reasonChoice` is `forged_documents · impersonation · call_fraud · other`.
+  - These are screens.md's `AdminDecisionDialog` choices.
+- **What each decision moves.**
+  - `approve` moves an `in_review` application whose call is recorded.
+  - `reject` moves `in_review` or `needs_document`.
+  - `requestInfo` moves `in_review` only.
+  - `ban` moves `in_review` or `needs_document`, through the standing's one ban.
+  - Any other state is `CONFLICT` naming the status. An application that is not there is `NOT_FOUND`.
+  - `APPROVAL_BLOCKED` carries every reason that holds as `details: [{ path: 'approval', code }]`, the code `call_not_recorded`, `credential_undecided` or `none_approved`.
+- **The audit.**
+  - Each decision's entry targets `teacher_application` (the applicant's id). Its reason is the note the applicant sees, and its after is the choice (`approve`'s after is the subjects it granted).
+  - `recordCall`'s after is `{ completedOn, outcome }`, without the notes.
+  - The list and the detail are the read `applications.read`.
 
 ## `credentials` — the credential review (FR-163, FR-164)
 
@@ -53,9 +75,18 @@ The review's states and answers (T069, batch B13a): `approve` and `requestDocume
 | Procedure                  | Input                  | Output                           | Audit                                                                    |
 | -------------------------- | ---------------------- | -------------------------------- | ------------------------------------------------------------------------ |
 | `documents.link`           | `{ documentId }`       | `{ url, expiresAt, pageCount? }` | `document.view` (viewing is an action worth a record, NFR-SEC-3)         |
-| `users.requireIdentity`    | `{ userId, reason }`   | `void`                           | `user.require_identity`; opens the request, sets `verification_required` |
+| `users.requireIdentity`    | `{ targetUserId, reason }` | `void`                           | `user.require_identity`; opens the request, sets `verification_required` |
 | `documents.accept`         | `{ requestId, note? }` | `void`                           | `verification_request.accept`; closes the request, account `active`      |
 | `documents.requestAnother` | `{ requestId, note }`  | `void`                           | `verification_request.request_another`                                   |
+
+The requests' states (T068, batch B13b):
+
+- **`users.requireIdentity`.** It needs an `active` account with no request open; otherwise it is `CONFLICT` on `userId`, the code `request_open` or the account status. The person's field is `targetUserId`, since a field named `userId` is refused in any input (R-GENDER-4).
+- **`documents.accept` and `documents.requestAnother`.** Each needs an open request with a document (`CONFLICT` on `requestId`, the code `no_document` or the request's status).
+  - `accept` reactivates only an account in `verification_required`. An account suspended meanwhile stays suspended.
+  - `requestAnother` clears the document and makes the note the reason the person reads. The first reason is kept in the audit entry.
+  - The cleared document is then unreferenced, so the documents sweep (T093) removes it.
+- **`documents.link`.** It answers no `pageCount` in this phase.
 
 ## `teachers` — an approved teacher's standing (FR-165)
 
@@ -65,6 +96,16 @@ The review's states and answers (T069, batch B13a): `approve` and `requestDocume
 | `teachers.revokeApproval` | `{ teacherUserId, reason }` | `void` | `teacher.revoke`; `verification_status = revoked` (the member T011 adds) and `application_status = rejected` with the reason as the note, so the teacher lands on `ApplicationRejected` and returns through `reapply`; the account stays active |
 | `teachers.ban`            | `{ teacherUserId, reason }` | `void` | `teacher.ban`                                                                                                                                                                                                                                   |
 | `teachers.reinstate`      | `{ teacherUserId, reason }` | `void` | `teacher.reinstate`                                                                                                                                                                                                                             |
+
+The standing's states (T068, batch B13b; data-model.md, ADR 0016 D2):
+
+- **`suspend`.** It moves an active approved teacher and writes `account_status` only.
+- **`revokeApproval`.** It moves an approved teacher, active or suspended. It also deletes the teacher's `teacher_subjects` (owner's decision 2026-10-22, FR-153); a new approval grants them again.
+- **`ban`.** It moves an approved teacher, active or suspended, and writes `account_status = banned` and `verification_status = banned`. It is the same function as `applications.ban`.
+- **`reinstate`.** It moves a suspended teacher back to `active`. A ban is not lifted (FR-162).
+- **Sessions and consequences.** Each of the three ends every session (`revoked_reason` `account_suspended`, `admin_action`, `account_banned`). Each calls `onAccountTerminated(tx, userId, cause)` (`identity/consequences.ts`, empty in this phase).
+- **Refusals.** A refusal is `CONFLICT` on `teacherUserId`, naming the standing. A person with no teacher profile is `NOT_FOUND`.
+- **The audit.** Each entry is on the person (`user`), with the reason and the standing it moved to.
 
 ## `admins` — the admins page (FR-174)
 

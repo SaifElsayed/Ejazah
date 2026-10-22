@@ -101,6 +101,46 @@ export {
  */
 export { isApprovedTeacher, readApplicationQueue } from './application.repository.js';
 
+/**
+ * The applications queue and its decisions, read and written by the verification module's review
+ * on the administrator's transaction (T068, R-121): the applicants' rows and detail, the call record,
+ * the approval, the rejection and the request for information.
+ */
+export {
+  type ApplicantDetail,
+  type ApplicantRow,
+  type ApplicantsFilter,
+  type ApplicantStatus,
+  applicantsCount,
+  applicantsPage,
+  readApplicant,
+} from './applicants.repository.js';
+export {
+  type CallRecord,
+  decideApplication,
+  recordApplicationCall,
+} from './application.repository.js';
+
+/**
+ * A person's standing as the administrator changes it (T068, FR-165, FR-166): the service, its store
+ * over this module's tables, and the one consequences entry Phase 2 and 3 subscribe to (FR-142).
+ */
+export {
+  AccountConsequences,
+  type AccountConsequence,
+  type TerminationCause,
+} from './consequences.js';
+export {
+  StandingService,
+  type StandingDependencies,
+  type StandingStore,
+  standingStoreOver,
+} from './standing.service.js';
+export { readStanding } from './standing.repository.js';
+
+/** The administrator surface's `teachers` namespace (T068), mounted by `admin.router.ts`. */
+export { teachersRouter } from './teachers.router.js';
+
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
 

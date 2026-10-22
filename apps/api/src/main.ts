@@ -190,6 +190,8 @@ const adminServices = createAdminServices({
   database,
   settings,
   encryptionKey: config.ENCRYPTION_KEY,
+  storage: ports.storage,
+  cipher,
   inviteQueue: {
     queue: async (adminId) => {
       inviteQueue ??= openQueue(connectionFor(config.REDIS_URL));

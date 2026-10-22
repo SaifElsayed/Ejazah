@@ -52,6 +52,17 @@ import type {
   adminMfaRecoverOutput,
   adminMfaSetupBeginOutput,
   adminCredentialCorrection,
+  applicationsApproveInput,
+  applicationsBanInput,
+  applicationsGetOutput,
+  applicationsListInput,
+  applicationsListOutput,
+  applicationsRecordCallInput,
+  applicationsRejectInput,
+  applicationsRequestInfoInput,
+  documentsAcceptInput,
+  documentsLinkOutput,
+  documentsRequestAnotherInput,
   adminCredentialsApproveInput,
   adminCredentialsCorrectInput,
   adminCredentialsGetOutput,
@@ -291,6 +302,73 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof adminCredentialsCorrectInput>,
     ): Answer<typeof adminCredentialCorrection>;
+  };
+  /**
+   * The verification queue (FR-160 to FR-162; T068), the verification module's. An approval answers
+   * the subjects it granted, for the call's audit entry.
+   */
+  readonly applications: {
+    list(
+      tx: Transaction,
+      query: z.output<typeof applicationsListInput>,
+    ): Answer<typeof applicationsListOutput>;
+    get(tx: Transaction, teacherUserId: string): Answer<typeof applicationsGetOutput>;
+    recordCall(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof applicationsRecordCallInput>,
+    ): Promise<void>;
+    approve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof applicationsApproveInput>,
+    ): Promise<{ readonly subjectIds: string[] }>;
+    reject(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof applicationsRejectInput>,
+    ): Promise<void>;
+    requestInfo(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof applicationsRequestInfoInput>,
+    ): Promise<void>;
+    ban(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof applicationsBanInput>,
+    ): Promise<void>;
+  };
+  /** The document viewer and the identity requests (FR-160, FR-166; T068), the verification module's. */
+  readonly documents: {
+    link(tx: Transaction, actorId: string, documentId: string): Answer<typeof documentsLinkOutput>;
+    requireIdentity(
+      tx: Transaction,
+      actorId: string,
+      input: { readonly userId: string; readonly reason: string },
+    ): Promise<{ readonly requestId: string }>;
+    accept(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof documentsAcceptInput>,
+    ): Promise<unknown>;
+    requestAnother(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof documentsRequestAnotherInput>,
+    ): Promise<unknown>;
+  };
+  /** An approved teacher's standing (FR-165; T068), the identity module's. */
+  readonly teachers: {
+    suspend(tx: Transaction, actorId: string, teacherUserId: string): Promise<void>;
+    revokeApproval(
+      tx: Transaction,
+      actorId: string,
+      teacherUserId: string,
+      reason: string,
+    ): Promise<void>;
+    ban(tx: Transaction, actorId: string, teacherUserId: string): Promise<void>;
+    reinstate(tx: Transaction, actorId: string, teacherUserId: string): Promise<void>;
   };
 }
 
