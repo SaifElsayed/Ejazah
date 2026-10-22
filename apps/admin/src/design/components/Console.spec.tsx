@@ -1,6 +1,6 @@
 // T036: the console pieces only a desktop needs (docs/design/components.md, "The admin panel"):
 // Console, Sidebar and NavItem, Page with PageHeader and Toolbar, SearchRow, Split, Panel, KeyValue,
-// DocThumb, QueueCard, Pager and AuthCard.
+// DocThumb, QueueCard, Pager and AuthCard. T071: a DocThumb with its icon, shown before it opens.
 import { act, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -316,6 +316,18 @@ describe('DocThumb and QueueCard', () => {
       },
     );
     expect(onPress).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a document it cannot open yet as no button, with the icon asked (T071)', () => {
+    inBothDirections(
+      () => <DocThumb label="id card" icon="user" />,
+      ({ view }) => {
+        expect(view.queryByRole('button')).toBeNull();
+        const thumb = view.getByText('id card').parentElement;
+        expect(thumb?.classList.contains('doc-thumb')).toBe(true);
+        expect(thumb?.querySelector('.lucide-user')).not.toBeNull();
+      },
+    );
   });
 
   it('links a queue to its page with how many items wait, in the Latin face', () => {

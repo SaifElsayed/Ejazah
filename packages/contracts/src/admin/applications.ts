@@ -59,6 +59,8 @@ export const applicationsListRow = z.object({
 export const applicationsListOutput = z.object({
   rows: z.array(applicationsListRow),
   total: z.int().min(0),
+  /** `admin_list_page_size`, so the panel's pager counts the pages (B14b, owner's decision). */
+  pageSize: z.int().min(1),
 });
 
 export const applicationsGetInput = z.object({ teacherUserId: z.uuid() });

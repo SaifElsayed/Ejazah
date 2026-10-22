@@ -6,21 +6,15 @@
 // password from the token it carries and takes the token out of the address. The setup page draws
 // the QR of a secret begun once, confirms the first code, shows the recovery codes once, and lets
 // the session in only once the person says they saved them.
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { TRPCClientError } from '@trpc/client';
-import { StrictMode } from 'react';
-import { MemoryRouter, useLocation } from 'react-router';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App } from '../../App';
 import { expectDesignRules } from '../../design/components/__tests__/harness';
 import { type MessageKey, setLocale, translate } from '../../i18n';
-import type { AdminClient } from '../../lib/client';
-import { type AdminSession, createSessionStore } from '../../lib/session';
+import type { AdminSession } from '../../lib/session';
+import { currentPath, inBothLocales, mutation, refusal, renderApp } from '../../test/app-harness';
 
 afterEach(() => setLocale('ar'));
-
-const mutation = () => ({ mutate: vi.fn<(input: unknown) => Promise<unknown>>() });
 
 function fakeAuth() {
   return {
@@ -32,20 +26,6 @@ function fakeAuth() {
       setup: { begin: mutation(), confirm: mutation() },
     },
   };
-}
-
-/** The error the client raises for an API refusal of `code`. */
-function refusal(code: string): TRPCClientError<never> {
-  return new TRPCClientError('refused', {
-    meta: { responseJSON: { error: { code, message: 'refused', details: [] } } },
-  });
-}
-
-let where = '';
-function Where() {
-  const location = useLocation();
-  where = `${location.pathname}${location.search}${location.hash}`;
-  return null;
 }
 
 function renderAt(
@@ -60,23 +40,9 @@ function renderAt(
     readonly arrange?: (auth: ReturnType<typeof fakeAuth>) => void;
   } = {},
 ) {
-  const sessions = createSessionStore(() => window.sessionStorage);
-  if (session !== null) sessions.write(session);
   const auth = fakeAuth();
   arrange(auth);
-  const client = {
-    api: { auth } as unknown as AdminClient['api'],
-    untyped: {} as AdminClient['untyped'],
-    signOut: vi.fn(async () => sessions.clear()),
-  };
-  const tree = (
-    <MemoryRouter initialEntries={[path]}>
-      <App client={client} sessions={sessions} />
-      <Where />
-    </MemoryRouter>
-  );
-  const view = render(strict ? <StrictMode>{tree}</StrictMode> : tree);
-  return { view, sessions, auth };
+  return { ...renderApp({ at: path, session, api: { auth }, strict }), auth };
 }
 
 const ar = (key: MessageKey, values?: Record<string, string | number>) =>
@@ -86,22 +52,6 @@ const field = (key: MessageKey) => screen.getByLabelText(ar(key));
 const type = (key: MessageKey, value: string) =>
   fireEvent.change(field(key), { target: { value } });
 const press = (key: MessageKey) => fireEvent.click(screen.getByRole('button', { name: ar(key) }));
-/** Renders a page in Arabic, then in English, checks it in each with the design's rules. */
-async function inBothLocales(
-  open: () => { readonly view: { readonly container: HTMLElement; unmount(): void } },
-  check: (
-    t: (key: MessageKey, values?: Record<string, string | number>) => string,
-  ) => void | Promise<void>,
-): Promise<void> {
-  for (const locale of ['ar', 'en'] as const) {
-    setLocale(locale);
-    const { view } = open();
-    await check((key, values) => translate(locale, key, values));
-    expectDesignRules(view.container);
-    view.unmount();
-  }
-  setLocale('ar');
-}
 const typeCode = (code: string) =>
   fireEvent.change(screen.getByLabelText(ar('admin.common.a11y.digit1')), {
     target: { value: code },
@@ -182,7 +132,7 @@ describe('AdminMfa (FR-171)', () => {
     auth.mfa.verify.mutate.mockResolvedValue(undefined);
     typeCode('123456');
     press('admin.mfa.signIn');
-    await waitFor(() => expect(where).toBe('/'));
+    await waitFor(() => expect(currentPath()).toBe('/'));
     expect(sessions.read()?.step).toBe('verified');
     expect(auth.mfa.verify.mutate).toHaveBeenCalledWith({
       sessionToken: 'pending-1',
@@ -298,7 +248,7 @@ describe('AdminSetPassword (the invite link, R-110)', () => {
         expect(screen.getByText(t('admin.setPassword.lede'))).toBeTruthy();
         expect(screen.getByText(t('admin.setPassword.hint', { min: 8, max: 128 }))).toBeTruthy();
         expect(screen.getByLabelText(t('admin.setPassword.confirm'))).toBeTruthy();
-        expect(where).toBe('/set-password');
+        expect(currentPath()).toBe('/set-password');
       },
     );
   });
@@ -320,7 +270,7 @@ describe('AdminSetPassword (the invite link, R-110)', () => {
   it('reads a token from the query too, and takes it out', () => {
     renderAt('/set-password?token=invite-2');
     expect(heading('admin.setPassword.title')).toBeTruthy();
-    expect(where).toBe('/set-password');
+    expect(currentPath()).toBe('/set-password');
   });
 
   it('opens with a session too: it works by the token', () => {
@@ -439,7 +389,7 @@ describe('AdminMfaSetup (FR-171)', () => {
       screen.getByRole('checkbox', { name: ar('admin.mfaSetup.step3.savedConfirm') }),
     );
     fireEvent.click(finish);
-    await waitFor(() => expect(where).toBe('/'));
+    await waitFor(() => expect(currentPath()).toBe('/'));
     expect(sessions.read()?.step).toBe('verified');
   });
 
@@ -492,7 +442,7 @@ describe('AdminMfaSetup (FR-171)', () => {
         auth.mfa.setup.begin.mutate.mockRejectedValue(refusal('FORBIDDEN'));
       },
     });
-    await waitFor(() => expect(where).toBe('/mfa'));
+    await waitFor(() => expect(currentPath()).toBe('/mfa'));
     expect(sessions.read()).toEqual({ token: 'pending-3', step: 'mfa' });
   });
 

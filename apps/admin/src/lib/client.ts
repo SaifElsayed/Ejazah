@@ -18,7 +18,8 @@
 // THE ERROR CODE. The API's error formatter answers `{ error: { code, message, details } }` with the
 // code as text (contracts/README.md), where tRPC's client recognises only its own numeric shape, so
 // a `TRPCClientError` from this API carries no `shape`; `errorCodeOf` reads the code from the body
-// the error keeps (the phone's `errorCodeOf`, note under T033).
+// the error keeps (the phone's `errorCodeOf`, note under T033). T071: `errorDetailsOf` reads its
+// details as the phone's does (`APPROVAL_BLOCKED`'s reasons, a refused field).
 import {
   createTRPCClient,
   createTRPCUntypedClient,
@@ -119,10 +120,37 @@ function asLinkFetch(
  * carries, or undefined when the error never came from the API (offline, a timeout, a bug).
  */
 export function errorCodeOf(error: unknown): string | undefined {
-  if (!(error instanceof TRPCClientError)) return undefined;
-  const body: unknown = error.meta?.['responseJSON'] ?? error.cause;
-  const code = codeOf(body);
+  const code = codeOf(bodyOf(error));
   return typeof code === 'string' ? code : undefined;
+}
+
+/** One detail of an API error: the field and the reason (contracts/README.md "Errors"). */
+export interface ErrorDetail {
+  readonly path: string;
+  readonly code: string;
+}
+
+/** The details a refusal carries, or none when the error never came from the API or had none. */
+export function errorDetailsOf(error: unknown): readonly ErrorDetail[] {
+  const body = bodyOf(error);
+  if (typeof body !== 'object' || body === null || !('error' in body)) return [];
+  const { error: answer } = body;
+  if (typeof answer !== 'object' || answer === null || !('details' in answer)) return [];
+  const { details } = answer;
+  if (!Array.isArray(details)) return [];
+  return details.filter(
+    (detail): detail is ErrorDetail =>
+      typeof detail === 'object' &&
+      detail !== null &&
+      typeof (detail as ErrorDetail).path === 'string' &&
+      typeof (detail as ErrorDetail).code === 'string',
+  );
+}
+
+/** The answer's body a refusal keeps, or undefined when the error never came from the API. */
+function bodyOf(error: unknown): unknown {
+  if (!(error instanceof TRPCClientError)) return undefined;
+  return error.meta?.['responseJSON'] ?? error.cause;
 }
 
 async function codeOfAnswer(response: Response): Promise<string | undefined> {

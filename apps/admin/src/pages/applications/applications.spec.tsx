@@ -1,0 +1,493 @@
+// T071 (FR-160 to FR-162): the applications queue against its board, through the router, in both
+// languages. The three tabs with the counts `home.summary` gives (in review = open − waiting on the
+// applicant; decided uncounted); the search by name or email, sent once the typing stops and never
+// twice for the same text; the table, its pages and the selected row's detail; the call record by
+// its day in the panel's zone; approval held until FR-161's three conditions hold, each one said,
+// and confirmed with an optional note; the decision dialog's three kinds; and the actions each state
+// allows. The documents' thumbnails are shown and open nothing until the viewer lands (B14b-2).
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
+import { dayMonth, dayMonthYear } from '../../lib/format';
+import { panelTimeZone, todayIn } from '../../lib/zone';
+import { inBothLocales, mutation, query, refusal, renderApp } from '../../test/app-harness';
+
+afterEach(() => setLocale('ar'));
+
+const A = '0193a6f0-0000-7000-8000-00000000000a';
+const B = '0193a6f0-0000-7000-8000-00000000000b';
+const QURAN = { id: '0193a6f0-0000-7000-8000-0000000000a1', nameAr: 'حفظ القرآن', nameEn: 'Quran' };
+const TAJWEED = {
+  id: '0193a6f0-0000-7000-8000-0000000000a2',
+  nameAr: 'التجويد',
+  nameEn: 'Tajweed',
+};
+
+const rowA = {
+  teacherUserId: A,
+  displayName: 'الشيخ ياسر حمدي',
+  email: 'yasser@example.com',
+  gender: 'male',
+  isMinor: false,
+  subjects: [QURAN, TAJWEED],
+  submittedAt: '2026-10-14T09:00:00.000Z',
+  status: 'in_review',
+} as const;
+
+const rowB = {
+  teacherUserId: B,
+  displayName: 'منى عبد الرحمن',
+  email: 'mona@example.com',
+  gender: 'female',
+  isMinor: true,
+  subjects: [TAJWEED],
+  callRecordedOn: '2026-10-13',
+  submittedAt: '2026-10-12T09:00:00.000Z',
+  status: 'in_review',
+} as const;
+
+function detailOf(row: typeof rowA | typeof rowB, more: Record<string, unknown> = {}) {
+  return {
+    ...row,
+    qualificationSummary: 'إجازة في حفظ القرآن بالسند المتصل.',
+    timezoneCity: 'Africa/Cairo',
+    identityDocument: {
+      documentId: '0193a6f0-0000-7000-8000-0000000000d0',
+      type: 'national_id',
+      uploadedAt: row.submittedAt,
+    },
+    credentials: row.subjects.map((subject, index) => ({
+      credentialId: `0193a6f0-0000-7000-8000-0000000000c${index}`,
+      subject,
+      status: 'pending',
+      documentId: `0193a6f0-0000-7000-8000-0000000000e${index}`,
+    })),
+    call: {},
+    ...more,
+  };
+}
+
+const summary = {
+  queues: {
+    applications: { open: 3, waitingOnApplicant: 1 },
+    credentials: { open: 0, addedSubjects: 0 },
+  },
+  latestActions: [],
+};
+
+function fakeApi() {
+  const api = {
+    applications: {
+      list: query(),
+      get: query(),
+      recordCall: mutation(),
+      approve: mutation(),
+      reject: mutation(),
+      requestInfo: mutation(),
+      ban: mutation(),
+    },
+    home: { summary: query() },
+  };
+  api.applications.list.query.mockResolvedValue({ rows: [rowA, rowB], total: 2, pageSize: 25 });
+  api.applications.get.query.mockImplementation(async (input) =>
+    (input as { teacherUserId: string }).teacherUserId === A ? detailOf(rowA) : detailOf(rowB),
+  );
+  api.home.summary.query.mockResolvedValue(summary);
+  return api;
+}
+
+const verified = { token: 't', step: 'verified' } as const;
+
+function open(api = fakeApi()) {
+  return { ...renderApp({ at: '/applications', session: verified, api }), api };
+}
+
+const ar = (key: MessageKey, values?: Record<string, string | number>) =>
+  translate('ar', key, values);
+const press = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+
+/** Selects a row of the table and waits for its detail. */
+async function select(name: string) {
+  const cells = await screen.findAllByText(name);
+  const row = cells.map((cell) => cell.closest('tr')).find((found) => found !== null);
+  fireEvent.click(row as HTMLElement);
+  return screen.findByRole('complementary', {
+    name: translate(getLocale(), 'admin.applications.detail.a11y'),
+  });
+}
+
+describe('AdminApplications (FR-160)', () => {
+  it('draws the queue in both languages: the counts, the tabs, the table and its footer', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t, locale) => {
+        expect(await screen.findByText(rowA.email)).toBeTruthy();
+        expect(
+          screen.getByRole('heading', { level: 1, name: t('admin.applications.title') }),
+        ).toBeTruthy();
+        expect(await screen.findByText(t('admin.applications.lede', { count: 3 }))).toBeTruthy();
+        const tabs = screen.getAllByRole('tab');
+        expect(tabs.map((tab) => tab.textContent)).toEqual([
+          `${t('admin.applications.tabs.inReview')}2`,
+          `${t('admin.applications.tabs.waitingOnApplicant')}1`,
+          t('admin.applications.tabs.decided'),
+        ]);
+        for (const column of ['applicant', 'subjects', 'call', 'submitted'] as const) {
+          expect(
+            screen.getByRole('columnheader', { name: t(`admin.applications.columns.${column}`) }),
+          ).toBeTruthy();
+        }
+        const subjects = locale === 'ar' ? 'حفظ القرآن، التجويد' : 'Quran, Tajweed';
+        expect(screen.getByText(subjects)).toBeTruthy();
+        expect(screen.getByText(t('admin.status.call.notRecorded'))).toBeTruthy();
+        expect(
+          screen.getByText(
+            t('admin.status.call.recorded', {
+              date: dayMonth('2026-10-13', locale, panelTimeZone()),
+            }),
+          ),
+        ).toBeTruthy();
+        expect(screen.getByText(dayMonth(rowA.submittedAt, locale, panelTimeZone()))).toBeTruthy();
+        expect(
+          screen.getByText(t('admin.applications.pagerSummary', { shown: 2, total: 2 })),
+        ).toBeTruthy();
+        expect(screen.getByText(t('admin.common.panel.nothingSelected'))).toBeTruthy();
+      },
+    );
+  });
+
+  it('reads the first page of the tab in review, and the counts once', async () => {
+    const { api } = open();
+    await screen.findByText(rowA.email);
+    expect(api.applications.list.query).toHaveBeenCalledWith({ tab: 'in_review', page: 1 });
+    expect(api.home.summary.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the selected row’s detail in both languages', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t, locale) => {
+        const aside = await select(rowA.displayName);
+        const detail = within(aside);
+        expect(await detail.findByText(rowA.displayName)).toBeTruthy();
+        expect(
+          detail.getByText(
+            t('admin.applications.detail.meta', {
+              gender: t('admin.common.gender.male'),
+              city: locale === 'ar' ? 'القاهرة' : 'Cairo',
+              date: dayMonthYear(rowA.submittedAt, locale, panelTimeZone()),
+            }),
+          ),
+        ).toBeTruthy();
+        const header = aside.querySelector('.panel__header');
+        expect(
+          within(header as HTMLElement).getByText(t('admin.status.application.inReview')),
+        ).toBeTruthy();
+        expect(detail.getByText(t('admin.common.documentType.nationalId'))).toBeTruthy();
+        const subject = locale === 'ar' ? QURAN.nameAr : QURAN.nameEn;
+        expect(
+          detail.getByText(t('admin.applications.detail.credentialFile', { subject })),
+        ).toBeTruthy();
+        expect(detail.getByText('إجازة في حفظ القرآن بالسند المتصل.')).toBeTruthy();
+        expect(detail.queryByText(t('admin.common.minor'))).toBeNull();
+      },
+    );
+  });
+
+  it('marks a minor in the detail’s header (FR-132)', async () => {
+    open();
+    const detail = within(await select(rowB.displayName));
+    expect(await detail.findByText(ar('admin.common.minor'))).toBeTruthy();
+  });
+
+  it('switches tabs, and searches by name or email once the typing stops', async () => {
+    const { api } = open();
+    await screen.findByText(rowA.email);
+    fireEvent.click(
+      screen.getByRole('tab', { name: ar('admin.applications.tabs.waitingOnApplicant') + '1' }),
+    );
+    await waitFor(() =>
+      expect(api.applications.list.query).toHaveBeenCalledWith({ tab: 'waiting', page: 1 }),
+    );
+    const search = screen.getByPlaceholderText(ar('admin.applications.search.placeholder'));
+    fireEvent.change(search, { target: { value: '   ' } });
+    fireEvent.change(search, { target: { value: ' مني' } });
+    fireEvent.change(search, { target: { value: ' منى ' } });
+    await waitFor(() =>
+      expect(api.applications.list.query).toHaveBeenCalledWith({
+        tab: 'waiting',
+        search: 'منى',
+        page: 1,
+      }),
+    );
+    const searches = () =>
+      api.applications.list.query.mock.calls.filter(
+        ([input]) => (input as { search?: string }).search !== undefined,
+      );
+    expect(searches()).toHaveLength(1);
+    fireEvent.change(search, { target: { value: 'منى' } });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(searches()).toHaveLength(1);
+  });
+
+  it('turns the pages of a long tab', async () => {
+    const api = fakeApi();
+    api.applications.list.query.mockResolvedValue({ rows: [rowA], total: 30, pageSize: 25 });
+    open(api);
+    await screen.findByText(rowA.email);
+    expect(
+      screen.getByText(ar('admin.applications.pagerSummary', { shown: 1, total: 30 })),
+    ).toBeTruthy();
+    press('2');
+    await waitFor(() =>
+      expect(api.applications.list.query).toHaveBeenCalledWith({ tab: 'in_review', page: 2 }),
+    );
+  });
+
+  it('says an empty tab, an empty search, and a list that could not load, with a retry', async () => {
+    const api = fakeApi();
+    api.applications.list.query.mockResolvedValue({ rows: [], total: 0, pageSize: 25 });
+    open(api);
+    expect(await screen.findByText(ar('admin.applications.empty.title'))).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(ar('admin.applications.search.placeholder')), {
+      target: { value: 'لا أحد' },
+    });
+    expect(await screen.findByText(ar('admin.applications.empty.search.title'))).toBeTruthy();
+    api.applications.list.query.mockRejectedValue(refusal('INTERNAL'));
+    fireEvent.click(screen.getByRole('tab', { name: ar('admin.applications.tabs.decided') }));
+    expect(
+      await screen.findByText(
+        ar('admin.common.loadError.title', { page: ar('admin.applications.title') }),
+      ),
+    ).toBeTruthy();
+    api.applications.list.query.mockResolvedValue({ rows: [rowA], total: 1, pageSize: 25 });
+    press(ar('admin.common.action.retry'));
+    expect(await screen.findByText(rowA.email)).toBeTruthy();
+  });
+});
+
+describe('the call record (FR-161)', () => {
+  it('records the call by its day in the panel’s zone, its outcome and its notes', async () => {
+    const { api } = open();
+    api.applications.recordCall.mutate.mockResolvedValue(undefined);
+    const detail = within(await select(rowA.displayName));
+    const date = await detail.findByLabelText(ar('admin.applications.detail.callDate'));
+    expect(date.getAttribute('type')).toBe('date');
+    expect(date.getAttribute('max')).toBe(todayIn(panelTimeZone()));
+    expect(detail.getByText(ar('admin.applications.detail.callDatePlaceholder'))).toBeTruthy();
+    const save = detail.getByRole('button', { name: ar('admin.applications.detail.saveCall') });
+    expect(save).toHaveProperty('disabled', true);
+    fireEvent.change(date, { target: { value: '2026-10-20' } });
+    fireEvent.click(detail.getByRole('button', { name: ar('admin.applications.detail.suitable') }));
+    fireEvent.change(detail.getByLabelText(ar('admin.applications.detail.callNotes')), {
+      target: { value: 'تحقّقت من الاسم والسند.' },
+    });
+    fireEvent.click(save);
+    expect(await detail.findByText(ar('admin.applications.detail.callSaved'))).toBeTruthy();
+    expect(api.applications.recordCall.mutate).toHaveBeenCalledWith({
+      teacherUserId: A,
+      completedOn: '2026-10-20',
+      timeZone: panelTimeZone(),
+      outcome: 'suitable',
+      notes: 'تحقّقت من الاسم والسند.',
+    });
+  });
+
+  it('says a day after today in place', async () => {
+    const { api } = open();
+    api.applications.recordCall.mutate.mockRejectedValue(
+      refusal('VALIDATION_FAILED', [{ path: 'completedOn', code: 'future' }]),
+    );
+    const detail = within(await select(rowA.displayName));
+    fireEvent.change(await detail.findByLabelText(ar('admin.applications.detail.callDate')), {
+      target: { value: '2026-10-20' },
+    });
+    fireEvent.click(
+      detail.getByRole('button', { name: ar('admin.applications.detail.unsuitable') }),
+    );
+    fireEvent.change(detail.getByLabelText(ar('admin.applications.detail.callNotes')), {
+      target: { value: 'ملاحظة' },
+    });
+    fireEvent.click(detail.getByRole('button', { name: ar('admin.applications.detail.saveCall') }));
+    expect(await detail.findByText(ar('admin.applications.detail.callFuture'))).toBeTruthy();
+  });
+});
+
+describe('approval (FR-161)', () => {
+  it('holds «اعتماد» and says each reason while the conditions do not hold', async () => {
+    open();
+    const detail = within(await select(rowA.displayName));
+    const approve = await detail.findByRole('button', {
+      name: ar('admin.applications.detail.approve'),
+    });
+    expect(approve).toHaveProperty('disabled', true);
+    for (const reason of ['callNotRecorded', 'credentialUndecided', 'noneApproved'] as const) {
+      expect(detail.getByText(ar(`admin.applications.blocked.${reason}`))).toBeTruthy();
+    }
+  });
+
+  it('approves once the call is recorded and the credentials decided, with an optional note', async () => {
+    const api = fakeApi();
+    const ready = detailOf(rowB, {
+      call: { completedOn: '2026-10-13', outcome: 'suitable', notes: 'تم' },
+    });
+    ready.credentials = [{ ...(ready.credentials[0] as object), status: 'approved' }] as never;
+    api.applications.get.query.mockResolvedValue(ready);
+    api.applications.approve.mutate.mockResolvedValue(undefined);
+    open(api);
+    const detail = within(await select(rowB.displayName));
+    const approve = await detail.findByRole('button', {
+      name: ar('admin.applications.detail.approve'),
+    });
+    await waitFor(() => expect(approve).toHaveProperty('disabled', false));
+    fireEvent.click(approve);
+    const dialog = within(
+      await screen.findByRole('dialog', {
+        name: ar('admin.dialogs.confirm.approveApplication.title', { name: rowB.displayName }),
+      }),
+    );
+    expect(
+      dialog.getByText(ar('admin.dialogs.confirm.approveApplication.effects.approved')),
+    ).toBeTruthy();
+    expect(dialog.getByText(ar('admin.dialogs.confirm.common.footerNote'))).toBeTruthy();
+    fireEvent.change(dialog.getByLabelText(ar('admin.dialogs.confirm.common.noteLabel')), {
+      target: { value: 'مطابق' },
+    });
+    fireEvent.click(
+      dialog.getByRole('button', { name: ar('admin.dialogs.confirm.approveApplication.confirm') }),
+    );
+    await waitFor(() =>
+      expect(api.applications.approve.mutate).toHaveBeenCalledWith({
+        teacherUserId: B,
+        note: 'مطابق',
+      }),
+    );
+  });
+
+  it('says the server’s reasons in the dialog when it refuses the approval', async () => {
+    const api = fakeApi();
+    const ready = detailOf(rowB, { call: { completedOn: '2026-10-13', outcome: 'suitable' } });
+    ready.credentials = [{ ...(ready.credentials[0] as object), status: 'approved' }] as never;
+    api.applications.get.query.mockResolvedValue(ready);
+    api.applications.approve.mutate.mockRejectedValue(
+      refusal('APPROVAL_BLOCKED', [{ path: 'approval', code: 'credential_undecided' }]),
+    );
+    open(api);
+    const detail = within(await select(rowB.displayName));
+    const approve = await detail.findByRole('button', {
+      name: ar('admin.applications.detail.approve'),
+    });
+    await waitFor(() => expect(approve).toHaveProperty('disabled', false));
+    fireEvent.click(approve);
+    const dialog = within(await screen.findByRole('dialog'));
+    fireEvent.click(
+      dialog.getByRole('button', { name: ar('admin.dialogs.confirm.approveApplication.confirm') }),
+    );
+    expect(
+      await dialog.findByText(ar('admin.applications.blocked.credentialUndecided')),
+    ).toBeTruthy();
+    expect(api.applications.approve.mutate).toHaveBeenCalledWith({ teacherUserId: B });
+  });
+});
+
+describe('the decision dialog (FR-162)', () => {
+  async function decide(action: MessageKey) {
+    const opened = open();
+    const detail = within(await select(rowA.displayName));
+    fireEvent.click(await detail.findByRole('button', { name: ar(action) }));
+    const dialog = within(
+      await screen.findByRole('dialog', {
+        name: ar('admin.dialogs.decision.title', { name: rowA.displayName }),
+      }),
+    );
+    return { ...opened, dialog };
+  }
+
+  it('rejects with a reason and the note the applicant reads', async () => {
+    const { api, dialog } = await decide('admin.applications.detail.reject');
+    api.applications.reject.mutate.mockResolvedValue(undefined);
+    expect(dialog.getByRole('group', { name: ar('admin.dialogs.decision.a11yKind') })).toBeTruthy();
+    expect(dialog.getByText(ar('admin.dialogs.decision.reapplyHint'))).toBeTruthy();
+    expect(dialog.getByText(ar('admin.dialogs.decision.footer'))).toBeTruthy();
+    const confirm = dialog.getByRole('button', {
+      name: ar('admin.dialogs.decision.confirmReject'),
+    });
+    expect(confirm).toHaveProperty('disabled', true);
+    fireEvent.click(dialog.getByLabelText(ar('admin.dialogs.decision.reasons.nameMismatch')));
+    fireEvent.change(dialog.getByLabelText(ar('admin.dialogs.decision.noteLabel')), {
+      target: { value: 'الاسم لا يطابق البطاقة.' },
+    });
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(api.applications.reject.mutate).toHaveBeenCalledWith({
+        teacherUserId: A,
+        reasonChoice: 'name_mismatch',
+        note: 'الاسم لا يطابق البطاقة.',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('asks for information with the one thing needed', async () => {
+    const { api, dialog } = await decide('admin.applications.detail.requestInfo');
+    api.applications.requestInfo.mutate.mockResolvedValue(undefined);
+    fireEvent.click(
+      dialog.getByLabelText(ar('admin.dialogs.decision.requestInfo.reasons.idUnclear')),
+    );
+    fireEvent.change(dialog.getByLabelText(ar('admin.dialogs.decision.requestInfo.noteLabel')), {
+      target: { value: 'الوجه الخلفي غير واضح.' },
+    });
+    fireEvent.click(
+      dialog.getByRole('button', { name: ar('admin.dialogs.decision.requestInfo.confirm') }),
+    );
+    await waitFor(() =>
+      expect(api.applications.requestInfo.mutate).toHaveBeenCalledWith({
+        teacherUserId: A,
+        needed: ['id_unclear'],
+        note: 'الوجه الخلفي غير واضح.',
+      }),
+    );
+  });
+
+  it('bans with a reason, switched to in place, and says a failure without closing', async () => {
+    const { api, dialog } = await decide('admin.applications.detail.reject');
+    api.applications.ban.mutate.mockRejectedValue(refusal('INTERNAL'));
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.dialogs.decision.kinds.ban') }));
+    expect(dialog.getByText(ar('admin.dialogs.decision.ban.banner'))).toBeTruthy();
+    fireEvent.click(dialog.getByLabelText(ar('admin.dialogs.decision.ban.reasons.impersonation')));
+    fireEvent.change(dialog.getByLabelText(ar('admin.dialogs.decision.ban.noteLabel')), {
+      target: { value: 'انتحال.' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.dialogs.decision.ban.confirm') }));
+    expect(await dialog.findByText(ar('admin.dialogs.submitError'))).toBeTruthy();
+    expect(api.applications.ban.mutate).toHaveBeenCalledWith({
+      teacherUserId: A,
+      reasonChoice: 'impersonation',
+      note: 'انتحال.',
+    });
+  });
+});
+
+describe('the actions each state allows (FR-162)', () => {
+  it.each([
+    ['needs_document', ['reject', 'ban']],
+    ['rejected', ['ban']],
+    ['approved', []],
+    ['banned', []],
+  ] as const)('offers %s only %j', async (status, offered) => {
+    const api = fakeApi();
+    api.applications.get.query.mockResolvedValue(detailOf(rowA, { status }));
+    open(api);
+    const detail = within(await select(rowA.displayName));
+    await detail.findByText('إجازة في حفظ القرآن بالسند المتصل.');
+    for (const action of ['approve', 'requestInfo', 'reject', 'ban'] as const) {
+      const button = detail.queryByRole('button', {
+        name: ar(`admin.applications.detail.${action}`),
+      });
+      expect(button === null ? 'absent' : 'present').toBe(
+        (offered as readonly string[]).includes(action) ? 'present' : 'absent',
+      );
+    }
+  });
+});

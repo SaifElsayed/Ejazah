@@ -29,7 +29,7 @@ function surface() {
       return answer;
     };
   const applications: AdminSurfaceServices['applications'] = {
-    list: record('list', { rows: [], total: 0 }),
+    list: record('list', { rows: [], total: 0, pageSize: 25 }),
     get: record('get', {
       teacherUserId: APPLICANT,
       displayName: 'عمر فاروق',

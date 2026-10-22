@@ -69,6 +69,8 @@ describe('the queue', () => {
     const banned = store.plant({ status: 'banned' });
     const one = await service.list(TX, { tab: 'in_review', page: 1 });
     expect(one.total).toBe(3);
+    // The page's size travels with the page, so the panel's pager needs no setting of its own (B14b).
+    expect(one.pageSize).toBe(2);
     expect(one.rows.map((row) => row.teacherUserId)).toEqual([first, second]);
     expect((await service.list(TX, { tab: 'in_review', page: 2 })).rows).toHaveLength(1);
     expect(third).toBeDefined();
