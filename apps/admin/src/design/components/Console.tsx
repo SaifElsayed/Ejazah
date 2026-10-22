@@ -72,8 +72,8 @@ export function Console({ children }: ConsoleProps) {
   );
 }
 
-/** The brand mark and name. */
-function Brand() {
+/** The brand mark and name (the sign-in card, and the setup page's header, T070). */
+export function Brand() {
   const t = useT();
   return (
     <span className="brand">

@@ -1,6 +1,6 @@
 // T036: Segmented, Chip, FilterChips (docs/design/components.md, "Primitives"; design
 // `.segmented`, `.chip`, `.filter-chips`). Segmented is the one selected style for exclusive
-// options, the language included.
+// options, the language included. T070: CheckRow, the setup page's confirmation.
 import clsx from 'clsx';
 
 import { useT } from '../../i18n';
@@ -106,5 +106,28 @@ export function FilterChips({ chips, onClearAll }: FilterChipsProps) {
         {t('admin.common.action.clearAll')}
       </button>
     </div>
+  );
+}
+
+export interface CheckRowProps {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onChange: (checked: boolean) => void;
+  /** Top-aligned, for a label of more than one line. */
+  readonly top?: boolean;
+}
+
+/** A checkbox and its sentence, one touch target (`.check-row`, `.check`; T070). */
+export function CheckRow({ label, checked, onChange, top = false }: CheckRowProps) {
+  return (
+    <label className={clsx('check-row', top && 'check-row--top')}>
+      <input
+        type="checkbox"
+        className="check"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="text-callout">{label}</span>
+    </label>
   );
 }

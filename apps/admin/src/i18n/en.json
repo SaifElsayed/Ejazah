@@ -1229,7 +1229,9 @@
     },
     "mfa": {
       "backToSignIn": "Back to sign-in",
+      "codeInvalid": "The code is wrong or has expired. Enter the code the app shows now.",
       "codeLabel": "Authentication code",
+      "failed": "Verification failed. Try again shortly.",
       "lede": "Enter the six-digit code from the authenticator app on your phone. Two-step verification is mandatory for every admin account.",
       "refreshHint": "The code renews every {seconds} seconds.",
       "signIn": "Sign in",
@@ -1239,6 +1241,7 @@
     "mfaRecovery": {
       "backToAppCode": "Back to the app code",
       "backToSignIn": "Back to sign-in",
+      "codeInvalid": "The recovery code is wrong or has already been used.",
       "codeLabel": "Recovery code",
       "lede": "Enter one of the ten recovery codes you saved at setup. Each code is used once.",
       "lostHint": "If you have lost the codes too, another admin resets verification for your account.",
@@ -1250,6 +1253,7 @@
       "finish": "Finish setup and sign in",
       "footer": "The app code is required at every sign-in from today.",
       "lede": "This is the first sign-in for {email}. Two-step verification is mandatory for every admin account, and sign-in does not complete until it is set up.",
+      "loadError": "Setup could not start. Try again shortly.",
       "step1": {
         "a11y": {
           "copyKey": "Copy key",
@@ -1519,6 +1523,18 @@
       },
       "title": "Session review"
     },
+    "setPassword": {
+      "confirm": "Confirm password",
+      "failed": "The password could not be saved. Try again shortly.",
+      "hint": "{min} to {max} characters.",
+      "inviteInvalid": "This invite link is invalid, has expired or was already used. Ask an admin for a new one.",
+      "lede": "Choose a password for your admin panel account. You sign in with it, then set up two-step verification.",
+      "mismatch": "The two passwords do not match.",
+      "password": "Password",
+      "save": "Save password",
+      "title": "Set your password",
+      "weak": "This password is weak or has appeared in a breach. Choose another."
+    },
     "settings": {
       "adminsLink": "Admins · {count}",
       "attendanceThreshold": {
@@ -1626,6 +1642,8 @@
       "error": "Could not sign in. Check your details and try again shortly.",
       "lede": "This sign-in is separate from the app's, and is for authorised operations-team accounts only.",
       "password": "Password",
+      "passwordSet": "Your password is saved. Sign in now, then set up two-step verification.",
+      "sessionExpired": "Your sign-in session ended. Start again.",
       "title": "Admin sign-in"
     },
     "status": {
