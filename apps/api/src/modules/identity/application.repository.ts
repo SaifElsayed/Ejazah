@@ -159,3 +159,15 @@ export async function readApplicationQueue(tx: Client): Promise<{
     waitingOnApplicant,
   };
 }
+
+/**
+ * Whether the teacher is approved (`verification_status`), for the credential review (T069): an
+ * approved teacher's newly approved credential makes its subject theirs at once (FR-153).
+ */
+export async function isApprovedTeacher(tx: Client, userId: string): Promise<boolean> {
+  const profile = await tx.teacherProfile.findUnique({
+    where: { userId },
+    select: { verificationStatus: true },
+  });
+  return profile?.verificationStatus === 'approved';
+}

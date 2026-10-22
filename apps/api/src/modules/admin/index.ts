@@ -4,14 +4,15 @@ import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
-import { readCredentialQueue } from '../catalog/index.js';
+import {
+  createCredentialReviewService,
+  type CredentialReviewService,
+  readCredentialQueue,
+} from '../catalog/index.js';
 import { readApplicationQueue } from '../identity/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
-import {
-  AdminSessionService,
-  type AdminSessionDependencies,
-} from './admin-session.service.js';
+import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
 import { AdminSessionsRepository } from './admin-sessions.repository.js';
 import { AdminUsersRepository } from './admin-users.repository.js';
 import { type AdminInviteQueue, AdminsService } from './admins.service.js';
@@ -50,6 +51,11 @@ export interface AdminServices {
   >;
   readonly audit: Pick<AuditQueryService, 'list' | 'get'>;
   readonly home: Pick<HomeService, 'summary'>;
+  /** The catalog module's credential review, composed here for the surface (T069). */
+  readonly credentials: Pick<
+    CredentialReviewService,
+    'list' | 'get' | 'approve' | 'reject' | 'requestDocument' | 'correct'
+  >;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -72,6 +78,7 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       audit,
       queues: { applications: readApplicationQueue, credentials: readCredentialQueue },
     }),
+    credentials: createCredentialReviewService(dependencies),
   };
 }
 

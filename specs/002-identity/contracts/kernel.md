@@ -36,6 +36,8 @@ Both contexts gain `clientAddress`: the socket's peer address, or, when `TRUSTED
 The administrator context also carries the admin module's services through a port the surfaces
 declare (`AdminSurfaceServices`, in the contract's types), which the admin module implements and
 `main.ts` binds, as the audit writer is: the context may not import `modules/admin` (T067).
+Another module's service on that surface is composed into the admin module's services, which may
+import any module's entry: the catalog module's credential review is `credentials` (T069).
 
 A `verification_required` account is admitted by every kind of this phase; Phase 2's booking kind refuses it (FR-137). Only `suspended` and `banned` are the restricted standings.
 

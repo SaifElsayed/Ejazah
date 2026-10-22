@@ -11,7 +11,7 @@ import type { Prisma } from '@prisma/client';
 
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
-import { likeLiteral } from './like-literal.js';
+import { likeLiteral } from '../../platform/db/like-literal.js';
 
 type Client = Pick<Database, 'adminUser'>;
 type Writer = Pick<Transaction, 'adminUser'>;

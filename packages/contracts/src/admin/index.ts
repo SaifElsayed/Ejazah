@@ -4,3 +4,4 @@
 export * from './admins.js';
 export * from './audit.js';
 export * from './auth.js';
+export * from './credentials.js';
