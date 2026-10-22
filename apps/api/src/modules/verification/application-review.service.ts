@@ -122,7 +122,7 @@ export class ApplicationReviewService {
     this.#now = dependencies.now ?? (() => new Date());
   }
 
-  /** `applications.list`: one page of a tab, and how many the tab and the search admit. */
+  /** `applications.list`: one page of a tab, how many the tab and the search admit, and the page size. */
   async list(
     tx: Transaction,
     query: z.output<typeof applicationsListInput>,
@@ -136,7 +136,11 @@ export class ApplicationReviewService {
       tx,
       rows.map((row) => row.userId),
     );
-    return { rows: rows.map((row) => this.#rowOf(row, ofApplication(row, credentials))), total };
+    return {
+      rows: rows.map((row) => this.#rowOf(row, ofApplication(row, credentials))),
+      total,
+      pageSize: size,
+    };
   }
 
   /** `applications.get`: the detail; the decision history is `audit.list` on the target. */

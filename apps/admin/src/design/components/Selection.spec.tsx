@@ -1,10 +1,11 @@
 // T036: Segmented, Chip, FilterChips (docs/design/components.md, "Primitives"). T070: CheckRow.
+// T071: Choice in its ChoiceGroup, and CategoryTabs.
 import { fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { translate } from '../../i18n';
 import { inBothDirections } from './__tests__/harness';
-import { CheckRow, Chip, FilterChips, Segmented } from './index';
+import { CategoryTabs, CheckRow, Chip, Choice, ChoiceGroup, FilterChips, Segmented } from './index';
 
 describe('Segmented', () => {
   it('is a labelled group with one pressed option, and reports a choice', () => {
@@ -92,5 +93,58 @@ describe('CheckRow', () => {
       },
     );
     expect(onChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('Choice and ChoiceGroup', () => {
+  it('is one radio group under its legend, the selected card marked, danger when asked', () => {
+    const onPress = vi.fn();
+    inBothDirections(
+      () => (
+        <ChoiceGroup legend="why">
+          <Choice label="first" selected danger onPress={() => undefined} />
+          <Choice label="second" selected={false} onPress={onPress} />
+        </ChoiceGroup>
+      ),
+      ({ view }) => {
+        const group = view.getByRole('group', { name: 'why' });
+        const [first, second] = view.getAllByRole('radio');
+        expect(first).toHaveProperty('checked', true);
+        expect(second).toHaveProperty('checked', false);
+        expect(first?.getAttribute('name')).toBe(second?.getAttribute('name'));
+        expect(group.querySelector('.choice--danger.choice--selected')).not.toBeNull();
+        fireEvent.click(view.getByLabelText('second'));
+      },
+    );
+    expect(onPress).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CategoryTabs', () => {
+  it('is a tab list with the selected tab and the counts given, and reports another tab', () => {
+    const onChange = vi.fn();
+    inBothDirections(
+      () => (
+        <CategoryTabs
+          accessibilityLabel="state"
+          value="a"
+          tabs={[
+            { value: 'a', label: 'A', count: 2 },
+            { value: 'b', label: 'B' },
+          ]}
+          onChange={onChange}
+        />
+      ),
+      ({ view }) => {
+        expect(view.getByRole('tablist', { name: 'state' })).toBeTruthy();
+        const [a, b] = view.getAllByRole('tab');
+        expect(a?.getAttribute('aria-selected')).toBe('true');
+        expect(a?.textContent).toBe('A2');
+        expect(b?.textContent).toBe('B');
+        fireEvent.click(a as HTMLElement);
+        fireEvent.click(b as HTMLElement);
+      },
+    );
+    expect(onChange.mock.calls).toEqual([['b'], ['b']]);
   });
 });

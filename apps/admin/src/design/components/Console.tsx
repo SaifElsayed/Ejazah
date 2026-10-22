@@ -379,18 +379,27 @@ export function KeyValue({ items, columns = 2 }: KeyValueProps) {
 export interface DocThumbProps {
   readonly label: string;
   readonly badge?: BadgeProps;
-  /** Opens the document viewer: view only. */
-  readonly onPress: Press;
+  /** The page's drawing: a file by default, a person for an identity document (T071). */
+  readonly icon?: IconName;
+  /** Opens the document viewer: view only. Without it the thumbnail is shown and opens nothing. */
+  readonly onPress?: Press;
 }
 
-export function DocThumb({ label, badge, onPress }: DocThumbProps) {
-  return (
-    <button type="button" className="doc-thumb" onClick={onPress}>
+export function DocThumb({ label, badge, icon = 'file-text', onPress }: DocThumbProps) {
+  const content = (
+    <>
       <span className="doc-thumb__page">
-        <Icon name="file-text" size="lg" />
+        <Icon name={icon} size="lg" />
       </span>
       <span>{label}</span>
       {badge === undefined ? null : <Badge {...badge} />}
+    </>
+  );
+  return onPress === undefined ? (
+    <span className="doc-thumb">{content}</span>
+  ) : (
+    <button type="button" className="doc-thumb" onClick={onPress}>
+      {content}
     </button>
   );
 }

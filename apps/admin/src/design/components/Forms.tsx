@@ -70,14 +70,29 @@ export interface InputProps extends Accessible {
   /** A left-to-right value (an email, a code, a reference), isolated inside Arabic. */
   readonly ltr?: boolean;
   readonly multiline?: boolean;
-  readonly keyboard?: 'default' | 'email' | 'numeric' | 'phone';
+  /** `date` is the browser's date field, its value `YYYY-MM-DD` (T071, the call's day). */
+  readonly keyboard?: 'default' | 'email' | 'numeric' | 'phone' | 'date';
+  /** The latest value a date field takes (`YYYY-MM-DD`). */
+  readonly max?: string;
   readonly secure?: boolean;
   readonly error?: boolean;
   readonly disabled?: boolean;
 }
 
-const INPUT_TYPE = { default: 'text', email: 'email', numeric: 'text', phone: 'tel' } as const;
-const INPUT_MODE = { default: 'text', email: 'email', numeric: 'numeric', phone: 'tel' } as const;
+const INPUT_TYPE = {
+  default: 'text',
+  email: 'email',
+  numeric: 'text',
+  phone: 'tel',
+  date: 'date',
+} as const;
+const INPUT_MODE = {
+  default: 'text',
+  email: 'email',
+  numeric: 'numeric',
+  phone: 'tel',
+  date: undefined,
+} as const;
 
 /** The attributes a control shares with the Field around it. */
 function useControlWiring(error: boolean) {
@@ -102,6 +117,7 @@ export function Input({
   secure = false,
   error = false,
   disabled = false,
+  max,
   accessibilityLabel,
 }: InputProps) {
   const { invalid, ...wiring } = useControlWiring(error);
@@ -127,6 +143,7 @@ export function Input({
       {...shared}
       type={secure ? 'password' : INPUT_TYPE[keyboard]}
       inputMode={INPUT_MODE[keyboard]}
+      max={max}
     />
   );
 }

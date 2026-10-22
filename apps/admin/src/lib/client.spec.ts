@@ -2,10 +2,11 @@
 // sessionStorage; the refusals are read by their code from the answer's body, never by the status
 // (owner's decision 2026-10-19: ADMIN_SIGN_IN_FAILED is 401 too), and they move the session: a
 // refused session (UNAUTHENTICATED) is cleared, an unverified one is sent to its second factor.
+// T071: the details a refusal carries (`APPROVAL_BLOCKED`'s reasons, a refused field).
 import { TRPCClientError } from '@trpc/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAdminClient, errorCodeOf } from './client';
+import { createAdminClient, errorCodeOf, errorDetailsOf } from './client';
 import { createSessionStore } from './session';
 
 const URL = 'https://api.example.test/admin/trpc';
@@ -98,5 +99,31 @@ describe('errorCodeOf', () => {
     ).toBe('RATE_LIMITED');
     expect(errorCodeOf(new Error('offline'))).toBeUndefined();
     expect(errorCodeOf(new TRPCClientError('no body'))).toBeUndefined();
+  });
+});
+
+describe('errorDetailsOf', () => {
+  it('reads the details of a refusal, and none from an error that carries none', () => {
+    const blocked = new TRPCClientError('refused', {
+      meta: {
+        responseJSON: {
+          error: {
+            code: 'APPROVAL_BLOCKED',
+            message: 'refused',
+            details: [
+              { path: 'approval', code: 'call_not_recorded' },
+              { path: 'approval', code: 'none_approved' },
+              { path: 7, code: 'not a detail' },
+            ],
+          },
+        },
+      },
+    });
+    expect(errorDetailsOf(blocked)).toEqual([
+      { path: 'approval', code: 'call_not_recorded' },
+      { path: 'approval', code: 'none_approved' },
+    ]);
+    expect(errorDetailsOf(new Error('offline'))).toEqual([]);
+    expect(errorDetailsOf(new TRPCClientError('no body'))).toEqual([]);
   });
 });

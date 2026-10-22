@@ -1,5 +1,6 @@
 // T036: Dialog, on Radix's dialog as shadcn/ui's is (docs/design/components.md, "Primitives";
-// "Dialogs that need a reason … the actions at the end").
+// "Dialogs that need a reason … the actions at the end"). T071: the header with an avatar or an icon
+// tile and a subtitle, and the note under the actions (the decision and confirm boards).
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -43,6 +44,29 @@ describe('Dialog', () => {
     );
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('draws a leading avatar or tile beside the title and its subtitle, and a note under the actions', () => {
+    inBothDirections(
+      () => (
+        <Dialog
+          open
+          title="title"
+          subtitle="subtitle"
+          leading={<span className="avatar">A</span>}
+          note="note"
+          actions={[{ label: 'confirm', onPress: () => undefined }]}
+        />
+      ),
+      () => {
+        const dialog = screen.getByRole('dialog', { name: 'title' });
+        const header = dialog.querySelector('.row.row--top.gap-3');
+        expect(header?.querySelector('.avatar')?.textContent).toBe('A');
+        expect(header?.querySelector('.text-caption.tone-muted')?.textContent).toBe('subtitle');
+        expect(dialog.lastElementChild?.className).toBe('panel__note');
+        expect(dialog.lastElementChild?.textContent).toBe('note');
+      },
+    );
   });
 
   it('is dismissed by Escape when it can be, and renders nothing closed', () => {

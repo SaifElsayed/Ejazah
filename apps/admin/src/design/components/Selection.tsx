@@ -1,7 +1,9 @@
 // T036: Segmented, Chip, FilterChips (docs/design/components.md, "Primitives"; design
 // `.segmented`, `.chip`, `.filter-chips`). Segmented is the one selected style for exclusive
-// options, the language included. T070: CheckRow, the setup page's confirmation.
+// options, the language included. T070: CheckRow, the setup page's confirmation. T071: Choice and
+// ChoiceGroup, the decision dialog's reasons, and CategoryTabs, a queue's tabs.
 import clsx from 'clsx';
+import { createContext, useContext, useId } from 'react';
 
 import { useT } from '../../i18n';
 import { Icon } from './Icon';
@@ -129,5 +131,93 @@ export function CheckRow({ label, checked, onChange, top = false }: CheckRowProp
       />
       <span className="text-callout">{label}</span>
     </label>
+  );
+}
+
+export interface ChoiceProps {
+  readonly label: string;
+  readonly selected: boolean;
+  /** Red when selected: a choice that refuses or ends something. */
+  readonly danger?: boolean;
+  readonly onPress: Press;
+}
+
+/**
+ * One option of a group of radio cards (`.choice`; T071, the decision dialog's reasons). The radio
+ * is visually hidden inside its label, so the card is the touch target and the group a radio group
+ * for assistive technology; `ChoiceGroup` names it.
+ */
+export function Choice({ label, selected, danger = false, onPress }: ChoiceProps) {
+  const name = useContext(ChoiceGroupContext);
+  return (
+    <label className={clsx('choice', danger && 'choice--danger', selected && 'choice--selected')}>
+      <input
+        type="radio"
+        className="visually-hidden"
+        name={name}
+        checked={selected}
+        onChange={() => onPress()}
+      />
+      <span className="choice__mark" aria-hidden="true" />
+      <span className="grow">{label}</span>
+    </label>
+  );
+}
+
+const ChoiceGroupContext = createContext<string | undefined>(undefined);
+
+export interface ChoiceGroupProps {
+  /** The group's legend («سبب الرفض»). */
+  readonly legend: string;
+  readonly children: Content;
+}
+
+/** A fieldset of Choices under their legend, one radio group (T071). */
+export function ChoiceGroup({ legend, children }: ChoiceGroupProps) {
+  const name = useId();
+  return (
+    <fieldset className="stack gap-2">
+      <legend className="field__label pad-bottom">{legend}</legend>
+      <ChoiceGroupContext.Provider value={name}>{children}</ChoiceGroupContext.Provider>
+    </fieldset>
+  );
+}
+
+export interface CategoryTabsProps extends Required<Accessible> {
+  readonly tabs: readonly {
+    readonly value: string;
+    readonly label: string;
+    /** How many the tab holds; no count drawn when absent. */
+    readonly count?: number;
+  }[];
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}
+
+/** The tabs of a queue with their counts (`.category-tabs`; T071). */
+export function CategoryTabs({ tabs, value, onChange, accessibilityLabel }: CategoryTabsProps) {
+  return (
+    <div className="category-tabs" role="tablist" aria-label={accessibilityLabel}>
+      {tabs.map((tab) => {
+        const selected = tab.value === value;
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            className={clsx('category-tabs__item', selected && 'category-tabs__item--selected')}
+            onClick={() => {
+              if (!selected) onChange(tab.value);
+            }}
+          >
+            {tab.label}
+            {tab.count === undefined ? null : (
+              <span className="category-tabs__count">{tab.count}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }

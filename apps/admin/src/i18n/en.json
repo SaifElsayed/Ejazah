@@ -38,6 +38,11 @@
       "you": "you"
     },
     "applications": {
+      "blocked": {
+        "callNotRecorded": "The verification call record is not saved yet.",
+        "credentialUndecided": "Not every ijazah has been decided yet.",
+        "noneApproved": "No ijazah is approved yet; at least one must be."
+      },
       "columns": {
         "applicant": "Applicant",
         "call": "Call",
@@ -51,8 +56,10 @@
         "call": "Verification call · outside the app",
         "callDate": "Call date",
         "callDatePlaceholder": "dd / mm / yyyy",
+        "callFuture": "The call date cannot be after today.",
         "callNotes": "Call notes",
         "callNotesPlaceholder": "What you checked on the call",
+        "callSaved": "The call record is saved.",
         "credentialFile": "{subject} (PDF)",
         "credentials": "Ijazahs · one PDF per subject",
         "footer": "Approve unlocks once the verification call record is saved: date, outcome and notes. The applicant receives the decision with your note, and it is recorded in the audit log.",
@@ -68,9 +75,21 @@
         "unsuitable": "Unsuitable"
       },
       "empty": {
+        "decided": {
+          "text": "Each approved, rejected or banned application appears here.",
+          "title": "No application decided yet"
+        },
+        "search": {
+          "text": "No application in this tab matches what you typed. Try another name or email.",
+          "title": "No results"
+        },
         "showDecided": "Show decided applications",
         "text": "Every application has been decided. Each new application a teacher sends appears here.",
-        "title": "No open applications"
+        "title": "No open applications",
+        "waiting": {
+          "text": "Each application whose applicant was asked for a file or information appears here.",
+          "title": "No applications waiting on applicants"
+        }
       },
       "lede": "{count, plural, one {# application awaits a decision} other {# applications await a decision}}. A teacher is not shown to students until approved and their payout account is verified.",
       "ledeEmpty": "No open applications now. A teacher is not shown to students until approved and their payout account is verified.",
@@ -226,6 +245,7 @@
         "en": "English"
       },
       "loadError": {
+        "text": "No answer arrived. Nothing changed in the data; try again, and if it keeps failing, tell the operations team.",
         "title": "Could not load {page}"
       },
       "minor": "Minor",
@@ -1657,8 +1677,10 @@
       },
       "application": {
         "approved": "Approved",
+        "banned": "Banned",
         "decided": "Decided",
         "inReview": "In review",
+        "rejected": "Rejected",
         "waitingOnApplicant": "Waiting on applicant"
       },
       "attendance": {

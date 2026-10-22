@@ -17,8 +17,14 @@ export {
   type TextLinkProps,
 } from './Button';
 export {
+  CategoryTabs,
+  type CategoryTabsProps,
   CheckRow,
   type CheckRowProps,
+  Choice,
+  ChoiceGroup,
+  type ChoiceGroupProps,
+  type ChoiceProps,
   Chip,
   type ChipProps,
   FilterChips,

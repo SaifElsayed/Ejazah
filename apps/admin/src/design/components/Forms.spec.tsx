@@ -1,4 +1,5 @@
-// T036: Field, Input, InputGroup, Otp, Upload (docs/design/components.md, "Primitives").
+// T036: Field, Input, InputGroup, Otp, Upload (docs/design/components.md, "Primitives"). T071: a
+// date Input, the browser's own, with its latest day.
 import { fireEvent } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -53,6 +54,26 @@ describe('Field and Input', () => {
       },
     );
     expect(onChangeText.mock.calls).toEqual([['x'], ['x']]);
+  });
+});
+
+describe('a date Input (T071)', () => {
+  it('is the browser’s date field, its value YYYY-MM-DD, bounded by its latest day', () => {
+    const onChangeText = vi.fn();
+    inBothDirections(
+      () => (
+        <Field label="day">
+          <Input value="" onChangeText={onChangeText} keyboard="date" max="2026-10-22" />
+        </Field>
+      ),
+      ({ view }) => {
+        const input = view.getByLabelText('day');
+        expect(input.getAttribute('type')).toBe('date');
+        expect(input.getAttribute('max')).toBe('2026-10-22');
+        fireEvent.change(input, { target: { value: '2026-10-20' } });
+      },
+    );
+    expect(onChangeText).toHaveBeenCalledWith('2026-10-20');
   });
 });
 

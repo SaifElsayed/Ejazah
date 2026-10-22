@@ -308,6 +308,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.pageSize": { "required": true, "type": "integer" },
           "$.rows": { "required": true, "type": "array" },
           "$.rows[]": { "type": "object" },
           "$.rows[].callRecordedOn": { "type": "string" },
