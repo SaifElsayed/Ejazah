@@ -4,8 +4,8 @@
 // reads the open request and attaches the document they uploaded (`POST /uploads/documents`);
 // `documents.accept` closes it and reactivates the account, only from `verification_required` (owner's
 // decision 2026-10-22: an account suspended meanwhile stays suspended); `documents.requestAnother`
-// keeps it open, clears the document and makes the note the reason the user reads, the first reason
-// kept in the audit log. The administrator never modifies or replaces a document; `documents.link`
+// closes it as `replaced`, keeping the document it held (so the documents sweep leaves it, B13b
+// review, follow-up 1), and opens a new request with the note as the reason the user reads. The administrator never modifies or replaces a document; `documents.link`
 // answers a signed, expiring link to view one (NFR-SEC-3).
 //
 // The administrator's methods run on the administrator kind's transaction (`tx`); the user's open
@@ -25,7 +25,7 @@ export interface IdentityRequestRecord {
   readonly requestId: string;
   readonly userId: string;
   readonly reason: string;
-  readonly status: 'open' | 'satisfied' | 'expired';
+  readonly status: 'open' | 'satisfied' | 'expired' | 'replaced';
   readonly requestedAt: Date;
   readonly document: {
     readonly documentId: string;
@@ -52,8 +52,14 @@ export interface IdentityRequestStore {
   ): Promise<boolean>;
   /** Closes the request while it is open with a document; whether it did. */
   resolve(tx: Transaction, requestId: string, at: Date): Promise<boolean>;
-  /** Clears the document of an open request and writes the note as its reason; whether it did. */
-  askAnother(tx: Transaction, requestId: string, note: string): Promise<boolean>;
+  /**
+   * Closes an open request holding a document as `replaced`, keeping the document, and opens a new
+   * one with the note as its reason; the new request's id, or null when it was no longer so.
+   */
+  replace(
+    tx: Transaction,
+    replacement: { requestId: string; adminId: string; note: string; at: Date },
+  ): Promise<string | null>;
   documentsOwnedAmong(
     tx: Transaction,
     userId: string,
@@ -136,17 +142,29 @@ export class VerificationRequestService {
     return { userId: request.userId };
   }
 
-  /** `documents.requestAnother`: the request stays open, its document cleared, the note its reason. */
+  /**
+   * `documents.requestAnother`: the request is closed as `replaced`, keeping the document it held,
+   * and a new one opens with the note as the reason the person reads; the account stays waiting.
+   */
   async requestAnother(
     tx: Transaction,
-    _adminId: string,
+    adminId: string,
     input: { readonly requestId: string; readonly note: string },
-  ): Promise<{ readonly userId: string }> {
+  ): Promise<{ readonly userId: string; readonly requestId: string; readonly documentId: string }> {
     const request = await this.#reviewable(tx, input.requestId);
-    if (!(await this.#store.askAnother(tx, request.requestId, input.note))) {
-      await this.#refuseMoved(tx, request.requestId);
-    }
-    return { userId: request.userId };
+    const next = await this.#store.replace(tx, {
+      requestId: request.requestId,
+      adminId,
+      note: input.note,
+      at: this.#now(),
+    });
+    if (next === null) return this.#refuseMoved(tx, request.requestId);
+    // `#reviewable` answered only a request holding a document.
+    return {
+      userId: request.userId,
+      requestId: next,
+      documentId: request.document?.documentId ?? '',
+    };
   }
 
   /** `documents.link`: a signed link to view the document, for the administrator (NFR-SEC-3). */

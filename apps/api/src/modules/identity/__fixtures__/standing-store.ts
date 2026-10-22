@@ -107,16 +107,14 @@ export class MemoryStandingStore implements StandingStore {
     const teacher = this.#people.get(userId)?.teacher;
     if (teacher == null) return false;
     if (ban.kind === 'teacher') {
-      if (teacher.verificationStatus !== 'approved') return false;
+      if (teacher.verificationStatus !== 'approved' && teacher.verificationStatus !== 'revoked') {
+        return false;
+      }
       Object.assign(teacher, { verificationStatus: 'banned' });
       return true;
     }
-    if (
-      teacher.applicationStatus !== 'in_review' &&
-      teacher.applicationStatus !== 'needs_document'
-    ) {
-      return false;
-    }
+    const banned: readonly (string | null)[] = ['in_review', 'needs_document', 'rejected'];
+    if (!banned.includes(teacher.applicationStatus)) return false;
     Object.assign(teacher, {
       verificationStatus: 'banned',
       applicationStatus: 'banned',

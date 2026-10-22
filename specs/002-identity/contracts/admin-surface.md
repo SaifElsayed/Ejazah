@@ -49,7 +49,7 @@ The review's states and answers (T068, batch B13b; owner's decisions at B13's co
   - `approve` moves an `in_review` application whose call is recorded.
   - `reject` moves `in_review` or `needs_document`.
   - `requestInfo` moves `in_review` only.
-  - `ban` moves `in_review` or `needs_document`, through the standing's one ban.
+  - `ban` moves `in_review`, `needs_document` or `rejected`, through the standing's one ban.
   - Any other state is `CONFLICT` naming the status. An application that is not there is `NOT_FOUND`.
   - `APPROVAL_BLOCKED` carries every reason that holds as `details: [{ path: 'approval', code }]`, the code `call_not_recorded`, `credential_undecided` or `none_approved`.
 - **The audit.**
@@ -84,8 +84,7 @@ The requests' states (T068, batch B13b):
 - **`users.requireIdentity`.** It needs an `active` account with no request open; otherwise it is `CONFLICT` on `userId`, the code `request_open` or the account status. The person's field is `targetUserId`, since a field named `userId` is refused in any input (R-GENDER-4).
 - **`documents.accept` and `documents.requestAnother`.** Each needs an open request with a document (`CONFLICT` on `requestId`, the code `no_document` or the request's status).
   - `accept` reactivates only an account in `verification_required`. An account suspended meanwhile stays suspended.
-  - `requestAnother` clears the document and makes the note the reason the person reads. The first reason is kept in the audit entry.
-  - The cleared document is then unreferenced, so the documents sweep (T093) removes it.
+  - `requestAnother` closes the request as `replaced`, keeping the document it held, and opens a new request with the note as the reason the person reads. The documents sweep (T093) therefore never removes a document an administrator turned away. The entry's before is `{ documentId }`, the document turned away, and its after `{ requestId }`, the new request (B13b review, owner's decision 2026-10-22).
 - **`documents.link`.** It answers no `pageCount` in this phase.
 
 ## `teachers` — an approved teacher's standing (FR-165)
@@ -99,9 +98,9 @@ The requests' states (T068, batch B13b):
 
 The standing's states (T068, batch B13b; data-model.md, ADR 0016 D2):
 
-- **`suspend`.** It moves an active approved teacher and writes `account_status` only.
+- **`suspend`.** It moves an approved teacher who is `active` or under an identity request (`verification_required`; B13b review, owner's decision 2026-10-22). It writes `account_status` only.
 - **`revokeApproval`.** It moves an approved teacher, active or suspended. It also deletes the teacher's `teacher_subjects` (owner's decision 2026-10-22, FR-153); a new approval grants them again.
-- **`ban`.** It moves an approved teacher, active or suspended, and writes `account_status = banned` and `verification_status = banned`. It is the same function as `applications.ban`.
+- **`ban`.** It moves a teacher approved or whose approval was revoked, and writes `account_status = banned` and `verification_status = banned`. It is the same function as `applications.ban`, which moves an `in_review`, `needs_document` or `rejected` application (B13b review, owner's decision 2026-10-22: a fraud found after a revocation or a rejection is banned at once).
 - **`reinstate`.** It moves a suspended teacher back to `active`. A ban is not lifted (FR-162).
 - **Sessions and consequences.** Each of the three ends every session (`revoked_reason` `account_suspended`, `admin_action`, `account_banned`). Each calls `onAccountTerminated(tx, userId, cause)` (`identity/consequences.ts`, empty in this phase).
 - **Refusals.** A refusal is `CONFLICT` on `teacherUserId`, naming the standing. A person with no teacher profile is `NOT_FOUND`.

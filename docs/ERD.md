@@ -229,7 +229,7 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | user_id | FK → users | |
 | requested_by_admin_id | FK → admin_users | |
 | reason | text | Mandatory |
-| status | enum open · satisfied · expired | Open request ⇒ account_status verification_required |
+| status | enum open · satisfied · expired · replaced | Open request ⇒ account_status verification_required. `replaced` (v1.8): closed by a request for another document, which opens a new request; the row keeps the document it held, so the documents sweep leaves it |
 | document_id | FK → verification_documents, nullable | The document the user submitted for the request (Phase 1 pass, migration `20261018000200`) |
 | document_type | enum national_id · passport, nullable | The same type as `teacher_profiles.identity_document_type` |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
@@ -975,3 +975,4 @@ FR-161 and `applications.recordCall` record the verification call's day, outcome
 |---|---|---|
 | 1 | §2 `teacher_profiles.verification_call_completed_on date` replaces `verification_call_completed_at timestamptz` | `20261022000000_verification_call_day_and_outcome` |
 | 2 | §2 `teacher_profiles.verification_call_outcome`, the new enum `verification_call_outcome` (`suitable · unsuitable`), nullable | the same |
+| 3 | §2 `verification_requests.status` gains `replaced`: a request for another document closes the request and opens a new one, so a document an administrator turned away is never swept (B13b review, owner's decision 2026-10-22) | the same |

@@ -356,7 +356,7 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof documentsRequestAnotherInput>,
-    ): Promise<unknown>;
+    ): Promise<{ readonly requestId: string; readonly documentId: string }>;
   };
   /** An approved teacher's standing (FR-165; T068), the identity module's. */
   readonly teachers: {

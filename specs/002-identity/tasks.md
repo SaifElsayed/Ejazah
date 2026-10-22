@@ -259,6 +259,11 @@ Three applications from one monorepo (plan.md, "Source Code"): `apps/mobile/src/
   - **Revocation** deletes `teacher_subjects` through catalog's `revokeSubjects`, handed to the standing by the composition, since identity imports no other module.
   - **Every service is over a store port**: identity's applicants and decisions, catalog's credentials, and verification's requests and documents are composed in `stores.ts`. The admin module composes the review, the requests and the standing (`createVerificationAdminServices`, `StandingService`), bound to the surface's port (`applications`, `documents`, `teachers`); `main.ts` hands it the storage port and the column cipher for the signed links.
   - **`account.identityVerification`** merges into identity's `account` through `mergeAppRouters` (R-121).
+  > **Note under T068 (B13b review round 1, 2026-10-22; owner's decisions on Saif's follow-ups 1 to 3).**
+  > - `documents.requestAnother` no longer clears the document: it closes the request as `replaced` (a new member of `verification_request_status`, in this batch's migration) and opens a new request with the note, so the document turned away stays referenced and T093's sweep keeps it. The entry names it (`before: { documentId }`) and the new request (`after: { requestId }`).
+  > - `teachers.suspend` also moves a teacher under an identity request (`verification_required`).
+  > - `ban` reaches a revoked teacher (`teachers.ban`) and a rejected applicant (`applications.ban`), so a fraud found later is banned at once.
+  > - Saif's other follow-ups stay follow-ups (PR body).
 
   Mine, for the reviewer:
   - `users.requireIdentity`'s person is `targetUserId`, since `no-authority-in-input` (R-GENDER-4) refuses a field named `userId` in any input.

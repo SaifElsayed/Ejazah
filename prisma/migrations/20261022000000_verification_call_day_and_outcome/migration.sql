@@ -8,6 +8,14 @@
 -- `verification_call_completed_at timestamptz`: a call is known by its day, and a midnight stored
 -- as an instant reads as another day in another zone. Nothing wrote the old column (`recordCall` is
 -- this batch's), so it held only nulls and is dropped rather than converted.
+--
+-- And `verification_request_status` gains `replaced` (B13b review, follow-up 1, owner's decision
+-- 2026-10-22): a request for another document closes the request as `replaced`, keeping the
+-- document it held, and opens a new one; so the documents sweep (T093) never removes a document an
+-- administrator turned away.
+
+-- AlterEnum
+ALTER TYPE "verification_request_status" ADD VALUE 'replaced';
 
 -- CreateEnum
 CREATE TYPE "verification_call_outcome" AS ENUM ('suitable', 'unsuitable');

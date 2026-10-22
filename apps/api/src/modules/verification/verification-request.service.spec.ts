@@ -173,17 +173,32 @@ describe('accept and requestAnother', () => {
     expect(answer).toEqual({ userId });
   });
 
-  it('requestAnother keeps the request open, clears the document and makes the note its reason', async () => {
+  it('requestAnother closes the request as replaced, keeping its document, and opens one with the note', async () => {
     const { userId, requestId } = await requested(true);
-    await service.requestAnother(TX, ADMIN, { requestId, note: 'صورة الوجه الخلفي غير واضحة' });
-    expect(store.requests(userId)[0]).toMatchObject({
+    const first = store.requests(userId)[0]?.documentId;
+    const answer = await service.requestAnother(TX, ADMIN, {
+      requestId,
+      note: 'صورة الوجه الخلفي غير واضحة',
+    });
+    const [replaced, next] = store.requests(userId);
+    expect(replaced).toMatchObject({
+      id: requestId,
+      status: 'replaced',
+      documentId: first,
+      resolvedAt: NOW,
+    });
+    expect(next).toMatchObject({
       status: 'open',
       documentId: null,
       reason: 'صورة الوجه الخلفي غير واضحة',
+      requestedBy: ADMIN,
+      createdAt: NOW,
     });
+    expect(answer).toEqual({ userId, requestId: next?.id, documentId: first });
     expect(store.accounts.get(userId)).toBe('verification_required');
     await person.submit(userId, { documentType: 'passport', documentId: store.upload(userId) });
-    expect(store.requests(userId)[0]?.documentId).not.toBeNull();
+    expect(store.requests(userId)[1]?.documentId).not.toBeNull();
+    expect(store.requests(userId)[0]?.documentId).toBe(first);
   });
 
   it.each(['accept', 'requestAnother'] as const)(

@@ -171,6 +171,9 @@ enum VerificationRequestStatus {
   open
   satisfied
   expired
+  // Phase 1 (T068): closed by a request for another document, which opened a new request; the row
+  // keeps the document it held, so it stays referenced (B13b review, follow-up 1).
+  replaced
 
   @@map("verification_request_status")
 }

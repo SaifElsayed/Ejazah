@@ -2,7 +2,8 @@
 // "`documents`"; FR-160, FR-166). Thin (R-API-1); the actor is the session's administrator. Viewing
 // a document is an action worth its entry (`document.view`, NFR-SEC-3), unlike a list read; the
 // identity request's three actions are audited on the person (`user.require_identity`, with the
-// reason) and on the request (`verification_request.accept`, `.request_another`, with the note).
+// reason) and on the request (`verification_request.accept`, `.request_another`, with the note; the
+// latter's entry names the document turned away and the request that replaces it).
 // Mounted under `documents` and `users` by `admin.router.ts`.
 import {
   documentsAcceptInput,
@@ -48,12 +49,18 @@ export const documentsRouter = createAdminRouter({
     input: documentsRequestAnotherInput,
     output: z.void(),
   }).mutation(async ({ ctx, input }) => {
-    await ctx.services.documents.requestAnother(ctx.tx, ctx.administrator.adminId, input);
+    const { requestId, documentId } = await ctx.services.documents.requestAnother(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
     ctx.audit.record({
       action: 'verification_request.request_another',
       targetType: 'verification_request',
       targetId: input.requestId,
       reason: input.note,
+      before: { documentId },
+      after: { requestId },
     });
   }),
 });

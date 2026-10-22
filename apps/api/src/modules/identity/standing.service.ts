@@ -4,7 +4,8 @@
 // application `rejected` with the reason as its note, removes the teacher's subjects (FR-153: a
 // subject is the teacher's only while approved; a new approval grants them again) and keeps the
 // account active; a ban is permanent and one function for the applicant (`applications.ban`, the
-// note written to the application) and the teacher (`teachers.ban`), owner's decision 2026-10-22;
+// note written to the application) and the teacher (`teachers.ban`), owner's decision 2026-10-22,
+// reaching a revoked teacher and a rejected applicant too;
 // only a suspended teacher is reinstated (FR-165), and no ban is lifted from the panel (FR-162).
 // Each of the three ends every session of the person (`user_sessions.revoked_reason`) and calls the
 // one consequences entry (`consequences.ts`), all on the administrator kind's transaction, so the
@@ -84,13 +85,21 @@ export class StandingService {
     this.#now = dependencies.now ?? (() => new Date());
   }
 
-  /** `teachers.suspend`: an active approved teacher. */
+  /**
+   * `teachers.suspend`: an approved teacher, active or under an identity request (B13b review,
+   * follow-up 2, owner's decision 2026-10-22); the request stays open, and its acceptance leaves
+   * the suspension as it is.
+   */
   async suspend(tx: Transaction, _adminId: string, teacherUserId: string): Promise<void> {
     const standing = await this.#teacher(tx, teacherUserId);
-    if (standing.teacher.verificationStatus !== 'approved' || standing.accountStatus !== 'active') {
+    const suspendable: readonly AccountStatus[] = ['active', 'verification_required'];
+    if (
+      standing.teacher.verificationStatus !== 'approved' ||
+      !suspendable.includes(standing.accountStatus)
+    ) {
       throw conflict(standing);
     }
-    if (!(await this.#store.moveAccount(tx, teacherUserId, ['active'], 'suspended'))) {
+    if (!(await this.#store.moveAccount(tx, teacherUserId, suspendable, 'suspended'))) {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
     await this.#end(tx, teacherUserId, 'suspended');
@@ -116,8 +125,10 @@ export class StandingService {
   }
 
   /**
-   * `teachers.ban` (an approved teacher, active or suspended) and `applications.ban` (an open
-   * application, with the note the applicant sees): the account banned for good.
+   * `teachers.ban` (a teacher approved or whose approval was revoked) and `applications.ban` (an
+   * open or rejected application, with the note the applicant sees): the account banned for good.
+   * A fraud found after a revocation or a rejection is banned at once, not when the person reapplies
+   * (B13b review, follow-up 3, owner's decision 2026-10-22).
    */
   async ban(
     tx: Transaction,
@@ -126,12 +137,14 @@ export class StandingService {
     applicant?: { readonly applicantNote: string },
   ): Promise<void> {
     const standing = await this.#teacher(tx, userId);
-    const open =
-      standing.teacher.applicationStatus === 'in_review' ||
-      standing.teacher.applicationStatus === 'needs_document';
+    const { applicationStatus, verificationStatus } = standing.teacher;
     const allowed =
       standing.accountStatus !== 'banned' &&
-      (applicant === undefined ? standing.teacher.verificationStatus === 'approved' : open);
+      (applicant === undefined
+        ? verificationStatus === 'approved' || verificationStatus === 'revoked'
+        : applicationStatus === 'in_review' ||
+          applicationStatus === 'needs_document' ||
+          applicationStatus === 'rejected');
     if (!allowed) throw conflict(standing);
     const written = await this.#store.banProfile(
       tx,

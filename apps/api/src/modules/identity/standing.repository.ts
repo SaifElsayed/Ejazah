@@ -80,8 +80,8 @@ export type ProfileBan =
   { readonly kind: 'teacher' } | ({ readonly kind: 'applicant' } & ProfileDecision);
 
 /**
- * Bans the profile: an approved teacher's standing, or an open application (`in_review`,
- * `needs_document`) with the note the applicant sees.
+ * Bans the profile: a teacher approved or whose approval was revoked, or an open or rejected
+ * application (`in_review`, `needs_document`, `rejected`) with the note the applicant sees.
  */
 export async function banTeacherProfile(
   tx: Client,
@@ -91,11 +91,11 @@ export async function banTeacherProfile(
   const { count } =
     ban.kind === 'teacher'
       ? await tx.teacherProfile.updateMany({
-          where: { userId, verificationStatus: 'approved' },
+          where: { userId, verificationStatus: { in: ['approved', 'revoked'] } },
           data: { verificationStatus: 'banned' },
         })
       : await tx.teacherProfile.updateMany({
-          where: { userId, applicationStatus: { in: ['in_review', 'needs_document'] } },
+          where: { userId, applicationStatus: { in: ['in_review', 'needs_document', 'rejected'] } },
           data: {
             verificationStatus: 'banned',
             applicationStatus: 'banned',

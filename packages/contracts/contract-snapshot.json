@@ -138,7 +138,7 @@
       "UserReportStatus": ["actioned", "dismissed", "open"],
       "VerificationCallOutcome": ["suitable", "unsuitable"],
       "VerificationDocumentType": ["credential", "national_id", "other", "passport"],
-      "VerificationRequestStatus": ["expired", "open", "satisfied"]
+      "VerificationRequestStatus": ["expired", "open", "replaced", "satisfied"]
     }
   },
   "procedures": {

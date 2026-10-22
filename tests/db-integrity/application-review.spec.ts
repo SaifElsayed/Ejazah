@@ -191,7 +191,7 @@ describe('the decisions', () => {
 });
 
 describe('the identity requests', () => {
-  it('opens a request, attaches one document, asks for another and accepts the next', async () => {
+  it('opens a request, attaches one document, replaces the request keeping it, and accepts the next', async () => {
     const userId = await makeUser(db);
     const adminId = await makeAdmin(db);
     const document = (type: string) =>
@@ -207,7 +207,7 @@ describe('the identity requests', () => {
     const at = new Date('2026-10-22T10:00:00Z');
     const steps = await rolledBack(async (tx) => {
       const requestId = await store.openRequest(tx, { userId, adminId, reason: 'بلاغ', at });
-      return [
+      const before = [
         await store.resolve(tx, requestId, at),
         await store.attachDocument(tx, { requestId, documentId: first, documentType: 'passport' }),
         await store.attachDocument(tx, {
@@ -216,16 +216,29 @@ describe('the identity requests', () => {
           documentType: 'national_id',
         }),
         (await review.openRequestOf(tx, userId))?.document?.documentId,
-        await store.askAnother(tx, requestId, 'الوجه الخلفي غير واضح'),
+      ] as unknown[];
+      const next = await store.replace(tx, {
+        requestId,
+        adminId,
+        note: 'الوجه الخلفي غير واضح',
+        at,
+      });
+      if (next === null) throw new Error('the request was not replaced');
+      const replaced = await store.readRequest(tx, requestId);
+      return [
+        ...before,
+        await store.replace(tx, { requestId, adminId, note: 'مرة أخرى', at }),
+        replaced?.status,
+        replaced?.document?.documentId,
         (await store.openRequestOf(tx, userId))?.reason,
         await store.attachDocument(tx, {
-          requestId,
+          requestId: next,
           documentId: second,
           documentType: 'national_id',
         }),
-        await store.resolve(tx, requestId, at),
+        await store.resolve(tx, next, at),
         await store.openRequestOf(tx, userId),
-        (await store.readRequest(tx, requestId))?.status,
+        (await store.readRequest(tx, next))?.status,
       ];
     });
     expect(steps).toEqual([
@@ -233,7 +246,9 @@ describe('the identity requests', () => {
       true,
       false,
       first,
-      true,
+      null,
+      'replaced',
+      first,
       'الوجه الخلفي غير واضح',
       true,
       true,
@@ -278,18 +293,24 @@ describe('the standing', () => {
     await insertRow(db, 'teacher_subjects', { teacher_user_id: userId, subject_id: subjectId });
     const store = standingStoreOver(database);
     const at = new Date('2026-10-22T10:00:00Z');
-    const [revoked, again, subjects, detail] = await rolledBack(async (tx) => {
-      const first = await store.revokeApproval(tx, userId, { adminId, at, note: 'شكوى' });
-      const second = await store.revokeApproval(tx, userId, { adminId, at, note: 'شكوى' });
-      await revokeSubjects(tx, userId);
-      return [
-        first,
-        second,
-        await tx.teacherSubject.count({ where: { teacherUserId: userId } }),
-        await readApplicant(tx, userId),
-      ] as const;
-    });
+    const [revoked, again, subjects, detail, bannedAfter, standingAfter] = await rolledBack(
+      async (tx) => {
+        const first = await store.revokeApproval(tx, userId, { adminId, at, note: 'شكوى' });
+        const second = await store.revokeApproval(tx, userId, { adminId, at, note: 'شكوى' });
+        await revokeSubjects(tx, userId);
+        return [
+          first,
+          second,
+          await tx.teacherSubject.count({ where: { teacherUserId: userId } }),
+          await readApplicant(tx, userId),
+          // A revoked teacher can still be banned (B13b review, follow-up 3).
+          await store.banProfile(tx, userId, { kind: 'teacher' }),
+          (await store.read(tx, userId))?.teacher?.verificationStatus,
+        ] as const;
+      },
+    );
     expect([revoked, again, subjects]).toEqual([true, false, 0]);
     expect(detail).toMatchObject({ status: 'rejected', note: 'شكوى' });
+    expect([bannedAfter, standingAfter]).toEqual([true, 'banned']);
   });
 });

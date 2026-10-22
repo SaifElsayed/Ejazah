@@ -21,7 +21,7 @@ interface Held {
   id: string;
   userId: string;
   reason: string;
-  status: 'open' | 'satisfied' | 'expired';
+  status: 'open' | 'satisfied' | 'expired' | 'replaced';
   documentId: string | null;
   documentType: 'national_id' | 'passport' | null;
   createdAt: Date;
@@ -111,11 +111,19 @@ export class MemoryRequestStore implements IdentityRequestStore {
     return true;
   }
 
-  async askAnother(_tx: Transaction, requestId: string, note: string): Promise<boolean> {
-    const held = this.#requests.find((request) => request.id === requestId);
-    if (held?.status !== 'open' || held.documentId === null) return false;
-    Object.assign(held, { documentId: null, documentType: null, reason: note });
-    return true;
+  async replace(
+    tx: Transaction,
+    replacement: { requestId: string; adminId: string; note: string; at: Date },
+  ): Promise<string | null> {
+    const held = this.#requests.find((request) => request.id === replacement.requestId);
+    if (held?.status !== 'open' || held.documentId === null) return null;
+    Object.assign(held, { status: 'replaced', resolvedAt: replacement.at });
+    return this.openRequest(tx, {
+      userId: held.userId,
+      adminId: replacement.adminId,
+      reason: replacement.note,
+      at: replacement.at,
+    });
   }
 
   async documentsOwnedAmong(

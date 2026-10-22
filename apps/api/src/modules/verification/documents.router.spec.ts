@@ -22,6 +22,7 @@ const callerFor = createAdminCallerFactory(
 const DOCUMENT = '0199d0a0-0000-7000-8000-0000000000d1';
 const REQUEST = '0199d0a0-0000-7000-8000-0000000000e1';
 const PERSON = '0199d0a0-0000-7000-8000-0000000000c1';
+const NEXT_REQUEST = '0199d0a0-0000-7000-8000-0000000000e2';
 
 function surface() {
   const reached: unknown[][] = [];
@@ -38,7 +39,11 @@ function surface() {
     }),
     requireIdentity: record('requireIdentity', { requestId: REQUEST }),
     accept: record('accept', { userId: PERSON }),
-    requestAnother: record('requestAnother', { userId: PERSON }),
+    requestAnother: record('requestAnother', {
+      userId: PERSON,
+      requestId: NEXT_REQUEST,
+      documentId: DOCUMENT,
+    }),
   };
   const contexts = adminContextsOver({ documents });
   return {
@@ -122,6 +127,8 @@ describe('the audit entries', () => {
         ...target,
         action: 'verification_request.request_another',
         reason: 'الوجه الخلفي غير واضح',
+        before: { documentId: DOCUMENT },
+        after: { requestId: NEXT_REQUEST },
       },
     ]);
   });

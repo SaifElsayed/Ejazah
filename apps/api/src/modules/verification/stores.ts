@@ -31,12 +31,12 @@ import type { ApplicationReviewStore } from './application-review.service.js';
 import type { IdentityRequestStore } from './verification-request.service.js';
 import { documentSizes, documentsOwnedAmong } from './verification.repository.js';
 import {
-  askAnotherDocument,
   attachDocument,
   documentUploadedAt,
   openRequest,
   openRequestOf,
   readRequest,
+  replaceRequest,
   resolveRequest,
 } from './verification-requests.repository.js';
 
@@ -146,7 +146,7 @@ export function createIdentityRequestStore(database: Database): IdentityRequestS
     openRequest,
     attachDocument,
     resolve: resolveRequest,
-    askAnother: askAnotherDocument,
+    replace: replaceRequest,
     documentsOwnedAmong,
   };
 }

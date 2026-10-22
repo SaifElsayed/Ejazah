@@ -76,6 +76,16 @@ describe('suspend', () => {
     expect(consequences).toEqual([{ userId, cause: 'suspended' }]);
   });
 
+  it('suspends a teacher whose identity is under request (B13b review, follow-up 2)', async () => {
+    const userId = store.plant({
+      accountStatus: 'verification_required',
+      teacher: { verificationStatus: 'approved', applicationStatus: 'approved' },
+    });
+    await standing.suspend(TX, ADMIN, userId);
+    expect(store.person(userId).accountStatus).toBe('suspended');
+    expect(consequences).toEqual([{ userId, cause: 'suspended' }]);
+  });
+
   it('refuses a teacher already suspended, naming the standing, and an applicant', async () => {
     const suspended = approvedTeacher('suspended');
     const pending = applicant('in_review');
@@ -165,6 +175,31 @@ describe('ban', () => {
     },
   );
 
+  it('bans a teacher whose approval was revoked, through the teacher path (B13b review, follow-up 3)', async () => {
+    const userId = store.plant({
+      teacher: { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+    });
+    await standing.ban(TX, ADMIN, userId);
+    expect(store.person(userId)).toMatchObject({
+      accountStatus: 'banned',
+      teacher: { verificationStatus: 'banned', applicationStatus: 'rejected' },
+    });
+    expect(consequences).toEqual([{ userId, cause: 'banned' }]);
+  });
+
+  it('bans a rejected applicant through the applicant path, writing the note (B13b review, follow-up 3)', async () => {
+    const userId = applicant('rejected');
+    await standing.ban(TX, ADMIN, userId, { applicantNote: 'وثائق مزوّرة' });
+    expect(store.person(userId)).toMatchObject({
+      accountStatus: 'banned',
+      teacher: {
+        verificationStatus: 'banned',
+        applicationStatus: 'banned',
+        applicationNote: 'وثائق مزوّرة',
+      },
+    });
+  });
+
   it('refuses an applicant through the teacher path and a teacher through the applicant path', async () => {
     const pending = applicant('in_review');
     const teacher = approvedTeacher();
@@ -176,11 +211,10 @@ describe('ban', () => {
     expect(store.person(teacher).accountStatus).toBe('active');
   });
 
-  it('refuses a rejected application and an account already banned', async () => {
-    const rejected = applicant('rejected');
+  it('refuses an account already banned, by either path', async () => {
     const teacher = approvedTeacher();
     await standing.ban(TX, ADMIN, teacher);
-    expect((await refusal(standing.ban(TX, ADMIN, rejected, { applicantNote: 'سبب' }))).code).toBe(
+    expect((await refusal(standing.ban(TX, ADMIN, teacher, { applicantNote: 'سبب' }))).code).toBe(
       'CONFLICT',
     );
     expect(await refusal(standing.ban(TX, ADMIN, teacher))).toEqual({
