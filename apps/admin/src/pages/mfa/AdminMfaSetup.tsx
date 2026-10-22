@@ -9,9 +9,11 @@
 //    file.
 // The server marks the session verified at the confirmation; the tab lets it in only when the
 // person says they saved the codes and presses «إتمام الإعداد والدخول» (a gate of the client's,
-// owner's decision at B14's conflict check). An account already set up (the page reloaded after
-// the codes) is let in at once: its codes are regenerated from its own account (B14d). The email
-// in the lede is read from the URI's label (admin-surface.md, `auth.mfa.setup.begin`).
+// owner's decision at B14's conflict check). A reload after the codes finds the session verified,
+// which a waiting session's procedures refuse (`ADMIN_SIGN_IN_FAILED`): the person signs in again
+// with the authenticator, and the codes are regenerated from their own account (B14d). An account
+// another sign-in set up meanwhile (`FORBIDDEN` on `begin`) owes its code (B14a review, round 1).
+// The email in the lede is read from the URI's label (admin-surface.md, `auth.mfa.setup.begin`).
 import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
@@ -64,7 +66,7 @@ export function AdminMfaSetup() {
       setBegun({ uri: otpauthUri, key: manualKey, email: emailOf(otpauthUri) });
     } catch (error) {
       if (startOver(error)) return;
-      if (errorCodeOf(error) === 'FORBIDDEN') sessions.setStep('verified');
+      if (errorCodeOf(error) === 'FORBIDDEN') sessions.setStep('mfa');
       else setBegun('failed');
     }
   }, [client, sessions, startOver]);
@@ -259,5 +261,6 @@ function download(codes: readonly string[]): void {
   link.href = url;
   link.download = RECOVERY_CODES_FILE;
   link.click();
-  URL.revokeObjectURL(url);
+  // Let go of the address once the browser took the download: Safari cancels it otherwise.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
