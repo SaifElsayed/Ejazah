@@ -9,11 +9,16 @@
 // module gains procedures: `platform.publicConfig` (the kernel's, beside the surfaces) and
 // `catalog.subjects.list` (the catalog module's) since T038; the identity module's `auth`,
 // `onboarding` and `account` since T048 and T049; the verification module's `teacher.application`
-// and `teacher.credentials` since T056 and T057.
+// and `teacher.credentials` since T056 and T057, and its `account.identityVerification`, merged into
+// identity's `account`, since T068 (R-121).
 import { subjectsRouter } from '../modules/catalog/index.js';
 import { accountRouter, authRouter, onboardingRouter } from '../modules/identity/index.js';
-import { applicationRouter, credentialsRouter } from '../modules/verification/index.js';
-import { createAppRouter } from './procedures.js';
+import {
+  applicationRouter,
+  credentialsRouter,
+  identityVerificationRouter,
+} from '../modules/verification/index.js';
+import { createAppRouter, mergeAppRouters } from './procedures.js';
 import { platformRouter } from './public-config.router.js';
 
 export const appRouter = createAppRouter({
@@ -21,7 +26,10 @@ export const appRouter = createAppRouter({
   catalog: createAppRouter({ subjects: subjectsRouter }),
   auth: authRouter,
   onboarding: onboardingRouter,
-  account: accountRouter,
+  account: mergeAppRouters(
+    accountRouter,
+    createAppRouter({ identityVerification: identityVerificationRouter }),
+  ),
   teacher: createAppRouter({ application: applicationRouter, credentials: credentialsRouter }),
 });
 

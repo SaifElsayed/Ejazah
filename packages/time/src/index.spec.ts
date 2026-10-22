@@ -13,6 +13,9 @@ import {
   addSeconds,
   assertTimeZone,
   calendarDateOf,
+  dateColumnOf,
+  localDateIn,
+  isMinorOn,
   assertLocalDate,
   endOfLocalDay,
   resolveLocalDateTime,
@@ -459,6 +462,53 @@ describe('T049 calendarDateOf: the calendar date a `date` column holds (R-TIME-6
   it('refuses a value that is not an instant, naming the field', () => {
     expect(() => calendarDateOf(new Date('not a date'))).toThrow(
       expect.objectContaining({ name: 'TimeError', offendingField: 'date' }),
+    );
+  });
+});
+
+describe('T068 isMinorOn: under eighteen on a calendar day (FR-132, FR-AUTH-4)', () => {
+  it('is a minor until the eighteenth birthday, an adult from that day', () => {
+    expect(isMinorOn('2008-10-22', '2026-10-21')).toBe(true);
+    expect(isMinorOn('2008-10-22', '2026-10-22')).toBe(false);
+    expect(isMinorOn('1990-04-12', '2026-10-22')).toBe(false);
+  });
+
+  it('counts a 29 February birthday as reached on 28 February in a common year', () => {
+    expect(isMinorOn('2008-02-29', '2026-02-27')).toBe(true);
+    expect(isMinorOn('2008-02-29', '2026-02-28')).toBe(false);
+  });
+
+  it('refuses a date that is not one, naming the field', () => {
+    expect(() => isMinorOn('2008-13-01', '2026-10-22')).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'dateOfBirth' }),
+    );
+    expect(() => isMinorOn('2008-10-22', 'today')).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'today' }),
+    );
+  });
+});
+
+describe('T068 localDateIn and dateColumnOf: a calendar day in a zone, and as a date column holds it', () => {
+  it('answers the day an instant falls on in the zone, not in UTC', () => {
+    expect(localDateIn(new Date('2026-10-21T22:30:00Z'), 'Africa/Cairo')).toBe('2026-10-22');
+    expect(localDateIn(new Date('2026-10-22T03:00:00Z'), 'America/New_York')).toBe('2026-10-21');
+  });
+
+  it('refuses a zone the package refuses, naming the field', () => {
+    expect(() => localDateIn(new Date('2026-10-22T10:00:00Z'), 'UTC')).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'timezone' }),
+    );
+  });
+
+  it('writes a day as the midnight UTC a date column reads back as the same day', () => {
+    const column = dateColumnOf('2026-10-22');
+    expect(column.toISOString()).toBe('2026-10-22T00:00:00.000Z');
+    expect(calendarDateOf(column)).toBe('2026-10-22');
+  });
+
+  it('refuses a day that is not one', () => {
+    expect(() => dateColumnOf('2026-02-30')).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'localDate' }),
     );
   });
 });

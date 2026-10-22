@@ -136,8 +136,9 @@
       ],
       "UserReportContext": ["chat", "profile", "session"],
       "UserReportStatus": ["actioned", "dismissed", "open"],
+      "VerificationCallOutcome": ["suitable", "unsuitable"],
       "VerificationDocumentType": ["credential", "national_id", "other", "passport"],
-      "VerificationRequestStatus": ["expired", "open", "satisfied"]
+      "VerificationRequestStatus": ["expired", "open", "replaced", "satisfied"]
     }
   },
   "procedures": {
@@ -199,6 +200,172 @@
           "$": { "type": "object" },
           "$.adminId": { "required": true, "type": "string" },
           "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "applications.approve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.note": { "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "applications.ban": {
+        "input": {
+          "$": { "type": "object" },
+          "$.note": { "required": true, "type": "string" },
+          "$.reasonChoice": {
+            "required": true,
+            "type": "string",
+            "values": ["call_fraud", "forged_documents", "impersonation", "other"]
+          },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "applications.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.call": { "required": true, "type": "object" },
+          "$.call.completedOn": { "type": "string" },
+          "$.call.notes": { "type": "string" },
+          "$.call.outcome": { "type": "string", "values": ["suitable", "unsuitable"] },
+          "$.callRecordedOn": { "type": "string" },
+          "$.credentials": { "required": true, "type": "array" },
+          "$.credentials[]": { "type": "object" },
+          "$.credentials[].credentialId": { "required": true, "type": "string" },
+          "$.credentials[].documentId": { "required": true, "type": "string" },
+          "$.credentials[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "needs_document", "pending", "rejected"]
+          },
+          "$.credentials[].subject": { "required": true, "type": "object" },
+          "$.credentials[].subject.id": { "required": true, "type": "string" },
+          "$.credentials[].subject.nameAr": { "required": true, "type": "string" },
+          "$.credentials[].subject.nameEn": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.email": { "required": true, "type": "string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.identityDocument": { "required": true, "type": "object" },
+          "$.identityDocument.documentId": { "required": true, "type": "string" },
+          "$.identityDocument.type": {
+            "required": true,
+            "type": "string",
+            "values": ["national_id", "passport"]
+          },
+          "$.identityDocument.uploadedAt": { "required": true, "type": "string" },
+          "$.identityRequest": { "type": "object" },
+          "$.identityRequest.document": { "type": "object" },
+          "$.identityRequest.document.documentId": { "required": true, "type": "string" },
+          "$.identityRequest.document.submittedAt": { "required": true, "type": "string" },
+          "$.identityRequest.document.type": {
+            "required": true,
+            "type": "string",
+            "values": ["national_id", "passport"]
+          },
+          "$.identityRequest.reason": { "required": true, "type": "string" },
+          "$.identityRequest.requestId": { "required": true, "type": "string" },
+          "$.identityRequest.requestedAt": { "required": true, "type": "string" },
+          "$.isMinor": { "required": true, "type": "boolean" },
+          "$.note": { "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "banned", "in_review", "needs_document", "rejected"]
+          },
+          "$.subjects": { "required": true, "type": "array" },
+          "$.subjects[]": { "type": "object" },
+          "$.subjects[].id": { "required": true, "type": "string" },
+          "$.subjects[].nameAr": { "required": true, "type": "string" },
+          "$.subjects[].nameEn": { "required": true, "type": "string" },
+          "$.submittedAt": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" },
+          "$.timezoneCity": { "required": true, "type": "string" }
+        }
+      },
+      "applications.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.page": { "required": true, "type": "integer" },
+          "$.search": { "type": "string" },
+          "$.tab": {
+            "required": true,
+            "type": "string",
+            "values": ["decided", "in_review", "waiting"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.rows": { "required": true, "type": "array" },
+          "$.rows[]": { "type": "object" },
+          "$.rows[].callRecordedOn": { "type": "string" },
+          "$.rows[].displayName": { "required": true, "type": "string" },
+          "$.rows[].email": { "required": true, "type": "string" },
+          "$.rows[].gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.rows[].isMinor": { "required": true, "type": "boolean" },
+          "$.rows[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "banned", "in_review", "needs_document", "rejected"]
+          },
+          "$.rows[].subjects": { "required": true, "type": "array" },
+          "$.rows[].subjects[]": { "type": "object" },
+          "$.rows[].subjects[].id": { "required": true, "type": "string" },
+          "$.rows[].subjects[].nameAr": { "required": true, "type": "string" },
+          "$.rows[].subjects[].nameEn": { "required": true, "type": "string" },
+          "$.rows[].submittedAt": { "required": true, "type": "string" },
+          "$.rows[].teacherUserId": { "required": true, "type": "string" },
+          "$.total": { "required": true, "type": "integer" }
+        }
+      },
+      "applications.recordCall": {
+        "input": {
+          "$": { "type": "object" },
+          "$.completedOn": { "required": true, "type": "string" },
+          "$.notes": { "required": true, "type": "string" },
+          "$.outcome": { "required": true, "type": "string", "values": ["suitable", "unsuitable"] },
+          "$.teacherUserId": { "required": true, "type": "string" },
+          "$.timeZone": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "applications.reject": {
+        "input": {
+          "$": { "type": "object" },
+          "$.note": { "required": true, "type": "string" },
+          "$.reasonChoice": {
+            "required": true,
+            "type": "string",
+            "values": ["call_unsuitable", "name_mismatch", "other", "qualification_gap"]
+          },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "applications.requestInfo": {
+        "input": {
+          "$": { "type": "object" },
+          "$.needed": { "required": true, "type": "array" },
+          "$.needed[]": {
+            "type": "string",
+            "values": ["id_unclear", "ijazah_unreadable", "name_mismatch", "other"]
+          },
+          "$.note": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
@@ -496,6 +663,37 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "documents.accept": {
+        "input": {
+          "$": { "type": "object" },
+          "$.note": { "type": "string" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "documents.link": {
+        "input": {
+          "$": { "type": "object" },
+          "$.documentId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.pageCount": { "type": "integer" },
+          "$.url": { "required": true, "type": "string" }
+        }
+      },
+      "documents.requestAnother": {
+        "input": {
+          "$": { "type": "object" },
+          "$.note": { "required": true, "type": "string" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "home.summary": {
         "input": { "$": { "type": "unknown" } },
         "kind": "query",
@@ -533,9 +731,81 @@
           "$.queues.credentials.addedSubjects": { "required": true, "type": "integer" },
           "$.queues.credentials.open": { "required": true, "type": "integer" }
         }
+      },
+      "teachers.ban": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teachers.reinstate": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teachers.revokeApproval": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teachers.suspend": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "users.requireIdentity": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.targetUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       }
     },
     "app": {
+      "account.identityVerification.get": {
+        "caller": "user",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.documentType": { "type": "string", "values": ["national_id", "passport"] },
+          "$.open": { "required": true, "type": "boolean" },
+          "$.reason": { "type": "string" },
+          "$.requestedAt": { "type": "string" },
+          "$.submittedAt": { "type": "string" }
+        }
+      },
+      "account.identityVerification.submit": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.documentId": { "required": true, "type": "string" },
+          "$.documentType": {
+            "required": true,
+            "type": "string",
+            "values": ["national_id", "passport"]
+          }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "account.me": {
         "caller": "user",
         "input": { "$": { "type": "unknown" } },

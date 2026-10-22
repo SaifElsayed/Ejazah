@@ -54,7 +54,7 @@ export class ApplicationRepository {
         applicationSubmittedAt: true,
         applicationNote: true,
         applicationDecidedAt: true,
-        verificationCallCompletedAt: true,
+        verificationCallCompletedOn: true,
         approvedShownAt: true,
       },
     });
@@ -64,7 +64,7 @@ export class ApplicationRepository {
       submittedAt: row.applicationSubmittedAt,
       note: row.applicationNote,
       decidedAt: row.applicationDecidedAt,
-      callRecorded: row.verificationCallCompletedAt !== null,
+      callRecorded: row.verificationCallCompletedOn !== null,
       approvedShownAt: row.approvedShownAt,
     };
   }
@@ -83,7 +83,8 @@ export class ApplicationRepository {
       applicationNote: null,
       applicationDecidedAt: null,
       applicationDecidedByAdminId: null,
-      verificationCallCompletedAt: null,
+      verificationCallCompletedOn: null,
+      verificationCallOutcome: null,
       verificationCallNotes: null,
       approvedShownAt: null,
       identityDocumentId: application.identityDocumentId,
@@ -170,4 +171,82 @@ export async function isApprovedTeacher(tx: Client, userId: string): Promise<boo
     select: { verificationStatus: true },
   });
   return profile?.verificationStatus === 'approved';
+}
+
+/** The verification call as the reviewer records it (FR-161): its day, its outcome, the notes. */
+export interface CallRecord {
+  /** A `date` column's value (`dateColumnOf`). */
+  readonly completedOn: Date;
+  readonly outcome: 'suitable' | 'unsuitable';
+  readonly notes: string;
+}
+
+/**
+ * Records the call on an open application (`in_review` or `needs_document`); a later record replaces
+ * it. Whether it wrote (T068).
+ */
+export async function recordApplicationCall(
+  tx: Client,
+  userId: string,
+  call: CallRecord,
+): Promise<boolean> {
+  const { count } = await tx.teacherProfile.updateMany({
+    where: { userId, applicationStatus: { in: ['in_review', 'needs_document'] } },
+    data: {
+      verificationCallCompletedOn: call.completedOn,
+      verificationCallOutcome: call.outcome,
+      verificationCallNotes: call.notes,
+    },
+  });
+  return count === 1;
+}
+
+/**
+ * A reviewer's decision on the application (T068, FR-161, FR-162), each from the state it moves:
+ * `approve` an application in review whose call is recorded (approved, with who and when);
+ * `reject` an open one (`in_review` or `needs_document`); `request_info` one in review, which then
+ * waits on the applicant. Each writes the note the applicant sees and the decision's moment
+ * (`application_decided_at`, which the status screen dates the note by). Whether it wrote.
+ */
+export async function decideApplication(
+  tx: Client,
+  userId: string,
+  decision: {
+    readonly kind: 'approve' | 'reject' | 'request_info';
+    readonly adminId: string;
+    readonly at: Date;
+    readonly note: string | null;
+  },
+): Promise<boolean> {
+  const decided = {
+    applicationNote: decision.note,
+    applicationDecidedAt: decision.at,
+    applicationDecidedByAdminId: decision.adminId,
+  };
+  const { count } =
+    decision.kind === 'approve'
+      ? await tx.teacherProfile.updateMany({
+          where: {
+            userId,
+            applicationStatus: 'in_review',
+            verificationCallCompletedOn: { not: null },
+          },
+          data: {
+            ...decided,
+            verificationStatus: 'approved',
+            applicationStatus: 'approved',
+            approvedByAdminId: decision.adminId,
+            approvedAt: decision.at,
+          },
+        })
+      : decision.kind === 'reject'
+        ? await tx.teacherProfile.updateMany({
+            where: { userId, applicationStatus: { in: ['in_review', 'needs_document'] } },
+            data: { ...decided, verificationStatus: 'rejected', applicationStatus: 'rejected' },
+          })
+        : await tx.teacherProfile.updateMany({
+            where: { userId, applicationStatus: 'in_review' },
+            data: { ...decided, applicationStatus: 'needs_document' },
+          });
+  return count === 1;
 }

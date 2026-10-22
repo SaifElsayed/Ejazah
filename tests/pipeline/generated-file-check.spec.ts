@@ -81,7 +81,9 @@ describe('the contract snapshot (T084)', () => {
   });
 });
 
-describe('the lockfile', () => {
+// Each case runs pnpm over the lockfile: past the default five seconds under the full suite's
+// parallel load (B13b, as the authorization gate's case in B12b).
+describe('the lockfile', { timeout: 15_000 }, () => {
   /** A throwaway root holding the repository's manifests and lockfile, and nothing else. */
   function workspaceCopy(): string {
     const directory = scratchRoot();

@@ -329,7 +329,9 @@ describe('setup', () => {
   });
 });
 
-describe('recovery codes', () => {
+// Each case enrols and hashes its codes, ten peppered Argon2id hashes and their checks: past the
+// default five seconds under the full suite's parallel load (B13a review, follow-up 7).
+describe('recovery codes', { timeout: 15_000 }, () => {
   async function enrolledWithCodes() {
     const admin = await world.createAdministrator({ enrolled: false });
     const { sessionToken } = await world.auth.signIn(admin.email, admin.password);

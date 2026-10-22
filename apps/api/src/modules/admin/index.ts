@@ -4,12 +4,25 @@ import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import type { ColumnCipher } from '../../platform/crypto/encryption.js';
+import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import {
   createCredentialReviewService,
   type CredentialReviewService,
   readCredentialQueue,
+  revokeSubjects,
 } from '../catalog/index.js';
-import { readApplicationQueue } from '../identity/index.js';
+import {
+  AccountConsequences,
+  readApplicationQueue,
+  StandingService,
+  standingStoreOver,
+} from '../identity/index.js';
+import {
+  type ApplicationReviewService,
+  createVerificationAdminServices,
+  type VerificationRequestService,
+} from '../verification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
@@ -56,16 +69,36 @@ export interface AdminServices {
     CredentialReviewService,
     'list' | 'get' | 'approve' | 'reject' | 'requestDocument' | 'correct'
   >;
+  /** The verification module's review and identity requests, and identity's standing (T068). */
+  readonly applications: Pick<
+    ApplicationReviewService,
+    'list' | 'get' | 'recordCall' | 'approve' | 'reject' | 'requestInfo' | 'ban'
+  >;
+  readonly documents: Pick<
+    VerificationRequestService,
+    'link' | 'requireIdentity' | 'accept' | 'requestAnother'
+  >;
+  readonly teachers: Pick<StandingService, 'suspend' | 'revokeApproval' | 'ban' | 'reinstate'>;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly encryptionKey: string;
   readonly inviteQueue: AdminInviteQueue;
+  /** For the document viewer's signed links (T068). */
+  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
   const sessions = new AdminSessionService(dependencies);
   const audit = new AuditQueryService(dependencies);
+  // One registry for every action that ends an account (FR-142); Phase 2 and 3 subscribe to it.
+  const standing = new StandingService({
+    store: standingStoreOver(dependencies.database),
+    consequences: new AccountConsequences(),
+    revokeSubjects,
+    ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+  });
   return {
     auth: new AdminAuthService({ ...dependencies, sessions }),
     sessions,
@@ -79,6 +112,8 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       queues: { applications: readApplicationQueue, credentials: readCredentialQueue },
     }),
     credentials: createCredentialReviewService(dependencies),
+    ...createVerificationAdminServices({ ...dependencies, standing }),
+    teachers: standing,
   };
 }
 

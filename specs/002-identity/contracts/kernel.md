@@ -37,7 +37,10 @@ The administrator context also carries the admin module's services through a por
 declare (`AdminSurfaceServices`, in the contract's types), which the admin module implements and
 `main.ts` binds, as the audit writer is: the context may not import `modules/admin` (T067).
 Another module's service on that surface is composed into the admin module's services, which may
-import any module's entry: the catalog module's credential review is `credentials` (T069).
+import any module's entry: the catalog module's credential review is `credentials` (T069); the
+verification module's review and identity requests are `applications` and `documents`, and identity's
+standing `teachers` (T068), the review banning through that one standing, so one consequences
+registry serves every action that ends an account (FR-142).
 
 A `verification_required` account is admitted by every kind of this phase; Phase 2's booking kind refuses it (FR-137). Only `suspended` and `banned` are the restricted standings.
 

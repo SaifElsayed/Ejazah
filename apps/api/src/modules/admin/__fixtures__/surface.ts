@@ -90,6 +90,9 @@ export function surfaceOf(
     }),
     // The catalog module's review has its own router spec (`catalog/credentials-admin.router.spec.ts`).
     credentials: unusedAdminServices.credentials,
+    applications: unusedAdminServices.applications,
+    documents: unusedAdminServices.documents,
+    teachers: unusedAdminServices.teachers,
   };
   const administration = {
     transactions: transactionsOver(database),

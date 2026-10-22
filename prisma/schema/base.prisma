@@ -88,6 +88,15 @@ enum TeacherVerificationStatus {
 
 // Phase 1 (T011, specs/002-identity/data-model.md §3): what the applicant sees of the application,
 // the queue's tab; `verification_status` stays the product's status.
+// The verification call's outcome as the reviewer recorded it (FR-161; Phase 1, T068). `unsuitable`
+// does not block approval: the reviewer decides, and may give it as the rejection's reason.
+enum VerificationCallOutcome {
+  suitable
+  unsuitable
+
+  @@map("verification_call_outcome")
+}
+
 enum TeacherApplicationStatus {
   in_review
   needs_document
@@ -162,6 +171,9 @@ enum VerificationRequestStatus {
   open
   satisfied
   expired
+  // Phase 1 (T068): closed by a request for another document, which opened a new request; the row
+  // keeps the document it held, so it stays referenced (B13b review, follow-up 1).
+  replaced
 
   @@map("verification_request_status")
 }

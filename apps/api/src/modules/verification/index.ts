@@ -18,7 +18,17 @@ import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { ApplicationService } from './application.service.js';
 import { CredentialsService } from './credentials.service.js';
-import { createVerificationStores } from './stores.js';
+import { ApplicationReviewService, type ApplicantBan } from './application-review.service.js';
+import {
+  createApplicationReviewStore,
+  createIdentityRequestStore,
+  createVerificationStores,
+} from './stores.js';
+import {
+  type IdentityStanding,
+  IdentityVerificationService,
+  VerificationRequestService,
+} from './verification-request.service.js';
 import { VerificationRepository } from './verification.repository.js';
 import { VerificationService } from './verification.service.js';
 
@@ -30,6 +40,17 @@ export { VerificationService };
 export { applicationRouter } from './application.router.js';
 export { credentialsRouter } from './credentials.router.js';
 
+/** `account.identityVerification` (T068), merged under `account` by `app.router.ts` (R-121). */
+export { identityVerificationRouter } from './identity-verification.router.js';
+
+/** The administrator surface's `applications`, `documents` and `users` namespaces (T068), mounted by `admin.router.ts`. */
+export { applicationsRouter } from './applications.router.js';
+export { documentsRouter, usersRouter } from './documents.router.js';
+export type { ApplicationReviewService, VerificationRequestService };
+
+/** The review's and the requests' stores, for the probe of their queries (`tests/db-integrity/application-review.spec.ts`). */
+export { createApplicationReviewStore, createIdentityRequestStore } from './stores.js';
+
 /** What the module's routers call, carried by every request in `AppServices.verification`. */
 export interface VerificationServices {
   readonly application: Pick<
@@ -40,6 +61,8 @@ export interface VerificationServices {
     CredentialsService,
     'list' | 'add' | 'replaceDocument' | 'documentLink'
   >;
+  /** The person's side of an identity request (T068, FR-166). */
+  readonly identityVerification: Pick<IdentityVerificationService, 'get' | 'submit'>;
 }
 
 /** What the module's services are built over, bound once by `main.ts`. */
@@ -66,6 +89,45 @@ export function createVerificationServices({
     credentials: new CredentialsService({
       stores,
       links: new VerificationService({ storage, cipher, settings }),
+    }),
+    identityVerification: new IdentityVerificationService({
+      store: createIdentityRequestStore(database),
+    }),
+  };
+}
+
+/**
+ * The application review and the identity requests (T068) for the administrator surface, which the
+ * admin module composes: the standing is identity's, handed in, so one consequences registry serves
+ * every action that ends an account.
+ */
+export function createVerificationAdminServices({
+  database,
+  storage,
+  cipher,
+  settings,
+  standing,
+  now,
+}: Pick<VerificationServiceDependencies, 'database' | 'storage' | 'cipher' | 'settings'> & {
+  readonly standing: ApplicantBan & IdentityStanding;
+  readonly now?: () => Date;
+}): {
+  readonly applications: ApplicationReviewService;
+  readonly documents: VerificationRequestService;
+} {
+  const clock = now === undefined ? {} : { now };
+  return {
+    applications: new ApplicationReviewService({
+      store: createApplicationReviewStore(),
+      standing,
+      settings,
+      ...clock,
+    }),
+    documents: new VerificationRequestService({
+      store: createIdentityRequestStore(database),
+      standing,
+      links: new VerificationService({ storage, cipher, settings }),
+      ...clock,
     }),
   };
 }

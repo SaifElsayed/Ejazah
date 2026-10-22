@@ -601,8 +601,9 @@ describe('the real contract (T084)', () => {
         .map((line) => line.split(/\s/)[0] ?? '')
         .sort();
     }
-    // 28 enums of Phase 0 and the eight the Phase 1 ERD pass declared (T009 to T012).
-    expect(Object.keys(declared)).toHaveLength(36);
+    // 28 enums of Phase 0, the eight the Phase 1 ERD pass declared (T009 to T012), and the
+    // verification call's outcome (T068).
+    expect(Object.keys(declared)).toHaveLength(37);
     expect(snapshot.enums.prisma).toEqual(declared);
     expect(Object.keys(snapshot.procedures)).toEqual(['admin', 'app']);
   });

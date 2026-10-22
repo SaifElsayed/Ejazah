@@ -5,11 +5,14 @@
 // and mounted by the HTTP application (T149) on its own path, apart from the user surface; its
 // capabilities never appear in the user surface's type (T098). This is one of the three composition
 // files that may import the admin module's public entry (T143): the admin module's four namespaces
-// since T067, `auth`, `admins`, `audit` and `home`; the catalog module's `credentials` since T069,
-// the verification and identity modules' namespaces with T068. Its anonymous procedures are exactly the six of `auth.*` that
+// since T067, `auth`, `admins`, `audit` and `home`; the catalog module's `credentials` since T069;
+// the verification module's `applications`, `documents` and `users` and the identity module's
+// `teachers` since T068. Its anonymous procedures are exactly the six of `auth.*` that
 // sign an administrator in (`admin.router.spec.ts`).
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
 import { credentialsAdminRouter } from '../modules/catalog/index.js';
+import { teachersRouter } from '../modules/identity/index.js';
+import { applicationsRouter, documentsRouter, usersRouter } from '../modules/verification/index.js';
 import { createAdminRouter } from './procedures.js';
 
 export const adminRouter = createAdminRouter({
@@ -18,6 +21,10 @@ export const adminRouter = createAdminRouter({
   audit: auditRouter,
   home: homeRouter,
   credentials: credentialsAdminRouter,
+  applications: applicationsRouter,
+  documents: documentsRouter,
+  users: usersRouter,
+  teachers: teachersRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */

@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.7 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog*
+*Version 1.8 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog*
 
 ## 0. How to read this
 
@@ -146,7 +146,8 @@ Exists only for users holding the teacher role. 1:1 with the role.
 | photo_key | text, nullable | Unused since the Phase 1 pass: the photo of either role is `users.photo_key`; the column stays |
 | qualification_summary | text | Years/type, FR-PROFILE-1 |
 | verification_status | enum pending · approved · rejected · suspended · banned · revoked | FR-AUTH-9, FR-VERIFY-8/9. `revoked` (Phase 1 pass, FR-165): a withdrawn approval, the teacher returns only through a new application; `suspended` stays the account-level word and is no longer written here |
-| verification_call_completed_at | timestamptz, nullable | Gate on approval, FR-VERIFY-5 |
+| verification_call_completed_on | date, nullable | Gate on approval, FR-VERIFY-5: the day the verification call took place. A call is known by its day, not its instant (v1.8) |
+| verification_call_outcome | enum suitable · unsuitable, nullable | FR-161 (v1.8). `unsuitable` does not block approval; the reviewer decides |
 | verification_call_notes | text, nullable | |
 | approved_by_admin_id | FK → admin_users, nullable | |
 | approved_at | timestamptz, nullable | |
@@ -228,7 +229,7 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | user_id | FK → users | |
 | requested_by_admin_id | FK → admin_users | |
 | reason | text | Mandatory |
-| status | enum open · satisfied · expired | Open request ⇒ account_status verification_required |
+| status | enum open · satisfied · expired · replaced | Open request ⇒ account_status verification_required. `replaced` (v1.8): closed by a request for another document, which opens a new request; the row keeps the document it held, so the documents sweep leaves it |
 | document_id | FK → verification_documents, nullable | The document the user submitted for the request (Phase 1 pass, migration `20261018000200`) |
 | document_type | enum national_id · passport, nullable | The same type as `teacher_profiles.identity_document_type` |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
@@ -965,3 +966,13 @@ The teacher's credentials page shows each PDF with its size (FR-153), and no col
 |---|---|---|
 | 1 | §2 `verification_documents.size_bytes`: written by the documents upload route, read by `teacher.credentials.list` | `20261021000000_verification_documents_size_bytes` |
 | 2 | §2 `teacher_profiles.application_decided_at`: the reviewer's latest action (request for a document, rejection, approval, ban) | this document pass (T056) |
+
+## Changelog — v1.7 → v1.8 (the verification call, 2026-10-22)
+
+FR-161 and `applications.recordCall` record the verification call's day, outcome and notes, and no column held the outcome. The column for the call's moment held an instant, while a call is known by its day: a midnight stored as an instant reads as another day in another zone. The decisions are the owner's (2026-10-22, the conflict check of batch B13). Nothing wrote the old column, so it is dropped rather than converted.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §2 `teacher_profiles.verification_call_completed_on date` replaces `verification_call_completed_at timestamptz` | `20261022000000_verification_call_day_and_outcome` |
+| 2 | §2 `teacher_profiles.verification_call_outcome`, the new enum `verification_call_outcome` (`suitable · unsuitable`), nullable | the same |
+| 3 | §2 `verification_requests.status` gains `replaced`: a request for another document closes the request and opens a new one, so a document an administrator turned away is never swept (B13b review, owner's decision 2026-10-22) | the same |
