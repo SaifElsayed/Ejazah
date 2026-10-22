@@ -114,3 +114,5 @@ export type MeOutput = z.infer<typeof meOutput>;
 export type TeacherApplicationStatus = z.infer<typeof teacherApplicationStatus>;
 export type AccountStatus = z.infer<typeof accountStatus>;
 export type SignInMethod = z.infer<typeof signInMethod>;
+export type IdentityDocumentType = z.infer<typeof identityDocumentType>;
+export type IdentityVerificationGetOutput = z.infer<typeof identityVerificationGetOutput>;

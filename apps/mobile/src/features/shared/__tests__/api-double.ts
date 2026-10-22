@@ -35,6 +35,10 @@ export function fakeProcedures() {
       setLanguage: { mutate: procedure() },
       setTimezone: { mutate: procedure() },
       reportDeviceTimezone: { mutate: procedure() },
+      identityVerification: {
+        get: { query: procedure() },
+        submit: { mutate: procedure() },
+      },
     },
     catalog: { subjects: { list: { query: procedure() } } },
     teacher: {

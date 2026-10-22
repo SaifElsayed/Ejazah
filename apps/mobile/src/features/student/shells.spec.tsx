@@ -2,6 +2,7 @@
 // path, in both directions, from the catalogue only.
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
+import { Text } from 'react-native';
 
 import { inBothDirections } from '../../design/primitives/__tests__/harness';
 import { translate } from '../../i18n';
@@ -34,6 +35,15 @@ describe('StudentHomeEmpty', () => {
       },
     );
     expect(mockNavigate).toHaveBeenCalledWith('/(student)/(tabs)/discovery');
+  });
+
+  it('draws the notice it is given above the first step (the identity request, T074)', async () => {
+    await inBothDirections(
+      () => <StudentHomeEmpty notice={<Text>notice</Text>} />,
+      () => {
+        expect(screen.getByText('notice')).toBeTruthy();
+      },
+    );
   });
 });
 

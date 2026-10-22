@@ -1,16 +1,19 @@
 // T034 (FR-202): the teacher's day with no session (`TeacherHomeEmpty`), leading to the
 // availability. The day's summary, its navigation and the next session's sentence are data and
-// arrive with the teacher's home in Phase 2.
+// arrive with the teacher's home in Phase 2. T074: the route hands it the identity request's card,
+// drawn first while the account is under one.
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 
 import { AppHeader, EmptyState } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
 import { TabScreen } from '../../../shared/screen';
 
-export function TeacherHomeEmpty() {
+export function TeacherHomeEmpty({ notice }: { readonly notice?: ReactNode }) {
   const t = useT();
   return (
     <TabScreen header={<AppHeader title={t('teacher.today.title')} />}>
+      {notice}
       <EmptyState
         icon={{ name: 'calendar' }}
         title={t('teacher.today.empty.title')}
