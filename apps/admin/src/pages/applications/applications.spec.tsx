@@ -1,11 +1,11 @@
 // T071 (FR-160 to FR-162): the applications queue against its board, through the router, in both
-// languages. The three tabs with the counts `home.summary` gives (in review = open − waiting on the
-// applicant; decided uncounted); the search by name or email, sent once the typing stops and never
+// languages. The three tabs with the counts `home.summary` gives (in review is its `open`, waiting
+// on the applicant its `waitingOnApplicant`, the lede both; decided uncounted); the search by name or email, sent once the typing stops and never
 // twice for the same text; the table, its pages and the selected row's detail; the call record by
 // its day in the panel's zone; approval held until FR-161's three conditions hold, each one said,
 // and confirmed with an optional note; the decision dialog's three kinds; and the actions each state
 // allows. The documents' thumbnails are shown and open nothing until the viewer lands (B14b-2).
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
@@ -70,7 +70,7 @@ function detailOf(row: typeof rowA | typeof rowB, more: Record<string, unknown> 
 
 const summary = {
   queues: {
-    applications: { open: 3, waitingOnApplicant: 1 },
+    applications: { open: 2, waitingOnApplicant: 1 },
     credentials: { open: 0, addedSubjects: 0 },
   },
   latestActions: [],
@@ -99,8 +99,8 @@ function fakeApi() {
 
 const verified = { token: 't', step: 'verified' } as const;
 
-function open(api = fakeApi()) {
-  return { ...renderApp({ at: '/applications', session: verified, api }), api };
+function open(api = fakeApi(), { strict = false }: { readonly strict?: boolean } = {}) {
+  return { ...renderApp({ at: '/applications', session: verified, api, strict }), api };
 }
 
 const ar = (key: MessageKey, values?: Record<string, string | number>) =>
@@ -157,11 +157,20 @@ describe('AdminApplications (FR-160)', () => {
     );
   });
 
-  it('reads the first page of the tab in review, and the counts once', async () => {
-    const { api } = open();
+  it('reads the first page of the tab in review, and the counts once, even in strict mode', async () => {
+    const { api } = open(fakeApi(), { strict: true });
     await screen.findByText(rowA.email);
     expect(api.applications.list.query).toHaveBeenCalledWith({ tab: 'in_review', page: 1 });
     expect(api.home.summary.query).toHaveBeenCalledTimes(1);
+    expect(api.applications.list.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets what it read when the session ends', async () => {
+    const { queries, sessions } = open();
+    await screen.findByText(rowA.email);
+    expect(queries.getQueryCache().getAll().length).toBeGreaterThan(0);
+    act(() => sessions.clear());
+    await waitFor(() => expect(queries.getQueryCache().getAll()).toHaveLength(0));
   });
 
   it('opens the selected row’s detail in both languages', async () => {
@@ -243,6 +252,21 @@ describe('AdminApplications (FR-160)', () => {
     await waitFor(() =>
       expect(api.applications.list.query).toHaveBeenCalledWith({ tab: 'in_review', page: 2 }),
     );
+    // A search goes back to the first page once it settles, with no read of page 1 before it.
+    const before = api.applications.list.query.mock.calls.length;
+    fireEvent.change(screen.getByPlaceholderText(ar('admin.applications.search.placeholder')), {
+      target: { value: 'منى' },
+    });
+    await waitFor(() =>
+      expect(api.applications.list.query).toHaveBeenCalledWith({
+        tab: 'in_review',
+        search: 'منى',
+        page: 1,
+      }),
+    );
+    expect(api.applications.list.query.mock.calls.slice(before)).toEqual([
+      [{ tab: 'in_review', search: 'منى', page: 1 }],
+    ]);
   });
 
   it('says an empty tab, an empty search, and a list that could not load, with a retry', async () => {

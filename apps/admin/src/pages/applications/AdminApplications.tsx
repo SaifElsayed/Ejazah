@@ -1,7 +1,9 @@
 // T071 (FR-160 to FR-162): the applications queue (`AdminApplications`, screens.md §18). The lede and
-// the tabs' counts come from `home.summary`: «قيد المراجعة» is the open applications less those
-// waiting on the applicant, and «تم البتّ» has no count, as the board draws it (owner's decision at
-// B14b's check). The search is the name or the email, sent once the typing stops. The table lists
+// the tabs' counts come from `home.summary`, whose `open` counts the applications in review alone
+// (`readApplicationQueue`): «قيد المراجعة» is `open`, «مطلوب من المتقدّم» `waitingOnApplicant`, the
+// lede the two together (the board: 3 = 2 + 1), and «تم البتّ» has no count (B14b-1 review, round
+// 1). The search is the name or the email, sent once the typing stops, and a settled search goes
+// back to the first page. The table lists
 // the tab's page, oldest first, with the pager the page size answers; a row opens its detail beside
 // it. An empty tab, an empty search and a list that could not be read each say so.
 import { useState } from 'react';
@@ -53,13 +55,21 @@ export function AdminApplications() {
   const list = useApplicationsPage(tab, search, page);
   const counts = useQueueCounts();
 
-  const open = counts.data?.open;
+  const inReview = counts.data?.open;
   const waiting = counts.data?.waitingOnApplicant;
+  const pending = inReview === undefined || waiting === undefined ? undefined : inReview + waiting;
   const countOf: Readonly<Record<ApplicationsTab, number | undefined>> = {
-    in_review: open === undefined || waiting === undefined ? undefined : open - waiting,
+    in_review: inReview,
     waiting,
     decided: undefined,
   };
+
+  // A new search starts at the first page, once it settles: a keystroke reads nothing.
+  const [searched, setSearched] = useState(search);
+  if (searched !== search) {
+    setSearched(search);
+    setPage(1);
+  }
 
   const choose = (next: ApplicationsTab) => {
     setTab(next);
@@ -78,20 +88,17 @@ export function AdminApplications() {
     <Page
       title={t('admin.applications.title')}
       subtitle={
-        open === undefined
+        pending === undefined
           ? undefined
-          : open === 0
+          : pending === 0
             ? t('admin.applications.ledeEmpty')
-            : t('admin.applications.lede', { count: open })
+            : t('admin.applications.lede', { count: pending })
       }
     >
       <Toolbar
         search={{
           value: typed,
-          onChangeText: (text) => {
-            setTyped(text);
-            setPage(1);
-          },
+          onChangeText: setTyped,
           placeholder: t('admin.applications.search.placeholder'),
         }}
       >

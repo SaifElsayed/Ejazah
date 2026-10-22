@@ -48,6 +48,7 @@ export function renderApp({
   readonly view: RenderResult;
   readonly sessions: ReturnType<typeof createSessionStore>;
   readonly client: AdminClient;
+  readonly queries: QueryClient;
 } {
   const sessions = createSessionStore(() => window.sessionStorage);
   if (session !== null) sessions.write(session);
@@ -66,7 +67,7 @@ export function renderApp({
     </MemoryRouter>
   );
   const view = render(strict ? <StrictMode>{tree}</StrictMode> : tree);
-  return { view, sessions, client };
+  return { view, sessions, client, queries };
 }
 
 /** The error the client raises for an API refusal of `code`, with its details. */
