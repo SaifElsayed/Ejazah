@@ -123,7 +123,7 @@ export class AdminsService {
   }
 
   /**
-   * `admins.regenerateRecoveryCodes`: the caller's new set, shown once, for a current code of their
+   * `admins.recoveryCodes.regenerate`: the caller's new set, shown once, for a current code of their
    * second factor (T096): a session alone cannot mint codes that outlive it. The code is checked as
    * the sign-in checks it, a step never accepted twice; a wrong one counts toward the lockout on its
    * own write (the procedure's transaction rolls back with the refusal), and a locked account is
