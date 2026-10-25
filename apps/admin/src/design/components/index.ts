@@ -111,4 +111,5 @@ export {
   Toolbar,
   type ToolbarProps,
 } from './Console';
+export { ChainInput, type ChainInputProps } from './ChainInput';
 export { DataTable, type DataTableColumn, type DataTableProps } from './DataTable';

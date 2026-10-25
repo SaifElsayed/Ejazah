@@ -3,10 +3,12 @@
 // (`readApplicationQueue`): «قيد المراجعة» is `open`, «مطلوب من المتقدّم» `waitingOnApplicant`, the
 // lede the two together (the board: 3 = 2 + 1), and «تم البتّ» has no count (B14b-1 review, round
 // 1). The search is the name or the email, sent once the typing stops, and a settled search goes
-// back to the first page. The table lists
-// the tab's page, oldest first, with the pager the page size answers; a row opens its detail beside
-// it. An empty tab, an empty search and a list that could not be read each say so.
+// back to the first page. The table lists the tab's page, oldest first, with the pager the page size
+// answers; a row opens its detail beside it, and `?teacher=` opens one at once (the credentials'
+// «طلب الانضمام», T072). An empty tab, an empty search and a list that could not be read each say
+// so.
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 
 import {
   Avatar,
@@ -51,7 +53,8 @@ export function AdminApplications() {
   const [typed, setTyped] = useState('');
   const search = useSettled(typed);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(params.get('teacher'));
   const list = useApplicationsPage(tab, search, page);
   const counts = useQueueCounts();
 

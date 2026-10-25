@@ -51,6 +51,7 @@ export async function reviewPage(
       submittedWithApplication: true,
       createdAt: true,
       status: true,
+      reviewedAt: true,
     },
   });
   return rows.map(listRowOf);
@@ -100,7 +101,6 @@ export async function readForReview(
     tariq,
     chain: isnadEntries,
     reviewReason: row.reviewReason,
-    reviewedAt: row.reviewedAt,
     reviewedByName: reviewedByAdmin?.displayName ?? null,
   };
 }
@@ -208,6 +208,7 @@ function listRowOf(row: {
   readonly submittedWithApplication: boolean;
   readonly createdAt: Date;
   readonly status: ReviewListRow['status'];
+  readonly reviewedAt: Date | null;
 }): ReviewListRow {
   return {
     id: row.id,
@@ -217,5 +218,6 @@ function listRowOf(row: {
     submittedWithApplication: row.submittedWithApplication,
     createdAt: row.createdAt,
     status: row.status,
+    reviewedAt: row.reviewedAt,
   };
 }

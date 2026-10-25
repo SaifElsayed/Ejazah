@@ -130,11 +130,14 @@ describe('approval', () => {
     const parents = await teacherAndSubject('probe teacher');
     const adminId = await makeAdmin(db);
     const credentialId = await makeCredential(db, { ...parents });
-    const [outcome, record] = await rolledBack(async (tx) => [
+    const [outcome, record, page] = await rolledBack(async (tx) => [
       await store.approve(tx, approval(credentialId, adminId)),
       await store.read(tx, credentialId),
+      await store.page(tx, { status: 'approved', search: 'probe teacher' }, 0, 50),
     ]);
     expect(outcome).toBe('approved');
+    // The decided tab's row carries its review's moment (the «وُثّقت» column; B14c).
+    expect(page.find((row) => row.id === credentialId)?.reviewedAt).toBeInstanceOf(Date);
     expect(record).toMatchObject({
       status: 'approved',
       holderName: 'عمر بن فاروق',

@@ -135,13 +135,14 @@ export class MemoryReviewStore implements CredentialReviewStore {
   ): Promise<ReviewListRow[]> {
     return this.#matching(filter)
       .slice(skip, skip + take)
-      .map(({ id, teacher, subject, submittedWithApplication, createdAt, status }) => ({
+      .map(({ id, teacher, subject, submittedWithApplication, createdAt, status, reviewedAt }) => ({
         id,
         teacher,
         subject,
         submittedWithApplication,
         createdAt,
         status,
+        reviewedAt,
       }));
   }
 

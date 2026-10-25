@@ -223,6 +223,14 @@ describe('the document viewer (FR-160)', () => {
     await queries.invalidateQueries({ queryKey: ['applications'] });
     await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: file })).toBeNull());
     expect(api.documents.link.mutate).toHaveBeenCalledTimes(1);
+
+    // Back in a later read, it does not open again on its own (B14b-2 review, round 2).
+    api.applications.get.query.mockResolvedValue(first);
+    await queries.invalidateQueries({ queryKey: ['applications'] });
+    await waitFor(() => expect(api.applications.get.query).toHaveBeenCalledTimes(4));
+    await screen.findByText(file);
+    expect(screen.queryByRole('heading', { level: 2, name: file })).toBeNull();
+    expect(api.documents.link.mutate).toHaveBeenCalledTimes(1);
   });
 
   it('says a link that could not be read, and tries again', async () => {

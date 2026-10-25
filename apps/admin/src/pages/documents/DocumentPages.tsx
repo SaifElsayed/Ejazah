@@ -4,7 +4,7 @@
 // changes or the viewer closes.
 import { useEffect, useRef, useState } from 'react';
 
-import { Pager } from '../../design/components';
+import { type Content, Pager } from '../../design/components';
 import { useT } from '../../i18n';
 import { openPdf, type PdfFile } from '../../lib/pdf';
 
@@ -40,7 +40,19 @@ export function usePdf(url: string | undefined): {
   return { file: current?.file, failed: current?.failed === true };
 }
 
-export function DocumentPages({ file, name }: { readonly file: PdfFile; readonly name: string }) {
+export function DocumentPages({
+  file,
+  name,
+  inline = false,
+  accessory,
+}: {
+  readonly file: PdfFile;
+  readonly name: string;
+  /** Beside a credential's panel (T072): «الصفحة 1 من 2» and «صفحات الإجازة», as drawn. */
+  readonly inline?: boolean;
+  /** Beside the pager (the credentials board's «فتح الوثيقة بالحجم الكامل»). */
+  readonly accessory?: Content;
+}) {
   const t = useT();
   const [page, setPage] = useState(1);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -49,20 +61,29 @@ export function DocumentPages({ file, name }: { readonly file: PdfFile; readonly
   }, [file, page]);
   return (
     <div className="stack gap-3">
-      <div className="toolbar row--between">
+      <div className={inline ? 'row row--between gap-2' : 'toolbar row--between'}>
         <span className="text-callout text-medium">
-          {t('admin.dialogs.documentViewer.fileCaption', {
-            file: name,
-            page,
-            total: file.pageCount,
-          })}
+          {inline
+            ? t('admin.common.pager.pageOf', { page, total: file.pageCount })
+            : t('admin.dialogs.documentViewer.fileCaption', {
+                file: name,
+                page,
+                total: file.pageCount,
+              })}
         </span>
-        <Pager
-          page={page}
-          pageCount={file.pageCount}
-          onChange={setPage}
-          accessibilityLabel={t('admin.dialogs.documentViewer.a11y.pages')}
-        />
+        <span className="row gap-1">
+          <Pager
+            page={page}
+            pageCount={file.pageCount}
+            onChange={setPage}
+            accessibilityLabel={t(
+              inline
+                ? 'admin.credentials.a11y.documentPages'
+                : 'admin.dialogs.documentViewer.a11y.pages',
+            )}
+          />
+          {accessory}
+        </span>
       </div>
       <div
         className="doc-viewer grow"

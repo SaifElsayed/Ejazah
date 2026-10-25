@@ -304,6 +304,8 @@ describe('list and get', () => {
     const service = serviceOver(store);
     const one = await service.list(TX, { tab: 'pending', page: 1 });
     expect(one.total).toBe(3);
+    // The pager's size (B14c, the owner's decision): the panel needs no setting of its own.
+    expect(one.pageSize).toBe(2);
     expect(one.rows.map((row) => row.credentialId)).toEqual([first, second]);
     expect(one.rows[0]).toEqual({
       credentialId: first,
@@ -329,6 +331,8 @@ describe('list and get', () => {
     });
     const { rows } = await serviceOver(store).list(TX, { tab: 'rejected', page: 1 });
     expect(rows.map((row) => row.credentialId)).toEqual([newer, older]);
+    // A decided row says when it was decided (the board's «وُثّقت» column; B14c).
+    expect(rows[0]?.reviewedAt).toBe('2026-10-21T09:00:00.000Z');
   });
 
   it("filters by the teacher's name", async () => {
