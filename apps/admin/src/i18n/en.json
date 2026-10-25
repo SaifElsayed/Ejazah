@@ -13,19 +13,45 @@
         "mfa": "Two-step verification"
       },
       "detail": {
+        "added": "{date} · {admin}",
         "addedBy": "Added {date} · {admin}",
         "auditEntries": "Actions in the log",
         "auditEntriesCount": "{count, plural, one {# entry} other {# entries}}",
         "disable": "Disable account",
         "footer": "Every action here asks for a reason and is recorded under your name in the audit log.",
         "lastSignIn": "Last sign-in {date} · {time}",
+        "mfaEnabled": "On · {count, plural, one {# recovery code left} other {# recovery codes left}}",
         "mfaLine": "Two-step verification enabled since {date} · {count, plural, one {# recovery code} other {# recovery codes}} left",
+        "neverSignedIn": "Not signed in yet",
         "resetMfa": "Reset two-step verification",
         "resetRequestTitle": "Verification reset requested",
         "selfNote": "An admin cannot reset their own verification or disable their own account; another admin does that with a reason."
       },
+      "empty": {
+        "active": {
+          "text": "Try another name or email.",
+          "title": "No administrator by that name"
+        },
+        "disabled": {
+          "text": "Every disabled administrator appears here, their name kept on what they recorded.",
+          "title": "No disabled accounts"
+        }
+      },
       "lede": "Operations-team accounts. One role in this version, so every admin has the same permissions (ADR 0019). Two-step verification is mandatory, and every action here is recorded in the audit log.",
-      "pagerSummary": "{shown} of {total} · by last sign-in",
+      "mfa": {
+        "enabled": "On",
+        "notSetUp": "Not set up"
+      },
+      "pagerSummary": "{shown} of {total} · by name",
+      "recovery": {
+        "action": "New recovery codes",
+        "codeInvalid": "The code is wrong or already used. Wait for the next code in the app and try again.",
+        "codeLabel": "Authenticator code",
+        "confirm": "Create new codes",
+        "done": "Done",
+        "text": "The new codes replace all the current ones, so no old code works after this. Enter the current code from your authenticator app.",
+        "title": "New recovery codes"
+      },
       "search": {
         "label": "Search",
         "placeholder": "Name or email"
@@ -75,6 +101,7 @@
         "requestInfo": "Request info",
         "reviewCredential": "Review ijazah",
         "saveCall": "Save call record",
+        "standing": "Account standing",
         "subjects": "Subjects and qualification",
         "suitable": "Suitable",
         "unsuitable": "Unsuitable"
@@ -517,6 +544,7 @@
       "addAdmin": {
         "auditHint": "The addition is recorded under your name in the audit log.",
         "cancel": "Cancel",
+        "emailTaken": "This email already has an administrator account.",
         "inviteHint": "They receive a link to set a password, then set up two-step verification at first sign-in before seeing any page.",
         "lede": "One role: has the same permissions you have.",
         "mfaHint": "Their sign-in does not complete before two-step verification is set up.",
@@ -702,6 +730,7 @@
           "effects": {
             "active": "The account becomes active again: they can sign in, book and join sessions.",
             "notified": "{name} is notified.",
+            "reinstated": "The account becomes active again, and its owner can sign in.",
             "sessions": "Sessions cancelled during the suspension do not come back; their compensation is in the account’s case under Compensation."
           },
           "reasonLabel": "Reason for reactivation (required)",
@@ -875,6 +904,7 @@
         "reasonLabel": "Reason for the reset (required)",
         "reasonPlaceholder": "For example: lost their phone, and I verified their identity by a call",
         "subtitle": "{email} · admin since {date}",
+        "title": "Reset two-step verification for {name}",
         "verifyHint": "Verify the admin's identity outside the panel before confirming."
       },
       "requireId": {
@@ -982,6 +1012,11 @@
           "notified": "A notification reaches every affected student."
         },
         "effectsTitle": "What happens on confirmation",
+        "honest": {
+          "ban": "The account is banned for good and signed out on every device. A ban is not lifted from the panel.",
+          "revoke": "The approval is revoked and the subjects removed, the application is rejected with the reason you write, and the account is signed out on every device.",
+          "suspend": "The account becomes suspended and is signed out on every device; it sees only the suspension page until reinstated."
+        },
         "kinds": {
           "ban": "Ban account",
           "revokeApproval": "Revoke approval",

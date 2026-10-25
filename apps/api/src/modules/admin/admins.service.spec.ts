@@ -31,7 +31,8 @@ async function refusal(work: Promise<unknown>): Promise<DomainError> {
     () => undefined,
     (thrown: unknown) => thrown,
   );
-  if (!(error instanceof DomainError)) throw new Error(`expected a DomainError, got ${String(error)}`);
+  if (!(error instanceof DomainError))
+    throw new Error(`expected a DomainError, got ${String(error)}`);
   return error;
 }
 
@@ -40,7 +41,10 @@ describe('add', () => {
     const actor = await world.createAdministrator();
     const email = uniqueEmail();
     const { adminId } = await inTransaction(database, (tx) =>
-      world.admins.add(tx, actor.adminId, { displayName: 'Hala Saeed', email: ` ${email.toUpperCase()} ` }),
+      world.admins.add(tx, actor.adminId, {
+        displayName: 'Hala Saeed',
+        email: ` ${email.toUpperCase()} `,
+      }),
     );
     const row = await world.rows.administrator(adminId);
     expect(row).toMatchObject({
@@ -132,9 +136,73 @@ describe('resetMfa and regenerateRecoveryCodes', () => {
   it('refuses to regenerate the codes of an administrator not enrolled', async () => {
     const admin = await world.createAdministrator({ enrolled: false });
     const answer = await refusal(
-      inTransaction(database, (tx) => world.admins.regenerateRecoveryCodes(tx, admin.adminId)),
+      inTransaction(database, (tx) =>
+        world.admins.regenerateRecoveryCodes(tx, admin.adminId, '000000'),
+      ),
     );
     expect(answer.code).toBe('MFA_SETUP_REQUIRED');
+  });
+});
+
+describe('regenerateRecoveryCodes asks the current second factor (T096)', () => {
+  it('replaces the codes for a current code, and refuses the same code twice', async () => {
+    const admin = await world.createAdministrator();
+    const code = await world.currentCode(admin.adminId);
+    const fresh = await inTransaction(database, (tx) =>
+      world.admins.regenerateRecoveryCodes(tx, admin.adminId, code),
+    );
+    expect(fresh.recoveryCodes).toHaveLength(10);
+    const again = await refusal(
+      inTransaction(database, (tx) =>
+        world.admins.regenerateRecoveryCodes(tx, admin.adminId, code),
+      ),
+    );
+    expect(again.code).toBe('CODE_INVALID');
+  });
+
+  it('refuses a wrong code, keeps the codes, and counts it toward the lockout', async () => {
+    const admin = await world.createAdministrator();
+    await inTransaction(database, async (tx) =>
+      world.admins.regenerateRecoveryCodes(
+        tx,
+        admin.adminId,
+        await world.currentCode(admin.adminId),
+      ),
+    );
+    world.clock.advance(30);
+    const before = await world.rows.recoveryCodes(admin.adminId);
+    const wrong = (await world.currentCode(admin.adminId)) === '000000' ? '111111' : '000000';
+    const answer = await refusal(
+      inTransaction(database, (tx) =>
+        world.admins.regenerateRecoveryCodes(tx, admin.adminId, wrong),
+      ),
+    );
+    expect(answer.code).toBe('CODE_INVALID');
+    expect(await world.rows.recoveryCodes(admin.adminId)).toEqual(before);
+    expect((await world.rows.administrator(admin.adminId)).failedSignInCount).toBe(1);
+  });
+
+  it('refuses even the right code while the account is locked, so a stolen session cannot keep guessing', async () => {
+    const admin = await world.createAdministrator();
+    const wrong = (await world.currentCode(admin.adminId)) === '000000' ? '111111' : '000000';
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await refusal(
+        inTransaction(database, (tx) =>
+          world.admins.regenerateRecoveryCodes(tx, admin.adminId, wrong),
+        ),
+      );
+    }
+    expect((await world.rows.administrator(admin.adminId)).lockedUntilAt).not.toBeNull();
+    const answer = await refusal(
+      inTransaction(database, async (tx) =>
+        world.admins.regenerateRecoveryCodes(
+          tx,
+          admin.adminId,
+          await world.currentCode(admin.adminId),
+        ),
+      ),
+    );
+    expect(answer.code).toBe('CODE_INVALID');
   });
 });
 
@@ -155,8 +223,14 @@ describe('list', () => {
 
   it('lists the active tab with who invited, whether enrolled, the codes left, and which row is the reader’s', async () => {
     const token = randomUUID();
-    const reader = await world.createAdministrator({ email: addressWith(token), displayName: 'أ القارئ' });
-    await inTransaction(database, (tx) => world.admins.regenerateRecoveryCodes(tx, reader.adminId));
+    const reader = await world.createAdministrator({
+      email: addressWith(token),
+      displayName: 'أ القارئ',
+    });
+    const readerCode = await world.currentCode(reader.adminId);
+    await inTransaction(database, (tx) =>
+      world.admins.regenerateRecoveryCodes(tx, reader.adminId, readerCode),
+    );
     const invitedAt = new Date('2026-10-19T10:00:00Z');
     const invited = await world.createAdministrator({
       email: addressWith(token),
@@ -171,6 +245,8 @@ describe('list', () => {
       world.admins.list(tx, reader.adminId, { tab: 'active', search: token, page: 1 }),
     );
     expect(answer.total).toBe(2);
+    // The pager's size, as the other queues answer it (B14d).
+    expect(answer.pageSize).toBeGreaterThan(0);
     expect(answer.rows).toEqual([
       {
         adminId: reader.adminId,
@@ -196,7 +272,10 @@ describe('list', () => {
   it('lists the disabled tab with when each was disabled', async () => {
     const token = randomUUID();
     const reader = await world.createAdministrator({ email: addressWith(token) });
-    const disabled = await world.createAdministrator({ email: addressWith(token), isActive: false });
+    const disabled = await world.createAdministrator({
+      email: addressWith(token),
+      isActive: false,
+    });
     const answer = await inTransaction(database, (tx) =>
       world.admins.list(tx, reader.adminId, { tab: 'disabled', search: token, page: 1 }),
     );
@@ -211,11 +290,22 @@ describe('list', () => {
 
   it('searches the name and the address in any case, % and _ meaning themselves', async () => {
     const token = randomUUID();
-    const reader = await world.createAdministrator({ email: addressWith(token), displayName: `Nour_${token}` });
+    const reader = await world.createAdministrator({
+      email: addressWith(token),
+      displayName: `Nour_${token}`,
+    });
     await world.createAdministrator({ email: addressWith(token), displayName: `NourX${token}` });
     const [byName, byAddress] = await inTransaction(database, async (tx) => [
-      await world.admins.list(tx, reader.adminId, { tab: 'active', search: `nour_${token.toUpperCase()}`, page: 1 }),
-      await world.admins.list(tx, reader.adminId, { tab: 'active', search: reader.email.toUpperCase(), page: 1 }),
+      await world.admins.list(tx, reader.adminId, {
+        tab: 'active',
+        search: `nour_${token.toUpperCase()}`,
+        page: 1,
+      }),
+      await world.admins.list(tx, reader.adminId, {
+        tab: 'active',
+        search: reader.email.toUpperCase(),
+        page: 1,
+      }),
     ]);
     expect(byName.rows.map((row) => row.adminId)).toEqual([reader.adminId]);
     expect(byAddress.rows.map((row) => row.adminId)).toEqual([reader.adminId]);
@@ -226,7 +316,9 @@ describe('list', () => {
     const token = randomUUID();
     const ids: string[] = [];
     for (const name of ['ج', 'ب', 'أ']) {
-      ids.push((await paged.createAdministrator({ email: addressWith(token), displayName: name })).adminId);
+      ids.push(
+        (await paged.createAdministrator({ email: addressWith(token), displayName: name })).adminId,
+      );
     }
     const [first, second] = await inTransaction(database, async (tx) => [
       await paged.admins.list(tx, ids[0] ?? '', { tab: 'active', search: token, page: 1 }),

@@ -113,7 +113,11 @@ describe('admins.disable and admins.resetMfa', () => {
 
 describe('admins.regenerateRecoveryCodes and admins.list', () => {
   it('regenerate answers the new codes once and audits it on the caller’s own account', async () => {
-    const { recoveryCodes } = await caller.admins.regenerateRecoveryCodes();
+    // The sign-in spent this step's code; the next one regenerates (T096).
+    world.clock.advance(30);
+    const { recoveryCodes } = await caller.admins.regenerateRecoveryCodes({
+      code: await world.currentCode(actor.adminId),
+    });
     expect(recoveryCodes).toHaveLength(10);
     const [entry] = await world.rows.auditEntriesOf(actor.adminId);
     expect(entry).toMatchObject({

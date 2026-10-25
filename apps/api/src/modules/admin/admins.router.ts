@@ -7,6 +7,7 @@
 // `admin.router.ts`.
 import {
   adminRecoveryCodesOutput,
+  adminRegenerateRecoveryCodesInput,
   adminsAddInput,
   adminsAddOutput,
   adminsDisableInput,
@@ -62,11 +63,11 @@ export const adminsRouter = createAdminRouter({
   ),
 
   regenerateRecoveryCodes: adminProcedure({
-    input: z.void(),
+    input: adminRegenerateRecoveryCodesInput,
     output: adminRecoveryCodesOutput,
-  }).mutation(async ({ ctx }) => {
+  }).mutation(async ({ ctx, input }) => {
     const { adminId } = ctx.administrator;
-    const codes = await ctx.services.admins.regenerateRecoveryCodes(ctx.tx, adminId);
+    const codes = await ctx.services.admins.regenerateRecoveryCodes(ctx.tx, adminId, input.code);
     ctx.audit.record({
       action: 'admin.regenerate_recovery_codes',
       targetType: 'admin',

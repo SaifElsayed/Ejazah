@@ -98,7 +98,9 @@ export class AdminInvites {
     const admin = await this.#administrators.findById(adminId);
     if (admin === null) throw new Error(`deliver-admin-invite: administrator ${adminId} not found`);
     if (this.#panelOrigin === undefined) {
-      throw new Error('deliver-admin-invite: ADMIN_PANEL_ORIGIN is not set, so the link has nowhere to point');
+      throw new Error(
+        'deliver-admin-invite: ADMIN_PANEL_ORIGIN is not set, so the link has nowhere to point',
+      );
     }
     if (!admin.isActive || admin.passwordSetAt !== null || admin.invitedAt === null) return null;
     const hours = await this.#settings.read(INVITE_TTL_SETTING, positiveWhole);

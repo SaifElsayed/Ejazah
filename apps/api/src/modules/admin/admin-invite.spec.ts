@@ -55,7 +55,9 @@ describe('prepare', () => {
     expect(expiry).toBe('2026-10-22T08:00:00Z');
     expect(prepared?.expiresAt).toEqual(new Date('2026-10-22T08:00:00Z'));
     const key = deriveSubkey(SPEC_ENCRYPTION_KEY, 'ijazah:admin-invite:v1');
-    expect(mac).toBe(createHmac('sha256', key).update(`v1.${adminId}.${expiry}`).digest('base64url'));
+    expect(mac).toBe(
+      createHmac('sha256', key).update(`v1.${adminId}.${expiry}`).digest('base64url'),
+    );
     expect(prepared?.mark).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -85,7 +87,9 @@ describe('prepare', () => {
 
     const disabled = await invitedAdministrator();
     const actor = await world.createAdministrator();
-    await inTransaction(database, (tx) => world.admins.disable(tx, actor.adminId, disabled.adminId));
+    await inTransaction(database, (tx) =>
+      world.admins.disable(tx, actor.adminId, disabled.adminId),
+    );
     expect(await world.invites.prepare(disabled.adminId)).toBeNull();
 
     const late = await invitedAdministrator();
@@ -99,8 +103,6 @@ describe('prepare', () => {
   });
 
   it('throws for an administrator who does not exist, so the queue tries again', async () => {
-    await expect(
-      world.invites.prepare('00000000-0000-7000-8000-000000000000'),
-    ).rejects.toThrow();
+    await expect(world.invites.prepare('00000000-0000-7000-8000-000000000000')).rejects.toThrow();
   });
 });
