@@ -447,11 +447,15 @@ describe('the transcription and the decisions (FR-163)', () => {
       }),
     );
     type(confirm.getByLabelText(ar('admin.dialogs.confirm.rejectCredential.reasonLabel')), 'سبب');
+    // Another administrator approved it meanwhile: the read again answers its new status, which
+    // draws the panel anew; the sentence stays (B14c review, round 1, finding 1).
+    api.credentials.get.query.mockResolvedValue(verifiedDetail);
     fireEvent.click(
       confirm.getByRole('button', { name: ar('admin.dialogs.confirm.rejectCredential.confirm') }),
     );
-    expect(await confirm.findByText(ar('admin.credentials.panel.conflict'))).toBeTruthy();
     await waitFor(() => expect(api.credentials.get.query).toHaveBeenCalledTimes(2));
+    await screen.findByText(ar('admin.credentials.panel.saveCorrection'));
+    expect(screen.getByText(ar('admin.credentials.panel.conflict'))).toBeTruthy();
   });
 
   it('says the teacher already holds the subject', async () => {
@@ -559,6 +563,37 @@ describe('the correction of a verified chain (FR-164)', () => {
         reason: 'سقط اسم عند النسخ',
       }),
     );
+    // The next correction needs its own reason (B14c review, round 1, Minor).
+    await waitFor(() =>
+      expect(
+        (form.getByLabelText(ar('admin.credentials.panel.correctReason')) as HTMLTextAreaElement)
+          .value,
+      ).toBe(''),
+    );
+  });
+});
+
+describe('a long chain (the owner’s decision, B14c)', () => {
+  it('shows its first five and last two generations, folds the middle, and opens it', async () => {
+    const api = fakeApi();
+    const named = (n: number) => `الجيل ${n}`;
+    const long = Array.from({ length: 12 }, (_, index) => ({
+      position: index + 1,
+      names: [named(index + 1)],
+    }));
+    api.credentials.get.query.mockResolvedValue({ ...verifiedDetail, chain: long });
+    open(api);
+    await screen.findByText(rowA.teacher.displayName);
+    fireEvent.click(screen.getByRole('tab', { name: ar('admin.credentials.tabs.verified') }));
+    const form = await select(rowV.teacher.displayName, QURAN.nameAr);
+    for (const shown of [1, 2, 3, 4, 5, 11, 12]) expect(form.getByText(named(shown))).toBeTruthy();
+    for (const folded of [6, 7, 8, 9, 10]) expect(form.queryByText(named(folded))).toBeNull();
+    fireEvent.click(
+      form.getByRole('button', {
+        name: ar('admin.credentials.panel.chainEllipsis', { from: 6, to: 10 }),
+      }),
+    );
+    for (let n = 1; n <= 12; n += 1) expect(form.getByText(named(n))).toBeTruthy();
   });
 });
 

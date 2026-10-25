@@ -109,10 +109,16 @@ export function CredentialConfirm({
   decision,
   detail,
   onClose,
+  onDone,
+  onMoved,
 }: {
   readonly decision: CredentialDecision;
   readonly detail: CredentialDetail;
   readonly onClose: () => void;
+  /** After the decision is saved, before the dialog closes. */
+  readonly onDone: () => void;
+  /** The credential moved meanwhile: the panel says so, since reading it again draws it anew. */
+  readonly onMoved: () => void;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -133,18 +139,22 @@ export function CredentialConfirm({
   const reasonMissing = decision.kind === 'reject' && written.trim() === '';
 
   const settled = {
-    onSuccess: onClose,
+    onSuccess: () => {
+      onDone();
+      onClose();
+    },
     onError: (error: unknown) => {
       if (errorCodeOf(error) !== 'CONFLICT') {
         setRefused('admin.dialogs.submitError');
-        return;
+      } else if (errorDetailsOf(error).some(({ code }) => code === 'subject_approved')) {
+        setRefused('admin.credentials.panel.subjectApproved');
+      } else {
+        // Its status changed: the panel is drawn anew from the next read and says why (B14c
+        // review, round 1, finding 1).
+        onMoved();
+        onClose();
+        void actions.reread();
       }
-      setRefused(
-        errorDetailsOf(error).some(({ code }) => code === 'subject_approved')
-          ? 'admin.credentials.panel.subjectApproved'
-          : 'admin.credentials.panel.conflict',
-      );
-      void actions.reread();
     },
   };
   const confirm = () => {

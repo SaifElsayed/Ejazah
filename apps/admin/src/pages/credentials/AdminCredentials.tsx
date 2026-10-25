@@ -222,7 +222,7 @@ export function AdminCredentials() {
               </div>
             </section>
           ) : (
-            <CredentialPanel credentialId={selected} />
+            <CredentialPanel key={selected} credentialId={selected} />
           )
         }
         detail={

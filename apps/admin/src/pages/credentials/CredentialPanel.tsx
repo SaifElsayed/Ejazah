@@ -51,6 +51,8 @@ type Chain = readonly (readonly string[])[];
 export function CredentialPanel({ credentialId }: { readonly credentialId: string }) {
   const t = useT();
   const credential = useCredential(credentialId);
+  // Said above the panel, which the next read draws anew (B14c review, round 1, finding 1).
+  const [moved, setMoved] = useState(false);
   const detail = credential.data;
   if (detail === undefined) {
     return credential.isError ? (
@@ -61,11 +63,30 @@ export function CredentialPanel({ credentialId }: { readonly credentialId: strin
       <Skeleton shape="block" />
     );
   }
-  // A new key for each credential and status, so the form starts from what it holds.
-  return <Transcription key={`${detail.credentialId}-${detail.status}`} detail={detail} />;
+  return (
+    <div className="stack gap-4">
+      {moved ? (
+        <Banner icon={{ name: 'info' }} tone="warning">
+          {t('admin.credentials.panel.conflict')}
+        </Banner>
+      ) : null}
+      {/* A new key for each credential and status, so the form starts from what it holds. */}
+      <Transcription
+        key={`${detail.credentialId}-${detail.status}`}
+        detail={detail}
+        onMoved={() => setMoved(true)}
+      />
+    </div>
+  );
 }
 
-function Transcription({ detail }: { readonly detail: CredentialDetail }) {
+function Transcription({
+  detail,
+  onMoved,
+}: {
+  readonly detail: CredentialDetail;
+  readonly onMoved: () => void;
+}) {
   const t = useT();
   const locale = useLocale();
   const navigate = useNavigate();
@@ -323,7 +344,14 @@ function Transcription({ detail }: { readonly detail: CredentialDetail }) {
         )}
       </Panel>
       {deciding === null ? null : (
-        <CredentialConfirm decision={deciding} detail={detail} onClose={() => setDeciding(null)} />
+        <CredentialConfirm
+          decision={deciding}
+          detail={detail}
+          onClose={() => setDeciding(null)}
+          // A saved correction leaves no reason for the next one (B14c review, round 1).
+          onDone={() => setReason('')}
+          onMoved={onMoved}
+        />
       )}
     </>
   );
@@ -339,5 +367,6 @@ function sameChain(a: Chain, b: Chain): boolean {
 
 /** The drawn meta line ends with « · » before its link; without the link the separator goes. */
 function withoutTrailingSeparator(text: string): string {
-  return text.replace(/\s·\s*$/, '');
+  // Every trailing separator: an approval with no reviewer's name leaves two (B14c review, nit).
+  return text.replace(/(\s·\s*)+$/, '');
 }
