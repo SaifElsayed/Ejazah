@@ -37,6 +37,7 @@ const [
   { createApplication },
   { connectionFor, openQueue },
   { DELIVER_ADMIN_INVITE },
+  { filesRoutes },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -60,6 +61,7 @@ const [
   import('./app.module.js'),
   import('./jobs/queue.js'),
   import('./jobs/deliver-admin-invite.js'),
+  import('./platform/ports/storage/files.route.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -154,7 +156,8 @@ const services = {
 // helper with the user session resolver, T020's guard and the storage port; the documents route
 // encrypts its key with the column cipher (R-DB-8) and refuses an uploader holding
 // `document_unreferenced_max_per_user` documents nothing points at, read through the identity and
-// catalog modules' pointers (T093, R-API-6).
+// catalog modules' pointers (T093, R-API-6). Beside them, over local storage alone, the route that
+// serves its signed links (T095).
 const documentReferences = [
   identity.createDocumentReferences(database),
   catalog.createDocumentReferences(database),
@@ -180,6 +183,7 @@ const routes = {
     settings,
     database,
   }),
+  ...filesRoutes(ports.storage),
 };
 
 // The admin module's services behind the administrator surface (T067), bound to the surface's port.

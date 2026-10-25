@@ -432,6 +432,8 @@ export interface PagerProps {
   readonly page: number;
   readonly pageCount: number;
   readonly onChange: (page: number) => void;
+  /** What the pages are of: a document's pages (B14b-2); a list's when absent. */
+  readonly accessibilityLabel?: string;
 }
 
 /** The pages shown: the first, the last and the ones beside the current, `null` for a gap. */
@@ -446,14 +448,14 @@ function visiblePages(page: number, pageCount: number): (number | null)[] {
 }
 
 /** Pages with previous and next; nothing for a single page. */
-export function Pager({ page, pageCount, onChange }: PagerProps) {
+export function Pager({ page, pageCount, onChange, accessibilityLabel }: PagerProps) {
   const t = useT();
   if (pageCount <= 1) return null;
   const go = (target: number) => {
     if (target !== page && target >= 1 && target <= pageCount) onChange(target);
   };
   return (
-    <nav className="pager" aria-label={t('admin.common.a11y.pages')}>
+    <nav className="pager" aria-label={accessibilityLabel ?? t('admin.common.a11y.pages')}>
       <button
         type="button"
         className="pager__page"

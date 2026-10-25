@@ -1,9 +1,11 @@
-// T071 (FR-160 to FR-162): the selected application's detail (`AdminApplications`' panel). The
-// header: the applicant, their gender, city and date, the minor flag (FR-132) and the status. The
-// documents are shown and open nothing until the viewer lands (B14b-2, the T052 rule). The call is
-// recorded by its day (the browser's date field, its latest day today in the panel's zone), its
-// outcome and its notes, while the application is open. The footer offers the actions the status
-// admits; «اعتماد» waits for the three conditions, each one said.
+// T071 (FR-160 to FR-162, FR-166): the selected application's detail (`AdminApplications`' panel).
+// The header: the applicant, their gender, city and date, the minor flag (FR-132) and the status.
+// Each document opens in the viewer, view only (B14b-2). An open identity request is shown with its
+// reason, and the document it brought opens in the person's context, with its two decisions;
+// «طلب إثبات هوية» is offered on an active account with none open (FR-166). The call is recorded
+// by its day (the browser's date field, its latest day today in the panel's zone), its outcome and
+// its notes, while the application is open. The footer offers the actions the status admits;
+// «اعتماد» waits for the three conditions, each one said.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -25,6 +27,8 @@ import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
 import { cityName, dayMonthYear } from '../../lib/format';
 import { panelTimeZone, todayIn } from '../../lib/zone';
+import { AdminDocumentViewer, type DocumentViewerProps } from '../documents/AdminDocumentViewer';
+import { AdminRequireIdDialog } from '../documents/AdminRequireIdDialog';
 import { initialsOf } from './initials';
 import { ApproveDialog } from './ApproveDialog';
 import { DecisionDialog, type DecisionKind } from './DecisionDialog';
@@ -71,10 +75,87 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
   const zone = panelTimeZone();
   const [deciding, setDeciding] = useState<DecisionKind | null>(null);
   const [approving, setApproving] = useState(false);
+  const [viewing, setViewing] = useState<Viewing | null>(null);
+  const [requiring, setRequiring] = useState(false);
   const allowed = allowedFor(detail.status);
   const blocked = blockedReasons(detail);
   const subjectName = (subject: { nameAr: string; nameEn: string }) =>
     locale === 'ar' ? subject.nameAr : subject.nameEn;
+  const typeName = (type: 'national_id' | 'passport') =>
+    t(
+      type === 'passport'
+        ? 'admin.common.documentType.passport'
+        : 'admin.common.documentType.nationalId',
+    );
+  const request = detail.identityRequest;
+  const requested = request?.document;
+
+  /** The viewer's props for what is being viewed. */
+  const viewerOf = (what: Viewing): DocumentViewerProps => {
+    const onClose = () => setViewing(null);
+    if (what.kind === 'request' && request !== undefined && requested !== undefined) {
+      return {
+        context: 'user',
+        documentId: requested.documentId,
+        title: typeName(requested.type),
+        subtitle: t('admin.dialogs.documentViewer.subtitle', {
+          name: detail.displayName,
+          date: dayMonthYear(requested.submittedAt, locale, zone),
+        }),
+        facts: [
+          {
+            label: t('admin.dialogs.documentViewer.documentType'),
+            value: typeName(requested.type),
+          },
+          {
+            label: t('admin.dialogs.documentViewer.requested'),
+            value: dayMonthYear(request.requestedAt, locale, zone),
+          },
+          {
+            label: t('admin.dialogs.documentViewer.uploaded'),
+            value: dayMonthYear(requested.submittedAt, locale, zone),
+          },
+        ],
+        request: {
+          requestId: request.requestId,
+          reason: request.reason,
+          name: detail.displayName,
+        },
+        onClose,
+      };
+    }
+    const subtitle = t('admin.dialogs.documentViewer.subtitleApplication', {
+      name: detail.displayName,
+    });
+    const credential = what.kind === 'credential' ? detail.credentials[what.index] : undefined;
+    if (credential !== undefined) {
+      return {
+        context: 'application',
+        documentId: credential.documentId,
+        title: t('admin.applications.detail.credentialFile', {
+          subject: subjectName(credential.subject),
+        }),
+        subtitle,
+        facts: [],
+        onClose,
+      };
+    }
+    const identity = detail.identityDocument;
+    return {
+      context: 'application',
+      documentId: identity.documentId,
+      title: typeName(identity.type),
+      subtitle,
+      facts: [
+        { label: t('admin.dialogs.documentViewer.documentType'), value: typeName(identity.type) },
+        {
+          label: t('admin.dialogs.documentViewer.uploaded'),
+          value: dayMonthYear(identity.uploadedAt, locale, zone),
+        },
+      ],
+      onClose,
+    };
+  };
 
   return (
     <>
@@ -138,17 +219,22 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
             <h2 className="group-label">{t('admin.applications.detail.identity')}</h2>
             <DocThumb
               icon="user"
-              label={t(
-                detail.identityDocument.type === 'passport'
-                  ? 'admin.common.documentType.passport'
-                  : 'admin.common.documentType.nationalId',
-              )}
+              label={typeName(detail.identityDocument.type)}
+              onPress={() => setViewing({ kind: 'identity' })}
             />
+            {detail.accountStatus === 'active' && request === undefined ? (
+              <div className="self-start">
+                <TextLink
+                  label={t('admin.common.action.requireId')}
+                  onPress={() => setRequiring(true)}
+                />
+              </div>
+            ) : null}
           </section>
           <section className="section">
             <h2 className="group-label">{t('admin.applications.detail.credentials')}</h2>
             <div className="row row--top gap-3">
-              {detail.credentials.map((credential) => (
+              {detail.credentials.map((credential, index) => (
                 <DocThumb
                   key={credential.credentialId}
                   label={t('admin.applications.detail.credentialFile', {
@@ -158,6 +244,7 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
                     label: t(CREDENTIAL_TEXT[credential.status]),
                     tone: CREDENTIAL_TONE[credential.status],
                   }}
+                  onPress={() => setViewing({ kind: 'credential', index })}
                 />
               ))}
             </div>
@@ -170,6 +257,34 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
             </div>
           </section>
         </div>
+
+        {request === undefined ? null : (
+          <section className="section">
+            <h2 className="group-label">{t('admin.applications.detail.identityRequest.title')}</h2>
+            <span className="row wrap gap-2">
+              <Badge label={t('admin.status.account.verificationPending')} tone="warning" />
+              <span className="text-caption tone-muted">
+                {t('admin.applications.detail.identityRequest.requested', {
+                  date: dayMonthYear(request.requestedAt, locale, zone),
+                })}
+              </span>
+            </span>
+            <p className="text-callout">
+              <bdi>{request.reason}</bdi>
+            </p>
+            {requested === undefined ? (
+              <p className="text-callout tone-muted">
+                {t('admin.applications.detail.identityRequest.waiting')}
+              </p>
+            ) : (
+              <DocThumb
+                icon="user"
+                label={typeName(requested.type)}
+                onPress={() => setViewing({ kind: 'request' })}
+              />
+            )}
+          </section>
+        )}
 
         <CallRecord detail={detail} editable={allowed.recordCall} />
 
@@ -202,9 +317,30 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
         />
       )}
       {approving ? <ApproveDialog detail={detail} onClose={() => setApproving(false)} /> : null}
+      {viewing === null ? null : <AdminDocumentViewer {...viewerOf(viewing)} />}
+      {requiring ? (
+        <AdminRequireIdDialog
+          userId={detail.teacherUserId}
+          name={detail.displayName}
+          role={t(
+            detail.gender === 'female'
+              ? 'admin.common.role.teacherFemale'
+              : 'admin.common.role.teacher',
+          )}
+          status={t('admin.status.account.activeLong')}
+          onClose={() => setRequiring(false)}
+        />
+      ) : null}
     </>
   );
 }
+
+/** What the viewer shows: the application's identity document, a credential's file, or the
+ *  document an identity request brought. */
+type Viewing =
+  | { readonly kind: 'identity' }
+  | { readonly kind: 'credential'; readonly index: number }
+  | { readonly kind: 'request' };
 
 /** The verification call (FR-161): a form while the application is open, its record otherwise. */
 function CallRecord({

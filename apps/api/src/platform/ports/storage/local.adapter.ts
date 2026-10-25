@@ -5,10 +5,11 @@
 // `STORAGE_LOCAL_ROOT`, outside any web root (NFR-SEC-9), and every path is resolved and checked
 // to stay under it, beside the key check every operation makes.
 //
-// A link is `/files/<key>?expires=<instant>&signature=<HMAC-SHA256>`, relative, signed over the key
-// and the expiry. `verifyLink` answers the key only while the signature holds and the moment has
-// not passed; the route that serves `/files/` belongs to the phase that uploads the first file
-// (note under T116). The signing key is derived from ENCRYPTION_KEY by HKDF under its own label,
+// A link is `/files/<key>?expires=<instant>&signature=<HMAC-SHA256>`, signed over the key and the
+// expiry, under `API_PUBLIC_ORIGIN` when it is set (T095: a contract's `z.url()` refuses a relative
+// link) and relative when not. `verifyLink` answers the key only while the signature holds and the
+// moment has not passed, for a link at its own origin or a bare path; `files.route.ts` (T095)
+// serves it. The signing key is derived from ENCRYPTION_KEY by HKDF under its own label,
 // so no new secret is configured; only `node:crypto` primitives are used (R-SEC-7). Rotating
 // ENCRYPTION_KEY invalidates every local link already handed out, which development can afford.
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -36,6 +37,8 @@ export function deriveLinkKey(encryptionKey: string): Buffer {
 export interface LocalStorageOptions {
   readonly root: string;
   readonly linkKey: Buffer;
+  /** `API_PUBLIC_ORIGIN`, which a link starts with; relative links when absent (T095). */
+  readonly origin?: string;
   /** The clock links are issued and checked against; the system clock unless a test sets one. */
   readonly now?: () => Date;
 }
@@ -44,6 +47,7 @@ export class LocalStorageAdapter implements StoragePort {
   readonly #objects: string;
   readonly #types: string;
   readonly #linkKey: Buffer;
+  readonly #origin: string | undefined;
   readonly #now: () => Date;
 
   constructor(options: LocalStorageOptions) {
@@ -51,6 +55,7 @@ export class LocalStorageAdapter implements StoragePort {
     this.#objects = resolve(root, 'objects');
     this.#types = resolve(root, 'types');
     this.#linkKey = options.linkKey;
+    this.#origin = options.origin;
     this.#now = options.now ?? (() => new Date());
   }
 
@@ -73,7 +78,7 @@ export class LocalStorageAdapter implements StoragePort {
     const expires = addSeconds(this.#now(), expiresInSeconds);
     const path = key.split('/').map(encodeURIComponent).join('/');
     const query = new URLSearchParams({ expires, signature: this.#sign(key, expires) });
-    return Promise.resolve(`${LINK_PATH}${path}?${query.toString()}`);
+    return Promise.resolve(`${this.#origin ?? ''}${LINK_PATH}${path}?${query.toString()}`);
   }
 
   async remove(key: string): Promise<void> {
@@ -98,9 +103,10 @@ export class LocalStorageAdapter implements StoragePort {
    * undefined. For the route that serves `/files/`, which then reads the object with `read`.
    */
   verifyLink(link: string): string | undefined {
-    if (!URL.canParse(link, LINK_BASE)) return undefined;
-    const url = new URL(link, LINK_BASE);
-    if (url.origin !== LINK_BASE || !url.pathname.startsWith(LINK_PATH)) return undefined;
+    const base = this.#origin ?? LINK_BASE;
+    if (!URL.canParse(link, base)) return undefined;
+    const url = new URL(link, base);
+    if (url.origin !== base || !url.pathname.startsWith(LINK_PATH)) return undefined;
 
     let key: string;
     try {

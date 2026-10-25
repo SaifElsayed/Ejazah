@@ -12,6 +12,7 @@ export type StorageConfig = Pick<
   Config,
   | 'STORAGE_DRIVER'
   | 'STORAGE_LOCAL_ROOT'
+  | 'API_PUBLIC_ORIGIN'
   | 'ENCRYPTION_KEY'
   | 'S3_ENDPOINT'
   | 'S3_BUCKET'
@@ -25,6 +26,7 @@ export function createStoragePort(config: StorageConfig): StoragePort {
     return new LocalStorageAdapter({
       root: config.STORAGE_LOCAL_ROOT,
       linkKey: deriveLinkKey(config.ENCRYPTION_KEY),
+      ...(config.API_PUBLIC_ORIGIN === undefined ? {} : { origin: config.API_PUBLIC_ORIGIN }),
     });
   }
   const { S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = config;

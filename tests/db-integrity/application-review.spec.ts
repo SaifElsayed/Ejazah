@@ -171,6 +171,7 @@ describe('the decisions', () => {
       note: 'مرحبًا',
       identityDocumentId: documentId,
       qualificationSummary: 'إجازة في حفص',
+      accountStatus: 'active',
     });
   });
 

@@ -8,7 +8,7 @@
 // decision 2026-10-22).
 import { z } from 'zod';
 
-import { identityDocumentType, teacherApplicationStatus } from '../account.js';
+import { accountStatus, identityDocumentType, teacherApplicationStatus } from '../account.js';
 import { subjectSummary } from '../catalog.js';
 import { calendarDate, gender, timeZone } from '../onboarding.js';
 import { credentialStatus } from '../teacher-credentials.js';
@@ -79,6 +79,8 @@ export const applicationsGetOutput = applicationsListRow.extend({
   qualificationSummary: z.string(),
   /** The applicant's IANA zone, which the panel shows as its city. */
   timezoneCity: z.string(),
+  /** The account's standing: «طلب إثبات هوية» is offered on an active account alone (B14b-2). */
+  accountStatus,
   identityDocument: z.object({
     documentId: z.uuid(),
     type: identityDocumentType,

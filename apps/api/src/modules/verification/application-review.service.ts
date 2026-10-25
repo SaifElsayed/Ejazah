@@ -155,6 +155,7 @@ export class ApplicationReviewService {
       ...this.#rowOf(applicant, credentials),
       qualificationSummary: applicant.qualificationSummary,
       timezoneCity: applicant.timezone,
+      accountStatus: applicant.accountStatus,
       // A submitted application always names its identity document (T056).
       identityDocument: {
         documentId: documentId ?? '',
