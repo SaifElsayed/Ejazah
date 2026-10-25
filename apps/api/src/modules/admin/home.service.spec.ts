@@ -58,7 +58,7 @@ function home(
 
 const quietQueues: HomeQueues = {
   applications: async () => ({ open: 0, oldestSubmittedAt: null, waitingOnApplicant: 0 }),
-  credentials: async () => ({ open: 0, addedSubjects: 0 }),
+  credentials: async () => ({ open: 0, addedSubjects: 0, oldestSubmittedAt: null }),
 };
 
 describe('home.summary', () => {
@@ -70,18 +70,24 @@ describe('home.summary', () => {
           oldestSubmittedAt: new Date('2026-10-18T09:30:00Z'),
           waitingOnApplicant: 2,
         }),
-        credentials: async () => ({ open: 4, addedSubjects: 1 }),
+        credentials: async () => ({
+          open: 4,
+          addedSubjects: 1,
+          oldestSubmittedAt: new Date('2026-10-20T11:30:00Z'),
+        }),
       }).summary(tx),
     );
     expect(summary.queues).toEqual({
       applications: { open: 3, oldestAgeHours: 74, waitingOnApplicant: 2 },
-      credentials: { open: 4, addedSubjects: 1 },
+      // The credentials card says its oldest's age as the applications card does (B14d).
+      credentials: { open: 4, oldestAgeHours: 24, addedSubjects: 1 },
     });
   });
 
   it('leaves the oldest’s age out when no application is open', async () => {
     const summary = await rolledBack(database, (tx) => home(quietQueues).summary(tx));
     expect(summary.queues.applications).toEqual({ open: 0, waitingOnApplicant: 0 });
+    expect(summary.queues.credentials).toEqual({ open: 0, addedSubjects: 0 });
   });
 
   it('shows the newest admin_home_latest_actions entries, newest first, leaving out the reads', async () => {

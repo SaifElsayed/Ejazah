@@ -26,7 +26,9 @@ import {
 import { AuthLayout, ConsoleLayout, SetupLayout } from './pages/_layout/layouts';
 import { ConsolePageShell } from './pages/_layout/shells';
 import { AdminApplications } from './pages/applications/AdminApplications';
+import { AdminAudit } from './pages/audit/AdminAudit';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
+import { AdminHome } from './pages/home/AdminHome';
 import { AdminMfa } from './pages/mfa/AdminMfa';
 import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
 import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
@@ -83,14 +85,14 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path={AUTH_PATHS.setup} element={<AdminMfaSetup />} />
             </Route>
             <Route element={<ConsoleLayout />}>
-              <Route path={HOME_PATH} element={<ConsolePageShell title="admin.home.title" />} />
+              <Route path={HOME_PATH} element={<AdminHome />} />
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
               <Route
                 path="/settings/admins"
                 element={<ConsolePageShell title="admin.admins.title" />}
               />
-              <Route path="/audit" element={<ConsolePageShell title="admin.audit.title" />} />
+              <Route path="/audit" element={<AdminAudit />} />
             </Route>
             <Route path="*" element={<Navigate to={HOME_PATH} replace />} />
           </Route>

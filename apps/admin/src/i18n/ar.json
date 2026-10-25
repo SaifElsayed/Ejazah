@@ -116,13 +116,32 @@
         "removeDateFilter": "إزالة فلتر التاريخ"
       },
       "actions": {
+        "adminAdd": "إضافة مشرف",
+        "adminDisable": "تعطيل مشرف",
+        "adminRegenerateRecoveryCodes": "إعادة توليد رموز الاسترداد",
+        "adminResetMfa": "إعادة ضبط التحقق بخطوتين",
+        "adminSignOut": "تسجيل الخروج",
+        "applicationApprove": "اعتماد طلب انضمام",
+        "applicationBan": "حظر متقدّم",
         "approveTeacherCredential": "اعتماد إجازة معلم",
+        "credentialCorrect": "تصحيح نسخ إجازة",
+        "credentialReject": "رفض إجازة",
+        "credentialRequestDocument": "طلب ملف آخر لإجازة",
         "dismissReport": "رفض بلاغ",
+        "documentView": "عرض وثيقة",
         "issueIjazahOnRequest": "إصدار إجازة بطلب المعلم",
         "recordVerificationCall": "تسجيل مكالمة التحقق",
         "rejectApplication": "رفض طلب انضمام",
         "removeReviewComment": "إزالة تعليق تقييم",
-        "requestMoreInfo": "طلب معلومات إضافية"
+        "requestMoreInfo": "طلب معلومات إضافية",
+        "teacherApprove": "اعتماد معلم",
+        "teacherBan": "حظر معلم",
+        "teacherReinstate": "إعادة تفعيل معلم",
+        "teacherRevoke": "سحب اعتماد معلم",
+        "teacherSuspend": "إيقاف معلم",
+        "userRequireIdentity": "طلب إثبات هوية",
+        "verificationRequestAccept": "قبول وثيقة هوية",
+        "verificationRequestRequestAnother": "طلب وثيقة هوية أخرى"
       },
       "clearAll": "مسح الكل",
       "columns": {
@@ -152,13 +171,56 @@
         "text": "وسّع المدة أو أزل فلترًا.",
         "title": "لا قيود تطابق الفلاتر"
       },
+      "emptyAll": {
+        "text": "يظهر هنا كل قرار ملزم يتخذه مشرف.",
+        "title": "لا قيود بعد"
+      },
+      "fields": {
+        "accountStatus": "حالة الحساب",
+        "chain": "السند",
+        "completedOn": "يوم المكالمة",
+        "documentId": "الوثيقة",
+        "holderName": "اسم صاحب الإجازة",
+        "isActive": "الحساب مفعّل",
+        "needed": "المطلوب",
+        "outcome": "النتيجة",
+        "reasonChoice": "السبب المختار",
+        "requestId": "الطلب",
+        "riwaya": "الرواية",
+        "status": "الحالة",
+        "subjectIds": "المواد",
+        "tariq": "الطريق",
+        "verificationStatus": "حالة التحقق"
+      },
       "lede": "كل قرار ملزم يتخذه مشرف، بسببه وبما كان قبله وبعده. السجل يُضاف إليه فقط.",
       "pagerSummary": "{shown} من {total} · آخر {days} يومًا · بتوقيت {city}",
+      "pagerSummaryAll": "{shown} من {total} · بتوقيت {city}",
       "search": {
         "label": "بحث",
         "placeholder": "الهدف أو السبب"
       },
-      "title": "سجل التدقيق"
+      "targetNamed": "{type} · {name}",
+      "targets": {
+        "admin": "مشرف",
+        "credential": "إجازة",
+        "document": "وثيقة",
+        "setting": "إعداد",
+        "teacherApplication": "طلب انضمام",
+        "user": "مستخدم",
+        "verificationRequest": "طلب إثبات هوية"
+      },
+      "title": "سجل التدقيق",
+      "values": {
+        "no": "لا",
+        "none": "—",
+        "verification": {
+          "approved": "معتمد",
+          "pending": "قيد المراجعة",
+          "rejected": "مرفوض",
+          "revoked": "سُحب الاعتماد"
+        },
+        "yes": "نعم"
+      }
     },
     "chatLog": {
       "a11y": {
@@ -1161,11 +1223,12 @@
       "latestActions": "آخر الإجراءات",
       "openQueues": "الطوابير المفتوحة",
       "queue": {
-        "addedSubjectThenOldest": "{added, plural, one {واحدة لمادة مضافة} two {اثنتان لمادة مضافة} few {# لمواد مضافة} many {# لمواد مضافة} other {# لمواد مضافة}} · {days, plural, one {أقدمها منذ يوم} two {أقدمها منذ يومين} few {أقدمها منذ # أيام} many {أقدمها منذ # يومًا} other {أقدمها منذ # يوم}}",
+        "added": "{added, plural, one {واحدة لمادة مضافة} two {اثنتان لمادة مضافة} few {# لمواد مضافة} many {# لمواد مضافة} other {# لمواد مضافة}}",
         "arrivedYesterday": "وصل أمس",
         "compensationHint": "تُفتح تلقائيًا حين يُنهى اشتراك قبل اكتمال جلساته",
         "oldest": "{days, plural, one {أقدمها منذ يوم} two {أقدمها منذ يومين} few {أقدمها منذ # أيام} many {أقدمها منذ # يومًا} other {أقدمها منذ # يوم}}",
-        "oldestWithWaiting": "{days, plural, one {أقدمها منذ يوم} two {أقدمها منذ يومين} few {أقدمها منذ # أيام} many {أقدمها منذ # يومًا} other {أقدمها منذ # يوم}} · {waiting, plural, one {واحد بانتظار المتقدّم} two {اثنان بانتظار المتقدّم} few {# بانتظار المتقدّم} many {# بانتظار المتقدّم} other {# بانتظار المتقدّم}}"
+        "oldestToday": "أقدمها من اليوم",
+        "waiting": "{waiting, plural, one {واحد بانتظار المتقدّم} two {اثنان بانتظار المتقدّم} few {# بانتظار المتقدّم} many {# بانتظار المتقدّم} other {# بانتظار المتقدّم}}"
       },
       "subtitle": "{date} · بتوقيت {city}",
       "title": "نظرة عامة"

@@ -128,16 +128,20 @@ export class CredentialsRepository {
 
 /**
  * The admin home's credentials card (T065, FR-176): how many credentials wait for review, and how
- * many of them are for a subject added after approval rather than sent with the application.
+ * many of them are for a subject added after approval rather than sent with the application, and
+ * when the oldest of them was sent (the card's age, B14d).
  */
-export async function readCredentialQueue(
-  tx: Pick<Transaction, 'teacherCredential'>,
-): Promise<{ readonly open: number; readonly addedSubjects: number }> {
-  const [open, addedSubjects] = await Promise.all([
+export async function readCredentialQueue(tx: Pick<Transaction, 'teacherCredential'>): Promise<{
+  readonly open: number;
+  readonly addedSubjects: number;
+  readonly oldestSubmittedAt: Date | null;
+}> {
+  const [open, addedSubjects, oldest] = await Promise.all([
     tx.teacherCredential.count({ where: { status: 'pending' } }),
     tx.teacherCredential.count({ where: { status: 'pending', submittedWithApplication: false } }),
+    tx.teacherCredential.aggregate({ where: { status: 'pending' }, _min: { createdAt: true } }),
   ]);
-  return { open, addedSubjects };
+  return { open, addedSubjects, oldestSubmittedAt: oldest._min.createdAt };
 }
 
 /**

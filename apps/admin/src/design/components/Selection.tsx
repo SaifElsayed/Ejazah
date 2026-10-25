@@ -91,6 +91,8 @@ export interface FilterChipsProps {
   readonly chips: readonly {
     readonly key: string;
     readonly content: Content;
+    /** What pressing it removes («إزالة فلتر التاريخ», B14d); the content when absent. */
+    readonly accessibilityLabel?: string;
     readonly onRemove: Press;
   }[];
   readonly onClearAll: Press;
@@ -102,7 +104,16 @@ export function FilterChips({ chips, onClearAll }: FilterChipsProps) {
   return (
     <div className="filter-chips" role="group" aria-label={t('admin.common.a11y.activeFilters')}>
       {chips.map((chip) => (
-        <Chip key={chip.key} content={chip.content} selected removable onPress={chip.onRemove} />
+        <Chip
+          key={chip.key}
+          content={chip.content}
+          selected
+          removable
+          onPress={chip.onRemove}
+          {...(chip.accessibilityLabel === undefined
+            ? {}
+            : { accessibilityLabel: chip.accessibilityLabel })}
+        />
       ))}
       <button type="button" className="link link--muted" onClick={onClearAll}>
         {t('admin.common.action.clearAll')}

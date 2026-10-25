@@ -25,3 +25,6 @@ export function todayIn(zone: string, now: Date = new Date()): string {
     parts.find((candidate) => candidate.type === type)?.value ?? '';
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
+
+/** The calendar day so many days before a day (`YYYY-MM-DD`): the audit's last days (B14d). */
+export { calendarDaysBefore as daysBefore } from '@ijazah/time/calendar';

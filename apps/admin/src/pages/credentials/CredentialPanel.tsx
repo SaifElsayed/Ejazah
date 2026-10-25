@@ -75,6 +75,7 @@ export function CredentialPanel({ credentialId }: { readonly credentialId: strin
         key={`${detail.credentialId}-${detail.status}`}
         detail={detail}
         onMoved={() => setMoved(true)}
+        onDeciding={() => setMoved(false)}
       />
     </div>
   );
@@ -83,9 +84,12 @@ export function CredentialPanel({ credentialId }: { readonly credentialId: strin
 function Transcription({
   detail,
   onMoved,
+  onDeciding,
 }: {
   readonly detail: CredentialDetail;
   readonly onMoved: () => void;
+  /** A new decision begins: the last one's sentence goes (B14c review, round 2). */
+  readonly onDeciding: () => void;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -99,7 +103,11 @@ function Transcription({
   const [unfolded, setUnfolded] = useState(false);
   const [request, setRequest] = useState('');
   const [reason, setReason] = useState('');
-  const [deciding, setDeciding] = useState<CredentialDecision | null>(null);
+  const [deciding, setDecidingState] = useState<CredentialDecision | null>(null);
+  const setDeciding = (next: CredentialDecision | null) => {
+    if (next !== null) onDeciding();
+    setDecidingState(next);
+  };
 
   const teacher = detail.teacher.displayName;
   const subject = locale === 'ar' ? detail.subject.nameAr : detail.subject.nameEn;

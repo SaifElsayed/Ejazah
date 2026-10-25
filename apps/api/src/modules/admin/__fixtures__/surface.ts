@@ -84,7 +84,7 @@ export function surfaceOf(
       audit,
       queues: {
         applications: async () => ({ open: 0, oldestSubmittedAt: null, waitingOnApplicant: 0 }),
-        credentials: async () => ({ open: 0, addedSubjects: 0 }),
+        credentials: async () => ({ open: 0, addedSubjects: 0, oldestSubmittedAt: null }),
       },
       now: world.clock.now,
     }),

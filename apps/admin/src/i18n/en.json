@@ -116,13 +116,32 @@
         "removeDateFilter": "Remove date filter"
       },
       "actions": {
+        "adminAdd": "Add an administrator",
+        "adminDisable": "Disable an administrator",
+        "adminRegenerateRecoveryCodes": "Regenerate recovery codes",
+        "adminResetMfa": "Reset two-step verification",
+        "adminSignOut": "Sign out",
+        "applicationApprove": "Approve application",
+        "applicationBan": "Ban applicant",
         "approveTeacherCredential": "Approve teacher ijazah",
+        "credentialCorrect": "Correct an ijazah transcription",
+        "credentialReject": "Reject ijazah",
+        "credentialRequestDocument": "Request another ijazah file",
         "dismissReport": "Dismiss report",
+        "documentView": "View a document",
         "issueIjazahOnRequest": "Issue ijazah on teacher's request",
         "recordVerificationCall": "Record verification call",
         "rejectApplication": "Reject application",
         "removeReviewComment": "Remove review comment",
-        "requestMoreInfo": "Request more information"
+        "requestMoreInfo": "Request more information",
+        "teacherApprove": "Approve teacher",
+        "teacherBan": "Ban teacher",
+        "teacherReinstate": "Reinstate teacher",
+        "teacherRevoke": "Revoke teacher approval",
+        "teacherSuspend": "Suspend teacher",
+        "userRequireIdentity": "Require proof of identity",
+        "verificationRequestAccept": "Accept identity document",
+        "verificationRequestRequestAnother": "Request another identity document"
       },
       "clearAll": "Clear all",
       "columns": {
@@ -152,13 +171,56 @@
         "text": "Widen the period or remove a filter.",
         "title": "No entries match the filters"
       },
+      "emptyAll": {
+        "text": "Every binding decision an administrator takes appears here.",
+        "title": "No entries yet"
+      },
+      "fields": {
+        "accountStatus": "Account status",
+        "chain": "Chain",
+        "completedOn": "Call date",
+        "documentId": "Document",
+        "holderName": "Holder name",
+        "isActive": "Account enabled",
+        "needed": "Needed",
+        "outcome": "Outcome",
+        "reasonChoice": "Chosen reason",
+        "requestId": "Request",
+        "riwaya": "Riwaya",
+        "status": "Status",
+        "subjectIds": "Subjects",
+        "tariq": "Tariq",
+        "verificationStatus": "Verification status"
+      },
       "lede": "Every binding decision an admin takes, with its reason and what was before and after. The log is append-only.",
       "pagerSummary": "{shown} of {total} · last {days} days · {city} time",
+      "pagerSummaryAll": "{shown} of {total} · {city} time",
       "search": {
         "label": "Search",
         "placeholder": "Target or reason"
       },
-      "title": "Audit log"
+      "targetNamed": "{type} · {name}",
+      "targets": {
+        "admin": "Administrator",
+        "credential": "Ijazah",
+        "document": "Document",
+        "setting": "Setting",
+        "teacherApplication": "Application",
+        "user": "User",
+        "verificationRequest": "Identity request"
+      },
+      "title": "Audit log",
+      "values": {
+        "no": "No",
+        "none": "—",
+        "verification": {
+          "approved": "Approved",
+          "pending": "In review",
+          "rejected": "Rejected",
+          "revoked": "Approval revoked"
+        },
+        "yes": "Yes"
+      }
     },
     "chatLog": {
       "a11y": {
@@ -1161,11 +1223,12 @@
       "latestActions": "Latest actions",
       "openQueues": "Open queues",
       "queue": {
-        "addedSubjectThenOldest": "{added, plural, one {One for an added subject} other {# for added subjects}} · {days, plural, one {oldest # day ago} other {oldest # days ago}}",
+        "added": "{added, plural, one {One for an added subject} other {# for added subjects}}",
         "arrivedYesterday": "Arrived yesterday",
         "compensationHint": "Opened automatically when an enrollment ends before all its sessions",
         "oldest": "{days, plural, one {Oldest # day ago} other {Oldest # days ago}}",
-        "oldestWithWaiting": "{days, plural, one {Oldest # day ago} other {Oldest # days ago}} · {waiting, plural, one {one waiting on the applicant} other {# waiting on the applicant}}"
+        "oldestToday": "Oldest from today",
+        "waiting": "{waiting, plural, one {one waiting on the applicant} other {# waiting on the applicant}}"
       },
       "subtitle": "{date} · {city} time",
       "title": "Overview"

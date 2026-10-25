@@ -8,6 +8,7 @@ import { cityOf } from '@ijazah/time/cities';
 import { formattingTag, type Locale } from '../i18n';
 
 const ENGLISH_DATES = 'en-GB-u-ca-gregory-nu-latn';
+const ENGLISH_TIMES = 'en-US-u-ca-gregory-nu-latn';
 
 const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -39,4 +40,27 @@ export function dayMonthYear(value: string, locale: Locale, zone: string): strin
 /** A zone as its city in `locale`; the zone itself when the list holds no city for it. */
 export function cityName(zone: string, locale: Locale): string {
   return cityOf(zone, locale) ?? zone;
+}
+
+/** «الخميس 15 أكتوبر 2026»: the home's day (B14d). */
+export function weekdayDate(value: string, locale: Locale, zone: string): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? ENGLISH_DATES : formattingTag(locale), {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: zone,
+  })
+    .format(new Date(value))
+    .replace(/[،,]/u, '');
+}
+
+/** «11:20 ص», «5:40 PM» as the English boards print it: a moment's time of day in the zone (B14d). */
+export function timeOfDay(value: string, locale: Locale, zone: string): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? ENGLISH_TIMES : formattingTag(locale), {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: zone,
+  }).format(new Date(value));
 }
