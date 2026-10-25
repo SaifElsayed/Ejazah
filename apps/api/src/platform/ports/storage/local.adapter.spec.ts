@@ -16,13 +16,17 @@ afterAll(() => {
   for (const root of roots) rmSync(root, { recursive: true, force: true });
 });
 
-function store(encryptionKey = ENCRYPTION_KEY): { storage: LocalStorageAdapter; root: string } {
+function store(
+  encryptionKey = ENCRYPTION_KEY,
+  origin?: string,
+): { storage: LocalStorageAdapter; root: string } {
   const root = mkdtempSync(join(tmpdir(), 'ijazah-local-'));
   roots.push(root);
   const storage = new LocalStorageAdapter({
     root,
     linkKey: deriveLinkKey(encryptionKey),
     now: () => ISSUED,
+    ...(origin === undefined ? {} : { origin }),
   });
   return { storage, root };
 }
@@ -61,6 +65,18 @@ describe('the local storage (T116, FR-055)', () => {
 
     expect(link.startsWith('/files/certificates/c-1.pdf?')).toBe(true);
     expect(storage.verifyLink(link)).toBe('certificates/c-1.pdf');
+  });
+
+  it('a link is absolute under API_PUBLIC_ORIGIN, and verifies whole or by its path (T095)', async () => {
+    const { storage } = store(ENCRYPTION_KEY, 'http://localhost:3000');
+    const link = await storage.temporaryLink('certificates/c-1.pdf', 60);
+
+    expect(link.startsWith('http://localhost:3000/files/certificates/c-1.pdf?')).toBe(true);
+    expect(storage.verifyLink(link)).toBe('certificates/c-1.pdf');
+    expect(storage.verifyLink(link.slice('http://localhost:3000'.length))).toBe(
+      'certificates/c-1.pdf',
+    );
+    expect(storage.verifyLink(link.replace('localhost:3000', 'elsewhere.example'))).toBeUndefined();
   });
 
   it('refuses a link whose key, expiry or signature was changed', async () => {

@@ -1,10 +1,11 @@
 // T071 (FR-160 to FR-162): the applications queue against its board, through the router, in both
 // languages. The three tabs with the counts `home.summary` gives (in review is its `open`, waiting
-// on the applicant its `waitingOnApplicant`, the lede both; decided uncounted); the search by name or email, sent once the typing stops and never
-// twice for the same text; the table, its pages and the selected row's detail; the call record by
-// its day in the panel's zone; approval held until FR-161's three conditions hold, each one said,
-// and confirmed with an optional note; the decision dialog's three kinds; and the actions each state
-// allows. The documents' thumbnails are shown and open nothing until the viewer lands (B14b-2).
+// on the applicant its `waitingOnApplicant`, the lede both; decided uncounted); the search by name
+// or email, sent once the typing stops and never twice for the same text; the table, its pages and
+// the selected row's detail; the call record by its day in the panel's zone; approval held until
+// FR-161's three conditions hold, each one said, and confirmed with an optional note; the decision
+// dialog's three kinds; and the actions each state allows. The documents and the identity request
+// are `identity.spec.tsx`'s (B14b-2).
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -52,6 +53,7 @@ function detailOf(row: typeof rowA | typeof rowB, more: Record<string, unknown> 
     ...row,
     qualificationSummary: 'إجازة في حفظ القرآن بالسند المتصل.',
     timezoneCity: 'Africa/Cairo',
+    accountStatus: 'active',
     identityDocument: {
       documentId: '0193a6f0-0000-7000-8000-0000000000d0',
       type: 'national_id',

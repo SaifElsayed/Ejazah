@@ -235,6 +235,11 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.accountStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "banned", "suspended", "verification_required"]
+          },
           "$.call": { "required": true, "type": "object" },
           "$.call.completedOn": { "type": "string" },
           "$.call.notes": { "type": "string" },

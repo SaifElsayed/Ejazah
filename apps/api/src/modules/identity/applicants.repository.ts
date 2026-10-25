@@ -35,6 +35,8 @@ export interface ApplicantRow {
 export interface ApplicantDetail extends ApplicantRow {
   readonly qualificationSummary: string;
   readonly timezone: string;
+  /** The account's standing, which the panel's require-ID reads (B14b-2). */
+  readonly accountStatus: 'active' | 'suspended' | 'verification_required' | 'banned';
   readonly identityDocumentId: string | null;
   readonly identityDocumentType: 'national_id' | 'passport' | null;
   readonly callOutcome: 'suitable' | 'unsuitable' | null;
@@ -108,6 +110,7 @@ export async function readApplicant(tx: Client, userId: string): Promise<Applica
           gender: true,
           dateOfBirth: true,
           timezone: true,
+          accountStatus: true,
         },
       },
     },
@@ -117,6 +120,7 @@ export async function readApplicant(tx: Client, userId: string): Promise<Applica
     ...rowOf(row),
     qualificationSummary: row.qualificationSummary,
     timezone: row.user.timezone,
+    accountStatus: row.user.accountStatus,
     identityDocumentId: row.identityDocumentId,
     identityDocumentType: row.identityDocumentType,
     callOutcome: row.verificationCallOutcome,

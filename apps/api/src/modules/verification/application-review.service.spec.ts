@@ -137,9 +137,15 @@ describe('get', () => {
       identityDocument: { type: 'national_id', uploadedAt: SUBMITTED.toISOString() },
       call: { completedOn: '2026-10-20', outcome: 'suitable', notes: 'تحقّقت من الهوية' },
       identityRequest: { requestId, reason: 'اشتباه في الهوية' },
+      accountStatus: 'active',
     });
     expect(detail.credentials.map((credential) => credential.subject)).toEqual([HAFS]);
     expect(detail).not.toHaveProperty('note');
+  });
+
+  it("answers the account's standing, which require-ID reads (B14b-2)", async () => {
+    const userId = store.plant({ accountStatus: 'verification_required' });
+    expect((await service.get(TX, userId)).accountStatus).toBe('verification_required');
   });
 
   it('answers NOT_FOUND for no application', async () => {

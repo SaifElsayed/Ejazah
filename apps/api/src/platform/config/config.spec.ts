@@ -384,6 +384,15 @@ describe('loadConfig (T015, FR-039)', () => {
     expect(() => loadConfig(s3Env)).not.toThrow(/S3_BUCKET/);
   });
 
+  it('accepts API_PUBLIC_ORIGIN only as a bare origin (T095)', () => {
+    expect(
+      loadConfig({ ...validEnv, API_PUBLIC_ORIGIN: 'http://localhost:3000' }).API_PUBLIC_ORIGIN,
+    ).toBe('http://localhost:3000');
+    expect(() => loadConfig({ ...validEnv, API_PUBLIC_ORIGIN: 'http://localhost:3000/' })).toThrow(
+      /API_PUBLIC_ORIGIN/,
+    );
+  });
+
   it('accepts PUBLIC_WEBHOOK_ORIGIN only as a bare origin', () => {
     expect(
       loadConfig({ ...validEnv, PUBLIC_WEBHOOK_ORIGIN: 'https://x.example' }).PUBLIC_WEBHOOK_ORIGIN,

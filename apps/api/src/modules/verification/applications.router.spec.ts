@@ -41,6 +41,7 @@ function surface() {
       status: 'in_review',
       qualificationSummary: 'إجازة في حفص',
       timezoneCity: 'Africa/Cairo',
+      accountStatus: 'active',
       identityDocument: {
         documentId: '0199d0a0-0000-7000-8000-0000000000d1',
         type: 'national_id',

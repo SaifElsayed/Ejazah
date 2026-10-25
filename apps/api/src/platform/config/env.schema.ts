@@ -141,6 +141,9 @@ const envObject = z.object({
   // Storage is the one port with two real implementations from day one (FR-055).
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_ROOT: nonEmpty.default('.storage'),
+  // T095: the API's own origin, which local storage's links start with so a contract's `z.url()`
+  // takes them and the panel can fetch them. Unset, a local link stays relative.
+  API_PUBLIC_ORIGIN: origin.optional(),
   S3_ENDPOINT: httpUrl.optional(),
   S3_BUCKET: nonEmpty.optional(),
   S3_REGION: nonEmpty.optional(),
@@ -226,6 +229,7 @@ const envKeyKinds = {
   ENCRYPTION_KEY_PREVIOUS: 'platform',
   STORAGE_DRIVER: 'platform',
   STORAGE_LOCAL_ROOT: 'platform',
+  API_PUBLIC_ORIGIN: 'platform',
   S3_ENDPOINT: 'provider',
   S3_BUCKET: 'provider',
   S3_REGION: 'provider',

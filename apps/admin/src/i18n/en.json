@@ -64,6 +64,11 @@
         "credentials": "Ijazahs · one PDF per subject",
         "footer": "Approve unlocks once the verification call record is saved: date, outcome and notes. The applicant receives the decision with your note, and it is recorded in the audit log.",
         "identity": "Identity · view only",
+        "identityRequest": {
+          "requested": "Requested {date}",
+          "title": "Open identity request",
+          "waiting": "No document has been uploaded yet."
+        },
         "meta": "{gender} · {city} · applied {date}",
         "outcome": "Outcome",
         "reject": "Reject",
@@ -745,15 +750,18 @@
         "a11y": {
           "about": "About the document",
           "back": "Back to users",
-          "page": "{documentType}, front side",
+          "page": "{documentType}, page {page}",
           "pages": "Document pages"
         },
         "accept": "Accept the document and reactivate booking",
         "acceptEffect": "Accepting makes the account active again, and booking is available to them anew.",
         "afterDecision": "After the decision",
+        "close": "Close",
         "documentType": "Document type",
         "fileCaption": "{file} · page {page} of {total}",
         "footer": "Documents are view only: not downloaded and not edited. Your decision is recorded under your name in the audit log.",
+        "footerViewOnly": "Documents are view only: not downloaded and not edited. Opening one is recorded under your name in the audit log.",
+        "loadError": "The document could not be opened. Try again.",
         "noteLabel": "Note to the account holder (required to request another document)",
         "notePlaceholder": "For example: the photo of the back side is unclear",
         "openReport": "Open the report",
@@ -767,6 +775,7 @@
         "requested": "Requested",
         "requestedValue": "{date} · {admin}",
         "subtitle": "Requested by the administration from {name} · uploaded {date} · view only",
+        "subtitleApplication": "From the application of {name} · view only",
         "uploaded": "Uploaded",
         "uploadedValue": "{date} · {time}"
       },

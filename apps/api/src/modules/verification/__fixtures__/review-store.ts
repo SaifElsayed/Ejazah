@@ -47,6 +47,7 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       dateOfBirth?: Date;
       submittedAt?: Date;
       callRecorded?: boolean;
+      accountStatus?: ApplicantDetail['accountStatus'];
       credentials?: readonly { subject: typeof HAFS; status: Status }[];
     } = {},
   ): string {
@@ -63,6 +64,7 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       callCompletedOn: values.callRecorded === true ? new Date('2026-10-20T00:00:00Z') : null,
       qualificationSummary: 'إجازة في حفص',
       timezone: 'Africa/Cairo',
+      accountStatus: values.accountStatus ?? 'active',
       identityDocumentId: randomUUID(),
       identityDocumentType: 'national_id',
       callOutcome: values.callRecorded === true ? 'suitable' : null,

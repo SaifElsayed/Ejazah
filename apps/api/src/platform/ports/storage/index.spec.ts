@@ -24,6 +24,13 @@ describe('storage selection (T116, FR-055)', () => {
     expect(createStoragePort({ ...base, ...s3Values })).toBeInstanceOf(LocalStorageAdapter);
   });
 
+  it('hands local storage API_PUBLIC_ORIGIN, so its links are absolute (T095)', async () => {
+    const storage = createStoragePort({ ...base, API_PUBLIC_ORIGIN: 'http://localhost:3000' });
+    await expect(storage.temporaryLink('documents/a.pdf', 60)).resolves.toMatch(
+      /^http:\/\/localhost:3000\/files\/documents\/a\.pdf\?/,
+    );
+  });
+
   it('serves remote storage when STORAGE_DRIVER is s3', () => {
     expect(createStoragePort({ ...base, ...s3Values, STORAGE_DRIVER: 's3' })).toBeInstanceOf(
       S3StorageAdapter,
