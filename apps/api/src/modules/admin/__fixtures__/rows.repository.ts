@@ -73,8 +73,7 @@ export class SpecAdminRows {
         lockedUntilAt,
         invitedAt,
         invitedByAdminId,
-        passwordSetAt:
-          passwordSetAt !== undefined ? passwordSetAt : passwordHash === null ? null : now,
+        passwordSetAt: passwordSetAt !== undefined ? passwordSetAt : passwordHash === null ? null : now,
       },
     });
     return id;
@@ -85,10 +84,7 @@ export class SpecAdminRows {
   }
 
   sessions(adminId: string) {
-    return this.#database.adminSession.findMany({
-      where: { adminId },
-      orderBy: { issuedAt: 'asc' },
-    });
+    return this.#database.adminSession.findMany({ where: { adminId }, orderBy: { issuedAt: 'asc' } });
   }
 
   recoveryCodes(adminId: string) {

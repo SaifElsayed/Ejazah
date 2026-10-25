@@ -204,6 +204,42 @@ describe('regenerateRecoveryCodes asks the current second factor (T096)', () => 
     );
     expect(answer.code).toBe('CODE_INVALID');
   });
+
+  it('locks again once a lock has run out, as the sign-in does (B14d-2 review, finding 1)', async () => {
+    const admin = await world.createAdministrator();
+    const wrongCode = async () =>
+      (await world.currentCode(admin.adminId)) === '000000' ? '111111' : '000000';
+    const guess = async () => {
+      const wrong = await wrongCode();
+      await refusal(
+        inTransaction(database, (tx) =>
+          world.admins.regenerateRecoveryCodes(tx, admin.adminId, wrong),
+        ),
+      );
+    };
+    for (let attempt = 0; attempt < 5; attempt += 1) await guess();
+    expect((await world.rows.administrator(admin.adminId)).lockedUntilAt).not.toBeNull();
+    world.clock.advance(16 * 60);
+    for (let attempt = 0; attempt < 5; attempt += 1) await guess();
+    const row = await world.rows.administrator(admin.adminId);
+    expect(row.lockedUntilAt?.getTime()).toBeGreaterThan(world.clock.now().getTime());
+  });
+
+  it('forgets the failed codes once a right one is given (B14d-2 review, m1)', async () => {
+    const admin = await world.createAdministrator();
+    const wrong = (await world.currentCode(admin.adminId)) === '000000' ? '111111' : '000000';
+    await refusal(
+      inTransaction(database, (tx) =>
+        world.admins.regenerateRecoveryCodes(tx, admin.adminId, wrong),
+      ),
+    );
+    expect((await world.rows.administrator(admin.adminId)).failedSignInCount).toBe(1);
+    const right = await world.currentCode(admin.adminId);
+    await inTransaction(database, (tx) =>
+      world.admins.regenerateRecoveryCodes(tx, admin.adminId, right),
+    );
+    expect((await world.rows.administrator(admin.adminId)).failedSignInCount).toBe(0);
+  });
 });
 
 describe('me', () => {

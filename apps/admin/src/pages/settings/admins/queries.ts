@@ -3,8 +3,8 @@
 // change nothing the page shows but the count left, so they read it again too.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useAdmin } from '../../lib/admin-context';
-import type { AdminClient } from '../../lib/client';
+import { useAdmin } from '../../../lib/admin-context';
+import type { AdminClient } from '../../../lib/client';
 
 type Api = AdminClient['api'];
 export type AdminsTab = Parameters<Api['admins']['list']['query']>[0]['tab'];

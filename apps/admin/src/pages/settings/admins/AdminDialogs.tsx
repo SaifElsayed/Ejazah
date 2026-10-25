@@ -5,13 +5,13 @@
 // factor (T096), shown once, the dialog closing once they are saved.
 import { useState } from 'react';
 
-import { Banner, Dialog, Field, Icon, IconTile, Input, Otp } from '../../design/components';
-import type { IconName } from '../../design/icons';
-import { type MessageKey, useLocale, useT } from '../../i18n';
-import { errorCodeOf, errorDetailsOf } from '../../lib/client';
-import { dayMonthYear } from '../../lib/format';
-import { panelTimeZone } from '../../lib/zone';
-import { RecoveryCodes } from '../mfa/RecoveryCodes';
+import { Banner, Dialog, Field, Icon, IconTile, Input, Otp } from '../../../design/components';
+import type { IconName } from '../../../design/icons';
+import { type MessageKey, useLocale, useT } from '../../../i18n';
+import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
+import { dayMonthYear } from '../../../lib/format';
+import { panelTimeZone } from '../../../lib/zone';
+import { RecoveryCodes } from '../../mfa/RecoveryCodes';
 import { type AdminRow, useAdminActions } from './queries';
 
 const CODE_LENGTH = 6;

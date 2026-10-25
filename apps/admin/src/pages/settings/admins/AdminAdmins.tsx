@@ -23,12 +23,12 @@ import {
   Skeleton,
   Split,
   Toolbar,
-} from '../../design/components';
-import { useLocale, useT } from '../../i18n';
-import { dayMonth, dayMonthYear, timeOfDay } from '../../lib/format';
-import { panelTimeZone } from '../../lib/zone';
-import { useSettled } from '../applications/queries';
-import { initialsOf } from '../applications/initials';
+} from '../../../design/components';
+import { useLocale, useT } from '../../../i18n';
+import { dayMonth, dayMonthYear, timeOfDay } from '../../../lib/format';
+import { panelTimeZone } from '../../../lib/zone';
+import { useSettled } from '../../applications/queries';
+import { initialsOf } from '../../applications/initials';
 import {
   AddAdminDialog,
   DisableAdminDialog,
@@ -132,7 +132,10 @@ export function AdminAdmins() {
                 tone={row.mfaEnrolled ? 'success' : 'warning'}
               />
             ),
-            lastSignIn: row.lastSignInAt === undefined ? '' : moment(row.lastSignInAt),
+            lastSignIn:
+              row.lastSignInAt === undefined
+                ? t('admin.admins.detail.neverSignedIn')
+                : moment(row.lastSignInAt),
             added: row.invitedAt === undefined ? '' : dayMonthYear(row.invitedAt, locale, zone),
           },
         }))}
@@ -259,7 +262,7 @@ function AdminDetail({
           </>
         )
       }
-      {...(disabled ? {} : { note: t('admin.admins.detail.footer') })}
+      {...(disabled || admin.self ? {} : { note: t('admin.admins.detail.footer') })}
     >
       <KeyValue
         items={[

@@ -53,8 +53,7 @@ async function refusal(work: Promise<unknown>): Promise<DomainError> {
     () => undefined,
     (thrown: unknown) => thrown,
   );
-  if (!(error instanceof DomainError))
-    throw new Error(`expected a DomainError, got ${String(error)}`);
+  if (!(error instanceof DomainError)) throw new Error(`expected a DomainError, got ${String(error)}`);
   return error;
 }
 
@@ -269,9 +268,7 @@ describe('verifyMfa', () => {
     const admin = await world.createAdministrator();
     const token = await verified(admin);
     const code = await world.currentCode(admin.adminId);
-    expect((await refusal(world.auth.verifyMfa('unknown', code))).code).toBe(
-      'ADMIN_SIGN_IN_FAILED',
-    );
+    expect((await refusal(world.auth.verifyMfa('unknown', code))).code).toBe('ADMIN_SIGN_IN_FAILED');
     expect((await refusal(world.auth.verifyMfa(token, code))).code).toBe('ADMIN_SIGN_IN_FAILED');
   });
 });
@@ -373,9 +370,7 @@ describe('recovery codes', { timeout: 15_000 }, () => {
   it('a wrong code is CODE_INVALID and counts', async () => {
     const { admin } = await enrolledWithCodes();
     const { sessionToken } = await world.auth.signIn(admin.email, admin.password);
-    expect((await refusal(world.auth.recover(sessionToken, '0000000000'))).code).toBe(
-      'CODE_INVALID',
-    );
+    expect((await refusal(world.auth.recover(sessionToken, '0000000000'))).code).toBe('CODE_INVALID');
     expect((await refusal(world.auth.recover(sessionToken, 'short'))).code).toBe('CODE_INVALID');
     expect((await world.rows.administrator(admin.adminId)).failedSignInCount).toBe(2);
   });
@@ -474,9 +469,9 @@ describe('setPassword: the invite link, single use by password_set_at', () => {
       'not-a-token',
     ];
     for (const candidate of altered) {
-      expect(
-        (await refusal(world.auth.setPassword(candidate, 'a new admin passphrase'))).code,
-      ).toBe('INVITE_INVALID');
+      expect((await refusal(world.auth.setPassword(candidate, 'a new admin passphrase'))).code).toBe(
+        'INVITE_INVALID',
+      );
     }
     const otherKey = new AdminInvites({
       database,
@@ -488,9 +483,9 @@ describe('setPassword: the invite link, single use by password_set_at', () => {
     const foreign = await otherKey.prepare(admin.adminId);
     const foreignToken = new URL(foreign?.link ?? 'https://x.invalid').hash.replace('#token=', '');
     expect(foreignToken).not.toBe('');
-    expect(
-      (await refusal(world.auth.setPassword(foreignToken, 'a new admin passphrase'))).code,
-    ).toBe('INVITE_INVALID');
+    expect((await refusal(world.auth.setPassword(foreignToken, 'a new admin passphrase'))).code).toBe(
+      'INVITE_INVALID',
+    );
   });
 
   it('refuses a disabled administrator’s link', async () => {
@@ -504,9 +499,7 @@ describe('setPassword: the invite link, single use by password_set_at', () => {
 
   it('refuses a breached password with PASSWORD_WEAK and keeps the link usable', async () => {
     const { token } = await invited();
-    expect((await refusal(world.auth.setPassword(token, 'password123'))).code).toBe(
-      'PASSWORD_WEAK',
-    );
+    expect((await refusal(world.auth.setPassword(token, 'password123'))).code).toBe('PASSWORD_WEAK');
     await world.auth.setPassword(token, 'a new admin passphrase');
   });
 });

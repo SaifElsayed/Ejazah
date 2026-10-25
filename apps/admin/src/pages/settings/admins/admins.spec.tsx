@@ -9,10 +9,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
-import { dayMonth, dayMonthYear, timeOfDay } from '../../lib/format';
-import { panelTimeZone } from '../../lib/zone';
-import { inBothLocales, mutation, query, refusal, renderApp } from '../../test/app-harness';
+import { getLocale, setLocale, translate, type MessageKey } from '../../../i18n';
+import { dayMonth, dayMonthYear, timeOfDay } from '../../../lib/format';
+import { panelTimeZone } from '../../../lib/zone';
+import { inBothLocales, mutation, query, refusal, renderApp } from '../../../test/app-harness';
 
 afterEach(() => setLocale('ar'));
 
@@ -147,6 +147,8 @@ describe('AdminAdmins (FR-174)', () => {
         expect(screen.getByText(`· ${t('admin.admins.you')}`)).toBeTruthy();
         expect(screen.getAllByText(t('admin.admins.mfa.enabled'))).toHaveLength(2);
         expect(screen.getByText(t('admin.admins.mfa.notSetUp'))).toBeTruthy();
+        // One never signed in says so in the table too (B14d-2 review, m4).
+        expect(screen.getByText(t('admin.admins.detail.neverSignedIn'))).toBeTruthy();
         expect(
           screen.getByText(
             `${dayMonth(other.lastSignInAt, locale, zone)} · ${timeOfDay(other.lastSignInAt, locale, zone)}`,
@@ -212,6 +214,8 @@ describe('AdminAdmins (FR-174)', () => {
     expect(detail.queryByRole('button', { name: ar('admin.admins.detail.resetMfa') })).toBeNull();
     expect(detail.queryByRole('button', { name: ar('admin.admins.detail.disable') })).toBeNull();
     expect(detail.getByRole('button', { name: ar('admin.admins.recovery.action') })).toBeTruthy();
+    // The reason note belongs to the actions that ask one (B14d-2 review, m3).
+    expect(detail.queryByText(ar('admin.admins.detail.footer'))).toBeNull();
   });
 
   it('offers nothing on a disabled account', async () => {

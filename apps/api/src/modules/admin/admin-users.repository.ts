@@ -134,6 +134,11 @@ export class AdminUsersRepository {
     });
   }
 
+  /** Forgets the failures a right second factor followed (T096: new recovery codes). */
+  async clearFailures(tx: Writer, id: string): Promise<void> {
+    await tx.adminUser.updateMany({ where: { id }, data: { failedSignInCount: 0 } });
+  }
+
   /**
    * Counts one failure and, where the count reaches `attempts` with no lock standing, locks until
    * `lockUntil`. The increment is the database's, so failures arriving together are all counted.

@@ -139,6 +139,11 @@ export class AdminsService {
     if (admin.lockedUntilAt !== null && admin.lockedUntilAt > this.#now()) {
       throw new DomainError('CODE_INVALID');
     }
+    // A lock that has run out is cleared with its count, as the sign-in clears it (R-107), so the
+    // next failures can lock again (B14d-2 review, finding 1).
+    if (admin.lockedUntilAt !== null) {
+      await this.#administrators.clearExpiredLock(this.#database, admin.id, this.#now());
+    }
     const secret = this.#cipher.decrypt(admin.mfaSecretEncrypted, MFA_SECRET_COLUMN, admin.id);
     const accepted = await verifyTotp(secret, code, this.#now(), admin.mfaLastAcceptedStep);
     if (accepted === null) {
@@ -162,6 +167,8 @@ export class AdminsService {
     ) {
       throw new DomainError('CODE_INVALID');
     }
+    // A right code forgets the failed ones, as a passed sign-in does (B14d-2 review, m1).
+    await this.#administrators.clearFailures(tx, admin.id);
     const count = await this.#settings.read(RECOVERY_CODE_COUNT_SETTING, positiveWhole);
     const { codes, hashes } = await drawRecoveryCodes(this.#recoveryHasher, count);
     await this.#recoveryCodes.replace(tx, adminId, hashes);

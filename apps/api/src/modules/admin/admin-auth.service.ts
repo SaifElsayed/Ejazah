@@ -155,25 +155,13 @@ export class AdminAuthService {
   async verifyMfa(sessionToken: string, code: string): Promise<void> {
     const { sessionId, admin } = await this.#waiting(sessionToken);
     if (admin.mfaEnrolledAt === null) throw new DomainError('MFA_SETUP_REQUIRED');
-    const accepted = await verifyTotp(
-      this.#secretOf(admin),
-      code,
-      this.#now(),
-      admin.mfaLastAcceptedStep,
-    );
+    const accepted = await verifyTotp(this.#secretOf(admin), code, this.#now(), admin.mfaLastAcceptedStep);
     if (accepted === null) {
       await this.#countFailure(admin.id);
       throw codeInvalid();
     }
     await this.#transactions.run(async (tx) => {
-      if (
-        !(await this.#administrators.acceptStep(
-          tx,
-          admin.id,
-          admin.mfaLastAcceptedStep,
-          accepted.step,
-        ))
-      ) {
+      if (!(await this.#administrators.acceptStep(tx, admin.id, admin.mfaLastAcceptedStep, accepted.step))) {
         throw codeInvalid();
       }
       await this.#sessions.markVerified(sessionId, tx);
@@ -210,9 +198,7 @@ export class AdminAuthService {
     if (admin.mfaEnrolledAt !== null) throw new DomainError('FORBIDDEN');
     const secret = generateTotpSecret();
     const encrypted = this.#cipher.encrypt(secret, MFA_SECRET_COLUMN, admin.id);
-    if (
-      !(await this.#administrators.replaceUnenrolledSecret(this.#database, admin.id, encrypted))
-    ) {
+    if (!(await this.#administrators.replaceUnenrolledSecret(this.#database, admin.id, encrypted))) {
       throw new DomainError('FORBIDDEN');
     }
     return { otpauthUri: totpUri({ account: admin.email, secret }), manualKey: secret };
@@ -225,12 +211,7 @@ export class AdminAuthService {
   ): Promise<{ readonly recoveryCodes: string[] }> {
     const { sessionId, admin } = await this.#waiting(sessionToken);
     if (admin.mfaEnrolledAt !== null) throw new DomainError('FORBIDDEN');
-    const accepted = await verifyTotp(
-      this.#secretOf(admin),
-      code,
-      this.#now(),
-      admin.mfaLastAcceptedStep,
-    );
+    const accepted = await verifyTotp(this.#secretOf(admin), code, this.#now(), admin.mfaLastAcceptedStep);
     if (accepted === null) {
       await this.#countFailure(admin.id);
       throw codeInvalid();
@@ -253,9 +234,7 @@ export class AdminAuthService {
     const admin = await this.#invited(inviteToken);
     if (isBreached(password)) throw new DomainError('PASSWORD_WEAK');
     const passwordHash = await this.#passwords.hash(password);
-    if (
-      !(await this.#administrators.setPassword(this.#database, admin.id, passwordHash, this.#now()))
-    ) {
+    if (!(await this.#administrators.setPassword(this.#database, admin.id, passwordHash, this.#now()))) {
       throw new DomainError('INVITE_INVALID');
     }
   }
@@ -270,12 +249,7 @@ export class AdminAuthService {
     const admin = z.uuid().safeParse(read.adminId).success
       ? await this.#administrators.findById(read.adminId)
       : null;
-    if (
-      admin === null ||
-      !admin.isActive ||
-      admin.passwordSetAt !== null ||
-      admin.invitedAt === null
-    ) {
+    if (admin === null || !admin.isActive || admin.passwordSetAt !== null || admin.invitedAt === null) {
       throw new DomainError('INVITE_INVALID');
     }
     const hours = await this.#settings.read(INVITE_TTL_SETTING, positiveWhole);

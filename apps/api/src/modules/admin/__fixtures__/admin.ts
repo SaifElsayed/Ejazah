@@ -12,11 +12,7 @@ import type { z } from 'zod';
 import { ColumnCipher } from '../../../platform/crypto/encryption.js';
 import { hashPassword } from '../../../platform/crypto/hashing.js';
 import { generateTotpSecret, totpCode } from '../../../platform/crypto/totp.js';
-import {
-  openDatabase,
-  type Database,
-  type Transaction,
-} from '../../../platform/db/prisma.repository.js';
+import { openDatabase, type Database, type Transaction } from '../../../platform/db/prisma.repository.js';
 import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
 import { MemorySingleUseMarks } from '../../../platform/redis/single-use-marks.fixtures.js';
 import { SettingError, type SettingsReader } from '../../../platform/settings/settings-reader.js';
@@ -64,11 +60,7 @@ export function openSpecDatabase(): Database {
   if (url === undefined || url === '') {
     throw new Error('admin specs: DATABASE_URL is not set (quickstart §1)');
   }
-  return openDatabase(url, {
-    poolMax: 4,
-    statementTimeoutMs: 30_000,
-    idleInTransactionTimeoutMs: 30_000,
-  });
+  return openDatabase(url, { poolMax: 4, statementTimeoutMs: 30_000, idleInTransactionTimeoutMs: 30_000 });
 }
 
 /** A clock the spec moves. */
@@ -210,10 +202,7 @@ export function buildAdmin(
 export type AdminWorld = ReturnType<typeof buildAdmin>;
 
 /** Runs `work` in one transaction, as the administrator caller kind does. */
-export function inTransaction<T>(
-  database: Database,
-  work: (tx: Transaction) => Promise<T>,
-): Promise<T> {
+export function inTransaction<T>(database: Database, work: (tx: Transaction) => Promise<T>): Promise<T> {
   return database.$transaction(work);
 }
 
