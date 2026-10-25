@@ -48,7 +48,10 @@ describe('openPdf', () => {
       'pdfjs-dist/build/pdf.worker.min.mjs',
     ]) {
       const source = readFileSync(require.resolve(build), 'utf8');
-      expect(source).not.toMatch(/new Function\(|[^\w.]eval\(/);
+      // Any `eval`, direct, indirect or as a property, and the `Function` constructor with or
+      // without `new` (B14b-2 review, round 1).
+      expect(source).not.toMatch(/\beval\b/);
+      expect(source).not.toMatch(/\bFunction\s*\(/);
     }
   });
 

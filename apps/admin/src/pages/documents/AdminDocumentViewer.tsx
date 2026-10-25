@@ -118,7 +118,8 @@ export function AdminDocumentViewer(props: DocumentViewerProps) {
           ) : pdf.file === undefined ? (
             <Skeleton shape="block" />
           ) : (
-            <DocumentPages file={pdf.file} name={title} />
+            // A new link starts again at the first page (B14b-2 review, round 1).
+            <DocumentPages key={link.data?.url} file={pdf.file} name={title} />
           )}
           <div className="stack gap-4">
             <KeyValue items={[...facts, ...pages]} />

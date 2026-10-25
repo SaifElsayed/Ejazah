@@ -90,10 +90,12 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
   const request = detail.identityRequest;
   const requested = request?.document;
 
-  /** The viewer's props for what is being viewed. */
-  const viewerOf = (what: Viewing): DocumentViewerProps => {
+  /** The viewer's props for what is being viewed; null once the detail no longer has it (B14b-2
+   *  review, round 1: a read after a decision may drop or reorder it). */
+  const viewerOf = (what: Viewing): DocumentViewerProps | null => {
     const onClose = () => setViewing(null);
-    if (what.kind === 'request' && request !== undefined && requested !== undefined) {
+    if (what.kind === 'request') {
+      if (request === undefined || requested === undefined) return null;
       return {
         context: 'user',
         documentId: requested.documentId,
@@ -127,8 +129,11 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
     const subtitle = t('admin.dialogs.documentViewer.subtitleApplication', {
       name: detail.displayName,
     });
-    const credential = what.kind === 'credential' ? detail.credentials[what.index] : undefined;
-    if (credential !== undefined) {
+    if (what.kind === 'credential') {
+      const credential = detail.credentials.find(
+        ({ credentialId }) => credentialId === what.credentialId,
+      );
+      if (credential === undefined) return null;
       return {
         context: 'application',
         documentId: credential.documentId,
@@ -156,6 +161,7 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
       onClose,
     };
   };
+  const viewed = viewing === null ? null : viewerOf(viewing);
 
   return (
     <>
@@ -234,7 +240,7 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
           <section className="section">
             <h2 className="group-label">{t('admin.applications.detail.credentials')}</h2>
             <div className="row row--top gap-3">
-              {detail.credentials.map((credential, index) => (
+              {detail.credentials.map((credential) => (
                 <DocThumb
                   key={credential.credentialId}
                   label={t('admin.applications.detail.credentialFile', {
@@ -244,7 +250,9 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
                     label: t(CREDENTIAL_TEXT[credential.status]),
                     tone: CREDENTIAL_TONE[credential.status],
                   }}
-                  onPress={() => setViewing({ kind: 'credential', index })}
+                  onPress={() =>
+                    setViewing({ kind: 'credential', credentialId: credential.credentialId })
+                  }
                 />
               ))}
             </div>
@@ -317,7 +325,7 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
         />
       )}
       {approving ? <ApproveDialog detail={detail} onClose={() => setApproving(false)} /> : null}
-      {viewing === null ? null : <AdminDocumentViewer {...viewerOf(viewing)} />}
+      {viewed === null ? null : <AdminDocumentViewer {...viewed} />}
       {requiring ? (
         <AdminRequireIdDialog
           userId={detail.teacherUserId}
@@ -339,7 +347,7 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
  *  document an identity request brought. */
 type Viewing =
   | { readonly kind: 'identity' }
-  | { readonly kind: 'credential'; readonly index: number }
+  | { readonly kind: 'credential'; readonly credentialId: string }
   | { readonly kind: 'request' };
 
 /** The verification call (FR-161): a form while the application is open, its record otherwise. */

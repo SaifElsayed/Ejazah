@@ -191,6 +191,40 @@ describe('the document viewer (FR-160)', () => {
     await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: file })).toBeNull());
   });
 
+  it('stays on the credential it opened when a read reorders them, and closes when one is gone', async () => {
+    const tajweed = {
+      id: '0193a6f0-0000-7000-8000-0000000000a2',
+      nameAr: 'التجويد',
+      nameEn: 'Tajweed',
+    };
+    const other = {
+      credentialId: '0193a6f0-0000-7000-8000-0000000000c1',
+      subject: tajweed,
+      status: 'pending',
+      documentId: '0193a6f0-0000-7000-8000-0000000000e1',
+    };
+    const first = detailOf();
+    const api = fakeApi(first);
+    const { queries } = renderApp({ at: '/applications', session: verified, api });
+    const file = ar('admin.applications.detail.credentialFile', { subject: QURAN.nameAr });
+    fireEvent.click((await detail()).getByRole('button', { name: (name) => name.includes(file) }));
+    await dialog(file);
+
+    api.applications.get.query.mockResolvedValue({
+      ...first,
+      credentials: [other, ...first.credentials],
+    });
+    await queries.invalidateQueries({ queryKey: ['applications'] });
+    await waitFor(() => expect(api.applications.get.query).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('heading', { level: 2, name: file })).toBeTruthy();
+    expect(api.documents.link.mutate).toHaveBeenCalledTimes(1);
+
+    api.applications.get.query.mockResolvedValue({ ...first, credentials: [other] });
+    await queries.invalidateQueries({ queryKey: ['applications'] });
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: file })).toBeNull());
+    expect(api.documents.link.mutate).toHaveBeenCalledTimes(1);
+  });
+
   it('says a link that could not be read, and tries again', async () => {
     const api = fakeApi();
     api.documents.link.mutate.mockRejectedValueOnce(refusal('INTERNAL'));
@@ -306,6 +340,9 @@ describe('the identity request in the detail (FR-166)', () => {
   it('accepts the document once confirmed, with the note when one is written', async () => {
     const { api, viewer } = await openRequestDocument();
     api.documents.accept.mutate.mockResolvedValue(undefined);
+    // The read after the decision no longer has the request: the viewer must not fall to
+    // another document and read its link (B14b-2 review, round 1).
+    api.applications.get.query.mockResolvedValue(detailOf());
     fireEvent.change(viewer.getByLabelText(ar('admin.dialogs.documentViewer.noteLabel')), {
       target: { value: '  مطابقة  ' },
     });
@@ -337,6 +374,7 @@ describe('the identity request in the detail (FR-166)', () => {
       ).toBeNull(),
     );
     expect(api.applications.get.query).toHaveBeenCalledTimes(2);
+    expect(api.documents.link.mutate).toHaveBeenCalledTimes(1);
   });
 
   it('asks for another document with the note the person reads, once confirmed', async () => {
