@@ -435,6 +435,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.pageSize": { "required": true, "type": "integer" },
           "$.rows": { "required": true, "type": "array" },
           "$.rows[]": { "type": "object" },
           "$.rows[].action": { "required": true, "type": "string" },
@@ -737,6 +738,7 @@
           "$.queues.applications.waitingOnApplicant": { "required": true, "type": "integer" },
           "$.queues.credentials": { "required": true, "type": "object" },
           "$.queues.credentials.addedSubjects": { "required": true, "type": "integer" },
+          "$.queues.credentials.oldestAgeHours": { "type": "integer" },
           "$.queues.credentials.open": { "required": true, "type": "integer" }
         }
       },

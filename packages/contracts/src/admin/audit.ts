@@ -52,7 +52,12 @@ export const auditRow = z.object({
   reason: z.string().optional(),
 });
 
-export const auditListOutput = z.object({ rows: z.array(auditRow), total: z.int().min(0) });
+export const auditListOutput = z.object({
+  rows: z.array(auditRow),
+  total: z.int().min(0),
+  /** `admin_list_page_size`, so the panel's pager counts the pages (B14d, owner's decision). */
+  pageSize: z.int().min(1),
+});
 
 export const auditGetInput = z.object({ entryId: z.uuid() });
 
@@ -68,7 +73,12 @@ export const homeSummaryOutput = z.object({
       oldestAgeHours: z.int().min(0).optional(),
       waitingOnApplicant: z.int().min(0),
     }),
-    credentials: z.object({ open: z.int().min(0), addedSubjects: z.int().min(0) }),
+    credentials: z.object({
+      open: z.int().min(0),
+      /** The oldest waiting credential's age, as the applications card says its own (B14d). */
+      oldestAgeHours: z.int().min(0).optional(),
+      addedSubjects: z.int().min(0),
+    }),
   }),
   /** The latest `admin_home_latest_actions` entries, newest first. */
   latestActions: z.array(auditRow),

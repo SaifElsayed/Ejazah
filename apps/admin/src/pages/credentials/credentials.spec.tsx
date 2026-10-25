@@ -456,6 +456,33 @@ describe('the transcription and the decisions (FR-163)', () => {
     await waitFor(() => expect(api.credentials.get.query).toHaveBeenCalledTimes(2));
     await screen.findByText(ar('admin.credentials.panel.saveCorrection'));
     expect(screen.getByText(ar('admin.credentials.panel.conflict'))).toBeTruthy();
+    // The confirmation closed with the redrawn panel (B14c review, round 2).
+    expect(
+      screen.queryByRole('heading', {
+        level: 2,
+        name: ar('admin.dialogs.confirm.rejectCredential.title', {
+          teacher: rowA.teacher.displayName,
+          subject: QURAN.nameAr,
+        }),
+      }),
+    ).toBeNull();
+    // The next decision begins without the last one's sentence (B14c review, round 2).
+    const redrawn = await panel();
+    type(redrawn.getByLabelText(ar('admin.credentials.panel.correctReason')), 'سبب');
+    fireEvent.click(
+      redrawn.getByRole('button', {
+        name: ar('admin.credentials.a11y.removeName', { name: 'أُبيّ بن كعب' }),
+      }),
+    );
+    fireEvent.click(
+      redrawn.getByRole('button', { name: ar('admin.credentials.panel.saveCorrection') }),
+    );
+    await dialog(
+      ar('admin.dialogs.confirm.saveCredentialCorrection.title', {
+        teacher: rowV.teacher.displayName,
+      }),
+    );
+    expect(screen.queryByText(ar('admin.credentials.panel.conflict'))).toBeNull();
   });
 
   it('says the teacher already holds the subject', async () => {
@@ -594,6 +621,24 @@ describe('a long chain (the owner’s decision, B14c)', () => {
       }),
     );
     for (let n = 1; n <= 12; n += 1) expect(form.getByText(named(n))).toBeTruthy();
+  });
+});
+
+describe('a verified credential with no reviewer’s name (B14c review, round 2)', () => {
+  it('says the day alone, with no separator left over', async () => {
+    const api = fakeApi();
+    api.credentials.get.query.mockResolvedValue({ ...verifiedDetail, reviewedByName: undefined });
+    open(api);
+    await screen.findByText(rowA.teacher.displayName);
+    fireEvent.click(screen.getByRole('tab', { name: ar('admin.credentials.tabs.verified') }));
+    const form = await select(rowV.teacher.displayName, QURAN.nameAr);
+    const day = dayMonthYear(rowV.reviewedAt, 'ar', panelTimeZone());
+    const meta = form.getByText(
+      (_, element) =>
+        element?.classList.contains('text-caption') === true &&
+        (element.textContent ?? '').includes(day),
+    );
+    expect(meta.textContent?.trim().endsWith('·')).toBe(false);
   });
 });
 

@@ -40,3 +40,26 @@ export function dayMonthYear(value: string, locale: Locale, zone: string): strin
 export function cityName(zone: string, locale: Locale): string {
   return cityOf(zone, locale) ?? zone;
 }
+
+/** «الخميس 15 أكتوبر 2026»: the home's day (B14d). */
+export function weekdayDate(value: string, locale: Locale, zone: string): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? ENGLISH_DATES : formattingTag(locale), {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: zone,
+  })
+    .format(new Date(value))
+    .replace(/[،,]/u, '');
+}
+
+/** «11:20 ص»: a moment's time of day in the zone (the audit's rows, B14d). */
+export function timeOfDay(value: string, locale: Locale, zone: string): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? ENGLISH_DATES : formattingTag(locale), {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: zone,
+  }).format(new Date(value));
+}

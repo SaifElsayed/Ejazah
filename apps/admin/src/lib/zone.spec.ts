@@ -3,7 +3,7 @@
 // call's day and the audit's days are read there (owner's decision at B14b's conflict check).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FALLBACK_TIME_ZONE, panelTimeZone, todayIn } from './zone';
+import { daysBefore, FALLBACK_TIME_ZONE, panelTimeZone, todayIn } from './zone';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -31,5 +31,12 @@ describe('todayIn', () => {
     const late = new Date('2026-10-22T22:30:00Z');
     expect(todayIn('Africa/Cairo', late)).toBe('2026-10-23');
     expect(todayIn('America/New_York', late)).toBe('2026-10-22');
+  });
+});
+
+describe('daysBefore (B14d)', () => {
+  it('is the calendar day so many days earlier, across a month', () => {
+    expect(daysBefore('2026-10-25', 29)).toBe('2026-09-26');
+    expect(daysBefore('2026-10-25', 0)).toBe('2026-10-25');
   });
 });

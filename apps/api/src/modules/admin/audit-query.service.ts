@@ -75,7 +75,7 @@ export class AuditQueryService {
   async list(
     tx: Transaction,
     query: AuditQuery,
-  ): Promise<{ readonly rows: AuditListRow[]; readonly total: number }> {
+  ): Promise<{ readonly rows: AuditListRow[]; readonly total: number; readonly pageSize: number }> {
     const size = await this.#settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
     let filter: AuditFilter;
     try {
@@ -94,7 +94,7 @@ export class AuditQueryService {
       this.#entries.page(tx, filter, (query.page - 1) * size, size),
       this.#entries.count(tx, filter),
     ]);
-    return { rows: await this.#rowsOf(tx, entries), total };
+    return { rows: await this.#rowsOf(tx, entries), total, pageSize: size };
   }
 
   /** The newest `count` entries, for the home (T065). */

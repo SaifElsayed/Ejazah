@@ -101,6 +101,8 @@ describe('audit.list', () => {
       return query().list(tx, { targetId: userId, page: 1 });
     });
     expect(answer.total).toBe(2);
+    // The pager's size, as the queues answer it (B14d).
+    expect(answer.pageSize).toBeGreaterThan(0);
     expect(answer.rows).toEqual([
       {
         entryId: expect.any(String),

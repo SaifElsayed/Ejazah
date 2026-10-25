@@ -3,19 +3,23 @@
 // until that phase adds it here. The groups and the order are the board's; the settings entry leads
 // to `/settings/admins`, the one settings page this phase builds (FR-174).
 //
-// Not yet here, each with the task that brings it: the signed-in administrator's name (`auth.me`,
-// T066, read by the page tasks of B14) and the queues' open counts (the home's service, T065).
+// The signed-in administrator's name (`auth.me`) and the two queues' open counts (`home.summary`,
+// the cache key the pages share) are read here (T073): the applications in review, the credentials
+// waiting.
 import { useLocation, useNavigate } from 'react-router';
 
 import { Sidebar } from '../../design/components';
 import type { IconName } from '../../design/icons';
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import { useHomeSummary, useMe } from '../home/queries';
 
 interface NavEntry {
   readonly path: string;
   readonly label: MessageKey;
   readonly icon: IconName;
+  /** The queue whose open count the entry shows. */
+  readonly queue?: 'applications' | 'credentials';
 }
 
 /** The entries of this phase, in the board's groups and order. */
@@ -27,8 +31,18 @@ export const NAV_GROUPS: readonly {
     label: 'admin.nav.groups.queues',
     entries: [
       { path: '/', label: 'admin.nav.items.home', icon: 'house' },
-      { path: '/applications', label: 'admin.nav.items.applications', icon: 'user-check' },
-      { path: '/credentials', label: 'admin.nav.items.credentials', icon: 'file-text' },
+      {
+        path: '/applications',
+        label: 'admin.nav.items.applications',
+        icon: 'user-check',
+        queue: 'applications',
+      },
+      {
+        path: '/credentials',
+        label: 'admin.nav.items.credentials',
+        icon: 'file-text',
+        queue: 'credentials',
+      },
     ],
   },
   {
@@ -51,8 +65,13 @@ export function AdminNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { client } = useAdmin();
+  const me = useMe().data;
+  const queues = useHomeSummary().data?.queues;
   return (
     <Sidebar
+      {...(me === undefined
+        ? {}
+        : { admin: { name: me.displayName, caption: t('admin.common.role.admin') } })}
       groups={NAV_GROUPS.map((group) => ({
         label: t(group.label),
         items: group.entries.map((entry) => ({
@@ -60,6 +79,9 @@ export function AdminNav() {
           label: t(entry.label),
           icon: entry.icon,
           active: isCurrent(entry.path, pathname),
+          ...(entry.queue === undefined || queues === undefined
+            ? {}
+            : { count: queues[entry.queue].open }),
         })),
       }))}
       onNavigate={(href) => {

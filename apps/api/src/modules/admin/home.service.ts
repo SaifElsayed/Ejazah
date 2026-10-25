@@ -1,7 +1,7 @@
 // T065, T067 (FR-176): `home.summary`, the admin home. Two queue cards, the ones this phase builds:
 // the applications waiting for a decision, with the oldest's age in whole hours and how many wait on
-// the applicant, and the credentials waiting for review, with how many are for a subject added
-// after approval; the other six cards are absent until their phases. Then the newest
+// the applicant, and the credentials waiting for review, with the oldest's age (B14d) and how many
+// are for a subject added after approval; the other six cards are absent until their phases. Then the newest
 // `admin_home_latest_actions` entries of the log, the reads left out (owner's decision 2026-10-21).
 //
 // The queues' tables are the identity and catalog modules' (R-API-6), read through their entries,
@@ -26,7 +26,11 @@ export interface HomeQueues {
     readonly waitingOnApplicant: number;
   }>;
   /** `teacher_credentials`: those pending, and those of them added after approval. */
-  credentials(tx: Transaction): Promise<{ readonly open: number; readonly addedSubjects: number }>;
+  credentials(tx: Transaction): Promise<{
+    readonly open: number;
+    readonly addedSubjects: number;
+    readonly oldestSubmittedAt: Date | null;
+  }>;
 }
 
 export interface HomeDependencies {
@@ -57,7 +61,11 @@ export class HomeService {
         readonly oldestAgeHours?: number;
         readonly waitingOnApplicant: number;
       };
-      readonly credentials: { readonly open: number; readonly addedSubjects: number };
+      readonly credentials: {
+        readonly open: number;
+        readonly oldestAgeHours?: number;
+        readonly addedSubjects: number;
+      };
     };
     readonly latestActions: AuditListRow[];
   }> {
@@ -66,6 +74,7 @@ export class HomeService {
     const credentials = await this.#queues.credentials(tx);
     const latestActions = await this.#audit.latest(tx, count);
     const oldest = applications.oldestSubmittedAt;
+    const oldestCredential = credentials.oldestSubmittedAt;
     return {
       queues: {
         applications: {
@@ -73,7 +82,13 @@ export class HomeService {
           ...(oldest === null ? {} : { oldestAgeHours: wholeHoursSince(oldest, this.#now()) }),
           waitingOnApplicant: applications.waitingOnApplicant,
         },
-        credentials,
+        credentials: {
+          open: credentials.open,
+          ...(oldestCredential === null
+            ? {}
+            : { oldestAgeHours: wholeHoursSince(oldestCredential, this.#now()) }),
+          addedSubjects: credentials.addedSubjects,
+        },
       },
       latestActions,
     };

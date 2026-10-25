@@ -4,7 +4,7 @@
 // list holds no city for it.
 import { describe, expect, it } from 'vitest';
 
-import { cityName, dayMonth, dayMonthYear } from './format';
+import { cityName, dayMonth, dayMonthYear, timeOfDay, weekdayDate } from './format';
 
 const at = '2026-10-14T09:00:00.000Z';
 
@@ -26,5 +26,18 @@ describe('cityName', () => {
     expect(cityName('Africa/Cairo', 'ar')).toBe('القاهرة');
     expect(cityName('Africa/Cairo', 'en')).toBe('Cairo');
     expect(cityName('Mars/Olympus', 'en')).toBe('Mars/Olympus');
+  });
+});
+
+describe('the home and the audit (B14d)', () => {
+  it('prints a day with its weekday, and a moment’s time of day, in the zone', () => {
+    expect(weekdayDate('2026-10-15T09:00:00.000Z', 'ar', 'Africa/Cairo')).toBe(
+      'الخميس 15 أكتوبر 2026',
+    );
+    expect(weekdayDate('2026-10-15T09:00:00.000Z', 'en', 'Africa/Cairo')).toBe(
+      'Thursday 15 October 2026',
+    );
+    expect(timeOfDay('2026-10-15T08:20:00.000Z', 'ar', 'Africa/Cairo')).toBe('11:20 ص');
+    expect(timeOfDay('2026-10-15T14:40:00.000Z', 'en', 'Africa/Cairo')).toBe('5:40 pm');
   });
 });

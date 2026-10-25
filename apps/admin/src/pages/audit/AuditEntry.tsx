@@ -1,0 +1,213 @@
+// T073 (FR-175): the selected entry's detail (`AdminAudit`'s panel). Its action and target, when and
+// by whom; what it changed, field by field, before then after (an entry holds what its action
+// wrote, so many hold an after alone): a standing as its badge, a chain by its generations, a day
+// as a day, anything else as stored; its reason; its number and its target. Entries are only ever
+// added (the footer).
+import { useNavigate } from 'react-router';
+
+import {
+  Badge,
+  Banner,
+  IconTile,
+  KeyValue,
+  Panel,
+  Skeleton,
+  TextLink,
+} from '../../design/components';
+import { type MessageKey, useLocale, useT } from '../../i18n';
+import { dayMonthYear, timeOfDay } from '../../lib/format';
+import { panelTimeZone } from '../../lib/zone';
+import { actionText, targetHref, targetText } from './actions';
+import { type AuditEntry as Entry, useAuditEntry } from './queries';
+
+const FIELD_TEXT: Readonly<Record<string, MessageKey>> = {
+  accountStatus: 'admin.audit.fields.accountStatus',
+  isActive: 'admin.audit.fields.isActive',
+  status: 'admin.audit.fields.status',
+  verificationStatus: 'admin.audit.fields.verificationStatus',
+  completedOn: 'admin.audit.fields.completedOn',
+  outcome: 'admin.audit.fields.outcome',
+  holderName: 'admin.audit.fields.holderName',
+  riwaya: 'admin.audit.fields.riwaya',
+  tariq: 'admin.audit.fields.tariq',
+  chain: 'admin.audit.fields.chain',
+  reasonChoice: 'admin.audit.fields.reasonChoice',
+  needed: 'admin.audit.fields.needed',
+  subjectIds: 'admin.audit.fields.subjectIds',
+  requestId: 'admin.audit.fields.requestId',
+  documentId: 'admin.audit.fields.documentId',
+};
+
+/** The standings the panel already names, by field. */
+const STANDING_TEXT: Readonly<Record<string, Readonly<Record<string, MessageKey>>>> = {
+  accountStatus: {
+    active: 'admin.status.account.active',
+    suspended: 'admin.status.account.suspended',
+    verification_required: 'admin.status.account.verificationPending',
+    banned: 'admin.status.account.banned',
+  },
+  status: {
+    pending: 'admin.status.credential.inReview',
+    needs_document: 'admin.status.credential.anotherFileNeeded',
+    approved: 'admin.status.credential.verified',
+    rejected: 'admin.status.credential.rejected',
+  },
+  outcome: {
+    suitable: 'admin.applications.detail.suitable',
+    unsuitable: 'admin.applications.detail.unsuitable',
+  },
+};
+
+export function AuditEntry({ entryId }: { readonly entryId: string }) {
+  const t = useT();
+  const entry = useAuditEntry(entryId);
+  if (entry.data === undefined) {
+    return entry.isError ? (
+      <Banner icon={{ name: 'alert-circle' }} tone="danger">
+        {t('admin.common.loadError.text')}
+      </Banner>
+    ) : (
+      <Skeleton shape="block" />
+    );
+  }
+  return <Detail entry={entry.data} />;
+}
+
+function Detail({ entry }: { readonly entry: Entry }) {
+  const t = useT();
+  const locale = useLocale();
+  const navigate = useNavigate();
+  const zone = panelTimeZone();
+  const target = targetText(entry, t);
+  const href = targetHref(entry);
+  const changes = changesOf(entry.before, entry.after);
+  const valueOf = (field: string, value: unknown) => {
+    const standing = typeof value === 'string' ? STANDING_TEXT[field]?.[value] : undefined;
+    if (standing !== undefined) return <Badge label={t(standing)} tone="neutral" />;
+    if (typeof value === 'boolean') {
+      return (
+        <Badge
+          label={t(value ? 'admin.audit.values.yes' : 'admin.audit.values.no')}
+          tone="neutral"
+        />
+      );
+    }
+    return <span>{plainText(field, value, t, locale, zone)}</span>;
+  };
+
+  return (
+    <Panel
+      header={
+        <>
+          <IconTile icon={{ name: 'list', size: 'lg' }} size="lg" tone="neutral" />
+          <span className="stack grow">
+            <strong className="text-title-3">
+              {t('admin.audit.detail.title', { action: actionText(entry.action, t), target })}
+            </strong>
+            <span className="text-caption tone-muted">
+              {t('admin.audit.detail.meta', {
+                date: dayMonthYear(entry.occurredAt, locale, zone),
+                time: timeOfDay(entry.occurredAt, locale, zone),
+                admin: entry.adminName,
+              })}
+            </span>
+          </span>
+        </>
+      }
+      note={t('admin.audit.detail.footer')}
+    >
+      {changes.length === 0 ? null : (
+        <section className="section">
+          <h2 className="group-label">{t('admin.audit.detail.beforeAfter')}</h2>
+          <KeyValue
+            items={changes.map(({ field, before, after }) => ({
+              label: FIELD_TEXT[field] === undefined ? field : t(FIELD_TEXT[field]),
+              value: (
+                <span className="row wrap gap-2">
+                  {before === undefined ? null : (
+                    <>
+                      {valueOf(field, before)}
+                      <span aria-hidden="true">{locale === 'ar' ? '←' : '→'}</span>
+                    </>
+                  )}
+                  {after === undefined ? (
+                    <span>{t('admin.audit.values.none')}</span>
+                  ) : (
+                    valueOf(field, after)
+                  )}
+                </span>
+              ),
+            }))}
+          />
+        </section>
+      )}
+      {entry.reason === undefined ? null : (
+        <section className="section">
+          <h2 className="group-label">{t('admin.audit.detail.reason')}</h2>
+          <p className="text-callout">
+            <bdi>{entry.reason}</bdi>
+          </p>
+        </section>
+      )}
+      <section className="section">
+        <h2 className="group-label">{t('admin.audit.detail.entryTitle')}</h2>
+        <KeyValue
+          items={[
+            {
+              label: t('admin.audit.detail.entryNo'),
+              value: <bdi className="ltr">{entry.entryId}</bdi>,
+            },
+            {
+              label: t('admin.audit.detail.target'),
+              value:
+                href === undefined ? (
+                  target
+                ) : (
+                  <TextLink label={target} href={href} onPress={() => void navigate(href)} />
+                ),
+            },
+          ]}
+        />
+      </section>
+    </Panel>
+  );
+}
+
+/** Each field the entry names, with its value before and after. */
+function changesOf(
+  before: unknown,
+  after: unknown,
+): { readonly field: string; readonly before: unknown; readonly after: unknown }[] {
+  const was = recordOf(before);
+  const is = recordOf(after);
+  const fields = [...new Set([...Object.keys(was), ...Object.keys(is)])];
+  return fields.map((field) => ({ field, before: was[field], after: is[field] }));
+}
+
+function recordOf(value: unknown): Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** A value with no badge, as text: a day as a day, a chain by its generations, a list joined. */
+function plainText(
+  field: string,
+  value: unknown,
+  t: ReturnType<typeof useT>,
+  locale: 'ar' | 'en',
+  zone: string,
+): string {
+  if (value === null || value === undefined) return t('admin.audit.values.none');
+  if (field === 'chain' && Array.isArray(value)) {
+    return t('admin.common.generations', { count: value.length });
+  }
+  if (field === 'completedOn' && typeof value === 'string')
+    return dayMonthYear(value, locale, zone);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+      .join(locale === 'ar' ? '، ' : ', ');
+  }
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}

@@ -131,5 +131,8 @@ describe('the credentials card', () => {
     });
     expect(after.open - before.open).toBe(2);
     expect(after.addedSubjects - before.addedSubjects).toBe(1);
+    // The oldest pending credential's moment, for the card's age (B14d): none later than these two.
+    expect(after.oldestSubmittedAt).toBeInstanceOf(Date);
+    expect(after.oldestSubmittedAt?.getTime()).toBeLessThanOrEqual(Date.parse('2026-10-20T09:00:00Z'));
   });
 });
