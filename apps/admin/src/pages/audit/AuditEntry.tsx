@@ -52,6 +52,12 @@ const STANDING_TEXT: Readonly<Record<string, Readonly<Record<string, MessageKey>
     approved: 'admin.status.credential.verified',
     rejected: 'admin.status.credential.rejected',
   },
+  verificationStatus: {
+    pending: 'admin.audit.values.verification.pending',
+    approved: 'admin.audit.values.verification.approved',
+    rejected: 'admin.audit.values.verification.rejected',
+    revoked: 'admin.audit.values.verification.revoked',
+  },
   outcome: {
     suitable: 'admin.applications.detail.suitable',
     unsuitable: 'admin.applications.detail.unsuitable',

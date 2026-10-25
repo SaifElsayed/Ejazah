@@ -80,10 +80,13 @@ describe('AdminHome (FR-176)', () => {
         const credentials = screen
           .getByText(t('admin.nav.items.credentials'), { selector: '.text-headline' })
           .closest('a') as HTMLElement;
+        // A part after the first starts in lower case in English, as the board writes it (B14d-1
+        // review, nit).
+        const oldest = t('admin.home.queue.oldest', { days: 2 });
+        const after =
+          locale === 'en' ? `${oldest.charAt(0).toLowerCase()}${oldest.slice(1)}` : oldest;
         expect(
-          within(credentials).getByText(
-            `${t('admin.home.queue.added', { added: 1 })} · ${t('admin.home.queue.oldest', { days: 2 })}`,
-          ),
+          within(credentials).getByText(`${t('admin.home.queue.added', { added: 1 })} · ${after}`),
         ).toBeTruthy();
         expect(screen.getByText(t('admin.audit.actions.requestMoreInfo'))).toBeTruthy();
         expect(
@@ -144,5 +147,25 @@ describe('AdminHome (FR-176)', () => {
     expect(within(credentials).getByText('2')).toBeTruthy();
     expect(api.home.summary.query).toHaveBeenCalledTimes(1);
     expect(api.auth.me.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts no empty queue in the sidebar, as the board draws it (B14d-1 review)', async () => {
+    open(
+      fakeApi({
+        queues: {
+          applications: { open: 0, waitingOnApplicant: 0 },
+          credentials: { open: 2, addedSubjects: 0 },
+        },
+        latestActions: [],
+      }),
+    );
+    const nav = within(
+      await screen.findByRole('complementary', { name: ar('admin.nav.a11y.panel') }),
+    );
+    await nav.findByText('2');
+    const applications = nav.getByRole('link', {
+      name: (name) => name.startsWith(ar('admin.nav.items.applications')),
+    });
+    expect(applications.querySelector('.nav-item__count')).toBeNull();
   });
 });

@@ -79,7 +79,8 @@ export function AdminNav() {
           label: t(entry.label),
           icon: entry.icon,
           active: isCurrent(entry.path, pathname),
-          ...(entry.queue === undefined || queues === undefined
+          // An empty queue shows no count, as the board draws it (B14d-1 review).
+          ...(entry.queue === undefined || queues === undefined || queues[entry.queue].open === 0
             ? {}
             : { count: queues[entry.queue].open }),
         })),

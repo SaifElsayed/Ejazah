@@ -83,16 +83,19 @@ export function AdminHome() {
                 icon="user-check"
                 title={t('admin.nav.items.applications')}
                 count={answer.queues.applications.open}
-                {...hintOf([
-                  ...oldest(answer.queues.applications.oldestAgeHours),
-                  ...(answer.queues.applications.waitingOnApplicant === 0
-                    ? []
-                    : [
-                        t('admin.home.queue.waiting', {
-                          waiting: answer.queues.applications.waitingOnApplicant,
-                        }),
-                      ]),
-                ])}
+                {...hintOf(
+                  [
+                    ...oldest(answer.queues.applications.oldestAgeHours),
+                    ...(answer.queues.applications.waitingOnApplicant === 0
+                      ? []
+                      : [
+                          t('admin.home.queue.waiting', {
+                            waiting: answer.queues.applications.waitingOnApplicant,
+                          }),
+                        ]),
+                  ],
+                  locale,
+                )}
                 onNavigate={(href) => void navigate(href)}
               />
               <QueueCard
@@ -100,16 +103,19 @@ export function AdminHome() {
                 icon="file-text"
                 title={t('admin.nav.items.credentials')}
                 count={answer.queues.credentials.open}
-                {...hintOf([
-                  ...(answer.queues.credentials.addedSubjects === 0
-                    ? []
-                    : [
-                        t('admin.home.queue.added', {
-                          added: answer.queues.credentials.addedSubjects,
-                        }),
-                      ]),
-                  ...oldest(answer.queues.credentials.oldestAgeHours),
-                ])}
+                {...hintOf(
+                  [
+                    ...(answer.queues.credentials.addedSubjects === 0
+                      ? []
+                      : [
+                          t('admin.home.queue.added', {
+                            added: answer.queues.credentials.addedSubjects,
+                          }),
+                        ]),
+                    ...oldest(answer.queues.credentials.oldestAgeHours),
+                  ],
+                  locale,
+                )}
                 onNavigate={(href) => void navigate(href)}
               />
             </div>
@@ -170,7 +176,14 @@ export function AdminHome() {
   );
 }
 
-/** The hint's parts with the board's separator; no hint when there are none. */
-function hintOf(parts: readonly string[]): { readonly hint?: string } {
-  return parts.length === 0 ? {} : { hint: parts.join(' · ') };
+/**
+ * The hint's parts with the board's separator, a part after the first in lower case in English as
+ * the board writes it («… · oldest 2 days ago»; B14d-1 review); no hint when there are none.
+ */
+function hintOf(parts: readonly string[], locale: 'ar' | 'en'): { readonly hint?: string } {
+  if (parts.length === 0) return {};
+  const [first, ...rest] = parts;
+  const later =
+    locale === 'en' ? rest.map((part) => part.charAt(0).toLowerCase() + part.slice(1)) : rest;
+  return { hint: [first, ...later].join(' · ') };
 }

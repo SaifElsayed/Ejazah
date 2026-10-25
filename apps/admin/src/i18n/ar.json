@@ -124,7 +124,7 @@
         "applicationApprove": "اعتماد طلب انضمام",
         "applicationBan": "حظر متقدّم",
         "approveTeacherCredential": "اعتماد إجازة معلم",
-        "credentialCorrect": "تصحيح سند",
+        "credentialCorrect": "تصحيح نسخ إجازة",
         "credentialReject": "رفض إجازة",
         "credentialRequestDocument": "طلب ملف آخر لإجازة",
         "dismissReport": "رفض بلاغ",
@@ -213,6 +213,12 @@
       "values": {
         "no": "لا",
         "none": "—",
+        "verification": {
+          "approved": "معتمد",
+          "pending": "قيد المراجعة",
+          "rejected": "مرفوض",
+          "revoked": "سُحب الاعتماد"
+        },
         "yes": "نعم"
       }
     },

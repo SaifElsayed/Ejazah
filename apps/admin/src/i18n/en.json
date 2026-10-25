@@ -124,7 +124,7 @@
         "applicationApprove": "Approve application",
         "applicationBan": "Ban applicant",
         "approveTeacherCredential": "Approve teacher ijazah",
-        "credentialCorrect": "Correct a chain",
+        "credentialCorrect": "Correct an ijazah transcription",
         "credentialReject": "Reject ijazah",
         "credentialRequestDocument": "Request another ijazah file",
         "dismissReport": "Dismiss report",
@@ -213,6 +213,12 @@
       "values": {
         "no": "No",
         "none": "—",
+        "verification": {
+          "approved": "Approved",
+          "pending": "In review",
+          "rejected": "Rejected",
+          "revoked": "Approval revoked"
+        },
         "yes": "Yes"
       }
     },

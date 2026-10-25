@@ -38,6 +38,6 @@ describe('the home and the audit (B14d)', () => {
       'Thursday 15 October 2026',
     );
     expect(timeOfDay('2026-10-15T08:20:00.000Z', 'ar', 'Africa/Cairo')).toBe('11:20 ص');
-    expect(timeOfDay('2026-10-15T14:40:00.000Z', 'en', 'Africa/Cairo')).toBe('5:40 pm');
+    expect(timeOfDay('2026-10-15T14:40:00.000Z', 'en', 'Africa/Cairo')).toBe('5:40 PM');
   });
 });

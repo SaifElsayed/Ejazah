@@ -206,6 +206,25 @@ describe('AdminAudit (FR-175)', () => {
     );
   });
 
+  it('draws a revoked approval as its badges, never as the stored word (B14d-1 review)', async () => {
+    const api = fakeApi();
+    api.audit.get.query.mockResolvedValue({
+      ...suspended,
+      action: 'teacher.revoke',
+      before: { verificationStatus: 'approved' },
+      after: { verificationStatus: 'revoked' },
+    });
+    open(api);
+    const cells = await screen.findAllByText(ar('admin.audit.actions.teacherSuspend'));
+    fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+    const detail = within(
+      await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }),
+    );
+    expect(await detail.findByText(ar('admin.audit.values.verification.revoked'))).toBeTruthy();
+    expect(detail.getByText(ar('admin.audit.values.verification.approved'))).toBeTruthy();
+    expect(detail.queryByText('revoked')).toBeNull();
+  });
+
   it('links a credential’s entry to its credential', async () => {
     open();
     const link = await screen.findByRole('link', { name: ar('admin.audit.targets.credential') });

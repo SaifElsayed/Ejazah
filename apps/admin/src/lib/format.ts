@@ -8,6 +8,7 @@ import { cityOf } from '@ijazah/time/cities';
 import { formattingTag, type Locale } from '../i18n';
 
 const ENGLISH_DATES = 'en-GB-u-ca-gregory-nu-latn';
+const ENGLISH_TIMES = 'en-US-u-ca-gregory-nu-latn';
 
 const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -54,9 +55,9 @@ export function weekdayDate(value: string, locale: Locale, zone: string): string
     .replace(/[،,]/u, '');
 }
 
-/** «11:20 ص»: a moment's time of day in the zone (the audit's rows, B14d). */
+/** «11:20 ص», «5:40 PM» as the English boards print it: a moment's time of day in the zone (B14d). */
 export function timeOfDay(value: string, locale: Locale, zone: string): string {
-  return new Intl.DateTimeFormat(locale === 'en' ? ENGLISH_DATES : formattingTag(locale), {
+  return new Intl.DateTimeFormat(locale === 'en' ? ENGLISH_TIMES : formattingTag(locale), {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
