@@ -26,6 +26,7 @@ import {
 import { AuthLayout, ConsoleLayout, SetupLayout } from './pages/_layout/layouts';
 import { ConsolePageShell } from './pages/_layout/shells';
 import { AdminApplications } from './pages/applications/AdminApplications';
+import { AdminCredentials } from './pages/credentials/AdminCredentials';
 import { AdminMfa } from './pages/mfa/AdminMfa';
 import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
 import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
@@ -84,10 +85,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
             <Route element={<ConsoleLayout />}>
               <Route path={HOME_PATH} element={<ConsolePageShell title="admin.home.title" />} />
               <Route path="/applications" element={<AdminApplications />} />
-              <Route
-                path="/credentials"
-                element={<ConsolePageShell title="admin.credentials.title" />}
-              />
+              <Route path="/credentials" element={<AdminCredentials />} />
               <Route
                 path="/settings/admins"
                 element={<ConsolePageShell title="admin.admins.title" />}

@@ -12,7 +12,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
 import { dayMonth, dayMonthYear } from '../../lib/format';
 import { panelTimeZone, todayIn } from '../../lib/zone';
-import { inBothLocales, mutation, query, refusal, renderApp } from '../../test/app-harness';
+import {
+  currentPath,
+  inBothLocales,
+  mutation,
+  query,
+  refusal,
+  renderApp,
+} from '../../test/app-harness';
 
 afterEach(() => setLocale('ar'));
 
@@ -204,6 +211,24 @@ describe('AdminApplications (FR-160)', () => {
         expect(detail.queryByText(t('admin.common.minor'))).toBeNull();
       },
     );
+  });
+
+  it('opens the credential still waiting in its queue, and is opened by `?teacher=` (T072)', async () => {
+    const { view } = open();
+    const detail = within(await select(rowA.displayName));
+    fireEvent.click(
+      await detail.findByRole('button', { name: ar('admin.applications.detail.reviewCredential') }),
+    );
+    await waitFor(() =>
+      expect(currentPath()).toBe('/credentials?credential=0193a6f0-0000-7000-8000-0000000000c0'),
+    );
+    view.unmount();
+
+    renderApp({ at: `/applications?teacher=${B}`, session: verified, api: fakeApi() });
+    const opened = within(
+      await screen.findByRole('complementary', { name: ar('admin.applications.detail.a11y') }),
+    );
+    expect(await opened.findByText(rowB.displayName)).toBeTruthy();
   });
 
   it('marks a minor in the detail’s header (FR-132)', async () => {

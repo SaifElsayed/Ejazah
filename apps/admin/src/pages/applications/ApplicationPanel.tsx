@@ -162,6 +162,12 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
     };
   };
   const viewed = viewing === null ? null : viewerOf(viewing);
+  // What is viewed is forgotten once the detail no longer has it, so a later read that brings it
+  // back does not open the viewer again on its own (B14b-2 review, round 2).
+  if (viewing !== null && viewed === null) setViewing(null);
+  // The credential «مراجعة الإجازة» opens: the first still waiting, else the first (T072).
+  const toReview =
+    detail.credentials.find(({ status }) => status === 'pending') ?? detail.credentials[0];
 
   return (
     <>
@@ -260,7 +266,13 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
               <TextLink
                 label={t('admin.applications.detail.reviewCredential')}
                 icon={{ name: locale === 'ar' ? 'chevron-left' : 'chevron-right' }}
-                onPress={() => void navigate('/credentials')}
+                onPress={() =>
+                  void navigate(
+                    toReview === undefined
+                      ? '/credentials'
+                      : `/credentials?credential=${toReview.credentialId}`,
+                  )
+                }
               />
             </div>
           </section>

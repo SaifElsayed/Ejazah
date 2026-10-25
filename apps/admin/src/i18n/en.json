@@ -377,12 +377,29 @@
       },
       "correctLede": "Correcting a verified chain. The teacher does not edit their chain; correction is for the administration only.",
       "empty": {
+        "rejected": {
+          "text": "Every rejected ijazah appears here, with its reason.",
+          "title": "No rejected ijazahs"
+        },
+        "search": {
+          "text": "No ijazah in this tab belongs to a teacher of that name. Try another name.",
+          "title": "No results"
+        },
         "showDecided": "Show verified",
         "text": "Every credential has been reviewed. Each new file a teacher uploads when applying or adding a subject appears here.",
-        "title": "No credentials awaiting review"
+        "title": "No credentials awaiting review",
+        "verified": {
+          "text": "Every ijazah you approve appears here, and its chain is corrected from here.",
+          "title": "No verified ijazahs yet"
+        },
+        "waiting": {
+          "text": "Every ijazah you asked another file for appears here until the teacher uploads it.",
+          "title": "No ijazah awaits another file"
+        }
       },
       "lede": "{count, plural, one {# ijazah awaits review} other {# ijazahs await review}}: one PDF per subject, from applications or from subjects teachers add.",
       "ledeEmpty": "No credentials awaiting review now.",
+      "pagerSummary": "{shown} of {total}",
       "panel": {
         "addGeneration": "Generation",
         "addName": "Name",
@@ -391,6 +408,7 @@
         "cancel": "Cancel",
         "chain": "Chain by generation · from its origin to the holder",
         "chainEllipsis": "… generations {from} to {to} …",
+        "conflict": "This ijazah changed meanwhile, so it is shown as it is now.",
         "correctEffect1": "The corrected chain appears on the teacher's page, and on every ijazah issued after saving.",
         "correctEffect2": "Ijazahs issued before the correction stay as issued.",
         "correctFooter": "Saving unlocks once the reason is written. The correction, its reason and the chain before and after are recorded under your name in the audit log.",
@@ -402,14 +420,17 @@
         "holderName": "Holder's name as in the file",
         "holderNameHint": "Copied verbatim from the ijazah file, and printed on every ijazah the teacher grants.",
         "holderRow": "{teacher} · holder",
+        "metaAdded": "Added subject · uploaded {date} · ",
         "metaAtApplication": "At application · uploaded {date} · ",
         "metaVerified": "Verified {date} · {admin} · ",
         "reject": "Reject",
         "requestAnother": "Request another document",
         "requestLabel": "What the other document needs · reaches the teacher (required to request another document)",
         "requestPlaceholder": "For example: the second page is unreadable",
+        "reviewReason": "What the teacher was told",
         "riwaya": "Riwaya",
         "saveCorrection": "Save correction",
+        "subjectApproved": "The teacher already has a verified ijazah in this subject.",
         "tariq": "Tariq (optional)",
         "teacherPageLink": "Teacher page",
         "title": "{subject} ijazah · {teacher}"
@@ -464,9 +485,9 @@
         "approveCredential": {
           "confirm": "Approve",
           "effects": {
-            "notified": "{teacher} is notified.",
+            "subjectAdded": "The subject joins the subjects of {teacher} at once.",
             "verified": "The credential becomes “verified” with the riwaya, tariq and chain as you transcribed them; the teacher cannot edit it.",
-            "visible": "The subject appears to students on the teacher’s profile, and the teacher can create packages in it."
+            "withApplication": "The ijazah counts toward the application; the subject is added when the application is approved."
           },
           "title": "Approve {teacher}’s credential in {subject}"
         },
@@ -627,8 +648,8 @@
         "rejectCredential": {
           "confirm": "Reject the credential",
           "effects": {
-            "notified": "{teacher} is notified with the reason as you write it.",
             "reapply": "They can upload another credential for the same subject.",
+            "reasonShown": "{teacher} sees the reason as you write it, in the app.",
             "rejected": "The credential becomes “rejected”, and the subject is not shown to students."
           },
           "reasonLabel": "Reason for rejection (required)",
@@ -671,7 +692,7 @@
         "requestCredentialDocument": {
           "confirm": "Send the request",
           "effects": {
-            "notified": "Your request reaches them with your note, in the app and as a notification.",
+            "inApp": "The teacher sees your note in the app.",
             "status": "The credential becomes “another document required” until the teacher uploads what you asked for, then returns to the queue.",
             "unchanged": "Nothing already verified changes."
           },
@@ -776,6 +797,7 @@
         "requestedValue": "{date} · {admin}",
         "subtitle": "Requested by the administration from {name} · uploaded {date} · view only",
         "subtitleApplication": "From the application of {name} · view only",
+        "subtitleCredential": "Ijazah of {teacher} · view only",
         "uploaded": "Uploaded",
         "uploadedValue": "{date} · {time}"
       },

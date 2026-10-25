@@ -40,11 +40,15 @@ export const adminCredentialsListRow = z.object({
   origin: credentialOrigin,
   submittedAt: z.iso.datetime(),
   status: credentialStatus,
+  /** When it was decided: the decided tabs' «وُثّقت» column (B14c, owner's decision). */
+  reviewedAt: z.iso.datetime().optional(),
 });
 
 export const adminCredentialsListOutput = z.object({
   rows: z.array(adminCredentialsListRow),
   total: z.int().min(0),
+  /** `admin_list_page_size`, so the panel's pager counts the pages (B14c, owner's decision). */
+  pageSize: z.int().min(1),
 });
 
 export const adminCredentialsGetInput = z.object({ credentialId: z.uuid() });
@@ -56,7 +60,6 @@ export const adminCredentialsGetOutput = adminCredentialsListRow.extend({
   tariq: z.string().optional(),
   chain: z.array(chainGeneration).optional(),
   reviewReason: z.string().optional(),
-  reviewedAt: z.iso.datetime().optional(),
   reviewedByName: z.string().optional(),
 });
 

@@ -627,6 +627,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.pageSize": { "required": true, "type": "integer" },
           "$.rows": { "required": true, "type": "array" },
           "$.rows[]": { "type": "object" },
           "$.rows[].credentialId": { "required": true, "type": "string" },
@@ -635,6 +636,7 @@
             "type": "string",
             "values": ["added", "application"]
           },
+          "$.rows[].reviewedAt": { "type": "string" },
           "$.rows[].status": {
             "required": true,
             "type": "string",

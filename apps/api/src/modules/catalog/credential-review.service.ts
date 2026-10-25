@@ -52,6 +52,8 @@ export interface ReviewListRow {
   readonly submittedWithApplication: boolean;
   readonly createdAt: Date;
   readonly status: ReviewStatus;
+  /** When it was decided; the decided tabs show it (B14c). */
+  readonly reviewedAt: Date | null;
 }
 
 /** A credential as the review panel reads it. */
@@ -62,7 +64,6 @@ export interface ReviewRecord extends ReviewListRow {
   readonly tariq: string | null;
   readonly chain: readonly Generation[];
   readonly reviewReason: string | null;
-  readonly reviewedAt: Date | null;
   readonly reviewedByName: string | null;
 }
 
@@ -153,7 +154,7 @@ export class CredentialReviewService {
     // One after the other: a transaction is one connection, which runs one query at a time.
     const rows = await this.#store.page(tx, filter, (query.page - 1) * size, size);
     const total = await this.#store.count(tx, filter);
-    return { rows: rows.map(listRowOf), total };
+    return { rows: rows.map(listRowOf), total, pageSize: size };
   }
 
   /** `credentials.get`: the review panel's credential, its transcription once approved. */
@@ -171,7 +172,6 @@ export class CredentialReviewService {
       ...(record.tariq === null ? {} : { tariq: record.tariq }),
       ...(record.chain.length === 0 ? {} : { chain: record.chain.map(generationOf) }),
       ...(record.reviewReason === null ? {} : { reviewReason: record.reviewReason }),
-      ...(record.reviewedAt === null ? {} : { reviewedAt: record.reviewedAt.toISOString() }),
       ...(record.reviewedByName === null ? {} : { reviewedByName: record.reviewedByName }),
     };
   }
@@ -308,5 +308,6 @@ function listRowOf(row: ReviewListRow): z.input<typeof adminCredentialsListOutpu
     origin: row.submittedWithApplication ? 'application' : 'added',
     submittedAt: row.createdAt.toISOString(),
     status: row.status,
+    ...(row.reviewedAt === null ? {} : { reviewedAt: row.reviewedAt.toISOString() }),
   };
 }
