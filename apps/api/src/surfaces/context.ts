@@ -261,6 +261,7 @@ export interface AdminSurfaceServices {
     regenerateRecoveryCodes(
       tx: Transaction,
       adminId: string,
+      code: string,
     ): Answer<typeof adminRecoveryCodesOutput>;
   };
   /** The audit log page and the home (FR-176, FR-181; T065). */

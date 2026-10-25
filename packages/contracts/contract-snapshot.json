@@ -171,6 +171,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.pageSize": { "required": true, "type": "integer" },
           "$.rows": { "required": true, "type": "array" },
           "$.rows[]": { "type": "object" },
           "$.rows[].adminId": { "required": true, "type": "string" },
@@ -184,6 +185,15 @@
           "$.rows[].recoveryCodesLeft": { "required": true, "type": "integer" },
           "$.rows[].self": { "required": true, "type": "boolean" },
           "$.total": { "required": true, "type": "integer" }
+        }
+      },
+      "admins.recoveryCodes.regenerate": {
+        "input": { "$": { "type": "object" }, "$.code": { "required": true, "type": "string" } },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.recoveryCodes": { "required": true, "type": "array" },
+          "$.recoveryCodes[]": { "type": "string" }
         }
       },
       "admins.regenerateRecoveryCodes": {

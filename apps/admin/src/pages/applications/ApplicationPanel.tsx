@@ -2,7 +2,8 @@
 // The header: the applicant, their gender, city and date, the minor flag (FR-132) and the status.
 // Each document opens in the viewer, view only (B14b-2). An open identity request is shown with its
 // reason, and the document it brought opens in the person's context, with its two decisions;
-// «طلب إثبات هوية» is offered on an active account with none open (FR-166). The call is recorded
+// «طلب إثبات هوية» is offered on an active account with none open (FR-166). An approved teacher's
+// standing is changed here (T073, `StandingDialogs.tsx`). The call is recorded
 // by its day (the browser's date field, its latest day today in the panel's zone), its outcome and
 // its notes, while the application is open. The footer offers the actions the status admits;
 // «اعتماد» waits for the three conditions, each one said.
@@ -34,6 +35,7 @@ import { ApproveDialog } from './ApproveDialog';
 import { DecisionDialog, type DecisionKind } from './DecisionDialog';
 import { allowedFor, BLOCKED_TEXT, blockedReasons, STATUS_TEXT } from './decisions';
 import { type ApplicationDetail, useApplication, useApplicationActions } from './queries';
+import { ReinstateDialog, StandingDialog } from './StandingDialogs';
 
 const CREDENTIAL_TEXT: Readonly<
   Record<ApplicationDetail['credentials'][number]['status'], MessageKey>
@@ -77,6 +79,14 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
   const [approving, setApproving] = useState(false);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [requiring, setRequiring] = useState(false);
+  const [standing, setStanding] = useState<'change' | 'reinstate' | null>(null);
+  // An approved teacher's standing (T073): suspended, reinstated; otherwise suspended, revoked or
+  // banned. A banned account has nothing left to change.
+  const approved = detail.status === 'approved';
+  const reinstatable = approved && detail.accountStatus === 'suspended';
+  const changeable =
+    approved &&
+    (detail.accountStatus === 'active' || detail.accountStatus === 'verification_required');
   const allowed = allowedFor(detail.status);
   const blocked = blockedReasons(detail);
   const subjectName = (subject: { nameAr: string; nameEn: string }) =>
@@ -222,6 +232,21 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
                 onPress={() => setDeciding('ban')}
               />
             ) : null}
+            {changeable ? (
+              <Button
+                label={t('admin.dialogs.suspendTeacher.kinds.suspend')}
+                variant="danger"
+                icon={{ name: 'ban' }}
+                onPress={() => setStanding('change')}
+              />
+            ) : null}
+            {reinstatable ? (
+              <Button
+                label={t('admin.dialogs.confirm.reactivateAccount.confirm')}
+                icon={{ name: 'rotate-ccw' }}
+                onPress={() => setStanding('reinstate')}
+              />
+            ) : null}
           </>
         }
         {...(allowed.approve ? { note: t('admin.applications.detail.footer') } : {})}
@@ -338,6 +363,11 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
       )}
       {approving ? <ApproveDialog detail={detail} onClose={() => setApproving(false)} /> : null}
       {viewed === null ? null : <AdminDocumentViewer {...viewed} />}
+      {standing === 'change' ? (
+        <StandingDialog detail={detail} onClose={() => setStanding(null)} />
+      ) : standing === 'reinstate' ? (
+        <ReinstateDialog detail={detail} onClose={() => setStanding(null)} />
+      ) : null}
       {requiring ? (
         <AdminRequireIdDialog
           userId={detail.teacherUserId}

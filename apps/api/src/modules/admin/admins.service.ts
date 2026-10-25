@@ -15,16 +15,19 @@
 //   of `admin_list_page_size`, the search over the name and the address as typed.
 import { randomUUID } from 'node:crypto';
 
+import { addMinutes } from '@ijazah/time';
 import { z } from 'zod';
 
 import { ColumnCipher } from '../../platform/crypto/encryption.js';
 import { OtpHasher } from '../../platform/crypto/hashing.js';
-import { generateTotpSecret } from '../../platform/crypto/totp.js';
+import { generateTotpSecret, verifyTotp } from '../../platform/crypto/totp.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   drawRecoveryCodes,
+  LOCKOUT_ATTEMPTS_SETTING,
+  LOCKOUT_MINUTES_SETTING,
   normalizeAdminEmail,
   RECOVERY_CODE_COUNT_SETTING,
 } from './admin-auth.service.js';
@@ -64,8 +67,10 @@ export class AdminsService {
   readonly #cipher: ColumnCipher;
   readonly #recoveryHasher: OtpHasher;
   readonly #now: () => Date;
+  readonly #database: Database;
 
   constructor(dependencies: AdminsDependencies) {
+    this.#database = dependencies.database;
     this.#administrators = new AdminUsersRepository(dependencies.database);
     this.#recoveryCodes = new AdminRecoveryCodesRepository(dependencies.database);
     this.#settings = dependencies.settings;
@@ -117,13 +122,53 @@ export class AdminsService {
     await this.#sessions.revokeAll(adminId, tx);
   }
 
-  /** `admins.regenerateRecoveryCodes`: the caller's new set, shown once. */
+  /**
+   * `admins.recoveryCodes.regenerate`: the caller's new set, shown once, for a current code of their
+   * second factor (T096): a session alone cannot mint codes that outlive it. The code is checked as
+   * the sign-in checks it, a step never accepted twice; a wrong one counts toward the lockout on its
+   * own write (the procedure's transaction rolls back with the refusal), and a locked account is
+   * refused whatever it sends, so a stolen session cannot keep guessing.
+   */
   async regenerateRecoveryCodes(
     tx: Tx,
     adminId: string,
+    code: string,
   ): Promise<{ readonly recoveryCodes: string[] }> {
     const admin = await this.#existing(tx, adminId);
     if (admin.mfaEnrolledAt === null) throw new DomainError('MFA_SETUP_REQUIRED');
+    if (admin.lockedUntilAt !== null && admin.lockedUntilAt > this.#now()) {
+      throw new DomainError('CODE_INVALID');
+    }
+    // A lock that has run out is cleared with its count, as the sign-in clears it (R-107), so the
+    // next failures can lock again (B14d-2 review, finding 1).
+    if (admin.lockedUntilAt !== null) {
+      await this.#administrators.clearExpiredLock(this.#database, admin.id, this.#now());
+    }
+    const secret = this.#cipher.decrypt(admin.mfaSecretEncrypted, MFA_SECRET_COLUMN, admin.id);
+    const accepted = await verifyTotp(secret, code, this.#now(), admin.mfaLastAcceptedStep);
+    if (accepted === null) {
+      const attempts = await this.#settings.read(LOCKOUT_ATTEMPTS_SETTING, positiveWhole);
+      const minutes = await this.#settings.read(LOCKOUT_MINUTES_SETTING, positiveWhole);
+      await this.#administrators.countFailure(
+        this.#database,
+        admin.id,
+        attempts,
+        new Date(addMinutes(this.#now(), minutes)),
+      );
+      throw new DomainError('CODE_INVALID');
+    }
+    if (
+      !(await this.#administrators.acceptStep(
+        tx,
+        admin.id,
+        admin.mfaLastAcceptedStep,
+        accepted.step,
+      ))
+    ) {
+      throw new DomainError('CODE_INVALID');
+    }
+    // A right code forgets the failed ones, as a passed sign-in does (B14d-2 review, m1).
+    await this.#administrators.clearFailures(tx, admin.id);
     const count = await this.#settings.read(RECOVERY_CODE_COUNT_SETTING, positiveWhole);
     const { codes, hashes } = await drawRecoveryCodes(this.#recoveryHasher, count);
     await this.#recoveryCodes.replace(tx, adminId, hashes);
@@ -148,14 +193,18 @@ export class AdminsService {
       readonly search?: string | undefined;
       readonly page: number;
     },
-  ): Promise<{ readonly rows: AdminsListRow[]; readonly total: number }> {
+  ): Promise<{
+    readonly rows: AdminsListRow[];
+    readonly total: number;
+    readonly pageSize: number;
+  }> {
     const size = await this.#settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
     const filter = { active: query.tab === 'active', search: query.search };
     const [rows, total] = await Promise.all([
       this.#administrators.page(tx, filter, (query.page - 1) * size, size),
       this.#administrators.count(tx, filter),
     ]);
-    return { rows: rows.map((row) => listRowOf(row, readerId)), total };
+    return { rows: rows.map((row) => listRowOf(row, readerId)), total, pageSize: size };
   }
 
   async #existing(tx: Tx, adminId: string) {

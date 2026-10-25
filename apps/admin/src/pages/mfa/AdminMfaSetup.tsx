@@ -17,26 +17,17 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import {
-  Banner,
-  Button,
-  CheckRow,
-  Field,
-  IconButton,
-  Otp,
-  Skeleton,
-} from '../../design/components';
+import { Banner, Button, Field, IconButton, Otp, Skeleton } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf } from '../../lib/client';
+import { RecoveryCodes } from './RecoveryCodes';
 import { TOTP_PERIOD_SECONDS, useStartOver } from './start-over';
 
 const CODE_LENGTH = 6;
 /** The QR's side in CSS pixels, and its quiet zone in modules (ISO/IEC 18004 asks for four). */
 const QR_SIZE = 160;
 const QR_QUIET_ZONE = 4;
-/** The name of the downloaded codes. */
-export const RECOVERY_CODES_FILE = 'ijazah-admin-recovery-codes.txt';
 
 interface Begun {
   readonly uri: string;
@@ -175,38 +166,7 @@ export function AdminMfaSetup() {
             <StepTitle number={3} title={t('admin.mfaSetup.step3.title')} />
             <p className="text-callout tone-muted">{t('admin.mfaSetup.step3.text')}</p>
             {codes === null ? null : (
-              <>
-                <div className="card card--surface">
-                  <ul className="grid-2 gap-3" aria-label={t('admin.mfaSetup.step3.a11y.codes')}>
-                    {codes.map((recovery) => (
-                      <li key={recovery} className="text-latin text-medium ltr">
-                        {recovery}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="row gap-2">
-                  <Button
-                    label={t('admin.mfaSetup.step3.copy')}
-                    variant="secondary"
-                    layout="grow"
-                    icon={{ name: 'copy' }}
-                    onPress={() => copy(codes.join('\n'))}
-                  />
-                  <Button
-                    label={t('admin.mfaSetup.step3.download')}
-                    variant="secondary"
-                    layout="grow"
-                    icon={{ name: 'download' }}
-                    onPress={() => download(codes)}
-                  />
-                </div>
-                <CheckRow
-                  label={t('admin.mfaSetup.step3.savedConfirm')}
-                  checked={saved}
-                  onChange={setSaved}
-                />
-              </>
+              <RecoveryCodes codes={codes} saved={saved} onSaved={setSaved} />
             )}
           </li>
         </ol>
@@ -252,15 +212,4 @@ export function emailOf(otpauthUri: string): string {
 
 function copy(text: string): void {
   void navigator.clipboard.writeText(text).catch(() => undefined);
-}
-
-/** Saves the codes as a text file, one a line (a file the browser writes, nothing sent). */
-function download(codes: readonly string[]): void {
-  const url = URL.createObjectURL(new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = RECOVERY_CODES_FILE;
-  link.click();
-  // Let go of the address once the browser took the download: Safari cancels it otherwise.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

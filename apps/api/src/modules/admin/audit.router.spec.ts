@@ -25,7 +25,8 @@ beforeEach(async () => {
 
 describe('audit.list and audit.get', () => {
   it('answers a target’s entries, leaving out the reads, and is audited as audit.read naming the reader', async () => {
-    await caller.admins.regenerateRecoveryCodes();
+    world.clock.advance(30);
+    await caller.admins.recoveryCodes.regenerate({ code: await world.currentCode(actorId) });
     const answer = await caller.audit.list({ targetId: actorId, page: 1 });
     expect(answer.rows.map((row) => row.action)).toEqual(['admin.regenerate_recovery_codes']);
     expect(answer.rows[0]).toMatchObject({ targetType: 'admin', targetName: 'Spec Administrator' });

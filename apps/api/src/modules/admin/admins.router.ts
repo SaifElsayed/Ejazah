@@ -7,6 +7,7 @@
 // `admin.router.ts`.
 import {
   adminRecoveryCodesOutput,
+  adminRegenerateRecoveryCodesInput,
   adminsAddInput,
   adminsAddOutput,
   adminsDisableInput,
@@ -16,6 +17,7 @@ import {
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
+import { DomainError } from '../../platform/errors/domain-error.js';
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
 
 export const adminsRouter = createAdminRouter({
@@ -61,17 +63,33 @@ export const adminsRouter = createAdminRouter({
     },
   ),
 
+  /**
+   * Deprecated by T096: new codes ask a current code of one's second factor, which this procedure's
+   * input has no room for, and its contract stays as published (R-API-9: additive only). It refuses
+   * every call, as a wrong code is refused, and writes nothing; `recoveryCodes.regenerate` replaces
+   * it. Removed once no client can call it (the panel never shipped a caller).
+   */
   regenerateRecoveryCodes: adminProcedure({
     input: z.void(),
     output: adminRecoveryCodesOutput,
-  }).mutation(async ({ ctx }) => {
-    const { adminId } = ctx.administrator;
-    const codes = await ctx.services.admins.regenerateRecoveryCodes(ctx.tx, adminId);
-    ctx.audit.record({
-      action: 'admin.regenerate_recovery_codes',
-      targetType: 'admin',
-      targetId: adminId,
-    });
-    return codes;
+  }).mutation((): never => {
+    throw new DomainError('CODE_INVALID');
+  }),
+
+  recoveryCodes: createAdminRouter({
+    /** `admins.recoveryCodes.regenerate` (T096): the caller's new set for a current code. */
+    regenerate: adminProcedure({
+      input: adminRegenerateRecoveryCodesInput,
+      output: adminRecoveryCodesOutput,
+    }).mutation(async ({ ctx, input }) => {
+      const { adminId } = ctx.administrator;
+      const codes = await ctx.services.admins.regenerateRecoveryCodes(ctx.tx, adminId, input.code);
+      ctx.audit.record({
+        action: 'admin.regenerate_recovery_codes',
+        targetType: 'admin',
+        targetId: adminId,
+      });
+      return codes;
+    }),
   }),
 });

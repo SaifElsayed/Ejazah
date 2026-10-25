@@ -377,8 +377,10 @@ describe('recovery codes', { timeout: 15_000 }, () => {
 
   it('regenerating replaces the set: the old codes are refused, the new ones pass', async () => {
     const { admin, recoveryCodes } = await enrolledWithCodes();
+    world.clock.advance(30);
+    const code = await world.currentCode(admin.adminId);
     const fresh = await inTransaction(database, (tx) =>
-      world.admins.regenerateRecoveryCodes(tx, admin.adminId),
+      world.admins.regenerateRecoveryCodes(tx, admin.adminId, code),
     );
     expect(fresh.recoveryCodes).toHaveLength(10);
     expect(await world.rows.recoveryCodes(admin.adminId)).toHaveLength(10);
@@ -395,8 +397,10 @@ describe('resetMfa', () => {
     const actor = await world.createAdministrator();
     const target = await world.createAdministrator();
     const token = await verified(target);
+    world.clock.advance(30);
+    const code = await world.currentCode(target.adminId);
     await inTransaction(database, (tx) =>
-      world.admins.regenerateRecoveryCodes(tx, target.adminId),
+      world.admins.regenerateRecoveryCodes(tx, target.adminId, code),
     );
     await inTransaction(database, (tx) => world.admins.resetMfa(tx, actor.adminId, target.adminId));
     const row = await world.rows.administrator(target.adminId);

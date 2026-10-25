@@ -25,6 +25,7 @@ import {
 } from './lib/session';
 import { AuthLayout, ConsoleLayout, SetupLayout } from './pages/_layout/layouts';
 import { ConsolePageShell } from './pages/_layout/shells';
+import { AdminAdmins } from './pages/settings/admins/AdminAdmins';
 import { AdminApplications } from './pages/applications/AdminApplications';
 import { AdminAudit } from './pages/audit/AdminAudit';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
@@ -88,10 +89,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path={HOME_PATH} element={<AdminHome />} />
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
-              <Route
-                path="/settings/admins"
-                element={<ConsolePageShell title="admin.admins.title" />}
-              />
+              <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>
             <Route path="*" element={<Navigate to={HOME_PATH} replace />} />

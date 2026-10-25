@@ -37,7 +37,12 @@ export const adminsListRow = z.object({
   disabledAt: z.iso.datetime().optional(),
 });
 
-export const adminsListOutput = z.object({ rows: z.array(adminsListRow), total: z.int().min(0) });
+export const adminsListOutput = z.object({
+  rows: z.array(adminsListRow),
+  total: z.int().min(0),
+  /** `admin_list_page_size`, so the panel's pager counts the pages (B14d, owner's decision). */
+  pageSize: z.int().min(1),
+});
 
 export const adminsAddInput = z.object({ displayName, email: emailAddress });
 
