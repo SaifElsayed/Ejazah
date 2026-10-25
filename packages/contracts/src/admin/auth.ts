@@ -48,7 +48,7 @@ export const adminMfaSetupConfirmInput = z.object({
 /** The codes, shown once (`admin_recovery_code_count` of them). */
 export const adminRecoveryCodesOutput = z.object({ recoveryCodes: z.array(z.string()) });
 
-/** `admins.regenerateRecoveryCodes`: a current code of the caller's own second factor (T096). */
+/** `admins.recoveryCodes.regenerate`: a current code of the caller's own second factor (T096). */
 export const adminRegenerateRecoveryCodesInput = z.object({ code: totpCode });
 
 export const adminSetPasswordInput = z.object({ inviteToken, password });

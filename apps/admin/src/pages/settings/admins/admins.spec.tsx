@@ -71,7 +71,7 @@ function fakeApi() {
       add: mutation(),
       disable: mutation(),
       resetMfa: mutation(),
-      regenerateRecoveryCodes: mutation(),
+      recoveryCodes: { regenerate: mutation() },
     },
     home: { summary: query() },
     auth: { me: query() },
@@ -307,8 +307,8 @@ describe('the dialogs (FR-173, FR-174)', () => {
 
   it('makes new recovery codes for a current code, and shows them once (T096)', async () => {
     const { api } = open();
-    api.admins.regenerateRecoveryCodes.mutate.mockRejectedValueOnce(refusal('CODE_INVALID'));
-    api.admins.regenerateRecoveryCodes.mutate.mockResolvedValueOnce({ recoveryCodes: CODES });
+    api.admins.recoveryCodes.regenerate.mutate.mockRejectedValueOnce(refusal('CODE_INVALID'));
+    api.admins.recoveryCodes.regenerate.mutate.mockResolvedValueOnce({ recoveryCodes: CODES });
     const detail = await select(self.displayName);
     fireEvent.click(detail.getByRole('button', { name: ar('admin.admins.recovery.action') }));
     const making = await dialog(ar('admin.admins.recovery.title'));
@@ -322,7 +322,7 @@ describe('the dialogs (FR-173, FR-174)', () => {
     expect(await making.findByText(ar('admin.admins.recovery.codeInvalid'))).toBeTruthy();
     fireEvent.click(create);
     await waitFor(() =>
-      expect(api.admins.regenerateRecoveryCodes.mutate).toHaveBeenLastCalledWith({
+      expect(api.admins.recoveryCodes.regenerate.mutate).toHaveBeenLastCalledWith({
         code: '123456',
       }),
     );

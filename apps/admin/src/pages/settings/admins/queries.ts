@@ -46,8 +46,8 @@ export function useAdminActions() {
       onSuccess: reread,
     }),
     regenerate: useMutation({
-      mutationFn: (input: Parameters<typeof api.regenerateRecoveryCodes.mutate>[0]) =>
-        api.regenerateRecoveryCodes.mutate(input),
+      mutationFn: (input: Parameters<typeof api.recoveryCodes.regenerate.mutate>[0]) =>
+        api.recoveryCodes.regenerate.mutate(input),
       onSuccess: reread,
     }),
   };

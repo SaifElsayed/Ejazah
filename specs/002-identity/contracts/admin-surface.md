@@ -114,7 +114,8 @@ The standing's states (T068, batch B13b; data-model.md, ADR 0016 D2):
 | `admins.add`                     | `{ displayName, email }`                         | `{ adminId }`                                                                                                                                      | `admin.add`; queues `deliver-admin-invite` (R-110)      |
 | `admins.disable`                 | `{ adminId, reason }`                            | `void`                                                                                                                                             | `admin.disable`; sessions revoked; self-disable refused |
 | `admins.resetMfa`                | `{ adminId, reason }`                            | `void`                                                                                                                                             | `admin.reset_mfa` (FR-173); self-reset refused          |
-| `admins.regenerateRecoveryCodes` | `{ code }`: a current TOTP code of the caller (T096) | `{ recoveryCodes }`                                                                                                                                | `admin.regenerate_recovery_codes` (own account); a wrong or spent code, or a locked account, is `CODE_INVALID`, a wrong one counted toward the lockout (T096) |
+| `admins.regenerateRecoveryCodes` | `void` | `{ recoveryCodes }` | deprecated by T096: refuses every call with `CODE_INVALID` and writes nothing; its contract stays as published (R-API-9) until no client can call it |
+| `admins.recoveryCodes.regenerate` | `{ code }`: a current TOTP code of the caller (T096) | `{ recoveryCodes }` | `admin.regenerate_recovery_codes` (own account); a wrong or spent code, or a locked account, is `CODE_INVALID`, a wrong one counted toward the lockout (T096) |
 
 ## `audit` and `home` (FR-176, FR-181)
 

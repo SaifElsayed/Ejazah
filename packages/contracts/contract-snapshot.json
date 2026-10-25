@@ -187,8 +187,17 @@
           "$.total": { "required": true, "type": "integer" }
         }
       },
-      "admins.regenerateRecoveryCodes": {
+      "admins.recoveryCodes.regenerate": {
         "input": { "$": { "type": "object" }, "$.code": { "required": true, "type": "string" } },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.recoveryCodes": { "required": true, "type": "array" },
+          "$.recoveryCodes[]": { "type": "string" }
+        }
+      },
+      "admins.regenerateRecoveryCodes": {
+        "input": { "$": { "type": "unknown" } },
         "kind": "mutation",
         "output": {
           "$": { "type": "object" },

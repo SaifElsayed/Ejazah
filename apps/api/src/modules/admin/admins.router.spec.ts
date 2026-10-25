@@ -111,11 +111,11 @@ describe('admins.disable and admins.resetMfa', () => {
   });
 });
 
-describe('admins.regenerateRecoveryCodes and admins.list', () => {
+describe('admins.recoveryCodes.regenerate and admins.list', () => {
   it('regenerate answers the new codes once and audits it on the caller’s own account', async () => {
     // The sign-in spent this step's code; the next one regenerates (T096).
     world.clock.advance(30);
-    const { recoveryCodes } = await caller.admins.regenerateRecoveryCodes({
+    const { recoveryCodes } = await caller.admins.recoveryCodes.regenerate({
       code: await world.currentCode(actor.adminId),
     });
     expect(recoveryCodes).toHaveLength(10);
@@ -125,6 +125,14 @@ describe('admins.regenerateRecoveryCodes and admins.list', () => {
       targetId: actor.adminId,
     });
     expect(JSON.stringify(entry)).not.toContain(recoveryCodes[0]);
+  });
+
+  it('the procedure without a code always refuses, changes nothing and audits nothing (T096; R-API-9 keeps its contract)', async () => {
+    const before = await world.rows.recoveryCodes(actor.adminId);
+    expect(await codeOf(caller.admins.regenerateRecoveryCodes())).toBe('CODE_INVALID');
+    expect(await world.rows.recoveryCodes(actor.adminId)).toEqual(before);
+    const actions = (await world.rows.auditEntriesOf(actor.adminId)).map((entry) => entry.action);
+    expect(actions).not.toContain('admin.regenerate_recovery_codes');
   });
 
   it('list answers the tab and is audited as admins.read naming the reader', async () => {
