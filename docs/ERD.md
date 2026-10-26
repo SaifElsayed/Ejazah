@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.8 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog*
+*Version 1.8 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog*
 
 ## 0. How to read this
 
@@ -215,9 +215,10 @@ Uploaded identity and credential documents (FR-VERIFY-1). Admin: view only, neve
 | id | uuid | PK |
 | user_id | FK → users | Teacher applicants and any user under FR-VERIFY-10 |
 | document_type | enum national_id · passport · credential · other | |
-| storage_key_encrypted | bytea | Identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only (NFR-SEC-2/3) |
+| storage_key_encrypted | bytea, nullable | Identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only (NFR-SEC-2/3). Null only once the file is removed after its person's deletion, never before `erased_at` (§15 rule 34; v1.9) |
 | size_bytes | int, nullable | The PDF's size as the upload accepted it; null for a document uploaded before it was recorded. The file's name is never stored (it may carry the person's name) (v1.7) |
 | uploaded_at | timestamptz | |
+| erased_at | timestamptz, nullable | Set in the account deletion's transaction of the person who uploaded it (ADR 0015 D3); the document is no longer readable from then on, and its key is cleared after the commit once the file is removed. A key still held is retried by the `erase-deleted-files` job (v1.9) |
 
 ### `verification_requests`
 
@@ -840,6 +841,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 33. `user_session_retired_tokens.token_hash` unique — a retired refresh token names one session, so a presentation of it after the grace finds the session to revoke (research R-101; Phase 1, T094).
 
+34. `verification_documents`: `storage_key_encrypted IS NOT NULL OR erased_at IS NOT NULL` — check constraint `verification_documents_erased_key_check`: a document loses its key only once it is erased, so a stored identity document never goes missing unseen (ADR 0015 D3; B16, T082).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -976,3 +979,13 @@ FR-161 and `applications.recordCall` record the verification call's day, outcome
 | 1 | §2 `teacher_profiles.verification_call_completed_on date` replaces `verification_call_completed_at timestamptz` | `20261022000000_verification_call_day_and_outcome` |
 | 2 | §2 `teacher_profiles.verification_call_outcome`, the new enum `verification_call_outcome` (`suitable · unsuitable`), nullable | the same |
 | 3 | §2 `verification_requests.status` gains `replaced`: a request for another document closes the request and opens a new one, so a document an administrator turned away is never swept (B13b review, owner's decision 2026-10-22) | the same |
+
+## Changelog — v1.8 → v1.9 (a deleted person's documents, 2026-10-26)
+
+An account deletion erases a teacher's documents (ADR 0015 D3), and the rows must stay, since profiles and credentials point at them. The owner decided at the conflict check of batch B16 (decision 1, on the reviewer's advice): the deletion's transaction marks the documents erased and keeps each key; after the commit each file is removed and its key cleared only once the removal succeeded; a job retries every erased document still holding a key.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §3 `verification_documents.storage_key_encrypted` becomes nullable | `20261026000000_verification_documents_erased_at` |
+| 2 | §3 `verification_documents.erased_at timestamptz`, nullable | the same |
+| 3 | §15 rule 34: no key without `erased_at` | the same |

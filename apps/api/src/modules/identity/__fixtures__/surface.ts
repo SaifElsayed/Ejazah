@@ -52,7 +52,10 @@ export interface IdentitySurface {
   readonly bearing: (accessToken: string) => Promise<IdentityCaller>;
 }
 
-export function surfaceOf(identity: Identity): IdentitySurface {
+export function surfaceOf(
+  identity: Identity,
+  overrides: { readonly deletion?: AppServices['identity']['deletion'] } = {},
+): IdentitySurface {
   const check = vi.fn(async (_key: string, _subject: string) => undefined);
   const rateLimiter = { check } as unknown as RateLimiter;
   const services: AppServices = {
@@ -60,11 +63,11 @@ export function surfaceOf(identity: Identity): IdentitySurface {
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
     subjects: { listActive: async () => [] },
     // The payout namespace has its own fixture (T077), and `account.delete` reaches the deletion,
-    // which T082 builds its own over; the other procedures never reach either.
+    // which deletion.service.spec.ts builds its own over; a router spec hands in a recording one.
     identity: {
       ...identity,
       payout: unusedIdentityServices.payout,
-      deletion: unusedIdentityServices.deletion,
+      deletion: overrides.deletion ?? unusedIdentityServices.deletion,
     },
     verification: unusedVerificationServices,
   };

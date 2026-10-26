@@ -9,7 +9,8 @@
 // purge stores of both modules bound for the three purge sweeps (T025), the verification module's
 // store of unreferenced documents over the identity and catalog modules' pointers (Phase 1's T093),
 // the admin module's invites with the email port and the invite marks for `deliver-admin-invite`
-// (T066), every sweep registered on its schedule, and the queue's deliveries run through the
+// (T066), the stores of deleted people's files for `erase-deleted-files` (B16), every sweep
+// registered on its schedule, and the queue's deliveries run through the
 // registered jobs (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
@@ -37,6 +38,7 @@ const [
   { purgeStalePushTokens },
   { purgeExpiredSessions },
   { purgeUnreferencedDocuments },
+  { eraseDeletedFiles },
   { deliverAdminInvite },
   { createRedisSingleUseMarks },
   catalog,
@@ -60,6 +62,7 @@ const [
   import('./jobs/purge-stale-push-tokens.js'),
   import('./jobs/purge-expired-sessions.js'),
   import('./jobs/purge-unreferenced-documents.js'),
+  import('./jobs/erase-deleted-files.js'),
   import('./jobs/deliver-admin-invite.js'),
   import('./platform/redis/single-use-marks.js'),
   import('./modules/catalog/index.js'),
@@ -115,6 +118,14 @@ const unreferencedDocuments = verification.createUnreferencedDocuments({
   ],
 });
 
+// A deleted person's files whose removal after the deletion's commit failed (B16, decision 1): the
+// verification module's erased documents still holding a key and the identity module's deleted
+// people still holding a photo key, each removed through the storage port before its key is cleared.
+const erasedFiles = [
+  verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+  identity.createErasedPhotos(database),
+];
+
 // The administrator's invite (T066, R-110): the admin module prepares each mail, the link pointing
 // at the panel's origin, and the job marks each one sent in Redis so a redelivery sends nothing more.
 const adminInvites = admin.createAdminInvites({
@@ -136,6 +147,7 @@ const jobs: readonly Job[] = [
   purgeStalePushTokens({ store: purge.pushTokens, settings }),
   purgeExpiredSessions({ stores: { user: purge.userSessions, admin: adminSessions }, settings }),
   purgeUnreferencedDocuments({ store: unreferencedDocuments, storage: ports.storage, settings }),
+  eraseDeletedFiles({ stores: erasedFiles, storage: ports.storage }),
   deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
 ];
 

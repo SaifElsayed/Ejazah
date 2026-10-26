@@ -10,10 +10,15 @@ import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
 import { AccountService } from './account.service.js';
 import { EmailAuthService } from './email-auth.service.js';
-import { AccountsRepository, IdentityRepository } from './identity.repository.js';
+import {
+  AccountsRepository,
+  DeletedPhotosRepository,
+  type HeldPhoto,
+  IdentityRepository,
+} from './identity.repository.js';
 import { OnboardingService } from './onboarding.service.js';
 import type { AccountConsequences } from './consequences.js';
-import { DeletionService } from './deletion.service.js';
+import { DeletionService, type FileErasure } from './deletion.service.js';
 import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
@@ -81,7 +86,8 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly marks: SingleUseMarks;
   readonly signIn: SignInPort;
   readonly email: EmailPort;
-  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  /** Photo links (T049) and, after a deletion's commit, the photo's removal (T082). */
+  readonly storage: Pick<StoragePort, 'temporaryLink' | 'remove'>;
   /** Where a mail that could not be handed over is reported, never awaited by the request. */
   readonly log: WarningLog;
   /** Payout setup registers the recipient through the port (T077). */
@@ -90,6 +96,10 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   /** The one registry of an account's end, shared with the admin module (FR-142, B16). */
   readonly consequences: AccountConsequences;
+  /** The other modules' files of a deleted person, removed after the commit (B16, decision 1). */
+  readonly fileErasures?: readonly FileErasure[];
+  /** Where a failure after a deletion's commit is reported; the error tracker unless given. */
+  readonly report?: (error: unknown) => void;
 }
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
@@ -102,6 +112,8 @@ export function createIdentityServices({
   payment,
   idempotency,
   consequences,
+  fileErasures,
+  report,
   ...base
 }: IdentityServiceDependencies): IdentityServices {
   const sessions = new SessionService(base);
@@ -114,7 +126,19 @@ export function createIdentityServices({
     onboarding,
     account: new AccountService({ ...base, storage }),
     payout: new PayoutService({ ...base, payment, idempotency }),
-    deletion: new DeletionService({ ...base, consequences }),
+    deletion: new DeletionService({
+      ...base,
+      consequences,
+      marks,
+      signIn: signInPort,
+      email,
+      storage,
+      idempotency,
+      codes,
+      log,
+      fileErasures,
+      report,
+    }),
   };
 }
 
@@ -246,6 +270,24 @@ export function createDocumentReferences(database: Database): {
 } {
   const accounts = new AccountsRepository(database);
   return { referencedAmong: (documentIds) => accounts.identityDocumentsAmong(documentIds) };
+}
+
+/** A file the deletion leaves to the `erase-deleted-files` sweep, and the deletion's file erasure (B16). */
+export type { FileErasure, HeldPhoto };
+
+/**
+ * Deleted people's photo keys still held, for the `erase-deleted-files` sweep (B16, decision 1): a
+ * page of them in id order, and the key cleared once its file is gone (R-API-6).
+ */
+export function createErasedPhotos(database: Pick<Database, 'includeDeleted'>): {
+  pendingPage(after: string | undefined, limit: number): Promise<readonly HeldPhoto[]>;
+  clearKey(photo: HeldPhoto): Promise<boolean>;
+} {
+  const photos = new DeletedPhotosRepository(database);
+  return {
+    pendingPage: (after, limit) => photos.heldPage(after, limit),
+    clearKey: (photo) => photos.clear(photo),
+  };
 }
 
 /** The identity module's `_encrypted` columns, for the `reencrypt-columns` job (T155, R-API-6; the third since T013). */

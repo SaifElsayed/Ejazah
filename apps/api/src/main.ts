@@ -133,8 +133,10 @@ const cipher = createColumnCipher(config);
 // (FR-106), the payout registration over the payment port (T077).
 // The one registry of an account's end (FR-142): the admin module's standing actions and the
 // identity module's deletion call it, and the modules that keep what an account had subscribe to it
-// (B16 check, decision 2).
+// (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
+// documents, and its file erasure removes their files after the deletion's commit (decision 1).
 const consequences = new identity.AccountConsequences();
+consequences.subscribe(verification.documentErasureConsequence());
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
@@ -156,6 +158,9 @@ const services = {
     payment: ports.payment,
     idempotency,
     consequences,
+    fileErasures: [
+      verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+    ],
   }),
   verification: verification.createVerificationServices({
     database,

@@ -9,11 +9,16 @@ model VerificationDocument {
   userId              String                   @map("user_id") @db.Uuid
   documentType        VerificationDocumentType @map("document_type")
   // An identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only.
-  storageKeyEncrypted Bytes                    @map("storage_key_encrypted")
+  // Null once the file is gone after its person's deletion (B16, decision 1): never before
+  // `erased_at`, which rule 34 holds.
+  storageKeyEncrypted Bytes?                   @map("storage_key_encrypted")
   // The PDF's size in bytes, recorded at upload (T057, owner's decision 2026-10-21); null for a document
   // uploaded before it was recorded. The file's name is never stored (it may carry the person's name).
   sizeBytes           Int?                     @map("size_bytes")
   uploadedAt          DateTime                 @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  // Set in the deletion's transaction of the person who uploaded it (ADR 0015 D3; B16, decision 1);
+  // the key is cleared after the commit, only once the file is removed.
+  erasedAt            DateTime?                @map("erased_at") @db.Timestamptz(6)
   createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id])

@@ -15,6 +15,29 @@ export interface SpecAccount {
   readonly provider?: { readonly provider: 'google' | 'apple'; readonly subject: string };
 }
 
+/** The columns of a teacher's profile a deletion erases or keeps (T080). */
+export interface ErasedProfileColumns {
+  readonly bio: string;
+  readonly verificationStatus: string;
+  readonly payoutAccountRefEncrypted: Uint8Array | null;
+  readonly payoutAccountRefHash: string | null;
+  readonly payoutConfiguredAt: Date | null;
+  readonly payoutVerifiedAt: Date | null;
+  readonly payoutRejectedReason: string | null;
+}
+
+/** The personal columns of a person's row, read past the soft-delete filter (T080). */
+export interface ErasedUserColumns {
+  readonly deletedAt: Date | null;
+  readonly displayName: string | null;
+  readonly email: string | null;
+  readonly phone: string | null;
+  readonly passwordHash: string | null;
+  readonly dateOfBirth: Date | null;
+  readonly certificateName: string | null;
+  readonly photoKey: string | null;
+}
+
 export class SpecRows {
   readonly #database: Database;
 
@@ -136,6 +159,112 @@ export class SpecRows {
 
   terms(userId: string) {
     return this.#database.termsAcceptance.findMany({ where: { userId } });
+  }
+
+  /**
+   * T080: the personal fields the deletion erases, set on a live account so a spec sees them go: a
+   * phone number, a certificate name, a photo key.
+   */
+  setPersonalFields(
+    userId: string,
+    fields: {
+      readonly phone?: string;
+      readonly certificateName?: string;
+      readonly photoKey?: string;
+    },
+  ) {
+    return this.#database.user.update({ where: { id: userId }, data: fields });
+  }
+
+  /** A provider identity with Apple's grant already encrypted to `id`, as onboarding writes it. */
+  createIdentity(identity: {
+    readonly id: string;
+    readonly userId: string;
+    readonly provider: 'google' | 'apple';
+    readonly subject: string;
+    readonly grantEncrypted: Uint8Array | null;
+  }) {
+    return this.#database.authIdentity.create({
+      data: {
+        id: identity.id,
+        userId: identity.userId,
+        provider: identity.provider,
+        providerSubject: identity.subject,
+        providerRefreshTokenEncrypted:
+          identity.grantEncrypted === null ? null : Uint8Array.from(identity.grantEncrypted),
+      },
+    });
+  }
+
+  /** A device push token of the person's (T080: the deletion removes them). */
+  createPushToken(userId: string, tokenHash: string) {
+    return this.#database.devicePushToken.create({
+      data: {
+        userId,
+        tokenEncrypted: Uint8Array.from([1, 2, 3]),
+        tokenHash,
+        platform: 'android',
+        lastSeenAt: new Date(),
+      },
+    });
+  }
+
+  pushTokens(userId: string) {
+    return this.#database.devicePushToken.findMany({ where: { userId } });
+  }
+
+  /** A teacher's bio and payout columns, as a set-up teacher holds them (T080). */
+  async setTeacherFields(
+    userId: string,
+    fields: {
+      readonly bio: string;
+      readonly payoutAccountRefEncrypted: Uint8Array;
+      readonly payoutAccountRefHash: string;
+      readonly payoutConfiguredAt: Date;
+      readonly payoutVerifiedAt: Date;
+    },
+  ): Promise<void> {
+    await this.#database.teacherProfile.update({
+      where: { userId },
+      data: {
+        ...fields,
+        payoutAccountRefEncrypted: Uint8Array.from(fields.payoutAccountRefEncrypted),
+      },
+      select: { id: true },
+    });
+  }
+
+  /** The columns a deletion erases or keeps on a teacher's profile. */
+  async teacherProfile(userId: string): Promise<ErasedProfileColumns | null> {
+    return this.#database.teacherProfile.findUnique({
+      where: { userId },
+      select: {
+        bio: true,
+        verificationStatus: true,
+        payoutAccountRefEncrypted: true,
+        payoutAccountRefHash: true,
+        payoutConfiguredAt: true,
+        payoutVerifiedAt: true,
+        payoutRejectedReason: true,
+      },
+    });
+  }
+
+  /** The row as it is after a deletion: the ordinary client hides it, so read it past the filter. */
+  async deletedUser(userId: string): Promise<ErasedUserColumns | null> {
+    return this.#database.includeDeleted.user.findUnique({
+      where: { id: userId },
+      select: {
+        deletedAt: true,
+        displayName: true,
+        email: true,
+        phone: true,
+        passwordHash: true,
+        dateOfBirth: true,
+        certificateName: true,
+        photoKey: true,
+      },
+    });
   }
 
   /** The hashes a session's rotations retired, oldest first (T094). */

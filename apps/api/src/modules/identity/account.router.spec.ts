@@ -5,8 +5,13 @@
 // gate, T028, R-MOBILE-13, reads these cases by path). `me` and `setLanguage` admit a suspended or
 // banned account, which still reads its standing and its language on the restricted screen; the
 // profile and the time zone do not. What the service answers is proven by account.service.spec.ts.
+// `account.delete` (T082) admits a suspended account too (a restricted person may still leave,
+// FR-140), counts the caller on the authentication budget, and takes the typed word in either
+// language and nothing else; what the deletion does is deletion.service.spec.ts's.
+import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
 import {
   buildIdentity,
   createAccount,
@@ -45,6 +50,14 @@ describe('the namespace', () => {
     ]) {
       expect(metaOf(path)).toEqual({ surface: 'app', caller: 'user' });
     }
+  });
+
+  it('declares account.delete as the user kind, limited on the authentication budget', () => {
+    expect(metaOf('account.delete')).toEqual({
+      surface: 'app',
+      caller: 'user',
+      rateLimit: 'rate_limit_authentication',
+    });
   });
 });
 
@@ -143,5 +156,71 @@ describe('account.reportDeviceTimezone', () => {
       );
     }
     expect((await rowsOf(database).user(userId))?.timezone).toBe('Africa/Cairo');
+  });
+});
+
+describe('account.delete', () => {
+  const input = {
+    confirmation: 'حذف',
+    reauth: { kind: 'password', password: 'a long spec passphrase 41' },
+    idempotencyKey: 'spec-delete-key-0001',
+  } as const;
+
+  /** A deletion that records whom it was asked to delete and with what. */
+  function recordingDeletion() {
+    const calls: { readonly userId: string; readonly input: DeleteAccountInput }[] = [];
+    return {
+      calls,
+      deletion: {
+        deleteAccount: async (userId: string, given: DeleteAccountInput) => {
+          calls.push({ userId, input: given });
+        },
+        requestWebCode: unusedIdentityServices.deletion.requestWebCode,
+        confirmWebDeletion: unusedIdentityServices.deletion.confirmWebDeletion,
+      },
+    };
+  }
+
+  it('refuses an anonymous caller with UNAUTHENTICATED, counting nothing', async () => {
+    await expect(surface.anonymous().account.delete(input)).rejects.toMatchObject(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(surface.counts()).toEqual([]);
+  });
+
+  it('admits a suspended account, counts the caller on the authentication budget, and hands the input to the deletion', async () => {
+    const recording = recordingDeletion();
+    surface = surfaceOf(identity, { deletion: recording.deletion });
+    const { userId, caller } = await signedIn('suspended');
+    await expect(caller.account.delete(input)).resolves.toBeUndefined();
+    expect(recording.calls).toEqual([{ userId, input }]);
+    expect(surface.counts()).toEqual([
+      ['rate_limit_authentication_budget', '*'],
+      ['rate_limit_authentication', userId],
+    ]);
+  });
+
+  it('takes the typed word in English too, and refuses any other word before the deletion is reached', async () => {
+    const recording = recordingDeletion();
+    surface = surfaceOf(identity, { deletion: recording.deletion });
+    const { caller } = await signedIn();
+    await caller.account.delete({ ...input, confirmation: 'DELETE' });
+    for (const confirmation of ['delete', 'حذف الحساب', '']) {
+      await expect(
+        caller.account.delete({ ...input, confirmation } as unknown as DeleteAccountInput),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    }
+    expect(recording.calls).toHaveLength(1);
+  });
+
+  it('refuses a request without its idempotency key', async () => {
+    const recording = recordingDeletion();
+    surface = surfaceOf(identity, { deletion: recording.deletion });
+    const { caller } = await signedIn();
+    const { idempotencyKey: _omitted, ...unkeyed } = input;
+    await expect(
+      caller.account.delete(unkeyed as unknown as DeleteAccountInput),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(recording.calls).toEqual([]);
   });
 });

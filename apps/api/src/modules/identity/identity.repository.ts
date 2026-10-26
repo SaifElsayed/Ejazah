@@ -298,3 +298,171 @@ export class AccountsRepository {
     await tx.user.update({ where: { id: userId }, data: { passwordHash }, select: { id: true } });
   }
 }
+
+// T082 (FR-141, ADR 0015 D3; B16 check, decision 1): an account's deletion. What the proof reads of
+// the live caller; what the one transaction reads before it erases and the writes it makes, each
+// on that transaction and each conditional on the row it moves, so of two deletions racing on one
+// person exactly one erases (the second's update finds the row already deleted and answers false);
+// and a deleted person's photo key, read and cleared past the soft-delete filter after the commit,
+// cleared only where the row still holds the key whose file was removed.
+
+type ErasureWriter = Pick<
+  Transaction,
+  'user' | 'authIdentity' | 'devicePushToken' | 'teacherProfile'
+>;
+
+/** What re-authentication reads of the live caller: the password hash and the provider identities. */
+export interface DeletionProof {
+  readonly passwordHash: string | null;
+  readonly identities: readonly {
+    readonly provider: 'google' | 'apple';
+    readonly subject: string;
+  }[];
+}
+
+/** The live caller's proof material, or null when the person is not there or already deleted. */
+export async function readDeletionProof(
+  database: Pick<Database, 'user'>,
+  userId: string,
+): Promise<DeletionProof | null> {
+  const user = await database.user.findUnique({
+    where: { id: userId },
+    select: {
+      passwordHash: true,
+      authIdentities: { select: { provider: true, providerSubject: true } },
+    },
+  });
+  if (user === null) return null;
+  return {
+    passwordHash: user.passwordHash,
+    identities: user.authIdentities.map(({ provider, providerSubject }) => ({
+      provider,
+      subject: providerSubject,
+    })),
+  };
+}
+
+/** What the deletion keeps for the work after its commit, read before it erases. */
+export interface ErasureSnapshot {
+  readonly email: string | null;
+  /** Apple's grants, still encrypted to their identity rows, for the revoke after the commit. */
+  readonly grants: readonly {
+    readonly identityId: string;
+    readonly refreshTokenEncrypted: Uint8Array;
+  }[];
+}
+
+/** The live person's address and Apple grants, on the deletion's transaction; null if not live. */
+export async function readErasureSnapshot(
+  tx: Pick<Transaction, 'user'>,
+  userId: string,
+): Promise<ErasureSnapshot | null> {
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      authIdentities: {
+        where: { provider: 'apple', providerRefreshTokenEncrypted: { not: null } },
+        select: { id: true, providerRefreshTokenEncrypted: true },
+      },
+    },
+  });
+  if (user === null) return null;
+  return {
+    email: user.email,
+    grants: user.authIdentities.flatMap(({ id, providerRefreshTokenEncrypted }) =>
+      providerRefreshTokenEncrypted === null
+        ? []
+        : [{ identityId: id, refreshTokenEncrypted: providerRefreshTokenEncrypted }],
+    ),
+  };
+}
+
+/**
+ * The one transaction's writes (ADR 0015 D3): the row soft-deleted with its personal fields erased,
+ * the provider identities deleted outright, the push tokens removed, a teacher's bio and payout
+ * columns erased. False, and nothing written, when the row is already deleted. The photo key stays
+ * until its file is gone (`clearDeletedPhotoKey`); the role row, the terms and every history row stay.
+ */
+export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date): Promise<boolean> {
+  const { count } = await tx.user.updateMany({
+    where: { id: userId, deletedAt: null },
+    data: {
+      deletedAt: at,
+      displayName: null,
+      email: null,
+      phone: null,
+      passwordHash: null,
+      dateOfBirth: null,
+      certificateName: null,
+    },
+  });
+  if (count !== 1) return false;
+  await tx.authIdentity.deleteMany({ where: { userId } });
+  await tx.devicePushToken.deleteMany({ where: { userId } });
+  await tx.teacherProfile.updateMany({
+    where: { userId },
+    data: {
+      bio: '',
+      photoKey: null,
+      payoutAccountRefEncrypted: null,
+      payoutAccountRefHash: null,
+      payoutConfiguredAt: null,
+      payoutVerifiedAt: null,
+      payoutRejectedReason: null,
+    },
+  });
+  return true;
+}
+
+/** A deleted person whose photo file is still to be removed. */
+export interface HeldPhoto {
+  readonly id: string;
+  readonly storageKey: string;
+}
+
+type DeletedClient = Pick<Database, 'includeDeleted'>;
+
+/** Deleted people's photo keys, past the soft-delete filter (`database.includeDeleted`, R-API-6). */
+export class DeletedPhotosRepository {
+  readonly #database: DeletedClient;
+
+  constructor(database: DeletedClient) {
+    this.#database = database;
+  }
+
+  /** The deleted person's photo key while it is held; null otherwise. */
+  async heldOf(userId: string): Promise<HeldPhoto | null> {
+    const user = await this.#database.includeDeleted.user.findFirst({
+      where: { id: userId, deletedAt: { not: null }, photoKey: { not: null } },
+      select: { id: true, photoKey: true },
+    });
+    return user?.photoKey == null ? null : { id: user.id, storageKey: user.photoKey };
+  }
+
+  /** A page of every deleted person still holding a photo key, in id order after `after`. */
+  async heldPage(after: string | undefined, limit: number): Promise<HeldPhoto[]> {
+    const users = await this.#database.includeDeleted.user.findMany({
+      where: {
+        deletedAt: { not: null },
+        photoKey: { not: null },
+        ...(after === undefined ? {} : { id: { gt: after } }),
+      },
+      orderBy: { id: 'asc' },
+      take: limit,
+      select: { id: true, photoKey: true },
+    });
+    return users.flatMap(({ id, photoKey }) =>
+      photoKey === null ? [] : [{ id, storageKey: photoKey }],
+    );
+  }
+
+  /** Clears the key once its file is gone, only where the deleted row still holds it; whether it did. */
+  async clear({ id, storageKey }: HeldPhoto): Promise<boolean> {
+    const { count } = await this.#database.includeDeleted.user.updateMany({
+      where: { id, deletedAt: { not: null }, photoKey: storageKey },
+      data: { photoKey: null },
+    });
+    return count === 1;
+  }
+}
