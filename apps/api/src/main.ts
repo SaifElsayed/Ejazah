@@ -131,6 +131,12 @@ const cipher = createColumnCipher(config);
 // verification module's behind `teacher.application` and `teacher.credentials` (T056, T057), the
 // application's submission and the payout registration keyed through the kernel's idempotency
 // (FR-106), the payout registration over the payment port (T077).
+// The one registry of an account's end (FR-142): the admin module's standing actions and the
+// identity module's deletion call it, and the modules that keep what an account had subscribe to it
+// (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
+// documents, and its file erasure removes their files after the deletion's commit (decision 1).
+const consequences = new identity.AccountConsequences();
+consequences.subscribe(verification.documentErasureConsequence());
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
@@ -151,6 +157,10 @@ const services = {
     log,
     payment: ports.payment,
     idempotency,
+    consequences,
+    fileErasures: [
+      verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+    ],
   }),
   verification: verification.createVerificationServices({
     database,
@@ -213,6 +223,7 @@ const adminServices = createAdminServices({
   encryptionKey: config.ENCRYPTION_KEY,
   storage: ports.storage,
   cipher,
+  consequences,
   inviteQueue: {
     queue: async (adminId) => {
       inviteQueue ??= openQueue(connectionFor(config.REDIS_URL));
@@ -231,8 +242,15 @@ const application = await createApplication({
   sessions,
   services,
   adminServices,
-  // The public pages (T019, ADR 0021 D5): the Terms (T039); the deletion pages join with T083.
-  webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
+  // The public pages (T019, ADR 0021 D5): the Terms (T039) and the web deletion pages (T083).
+  webRoutes: {
+    [TERMS_PATH]: termsRoute({ settings }),
+    ...identity.deleteAccountRoutes({
+      deletion: services.identity.deletion,
+      supportEmail: config.SUPPORT_EMAIL,
+      rateLimiter,
+    }),
+  },
   routes,
   // The one proxy header whose last hop is the client's address; unset before a host is chosen.
   ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),

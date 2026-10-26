@@ -13,6 +13,11 @@
 //
 // T056, T057 add the reads the application and the credentials make on their transaction: which of
 // a set of documents a person uploaded, and the size each upload recorded.
+//
+// B16 (the B16 check, decision 1) adds a deleted person's documents: `erased_at` set on the
+// deletion's transaction, the key left; then the documents still holding a key, by person or page,
+// and the key cleared only where the row still holds the one whose file was removed. A document
+// erased, or without its key, is no document to a link or to the sweep.
 import { Prisma } from '@prisma/client';
 
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
@@ -90,15 +95,43 @@ export async function documentSizes(
   );
 }
 
-/** The document, on the reading transaction; null when there is none. */
-export function readDocument(
+/** The document, on the reading transaction; null when there is none or it was erased (B16). */
+export async function readDocument(
   tx: Pick<Transaction, 'verificationDocument'>,
   id: string,
 ): Promise<StoredDocument | null> {
-  return tx.verificationDocument.findUnique({
-    where: { id },
+  const row = await tx.verificationDocument.findUnique({
+    where: { id, erasedAt: null },
     select: { id: true, userId: true, storageKeyEncrypted: true },
   });
+  if (row?.storageKeyEncrypted == null) return null;
+  return { id: row.id, userId: row.userId, storageKeyEncrypted: row.storageKeyEncrypted };
+}
+
+/** A document of a deleted person whose key is still held: its file is still to be removed. */
+export interface ErasedDocumentRow {
+  readonly id: string;
+  readonly storageKeyEncrypted: Uint8Array;
+}
+
+const heldKeys = (
+  rows: readonly { readonly id: string; readonly storageKeyEncrypted: Uint8Array | null }[],
+): ErasedDocumentRow[] =>
+  rows.flatMap(({ id, storageKeyEncrypted }) =>
+    storageKeyEncrypted === null ? [] : [{ id, storageKeyEncrypted }],
+  );
+
+/** Marks every document of `userId` not yet erased as erased at `at`, on the deletion's transaction; the keys stay. */
+export async function markDocumentsErased(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  userId: string,
+  at: Date,
+): Promise<number> {
+  const { count } = await tx.verificationDocument.updateMany({
+    where: { userId, erasedAt: null },
+    data: { erasedAt: at },
+  });
+  return count;
 }
 
 export class VerificationRepository {
@@ -123,14 +156,70 @@ export class VerificationRepository {
 
   /**
    * The documents uploaded before `uploadedBefore` that no verification request points at (T093);
-   * the other modules' pointers are theirs to read.
+   * the other modules' pointers are theirs to read. A row whose key is gone holds no file (B16).
    */
   async listWithoutRequestUploadedBefore(uploadedBefore: Date): Promise<StoredDocument[]> {
-    return this.#database.verificationDocument.findMany({
-      where: { uploadedAt: { lt: uploadedBefore }, verificationRequests: { none: {} } },
+    const rows = await this.#database.verificationDocument.findMany({
+      where: {
+        uploadedAt: { lt: uploadedBefore },
+        verificationRequests: { none: {} },
+        storageKeyEncrypted: { not: null },
+      },
       orderBy: { id: 'asc' },
       select: { id: true, userId: true, storageKeyEncrypted: true },
     });
+    return rows.flatMap(({ id, userId, storageKeyEncrypted }) =>
+      storageKeyEncrypted === null ? [] : [{ id, userId, storageKeyEncrypted }],
+    );
+  }
+
+  /** The erased documents of `userId` still holding a key (B16: removed after the deletion's commit). */
+  async erasedWithKeyOf(userId: string): Promise<ErasedDocumentRow[]> {
+    return heldKeys(
+      await this.#database.verificationDocument.findMany({
+        where: { userId, erasedAt: { not: null }, storageKeyEncrypted: { not: null } },
+        orderBy: { id: 'asc' },
+        select: { id: true, storageKeyEncrypted: true },
+      }),
+    );
+  }
+
+  /** The erased document `id` while it still holds a key; null otherwise. */
+  async erasedWithKey(id: string): Promise<ErasedDocumentRow | null> {
+    const row = await this.#database.verificationDocument.findFirst({
+      where: { id, erasedAt: { not: null }, storageKeyEncrypted: { not: null } },
+      select: { id: true, storageKeyEncrypted: true },
+    });
+    return row === null ? null : (heldKeys([row])[0] ?? null);
+  }
+
+  /** A page of every erased document still holding a key, in id order after `after` (B16's job). */
+  async erasedWithKeyPage(after: string | undefined, limit: number): Promise<ErasedDocumentRow[]> {
+    return heldKeys(
+      await this.#database.verificationDocument.findMany({
+        where: {
+          erasedAt: { not: null },
+          storageKeyEncrypted: { not: null },
+          ...(after === undefined ? {} : { id: { gt: after } }),
+        },
+        orderBy: { id: 'asc' },
+        take: limit,
+        select: { id: true, storageKeyEncrypted: true },
+      }),
+    );
+  }
+
+  /** Clears an erased document's key, only where it still holds `stored`; whether it did. */
+  async clearErasedKey(id: string, stored: Uint8Array): Promise<boolean> {
+    const { count } = await this.#database.verificationDocument.updateMany({
+      where: {
+        id,
+        erasedAt: { not: null },
+        storageKeyEncrypted: { equals: Uint8Array.from(stored) },
+      },
+      data: { storageKeyEncrypted: null },
+    });
+    return count === 1;
   }
 
   /** The ids of `userId`'s documents that no verification request points at (T093). */
@@ -149,12 +238,15 @@ export class VerificationRepository {
       column: DOCUMENT_STORAGE_KEY_COLUMN,
       page: async (after, limit) => {
         const rows = await documents.findMany({
-          where: after === undefined ? {} : { id: { gt: after } },
+          where: {
+            storageKeyEncrypted: { not: null },
+            ...(after === undefined ? {} : { id: { gt: after } }),
+          },
           orderBy: { id: 'asc' },
           take: limit,
           select: { id: true, storageKeyEncrypted: true },
         });
-        return rows.map(({ id, storageKeyEncrypted: value }) => ({ id, value }));
+        return heldKeys(rows).map(({ id, storageKeyEncrypted: value }) => ({ id, value }));
       },
       replace: async (id, stored, next) => {
         const { count } = await documents.updateMany({

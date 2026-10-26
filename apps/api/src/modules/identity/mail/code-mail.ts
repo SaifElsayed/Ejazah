@@ -2,8 +2,9 @@
 // asking for a sign-up code or a password reset has no account whose language could be read, and
 // the request carries the address alone, so each mail is written in both languages, Arabic first
 // and English under it (owner's decision 2026-10-20, from the sample shown in the conversation).
-// Plain text: a code and a number are the only values, so there is nothing to escape.
-export type CodeMailPurpose = 'signup' | 'password_reset';
+// Plain text: a code and a number are the only values, so there is nothing to escape. B16 (T082)
+// adds the web deletion's code, `account_deletion`, in the same format (the note under T082).
+export type CodeMailPurpose = 'signup' | 'password_reset' | 'account_deletion';
 
 export interface RenderedMail {
   readonly subject: string;
@@ -13,6 +14,7 @@ export interface RenderedMail {
 const COPY: Readonly<Record<CodeMailPurpose, { readonly ar: string; readonly en: string }>> = {
   signup: { ar: 'رمز التحقق', en: 'verification code' },
   password_reset: { ar: 'رمز إعادة تعيين كلمة المرور', en: 'password reset code' },
+  account_deletion: { ar: 'رمز تأكيد حذف الحساب', en: 'account deletion code' },
 };
 
 /** The mail carrying `code`, valid `minutes`, for `purpose`. */

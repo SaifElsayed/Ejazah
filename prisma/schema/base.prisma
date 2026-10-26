@@ -156,6 +156,15 @@ enum DevicePlatform {
   @@map("device_platform")
 }
 
+// T097 (FR-155): what a banned person's kept identifier was made from, an address or a provider
+// identity; the hash itself says nothing of it.
+enum BannedIdentifierKind {
+  email
+  provider
+
+  @@map("banned_identifier_kind")
+}
+
 // verification (ERD section 3)
 
 enum VerificationDocumentType {

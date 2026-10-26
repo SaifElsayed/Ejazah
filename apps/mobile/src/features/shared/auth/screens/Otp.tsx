@@ -1,7 +1,8 @@
 // T050 (FR-AUTH-1, ADR 0012 D1): the code that proves the new account's address. Six cells, the
 // confirm button once six digits are in, the resend countdown and the way back to change the
 // address. A proved address starts the onboarding (Role); one another method already holds opens
-// the conflict sheet, told only now that the mailbox is proved (app-surface.md).
+// the conflict sheet, told only now that the mailbox is proved (app-surface.md). T097: one that
+// belongs to a banned person's deleted account lands on the signed-out banned state.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -19,7 +20,7 @@ import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
 import { BackBar, StackScreen } from '../../screen';
-import { useAuthApi } from '../api';
+import { BANNED_ROUTE, useAuthApi } from '../api';
 import { type SignInConflict, SignInConflictSheet } from '../components/SignInConflictSheet';
 import { Resend, useCountdown } from '../components/parts';
 import { getPendingEmail } from '../pending';
@@ -44,6 +45,7 @@ export function Otp() {
       const outcome = await auth.verifySignUpCode(email, code, pending?.password ?? '');
       if (outcome.kind === 'onboarding') router.push('/(auth)/role');
       if (outcome.kind === 'conflict') setConflict(outcome);
+      if (outcome.kind === 'banned') router.replace(BANNED_ROUTE);
     } catch (caught: unknown) {
       setError(errorCodeOf(caught) === 'CODE_INVALID' ? 'code' : 'other');
     } finally {

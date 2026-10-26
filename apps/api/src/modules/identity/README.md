@@ -2,7 +2,7 @@
 
 ## Owns
 
-`users, user_roles, teacher_profiles, otp_codes, device_push_tokens, terms_acceptances`
+`users, user_roles, teacher_profiles, otp_codes, device_push_tokens, terms_acceptances, user_sessions, user_session_retired_tokens, auth_identities, banned_identifiers`
 
 Listed in `packages/config/module-tables.json`. Reaching a table outside this list fails the build citing R-API-6.
 
@@ -23,3 +23,4 @@ The rules live in the services (Phase 1, T047): `sign-in.service.ts` (the provid
 _Filled as SRS requirements land in this module._
 
 - FR-190 to FR-194 (payout setup, the recipient verdicts, the publishable standing; FR-PAYG-13 to FR-PAYG-16): `payout.service.ts`, `payout.router.ts`.
+- FR-155 (a banned person's deleted account keeps its sign-in identifiers as keyed hashes, T097): `banned-identifiers.ts`, `banned-identifiers.repository.ts`, the deletion's transaction in `deletion.service.ts`, and the checks in `email-auth.service.ts`, `sign-in.service.ts` and `onboarding.service.ts`.

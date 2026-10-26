@@ -12,8 +12,10 @@
 // says so rather than what its answers would meet. The answers are checked next (the current terms
 // version, an IANA zone the time package
 // knows, a password exactly for an email identity and not breached, an email and its code exactly
-// when the identity has no verified one, an address no account holds), so a refusal there leaves
-// the token good for another try. Then the `jti` is claimed in Redis until the token's expiry, and
+// when the identity has no verified one, an address no account holds, and neither the address nor
+// the provider identity one a banned person's deleted account left: T097, FR-155,
+// ACCOUNT_RESTRICTED with no detail, so a token minted before that deletion is refused too), so a
+// refusal there leaves the token good for another try. Then the `jti` is claimed in Redis until the token's expiry, and
 // the person, the identity or the password hash, the one role, the terms acceptance and the session
 // are written in one transaction. A transaction that fails releases the claim, so the person can try
 // again with the same token; one that commits keeps it, so a second presentation is refused.
@@ -34,6 +36,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
 import { TERMS_VERSION_SETTING } from '../../platform/settings/keys.js';
+import { BannedIdentifiers } from './banned-identifiers.js';
 import { AccountsRepository } from './identity.repository.js';
 import { normalizeEmail, type OneTimeCodes } from './one-time-codes.js';
 import type {
@@ -104,6 +107,7 @@ const invalidField = (path: string, code: string) =>
 
 export class OnboardingService {
   readonly #accounts: AccountsRepository;
+  readonly #banned: BannedIdentifiers;
   readonly #transactions;
   readonly #dependencies: OnboardingDependencies;
   readonly #key: Buffer;
@@ -113,6 +117,7 @@ export class OnboardingService {
   constructor(dependencies: OnboardingDependencies) {
     this.#dependencies = dependencies;
     this.#accounts = new AccountsRepository(dependencies.database);
+    this.#banned = new BannedIdentifiers(dependencies);
     this.#transactions = transactionsOver(dependencies.database);
     this.#key = deriveSubkey(dependencies.encryptionKey, ONBOARDING_TOKEN_LABEL);
     // The current key only: the token's HMAC is under the current key too, so a token minted before
@@ -167,6 +172,12 @@ export class OnboardingService {
     }
     const passwordHash = await this.#passwordHash(identity, input.password);
     const email = await this.#email(identity, input);
+    await this.#banned.refuse({
+      email,
+      ...(identity.kind === 'provider'
+        ? { identity: { provider: identity.provider, subject: identity.subject } }
+        : {}),
+    });
     const owner = await this.#accounts.findByEmail(email);
     if (owner !== null) {
       throw new DomainError('EMAIL_IN_USE_BY_OTHER_METHOD', undefined, {

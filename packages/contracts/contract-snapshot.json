@@ -33,6 +33,7 @@
     "prisma": {
       "AccountStatus": ["active", "banned", "suspended", "verification_required"],
       "AuthProvider": ["apple", "google"],
+      "BannedIdentifierKind": ["email", "provider"],
       "CancellationReason": [
         "account_deleted",
         "admin",
@@ -800,6 +801,25 @@
       }
     },
     "app": {
+      "account.delete": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.confirmation": { "required": true, "type": "string", "values": ["DELETE", "حذف"] },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reauth": { "required": true, "type": "object" },
+          "$.reauth.identityToken": { "required": true, "type": "string" },
+          "$.reauth.kind": {
+            "required": true,
+            "type": "string",
+            "values": ["password", "provider"]
+          },
+          "$.reauth.nonce": { "required": true, "type": "string" },
+          "$.reauth.password": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "account.identityVerification.get": {
         "caller": "user",
         "input": { "$": { "type": "unknown" } },

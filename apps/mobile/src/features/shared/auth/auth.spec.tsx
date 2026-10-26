@@ -3,6 +3,10 @@
 // the landing to the guard (`restoring`, then `account.me`); one that yields an onboarding token
 // starts the onboarding draft and opens Role; an email that belongs to another method opens the
 // conflict sheet naming that method, never linking the accounts.
+//
+// T097 (FR-155): a new account refused with `ACCOUNT_RESTRICTED` (the identifiers of a banned
+// person's deleted account) lands on the signed-out banned state, storing no session, no draft and
+// no password; any other refusal keeps its message.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
@@ -10,10 +14,10 @@ import { Platform } from 'react-native';
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { getLocale, type MessageKey, translate } from '../../../i18n';
 import { getSession, setSession } from '../../../lib/session';
-import { getDraft } from '../onboarding/draft';
+import { clearDraft, getDraft } from '../onboarding/draft';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
 import { EmailSignIn, EmailSignUp, ForgotPassword, Otp, ResetPassword, Welcome } from './index';
-import { setPendingEmail } from './pending';
+import { getPendingEmail, setPendingEmail } from './pending';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
@@ -161,6 +165,28 @@ describe('Welcome', () => {
     mockIdentity.mockRejectedValueOnce(new Error('the provider failed'));
     await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
     expect(await screen.findByText(ar('auth.welcome.failed'))).toBeTruthy();
+  });
+
+  it('lands a new account refused as banned on the signed-out banned state (T097)', async () => {
+    clearDraft();
+    mockIdentity.mockResolvedValue({ identityToken: 'google-token', email: 'amal@example.com' });
+    mockApi.api.auth.signInWithProvider.mutate.mockRejectedValue(apiError('ACCOUNT_RESTRICTED'));
+    await renderIn('rtl', <Welcome />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(auth)/banned'));
+    expect(screen.queryByText(ar('auth.welcome.failed'))).toBeNull();
+    expect(getSession()).toEqual({ kind: 'signed-out' });
+    expect(mockApi.sessions.current()).toBeNull();
+    expect(getDraft()).toBeNull();
+  });
+
+  it('keeps the failed line for any other refusal of the provider sign-in', async () => {
+    mockIdentity.mockResolvedValue({ identityToken: 'google-token' });
+    mockApi.api.auth.signInWithProvider.mutate.mockRejectedValue(apiError('FORBIDDEN'));
+    await renderIn('rtl', <Welcome />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
+    expect(await screen.findByText(ar('auth.welcome.failed'))).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/(auth)/banned');
   });
 
   it('offers the development sign-in only behind its flag, with the stand-in token', async () => {
@@ -325,6 +351,33 @@ describe('Otp', () => {
     await fireEvent.changeText(screen.getByTestId('otp-input'), '000000');
     await fireEvent.press(screen.getByRole('button', { name: ar('auth.otp.confirm') }));
     expect(await screen.findByText(ar('auth.otp.invalid'))).toBeTruthy();
+  });
+
+  it('lands a proved address refused as banned on the signed-out banned state (T097)', async () => {
+    clearDraft();
+    mockApi.api.auth.email.verifySignUpCode.mutate.mockRejectedValue(
+      apiError('ACCOUNT_RESTRICTED'),
+    );
+    await renderIn('rtl', <Otp />);
+    await fireEvent.changeText(screen.getByTestId('otp-input'), '123456');
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.otp.confirm') }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(auth)/banned'));
+    expect(screen.queryByText(ar('common.state.actionError'))).toBeNull();
+    expect(getSession()).toEqual({ kind: 'signed-out' });
+    expect(mockApi.sessions.current()).toBeNull();
+    expect(getDraft()).toBeNull();
+    // The password chosen on EmailSignUp is dropped with the address.
+    expect(getPendingEmail()).toBeNull();
+  });
+
+  it('keeps the general line for any other refusal of the code', async () => {
+    mockApi.api.auth.email.verifySignUpCode.mutate.mockRejectedValue(apiError('INTERNAL'));
+    await renderIn('rtl', <Otp />);
+    await fireEvent.changeText(screen.getByTestId('otp-input'), '123456');
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.otp.confirm') }));
+    expect(await screen.findByText(ar('common.state.actionError'))).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/(auth)/banned');
+    expect(getPendingEmail()).toEqual({ email: 'amal@example.com', password: 'a long secret' });
   });
 
   it('opens the conflict sheet when the address belongs to a Google account', async () => {

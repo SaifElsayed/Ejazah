@@ -11,6 +11,7 @@
 import { z } from 'zod';
 
 import { identityDocumentType } from './account.js';
+import { idempotencyKey } from './idempotency-key.js';
 
 /** How many subjects one application may choose (app-surface.md: 1 to 10). */
 export const APPLICATION_SUBJECTS_MAX = 10;
@@ -18,8 +19,8 @@ export const APPLICATION_SUBJECTS_MAX = 10;
 /** The longest qualification sentence the form takes, in characters. */
 export const QUALIFICATION_MAX_LENGTH = 500;
 
-/** The kernel's idempotency key (16 to 128 of `A–Z a–z 0–9 _ -`, FR-106). */
-export const idempotencyKey = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/);
+/** The kernel's idempotency key (FR-106); kept exported from here, where it was first published. */
+export { idempotencyKey };
 
 const subjectIds = z.array(z.uuid()).min(1).max(APPLICATION_SUBJECTS_MAX);
 

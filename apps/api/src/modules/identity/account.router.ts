@@ -3,9 +3,11 @@
 // output parsed by its schema (R-API-1), so `me` answers the fields the contract names and nothing
 // else. Every procedure is the user kind; `me` and `setLanguage` admit a suspended or banned account
 // (the restricted screen reads its standing and switches its language), the rest do not. Mounted
-// under `account` by `app.router.ts`; `account.delete` (T080) and `account.identityVerification`
-// (the verification module's router) join it with their tasks.
+// under `account` by `app.router.ts`; `account.identityVerification` is the verification module's
+// router, merged there. `account.delete` (T082) admits a restricted account (a suspended person may
+// still leave, FR-140), counts the caller's attempts on the authentication budget, and is keyed.
 import {
+  deleteAccountInput,
   meOutput,
   reportDeviceTimezoneInput,
   setLanguageInput,
@@ -14,7 +16,10 @@ import {
 } from '@ijazah/contracts';
 import { z } from 'zod';
 
+import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
 import { createAppRouter, userProcedure } from '../../surfaces/procedures.js';
+
+const { authentication, authenticationBudget } = defaultRateLimits;
 
 export const accountRouter = createAppRouter({
   me: userProcedure({ input: z.void(), output: meOutput, admitsRestricted: true }).query(
@@ -46,5 +51,18 @@ export const accountRouter = createAppRouter({
     output: z.void(),
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.identity.account.reportDeviceTimezone(ctx.caller.userId, input.timezone);
+  }),
+
+  delete: userProcedure({
+    input: deleteAccountInput,
+    output: z.void(),
+    admitsRestricted: true,
+    rateLimit: {
+      key: authentication,
+      budget: authenticationBudget,
+      subjectOf: ({ ctx }) => ctx.caller.userId,
+    },
+  }).mutation(async ({ ctx, input }) => {
+    await ctx.services.identity.deletion.deleteAccount(ctx.caller.userId, input);
   }),
 });

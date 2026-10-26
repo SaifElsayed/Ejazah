@@ -602,8 +602,8 @@ describe('the real contract (T084)', () => {
         .sort();
     }
     // 28 enums of Phase 0, the eight the Phase 1 ERD pass declared (T009 to T012), and the
-    // verification call's outcome (T068).
-    expect(Object.keys(declared)).toHaveLength(37);
+    // verification call's outcome (T068), and the kind of a banned person's kept identifier (T097).
+    expect(Object.keys(declared)).toHaveLength(38);
     expect(snapshot.enums.prisma).toEqual(declared);
     expect(Object.keys(snapshot.procedures)).toEqual(['admin', 'app']);
   });

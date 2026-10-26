@@ -2,7 +2,7 @@
 // in the header, the name with the approved badge, and the same settings as the student's. The
 // teaching list holds «إجازاتي» since B11b (T059), with the count waiting for review, and «حساب
 // الاستلام» since B15 (T078), with «موثّق» once verified; the profile and signature come with their
-// phases, and the delete row with B16.
+// phases. The danger row «حذف الحساب» opens the deletion since B16 (T084).
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -19,6 +19,8 @@ jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ router: { push: (route: unknown) => mockPush(route) } }));
 jest.mock('../../../lib/time-zone', () => ({ deviceTimeZone: () => 'Africa/Cairo' }));
+// The tab leads to the deletion, whose proof loads the providers' native modules (T084).
+jest.mock('../../shared/auth/providers', () => ({ nativeIdentity: jest.fn() }));
 
 const me = {
   userId: '0193a6f0-0000-7000-8000-000000000002',
@@ -63,14 +65,14 @@ beforeEach(async () => {
 });
 
 describe('TeacherAccount', () => {
-  it('draws the name with its badge and the settings, none of the rows that come later', async () => {
+  it('draws the name with its badge, the settings and the delete row, none of the rows that come later', async () => {
     await inBothDirections(withAccount(), (_rendered, direction) => {
       expect(screen.getByText(said(direction, 'teacher.account.title'))).toBeTruthy();
       expect(screen.getByText('أحمد سالم')).toBeTruthy();
       expect(screen.getByText(said(direction, 'status.application.approved'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.providers.apple'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.genders.male'))).toBeTruthy();
-      expect(screen.queryByText(said(direction, 'teacher.account.deleteAccount'))).toBeNull();
+      expect(screen.getByText(said(direction, 'teacher.account.deleteAccount'))).toBeTruthy();
       expect(screen.queryByText(said(direction, 'teacher.account.profile'))).toBeNull();
       expect(screen.queryByText(said(direction, 'teacher.account.signature'))).toBeNull();
     });
@@ -134,6 +136,12 @@ describe('TeacherAccount', () => {
         expect(screen.queryByText(said(direction, 'status.payout.verified'))).toBeNull();
       },
     );
+  });
+
+  it('opens the deletion from the danger row (T084)', async () => {
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.deleteAccount')));
+    expect(mockPush).toHaveBeenCalledWith('/(teacher)/account/delete');
   });
 
   it('signs out from the header, after the sheet', async () => {

@@ -5,8 +5,15 @@
 // never lands here: the teacher reads the note on `ApplicationRejected` and reapplies, so decision
 // 34's revoked title is retired. «تواصل مع الدعم» writes to the support address the public
 // configuration serves, read once per launch (lib/client.ts); «تسجيل الخروج» opens the sheet.
+//
+// T097 (FR-155, app-surface.md): `BannedSignedOut`, the banned state without a session, where a
+// sign-up refused with `ACCOUNT_RESTRICTED` lands (the identifiers of a banned person's deleted
+// account). No role is known signed out, so it draws `AccountRestricted`'s banned title and final
+// line, the same words as the teacher's, then the support contact and the way back to the start
+// in place of «تسجيل الخروج»; nothing on it says an account was deleted.
 import type { MeOutput } from '@ijazah/contracts';
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -97,32 +104,16 @@ function RestrictedScreen({
   readonly text: RestrictedText;
 }) {
   const t = useT();
-  const { client } = useApi();
+  const support = useWriteToSupport();
   const [signingOut, setSigningOut] = useState(false);
-  const [failed, setFailed] = useState(false);
   const banned = account.accountStatus === 'banned';
-
-  async function writeToSupport(): Promise<void> {
-    setFailed(false);
-    try {
-      const { supportEmail } = await client.publicConfig();
-      await Linking.openURL(`mailto:${supportEmail}`);
-    } catch {
-      setFailed(true);
-    }
-  }
 
   return (
     <StackScreen
       header={<View style={{ height: tokens.space['6'] }} />}
       footer={
         <ActionBar>
-          <Button
-            label={t('account.restricted.contactSupport')}
-            icon={{ name: 'mail' }}
-            layout="block"
-            onPress={() => void writeToSupport()}
-          />
+          <ContactSupport onPress={support.write} />
           <Button
             label={t('account.restricted.signOut')}
             variant="ghost"
@@ -143,17 +134,81 @@ function RestrictedScreen({
       <Section title={t(text.available)}>
         <Lines items={text.availableItems} icon="check" tone="success" />
       </Section>
-      {failed ? (
-        <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
-        </Banner>
-      ) : null}
+      {support.failed ? <SupportFailed /> : null}
       <SignOutSheet
         open={signingOut}
         method={account.signInMethod}
         onClose={() => setSigningOut(false)}
       />
     </StackScreen>
+  );
+}
+
+/** The `(auth)/banned` route: the banned state with no session and no role (T097). */
+export function BannedSignedOut() {
+  const t = useT();
+  const support = useWriteToSupport();
+  return (
+    <StackScreen
+      header={<View style={{ height: tokens.space['6'] }} />}
+      footer={
+        <ActionBar>
+          <ContactSupport onPress={support.write} />
+          <Button
+            label={t('auth.banned.backToStart')}
+            variant="ghost"
+            layout="block"
+            onPress={() => router.replace('/(auth)/welcome')}
+          />
+        </ActionBar>
+      }
+    >
+      <IconTile icon={{ name: 'lock' }} tone="warning" size="2xl" />
+      <PageIntro
+        title={t('account.restricted.bannedTitle')}
+        lede={t('account.restricted.finalLede')}
+      />
+      {support.failed ? <SupportFailed /> : null}
+    </StackScreen>
+  );
+}
+
+/** «تواصل مع الدعم»: a mail to the support address the public configuration serves (FR-145). */
+function useWriteToSupport() {
+  const { client } = useApi();
+  const [failed, setFailed] = useState(false);
+
+  async function writeToSupport(): Promise<void> {
+    setFailed(false);
+    try {
+      const { supportEmail } = await client.publicConfig();
+      await Linking.openURL(`mailto:${supportEmail}`);
+    } catch {
+      setFailed(true);
+    }
+  }
+
+  return { failed, write: () => void writeToSupport() };
+}
+
+function ContactSupport({ onPress }: { readonly onPress: () => void }) {
+  const t = useT();
+  return (
+    <Button
+      label={t('account.restricted.contactSupport')}
+      icon={{ name: 'mail' }}
+      layout="block"
+      onPress={onPress}
+    />
+  );
+}
+
+function SupportFailed() {
+  const t = useT();
+  return (
+    <Banner icon={{ name: 'alert-circle' }} tone="danger">
+      {t('common.state.actionError')}
+    </Banner>
   );
 }
 

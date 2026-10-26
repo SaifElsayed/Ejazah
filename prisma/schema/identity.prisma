@@ -155,6 +155,22 @@ model UserSessionRetiredToken {
   @@map("user_session_retired_tokens")
 }
 
+// T097 (FR-155, ADR 0015 D1 and D3): a banned person's sign-in identifiers, kept past the deletion of
+// their account so the ban outlives it. Only a keyed hash: HMAC-SHA256, under a subkey of
+// ENCRYPTION_KEY derived by HKDF under `ijazah:banned-identifier:v1`, of the normalized email or of
+// the `(provider, provider_subject)` pair (`banned-identifiers.ts`). Nothing else of the person, and
+// no link to the deleted row. Written in the deletion's transaction; one row per hash (rule 35).
+// Never updated. Its retention is OPEN-05's (NFR-COMP-2); a rotation of ENCRYPTION_KEY leaves every
+// row unmatched (docs/RUNBOOK.md).
+model BannedIdentifier {
+  id             String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  kind           BannedIdentifierKind
+  identifierHmac String               @unique @map("identifier_hmac")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("banned_identifiers")
+}
+
 // Phase 1 (T009, ADR 0012 D2): a Google or Apple account, keyed by the provider's subject, never by
 // the email. Unique on (provider, provider_subject) (rule 22). Deleted outright on account deletion
 // (ADR 0015 D3), so the uniqueness never blocks the person's new account; the application role

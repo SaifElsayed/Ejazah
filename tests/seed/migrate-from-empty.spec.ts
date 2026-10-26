@@ -90,7 +90,7 @@ describe('the migration history applied to an empty database (T073)', () => {
       [MIGRATION_TABLE],
     );
     const tables = rows.map((row) => row.table_name).sort();
-    expect(modelTables()).toHaveLength(40);
+    expect(modelTables()).toHaveLength(41);
     expect(tables).toEqual(modelTables());
   });
 });

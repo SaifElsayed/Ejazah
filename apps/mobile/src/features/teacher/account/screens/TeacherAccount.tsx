@@ -4,8 +4,9 @@
 // added with their screens (owner's decision, 2026-10-20): «إجازاتي» since B11b (T059), with the
 // count waiting for review from `teacher.credentials.list`; «حساب الاستلام» since B15 (T078), for an
 // approved teacher, to the payout's state, with «موثّق» once `account.me` says verified (the only
-// badge drawn, open-items 18); «حذف الحساب» with B16, the public profile, the signature and the
-// rating with their phases; the notifications with theirs.
+// badge drawn, open-items 18); the danger row «حذف الحساب» since B16 (T084), after the settings, to
+// the deletion; the public profile, the signature and the rating with their phases; the
+// notifications with theirs.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -15,6 +16,7 @@ import {
   Avatar,
   Badge,
   Card,
+  Icon,
   IconButton,
   List,
   ListRow,
@@ -33,6 +35,7 @@ import {
 import { TabScreen } from '../../../shared/screen';
 import { useCredentials } from '../../credentials';
 import { PAYOUT_ROUTE } from '../../payout';
+import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../navigation';
 
 export function TeacherAccount() {
   const t = useT();
@@ -107,6 +110,14 @@ export function TeacherAccount() {
             ) : null}
           </List>
           <AccountSettings me={account} />
+          <List>
+            <ListRow
+              label={t('teacher.account.deleteAccount')}
+              tone="danger"
+              leading={<Icon name="trash" tone="danger" />}
+              onPress={() => router.push(DELETE_ACCOUNT_TEACHER_ROUTE)}
+            />
+          </List>
           <SignOutSheet
             open={signingOut}
             method={account.signInMethod}

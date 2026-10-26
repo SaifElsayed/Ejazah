@@ -31,6 +31,7 @@ export function ApiProvider({ children }: { readonly children: ReactNode }) {
     const client = createApiClient({
       url: apiUrl(),
       documentsUploadUrl: `${apiOrigin()}/uploads/documents`,
+      photosUploadUrl: `${apiOrigin()}/uploads/photos`,
       sessions,
       // A refused refresh has already cleared the tokens; the guard lands the person on welcome.
       onSignedOut: () => setSession({ kind: 'signed-out' }),

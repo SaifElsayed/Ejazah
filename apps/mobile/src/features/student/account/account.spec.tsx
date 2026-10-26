@@ -1,8 +1,9 @@
 // T052 (FR-131, FR-AUTH-5, FR-AUTH-10, FR-GENDER-5, FR-AUTH-7): the student's account tab against
 // the board, from `account.me`. The language switches in place and on the account, the zone row
 // says the city (and «من الجهاز» while it follows the device), the gender is read only, and sign-out
-// asks first, then revokes the device's session and lands on the welcome screen. The rows whose
-// screens come with later batches (delete with B16, the profile editor with its phase) are absent.
+// asks first, then revokes the device's session and lands on the welcome screen. Since B16 (T084)
+// the profile row opens the profile editor and the danger row the deletion; the notifications wait
+// for their phase.
 import type { MeOutput } from '@ijazah/contracts';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -22,6 +23,9 @@ const mockNavigate = jest.fn();
 jest.mock('expo-router', () => ({
   router: { push: (route: unknown) => mockNavigate(route) },
 }));
+
+// The tab leads to the deletion, whose proof loads the providers' native modules (T084).
+jest.mock('../../shared/auth/providers', () => ({ nativeIdentity: jest.fn() }));
 
 let mockDeviceZone: string | null = 'Africa/Cairo';
 jest.mock('../../../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
@@ -86,10 +90,24 @@ describe('StudentAccount', () => {
       expect(screen.getByText(said(direction, 'account.genders.female'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.terms'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.signOut'))).toBeTruthy();
-      // Rows whose screens land with later batches lead nowhere, so they are not drawn yet.
-      expect(screen.queryByText(said(direction, 'account.deleteAccount'))).toBeNull();
-      expect(screen.queryByText(said(direction, 'account.profile'))).toBeNull();
+      expect(screen.getByText(said(direction, 'account.profile'))).toBeTruthy();
+      expect(screen.getByText(said(direction, 'account.profileValue'))).toBeTruthy();
+      expect(screen.getByText(said(direction, 'account.deleteAccount'))).toBeTruthy();
+      // The notifications row lands with its phase, so it is not drawn yet.
+      expect(screen.queryByText(said(direction, 'account.notifications'))).toBeNull();
     });
+  });
+
+  it('opens the profile editor and the deletion (T084)', async () => {
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByRole('button', { name: new RegExp(ar('account.profile')) }));
+    await fireEvent.press(
+      screen.getByRole('button', { name: new RegExp(ar('account.deleteAccount')) }),
+    );
+    expect(mockNavigate.mock.calls).toEqual([
+      ['/(student)/account/profile'],
+      ['/(student)/account/delete'],
+    ]);
   });
 
   it('names a zone chosen by hand without «من الجهاز»', async () => {

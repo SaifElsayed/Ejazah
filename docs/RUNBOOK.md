@@ -283,32 +283,47 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   purpose and protect only a container on 127.0.0.1; a deployed environment
   never uses them.
 - **`ENCRYPTION_KEY`**. Every key derived from it changes with it: the column
-  key, the one-time-code pepper, the local storage link signature, and the
+  key, the one-time-code pepper, the local storage link signature, the
   webhook secrets of the payment stand-in (when
-  `PAYMENT_GATEWAY_WEBHOOK_SECRET` is empty) and the video stand-in.
-  Those last three protect only short-lived values: codes already sent stop
-  verifying, and links and stand-in events already signed are refused. The four
-  `*_encrypted` columns are kept by these four steps (T155):
+  `PAYMENT_GATEWAY_WEBHOOK_SECRET` is empty) and the video stand-in, and the
+  banned-identifier key (T097).
+  The pepper, the link signature and the stand-in secrets protect only
+  short-lived values: codes already sent stop verifying, and links and
+  stand-in events already signed are refused. The banned-identifier key is
+  different: its hashes are stored and cannot be carried over (step 1). The
+  four `*_encrypted` columns are kept by steps 2 to 5 (T155):
   `admin_users.mfa_secret_encrypted`,
   `teacher_profiles.payout_account_ref_encrypted`,
   `device_push_tokens.token_encrypted` and
   `verification_documents.storage_key_encrypted`.
-  1. Generate a new key (`openssl rand -base64 32`). Set
+  1. **Decide about the banned identifiers before anything else (T097,
+     FR-155).** `banned_identifiers` holds a banned person's email and
+     provider accounts, kept after they deleted their account, as HMACs under a
+     key derived from ENCRYPTION_KEY. An HMAC cannot be recomputed without the
+     address it was made from, and the platform no longer has the address, so
+     no step below carries these rows over: after the rotation every row is
+     unmatched, and every banned person who deleted their account can sign up
+     again with the same email or Google or Apple account. Count the rows
+     (`SELECT count(*) FROM banned_identifiers`). If there are none, go on. If
+     there are some, the owner decides before step 2: accept that those bans
+     lapse (after a leak this may be the lesser harm), or postpone the rotation.
+     Record the decision and the count in the incident notes.
+  2. Generate a new key (`openssl rand -base64 32`). Set
      `ENCRYPTION_KEY_PREVIOUS` to the current value and `ENCRYPTION_KEY` to the
      new one, for the API and the worker together, and restart both. If they
      refuse to start because the two keys share a key id, generate another new
      key; this happens about once in 256.
-  2. Every value is now written under the new key, and both keys read. The
+  3. Every value is now written under the new key, and both keys read. The
      worker's `reencrypt-columns` sweep runs every ten minutes and writes each
      value still under the old key again under the new one, one column at a
      time.
-  3. Wait for the worker to log "Every encrypted value is under ENCRYPTION_KEY;
+  4. Wait for the worker to log "Every encrypted value is under ENCRYPTION_KEY;
      ENCRYPTION_KEY_PREVIOUS can be removed" with a `startedAt` later than the
-     restart of the last process from step 1, so the run began once no process
+     restart of the last process from step 2, so the run began once no process
      could still write under the old key. If the sweep fails instead, naming
      columns with values under neither key, those values were written under a
      key nobody holds any more: stop and raise it with the team.
-  4. Remove `ENCRYPTION_KEY_PREVIOUS` and restart both processes. The old key is
+  5. Remove `ENCRYPTION_KEY_PREVIOUS` and restart both processes. The old key is
      retired. After a leak, the leaked key still reads values until this step,
      so take it as soon as the log line appears.
 

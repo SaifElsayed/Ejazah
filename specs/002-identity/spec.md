@@ -289,7 +289,7 @@ arrive in later phases, which attach to the one entry this story leaves.
 **Independent Test**: Delete an account from the app and another from the web
 page; read the row and confirm every personal field is erased and the identity
 rows are gone; present the old refresh token and be refused; sign up again with
-the same email and succeed.
+the same email and succeed; a banned account's deletion is refused that sign-up (T097).
 
 **Acceptance Scenarios**:
 
@@ -373,7 +373,7 @@ phase's list, an ADR decision, a table or rule in `docs/ERD.md`, a board in
 **Account deletion and the public pages**
 
 - **FR-140**: A person MUST be able to delete their account from Account; the screen MUST state what is deleted, what is kept and why, and what happens to their enrollments, and confirmation MUST require the typed word, a fresh re-authentication, and a final confirm (FR-AUTH-14, ADR 0015 D1).
-- **FR-141**: Deletion MUST be immediate and final, in one transaction: the row soft-deleted; display name, email, phone, password hash, date of birth, photo and certificate name erased; the provider identity rows deleted; every session revoked; push tokens removed; a Sign in with Apple token revoked; a teacher's bio, documents and payout reference erased; the email freed by the partial uniques; and the audit log, gateway records and history rows kept without those fields (ADR 0015 D3, FR-AUTH-14).
+- **FR-141**: Deletion MUST be immediate and final, in one transaction: the row soft-deleted; display name, email, phone, password hash, date of birth, photo and certificate name erased; the provider identity rows deleted; every session revoked; push tokens removed; a Sign in with Apple token revoked; a teacher's bio, documents and payout reference erased; the email freed by the partial uniques; and the audit log, gateway records and history rows kept without those fields (ADR 0015 D3, FR-AUTH-14). The stored files (the photo, the documents) are removed and their keys cleared after the commit, and the Apple token is revoked after it, outside the transaction (the B16 check, decisions 1 and 3, note under T080).
 - **FR-142**: The consequences of a deletion for enrollments, sessions and cases (ADR 0015 D4, FR-SESS-16) MUST attach through one entry of the deletion, so that Phase 2 and Phase 3 add theirs without changing the deletion's own transaction; the same entry MUST serve a teacher's suspension, revocation and ban (FR-VERIFY-8).
 - **FR-143**: A public web page MUST let a person request deletion without the app: the account's email, a code sent to it, then the same deletion; the email step MUST answer every address with the same sentence; the done page MUST say the confirmation was sent to the address, and the system MUST send that confirmation through the email port (FR-AUTH-15, ADR 0015 D2, `DeleteAccountWeb*`).
 - **FR-144**: The public pages of this phase — the deletion flow and the Terms body — MUST be routes of the API under their own paths, never mixed with the procedure routes, sending a strict Content-Security-Policy and the full header set and CORS allowlist of NFR-SEC-11, setting no cookie, rendered from templates that escape every value, under the anonymous rate limits, with English by `?lang=en` (ADR 0021 D5).
@@ -481,7 +481,7 @@ or first fills.
 - **SC-108**: One hundred percent of administrative actions taken in the phase's tests have an audit entry with a non-empty, non-personal label, and a renamed or deleted target changes zero stored labels.
 - **SC-109**: The locked and wrong-credential answers of the admin sign-in are byte-identical in body and status, their timing difference is within the test's tolerance, and zero responses carry an attempts count.
 - **SC-110**: A teacher approved without a verified payout account is refused by every publishing path, and the verified instant is null until the stand-in's signed event sets it; a replayed event changes nothing a second time.
-- **SC-111**: A deleted account's personal fields are erased and its identity rows gone in the same transaction; its refresh token is refused; and a new sign-up with the same email succeeds immediately.
+- **SC-111**: A deleted account's personal fields are erased and its identity rows gone in the same transaction; its refresh token is refused; and a new sign-up with the same email succeeds immediately, except for an account banned when it was deleted, whose identifiers are kept as keyed hashes and refused (T097, FR-155).
 - **SC-112**: T130's register shows Phase 1's own count at zero, with R-GENDER-6, R-MOBILE-13, R-HONEST-4, R-GENDER-1 and R-GENDER-3 proven.
 - **SC-113**: The full migration history applied to an empty database succeeds on the first attempt and yields every table the pass adds, each with exactly one owner in the manifest and each new integrity rule demonstrated by a refused insert.
 - **SC-114**: The complete test suite passes on a machine holding no Google, Apple, email or gateway credential.

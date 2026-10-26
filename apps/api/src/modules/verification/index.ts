@@ -31,6 +31,7 @@ import {
 } from './verification-request.service.js';
 import { VerificationRepository } from './verification.repository.js';
 import { VerificationService } from './verification.service.js';
+import { DocumentErasure, type DocumentErasureDependencies } from './document-erasure.js';
 
 export { DOCUMENTS_UPLOAD_PATH };
 export type { DocumentLink, DocumentViewer } from './verification.service.js';
@@ -172,6 +173,24 @@ export function createUnreferencedDocuments(
   dependencies: UnreferencedDocumentsDependencies,
 ): UnreferencedDocuments {
   return new UnreferencedDocuments(dependencies);
+}
+
+/**
+ * A deleted person's documents (B16, decision 1): the subscriber `main.ts` adds to the consequences
+ * registry, which marks them erased on the deletion's transaction, and the erasure that removes their
+ * files after the commit, handed to the identity module's deletion by `main.ts` and to the
+ * `erase-deleted-files` sweep by `worker.ts`.
+ */
+export {
+  DocumentErasure,
+  type DocumentErasureDependencies,
+  documentErasureConsequence,
+  type ErasedFile,
+} from './document-erasure.js';
+
+/** The erasure of deleted people's documents over the process's database, cipher and storage. */
+export function createDocumentErasure(dependencies: DocumentErasureDependencies): DocumentErasure {
+  return new DocumentErasure(dependencies);
 }
 
 /** The verification module's `_encrypted` column, for the `reencrypt-columns` job (T155, R-API-6). */

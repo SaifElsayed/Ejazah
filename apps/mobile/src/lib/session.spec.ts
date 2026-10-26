@@ -127,6 +127,15 @@ describe('allows', () => {
     expect(allows(restricted, ['(student)', '(tabs)'])).toBe(false);
     expect(allows(restricted, ['notifications'])).toBe(false);
   });
+
+  // T097 (FR-155): a sign-up refused as a banned person's lands on `(auth)/banned` with no
+  // session; a session never stays there.
+  it('keeps the banned state without a session to a signed-out person', () => {
+    expect(allows({ kind: 'signed-out' }, ['(auth)', 'banned'])).toBe(true);
+    expect(allows(student, ['(auth)', 'banned'])).toBe(false);
+    expect(allows({ kind: 'signed-in', landing: 'restricted' }, ['(auth)', 'banned'])).toBe(false);
+    expect(allows({ kind: 'restoring' }, ['(auth)', 'banned'])).toBe(false);
+  });
 });
 
 describe('the session store', () => {

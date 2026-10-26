@@ -5,7 +5,15 @@
 // (note under T018). `platform.publicConfig` is read once and cached.
 import { describe, expect, it, jest } from '@jest/globals';
 
-import { createApiClient, errorCodeOf, errorDetailsOf, filePart, UPLOAD_FILE_NAME } from './client';
+import {
+  createApiClient,
+  errorCodeOf,
+  errorDetailsOf,
+  filePart,
+  photoPart,
+  UPLOAD_FILE_NAME,
+  UPLOAD_PHOTO_NAME,
+} from './client';
 import type { SessionStore, SessionTokens } from './storage';
 
 const url = 'https://api.test/trpc';
@@ -422,6 +430,84 @@ describe('the documents upload', () => {
     const { client } = clientOver(fake.fetch, false);
     await expect(client.uploadDocument('credential', file)).rejects.toThrow(
       'no documents upload URL',
+    );
+    expect(fake.uploads).toEqual([]);
+  });
+});
+
+describe('the photo upload (T084)', () => {
+  const photosUrl = 'https://api.test/uploads/photos';
+  const photo = { uri: 'file:///cache/IMG_0001.png', name: 'IMG_0001.png', mimeType: 'image/png' };
+
+  function server(answer: () => { status: number; body: unknown }) {
+    const uploads: { bearer: string | null; parts: [string, unknown][] }[] = [];
+    const fetchImpl = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe(photosUrl);
+      const authorization = new Headers(init?.headers).get('authorization');
+      const form = init?.body as {
+        readonly _parts?: [string, unknown][];
+        readonly entries?: () => Iterable<[string, unknown]>;
+      };
+      uploads.push({
+        bearer: authorization === null ? null : authorization.replace(/^Bearer /, ''),
+        parts: form._parts ?? [...(form.entries?.() ?? [])],
+      });
+      const { status, body } = answer();
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    return { uploads, fetch: fetchImpl as unknown as typeof fetch };
+  }
+
+  function clientOver(fetchImpl: typeof fetch, withUrl = true) {
+    return createApiClient({
+      url,
+      sessions: memorySessions({ accessToken: 'a1', refreshToken: 'r1' }).store,
+      ...(withUrl ? { photosUploadUrl: photosUrl } : {}),
+      onSignedOut: jest.fn(),
+      fetch: fetchImpl,
+    });
+  }
+
+  it('posts the one image with the bearer and answers the signed link', async () => {
+    const fake = server(() => ({
+      status: 201,
+      body: { photoUrl: 'https://files.test/p.png?s=1' },
+    }));
+    await expect(clientOver(fake.fetch).uploadPhoto(photo)).resolves.toBe(
+      'https://files.test/p.png?s=1',
+    );
+    expect(fake.uploads).toHaveLength(1);
+    expect(fake.uploads[0]?.bearer).toBe('a1');
+    expect(fake.uploads[0]?.parts.map(([name]) => name)).toEqual(['file']);
+  });
+
+  it('sends the image under a fixed name with the type the picker reported', () => {
+    expect(photoPart(photo)).toEqual({
+      uri: 'file:///cache/IMG_0001.png',
+      name: UPLOAD_PHOTO_NAME,
+      type: 'image/png',
+    });
+    expect(UPLOAD_PHOTO_NAME).toBe('photo');
+  });
+
+  it('raises a refusal whose code is read as a call’s is', async () => {
+    const fake = server(() => ({
+      status: 400,
+      body: { error: { code: 'VALIDATION_FAILED', message: 'refused' } },
+    }));
+    const refusal = await clientOver(fake.fetch)
+      .uploadPhoto(photo)
+      .catch((error: unknown) => error);
+    expect(errorCodeOf(refusal)).toBe('VALIDATION_FAILED');
+  });
+
+  it('refuses to upload when the client was given no photos address', async () => {
+    const fake = server(() => ({ status: 201, body: { photoUrl: 'x' } }));
+    await expect(clientOver(fake.fetch, false).uploadPhoto(photo)).rejects.toThrow(
+      'no photos upload URL',
     );
     expect(fake.uploads).toEqual([]);
   });

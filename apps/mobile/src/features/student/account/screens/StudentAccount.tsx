@@ -1,8 +1,10 @@
 // T052 (FR-AUTH-5, FR-LOC-3, FR-AUTH-10, FR-GENDER-5, FR-AUTH-11, FR-AUTH-7): the student's account
 // tab (StudentAccount): the profile row (avatar, name, address, «طالب · منذ …»), the shared
 // settings, and sign-out behind its sheet. The rows whose screens land later are added with them
-// (owner's decision, 2026-10-20): the notifications with their phase, the profile editor with its
-// phase, «حذف الحساب» with B16.
+// (owner's decision, 2026-10-20): the notifications with their phase. Since B16 (T084) «الملف
+// الشخصي» leads the first list to the profile editor, and the danger row «حذف الحساب» follows
+// sign-out to the deletion, as the board draws them.
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -19,6 +21,7 @@ import {
   SignOutSheet,
 } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
+import { DELETE_ACCOUNT_ROUTE, PROFILE_EDITOR_ROUTE } from '../navigation';
 
 export function StudentAccount() {
   const t = useT();
@@ -57,12 +60,27 @@ export function StudentAccount() {
               </Text>
             </View>
           </Card>
-          <AccountSettings me={account} />
+          <AccountSettings
+            me={account}
+            leading={
+              <ListRow
+                label={t('account.profile')}
+                value={t('account.profileValue')}
+                onPress={() => router.push(PROFILE_EDITOR_ROUTE)}
+              />
+            }
+          />
           <List>
             <ListRow
               label={t('account.signOut')}
               leading={<Icon name="log-out" tone="muted" />}
               onPress={() => setSigningOut(true)}
+            />
+            <ListRow
+              label={t('account.deleteAccount')}
+              tone="danger"
+              leading={<Icon name="trash" tone="danger" />}
+              onPress={() => router.push(DELETE_ACCOUNT_ROUTE)}
             />
           </List>
           <SignOutSheet

@@ -1,5 +1,5 @@
 {
-  "$comment": "Domain-to-module ownership manifest (ERD v1.3 section 1, data-model.md section 1, ADR 0005 D2, ADR 0007 D4, ADR 0008 D2; Phase 1 adds seven tables, specs/002-identity/data-model.md section 1, T003 and T094). Consumed by api/table-ownership (R-API-6). A table lands in exactly one owner or fails the check. 40 tables: 12 modules plus the platform kernel.",
+  "$comment": "Domain-to-module ownership manifest (ERD v1.3 section 1, data-model.md section 1, ADR 0005 D2, ADR 0007 D4, ADR 0008 D2; Phase 1 adds seven tables, specs/002-identity/data-model.md section 1, T003 and T094; T097 adds banned_identifiers). Consumed by api/table-ownership (R-API-6). A table lands in exactly one owner or fails the check. 41 tables: 12 modules plus the platform kernel.",
   "identity": [
     "users",
     "user_roles",
@@ -9,7 +9,8 @@
     "terms_acceptances",
     "user_sessions",
     "user_session_retired_tokens",
-    "auth_identities"
+    "auth_identities",
+    "banned_identifiers"
   ],
   "verification": [
     "verification_documents",

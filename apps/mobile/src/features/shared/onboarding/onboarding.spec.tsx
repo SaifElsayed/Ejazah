@@ -3,6 +3,9 @@
 // provider identity with no verified address), the time-zone picker over the city list, the Terms
 // as served content, and the confirmation sheet whose confirm creates the account in one call to
 // `onboarding.complete` and lands the person through the guard.
+//
+// T097 (FR-155): `complete` refused with `ACCOUNT_RESTRICTED` (the identifiers of a banned person's
+// deleted account) lands on the signed-out banned state and forgets the draft, storing no session.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -301,6 +304,25 @@ describe('OnboardProfile', () => {
     );
   });
 
+  it('lands a creation refused as banned on the signed-out banned state (T097)', async () => {
+    startAs('email');
+    updateDraft({ role: 'student' });
+    mockApi.api.onboarding.complete.mutate.mockRejectedValue(apiError('ACCOUNT_RESTRICTED'));
+    await renderIn('rtl', <OnboardProfile />);
+    await fillProfile();
+    await fireEvent.press(screen.getByRole('checkbox'));
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(auth)/banned'));
+    expect(screen.queryByText(ar('common.state.actionError'))).toBeNull();
+    expect(getSession()).toEqual({ kind: 'signed-out' });
+    expect(mockApi.sessions.current()).toBeNull();
+    // The token and the password go with the draft.
+    expect(getDraft()).toBeNull();
+  });
+
   it('says a failed creation on the sheet and creates nothing', async () => {
     updateDraft({ role: 'student' });
     mockApi.api.onboarding.complete.mutate.mockRejectedValue(apiError('INTERNAL'));
@@ -314,6 +336,8 @@ describe('OnboardProfile', () => {
     expect(await screen.findByText(ar('common.state.actionError'))).toBeTruthy();
     expect(getSession()).toEqual({ kind: 'signed-out' });
     expect(mockApi.sessions.current()).toBeNull();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/(auth)/banned');
+    expect(getDraft()).not.toBeNull();
   });
 });
 

@@ -1,12 +1,12 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.8 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog*
+*Version 1.10 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog*
 
 ## 0. How to read this
 
 This is the complete data model for the MVP — 40 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
-> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
+> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
 Conventions, binding on every table:
 
@@ -29,7 +29,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 
 | Domain | Module | Tables |
 |---|---|---|
-| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` |
+| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` · `banned_identifiers` |
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
 | CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
 | BOOKING | `booking` | `slot_holds` · `enrollments` |
@@ -61,7 +61,7 @@ The root identity. One row per human, with exactly one role (ADR 0016).
 | date_of_birth | date, nullable | FR-AUTH-4. Nullable only for a deleted row, so the deletion transaction can erase it; §15 rule 32 keeps it NOT NULL while the row is live (Phase 1 pass, migration `20261018000000`) |
 | display_name | text, nullable | Nullable only for a deleted row, as `date_of_birth` (rule 32) |
 | certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, landed by the Phase 1 pass). Erased on deletion; the names a certificate prints are snapshotted onto `ijazahs` at issue (ADR 0015 D3, ADR 0019 D1) |
-| photo_key | text, nullable | The profile photo of either role (decision 46), a storage key served by a signed link; erased on deletion. `teacher_profiles.photo_key` is unused since (Phase 1 pass) |
+| photo_key | text, nullable | The profile photo of either role (decision 46), a storage key served by a signed link; on deletion it is cleared once its file is removed, and a key still held is retried by the `erase-deleted-files` job (v1.9). `teacher_profiles.photo_key` is unused since (Phase 1 pass) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
 | timezone_overridden_at | timestamptz, nullable | When the person chose the zone by hand; while null, the device's report replaces `timezone` (FR-AUTH-10, v1.6) |
@@ -87,6 +87,19 @@ A Google or Apple account, keyed by the provider's subject (ADR 0012 D2). Added 
 | created_at | timestamptz | |
 
 Deleted outright on account deletion (ADR 0015 D3): the application role keeps DELETE on this table, and the uniqueness never blocks the person's new account.
+
+### `banned_identifiers`
+
+A banned person's sign-in identifiers, kept past the deletion of their account so the ban outlives it (FR-155; ADR 0015 D1 and D3; T097). Written in the deletion's transaction, before the personal fields and `auth_identities` are erased, only when `users.account_status` is `banned`: one row for the normalized email and one for each linked `(provider, provider_subject)`. Read by `auth.email.verifySignUpCode` after the code, `auth.signInWithProvider` on the new-account path after the token and `onboarding.complete` before the row is written; a match is refused with `ACCOUNT_RESTRICTED`. Added by migration `20261026000100`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| kind | enum email · provider | What the hash was made from |
+| identifier_hmac | text, unique | HMAC-SHA256, hex, under a subkey of ENCRYPTION_KEY derived by HKDF under `ijazah:banned-identifier:v1`, of `email` NUL the normalized address, or of `provider` NUL the provider NUL the subject (§15 rule 35) |
+| created_at | timestamptz | |
+
+Nothing else of the person: no address, subject, name or link to the deleted row, so the table says nothing to anyone without the key. A row never changes, so it carries no `updated_at`. Kept with no end date until OPEN-05 (NFR-COMP-2) settles its retention; the privacy policy must say it. An HMAC cannot be recomputed without the address it was made from, so a rotation of ENCRYPTION_KEY leaves every row unmatched (docs/RUNBOOK.md). The application role keeps the default privileges, DELETE included, for that retention.
 
 ### `user_sessions`
 
@@ -215,9 +228,10 @@ Uploaded identity and credential documents (FR-VERIFY-1). Admin: view only, neve
 | id | uuid | PK |
 | user_id | FK → users | Teacher applicants and any user under FR-VERIFY-10 |
 | document_type | enum national_id · passport · credential · other | |
-| storage_key_encrypted | bytea | Identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only (NFR-SEC-2/3) |
+| storage_key_encrypted | bytea, nullable | Identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only (NFR-SEC-2/3). Null only once the file is removed after its person's deletion, never before `erased_at` (§15 rule 34; v1.9) |
 | size_bytes | int, nullable | The PDF's size as the upload accepted it; null for a document uploaded before it was recorded. The file's name is never stored (it may carry the person's name) (v1.7) |
 | uploaded_at | timestamptz | |
+| erased_at | timestamptz, nullable | Set in the account deletion's transaction of the person who uploaded it (ADR 0015 D3); the document is no longer readable from then on, and its key is cleared after the commit once the file is removed. A key still held is retried by the `erase-deleted-files` job (v1.9) |
 
 ### `verification_requests`
 
@@ -840,11 +854,15 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 33. `user_session_retired_tokens.token_hash` unique — a retired refresh token names one session, so a presentation of it after the grace finds the session to revoke (research R-101; Phase 1, T094).
 
+34. `verification_documents`: `storage_key_encrypted IS NOT NULL OR erased_at IS NOT NULL` — check constraint `verification_documents_erased_key_check`: a document loses its key only once it is erased, so a stored identity document never goes missing unseen (ADR 0015 D3; B16, T082).
+
+35. `banned_identifiers.identifier_hmac` unique — a kept identifier is one row, so a deletion written twice keeps one (FR-155; T097).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 40 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 41 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -976,3 +994,22 @@ FR-161 and `applications.recordCall` record the verification call's day, outcome
 | 1 | §2 `teacher_profiles.verification_call_completed_on date` replaces `verification_call_completed_at timestamptz` | `20261022000000_verification_call_day_and_outcome` |
 | 2 | §2 `teacher_profiles.verification_call_outcome`, the new enum `verification_call_outcome` (`suitable · unsuitable`), nullable | the same |
 | 3 | §2 `verification_requests.status` gains `replaced`: a request for another document closes the request and opens a new one, so a document an administrator turned away is never swept (B13b review, owner's decision 2026-10-22) | the same |
+
+## Changelog — v1.8 → v1.9 (a deleted person's documents, 2026-10-26)
+
+An account deletion erases a teacher's documents (ADR 0015 D3), and the rows must stay, since profiles and credentials point at them. The owner decided at the conflict check of batch B16 (decision 1, on the reviewer's advice): the deletion's transaction marks the documents erased and keeps each key; after the commit each file is removed and its key cleared only once the removal succeeded; a job retries every erased document still holding a key.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §3 `verification_documents.storage_key_encrypted` becomes nullable | `20261026000000_verification_documents_erased_at` |
+| 2 | §3 `verification_documents.erased_at timestamptz`, nullable | the same |
+| 3 | §15 rule 34: no key without `erased_at` | the same |
+
+## Changelog — v1.9 → v1.10 (a banned person's identifiers, 2026-10-26)
+
+A deletion freed the email and deleted the provider identities (ADR 0015 D3), so a banned person could delete and sign up again with the same address or provider account, and FR-155 says a banned account must reach neither the application nor sign-in. The owner decided on 2026-10-26 (B16 review, round 1, question 1; the note under T097): a banned person's deletion keeps their identifiers as keyed hashes, and the three sign-up paths refuse them after the proof of ownership.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §2 `banned_identifiers` (`id`, `kind`, `identifier_hmac`, `created_at`), with the new enum `banned_identifier_kind` (`email · provider`); §1 lists it under identity, 41 tables | `20261026000100_banned_identifiers` |
+| 2 | §15 rule 35: `identifier_hmac` unique | the same |
