@@ -3,7 +3,9 @@
 // SIGN-UP. A code goes to every well-formed address, the same answer whether the address is in use
 // or not; only once the code verifies is an address in use told, with its account's method
 // (FR-123), so the conflict reaches only someone who controls the mailbox and nothing is
-// enumerated. A verified code yields an onboarding token for the address.
+// enumerated. A verified code yields an onboarding token for the address. An address a banned
+// person's deleted account left (T097, FR-155) is refused after the code, ACCOUNT_RESTRICTED with no
+// detail and no token; the code request answers it as any other (R-104).
 //
 // SIGN-IN. The password is verified after the throttle the router applies (FR-135). An unknown
 // address and a provider account verify against a decoy hash, so every branch does one Argon2id
@@ -20,6 +22,7 @@ import { hashPassword, type Verification, verifyPassword } from '../../platform/
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
+import { BannedIdentifiers } from './banned-identifiers.js';
 import { AccountsRepository } from './identity.repository.js';
 import type { OnboardingService } from './onboarding.service.js';
 import { normalizeEmail, type OneTimeCodes } from './one-time-codes.js';
@@ -49,6 +52,7 @@ const signInFailed = () => new DomainError('SIGN_IN_FAILED');
 
 export class EmailAuthService {
   readonly #accounts: AccountsRepository;
+  readonly #banned: BannedIdentifiers;
   readonly #transactions;
   readonly #dependencies: EmailAuthDependencies;
   readonly #passwords: PasswordHashing;
@@ -58,6 +62,7 @@ export class EmailAuthService {
   constructor(dependencies: EmailAuthDependencies) {
     this.#dependencies = dependencies;
     this.#accounts = new AccountsRepository(dependencies.database);
+    this.#banned = new BannedIdentifiers(dependencies);
     this.#transactions = transactionsOver(dependencies.database);
     this.#passwords = dependencies.passwords ?? { hash: hashPassword, verify: verifyPassword };
     this.#decoy = this.#passwords.hash(generateSecretToken());
@@ -75,6 +80,7 @@ export class EmailAuthService {
   ): Promise<{ readonly onboardingToken: string }> {
     const address = normalizeEmail(email);
     await this.#dependencies.codes.verify(address, 'signup', code);
+    await this.#banned.refuse({ email: address });
     const owner = await this.#accounts.findByEmail(address);
     if (owner !== null) {
       throw new DomainError('EMAIL_IN_USE_BY_OTHER_METHOD', undefined, {

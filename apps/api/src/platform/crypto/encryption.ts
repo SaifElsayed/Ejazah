@@ -41,8 +41,11 @@
 //   ijazah:access-token:v1              modules/identity (Phase 1, T044)         signs access tokens (data-model §7, R-101)
 //   ijazah:onboarding-token:v1          modules/identity (Phase 1, T043)         signs onboarding tokens (R-102)
 //   ijazah:admin-invite:v1              modules/admin (Phase 1, T066)            signs invite links (FR-174)
-// Only the column key protects a stored value; the rest protect short-lived values, so a rotation
-// re-encrypts the columns alone (T155).
+//   ijazah:banned-identifier:v1         modules/identity (Phase 1, T097)         keys a banned person's identifier hashes (FR-155)
+// Only the column key protects a stored value that a rotation can carry over: the columns are
+// re-encrypted (T155). The banned-identifier key makes stored hashes that cannot be: an HMAC is not
+// recomputed without the address it was made from, so a rotation leaves every `banned_identifiers`
+// row unmatched (docs/RUNBOOK.md, the rotation's warning). The rest protect short-lived values.
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import type { Config } from '../config/config.module.js';
 
@@ -58,6 +61,7 @@ export const HKDF_LABELS = [
   'ijazah:access-token:v1',
   'ijazah:onboarding-token:v1',
   'ijazah:admin-invite:v1',
+  'ijazah:banned-identifier:v1',
 ] as const;
 
 /** A registered label: the only kind `deriveSubkey` takes, so an unlisted label does not compile. */
@@ -69,6 +73,8 @@ export const COLUMN_KEY_ID_LABEL = 'ijazah:column-key-id:v1' satisfies HkdfLabel
 export const ACCESS_TOKEN_LABEL = 'ijazah:access-token:v1' satisfies HkdfLabel;
 export const ONBOARDING_TOKEN_LABEL = 'ijazah:onboarding-token:v1' satisfies HkdfLabel;
 export const ADMIN_INVITE_LABEL = 'ijazah:admin-invite:v1' satisfies HkdfLabel;
+/** T097 (FR-155): the key of a banned person's identifier hashes (`modules/identity/banned-identifiers.ts`). */
+export const BANNED_IDENTIFIER_LABEL = 'ijazah:banned-identifier:v1' satisfies HkdfLabel;
 
 const KEY_BYTES = 32;
 const IV_BYTES = 12;

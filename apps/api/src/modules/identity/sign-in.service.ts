@@ -14,7 +14,10 @@
 // new identity whose verified email belongs to an account is refused with that account's method,
 // never signed in to or merged (FR-123). Any other new identity gets an onboarding token with the
 // prefill; for Apple the authorization code is exchanged at once and the refresh token rides inside
-// the token, encrypted (TN3194, ADR 0015 D3). Nothing is written before onboarding completes.
+// the token, encrypted (TN3194, ADR 0015 D3). Nothing is written before onboarding completes. A new
+// identity whose subject, or whose verified email, a banned person's deleted account left (T097,
+// FR-155) is refused after the token and before Apple's exchange: ACCOUNT_RESTRICTED, no detail, no
+// token.
 import { addMinutes } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -26,6 +29,7 @@ import {
   type SignInPort,
 } from '../../platform/ports/sign-in/sign-in.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
+import { BannedIdentifiers } from './banned-identifiers.js';
 import { AccountsRepository } from './identity.repository.js';
 import type { OnboardingService } from './onboarding.service.js';
 import { normalizeEmail } from './one-time-codes.js';
@@ -71,12 +75,14 @@ const refused = (cause?: unknown) =>
 
 export class SignInService {
   readonly #accounts: AccountsRepository;
+  readonly #banned: BannedIdentifiers;
   readonly #dependencies: SignInDependencies;
   readonly #now: () => Date;
 
   constructor(dependencies: SignInDependencies) {
     this.#dependencies = dependencies;
     this.#accounts = new AccountsRepository(dependencies.database);
+    this.#banned = new BannedIdentifiers(dependencies);
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -108,6 +114,10 @@ export class SignInService {
 
     const email =
       proven.emailVerified && proven.email !== null ? normalizeEmail(proven.email) : null;
+    await this.#banned.refuse({
+      email,
+      identity: { provider: proven.provider, subject: proven.subject },
+    });
     if (email !== null) {
       const owner = await this.#accounts.findByEmail(email);
       if (owner !== null) {

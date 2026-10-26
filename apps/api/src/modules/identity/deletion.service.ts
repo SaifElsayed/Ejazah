@@ -18,8 +18,10 @@
 //   never awaited; the decoy hash otherwise. The second consumes the code (one Argon2id comparison
 //   on every path, `one-time-codes.ts`) and runs the same transaction; a wrong code answers false
 //   and deletes nothing. A right code whose account is gone meanwhile was another deletion's: true.
-// - THE TRANSACTION (ADR 0015 D3): the address and Apple's grants read, the row soft-deleted with
-//   its personal fields erased (conditional on the row still being live, so of two deletions racing
+// - THE TRANSACTION (ADR 0015 D3): the address and Apple's grants read; for a banned account, the
+//   keyed hashes of its address and provider identities kept in `banned_identifiers` before they
+//   are erased, so the ban outlives the account (T097, FR-155, `banned-identifiers.ts`); the row
+//   soft-deleted with its personal fields erased (conditional on the row still being live, so of two deletions racing
 //   on one person exactly one erases and only that one does the work after the commit), the
 //   identity rows deleted, every session revoked (`account_deleted`), the push tokens removed, a
 //   teacher's bio and payout columns erased, then the consequences registry with `account_deleted`
@@ -44,6 +46,7 @@ import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import { IdentityTokenError, type SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
+import { BannedIdentifiers } from './banned-identifiers.js';
 import type { AccountConsequences } from './consequences.js';
 import type { PasswordHashing } from './email-auth.service.js';
 import {
@@ -53,6 +56,7 @@ import {
   eraseAccount,
   type ErasureSnapshot,
   readDeletionProof,
+  readBannedSignIn,
   readErasureSnapshot,
 } from './identity.repository.js';
 import { renderDeletionMail } from './mail/deletion-mail.js';
@@ -101,6 +105,7 @@ export class DeletionService {
   readonly #accounts: AccountsRepository;
   readonly #sessions: UserSessionsRepository;
   readonly #photos: DeletedPhotosRepository;
+  readonly #banned: BannedIdentifiers;
   readonly #transactions;
   readonly #cipher: ColumnCipher;
   readonly #passwords: PasswordHashing;
@@ -115,6 +120,7 @@ export class DeletionService {
     this.#accounts = new AccountsRepository(dependencies.database);
     this.#sessions = new UserSessionsRepository(dependencies.database);
     this.#photos = new DeletedPhotosRepository(dependencies.database);
+    this.#banned = new BannedIdentifiers(dependencies);
     this.#transactions = transactionsOver(dependencies.database);
     this.#cipher = new ColumnCipher(dependencies.encryptionKey);
     this.#passwords = dependencies.passwords ?? { hash: hashPassword, verify: verifyPassword };
@@ -179,7 +185,12 @@ export class DeletionService {
   /** The one transaction (ADR 0015 D3); null when the person was already deleted. */
   async #erase(tx: Transaction, userId: string, at: Date): Promise<ErasureSnapshot | null> {
     const snapshot = await readErasureSnapshot(tx, userId);
-    if (snapshot === null || !(await eraseAccount(tx, userId, at))) return null;
+    if (snapshot === null) return null;
+    const banned = await readBannedSignIn(tx, userId);
+    // Before the erasure, which takes the address and the identities with it (T097). Of two
+    // deletions racing on one person both may keep the hashes; a hash kept twice stays one row.
+    if (banned !== null) await this.#banned.keep(tx, banned);
+    if (!(await eraseAccount(tx, userId, at))) return null;
     await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
     await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted');
     return snapshot;

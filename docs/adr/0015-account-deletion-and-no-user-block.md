@@ -41,6 +41,17 @@ The user then confirms in three steps:
 Deletion is immediate and final. There is no recovery period. Signing up again
 with the same email creates a new account.
 
+**The exception: a banned account (FR-155, T097, the owner's decision of
+2026-10-26).** A banned person may delete their account, but the ban outlives
+it: signing up again with the same email, or with the same Google or Apple
+account, is refused with `ACCOUNT_RESTRICTED` and no detail, and no token is
+issued. Without this, deleting and signing up again would lift a ban that is
+permanent and not lifted from the panel (FR-162). The refusal comes only after
+the person proved the address or the account (the right code, a provider
+token, an onboarding token), never at the code request, which answers every
+address alike, so nobody learns of another person's ban. Nothing says an
+account was deleted before. The identifiers are kept as D3 states.
+
 ### D2 — Deletion can also be requested on the web
 
 A public page explains the in-app path. It also takes a request without the app:
@@ -68,6 +79,23 @@ A public page explains the in-app path. It also takes a request without the app:
     personal data with no history value, and its unique
     `(provider, provider_subject)` must not block the person's new account (D1).
   - The partial unique indexes free the email for a new sign-up.
+  - **Except for a banned account (FR-155, T097).** Its email and each
+    linked `(provider, provider_subject)` are kept in `banned_identifiers`,
+    written in the same transaction before they are erased, so the ban
+    outlives the account (D1). Only a keyed hash is kept: HMAC-SHA256 under a
+    subkey of ENCRYPTION_KEY derived by HKDF under its own label, with the
+    row's `created_at`. No address, subject, name or link to the deleted row
+    is stored, so the table identifies no one to a reader without the key, and
+    a guessed address can be tested only by the platform. Why hashes and not
+    the values: matching needs equality only, and data minimisation (Egypt
+    PDPL) forbids keeping more. Why keyed: a plain hash of an address can be
+    reversed by hashing a list of addresses. The cost: a rotation of
+    ENCRYPTION_KEY leaves every row unmatched, since an HMAC cannot be
+    recomputed without the address it was made from (docs/RUNBOOK.md, the
+    rotation's warning).
+  - **Retention.** The kept identifiers have no end date. OPEN-05
+    (NFR-COMP-2) must settle how long a ban outlives an account before
+    launch, with counsel, and the privacy policy must say it.
 - **Teacher data.** A teacher's bio, verification documents and payout
   recipient reference are erased.
 

@@ -14,8 +14,8 @@ says it as the model.
 
 Everything below lands by forward migrations after `20261014000000`, immutable
 once merged (R-DB-1), each applied clean from an empty database (SC-113). The
-count rises from thirty-three tables to thirty-nine, and to forty with
-`user_session_retired_tokens` (T094).
+count rises from thirty-three tables to thirty-nine, to forty with
+`user_session_retired_tokens` (T094), and to forty-one with `banned_identifiers` (T097).
 
 ---
 
@@ -26,6 +26,7 @@ count rises from thirty-three tables to thirty-nine, and to forty with
 | `user_sessions`               | identity | A device's session: its refresh token as a hash, rotation, revocation (FR-101, R-101)                    |
 | `user_session_retired_tokens` | identity | Every hash a session's rotations retired, so reuse is caught across every rotation (R-101, T094)         |
 | `auth_identities`             | identity | A Google or Apple account keyed by the provider's subject (FR-102, ADR 0012 D2)                          |
+| `banned_identifiers`          | identity | A banned person's sign-in identifiers as keyed hashes, kept past their deletion (FR-155, T097)           |
 | `admin_sessions`              | admin    | An administrator's session, a different principal in a different table (FR-101, R-SEC-8)                 |
 | `admin_recovery_codes`        | admin    | Ten single-use codes per administrator, hashed (FR-105, ADR 0019 D3)                                     |
 | `teacher_credentials`         | catalog  | One ijazah PDF per subject with its transcription; the chain hangs under it (FR-104, ADR 0017 D5)        |
@@ -34,6 +35,25 @@ count rises from thirty-three tables to thirty-nine, and to forty with
 `packages/config/module-tables.json` gains each under its owner; the
 table-ownership rule (R-API-6) then refuses any other module's read. The
 `verification` module keeps its two tables: it owns the documents and the verification requests. The application's state and decisions are columns of `teacher_profiles` (§3), identity's table, written by the `verification` module's application services through `identity`'s public entry (`setApplication`, `setAccountStatus`), with the approved subjects granted through `catalog`'s (`grantSubjects`); `identity` imports no other module (research R-121) (R-API-6).
+
+### `banned_identifiers` (T097)
+
+| Column            | Type                                    | Notes                                                                                                                                                                                       |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | `uuid` PK                               |                                                                                                                                                                                             |
+| `kind`            | `banned_identifier_kind` (email, provider) | What the hash was made from                                                                                                                                                                 |
+| `identifier_hmac` | `text` unique NOT NULL                  | HMAC-SHA256, hex, under the subkey HKDF derives from ENCRYPTION_KEY under `ijazah:banned-identifier:v1`, of `email` NUL the address as `normalizeEmail` gives it, or of `provider` NUL the provider NUL the subject (rule 35) |
+| `created_at`      | `timestamptz`                           |                                                                                                                                                                                             |
+
+Written in an account deletion's transaction, before the personal fields and
+`auth_identities` are erased, only when `users.account_status` is `banned`
+(FR-155; ADR 0015 D1 and D3). Checked after the proof of ownership:
+`auth.email.verifySignUpCode` after the code, `auth.signInWithProvider` on the
+new-account path after the token, `onboarding.complete` before the row is
+written; a match is `ACCOUNT_RESTRICTED` with no detail and no token. Nothing
+else of the person is stored. Kept with no end date until OPEN-05 (NFR-COMP-2)
+settles the retention. A rotation of ENCRYPTION_KEY leaves every row unmatched,
+since an HMAC is not recomputed without its address (docs/RUNBOOK.md).
 
 ### `user_sessions`
 
@@ -259,13 +279,14 @@ Zod `.max()`; conversions in `@ijazah/time`.
 | 32  | `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` | check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141) |
 | 33  | `user_session_retired_tokens.token_hash` unique                                                                     | unique index (T094)                                                                                  |
 | 34  | `verification_documents`: `storage_key_encrypted IS NOT NULL OR erased_at IS NOT NULL`                            | check constraint: a document loses its key only once it is erased (B16, T082)                        |
+| 35  | `banned_identifiers.identifier_hmac` unique                                                                         | unique index: a kept identifier is one row (T097)                                                    |
 
 Rules 10 and 21 (no DELETE on the five tables; append-only on the three) are
 untouched. `auth_identities`, `user_sessions`, `user_session_retired_tokens`, `admin_sessions`,
 `admin_recovery_codes` and `otp_codes` keep DELETE for the application role:
 each is a credential or a key, not a record of something that happened.
-`teacher_credentials` and `session_remedies` keep it too, by the default
-privileges, as every table without `deleted_at` that is not append-only does
+`teacher_credentials`, `session_remedies` and `banned_identifiers` (whose
+retention OPEN-05 settles) keep it too, by the default privileges, as every table without `deleted_at` that is not append-only does
 (`isnad_entries` is the Phase 0 precedent); nothing deletes their rows in this
 phase.
 
@@ -313,11 +334,14 @@ kind refuses `mfaVerified: false`.
 | Recipient reference                                           | Column cipher plus a lookup hash                             | `teacher_profiles`                                               |
 | Identity document storage key                                 | Column cipher                                                | `verification_documents` (unchanged)                             |
 | Access token, onboarding token, admin invite link             | Not stored: signed, verified by HMAC under their HKDF labels | —                                                                |
+| A banned person's email and provider identities (T097)        | HMAC-SHA256 under its HKDF label; not recoverable            | `banned_identifiers`                                             |
 
 The three new HKDF labels (`ijazah:access-token:v1`,
 `ijazah:onboarding-token:v1`, `ijazah:admin-invite:v1`) join the list in
 `encryption.ts`. The schema check's `secret-column` rule reads the new columns
-as it reads the old (`*_hash`, `*_encrypted`).
+as it reads the old (`*_hash`, `*_encrypted`). T097 adds a fourth,
+`ijazah:banned-identifier:v1`, whose hashes are stored: a rotation of
+ENCRYPTION_KEY cannot carry them over (docs/RUNBOOK.md).
 
 ---
 
@@ -335,6 +359,7 @@ as it reads the old (`*_hash`, `*_encrypted`).
 | `20261021000000_verification_documents_size_bytes` | `verification_documents.size_bytes`; batch B11 with T057, the upload route that writes it and the credentials list that reads it                                                                                                                                      |
 | `20261022000000_verification_call_day_and_outcome` | `teacher_profiles.verification_call_completed_on date` in place of `verification_call_completed_at`, `verification_call_outcome` with its enum, and `replaced` on `verification_request_status`; batch B13b with T068, the review that records the call (owner's decisions 2026-10-22) |
 | `20261026000000_verification_documents_erased_at` | `verification_documents.erased_at`, `storage_key_encrypted` nullable, rule 34; batch B16 with T082, the deletion that writes it and the job that retries it |
+| `20261026000100_banned_identifiers` | `banned_identifiers` with the `banned_identifier_kind` enum, rule 35; batch B16 with T097, the deletion that writes it and the three sign-up checks that read it |
 
 The first four land in B2; the last two ride with their writers in B4, since the
 repositories and three Phase 0 probes write those rows without the new columns

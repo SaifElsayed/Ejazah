@@ -267,6 +267,11 @@ export class SpecRows {
     });
   }
 
+  /** T097: the stored row under one keyed hash, or null; every column the table has. */
+  bannedIdentifier(identifierHmac: string) {
+    return this.#database.bannedIdentifier.findUnique({ where: { identifierHmac } });
+  }
+
   /** The hashes a session's rotations retired, oldest first (T094). */
   retiredTokens(sessionId: string) {
     return this.#database.userSessionRetiredToken.findMany({

@@ -113,20 +113,22 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   session_remedies: 'sessionRemedy',
   admin_sessions: 'adminSession',
   admin_recovery_codes: 'adminRecoveryCode',
+  // T097 (FR-155).
+  banned_identifiers: 'bannedIdentifier',
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 40 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094)', () => {
+  it('holds the ERD’s 41 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(40);
-    expect(new Set(tables).size).toBe(40);
+    expect(tables).toHaveLength(41);
+    expect(new Set(tables).size).toBe(41);
   });
 
-  it('gives 40 distinct delegates, one per table', () => {
+  it('gives 41 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(40);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(41);
   });
 });
 
@@ -709,7 +711,7 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       ],
     },
     {
-      name: 'all 40 manifest tables, each reached through the delegate Prisma would generate',
+      name: 'all 41 manifest tables, each reached through the delegate Prisma would generate',
       code: [
         client(Object.values(expectedDelegates)),
         ...ownedTables.map(({ table }) => `prisma.${expectedDelegates[table]}.findMany();`),

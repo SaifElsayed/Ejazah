@@ -378,6 +378,41 @@ export async function readErasureSnapshot(
   };
 }
 
+/** T097 (FR-155): what a banned person's deletion keeps of their sign-in identifiers. */
+export interface BannedSignIn {
+  readonly email: string | null;
+  readonly identities: readonly {
+    readonly provider: 'google' | 'apple';
+    readonly subject: string;
+  }[];
+}
+
+/**
+ * The live person's address and provider identities when the account is banned, on the deletion's
+ * transaction, read before they are erased; null for any other standing or a person not live.
+ */
+export async function readBannedSignIn(
+  tx: Pick<Transaction, 'user'>,
+  userId: string,
+): Promise<BannedSignIn | null> {
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: {
+      accountStatus: true,
+      email: true,
+      authIdentities: { select: { provider: true, providerSubject: true } },
+    },
+  });
+  if (user?.accountStatus !== 'banned') return null;
+  return {
+    email: user.email,
+    identities: user.authIdentities.map(({ provider, providerSubject }) => ({
+      provider,
+      subject: providerSubject,
+    })),
+  };
+}
+
 /**
  * The one transaction's writes (ADR 0015 D3): the row soft-deleted with its personal fields erased,
  * the provider identities deleted outright, the push tokens removed, a teacher's bio and payout
