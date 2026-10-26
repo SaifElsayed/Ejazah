@@ -336,7 +336,7 @@ function doneStep(lang: Locale, email: string, supportEmail: string): WebRespons
               >
                 ${checkPath}
               </svg></span
-            ><span class="grow">${text.done.newAccount}</span>
+            ><span class="grow">${text.honest.newAccount}</span>
           </li>
         </ul>
         <p class="text-caption tone-muted push">

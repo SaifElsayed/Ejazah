@@ -289,7 +289,7 @@ arrive in later phases, which attach to the one entry this story leaves.
 **Independent Test**: Delete an account from the app and another from the web
 page; read the row and confirm every personal field is erased and the identity
 rows are gone; present the old refresh token and be refused; sign up again with
-the same email and succeed.
+the same email and succeed; a banned account's deletion is refused that sign-up (T097).
 
 **Acceptance Scenarios**:
 
@@ -481,7 +481,7 @@ or first fills.
 - **SC-108**: One hundred percent of administrative actions taken in the phase's tests have an audit entry with a non-empty, non-personal label, and a renamed or deleted target changes zero stored labels.
 - **SC-109**: The locked and wrong-credential answers of the admin sign-in are byte-identical in body and status, their timing difference is within the test's tolerance, and zero responses carry an attempts count.
 - **SC-110**: A teacher approved without a verified payout account is refused by every publishing path, and the verified instant is null until the stand-in's signed event sets it; a replayed event changes nothing a second time.
-- **SC-111**: A deleted account's personal fields are erased and its identity rows gone in the same transaction; its refresh token is refused; and a new sign-up with the same email succeeds immediately.
+- **SC-111**: A deleted account's personal fields are erased and its identity rows gone in the same transaction; its refresh token is refused; and a new sign-up with the same email succeeds immediately, except for an account banned when it was deleted, whose identifiers are kept as keyed hashes and refused (T097, FR-155).
 - **SC-112**: T130's register shows Phase 1's own count at zero, with R-GENDER-6, R-MOBILE-13, R-HONEST-4, R-GENDER-1 and R-GENDER-3 proven.
 - **SC-113**: The full migration history applied to an empty database succeeds on the first attempt and yields every table the pass adds, each with exactly one owner in the manifest and each new integrity rule demonstrated by a refused insert.
 - **SC-114**: The complete test suite passes on a machine holding no Google, Apple, email or gateway credential.

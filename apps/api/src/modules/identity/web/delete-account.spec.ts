@@ -283,7 +283,9 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
     expect(page).toContain(`<title>${ar.done.title}</title>`);
     expect(page).toContain(ar.brandDone);
     expect(page).toContain(ar.done.title);
-    expect(page).toContain(ar.done.newAccount);
+    // Not a promise a banned person's deletion would break (T097; B16 review, round 2, m1).
+    expect(page).toContain(ar.honest.newAccount);
+    expect(page).not.toContain(ar.done.newAccount);
     expect(page).toContain(
       ar.done.confirmation
         // Each address in its own left-to-right run, as the code step names it (B16 review, nit).
