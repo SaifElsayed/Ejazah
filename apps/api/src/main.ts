@@ -237,8 +237,15 @@ const application = await createApplication({
   sessions,
   services,
   adminServices,
-  // The public pages (T019, ADR 0021 D5): the Terms (T039); the deletion pages join with T083.
-  webRoutes: { [TERMS_PATH]: termsRoute({ settings }) },
+  // The public pages (T019, ADR 0021 D5): the Terms (T039) and the web deletion pages (T083).
+  webRoutes: {
+    [TERMS_PATH]: termsRoute({ settings }),
+    ...identity.deleteAccountRoutes({
+      deletion: services.identity.deletion,
+      supportEmail: config.SUPPORT_EMAIL,
+      rateLimiter,
+    }),
+  },
   routes,
   // The one proxy header whose last hop is the client's address; unset before a host is chosen.
   ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),

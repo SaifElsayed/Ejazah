@@ -26,6 +26,7 @@
     "db:schema:check": "tsx scripts/schema-check.ts",
     "contract:snapshot": "tsx --conditions=@ijazah/source scripts/contract-snapshot.ts",
     "tokens:build": "tsx scripts/build-tokens.ts",
+    "web-copy:build": "tsx scripts/build-web-copy.ts",
     "check:generated": "tsx --conditions=@ijazah/source scripts/generated-file-check.ts",
     "check:branch": "tsx scripts/branch-spec-check.ts",
     "check:migrations": "tsx scripts/migration-check.ts",

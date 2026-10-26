@@ -17,6 +17,13 @@
 //     runs, through the kernel's limiter (T170), the address read as the context reads it (T017):
 //     the socket's peer or the trusted proxy header's last hop.
 //   - THE LANGUAGE is `ar` unless `?lang=en`; nothing else in the query selects anything here.
+//   - A FORM is read from a POST's body only, never from the query, so a field a page takes (an
+//     address, a code) never travels in a URL (T083, public-pages.md). The body must be
+//     `application/x-www-form-urlencoded` in UTF-8, anything else (multipart, JSON, text) is
+//     refused with 400 before a byte is parsed; it is read whole up to `PUBLIC_FORM_MAX_BYTES` and
+//     refused with 413 past it, by its declared length before reading or as it streams, and the
+//     connection is closed so nothing more of it is read. The fields reach the handler as
+//     `URLSearchParams`, after the anonymous limit, so a refused request reads no body.
 //   - ESCAPING is the template's (`html.ts`); a handler returns a `SafeHtml` and nothing else
 //     reaches the body.
 //   - AN ERROR is a page too, in the request's language, with the status of the kernel's one
@@ -50,6 +57,16 @@ export const PUBLIC_PAGE_RATE_LIMIT = 'rate_limit_public_page' satisfies RateLim
 export const PUBLIC_PAGE_CSP =
   "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
+/**
+ * The largest form body a page reads: an address of at most 254 characters and a six-digit code,
+ * each URL-encoded (three bytes a character at worst), with room to spare and nothing near a
+ * file. A page that needs more is a different kind of route.
+ */
+export const PUBLIC_FORM_MAX_BYTES = 4_096;
+
+/** The one body type a page reads. */
+const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
+
 /** The methods a public page may declare; `GET` unless the route says otherwise. */
 export type WebMethod = 'GET' | 'POST';
 
@@ -59,6 +76,8 @@ export interface WebRequest {
   readonly lang: Locale;
   readonly clientAddress: string;
   readonly query: URLSearchParams;
+  /** A POST's URL-encoded fields; empty on a GET. Never read from the query. */
+  readonly form: URLSearchParams;
   readonly correlationId: string;
   readonly log: Logger;
 }
@@ -146,6 +165,52 @@ function sendPage(
   response.end(headOnly ? undefined : page.toString());
 }
 
+/** Whether the request's body is declared URL-encoded; its `charset`, when named, must be UTF-8. */
+function isUrlEncoded(request: IncomingMessage): boolean {
+  const [type = '', ...parameters] = (request.headers['content-type'] ?? '').split(';');
+  if (type.trim().toLowerCase() !== FORM_CONTENT_TYPE) return false;
+  return parameters.every((parameter) => {
+    const [name = '', value = ''] = parameter.split('=');
+    return name.trim().toLowerCase() !== 'charset' || value.trim().toLowerCase() === 'utf-8';
+  });
+}
+
+/** The body is refused: the response closes the connection, so the rest of it is never read. */
+function tooLarge(response: ServerResponse): DomainError {
+  response.setHeader('connection', 'close');
+  return new DomainError('PAYLOAD_TOO_LARGE');
+}
+
+/**
+ * A POST's form, read whole up to the limit and parsed; refused when it is not one or too large. A
+ * POST with no body at all (no length, or zero, and no transfer coding) carries an empty form.
+ */
+async function readForm(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<URLSearchParams> {
+  const declared = Number(request.headers['content-length'] ?? 0);
+  if (declared === 0 && request.headers['transfer-encoding'] === undefined) {
+    return new URLSearchParams();
+  }
+  if (!isUrlEncoded(request)) throw new DomainError('VALIDATION_FAILED');
+  if (declared > PUBLIC_FORM_MAX_BYTES) throw tooLarge(response);
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request as AsyncIterable<Buffer>) {
+    size += chunk.length;
+    if (size > PUBLIC_FORM_MAX_BYTES) throw tooLarge(response);
+    chunks.push(chunk);
+  }
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+  } catch (error: unknown) {
+    throw new DomainError('VALIDATION_FAILED', undefined, { cause: error });
+  }
+  return new URLSearchParams(text);
+}
+
 /** The path of a mounted route: what follows the mount, without its query. */
 function pathOf(request: IncomingMessage): { path: string; query: URLSearchParams } {
   const url = new URL(request.url ?? '/', 'http://local');
@@ -185,11 +250,13 @@ export function webRoute(
           return;
         }
         await rateLimiter.check(PUBLIC_PAGE_RATE_LIMIT, clientAddress);
+        const form = method === 'POST' ? await readForm(incoming, response) : new URLSearchParams();
         const answer = await route.handle({
           method: method as WebMethod,
           lang,
           clientAddress,
           query,
+          form,
           correlationId,
           log: requestLog,
         });

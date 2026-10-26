@@ -16,6 +16,10 @@
 //                                                apps/api/src/platform/web/assets/ (T004), from
 //                                                docs/design/frames/ds/ijazah/components.css too,
 //                                                and compared byte for byte, each one named.
+//   apps/api/src/platform/web/i18n/{ar,en}.ts     regenerated in memory from the phone catalogue,
+//                                                apps/mobile/src/i18n/{ar,en}.json, by
+//                                                scripts/build-web-copy.ts (T083, the B16 check's
+//                                                decision 7), and compared byte for byte.
 //   pnpm-lock.yaml                               two runs of pnpm's own `install --lockfile-only`,
 //                                                in a scratch copy of the workspace's manifests, so
 //                                                the committed file is never rewritten and nothing
@@ -49,6 +53,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 
 import { GENERATED_FILES, generateFromRepository } from './build-tokens';
+import { generateWebCopyFromRepository, WEB_COPY_FILES } from './build-web-copy';
 import { SNAPSHOT_PATH, currentSnapshotText } from './contract-snapshot';
 
 const repositoryRoot = join(__dirname, '..');
@@ -102,6 +107,32 @@ export async function checkTokens(
         path,
         problem:
           'differs from what packages/tokens/tokens.json and icons.json generate (a token changed without regenerating, or an edit by hand)',
+        command,
+      });
+    }
+  }
+  return drifts;
+}
+
+/** Compares the web pages' copy (T083) with what the phone catalogue generates now. */
+export async function checkWebCopy(
+  root: string,
+  generate: (
+    root: string,
+  ) => Promise<Readonly<Record<string, string>>> = generateWebCopyFromRepository,
+): Promise<Drift[]> {
+  const command = 'pnpm web-copy:build';
+  const generated = await generate(root);
+  const drifts: Drift[] = [];
+  for (const path of WEB_COPY_FILES) {
+    const file = join(root, path);
+    if (!existsSync(file)) {
+      drifts.push({ path, problem: 'is missing', command });
+    } else if (readFileSync(file, 'utf8') !== generated[path]) {
+      drifts.push({
+        path,
+        problem:
+          'differs from what apps/mobile/src/i18n/ar.json and en.json generate (a key changed without regenerating, or an edit by hand)',
         command,
       });
     }
@@ -206,10 +237,17 @@ async function tokenRows(): Promise<[string, Drift | undefined][]> {
   return GENERATED_FILES.map((path) => [path, drifts.find((drift) => drift.path === path)]);
 }
 
+/** One row per generated copy file of the web pages: its drift, or nothing. */
+async function webCopyRows(): Promise<[string, Drift | undefined][]> {
+  const drifts = await checkWebCopy(repositoryRoot);
+  return WEB_COPY_FILES.map((path) => [path, drifts.find((drift) => drift.path === path)]);
+}
+
 async function main(): Promise<number> {
   const checked: [string, Drift | undefined][] = [
     [SNAPSHOT_PATH, await checkContractSnapshot(repositoryRoot)],
     ...(await tokenRows()),
+    ...(await webCopyRows()),
     ['pnpm-lock.yaml', checkLockfile(repositoryRoot)],
   ];
   for (const [path, drift] of checked) {
