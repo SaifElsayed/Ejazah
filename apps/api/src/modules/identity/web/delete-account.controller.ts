@@ -265,8 +265,8 @@ function codeStep(lang: Locale, email: string, wrongCode: boolean): WebResponse 
           <h1 class="page-intro__title">${text.code.title}</h1>
           <p class="page-intro__lede">
             ${fill(text.code.lede, {
-            email: html`<span class="ltr tone-default">${email}</span>`,
-          })}
+              email: html`<span class="ltr tone-default">${email}</span>`,
+            })}
           </p>
         </div>
         ${timeline(lang, true)}
@@ -340,7 +340,10 @@ function doneStep(lang: Locale, email: string, supportEmail: string): WebRespons
           </li>
         </ul>
         <p class="text-caption tone-muted push">
-          ${fill(text.done.confirmation, { email, supportEmail })}
+          ${fill(text.done.confirmation, {
+            email: html`<span class="ltr tone-default">${email}</span>`,
+            supportEmail: html`<span class="ltr tone-default">${supportEmail}</span>`,
+          })}
         </p>`,
     ),
   };

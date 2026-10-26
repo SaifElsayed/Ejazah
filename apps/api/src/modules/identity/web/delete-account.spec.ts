@@ -286,8 +286,9 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
     expect(page).toContain(ar.done.newAccount);
     expect(page).toContain(
       ar.done.confirmation
-        .replace('{email}', 'someone@example.com')
-        .replace('{supportEmail}', SUPPORT),
+        // Each address in its own left-to-right run, as the code step names it (B16 review, nit).
+        .replace('{email}', '<span class="ltr tone-default">someone@example.com</span>')
+        .replace('{supportEmail}', `<span class="ltr tone-default">${SUPPORT}</span>`),
     );
     expect(counted).toEqual([[defaultRateLimits.oneTimeCode, 'someone@example.com']]);
   });

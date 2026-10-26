@@ -234,8 +234,12 @@ export class DeletionService {
 
   /** The work after the commit, each part on its own, detached from the request. */
   #afterCommit(userId: string, { email, grants }: ErasureSnapshot): void {
+    // Through a resolved promise, so a part that throws before it returns one (the grant's
+    // decryption) is reported like a rejection and never escapes into the answered request.
     const reported = (work: () => Promise<void>) =>
-      work().catch((error: unknown) => this.#report(error));
+      Promise.resolve()
+        .then(work)
+        .catch((error: unknown) => this.#report(error));
     const files = this.#dependencies.fileErasures ?? [];
     this.#defer(
       Promise.all([

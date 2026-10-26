@@ -384,6 +384,26 @@ describe('account.delete: after the commit (B16 check, decisions 1 and 3)', () =
     expect(await rows().identities(caller.userId)).toEqual([]);
   });
 
+  it('reports a grant that cannot be decrypted, answers the deletion and still mails (B16 review, m1)', async () => {
+    const { userId } = await createAccount(database);
+    const subject = uniqueSubject();
+    const id = identityId();
+    await rows().createIdentity({
+      id,
+      userId,
+      provider: 'apple',
+      subject,
+      // Bound to another row, so its decryption throws, synchronously, after the commit.
+      grantEncrypted: encryptedGrant('apple-grant-unreadable', identityId()),
+    });
+    const mails = spec.identity.mails().length;
+    await deleteWith(userId, await providerProof('apple', subject));
+    await spec.settle();
+    expect(spec.reports).toHaveLength(1);
+    expect(spec.identity.mails()).toHaveLength(mails + 1);
+    expect((await rows().deletedUser(userId))?.deletedAt).not.toBeNull();
+  });
+
   it('removes the photo after the commit and clears its key only once its file is gone', async () => {
     const caller = await emailAccount();
     await rows().setPersonalFields(caller.userId, { photoKey: `photos/${caller.userId}.jpg` });
