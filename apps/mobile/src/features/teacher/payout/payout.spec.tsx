@@ -220,6 +220,10 @@ describe('PayoutSetup', () => {
           ),
         ).toBeTruthy();
         expect(screen.getByText(said(direction, 'teacher.payout.honest.setupNote'))).toBeTruthy();
+        // FR-193: the teacher is told they stay hidden until the gateway verifies (B15 review, 1).
+        expect(said(direction, 'teacher.payout.honest.setupNote')).toMatch(
+          direction === 'rtl' ? /لن تظهر للطلاب/ : /not be visible to students/,
+        );
       },
     );
     await renderIn('rtl', withQueries(() => <Payout />)());

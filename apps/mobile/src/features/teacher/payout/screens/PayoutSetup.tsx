@@ -4,7 +4,8 @@
 // (open-items 17); «تغيير الحساب» registers another (`start`). No account detail is shown: the
 // platform keeps only the gateway's reference (FR-190). The text says only what this phase does
 // (R-HONEST, B15 integration): no notification is sent and no enrollment exists yet, so the
-// board's two lines wait in the catalogue and `teacher.payout.honest.*` is shown.
+// board's notification line and its clause on current enrollments wait in the catalogue, and
+// `teacher.payout.honest.*` is shown; the teacher stays hidden until verified (FR-193).
 import type { PayoutGetOutput } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { View } from 'react-native';

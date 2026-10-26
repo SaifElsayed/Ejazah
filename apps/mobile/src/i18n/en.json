@@ -1481,7 +1481,7 @@
     "payout": {
       "honest": {
         "setupVerifying": "The result shows here when verification ends.",
-        "setupNote": "Your account stays unverified until the payment gateway verifies it.",
+        "setupNote": "You will not be visible to students until it is verified.",
         "verifiedLede": "The payment gateway verified your payout account."
       },
       "rejected": {

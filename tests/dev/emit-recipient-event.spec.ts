@@ -276,7 +276,7 @@ describe('a replay is a no-op end to end (T079, FR-PAYG-4)', () => {
     const argv = ['--teacher', teacherUserId, '--verdict', 'verified', '--api', origin];
 
     const first = await run(argv, env, dependencies);
-    // Before lane A of B15 lands, this names the step-zero rejection of `markPayoutVerified`.
+    // Any error the route logged is named here, so a failure shows its cause.
     expect(unexpectedErrors(lines)).toEqual([]);
     expect(first).toBe(0);
     const afterFirst = await stateOf(db, teacherUserId);
