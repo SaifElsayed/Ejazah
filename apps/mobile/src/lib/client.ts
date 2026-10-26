@@ -21,7 +21,9 @@
 // THE UPLOADS (T058). A PDF goes to `POST /uploads/documents` as multipart, the `kind` before the
 // file (public-pages.md "The uploads route"), through the same bearer and the same one refresh as
 // a call; the answer is the document's id. A refusal arrives in the API's one error shape and is
-// raised as `ApiRefusal`, whose code `errorCodeOf` reads as it reads a call's.
+// raised as `ApiRefusal`, whose code `errorCodeOf` reads as it reads a call's. The profile photo
+// (T084) goes to `POST /uploads/photos` the same way, one JPEG or PNG under a fixed name, and the
+// answer is the signed link to it (`{ photoUrl }`).
 //
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
@@ -43,6 +45,8 @@ export interface ApiClientOptions {
   readonly sessions: SessionStore;
   /** `POST /uploads/documents` on the API's origin (T058). */
   readonly documentsUploadUrl?: string;
+  /** `POST /uploads/photos` on the API's origin (T084). */
+  readonly photosUploadUrl?: string;
   /** Called once when the server refuses the session's refresh. */
   readonly onSignedOut: () => void;
   /** The transport; the platform's own unless a test hands one in. */
@@ -55,6 +59,8 @@ export interface ApiClient {
   publicConfig(): Promise<PublicConfig>;
   /** Uploads a PDF the person picked; the document's id (T058). */
   uploadDocument(kind: DocumentKind, file: LocalFile): Promise<string>;
+  /** Uploads the profile photo the person picked; the signed link to it (T084). */
+  uploadPhoto(file: LocalPhoto): Promise<string>;
 }
 
 /** What an upload is for: the identity document or an ijazah (`POST /uploads/documents`). */
@@ -64,6 +70,11 @@ export type DocumentKind = 'identity' | 'credential';
 export interface LocalFile {
   readonly uri: string;
   readonly name: string;
+}
+
+/** An image on the device, as the picker hands it, with the type it reported. */
+export interface LocalPhoto extends LocalFile {
+  readonly mimeType: string;
 }
 
 /** A refusal of a call made outside tRPC (an upload), in the API's one error shape. */
@@ -152,6 +163,16 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (!response.ok) throw new ApiRefusal(answer);
       return documentIdOf(answer);
     },
+    async uploadPhoto(file) {
+      const target = options.photosUploadUrl;
+      if (target === undefined) throw new Error('uploadPhoto: no photos upload URL');
+      const body = new FormData();
+      body.append('file', photoPart(file) as unknown as Blob);
+      const response = await sessionFetch(target, { method: 'POST', body });
+      const answer: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new ApiRefusal(answer);
+      return photoUrlOf(answer);
+    },
     publicConfig() {
       config ??= api.platform.publicConfig
         .query()
@@ -224,6 +245,23 @@ export const UPLOAD_FILE_NAME = 'document.pdf';
  */
 export function filePart(file: LocalFile): { uri: string; name: string; type: string } {
   return { uri: file.uri, name: UPLOAD_FILE_NAME, type: 'application/pdf' };
+}
+
+/** The name every photo carries: the server decides the type by content and keeps no name. */
+export const UPLOAD_PHOTO_NAME = 'photo';
+
+/** The multipart part of a photo: where it is, a fixed name, and the type the picker reported. */
+export function photoPart(file: LocalPhoto): { uri: string; name: string; type: string } {
+  return { uri: file.uri, name: UPLOAD_PHOTO_NAME, type: file.mimeType };
+}
+
+/** The photos route's answer: the signed link to the new photo. */
+function photoUrlOf(answer: unknown): string {
+  if (typeof answer === 'object' && answer !== null && 'photoUrl' in answer) {
+    const { photoUrl } = answer;
+    if (typeof photoUrl === 'string') return photoUrl;
+  }
+  throw new Error('uploadPhoto: the answer carries no photo link');
 }
 
 /** The uploads route's answer: the document's id. */

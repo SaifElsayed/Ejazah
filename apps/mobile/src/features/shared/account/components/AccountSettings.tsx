@@ -2,9 +2,11 @@
 // draw alike (StudentAccount and TeacherAccount, lists 1 and 2): the language, switched in place;
 // the zone as its city, «من الجهاز» while it is the device's own; the sign-in method; the gender,
 // read only; the Terms. Also the two states of a tab that reads `account.me`: loading and failed.
+// T084: a role may lead the first list with its own row (the student's «الملف الشخصي»).
 import type { MeOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import {
@@ -27,7 +29,14 @@ const PROVIDER: Readonly<Record<MeOutput['signInMethod'], MessageKey>> = {
   email: 'account.providers.email',
 };
 
-export function AccountSettings({ me }: { readonly me: MeOutput }) {
+export function AccountSettings({
+  me,
+  leading,
+}: {
+  readonly me: MeOutput;
+  /** A row the role draws first in the first list. */
+  readonly leading?: ReactNode;
+}) {
   const t = useT();
   const locale = useLocale();
   const actions = useAccountActions();
@@ -36,6 +45,7 @@ export function AccountSettings({ me }: { readonly me: MeOutput }) {
   return (
     <>
       <List>
+        {leading}
         <ListRow
           label={t('account.language')}
           trailing={

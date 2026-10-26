@@ -29,6 +29,9 @@ jest.mock('../lib/client', () => ({
 let mockDeviceZone: string | null = 'Africa/Cairo';
 jest.mock('../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
 
+// The account tabs lead to the deletion, whose proof loads the providers' native modules (T084).
+jest.mock('../features/shared/auth/providers', () => ({ nativeIdentity: jest.fn() }));
+
 const account = (landing: string, extra: Record<string, unknown> = {}) => ({
   userId: '0193a6f0-0000-7000-8000-000000000001',
   role: 'student',

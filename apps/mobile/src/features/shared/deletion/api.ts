@@ -1,0 +1,75 @@
+// T084 (FR-140, FR-141, ADR 0015 D1): what the student's and the teacher's deletion share. The typed
+// word is either language's (`حذف`, or `delete` in any case, sent as the contract spells it). The
+// proof is fresh and by the account's own method: Google or Apple through the provider's sheet, over
+// a nonce `auth.providerNonce` mints, as sign-in does (a development build signs in as the API's
+// stand-in, so it proves itself the same way); an email account by its password. Each attempt sends
+// its own idempotency key (FR-106): a proof is single-use, so a new attempt is a new request. Once
+// deleted, the device forgets the session as sign-out does; nothing is sent, since the deletion
+// revoked every session, and the guard lands on the welcome screen. The providers' native modules
+// load with this folder, which is why it is not part of `shared/account`'s entry: the screens that
+// read that entry (the homes, the application, the payout) never load the providers.
+import type { DeleteAccountInput } from '@ijazah/contracts';
+import * as Crypto from 'expo-crypto';
+import { useMemo } from 'react';
+
+import { useApi } from '../../../lib/api';
+import { setSession } from '../../../lib/session';
+import { DEV_EMAIL, devIdentityToken, devSignInEnabled } from '../auth/dev-sign-in';
+import { nativeIdentity } from '../auth/providers';
+
+export type DeletionConfirmation = DeleteAccountInput['confirmation'];
+
+/** How the person proves it is them: their provider's sheet, or the password they typed. */
+export type DeletionProof =
+  | { readonly kind: 'provider'; readonly provider: 'google' | 'apple' }
+  | { readonly kind: 'password'; readonly password: string };
+
+/** What an attempt came to; a refusal is thrown as the API's error. */
+export type DeletionOutcome = 'deleted' | 'cancelled';
+
+const ARABIC_WORD: DeletionConfirmation = 'حذف';
+const LATIN_WORD: DeletionConfirmation = 'DELETE';
+
+/** The contract's word for what the person typed, or null while it is not one. */
+export function confirmationOf(typed: string): DeletionConfirmation | null {
+  const word = typed.trim();
+  if (word === ARABIC_WORD) return ARABIC_WORD;
+  if (word.toUpperCase() === LATIN_WORD) return LATIN_WORD;
+  return null;
+}
+
+export function useAccountDeletion() {
+  const { client, sessions } = useApi();
+  return useMemo(() => {
+    const { api } = client;
+
+    async function reauthOf(proof: DeletionProof): Promise<DeleteAccountInput['reauth'] | null> {
+      if (proof.kind === 'password') return { kind: 'password', password: proof.password };
+      const { nonce } = await api.auth.providerNonce.mutate();
+      const identity =
+        proof.provider === 'google' && devSignInEnabled()
+          ? { identityToken: devIdentityToken(nonce), email: DEV_EMAIL }
+          : await nativeIdentity(proof.provider, nonce);
+      if (identity === null) return null;
+      return { kind: 'provider', identityToken: identity.identityToken, nonce };
+    }
+
+    return {
+      async deleteAccount(
+        confirmation: DeletionConfirmation,
+        proof: DeletionProof,
+      ): Promise<DeletionOutcome> {
+        const reauth = await reauthOf(proof);
+        if (reauth === null) return 'cancelled';
+        await api.account.delete.mutate({
+          confirmation,
+          reauth,
+          idempotencyKey: Crypto.randomUUID(),
+        });
+        await sessions.clear();
+        setSession({ kind: 'signed-out' });
+        return 'deleted';
+      },
+    };
+  }, [client, sessions]);
+}

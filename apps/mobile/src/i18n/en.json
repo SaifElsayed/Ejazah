@@ -21,13 +21,20 @@
         "confirmEmail": "Confirm with your password and delete the account",
         "confirmGoogle": "Confirm with Google and delete the account",
         "text": "Your upcoming sessions are cancelled, and the account cannot be restored.",
-        "title": "Delete your account permanently?"
+        "title": "Delete your account permanently?",
+        "passwordFailed": "The password is incorrect.",
+        "providerFailed": "We could not confirm this is your account. Use the account you sign in to Ijazah with."
       },
       "submit": "Delete account",
       "title": "Delete account",
       "warning": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}. All your upcoming sessions will be cancelled without compensation.",
       "warningMany": "You have {count, plural, one {# active enrollment} other {# active enrollments}}. All your upcoming sessions will be cancelled without compensation.",
-      "warningShort": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}."
+      "warningShort": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}.",
+      "honest": {
+        "noEnrollments": "You have no active enrollments.",
+        "kept": "The log of actions on your account, without your personal data, because it is never altered",
+        "sheetText": "Your personal data is deleted at once, and the account cannot be restored."
+      }
     },
     "deleteAccount": "Delete account",
     "gender": "Gender",
@@ -1328,7 +1335,11 @@
         "title": "Delete your account permanently?"
       },
       "title": "Delete account",
-      "warning": "Your students' upcoming sessions will be cancelled and the administration will contact them about compensation."
+      "warning": "Your students' upcoming sessions will be cancelled and the administration will contact them about compensation.",
+      "honest": {
+        "warning": "You have no enrolled students.",
+        "deletedDocuments": "Your application’s documents, your uploaded ijazahs and your payout account’s reference"
+      }
     },
     "enrollment": {
       "a11y": {
