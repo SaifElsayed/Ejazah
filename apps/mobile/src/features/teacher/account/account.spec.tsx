@@ -1,7 +1,8 @@
 // T052 (FR-PROFILE-6, FR-131, FR-AUTH-7): the teacher's account tab against the board: the sign-out
 // in the header, the name with the approved badge, and the same settings as the student's. The
-// teaching list holds «إجازاتي» since B11b (T059), with the count waiting for review; payout comes
-// with B15, the profile and signature with their phases, and the delete row with B16.
+// teaching list holds «إجازاتي» since B11b (T059), with the count waiting for review, and «حساب
+// الاستلام» since B15 (T078), with «موثّق» once verified; the profile and signature come with their
+// phases, and the delete row with B16.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -42,9 +43,11 @@ const me = {
 const said = (direction: 'rtl' | 'ltr', key: MessageKey) =>
   translate(direction === 'rtl' ? 'ar' : 'en', key);
 
-function withAccount() {
+function withAccount(payout = me.teacher.payout) {
+  const account = { ...me, teacher: { ...me.teacher, payout } };
+  mockApi.api.account.me.query.mockResolvedValue(account);
   const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queries.setQueryData(ME_QUERY_KEY, me);
+  queries.setQueryData(ME_QUERY_KEY, account);
   return () => (
     <QueryClientProvider client={queries}>
       <TeacherAccount />
@@ -67,8 +70,9 @@ describe('TeacherAccount', () => {
       expect(screen.getByText(said(direction, 'status.application.approved'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.providers.apple'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.genders.male'))).toBeTruthy();
-      expect(screen.queryByText(said(direction, 'teacher.account.payout'))).toBeNull();
       expect(screen.queryByText(said(direction, 'teacher.account.deleteAccount'))).toBeNull();
+      expect(screen.queryByText(said(direction, 'teacher.account.profile'))).toBeNull();
+      expect(screen.queryByText(said(direction, 'teacher.account.signature'))).toBeNull();
     });
   });
 
@@ -110,6 +114,26 @@ describe('TeacherAccount', () => {
     await renderIn('rtl', withAccount()());
     await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.credentials')));
     expect(mockPush).toHaveBeenCalledWith('/(teacher)/credentials');
+  });
+
+  it('lists «حساب الاستلام» under teaching, «موثّق» once verified, and opens the payout (T078)', async () => {
+    await inBothDirections(withAccount(), (_rendered, direction) => {
+      expect(screen.getByText(said(direction, 'teacher.account.payout'))).toBeTruthy();
+      expect(screen.getByText(said(direction, 'status.payout.verified'))).toBeTruthy();
+    });
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.payout')));
+    expect(mockPush).toHaveBeenCalledWith('/(teacher)/payout');
+  });
+
+  it('draws no badge on the payout row before the account is verified', async () => {
+    await inBothDirections(
+      withAccount({ configured: true, verified: false }),
+      (_rendered, direction) => {
+        expect(screen.getByText(said(direction, 'teacher.account.payout'))).toBeTruthy();
+        expect(screen.queryByText(said(direction, 'status.payout.verified'))).toBeNull();
+      },
+    );
   });
 
   it('signs out from the header, after the sheet', async () => {
