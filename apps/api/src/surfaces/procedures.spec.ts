@@ -345,6 +345,33 @@ describe('the Phase 1 kinds (T016, FR-108, FR-137, FR-170; contracts/kernel.md)'
     expect(await callUser(appContext(publishable)).listPackages()).toBe('packages');
   });
 
+  it("`admits: 'publishable'` refuses an approved teacher whose payout is unverified and admits one whose payout is verified (T076, FR-192)", async () => {
+    expect(await refusal(() => callUser(appContext(approved)).listPackages())).toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(await callUser(appContext(publishable)).listPackages()).toBe('packages');
+  });
+
+  it("`admits: 'publishable'` refuses a verified teacher again once a new payout account is registered, and `'approved'` still admits them (T076, FR-193)", async () => {
+    // The standing the resolver reads on the next request after a replacement: the verified instant
+    // cleared. The same through the real resolution, over the database: payout.service.spec.ts.
+    const replaced: UserSession = {
+      ...publishable,
+      teacher: {
+        verificationStatus: 'approved',
+        payoutVerified: false,
+        applicationStatus: 'approved',
+      },
+    };
+    const asReplaced = callUser(appContext(replaced));
+    expect(await refusal(() => asReplaced.listPackages())).toMatchObject({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(await asReplaced.publish()).toBe('published');
+  });
+
   it('a suspended account is refused with `ACCOUNT_RESTRICTED` unless the procedure `admitsRestricted`', async () => {
     for (const session of [suspended, banned]) {
       const caller = callUser(appContext(session));
