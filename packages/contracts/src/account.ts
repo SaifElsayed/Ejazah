@@ -4,6 +4,8 @@
 // nothing of another person; the date of birth is the caller's own (FR-138). No input names
 // gender, role or user id (R-GENDER-4) and none names a timestamp (R-TIME-6).
 import { z } from 'zod';
+
+import { idempotencyKey } from './idempotency-key.js';
 import { identityToken, landing, nonce } from './auth.js';
 import { password } from './password.js';
 import { calendarDate, displayName, gender, role, timeZone } from './onboarding.js';
@@ -89,9 +91,11 @@ export const deletionReauth = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('password'), password }),
 ]);
 
+/** `account.delete` is keyed (app-surface.md, "What every procedure guarantees"; B16 check, decision 6). */
 export const deleteAccountInput = z.object({
   confirmation: deletionConfirmation,
   reauth: deletionReauth,
+  idempotencyKey,
 });
 
 export const identityDocumentType = z.enum(['national_id', 'passport']);
@@ -115,4 +119,5 @@ export type TeacherApplicationStatus = z.infer<typeof teacherApplicationStatus>;
 export type AccountStatus = z.infer<typeof accountStatus>;
 export type SignInMethod = z.infer<typeof signInMethod>;
 export type IdentityDocumentType = z.infer<typeof identityDocumentType>;
+export type DeleteAccountInput = z.infer<typeof deleteAccountInput>;
 export type IdentityVerificationGetOutput = z.infer<typeof identityVerificationGetOutput>;

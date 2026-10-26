@@ -131,6 +131,10 @@ const cipher = createColumnCipher(config);
 // verification module's behind `teacher.application` and `teacher.credentials` (T056, T057), the
 // application's submission and the payout registration keyed through the kernel's idempotency
 // (FR-106), the payout registration over the payment port (T077).
+// The one registry of an account's end (FR-142): the admin module's standing actions and the
+// identity module's deletion call it, and the modules that keep what an account had subscribe to it
+// (B16 check, decision 2).
+const consequences = new identity.AccountConsequences();
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
@@ -151,6 +155,7 @@ const services = {
     log,
     payment: ports.payment,
     idempotency,
+    consequences,
   }),
   verification: verification.createVerificationServices({
     database,
@@ -213,6 +218,7 @@ const adminServices = createAdminServices({
   encryptionKey: config.ENCRYPTION_KEY,
   storage: ports.storage,
   cipher,
+  consequences,
   inviteQueue: {
     queue: async (adminId) => {
       inviteQueue ??= openQueue(connectionFor(config.REDIS_URL));

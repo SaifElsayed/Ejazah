@@ -87,6 +87,8 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
   /** For the document viewer's signed links (T068). */
   readonly storage: Pick<StoragePort, 'temporaryLink'>;
   readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+  /** The one registry of an account's end (FR-142), shared with the identity module's deletion (B16). */
+  readonly consequences?: AccountConsequences;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -95,7 +97,7 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
   // One registry for every action that ends an account (FR-142); Phase 2 and 3 subscribe to it.
   const standing = new StandingService({
     store: standingStoreOver(dependencies.database),
-    consequences: new AccountConsequences(),
+    consequences: dependencies.consequences ?? new AccountConsequences(),
     revokeSubjects,
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   });

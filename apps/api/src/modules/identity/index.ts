@@ -12,6 +12,8 @@ import { AccountService } from './account.service.js';
 import { EmailAuthService } from './email-auth.service.js';
 import { AccountsRepository, IdentityRepository } from './identity.repository.js';
 import { OnboardingService } from './onboarding.service.js';
+import type { AccountConsequences } from './consequences.js';
+import { DeletionService } from './deletion.service.js';
 import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
@@ -35,6 +37,11 @@ import { type SessionRevokedReason, UserSessionsRepository } from './user-sessio
 export { accountRouter } from './account.router.js';
 export { authRouter } from './auth.router.js';
 export { onboardingRouter } from './onboarding.router.js';
+/** The web deletion pages (T083), mounted with the public pages by `main.ts`. */
+export {
+  type DeleteAccountRouteDependencies,
+  deleteAccountRoutes,
+} from './web/delete-account.controller.js';
 /** `teacher.payout` (T077), mounted under `teacher` by `app.router.ts`. */
 export { payoutRouter } from './payout.router.js';
 
@@ -61,6 +68,11 @@ export interface IdentityServices {
     'me' | 'updateProfile' | 'setLanguage' | 'setTimezone' | 'reportDeviceTimezone'
   >;
   readonly payout: Pick<PayoutService, 'get' | 'register'>;
+  /** `account.delete` and the web deletion pages (T082, T083). */
+  readonly deletion: Pick<
+    DeletionService,
+    'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion'
+  >;
 }
 
 /** What the module's services are built over, bound once by `main.ts`. */
@@ -74,8 +86,10 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly log: WarningLog;
   /** Payout setup registers the recipient through the port (T077). */
   readonly payment: Pick<PaymentPort, 'registerPayoutRecipient'>;
-  /** `teacher.payout.register` is keyed (FR-106). */
+  /** `teacher.payout.register` and `account.delete` are keyed (FR-106). */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /** The one registry of an account's end, shared with the admin module (FR-142, B16). */
+  readonly consequences: AccountConsequences;
 }
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
@@ -87,6 +101,7 @@ export function createIdentityServices({
   log,
   payment,
   idempotency,
+  consequences,
   ...base
 }: IdentityServiceDependencies): IdentityServices {
   const sessions = new SessionService(base);
@@ -99,6 +114,7 @@ export function createIdentityServices({
     onboarding,
     account: new AccountService({ ...base, storage }),
     payout: new PayoutService({ ...base, payment, idempotency }),
+    deletion: new DeletionService({ ...base, consequences }),
   };
 }
 

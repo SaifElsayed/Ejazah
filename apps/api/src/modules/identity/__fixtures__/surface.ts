@@ -59,8 +59,13 @@ export function surfaceOf(identity: Identity): IdentitySurface {
     settings: identity.settings,
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
     subjects: { listActive: async () => [] },
-    // The payout namespace has its own fixture (T077); these three namespaces never reach it.
-    identity: { ...identity, payout: unusedIdentityServices.payout },
+    // The payout namespace has its own fixture (T077), and `account.delete` reaches the deletion,
+    // which T082 builds its own over; the other procedures never reach either.
+    identity: {
+      ...identity,
+      payout: unusedIdentityServices.payout,
+      deletion: unusedIdentityServices.deletion,
+    },
     verification: unusedVerificationServices,
   };
   const as = (session: UserSession | null) =>
