@@ -20,13 +20,23 @@ export type PaymentConfig = Pick<
 
 const STAND_IN_SECRET_LABEL = 'ijazah:payment-stand-in-webhook:v1';
 
+/**
+ * The secret the stand-in signs and verifies its events under, as above. Exported for
+ * `scripts/dev/emit-recipient-event.ts` (T079), which signs what the API verifies without naming the
+ * adapter or repeating the label.
+ */
+export function standInWebhookSecret(
+  config: Pick<PaymentConfig, 'PAYMENT_GATEWAY_WEBHOOK_SECRET' | 'ENCRYPTION_KEY'>,
+): string {
+  return (
+    config.PAYMENT_GATEWAY_WEBHOOK_SECRET ??
+    deriveStandInSecret(config.ENCRYPTION_KEY, STAND_IN_SECRET_LABEL)
+  );
+}
+
 export function createPaymentPort(config: PaymentConfig): PaymentPort {
   switch (config.PAYMENT_GATEWAY) {
     case 'fake':
-      return new FakePaymentAdapter({
-        webhookSecret:
-          config.PAYMENT_GATEWAY_WEBHOOK_SECRET ??
-          deriveStandInSecret(config.ENCRYPTION_KEY, STAND_IN_SECRET_LABEL),
-      });
+      return new FakePaymentAdapter({ webhookSecret: standInWebhookSecret(config) });
   }
 }
