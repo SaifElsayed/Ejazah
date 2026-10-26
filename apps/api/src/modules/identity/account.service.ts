@@ -84,7 +84,8 @@ function teacherOf(row: OwnAccountRow): NonNullable<OwnAccount['teacher']> {
     payout: {
       configured: profile?.payoutConfiguredAt != null,
       verified: profile?.payoutVerifiedAt != null,
-      ...(profile?.payoutRejectedReason == null
+      // A rejection the gateway gave no reason for is kept as an empty reason (T077).
+      ...(profile?.payoutRejectedReason == null || profile.payoutRejectedReason === ''
         ? {}
         : { rejectedReason: profile.payoutRejectedReason }),
     },

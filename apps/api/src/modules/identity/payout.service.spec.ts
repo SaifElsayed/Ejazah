@@ -316,7 +316,9 @@ describe('get', () => {
   });
 });
 
-describe('no raw account number anywhere (FR-190, R-DB-8, R-SEC-2)', () => {
+// The sweep reads every column of every table after six registrations: under a second alone,
+// past the default five seconds under the full suite's parallel load (B15 integration).
+describe('no raw account number anywhere (FR-190, R-DB-8, R-SEC-2)', { timeout: 15_000 }, () => {
   it('in no column, log line or answer, for a first setup, a retry, a replacement, a rejection and a failed registration', async () => {
     const userId = await createApprovedTeacher(database);
     const { accessToken } = await spec.sessions.issue(userId);
