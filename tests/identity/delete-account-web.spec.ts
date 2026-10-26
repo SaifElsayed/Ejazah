@@ -126,7 +126,7 @@ describe('the web deletion end to end (T081, FR-143)', () => {
         revoke: unexpected,
       },
       email: mailbox,
-      storage: { temporaryLink: unexpected },
+      storage: { temporaryLink: unexpected, remove: unexpected },
       log: { warn: (entry: unknown) => void lines.push(JSON.stringify({ level: 'warn', entry })) },
       payment: { registerPayoutRecipient: unexpected },
       idempotency: { run: unexpected },
