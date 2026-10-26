@@ -3,7 +3,9 @@
 // (never blocking: the under-18 flag is the server's), the zone as a city (the device's, or the one
 // chosen in the picker), and the Terms box, unchecked, «متابعة» disabled until it is ticked (decided
 // 2026-10-17). A provider identity with no verified address proves one here by a code (FR-122).
-// «متابعة» opens the confirmation sheet, whose confirm creates the account.
+// «متابعة» opens the confirmation sheet, whose confirm creates the account. T097 (FR-155): a creation
+// refused as a banned person's (`ACCOUNT_RESTRICTED`) forgets the draft and lands on the signed-out
+// banned state.
 import { displayName as displayNameSchema, emailAddress, type Gender } from '@ijazah/contracts';
 import { calendarDateOfPicked, pickerDateOf } from '@ijazah/time/calendar';
 import { cityOf } from '@ijazah/time/cities';
@@ -34,7 +36,7 @@ import { useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
 import { useFormatters } from '../../../../lib/formatters';
 import { deviceTimeZone } from '../../../../lib/time-zone';
-import { conflictMethodOf } from '../../auth/api';
+import { BANNED_ROUTE, conflictMethodOf, isBannedRefusal } from '../../auth/api';
 import {
   type SignInConflict,
   SignInConflictSheet,
@@ -104,7 +106,11 @@ export function OnboardProfile() {
     } catch (caught: unknown) {
       const method = conflictMethodOf(caught);
       const code = errorCodeOf(caught);
-      if (method !== null) {
+      if (isBannedRefusal(caught)) {
+        // Away first: an empty draft redirects a focused profile to the welcome screen.
+        router.replace(BANNED_ROUTE);
+        clearDraft();
+      } else if (method !== null) {
         setConfirming(false);
         setConflict({ method, email: draft.email.trim() });
       } else if (code === 'CODE_INVALID') {

@@ -123,6 +123,9 @@
     }
   },
   "auth": {
+    "banned": {
+      "backToStart": "العودة إلى البداية"
+    },
     "emailSignIn": {
       "a11y": {
         "showPassword": "إظهار كلمة المرور"

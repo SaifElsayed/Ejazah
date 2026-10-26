@@ -2,7 +2,8 @@
 // The language segmented switches in place; the brand, the tagline and the two feature lines; then
 // the ways in: Google, Apple on iOS only, email, and in a development build the stand-in. A
 // returning person lands through the guard; a new one goes to Role; an address another method
-// holds opens the conflict sheet.
+// holds opens the conflict sheet. T097: a new account refused as a banned person's lands on the
+// signed-out banned state.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
@@ -18,7 +19,7 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { type Locale, setLocale, useLocale, useT } from '../../../../i18n';
-import { type SignInProvider, useAuthApi } from '../api';
+import { BANNED_ROUTE, type SignInProvider, useAuthApi } from '../api';
 import { type SignInConflict, SignInConflictSheet } from '../components/SignInConflictSheet';
 import { devSignInEnabled } from '../dev-sign-in';
 
@@ -37,6 +38,7 @@ export function Welcome() {
       const outcome = await auth.withProvider(provider);
       if (outcome.kind === 'onboarding') router.push('/(auth)/role');
       if (outcome.kind === 'conflict') setConflict(outcome);
+      if (outcome.kind === 'banned') router.replace(BANNED_ROUTE);
     } catch {
       setFailed(true);
     } finally {

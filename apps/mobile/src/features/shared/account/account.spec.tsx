@@ -4,6 +4,10 @@
 // support address of the public configuration; «تسجيل الخروج» opens the sheet. `VerifyIdentity`
 // takes the document's type and its one PDF, sends it to the open request, and then says it waits
 // for review; the card on a home opens it while the account is under a request.
+//
+// T097 (FR-155): a sign-up refused because the identifiers belong to a banned person's deleted
+// account lands on `BannedSignedOut`, with no session: the banned title and the final line, the
+// support contact, and the way back to the start; nothing on it says an account was deleted.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -13,7 +17,8 @@ import { inBothDirections, renderIn } from '../../../design/primitives/__tests__
 import { type MessageKey, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
 import { apiError, fakeApi } from '../__tests__/api-double';
-import { IdentityRequestCard, Restricted, VerifyIdentity } from './index';
+import { getSession, setSession } from '../../../lib/session';
+import { BannedSignedOut, IdentityRequestCard, Restricted, VerifyIdentity } from './index';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
@@ -189,6 +194,62 @@ describe('Restricted (FR-137)', () => {
     await renderIn('rtl', as('student', 'banned', () => <Restricted />)());
     await fireEvent.press(screen.getByRole('button', { name: ar('account.restricted.signOut') }));
     expect(await screen.findByText(ar('account.signOutSheet.title'))).toBeTruthy();
+  });
+});
+
+describe('BannedSignedOut (T097, FR-155)', () => {
+  beforeEach(() => setSession({ kind: 'signed-out' }));
+
+  it('draws the banned title, the final line, the support contact and the way back', async () => {
+    await inBothDirections(
+      () => <BannedSignedOut />,
+      (rendered, direction) => {
+        expect(screen.getByText(said(direction, 'account.restricted.bannedTitle'))).toBeTruthy();
+        expect(screen.getByText(said(direction, 'account.restricted.finalLede'))).toBeTruthy();
+        expect(
+          screen.getByRole('button', {
+            name: said(direction, 'account.restricted.contactSupport'),
+          }),
+        ).toBeTruthy();
+        expect(
+          screen.getByRole('button', { name: said(direction, 'auth.banned.backToStart') }),
+        ).toBeTruthy();
+        // Signed out: no sign-out, no role's lines, and no word of a deleted account.
+        expect(
+          screen.queryByRole('button', { name: said(direction, 'account.restricted.signOut') }),
+        ).toBeNull();
+        expect(screen.queryByText(said(direction, 'account.restricted.stopped'))).toBeNull();
+        expect(JSON.stringify(rendered.toJSON())).not.toMatch(/حذف|حُذف|delet/i);
+      },
+    );
+  });
+
+  it('writes to the support address of the cached public configuration', async () => {
+    await renderIn('rtl', <BannedSignedOut />);
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('account.restricted.contactSupport') }),
+    );
+    await waitFor(() => expect(mockOpen).toHaveBeenCalledWith('mailto:support@ijazah.test'));
+    expect(mockApi.value.client.publicConfig).toHaveBeenCalledTimes(1);
+    expect(mockApi.api.account.me.query).not.toHaveBeenCalled();
+  });
+
+  it('says so in place when the support address cannot be read', async () => {
+    mockApi.value.client.publicConfig.mockRejectedValueOnce(apiError('INTERNAL'));
+    await renderIn('rtl', <BannedSignedOut />);
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('account.restricted.contactSupport') }),
+    );
+    expect(await screen.findByText(ar('common.state.actionError'))).toBeTruthy();
+    expect(mockOpen).not.toHaveBeenCalled();
+  });
+
+  it('goes back to the signed-out start, storing nothing', async () => {
+    await renderIn('rtl', <BannedSignedOut />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.banned.backToStart') }));
+    expect(mockNavigate).toHaveBeenCalledWith('/(auth)/welcome');
+    expect(getSession()).toEqual({ kind: 'signed-out' });
+    expect(mockApi.sessions.current()).toBeNull();
   });
 });
 

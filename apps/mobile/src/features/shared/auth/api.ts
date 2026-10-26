@@ -2,6 +2,10 @@
 // session is stored and handed to the guard as `restoring`, which reads `account.me` for where to
 // land (T052); an onboarding token starts the onboarding draft; an address that belongs to another
 // method is answered as a conflict naming that method (FR-123), never linked.
+//
+// T097 (FR-155): a new account whose proved address or provider subject belongs to a banned
+// person's deleted account is refused with `ACCOUNT_RESTRICTED` and no token; that refusal is the
+// `banned` outcome, which lands on the signed-out banned state with nothing stored.
 import type { SessionOutput, SignInMethod } from '@ijazah/contracts';
 import { useMemo } from 'react';
 
@@ -20,11 +24,20 @@ export type SignInOutcome =
   | { readonly kind: 'session' }
   | { readonly kind: 'onboarding' }
   | { readonly kind: 'cancelled' }
+  | { readonly kind: 'banned' }
   | { readonly kind: 'conflict'; readonly method: SignInMethod; readonly email: string };
 
 export type SignInProvider = 'google' | 'apple' | 'dev';
 
 const METHODS: ReadonlySet<string> = new Set<SignInMethod>(['google', 'apple', 'email']);
+
+/** The signed-out banned state (T097). */
+export const BANNED_ROUTE = '/(auth)/banned';
+
+/** True when a sign-up was refused as a banned person's (T097); the refusal carries no detail. */
+export function isBannedRefusal(error: unknown): boolean {
+  return errorCodeOf(error) === 'ACCOUNT_RESTRICTED';
+}
 
 /** The method the address already uses when `error` is FR-123's conflict; null otherwise. */
 export function conflictMethodOf(error: unknown): SignInMethod | null {
@@ -79,6 +92,7 @@ export function useAuthApi() {
           });
           return { kind: 'onboarding' };
         } catch (error: unknown) {
+          if (isBannedRefusal(error)) return { kind: 'banned' };
           const method = conflictMethodOf(error);
           if (method === null) throw error;
           return { kind: 'conflict', method, email: identity.email ?? '' };
@@ -113,6 +127,11 @@ export function useAuthApi() {
           clearPendingEmail();
           return { kind: 'onboarding' };
         } catch (error: unknown) {
+          if (isBannedRefusal(error)) {
+            // Nothing of the refused sign-up stays on the device, its password included.
+            clearPendingEmail();
+            return { kind: 'banned' };
+          }
           const method = conflictMethodOf(error);
           if (method === null) throw error;
           return { kind: 'conflict', method, email };
