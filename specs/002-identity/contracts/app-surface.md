@@ -38,6 +38,11 @@ the verified email; the password chosen on `EmailSignUp` is held on the device a
 when the identity is an email. Nothing of the person is stored before
 `complete` commits.
 
+A banned person's deleted account (T097): `auth.email.verifySignUpCode` after the code,
+`auth.signInWithProvider` on the new-account path after the token, and `onboarding.complete`
+before the row is written refuse an address or a provider subject in `banned_identifiers` with
+`ACCOUNT_RESTRICTED` (403), with no detail and no token; nothing says an account was deleted.
+
 ## `platform` and `catalog` — public configuration and subjects (FR-145, FR-182)
 
 | Procedure               | Kind                             | Input  | Output                           | Notes                                                                                                  |
