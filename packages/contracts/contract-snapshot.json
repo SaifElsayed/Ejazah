@@ -33,6 +33,7 @@
     "prisma": {
       "AccountStatus": ["active", "banned", "suspended", "verification_required"],
       "AuthProvider": ["apple", "google"],
+      "BannedIdentifierKind": ["email", "provider"],
       "CancellationReason": [
         "account_deleted",
         "admin",

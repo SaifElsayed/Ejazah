@@ -84,4 +84,6 @@ Both are proven by a fixture that fails them, as every gate is
 ## HKDF labels added to `encryption.ts`
 
 `ijazah:access-token:v1`, `ijazah:onboarding-token:v1`,
-`ijazah:admin-invite:v1`.
+`ijazah:admin-invite:v1`, and since T097 `ijazah:banned-identifier:v1`, the key of the
+keyed hashes a banned person's deletion keeps (`banned_identifiers`). A rotation of
+`ENCRYPTION_KEY` cannot carry those hashes over (RUNBOOK.md, the rotation steps).
