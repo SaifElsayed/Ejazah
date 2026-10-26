@@ -127,7 +127,12 @@ const cipher = createColumnCipher(config);
 // the configuration (FR-145, never an admin setting), the catalog module's subjects read, the
 // identity module's services behind `auth`, `onboarding` and `account` (T048, T049), and the
 // verification module's behind `teacher.application` and `teacher.credentials` (T056, T057), the
-// application's submission keyed through the kernel's idempotency (FR-106).
+// application's submission and the payout registration keyed through the kernel's idempotency
+// (FR-106), the payout registration over the payment port (T077).
+const idempotency = new IdempotencyService({
+  store: new IdempotencyRepository(database),
+  settings,
+});
 const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
@@ -142,13 +147,15 @@ const services = {
     email: ports.email,
     storage: ports.storage,
     log,
+    payment: ports.payment,
+    idempotency,
   }),
   verification: verification.createVerificationServices({
     database,
     storage: ports.storage,
     cipher,
     settings,
-    idempotency: new IdempotencyService({ store: new IdempotencyRepository(database), settings }),
+    idempotency,
   }),
 };
 

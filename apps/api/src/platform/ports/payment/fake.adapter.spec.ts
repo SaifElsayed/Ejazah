@@ -251,6 +251,20 @@ describe('the payment stand-in: payout recipients (T117, FR-PAYG-13, FR-PAYG-15)
     },
   );
 
+  it("a rejection carries the gateway's reason where it sent one (B15)", async () => {
+    const payments = gateway();
+    const recipientRef = await payments.registerPayoutRecipient('teacher-1', details);
+    const { rawBody, headers } = payments.recipientEvent(recipientRef, 'recipient_rejected', {
+      reason: 'name mismatch',
+    });
+
+    expect(await payments.verifyAndParseEvent(rawBody, headers)).toMatchObject({
+      type: 'recipient_rejected',
+      recipientRef,
+      reason: 'name mismatch',
+    });
+  });
+
   it('an incorrectly signed recipient event leaves the recipient pending', async () => {
     const payments = gateway();
     const recipientRef = await payments.registerPayoutRecipient('teacher-1', details);

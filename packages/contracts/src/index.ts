@@ -17,6 +17,7 @@ export {
 } from './idempotent-procedures.js';
 export * from './onboarding.js';
 export * from './password.js';
+export * from './payout.js';
 export * from './platform.js';
 export * from './teacher-application.js';
 export * from './teacher-credentials.js';

@@ -40,6 +40,11 @@ export interface EventOptions {
   readonly signature?: 'valid' | 'invalid';
 }
 
+export interface RecipientEventOptions extends EventOptions {
+  /** The gateway's reason on a rejection; none by default. */
+  readonly reason?: string;
+}
+
 export interface PaidEventOptions extends EventOptions {
   /** As the gateway would report them; by default no fee, and the whole gross settled. */
   readonly gateway_fee_piasters?: Piasters;
@@ -72,8 +77,14 @@ const eventBody = z.discriminatedUnion('type', [
   }),
   z.object({
     id: z.string().min(1),
-    type: z.enum(['recipient_verified', 'recipient_rejected']),
+    type: z.literal('recipient_verified'),
     recipient: z.string().min(1),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('recipient_rejected'),
+    recipient: z.string().min(1),
+    reason: z.string().min(1).optional(),
   }),
 ]);
 
@@ -166,11 +177,17 @@ export class FakePaymentAdapter extends StandIn<PaymentPort> implements PaymentP
           gatewayOrderId: body.order,
         });
       case 'recipient_verified':
+        return Promise.resolve({
+          type: body.type,
+          providerEventId: body.id,
+          recipientRef: body.recipient,
+        });
       case 'recipient_rejected':
         return Promise.resolve({
           type: body.type,
           providerEventId: body.id,
           recipientRef: body.recipient,
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
         });
     }
   }
@@ -223,12 +240,16 @@ export class FakePaymentAdapter extends StandIn<PaymentPort> implements PaymentP
   recipientEvent(
     recipientRef: string,
     type: RecipientEventType,
-    options: EventOptions = {},
+    options: RecipientEventOptions = {},
   ): SignedEvent {
     if (!this.#recipients.has(recipientRef)) {
       throw new Error('unknown recipient: the stand-in did not register it.');
     }
-    const body: EventBody = { id: `fake_evt_${randomUUID()}`, type, recipient: recipientRef };
+    const id = `fake_evt_${randomUUID()}`;
+    const body: EventBody =
+      type === 'recipient_rejected' && options.reason !== undefined
+        ? { id, type, recipient: recipientRef, reason: options.reason }
+        : { id, type, recipient: recipientRef };
     if (options.signature !== 'invalid') {
       this.#recipients.set(recipientRef, type === 'recipient_verified' ? 'verified' : 'rejected');
     }
