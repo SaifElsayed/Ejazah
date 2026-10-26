@@ -114,8 +114,8 @@ function screen(lang: Locale, title: string, body: SafeHtml): SafeHtml {
 function brandLine(lang: Locale): SafeHtml {
   const copy = copyOf(lang);
   return html`<span class="brand"
-    ><span class="brand-mark" aria-hidden="true">${copy.common.brand.mark}</span
-    ><span class="brand__name">${copy.common.brand.name}</span
+    ><span class="brand-mark" aria-hidden="true">${copy.web.deleteAccount.brandMark}</span
+    ><span class="brand__name">${copy.web.deleteAccount.brandName}</span
     ><span class="text-caption tone-muted">${copy.web.deleteAccount.brandSuffix}</span></span
   >`;
 }
@@ -184,7 +184,7 @@ function emailStep(lang: Locale, invalid?: { readonly email: string }): WebRespo
             aria-describedby="email-error"
           />
           <p id="email-error" class="field__error" role="alert">
-            ${copy.auth.field.emailInvalid}
+            ${copy.web.deleteAccount.emailInvalid}
           </p>`;
   return {
     ...(invalid === undefined ? {} : { status: UNUSABLE_FORM }),
@@ -253,7 +253,7 @@ function codeStep(lang: Locale, email: string, wrongCode: boolean): WebResponse 
     codeCell(label, index === 0, wrongCode),
   );
   const error = wrongCode
-    ? html`<p class="field__error" role="alert">${copy.auth.otp.invalid}</p>`
+    ? html`<p class="field__error" role="alert">${copy.web.deleteAccount.codeInvalid}</p>`
     : null;
   return {
     ...(wrongCode ? { status: UNUSABLE_FORM } : {}),
@@ -306,7 +306,7 @@ function doneStep(lang: Locale, email: string, supportEmail: string): WebRespons
       lang,
       text.done.title,
       html`<span class="brand"
-          ><span class="brand-mark" aria-hidden="true">${copy.common.brand.mark}</span
+          ><span class="brand-mark" aria-hidden="true">${copy.web.deleteAccount.brandMark}</span
           ><span class="brand__name">${text.brandDone}</span></span
         >
         <div class="state-hero">

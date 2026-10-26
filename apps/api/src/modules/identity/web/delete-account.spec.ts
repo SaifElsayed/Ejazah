@@ -243,7 +243,7 @@ describe('POST /delete-account: the email step (FR-143, public-pages.md)', () =>
       expect(response.status).toBe(400);
       expectPublicHeaders(response);
       const page = await response.text();
-      expect(page).toContain(copyOf('ar').auth.field.emailInvalid);
+      expect(page).toContain(copyOf('ar').web.deleteAccount.emailInvalid);
       expect(page).toContain('input--error');
       expect(page).toContain(`<h1 class="page-intro__title">${ar.title}</h1>`);
     }
@@ -313,7 +313,7 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
     expectPublicHeaders(response);
     const page = await response.text();
     expect(page).toContain(`<h1 class="page-intro__title">${ar.code.title}</h1>`);
-    expect(page).toContain(copyOf('ar').auth.otp.invalid);
+    expect(page).toContain(copyOf('ar').web.deleteAccount.codeInvalid);
     expect(page).toContain('otp__cell--error');
     expect(page).toMatch(/<input type="hidden" name="email" value="someone@example.com"/);
     expect(page).not.toContain(ar.done.title);
@@ -326,7 +326,7 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
         code,
       });
       expect(response.status).toBe(400);
-      expect(await response.text()).toContain(copyOf('ar').auth.otp.invalid);
+      expect(await response.text()).toContain(copyOf('ar').web.deleteAccount.codeInvalid);
     }
     expect(deletion.confirmWebDeletion).not.toHaveBeenCalled();
   });

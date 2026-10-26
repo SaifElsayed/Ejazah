@@ -7,8 +7,8 @@ import { html } from './html.js';
 
 describe('the pages’ copy', () => {
   it('is the phone catalogue’s, in the request’s language', () => {
-    expect(copyOf('ar').common.brand.name).toBe('إجازة');
-    expect(copyOf('en').common.brand.name).toBe('Ijazah');
+    expect(copyOf('ar').web.deleteAccount.brandName).toBe('إجازة');
+    expect(copyOf('en').web.deleteAccount.brandName).toBe('Ijazah');
     expect(copyOf('ar').web.deleteAccount.title).toBe('حذف حسابك في إجازة');
     expect(copyOf('en').web.deleteAccount.honest.info).toContain('cannot be restored');
   });

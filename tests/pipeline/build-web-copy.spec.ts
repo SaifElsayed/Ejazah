@@ -40,23 +40,22 @@ function rootHolding(files: Readonly<Record<string, string>>): string {
 const catalogue = {
   common: { brand: { mark: 'إ', name: 'إجازة' }, other: 'not copied' },
   auth: { field: { emailInvalid: 'e' }, otp: { invalid: 'o', title: 'not copied' } },
-  web: { deleteAccount: { title: 't', done: { lede: 'l' } }, notFound: { title: 'n' }, verify: {} },
+  web: {
+    deleteAccount: { title: 't', brandName: 'إجازة', done: { lede: 'l' } },
+    notFound: { title: 'n' },
+    verify: {},
+  },
   student: { home: 'not copied' },
 };
 
 describe('the keys taken from the catalogue', () => {
-  it('takes the deletion and not-found groups and the shared keys the pages name, at their own paths', () => {
-    expect(WEB_COPY_KEYS).toEqual([
-      'common.brand',
-      'auth.field.emailInvalid',
-      'auth.otp.invalid',
-      'web.deleteAccount',
-      'web.notFound',
-    ]);
+  it('takes the deletion and not-found groups and nothing else, at their own paths', () => {
+    expect(WEB_COPY_KEYS).toEqual(['web.deleteAccount', 'web.notFound']);
     expect(pickCopy(catalogue, WEB_COPY_KEYS)).toEqual({
-      common: { brand: { mark: 'إ', name: 'إجازة' } },
-      auth: { field: { emailInvalid: 'e' }, otp: { invalid: 'o' } },
-      web: { deleteAccount: { title: 't', done: { lede: 'l' } }, notFound: { title: 'n' } },
+      web: {
+        deleteAccount: { title: 't', brandName: 'إجازة', done: { lede: 'l' } },
+        notFound: { title: 'n' },
+      },
     });
   });
 
@@ -71,7 +70,13 @@ describe('the generated files', () => {
   it('writes one TypeScript module per language, marked generated, from its own catalogue', async () => {
     const files = await generateWebCopy(root, {
       ar: JSON.stringify(catalogue),
-      en: JSON.stringify({ ...catalogue, common: { brand: { mark: 'I', name: 'Ijazah' } } }),
+      en: JSON.stringify({
+        ...catalogue,
+        web: {
+          ...catalogue.web,
+          deleteAccount: { ...catalogue.web.deleteAccount, brandName: 'Ijazah' },
+        },
+      }),
     });
     expect(Object.keys(files)).toEqual([...WEB_COPY_FILES]);
     const [arabic, english] = WEB_COPY_FILES.map((path) => files[path] ?? '');

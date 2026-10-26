@@ -1,22 +1,10 @@
 // GENERATED from apps/mobile/src/i18n/ar.json by scripts/build-web-copy.ts. Do not edit; run `pnpm web-copy:build`.
 export const ar = {
-  common: {
-    brand: {
-      mark: 'إ',
-      name: 'إجازة',
-    },
-  },
-  auth: {
-    field: {
-      emailInvalid: 'اكتب بريدًا إلكترونيًا صحيحًا.',
-    },
-    otp: {
-      invalid: 'الرمز غير صحيح أو انتهت صلاحيته.',
-    },
-  },
   web: {
     deleteAccount: {
       brandDone: 'إجازة · حذف الحساب',
+      brandMark: 'إ',
+      brandName: 'إجازة',
       brandSuffix: '· حذف الحساب',
       code: {
         a11y: {
@@ -34,6 +22,7 @@ export const ar = {
         submit: 'حذف الحساب نهائيًا',
         title: 'أدخل الرمز',
       },
+      codeInvalid: 'الرمز غير صحيح أو انتهت صلاحيته.',
       done: {
         confirmation: 'وصلك تأكيد الحذف على {email}. للاستفسار راسل {supportEmail}.',
         ijazahs: 'إجازاتك تبقى صالحة في صفحة التحقق برقمها.',
@@ -43,6 +32,7 @@ export const ar = {
         title: 'حُذف حسابك',
       },
       email: 'البريد الإلكتروني للحساب',
+      emailInvalid: 'اكتب بريدًا إلكترونيًا صحيحًا.',
       honest: {
         info: 'تُحذف بياناتك الشخصية فورًا، ولا يمكن استعادة الحساب.',
         doneLede: 'حُذفت بياناتك الشخصية، ولا يمكن استعادة الحساب.',

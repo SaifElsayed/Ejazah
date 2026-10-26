@@ -7,8 +7,9 @@
 // word, the web pages' included: its `web` group holds them. The API renders the deletion pages
 // (T083), so the keys they name are copied here, whole and at their own paths, into one TypeScript
 // module per language under `apps/api/src/platform/web/i18n/`: the `web.deleteAccount` and
-// `web.notFound` groups, and the three keys the pages share with the phone (the brand's mark and
-// name, the invalid-address line and the generic wrong-code line). `web.verify` is Phase 4's.
+// `web.notFound` groups, and nothing else, so the copy the API renders stays closed on itself; the
+// brand and the two error lines the pages share with the phone are repeated inside the group (the
+// owner's answer to B16's review, 2026-10-26). `web.verify` is Phase 4's.
 //
 // WHAT IS WRITTEN
 //
@@ -33,13 +34,7 @@ export const WEB_COPY_SOURCES = {
 export type WebCopyLanguage = keyof typeof WEB_COPY_SOURCES;
 
 /** The keys the API's pages render, each a group or a leaf of the catalogue, copied whole. */
-export const WEB_COPY_KEYS = [
-  'common.brand',
-  'auth.field.emailInvalid',
-  'auth.otp.invalid',
-  'web.deleteAccount',
-  'web.notFound',
-] as const;
+export const WEB_COPY_KEYS = ['web.deleteAccount', 'web.notFound'] as const;
 
 /** Every file this generator writes, in the order of the languages. */
 export const WEB_COPY_FILES = [
