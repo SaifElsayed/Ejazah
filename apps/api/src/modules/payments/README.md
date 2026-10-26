@@ -12,8 +12,10 @@ Hold, route, balance, transfer or refund money; the gateway settles directly to 
 
 ## Shape
 
-`payments.service.ts` holds every rule. `payments.repository.ts` holds every query. `payments.router.ts` is thin (student: start checkout; teacher: payout setup and status; admin: read-only monitor). `payments.webhook.ts` is the raw-body HTTP endpoint outside tRPC, guarded by `platform/guards/webhook-signature.guard.ts`. Jobs: `confirm-enrollment`, `expire-pending-payments`. Arrives with Phase 2 (checkout, confirmation) and Phase 1 (payout onboarding).
+`payments.service.ts` holds every rule. `payments.repository.ts` holds every query. `payments.router.ts` is thin (student: start checkout; admin: read-only monitor); payout setup and its status are the identity module's `teacher.payout` (research R-121). `webhook.controller.ts` is the raw-body HTTP endpoint outside tRPC, `POST /webhooks/payment` (T077), verified through `platform/guards/webhook-signature.guard.ts`'s `verifyInboundEvent`; `recipient-events.service.ts` records a signed payout-recipient event and hands its verdict to `identity`'s entry in the same transaction (research R-114, R-121). Jobs: `confirm-enrollment`, `expire-pending-payments`. Arrives with Phase 2 (checkout, confirmation) and Phase 1 (the recipient events).
 
 ## Requirement ids
 
 `SRS-PAY-*`: FR-PAYG-1 to FR-PAYG-18, FR-ADMIN-18, section 3.6. _Filled as they land._
+
+- FR-PAYG-4, FR-PAYG-15, FR-191 (Phase 1, T077): the webhook, and the recipient events recorded once and routed to the teacher by the reference's hash. An order event is reported and acknowledged, and nothing is written, until Phase 2's checkout lands.

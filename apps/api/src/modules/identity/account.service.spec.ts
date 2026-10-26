@@ -99,6 +99,20 @@ describe('me', () => {
     expect(me.landing).toBe('teacher_home');
   });
 
+  it('answers a rejection the gateway gave no reason for with no reason (B15, decision 2)', async () => {
+    const { userId } = await createAccount(database, { role: 'teacher' });
+    await createTeacherProfile(database, userId, {
+      verificationStatus: 'approved',
+      applicationStatus: 'approved',
+      payoutConfiguredAt: new Date('2026-10-19T10:00:00Z'),
+      payoutRejectedReason: '',
+    });
+    expect((await identity.account.me(userId)).teacher?.payout).toEqual({
+      configured: true,
+      verified: false,
+    });
+  });
+
   it('answers a restricted account, which still reads its own standing (FR-137)', async () => {
     const { userId } = await createAccount(database, { accountStatus: 'suspended' });
     await expect(identity.account.me(userId)).resolves.toMatchObject({

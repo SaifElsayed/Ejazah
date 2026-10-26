@@ -38,6 +38,7 @@ const [
   { connectionFor, openQueue },
   { DELIVER_ADMIN_INVITE },
   { filesRoutes },
+  payments,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -62,6 +63,7 @@ const [
   import('./jobs/queue.js'),
   import('./jobs/deliver-admin-invite.js'),
   import('./platform/ports/storage/files.route.js'),
+  import('./modules/payments/index.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -127,7 +129,12 @@ const cipher = createColumnCipher(config);
 // the configuration (FR-145, never an admin setting), the catalog module's subjects read, the
 // identity module's services behind `auth`, `onboarding` and `account` (T048, T049), and the
 // verification module's behind `teacher.application` and `teacher.credentials` (T056, T057), the
-// application's submission keyed through the kernel's idempotency (FR-106).
+// application's submission and the payout registration keyed through the kernel's idempotency
+// (FR-106), the payout registration over the payment port (T077).
+const idempotency = new IdempotencyService({
+  store: new IdempotencyRepository(database),
+  settings,
+});
 const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
@@ -142,13 +149,15 @@ const services = {
     email: ports.email,
     storage: ports.storage,
     log,
+    payment: ports.payment,
+    idempotency,
   }),
   verification: verification.createVerificationServices({
     database,
     storage: ports.storage,
     cipher,
     settings,
-    idempotency: new IdempotencyService({ store: new IdempotencyRepository(database), settings }),
+    idempotency,
   }),
 };
 
@@ -184,6 +193,14 @@ const routes = {
     database,
   }),
   ...filesRoutes(ports.storage),
+  // The gateway's signed webhook (T077): its raw body read under the request limit, verified by the
+  // payment port, and a recipient event recorded and handed to identity's entries (R-121).
+  [payments.PAYMENT_WEBHOOK_PATH]: payments.createPaymentWebhookRoute({
+    database,
+    payment: ports.payment,
+    log,
+    maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
+  }),
 };
 
 // The admin module's services behind the administrator surface (T067), bound to the surface's port.

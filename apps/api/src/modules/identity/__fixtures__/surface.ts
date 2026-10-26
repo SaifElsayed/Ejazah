@@ -10,7 +10,10 @@ import type { RateLimiter } from '../../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
-import { unusedVerificationServices } from '../../../surfaces/services.fixtures.js';
+import {
+  unusedIdentityServices,
+  unusedVerificationServices,
+} from '../../../surfaces/services.fixtures.js';
 import { accountRouter } from '../account.router.js';
 import { authRouter } from '../auth.router.js';
 import { onboardingRouter } from '../onboarding.router.js';
@@ -56,7 +59,8 @@ export function surfaceOf(identity: Identity): IdentitySurface {
     settings: identity.settings,
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
     subjects: { listActive: async () => [] },
-    identity,
+    // The payout namespace has its own fixture (T077); these three namespaces never reach it.
+    identity: { ...identity, payout: unusedIdentityServices.payout },
     verification: unusedVerificationServices,
   };
   const as = (session: UserSession | null) =>

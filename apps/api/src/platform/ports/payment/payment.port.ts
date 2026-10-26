@@ -56,9 +56,16 @@ export type GatewayEvent =
       readonly gatewayOrderId: string;
     }
   | {
-      readonly type: 'recipient_verified' | 'recipient_rejected';
+      readonly type: 'recipient_verified';
       readonly providerEventId: string;
       readonly recipientRef: string;
+    }
+  | {
+      readonly type: 'recipient_rejected';
+      readonly providerEventId: string;
+      readonly recipientRef: string;
+      /** The gateway's reason, as it sent it, where it sent one (B15 check, decision 2). */
+      readonly reason?: string;
     };
 
 // The refusals of an inbound event, shared with the video port since T118.

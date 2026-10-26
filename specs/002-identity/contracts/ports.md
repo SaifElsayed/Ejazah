@@ -56,10 +56,13 @@ a device walk-through.
 
 ## PaymentPort — the recipient operations, as this phase calls them
 
-Unchanged interface (Phase 0's `contracts/ports.md`). This phase is the first
-caller of `registerPayoutRecipient(teacherUserId, details)` and of the parsed
-`recipient_verified` / `recipient_rejected` events, and the first reader of
-`getRecipientStatus`. What this phase fixes:
+Phase 0's interface (`contracts/ports.md`), with one additive field since B15:
+`recipient_rejected` carries the gateway's `reason` where it sent one (note
+under T077, decision 2). This phase is the first caller of
+`registerPayoutRecipient(teacherUserId, details)` and of the parsed
+`recipient_verified` / `recipient_rejected` events. It reads no
+`getRecipientStatus`; the poll fallback is Phase 2's (decision 6). What this
+phase fixes:
 
 - `PayoutDetails` is published in `packages/contracts` as the stand-in's
   provisional shape (holder name, account kind, account number) and marked

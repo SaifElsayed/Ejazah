@@ -1479,17 +1479,21 @@
       "title": "Packages"
     },
     "payout": {
+      "honest": {
+        "setupVerifying": "The result shows here when verification ends.",
+        "setupNote": "You will not be visible to students until it is verified.",
+        "verifiedLede": "The payment gateway verified your payout account."
+      },
       "rejected": {
         "heading": "The payment gateway could not verify your account",
         "lede": "You are still not visible to students.",
-        "reason": {
-          "nameMismatch": "The bank account holder's name does not match the name on your ID card."
-        },
         "reasonLabel": "Reason",
+        "reasonNone": "The payment gateway gave no reason.",
         "supportNote": "If it is rejected again, write to the support team: {email}",
         "tipName": "Use an account in your name as it appears on your ID card.",
         "tipNumber": "Check the account number and the bank name before submitting.",
-        "title": "Payout account"
+        "title": "Payout account",
+        "tryAgain": "Try again"
       },
       "setup": {
         "addedOn": "Added {date}",

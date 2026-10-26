@@ -2,8 +2,8 @@
 // steps (the subjects and the qualification; the identity document; one ijazah per subject, sent
 // only when every subject has one), the upload of each PDF as it is picked, the first application
 // keyed and a reapplication not; the status in each drawn state (in review with its timeline, a
-// document asked for, rejected with the way to reapply, approved once, then the tabs); and the
-// resubmission of what a reviewer asked for.
+// document asked for, rejected with the way to reapply, approved once, then the payout since B15);
+// and the resubmission of what a reviewer asked for.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -366,7 +366,7 @@ describe('ApplicationStatus (FR-152)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/application/subjects');
   });
 
-  it('draws approved once: the three next steps, the packages tab linked, «متابعة» marks it shown and opens the tabs', async () => {
+  it('draws approved once: the three next steps, payout and packages linked, «إعداد حساب الاستلام» marks it shown and opens the payout (T078)', async () => {
     status({
       status: 'approved',
       submittedAt: SUBMITTED,
@@ -389,29 +389,36 @@ describe('ApplicationStatus (FR-152)', () => {
         expect(
           screen.getByText(said(direction, 'teacher.application.approved.packages')),
         ).toBeTruthy();
-        // The drawn buttons wait for their screens (B15, Phase 2): one «متابعة» stands for them.
+        // The payout button since B15 (T078); the profile's waits for its screen (Phase 2).
         expect(
-          screen.queryByText(said(direction, 'teacher.application.approved.setupPayout')),
-        ).toBeNull();
+          screen.getByRole('button', {
+            name: said(direction, 'teacher.application.approved.setupPayout'),
+          }),
+        ).toBeTruthy();
         expect(
           screen.queryByText(said(direction, 'teacher.application.approved.profileFirst')),
         ).toBeNull();
+        expect(screen.queryByText(said(direction, 'common.action.continue'))).toBeNull();
       },
     );
     await renderIn('rtl', withQueries(() => <ApplicationStatus />)());
     await fireEvent.press(
-      await screen.findByRole('button', { name: ar('common.action.continue') }),
+      await screen.findByRole('button', { name: ar('teacher.application.approved.setupPayout') }),
     );
     await waitFor(() =>
       expect(mockApi.api.teacher.application.markApprovedShown.mutate).toHaveBeenCalled(),
     );
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/(tabs)'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/payout'));
 
     mockNavigate.mockReset();
     await renderIn('rtl', withQueries(() => <ApplicationStatus />)());
     await fireEvent.press(await screen.findByText(ar('teacher.application.approved.packages')));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/(tabs)/packages'));
-    await fireEvent.press(screen.getByText(ar('teacher.application.approved.payout')));
+    mockNavigate.mockReset();
+    await renderIn('rtl', withQueries(() => <ApplicationStatus />)());
+    await fireEvent.press(await screen.findByText(ar('teacher.application.approved.payout')));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/payout'));
+    await fireEvent.press(screen.getByText(ar('teacher.application.approved.profile')));
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 

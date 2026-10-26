@@ -10,6 +10,7 @@
       "identityDocumentType": ["national_id", "passport"],
       "landing": ["restricted", "student_home", "teacher_application", "teacher_home"],
       "language": ["ar", "en"],
+      "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
       "signInMethod": ["apple", "email", "google"],
       "teacherApplicationStatus": [
@@ -1240,6 +1241,39 @@
           "$": { "type": "object" },
           "$.credentialId": { "required": true, "type": "string" },
           "$.documentId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.payout.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.configuredAt": { "type": "string" },
+          "$.rejectedReason": { "type": "string" },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["not_configured", "pending_verification", "rejected", "verified"]
+          },
+          "$.verifiedAt": { "type": "string" }
+        }
+      },
+      "teacher.payout.register": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.details": { "required": true, "type": "object" },
+          "$.details.accountNumber": { "required": true, "type": "string" },
+          "$.details.holderName": { "required": true, "type": "string" },
+          "$.details.method": {
+            "required": true,
+            "type": "string",
+            "values": ["bank_account", "mobile_wallet"]
+          },
+          "$.idempotencyKey": { "required": true, "type": "string" }
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }

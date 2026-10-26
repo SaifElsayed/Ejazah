@@ -1,5 +1,5 @@
 // B10b: the API as the screens' specs see it (B11b adds the teacher's application and credentials,
-// the subjects, and the documents upload). `useApi()` is replaced by a client whose procedures
+// the subjects, and the documents upload; B15 the payout account). `useApi()` is replaced by a client whose procedures
 // are mocks answering what each case says, and a session store in memory; an API refusal is the
 // tRPC client error the real client raises, carrying the code and details the screens read.
 import { jest } from '@jest/globals';
@@ -11,7 +11,7 @@ export type Procedure = jest.Mock<(input?: unknown) => Promise<unknown>>;
 
 const procedure = (): Procedure => jest.fn(async () => undefined);
 
-/** Every procedure the B10b and B11b screens call, each a mock. */
+/** Every procedure the B10b, B11b and B15 screens call, each a mock. */
 export function fakeProcedures() {
   return {
     auth: {
@@ -54,6 +54,10 @@ export function fakeProcedures() {
         add: { mutate: procedure() },
         replaceDocument: { mutate: procedure() },
         documentLink: { query: procedure() },
+      },
+      payout: {
+        get: { query: procedure() },
+        register: { mutate: procedure() },
       },
     },
   };

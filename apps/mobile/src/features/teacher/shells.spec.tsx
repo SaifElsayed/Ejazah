@@ -1,5 +1,6 @@
 // T034 (FR-202): the teacher's tabs of later phases render their drawn empty or locked state with
-// no data path, in both directions, from the catalogue only.
+// no data path, in both directions, from the catalogue only. The packages' locked banner leads to
+// the payout since B15 (T078).
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
 import { Text } from 'react-native';
@@ -12,7 +13,12 @@ import { PackagesLocked } from './packages';
 import { TeacherStudentsEmpty } from './students';
 
 const mockNavigate = jest.fn();
-jest.mock('expo-router', () => ({ router: { navigate: (route: string) => mockNavigate(route) } }));
+jest.mock('expo-router', () => ({
+  router: {
+    navigate: (route: string) => mockNavigate(route),
+    push: (route: string) => mockNavigate(route),
+  },
+}));
 
 const said = (direction: 'rtl' | 'ltr', key: Parameters<typeof translate>[1]) =>
   translate(direction === 'rtl' ? 'ar' : 'en', key);
@@ -83,5 +89,17 @@ describe('PackagesLocked', () => {
         expect(screen.getByText(said(direction, 'teacher.packages.empty.title'))).toBeTruthy();
       },
     );
+  });
+
+  it('leads from the banner to the payout state (T078)', async () => {
+    mockNavigate.mockReset();
+    await inBothDirections(
+      () => <PackagesLocked />,
+      async (_rendered, direction) => {
+        await fireEvent.press(screen.getByText(said(direction, 'teacher.packages.lockedBanner')));
+      },
+    );
+    expect(mockNavigate).toHaveBeenCalledTimes(2);
+    expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/payout');
   });
 });

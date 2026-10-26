@@ -1,10 +1,10 @@
 // T058 (FR-152, FR-VERIFY-7, FR-PAYG-13): the approved state of the status screen, shown once
-// after the approval and then the tabs. Owner's decisions at the conflict check of B11b (note under
-// T058): the three next steps are drawn; the packages step opens the packages tab (its locked state
-// exists since T034); the payout account (B15) and the public profile (Phase 2) are told, not
-// linked, until their screens exist; the drawn buttons wait for those screens too, so one
-// «متابعة» marks the screen shown (`markApprovedShown`) and opens the tabs. B15 makes the payout
-// step a link and turns the button into «إعداد حساب الاستلام».
+// after the approval. Owner's decisions at the conflict check of B11b (note under T058): the three
+// next steps are drawn; the packages step opens the packages tab (its locked state exists since
+// T034); the public profile (Phase 2) is told, not linked, until its screen exists. Since B15
+// (T078, FR-190) the payout step and the primary «إعداد حساب الاستلام» open the payout, which
+// immediately follows the approval; the ghost «إكمال الملف العام أولًا» waits for its screen. Each
+// marks the screen shown (`markApprovedShown`) before it leaves.
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -23,10 +23,15 @@ import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { StackScreen } from '../../../shared/screen';
+import { PAYOUT_ROUTE } from '../../payout';
 import { useApplicationActions } from '../api';
 
 const STEPS = [
-  { title: 'teacher.application.approved.payout', hint: 'teacher.application.approved.payoutHint' },
+  {
+    title: 'teacher.application.approved.payout',
+    hint: 'teacher.application.approved.payoutHint',
+    route: PAYOUT_ROUTE,
+  },
   {
     title: 'teacher.application.approved.profile',
     hint: 'teacher.application.approved.profileHint',
@@ -64,11 +69,11 @@ export function ApplicationApproved() {
       footer={
         <ActionBar>
           <Button
-            label={t('common.action.continue')}
+            label={t('teacher.application.approved.setupPayout')}
             layout="block"
             loading={leaving}
             disabled={leaving}
-            onPress={() => void leaveFor('/(teacher)/(tabs)')}
+            onPress={() => void leaveFor(PAYOUT_ROUTE)}
           />
         </ActionBar>
       }

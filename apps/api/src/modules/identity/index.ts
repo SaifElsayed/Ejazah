@@ -1,8 +1,10 @@
 // PUBLIC ENTRY of the identity module (T017). Other modules import this file and nothing below it (R-API-3).
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
-import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
+import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
@@ -11,6 +13,7 @@ import { EmailAuthService } from './email-auth.service.js';
 import { AccountsRepository, IdentityRepository } from './identity.repository.js';
 import { OnboardingService } from './onboarding.service.js';
 import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
+import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
 import {
   PHOTOS_UPLOAD_PATH,
@@ -32,6 +35,14 @@ import { type SessionRevokedReason, UserSessionsRepository } from './user-sessio
 export { accountRouter } from './account.router.js';
 export { authRouter } from './auth.router.js';
 export { onboardingRouter } from './onboarding.router.js';
+/** `teacher.payout` (T077), mounted under `teacher` by `app.router.ts`. */
+export { payoutRouter } from './payout.router.js';
+
+/**
+ * The payments module's two entries for a signed recipient event, on its transaction, and the hash
+ * that routes the event to its teacher (T077, R-114, R-121: payments calls identity, never back).
+ */
+export { markPayoutRejected, markPayoutVerified, payoutRefHash } from './payout.service.js';
 
 /**
  * What the module's routers call, carried by every request in `AppServices.identity` (T048): each
@@ -49,6 +60,7 @@ export interface IdentityServices {
     AccountService,
     'me' | 'updateProfile' | 'setLanguage' | 'setTimezone' | 'reportDeviceTimezone'
   >;
+  readonly payout: Pick<PayoutService, 'get' | 'register'>;
 }
 
 /** What the module's services are built over, bound once by `main.ts`. */
@@ -60,6 +72,10 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly storage: Pick<StoragePort, 'temporaryLink'>;
   /** Where a mail that could not be handed over is reported, never awaited by the request. */
   readonly log: WarningLog;
+  /** Payout setup registers the recipient through the port (T077). */
+  readonly payment: Pick<PaymentPort, 'registerPayoutRecipient'>;
+  /** `teacher.payout.register` is keyed (FR-106). */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
 }
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
@@ -69,6 +85,8 @@ export function createIdentityServices({
   email,
   storage,
   log,
+  payment,
+  idempotency,
   ...base
 }: IdentityServiceDependencies): IdentityServices {
   const sessions = new SessionService(base);
@@ -80,6 +98,7 @@ export function createIdentityServices({
     emailAuth: new EmailAuthService({ ...base, codes, onboarding, sessions }),
     onboarding,
     account: new AccountService({ ...base, storage }),
+    payout: new PayoutService({ ...base, payment, idempotency }),
   };
 }
 

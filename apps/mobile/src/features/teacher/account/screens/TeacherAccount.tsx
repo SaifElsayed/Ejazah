@@ -2,9 +2,10 @@
 // teacher's account tab (TeacherAccount): sign-out in the header, the avatar and name with the
 // approved badge, and the settings the student's tab has. The teaching list and the delete row are
 // added with their screens (owner's decision, 2026-10-20): «إجازاتي» since B11b (T059), with the
-// count waiting for review from `teacher.credentials.list`; «حساب الاستلام» with B15, «حذف الحساب»
-// with B16, the public profile, the signature and the rating with their phases; the notifications
-// with theirs.
+// count waiting for review from `teacher.credentials.list`; «حساب الاستلام» since B15 (T078), for an
+// approved teacher, to the payout's state, with «موثّق» once `account.me` says verified (the only
+// badge drawn, open-items 18); «حذف الحساب» with B16, the public profile, the signature and the
+// rating with their phases; the notifications with theirs.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -31,6 +32,7 @@ import {
 } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
 import { useCredentials } from '../../credentials';
+import { PAYOUT_ROUTE } from '../../payout';
 
 export function TeacherAccount() {
   const t = useT();
@@ -94,6 +96,15 @@ export function TeacherAccount() {
                   })}
               onPress={() => router.push('/(teacher)/credentials')}
             />
+            {account.teacher?.verificationStatus === 'approved' ? (
+              <ListRow
+                label={t('teacher.account.payout')}
+                {...(account.teacher.payout.verified
+                  ? { trailing: <Badge label={t('status.payout.verified')} tone="success" /> }
+                  : {})}
+                onPress={() => router.push(PAYOUT_ROUTE)}
+              />
+            ) : null}
           </List>
           <AccountSettings me={account} />
           <SignOutSheet
