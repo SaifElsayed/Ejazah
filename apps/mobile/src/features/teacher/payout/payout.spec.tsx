@@ -203,7 +203,7 @@ describe('PayoutSetup', () => {
         expect(screen.getByText(said(direction, 'teacher.payout.setup.title'))).toBeTruthy();
         expect(screen.getByText(said(direction, 'status.payout.verifying'))).toBeTruthy();
         expect(
-          screen.getByText(said(direction, 'teacher.payout.setup.verifyingText')),
+          screen.getByText(said(direction, 'teacher.payout.honest.setupVerifying')),
         ).toBeTruthy();
         expect(
           screen.getByText(said(direction, 'teacher.payout.setup.newBankAccount')),
@@ -219,7 +219,7 @@ describe('PayoutSetup', () => {
             }),
           ),
         ).toBeTruthy();
-        expect(screen.getByText(said(direction, 'teacher.payout.setup.note'))).toBeTruthy();
+        expect(screen.getByText(said(direction, 'teacher.payout.honest.setupNote'))).toBeTruthy();
       },
     );
     await renderIn('rtl', withQueries(() => <Payout />)());
@@ -239,7 +239,9 @@ describe('PayoutVerified', () => {
         expect(
           await screen.findByText(said(direction, 'teacher.payout.verified.title')),
         ).toBeTruthy();
-        expect(screen.getByText(said(direction, 'teacher.payout.verified.lede'))).toBeTruthy();
+        expect(
+          screen.getByText(said(direction, 'teacher.payout.honest.verifiedLede')),
+        ).toBeTruthy();
         expect(
           screen.getByText(said(direction, 'teacher.payout.verified.payoutAccount')),
         ).toBeTruthy();

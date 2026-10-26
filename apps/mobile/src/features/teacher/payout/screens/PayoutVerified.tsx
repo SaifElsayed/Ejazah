@@ -3,6 +3,8 @@
 // the weekly slots and the payout account; the first two and «مراجعة باقاتي» arrive with their
 // screens in Phase 2 (T052's rule on rows), so the payout account is listed alone, with the day it
 // was verified in the account's zone, and leads to `start` to replace it (FR-193).
+// The board's lede says students can now enroll, which no screen of this phase lets them do; the
+// honest lede is shown (R-HONEST, B15 integration) and the board's waits in the catalogue.
 import type { PayoutGetOutput } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { View } from 'react-native';
@@ -44,7 +46,7 @@ export function PayoutVerified({ payout }: { readonly payout: PayoutGetOutput })
       <IconTile icon={{ name: 'shield-check' }} size="2xl" />
       <PageIntro
         title={t('teacher.payout.verified.title')}
-        lede={t('teacher.payout.verified.lede')}
+        lede={t('teacher.payout.honest.verifiedLede')}
       />
       <View accessibilityLabel={t('teacher.payout.verified.a11y.published')}>
         <List>
