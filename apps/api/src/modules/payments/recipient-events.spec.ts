@@ -11,10 +11,11 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { openDatabase, type Database } from '../../platform/db/prisma.repository.js';
+import { closeDatabase, openDatabase, type Database } from '../../platform/db/prisma.repository.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js';
 import { payoutRefHash } from '../identity/index.js';
+import { EventRows } from './__fixtures__/event-rows.repository.js';
 import {
   type Receipt,
   RecipientEventsService,
@@ -39,9 +40,7 @@ beforeAll(() => {
   });
 });
 
-afterAll(async () => {
-  await database.$disconnect();
-});
+afterAll(() => closeDatabase(database));
 
 /** One call identity's entries received, with whether it came on a transaction. */
 interface VerdictCall {
@@ -121,18 +120,8 @@ function recipientEvent(
   };
 }
 
-async function rowsOf(providerEventId: string) {
-  return database.paymentEvent.findMany({
-    where: { providerEventId },
-    select: {
-      paymentId: true,
-      providerEventId: true,
-      eventType: true,
-      signatureVerifiedAt: true,
-      payloadHash: true,
-      receivedAt: true,
-    },
-  });
+function rowsOf(providerEventId: string) {
+  return new EventRows(database).of(providerEventId);
 }
 
 const sha256 = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
