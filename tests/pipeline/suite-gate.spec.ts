@@ -279,5 +279,11 @@ describe('the coverage floor refuses a covered path below 80% (T163, T086)', () 
     expect(result.status, output).toBe(1);
     expect(output).toMatch(/Tests\s+1 passed/);
     expect(output).toMatch(/does not meet "packages\/money\/src\/\*\*" threshold \(80%\)/);
+    // T086 widened the floor to the four modules of Phase 1. The fixtures folder mirrors a file under
+    // each of them that no spec loads, so each counts at 0% and its own glob is named: a module file
+    // no test reaches fails the floor rather than escaping it.
+    for (const module of ['identity', 'verification', 'catalog', 'admin']) {
+      expect(output).toContain(`does not meet "apps/api/src/modules/${module}/**" threshold (80%)`);
+    }
   }, 150_000);
 });
