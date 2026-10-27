@@ -23,7 +23,10 @@
 // a call; the answer is the document's id. A refusal arrives in the API's one error shape and is
 // raised as `ApiRefusal`, whose code `errorCodeOf` reads as it reads a call's. The profile photo
 // (T084) goes to `POST /uploads/photos` the same way, one JPEG or PNG under a fixed name, and the
-// answer is the signed link to it (`{ photoUrl }`).
+// answer is the signed link to it (`{ photoUrl }`). T100: on the phone the global `fetch` is
+// `expo/fetch`, whose multipart encoder takes a part that is a string, a Blob or an object with
+// `bytes()`, and throws on React Native's `{ uri, name, type }`; so a file part is its fixed name,
+// its type and a `bytes()` that reads the picked file through expo-file-system when it is sent.
 //
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
@@ -35,6 +38,7 @@ import {
   TRPCClientError,
   type TRPCClient,
 } from '@trpc/client';
+import { File } from 'expo-file-system';
 
 import type { AppRouter } from '../../../api/src/surfaces/app.router';
 import type { SessionStore } from './storage';
@@ -156,7 +160,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (target === undefined) throw new Error('uploadDocument: no documents upload URL');
       const body = new FormData();
       body.append('kind', kind);
-      // React Native's FormData takes a file as its uri, name and type.
+      // Expo's FormData keeps the part as it is; expo/fetch reads its name, type and bytes.
       body.append('file', filePart(file) as unknown as Blob);
       const response = await sessionFetch(target, { method: 'POST', body });
       const answer: unknown = await response.json().catch(() => null);
@@ -239,20 +243,37 @@ export function errorDetailsOf(error: unknown): readonly ErrorDetail[] {
 export const UPLOAD_FILE_NAME = 'document.pdf';
 
 /**
- * The multipart file part of an upload: where the file is, and a fixed name rather than the
- * person's, which may carry their name (owner's decision 2026-10-21; review of B11b, round 1,
- * finding 3).
+ * A multipart file part as expo/fetch encodes it: the name and type it sends, and the file's bytes,
+ * read from the device only when the request is sent (T100).
  */
-export function filePart(file: LocalFile): { uri: string; name: string; type: string } {
-  return { uri: file.uri, name: UPLOAD_FILE_NAME, type: 'application/pdf' };
+export interface UploadPart {
+  readonly name: string;
+  readonly type: string;
+  bytes(): Promise<Uint8Array>;
 }
 
-/** The name every photo carries: the server decides the type by content and keeps no name. */
-export const UPLOAD_PHOTO_NAME = 'photo';
+/**
+ * The multipart file part of an upload: a fixed name rather than the person's, which may carry
+ * their name (owner's decision 2026-10-21; review of B11b, round 1, finding 3), and the file's bytes.
+ */
+export function filePart(file: LocalFile): UploadPart {
+  return {
+    name: UPLOAD_FILE_NAME,
+    type: 'application/pdf',
+    bytes: () => new File(file.uri).bytes(),
+  };
+}
 
-/** The multipart part of a photo: where it is, a fixed name, and the type the picker reported. */
-export function photoPart(file: LocalPhoto): { uri: string; name: string; type: string } {
-  return { uri: file.uri, name: UPLOAD_PHOTO_NAME, type: file.mimeType };
+/**
+ * The name every photo carries, by the type the picker reported: the server decides the type again
+ * by content and keeps no name (owner's decision 2026-10-27, T100).
+ */
+export const UPLOAD_PHOTO_NAMES = { jpeg: 'photo.jpg', png: 'photo.png' } as const;
+
+/** The multipart part of a photo: a fixed name, the type the picker reported, and its bytes. */
+export function photoPart(file: LocalPhoto): UploadPart {
+  const name = file.mimeType === 'image/png' ? UPLOAD_PHOTO_NAMES.png : UPLOAD_PHOTO_NAMES.jpeg;
+  return { name, type: file.mimeType, bytes: () => new File(file.uri).bytes() };
 }
 
 /** The photos route's answer: the signed link to the new photo. */
