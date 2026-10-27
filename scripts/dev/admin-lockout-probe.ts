@@ -13,7 +13,8 @@
 // `settings`, and reads the right password from hidden input, never from its arguments. The database
 // is only read, over a read-only session.
 //
-// THE VERDICT. Every answer has the same status and a byte-identical body; none signs in; none
+// THE VERDICT. Every answer is the sign-in refusal (401, `ADMIN_SIGN_IN_FAILED`), with the same
+// status and a byte-identical body; none signs in; none
 // carries a count, in its body or a header's name; and the spread of the timings is under
 // `TOLERANCE_IN_VERIFIES` password verifies, T060's tolerance (`admin-auth.service.spec.ts`: "the
 // tolerance is one verify"). That spec holds the verify's time as a constant of its own, which no
@@ -158,6 +159,10 @@ export interface Verdict {
   readonly findings: readonly string[];
 }
 
+/** The one answer of the admin sign-in to a wrong password and to a locked account (T060). */
+const SIGN_IN_REFUSED = 'ADMIN_SIGN_IN_FAILED';
+const SIGN_IN_REFUSED_STATUS = 401;
+
 /** A header whose name gives away a count, or how long a lock lasts. */
 const COUNT_HEADER = /attempt|remaining|retry-after|lock/i;
 /** A number, or a word for a count, anywhere in a body. */
@@ -168,6 +173,12 @@ export function judge(attempts: readonly Attempt[], oneVerifyMilliseconds: numbe
   const findings: string[] = [];
   const [first] = attempts;
   if (first === undefined) return { passed: false, findings: ['no attempt was made'] };
+  // Answers alike in some other refusal (a wrong path, a lost session) never reached the lockout.
+  if (first.status !== SIGN_IN_REFUSED_STATUS || !first.body.includes(`"${SIGN_IN_REFUSED}"`)) {
+    findings.push(
+      `${first.label}: HTTP ${first.status} is not the sign-in refusal (${SIGN_IN_REFUSED_STATUS}, ${SIGN_IN_REFUSED}); the lockout was not reached`,
+    );
+  }
   for (const attempt of attempts) {
     if (attempt.status >= 200 && attempt.status < 300) {
       findings.push(

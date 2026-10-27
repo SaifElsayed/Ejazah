@@ -6,8 +6,8 @@
 // banned account, which still reads its standing and its language on the restricted screen; the
 // profile and the time zone do not. What the service answers is proven by account.service.spec.ts.
 // `account.delete` (T082) admits a suspended account too (a restricted person may still leave,
-// FR-140) and a banned one (T098: the restricted screen opens the deletion), counts the caller on the authentication budget, and takes the typed word in either
-// language and nothing else; what the deletion does is deletion.service.spec.ts's.
+// FR-140) and a banned one (T098: the restricted screen opens the deletion), counts the caller
+// on the authentication budget, and takes the typed word in either language and nothing else; what the deletion does is deletion.service.spec.ts's.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

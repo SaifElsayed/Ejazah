@@ -143,7 +143,9 @@ pnpm exec tsx scripts/dev/count-person.ts --user <id>
 (it counts rows only; that `deleted_at` is set, every personal field null and
 every `user_sessions` row revoked is what `deletion.service.spec.ts` asserts); the
 refresh token the device held answers `UNAUTHENTICATED`; a new sign-up with the
-same email succeeds. On the web: `http://localhost:3000/delete-account`, the
+same email succeeds; and for an account an admin banned before it was deleted, a
+new sign-up with the same email is refused and the phone shows the banned state
+(T097). On the web: `http://localhost:3000/delete-account`, the
 address, the code from `apps/api/.storage/mail/`, the done page; the response headers
 carry the CSP and no `Set-Cookie`.
 

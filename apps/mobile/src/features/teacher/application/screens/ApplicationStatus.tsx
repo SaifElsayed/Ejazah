@@ -8,7 +8,7 @@
 // request's card comes first while the account is under one.
 //
 // T098 (App Store 5.1.1(v)): with the tabs closed, «حذف الحساب» at the foot of each answered state
-// (in review, a document asked for, rejected), quiet and in the danger colour, opens the teacher's
+// (in review, a document asked for, rejected), the outlined danger button, opens the teacher's
 // deletion (T084); the approved screen leads to the tabs, whose account has its own.
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';

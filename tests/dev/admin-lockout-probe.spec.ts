@@ -145,6 +145,18 @@ describe('the verdict', () => {
     }
   });
 
+  it('fails answers that are alike but are not the sign-in refusal, so the lockout was never reached', () => {
+    for (const odd of [
+      attempt({ status: 404, body: '{"error":{"code":"NOT_FOUND"}}' }),
+      attempt({ status: 401, body: '{"error":{"code":"UNAUTHENTICATED"}}' }),
+    ]) {
+      const all = sevenAlike.map((one) => ({ ...one, status: odd.status, body: odd.body }));
+      const verdict = judge(all, 10);
+      expect(verdict.passed).toBe(false);
+      expect(verdict.findings.join('\n')).toMatch(/ADMIN_SIGN_IN_FAILED/);
+    }
+  });
+
   it('fails a right password that signed in during the lockout', () => {
     const verdict = judge(
       sevenAlike.map((one) => ({ ...one, status: 200, body: '{"result":{}}' })),

@@ -12,7 +12,7 @@
 // line, the same words as the teacher's, then the support contact and the way back to the start
 // in place of «تسجيل الخروج»; nothing on it says an account was deleted.
 //
-// T098 (App Store 5.1.1(v)): «حذف الحساب» at the foot, quiet and in the danger colour, opens the
+// T098 (App Store 5.1.1(v)): «حذف الحساب» at the foot, the outlined danger button, opens the
 // deletion of the account's own role (T084, its re-authentication included); the guard lets a
 // restricted account reach that route and no other (lib/session.ts). The signed-out banned state
 // has no account and offers none.
