@@ -15,12 +15,12 @@ everything else is a command.
 
 - Phase 0's quickstart §1 (a running, seeded system); re-run `pnpm db:reset`
   after this phase's migrations land, since the seed gains settings rows.
-- A physical iOS device and a physical Android device with Expo's development
-  client installed (`docs/RUNBOOK.md`, "Local setup", the mobile section this
+- A physical iOS device and a physical Android device with a development
+  build of the app installed (`expo run:android` / `expo run:ios --device`) (`docs/RUNBOOK.md`, "Local setup", the mobile section this
   phase adds).
 - No third-party credential. The sign-in port and the email port run as
   stand-ins; a development build of the app offers the fake provider token
-  behind its development flag, and every mail lands in `.storage/mail/`.
+  behind its development flag, and every mail lands in `apps/api/.storage/mail/`.
 
 ---
 
@@ -61,7 +61,7 @@ install, abandon at the profile step, and run the count again for that address:
 **zero rows in every table**. Switch the language from the account tab: the
 app follows at once, signed in.
 
-The email path: sign up with an address, read the code from `.storage/mail/`,
+The email path: sign up with an address, read the code from `apps/api/.storage/mail/`,
 complete onboarding; request a reset for an address that does not exist and for
 one that does: the same sentence both times.
 
@@ -75,9 +75,10 @@ one identity PDF and two credential PDFs. Time it; under ten minutes. Record
 the run.
 
 The seeded admin has no usable password until it is invited: with the worker
-running and `ADMIN_PANEL_ORIGIN` set, run
+running, `ADMIN_PANEL_ORIGIN` set, and the panel's `VITE_API_URL` and the API's
+`ADMIN_ALLOWED_ORIGINS` pointing at each other, run
 `pnpm exec tsx scripts/dev/admin-invite.ts` (development and the stand-in email
-only), open the link in the mail under `.storage/mail/` and set the password.
+only), open the link in the mail under `apps/api/.storage/mail/` and set the password.
 
 In the admin panel (`http://localhost:5173`, the seeded admin, the second factor
 set up on first sign-in — save the ten codes):
@@ -106,6 +107,13 @@ name beside them is new.
 
 ## 4. The admin's own sign-in (SC-109)
 
+The probe needs the API running and the seeded admin's password already set
+(§3). It targets the seeded admin only, says before its first attempt that the
+attempts count toward the lockout, reads the right password from hidden input,
+and refuses to start while the account is locked. It is not read-only: the API
+writes the lockout counters, and the account stays locked for
+`admin_lockout_minutes` after the run.
+
 ```bash
 pnpm exec tsx scripts/dev/admin-lockout-probe.ts
 ```
@@ -117,7 +125,7 @@ the same; the timing spread is within the probe's tolerance; no response
 carries a count. After fifteen minutes (or `admin_lockout_minutes` lowered in
 the seed for the probe), the right password signs in. Then: sign in with a
 recovery code; have a second admin (add one from `/settings/admins`, read the
-invite from `.storage/mail/`, set its password) reset the first's second
+invite from `apps/api/.storage/mail/`, set its password) reset the first's second
 factor; the first's open session is gone and the next sign-in is setup.
 
 ---
@@ -131,11 +139,14 @@ the fake provider → confirm. Then:
 pnpm exec tsx scripts/dev/count-person.ts --user <id>
 ```
 
-**Expected**: the `users` row has `deleted_at` set and every personal field
-null; zero `auth_identities` rows; every `user_sessions` row revoked; the
+**Expected**: the count shows the `users` row and zero `auth_identities` rows
+(it counts rows only; that `deleted_at` is set, every personal field null and
+every `user_sessions` row revoked is what `deletion.service.spec.ts` asserts); the
 refresh token the device held answers `UNAUTHENTICATED`; a new sign-up with the
-same email succeeds. On the web: `http://localhost:3000/delete-account`, the
-address, the code from `.storage/mail/`, the done page; the response headers
+same email succeeds; and for an account an admin banned before it was deleted, a
+new sign-up with the same email is refused and the phone shows the banned state
+(T097). On the web: `http://localhost:3000/delete-account`, the
+address, the code from `apps/api/.storage/mail/`, the done page; the response headers
 carry the CSP and no `Set-Cookie`.
 
 ---

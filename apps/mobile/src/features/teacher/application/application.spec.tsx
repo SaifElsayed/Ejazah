@@ -4,6 +4,10 @@
 // keyed and a reapplication not; the status in each drawn state (in review with its timeline, a
 // document asked for, rejected with the way to reapply, approved once, then the payout since B15);
 // and the resubmission of what a reviewer asked for.
+//
+// T098 (App Store 5.1.1(v)): with the tabs closed, an applicant deletes from the status (in review,
+// a document asked for, rejected) and from the request for a document: «حذف الحساب» at the foot
+// opens the teacher's deletion; the approved screen leads to the tabs, whose account has its own.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -572,5 +576,84 @@ describe('ApplicationMoreInfo (FR-152)', () => {
       }),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/application/status'));
+  });
+});
+
+describe('the deletion with the tabs closed (T098)', () => {
+  const DELETE = 'teacher.account.deleteAccount';
+  const answers = {
+    in_review: { status: 'in_review', submittedAt: SUBMITTED, subjectCount: 2 },
+    needs_document: {
+      status: 'needs_document',
+      submittedAt: SUBMITTED,
+      subjectCount: 2,
+      note: 'نسخة أوضح',
+      decidedAt: DECIDED,
+    },
+    rejected: {
+      status: 'rejected',
+      submittedAt: SUBMITTED,
+      subjectCount: 2,
+      note: 'الوثائق لا تطابق الاسم',
+      decidedAt: DECIDED,
+    },
+  } as const;
+
+  function status(answer: Record<string, unknown>) {
+    mockApi.api.teacher.application.get.query.mockResolvedValue({
+      callRecorded: false,
+      approvedShown: false,
+      ...answer,
+    });
+  }
+
+  for (const [state, answer] of Object.entries(answers)) {
+    it(`offers «حذف الحساب» on the status ${state}, opening the teacher's deletion`, async () => {
+      status(answer);
+      await inBothDirections(
+        withQueries(() => <ApplicationStatus />),
+        async (_rendered, direction) => {
+          expect(await screen.findByRole('button', { name: said(direction, DELETE) })).toBeTruthy();
+        },
+      );
+      await renderIn('rtl', withQueries(() => <ApplicationStatus />)());
+      await fireEvent.press(await screen.findByRole('button', { name: ar(DELETE) }));
+      expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/account/delete');
+      expect(mockNavigate).not.toHaveBeenCalledWith('/(student)/account/delete');
+    });
+  }
+
+  it('offers none on the approved screen, which leads to the tabs and their account', async () => {
+    status({ status: 'approved', submittedAt: SUBMITTED, subjectCount: 2, callRecorded: true });
+    await inBothDirections(
+      withQueries(() => <ApplicationStatus />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(said(direction, 'teacher.application.approved.title')),
+        ).toBeTruthy();
+        expect(screen.queryByRole('button', { name: said(direction, DELETE) })).toBeNull();
+      },
+    );
+  });
+
+  it('offers none while the status is not read yet', async () => {
+    mockApi.api.teacher.application.get.query.mockReturnValue(new Promise(() => undefined));
+    await renderIn('rtl', withQueries(() => <ApplicationStatus />)());
+    expect(screen.queryByRole('button', { name: ar(DELETE) })).toBeNull();
+  });
+
+  it("offers «حذف الحساب» on the request for a document, opening the teacher's deletion", async () => {
+    status(answers.needs_document);
+    mockApi.api.teacher.credentials.list.query.mockResolvedValue([]);
+    await inBothDirections(
+      withQueries(() => <ApplicationMoreInfo />),
+      async (_rendered, direction) => {
+        expect(await screen.findByRole('button', { name: said(direction, DELETE) })).toBeTruthy();
+      },
+    );
+    await renderIn('rtl', withQueries(() => <ApplicationMoreInfo />)());
+    await fireEvent.press(await screen.findByRole('button', { name: ar(DELETE) }));
+    expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/account/delete');
+    expect(mockApi.api.teacher.application.resubmit.mutate).not.toHaveBeenCalled();
   });
 });

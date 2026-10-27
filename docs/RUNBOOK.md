@@ -14,7 +14,7 @@ openssl rand -base64 32   # paste the output into ENCRYPTION_KEY in .env
 pnpm infra:up             # postgres and redis (docker-compose.yml), on 127.0.0.1:5432 and :6379
 pnpm db:migrate           # every migration in prisma/migrations, as the owner role
 pnpm db:seed              # subjects, settings and one administrator, the same on every machine
-pnpm dev                  # api (request + worker processes) and admin; mobile joins when the first task importing Expo declares it (note under T076)
+pnpm dev                  # api (request + worker processes) and admin; the phone app runs on its own (below, note under T076)
 ```
 
 `ENCRYPTION_KEY` is required in every environment, development included, and
@@ -41,6 +41,44 @@ history. It leaves out only the administrator's password hash and MFA secret,
 which are random on each machine. Compare the value with a teammate: it must be
 identical, whatever the date, the machine's time zone or its `ENCRYPTION_KEY`.
 Running `pnpm db:seed` again changes nothing, so the checksum stays the same.
+
+**Run the phone app on a physical device.** The app carries native modules
+(Google and Apple sign-in, secure storage), so it runs as a development build
+installed on the device, never in Expo Go. Its settings go in
+`apps/mobile/.env` (ignored, like the root one), which Expo reads when it
+bundles:
+
+```bash
+EXPO_PUBLIC_API_URL=http://<this machine's LAN address>:3000   # the API's origin; without it the app stops at launch
+EXPO_PUBLIC_DEV_SIGN_IN=true                                   # the fake provider, below
+```
+
+With `pnpm dev` running and the device on the same network:
+
+```bash
+pnpm --filter @ijazah/mobile exec expo run:android --device   # Android over USB: builds, installs, starts Metro
+pnpm --filter @ijazah/mobile exec expo run:ios --device       # iOS: on macOS with Xcode only
+pnpm --filter @ijazah/mobile dev                              # later, when only JavaScript changed: Metro alone
+```
+
+`app.json` names no `android.package` or `ios.bundleIdentifier` yet (the
+owner's decision, note under T006): the first build asks for one; keep it out
+of commits.
+
+**The fake provider.** One switch on each side. The API's
+`SIGN_IN_PROVIDER=fake` (the `.env.example` value) selects the stand-in that
+accepts an unsigned token (`platform/ports/sign-in/fake.adapter.ts`);
+`env.schema.ts` refuses it outside development and test. The phone's
+`EXPO_PUBLIC_DEV_SIGN_IN=true` adds «دخول تجريبي للتطوير» to the welcome screen
+(`features/shared/auth/dev-sign-in.ts`), which signs in as one fixed person,
+`dev-phone@ijazah.test`; a release build never shows it (`__DEV__` is false).
+
+**Where the mails land.** With `NODE_ENV=development` and
+`EMAIL_PROVIDER=fake`, the email stand-in sends nothing and writes each mail,
+one-time codes and invite links included, as a text file under
+`<STORAGE_LOCAL_ROOT>/mail/` (`platform/ports/email/index.ts`). The path is
+relative to the API's working directory: under `pnpm dev`, with the default
+`.storage`, that is `apps/api/.storage/mail/`. A test run writes no mail.
 
 ## Reset the local database
 
@@ -234,6 +272,31 @@ example `Ejazah_app(001-foundations): T001 create the pnpm workspace root`.
 
 **Rebuild design tokens** — edit `tokens.json`, run
 `pnpm --filter @ijazah/mobile tokens:build`, commit both files.
+
+**Give the seeded administrator a password** — the seed writes it with no
+usable password. On a development machine:
+
+```bash
+pnpm exec tsx scripts/dev/admin-invite.ts
+```
+
+It refuses unless `NODE_ENV` is `development`, `EMAIL_PROVIDER` is `fake` and
+`ADMIN_PANEL_ORIGIN` is set, so it never sends a real mail. It only queues the
+invite: the worker (`pnpm dev` starts it) writes the mail where the mails land
+(Local setup). The link opens the panel's `/set-password`, then the second
+factor's setup; save the recovery codes it shows once. Run it again for a fresh
+link after `admin_invite_ttl_hours`; once a password is set it queues nothing.
+The panel calls the API at `VITE_API_URL` (in `apps/admin/.env`), and the API
+answers it only when `ADMIN_ALLOWED_ORIGINS` lists `http://localhost:5173`.
+
+**Reset an administrator's second factor** — another administrator does it,
+never the one locked out (refused as `FORBIDDEN`): Settings → Admins, the
+administrator, "Reset two-step verification", with a reason. It clears the
+enrolment, rotates the secret, deletes the recovery codes and ends every open
+session (`admins.resetMfa`, FR-173); the action is audited as
+`admin.reset_mfa`, and the next sign-in repeats the setup. With a single
+administrator nobody can do it, so add a second ("Add admin" on the same page,
+its invite mail in the same folder) before you need one.
 
 ## Capacity
 

@@ -3,7 +3,11 @@
 // tokens at launch, the client signs out on a refused refresh (lib/client.ts), and B10 wires the
 // sign-in procedures and `account.me` that say where a session lands (`landing`, contracts/auth.ts).
 // The guard reads it through `useSession()` and decides with `destinationFor` and `allows`.
-import type { Landing, MeOutput, TeacherApplicationStatus } from '@ijazah/contracts';
+//
+// T098 (App Store 5.1.1(v)): with the tabs closed, a restricted account and an applicant reach the
+// deletion of their own role (T084) and nothing more; a restricted state carries the account's role
+// from `account.me` so the guard knows which deletion is its own.
+import type { Landing, MeOutput, Role, TeacherApplicationStatus } from '@ijazah/contracts';
 import { useSyncExternalStore } from 'react';
 
 export type SessionState =
@@ -14,7 +18,13 @@ export type SessionState =
   | { readonly kind: 'signed-out' }
   | {
       readonly kind: 'signed-in';
-      readonly landing: Exclude<Landing, 'teacher_application'>;
+      readonly landing: Exclude<Landing, 'teacher_application' | 'restricted'>;
+    }
+  | {
+      readonly kind: 'signed-in';
+      readonly landing: 'restricted';
+      /** The account's role (`account.me`): which deletion is its own (T098). */
+      readonly role: Role;
     }
   | {
       readonly kind: 'signed-in';
@@ -64,11 +74,14 @@ export function destinationFor(state: SessionState): string | null {
 
 /**
  * The guard's state for a signed-in account, from `account.me` (T052): the landing is the server's
- * rule, read, never recomputed here; an applicant carries its application's status.
+ * rule, read, never recomputed here; an applicant carries its application's status, a restricted
+ * account its role (T098).
  */
 export function signedInAs(
-  me: Pick<MeOutput, 'landing'> & Partial<Pick<MeOutput, 'teacher'>>,
+  me: Pick<MeOutput, 'landing' | 'role'> & Partial<Pick<MeOutput, 'teacher'>>,
 ): SessionState {
+  if (me.landing === 'restricted')
+    return { kind: 'signed-in', landing: 'restricted', role: me.role };
   if (me.landing !== 'teacher_application') return { kind: 'signed-in', landing: me.landing };
   if (me.teacher === undefined) {
     throw new TypeError('session: an applicant landing without the teacher standing');
@@ -93,16 +106,36 @@ const SHARED = new Set([
   'verify-identity',
 ]);
 
+/** The deletion of each role (T084), the one route a closed account's tabs leave open (T098). */
+const DELETION: Readonly<Record<Role, readonly string[]>> = {
+  student: ['(student)', 'account', 'delete'],
+  teacher: ['(teacher)', 'account', 'delete'],
+};
+
+function isDeletionOf(role: Role, segments: readonly string[]): boolean {
+  const route = DELETION[role];
+  return segments.length === route.length && route.every((segment, at) => segments[at] === segment);
+}
+
 /** True when the route at `segments` is one `state` may stay on; otherwise the guard lands it. */
 export function allows(state: SessionState, segments: readonly string[]): boolean {
   const [root, next] = segments;
   if (root === undefined) return false;
   if (state.kind === 'signed-out') return SIGNED_OUT.has(root);
   if (state.kind !== 'signed-in') return false;
-  const destination = destinationFor(state);
-  if (destination === RESTRICTED) return root === 'restricted';
+  if (state.landing === 'restricted') {
+    return root === 'restricted' || isDeletionOf(state.role, segments);
+  }
   if (state.landing === 'teacher_application') {
-    return (root === '(teacher)' && next === 'application') || SHARED.has(root);
+    // A banned applicant lands on the restricted screen (T074) and stays there or on its deletion.
+    if (destinationFor(state) === RESTRICTED) {
+      return root === 'restricted' || isDeletionOf('teacher', segments);
+    }
+    return (
+      (root === '(teacher)' && next === 'application') ||
+      isDeletionOf('teacher', segments) ||
+      SHARED.has(root)
+    );
   }
   const group = state.landing === 'student_home' ? '(student)' : '(teacher)';
   return root === group || SHARED.has(root);

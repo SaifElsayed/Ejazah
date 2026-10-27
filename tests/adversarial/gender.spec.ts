@@ -28,6 +28,16 @@
 // API surfaces (a profile by id answering 404, crafted pagination, facets) are listed as `it.todo`
 // in each direction, for the Phase 2 task that builds those surfaces.
 //
+// THE SUITE IS SEEN TO BITE (T085, FR-211, research R-119). A suite that passes the right predicate
+// proves nothing until it is seen to fail a wrong one, so two leaky subjects are committed beside
+// the reference: `noGenderConjunct`, the predicate without the gender conjunct, and
+// `asymmetricV11`, the asymmetric rule SRS §3.7.1 replaced (a female requester sees both genders,
+// a male requester only males). They are never in `subjects`, whose every case must pass; the
+// `expectToBite` block runs the whole case table, the count comparison included, against each, in
+// each direction, and is red only if a leaky subject passes where it must be caught — the way
+// `tests/violations/harness.ts` inverts a lint rule. The reference subject runs through the same
+// comparison as a control, so a bite cannot come from a comparison that disagrees with everything.
+//
 // The genders and verification statuses come from the generated client (`pnpm db:generate`), so a
 // status added to the schema is attacked here without a new case, and a third gender value fails
 // the suite until this harness is revisited.
@@ -220,6 +230,9 @@ const ownOnly: World = {
   pending: { gender: 'own', verificationStatus: $Enums.TeacherVerificationStatus.pending },
 };
 
+/** How many teachers of the other gender the count comparison adds to `ownOnly`. */
+const OTHER_GENDER_COUNTS = [1, 5, 50] as const;
+
 function withOthers(count: number): World {
   const others: Record<string, RelativeTeacher> = {};
   for (let index = 0; index < count; index += 1) others[`other${index}`] = { gender: 'other' };
@@ -270,7 +283,7 @@ for (const subject of subjects) {
           materialise(direction, ownOnly),
         );
         expect([...baseline].sort()).toEqual(['a', 'b']);
-        for (const count of [1, 5, 50]) {
+        for (const count of OTHER_GENDER_COUNTS) {
           const seen = await subject.visibleTeacherIds(
             requester,
             materialise(direction, withOthers(count)),
@@ -290,3 +303,151 @@ for (const subject of subjects) {
     });
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// The suite bites (T085, FR-211, research R-119)
+// ---------------------------------------------------------------------------------------------
+
+function eligibleApartFromGender(teacher: TeacherRecord): boolean {
+  return (
+    teacher.verificationStatus === $Enums.TeacherVerificationStatus.approved &&
+    teacher.deletedAt === null &&
+    teacher.payoutVerifiedAt !== null
+  );
+}
+
+/** SRS §3.7.1 with its first conjunct, `teacher.gender = requester.gender`, dropped. */
+const noGenderConjunct: VisibilitySubject = {
+  name: 'noGenderConjunct',
+  visibleTeacherIds: (_requester, world) =>
+    Promise.resolve(world.filter(eligibleApartFromGender).map((teacher) => teacher.id)),
+};
+
+/** The asymmetric v1.1 rule SRS §3.7.1 replaced: a female requester sees both genders. */
+const asymmetricV11: VisibilitySubject = {
+  name: 'asymmetricV11',
+  visibleTeacherIds: (requester, world) =>
+    Promise.resolve(
+      world
+        .filter(
+          (teacher) =>
+            (requester.gender === $Enums.Gender.female || teacher.gender === requester.gender) &&
+            eligibleApartFromGender(teacher),
+        )
+        .map((teacher) => teacher.id),
+    ),
+};
+
+interface InvertedSubject {
+  readonly subject: VisibilitySubject;
+  /**
+   * The requester genders whose direction must catch the subject, written by hand from where its
+   * leak lies. A direction left out must pass it: its leak is not there, and only the other
+   * direction shows it, which is why every case runs in both (FR-064).
+   */
+  readonly caughtBy: readonly Gender[];
+}
+
+const invertedSubjects: readonly InvertedSubject[] = [
+  { subject: noGenderConjunct, caughtBy: [$Enums.Gender.male, $Enums.Gender.female] },
+  { subject: asymmetricV11, caughtBy: [$Enums.Gender.female] },
+];
+
+interface Disagreement {
+  readonly name: string;
+  readonly holds: string;
+}
+
+const COUNT_COMPARISON: Disagreement = {
+  name: 'the answer and its count unchanged however many teachers of the other gender exist',
+  holds: 'R-GENDER-3',
+};
+
+function sameIds(seen: readonly string[], expected: readonly string[]): boolean {
+  return JSON.stringify([...seen].sort()) === JSON.stringify([...expected].sort());
+}
+
+/**
+ * Every case of the table, and the count comparison, on which `subject` answers otherwise than the
+ * hand-written expectation, in one direction. Nothing here throws: the caller decides whether a
+ * disagreement is the failure (a subject under attack) or the proof (an inverted one).
+ */
+async function disagreements(
+  subject: VisibilitySubject,
+  direction: Direction,
+): Promise<Disagreement[]> {
+  const requester: Requester = { gender: direction.requester };
+  const answer = (world: World): Promise<readonly string[]> =>
+    subject.visibleTeacherIds(requester, materialise(direction, world));
+
+  const [table, baseline, withOtherGender] = await Promise.all([
+    Promise.all(cases.map((visibilityCase) => answer(visibilityCase.world))),
+    answer(ownOnly),
+    Promise.all(OTHER_GENDER_COUNTS.map((count) => answer(withOthers(count)))),
+  ]);
+
+  const found: Disagreement[] = cases
+    .filter((visibilityCase, index) => !sameIds(table[index] ?? [], visibilityCase.visible))
+    .map(({ name, holds }) => ({ name, holds }));
+  const countHolds =
+    sameIds(baseline, ['a', 'b']) && withOtherGender.every((seen) => sameIds(seen, baseline));
+  if (!countHolds) found.push(COUNT_COMPARISON);
+  return found;
+}
+
+function biteReport(subject: VisibilitySubject, direction: Direction, verdict: string): string {
+  return [
+    '',
+    `subject      ${subject.name}`,
+    `direction    ${direction.name}`,
+    `verdict      ${verdict}`,
+    '',
+  ].join('\n');
+}
+
+/**
+ * The inversion: a leaky subject must disagree with the table in this direction, on a case of
+ * R-GENDER-1 and on the count comparison of R-GENDER-3. Red only if the leak passes.
+ */
+async function expectToBite(subject: VisibilitySubject, direction: Direction): Promise<void> {
+  const found = await disagreements(subject, direction);
+  const holds = new Set(found.map((disagreement) => disagreement.holds));
+  expect(
+    holds.has('R-GENDER-1'),
+    biteReport(
+      subject,
+      direction,
+      'THE SUITE PASSED A LEAKY SUBJECT — no R-GENDER-1 case caught it',
+    ),
+  ).toBe(true);
+  expect(
+    holds.has('R-GENDER-3'),
+    biteReport(
+      subject,
+      direction,
+      'THE SUITE PASSED A LEAKY SUBJECT — the count comparison did not catch it (R-GENDER-3)',
+    ),
+  ).toBe(true);
+}
+
+describe('expectToBite: the suite fails each inverted subject (T085, FR-211)', () => {
+  for (const direction of directions) {
+    it(`the comparison finds no disagreement for the reference subject: ${direction.name}`, async () => {
+      expect(await disagreements(srsText, direction)).toEqual([]);
+    });
+  }
+
+  for (const { subject, caughtBy } of invertedSubjects) {
+    for (const direction of directions) {
+      if (caughtBy.includes(direction.requester)) {
+        it(`${subject.name} is caught: ${direction.name}`, async () => {
+          await expectToBite(subject, direction);
+        });
+      } else {
+        it(`${subject.name} leaks nothing here, so only the other direction catches it: ${direction.name}`, async () => {
+          expect(await disagreements(subject, direction)).toEqual([]);
+        });
+      }
+    }
+  }
+});

@@ -1,6 +1,7 @@
 // T034: where the session guard lands (FR-130, FR-137, screens.md "Routing"): no session → the
 // welcome screen; a student → the student's tabs; a teacher → by the application's status; a
-// restricted account → `restricted`. A route the state allows is left alone.
+// restricted account → `restricted`. A route the state allows is left alone. T098: a restricted
+// account and an applicant also reach the deletion of their own role, and nothing more.
 import { describe, expect, it } from '@jest/globals';
 import { act, renderHook } from '@testing-library/react-native';
 
@@ -21,7 +22,8 @@ describe('destinationFor', () => {
       [{ kind: 'signed-out' }, '/(auth)/welcome'],
       [{ kind: 'signed-in', landing: 'student_home' }, '/(student)/(tabs)'],
       [{ kind: 'signed-in', landing: 'teacher_home' }, '/(teacher)/(tabs)'],
-      [{ kind: 'signed-in', landing: 'restricted' }, '/restricted'],
+      [{ kind: 'signed-in', landing: 'restricted', role: 'student' }, '/restricted'],
+      [{ kind: 'signed-in', landing: 'restricted', role: 'teacher' }, '/restricted'],
       [
         { kind: 'signed-in', landing: 'teacher_application', applicationStatus: 'not_started' },
         '/(teacher)/application/subjects',
@@ -60,17 +62,14 @@ it('refuses, by type, an applicant without the application status (review of B6,
 
 describe('signedInAs', () => {
   it('lands an account where `account.me` says, the applicant by its status (T052)', () => {
-    expect(signedInAs({ landing: 'student_home' })).toEqual({
+    expect(signedInAs({ landing: 'student_home', role: 'student' })).toEqual({
       kind: 'signed-in',
       landing: 'student_home',
-    });
-    expect(signedInAs({ landing: 'restricted' })).toEqual({
-      kind: 'signed-in',
-      landing: 'restricted',
     });
     expect(
       signedInAs({
         landing: 'teacher_application',
+        role: 'teacher',
         teacher: {
           applicationStatus: 'not_started',
           verificationStatus: 'pending',
@@ -85,7 +84,24 @@ describe('signedInAs', () => {
   });
 
   it('refuses an applicant landing without the teacher standing, never guessing a status', () => {
-    expect(() => signedInAs({ landing: 'teacher_application' })).toThrow(TypeError);
+    expect(() => signedInAs({ landing: 'teacher_application', role: 'teacher' })).toThrow(
+      TypeError,
+    );
+  });
+
+  // T098: the restricted screen opens the deletion of the account's own role, read from
+  // `account.me`'s role; the landing itself stays the server's.
+  it("carries a restricted account's role, as `account.me` says it", () => {
+    expect(signedInAs({ landing: 'restricted', role: 'student' })).toEqual({
+      kind: 'signed-in',
+      landing: 'restricted',
+      role: 'student',
+    });
+    expect(signedInAs({ landing: 'restricted', role: 'teacher' })).toEqual({
+      kind: 'signed-in',
+      landing: 'restricted',
+      role: 'teacher',
+    });
   });
 });
 
@@ -96,6 +112,18 @@ describe('allows', () => {
     landing: 'teacher_application',
     applicationStatus: 'in_review',
   };
+  const restrictedStudent: SessionState = {
+    kind: 'signed-in',
+    landing: 'restricted',
+    role: 'student',
+  };
+  const restrictedTeacher: SessionState = {
+    kind: 'signed-in',
+    landing: 'restricted',
+    role: 'teacher',
+  };
+  const STUDENT_DELETE = ['(student)', 'account', 'delete'];
+  const TEACHER_DELETE = ['(teacher)', 'account', 'delete'];
 
   it('keeps a signed-out person in the sign-in routes and the Terms', () => {
     const out: SessionState = { kind: 'signed-out' };
@@ -122,10 +150,66 @@ describe('allows', () => {
   });
 
   it('keeps a restricted account on the restricted screen', () => {
-    const restricted: SessionState = { kind: 'signed-in', landing: 'restricted' };
-    expect(allows(restricted, ['restricted'])).toBe(true);
-    expect(allows(restricted, ['(student)', '(tabs)'])).toBe(false);
-    expect(allows(restricted, ['notifications'])).toBe(false);
+    for (const restricted of [restrictedStudent, restrictedTeacher]) {
+      expect(allows(restricted, ['restricted'])).toBe(true);
+      expect(allows(restricted, ['(student)', '(tabs)'])).toBe(false);
+      expect(allows(restricted, ['(teacher)', '(tabs)'])).toBe(false);
+      expect(allows(restricted, ['notifications'])).toBe(false);
+    }
+  });
+
+  // T098 (App Store 5.1.1(v)): with the tabs closed, the deletion of the person's own role is the
+  // one route added, and nothing else of the role's group (least privilege).
+  it("lets a restricted account reach its own role's deletion and no other route", () => {
+    expect(allows(restrictedStudent, STUDENT_DELETE)).toBe(true);
+    expect(allows(restrictedStudent, TEACHER_DELETE)).toBe(false);
+    expect(allows(restrictedStudent, ['(student)', 'account', 'profile'])).toBe(false);
+    expect(allows(restrictedStudent, ['(student)', 'account'])).toBe(false);
+    expect(allows(restrictedStudent, ['(student)', '(tabs)', 'account'])).toBe(false);
+    expect(allows(restrictedStudent, [...STUDENT_DELETE, 'more'])).toBe(false);
+
+    expect(allows(restrictedTeacher, TEACHER_DELETE)).toBe(true);
+    expect(allows(restrictedTeacher, STUDENT_DELETE)).toBe(false);
+    expect(allows(restrictedTeacher, ['(teacher)', 'application', 'status'])).toBe(false);
+    expect(allows(restrictedTeacher, ['(teacher)', 'payout'])).toBe(false);
+    expect(allows(restrictedTeacher, ['(teacher)', '(tabs)', 'account'])).toBe(false);
+  });
+
+  it("lets an applicant reach the teacher's deletion and no other account route", () => {
+    for (const applicationStatus of ['in_review', 'needs_document', 'rejected'] as const) {
+      const waiting: SessionState = {
+        kind: 'signed-in',
+        landing: 'teacher_application',
+        applicationStatus,
+      };
+      expect(allows(waiting, TEACHER_DELETE)).toBe(true);
+      expect(allows(waiting, STUDENT_DELETE)).toBe(false);
+      expect(allows(waiting, ['(student)', '(tabs)'])).toBe(false);
+      expect(allows(waiting, ['(teacher)', 'account', 'profile'])).toBe(false);
+      expect(allows(waiting, ['(teacher)', '(tabs)', 'account'])).toBe(false);
+      expect(allows(waiting, ['(teacher)', 'payout'])).toBe(false);
+    }
+  });
+
+  it('lets a banned applicant, landed on the restricted screen, reach only that and its deletion', () => {
+    const banned: SessionState = {
+      kind: 'signed-in',
+      landing: 'teacher_application',
+      applicationStatus: 'banned',
+    };
+    expect(allows(banned, ['restricted'])).toBe(true);
+    expect(allows(banned, TEACHER_DELETE)).toBe(true);
+    expect(allows(banned, STUDENT_DELETE)).toBe(false);
+    expect(allows(banned, ['(teacher)', 'application', 'status'])).toBe(false);
+  });
+
+  it('leaves an active account and a signed-out person as they were', () => {
+    expect(allows(student, STUDENT_DELETE)).toBe(true);
+    expect(allows(student, TEACHER_DELETE)).toBe(false);
+    expect(allows({ kind: 'signed-in', landing: 'teacher_home' }, TEACHER_DELETE)).toBe(true);
+    expect(allows({ kind: 'signed-out' }, STUDENT_DELETE)).toBe(false);
+    expect(allows({ kind: 'signed-out' }, TEACHER_DELETE)).toBe(false);
+    expect(allows({ kind: 'restoring' }, TEACHER_DELETE)).toBe(false);
   });
 
   // T097 (FR-155): a sign-up refused as a banned person's lands on `(auth)/banned` with no
@@ -133,7 +217,7 @@ describe('allows', () => {
   it('keeps the banned state without a session to a signed-out person', () => {
     expect(allows({ kind: 'signed-out' }, ['(auth)', 'banned'])).toBe(true);
     expect(allows(student, ['(auth)', 'banned'])).toBe(false);
-    expect(allows({ kind: 'signed-in', landing: 'restricted' }, ['(auth)', 'banned'])).toBe(false);
+    expect(allows(restrictedStudent, ['(auth)', 'banned'])).toBe(false);
     expect(allows({ kind: 'restoring' }, ['(auth)', 'banned'])).toBe(false);
   });
 });

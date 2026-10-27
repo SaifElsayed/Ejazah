@@ -11,6 +11,11 @@
 // account). No role is known signed out, so it draws `AccountRestricted`'s banned title and final
 // line, the same words as the teacher's, then the support contact and the way back to the start
 // in place of «تسجيل الخروج»; nothing on it says an account was deleted.
+//
+// T098 (App Store 5.1.1(v)): «حذف الحساب» at the foot, the outlined danger button, opens the
+// deletion of the account's own role (T084, its re-authentication included); the guard lets a
+// restricted account reach that route and no other (lib/session.ts). The signed-out banned state
+// has no account and offers none.
 import type { MeOutput } from '@ijazah/contracts';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
@@ -44,6 +49,9 @@ interface RestrictedText {
   readonly stoppedItems: readonly MessageKey[];
   readonly available: MessageKey;
   readonly availableItems: readonly MessageKey[];
+  readonly deleteAccount: MessageKey;
+  /** The role's deletion (T084); a route, since a shared screen imports no role's feature. */
+  readonly deletion: '/(student)/account/delete' | '/(teacher)/account/delete';
 }
 
 const STUDENT: RestrictedText = {
@@ -58,6 +66,8 @@ const STUDENT: RestrictedText = {
     'account.restricted.availableItems.ijazahs',
     'account.restricted.availableItems.support',
   ],
+  deleteAccount: 'account.deleteAccount',
+  deletion: '/(student)/account/delete',
 };
 
 const TEACHER: RestrictedText = {
@@ -73,6 +83,8 @@ const TEACHER: RestrictedText = {
   ],
   available: 'teacher.restricted.availableTitle',
   availableItems: ['teacher.restricted.availableIjazahs', 'teacher.restricted.availableSupport'],
+  deleteAccount: 'teacher.account.deleteAccount',
+  deletion: '/(teacher)/account/delete',
 };
 
 /** The `restricted` route: the screen of the account's role, from `account.me`. */
@@ -135,6 +147,13 @@ function RestrictedScreen({
         <Lines items={text.availableItems} icon="check" tone="success" />
       </Section>
       {support.failed ? <SupportFailed /> : null}
+      <Button
+        label={t(text.deleteAccount)}
+        variant="danger"
+        size="md"
+        layout="block"
+        onPress={() => router.push(text.deletion)}
+      />
       <SignOutSheet
         open={signingOut}
         method={account.signInMethod}

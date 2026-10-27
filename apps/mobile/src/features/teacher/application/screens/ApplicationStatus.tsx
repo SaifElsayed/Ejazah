@@ -6,6 +6,10 @@
 // (`approvedShown`), then the tabs. With no application yet, the first step; a banned account never
 // reaches this screen (the guard lands it on the restricted screen, FR-137). T074: the identity
 // request's card comes first while the account is under one.
+//
+// T098 (App Store 5.1.1(v)): with the tabs closed, «حذف الحساب» at the foot of each answered state
+// (in review, a document asked for, rejected), the outlined danger button, opens the teacher's
+// deletion (T084); the approved screen leads to the tabs, whose account has its own.
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -27,6 +31,7 @@ import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
 import { AccountFailed, IdentityRequestCard, SignOutSheet } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
+import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../../account/navigation';
 import { useApplicationStatus } from '../api';
 import { startApplication } from '../draft';
 import { ApplicationApproved } from './ApplicationApproved';
@@ -153,6 +158,7 @@ export function ApplicationStatus() {
           </View>
         </View>
       )}
+      {answer === undefined ? null : <DeleteAccountAction />}
       {me.data === undefined ? null : (
         <SignOutSheet
           open={signingOut}
@@ -161,5 +167,19 @@ export function ApplicationStatus() {
         />
       )}
     </TabScreen>
+  );
+}
+
+/** «حذف الحساب» for an applicant, whose tabs and account are closed (T098). */
+export function DeleteAccountAction() {
+  const t = useT();
+  return (
+    <Button
+      label={t('teacher.account.deleteAccount')}
+      variant="danger"
+      size="md"
+      layout="block"
+      onPress={() => router.push(DELETE_ACCOUNT_TEACHER_ROUTE)}
+    />
   );
 }

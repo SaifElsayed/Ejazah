@@ -1,7 +1,8 @@
 // T034: the root layout: the providers and the session guard, over a mock route tree whose screens
 // stand for the ones later batches add (the application in B11, restricted in B13). It lives outside
 // `app/`, where every file is a route. T052 (B10b): a restored session lands where `account.me`
-// says, and the device's zone is reported when it is one a person lives by.
+// says, and the device's zone is reported when it is one a person lives by. T098: with the tabs
+// closed, the deletion of the person's own role stays open through the role group's layout.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,6 +71,8 @@ const routes = {
   '(teacher)/(tabs)/account': require('../app/(teacher)/(tabs)/account').default,
   '(teacher)/application/status': stand('application status'),
   '(teacher)/application/subjects': stand('application subjects'),
+  '(student)/account/delete': stand('student deletion'),
+  '(teacher)/account/delete': stand('teacher deletion'),
   restricted: stand('restricted'),
 };
 
@@ -121,9 +124,41 @@ describe('the root layout', () => {
   });
 
   it('lands a restricted account on the restricted screen', async () => {
-    setSession({ kind: 'signed-in', landing: 'restricted' });
+    setSession({ kind: 'signed-in', landing: 'restricted', role: 'student' });
     await renderRouter(routes, { initialUrl: '/(student)/(tabs)' });
     expect(await screen.findByText('restricted')).toBeTruthy();
+  });
+
+  it("lets a restricted account stay on its own role's deletion, and lands it from the other's (T098)", async () => {
+    setSession({ kind: 'signed-in', landing: 'restricted', role: 'student' });
+    await renderRouter(routes, { initialUrl: '/(student)/account/delete' });
+    expect(await screen.findByText('student deletion')).toBeTruthy();
+    await act(async () =>
+      setSession({ kind: 'signed-in', landing: 'restricted', role: 'teacher' }),
+    );
+    expect(await screen.findByText('restricted')).toBeTruthy();
+  });
+
+  it("lets a restricted teacher and an applicant stay on the teacher's deletion (T098)", async () => {
+    setSession({ kind: 'signed-in', landing: 'restricted', role: 'teacher' });
+    await renderRouter(routes, { initialUrl: '/(teacher)/account/delete' });
+    expect(await screen.findByText('teacher deletion')).toBeTruthy();
+    await act(async () =>
+      setSession({
+        kind: 'signed-in',
+        landing: 'teacher_application',
+        applicationStatus: 'rejected',
+      }),
+    );
+    expect(screen.getByText('teacher deletion')).toBeTruthy();
+  });
+
+  it('lands the welcome screen once the deletion signs the person out (T098)', async () => {
+    setSession({ kind: 'signed-in', landing: 'restricted', role: 'student' });
+    await renderRouter(routes, { initialUrl: '/(student)/account/delete' });
+    expect(await screen.findByText('student deletion')).toBeTruthy();
+    await act(async () => setSession({ kind: 'signed-out' }));
+    expect(await screen.findByText('welcome')).toBeTruthy();
   });
 
   it('moves the person when the session changes', async () => {
@@ -143,7 +178,7 @@ describe('the root layout', () => {
       const held = useQueryClient().getQueryData<string>(['account']);
       return <Text>{held ?? 'nothing held'}</Text>;
     };
-    setSession({ kind: 'signed-in', landing: 'restricted' });
+    setSession({ kind: 'signed-in', landing: 'restricted', role: 'student' });
     await renderRouter(
       { ...routes, restricted: Remember, '(auth)/welcome': Recall },
       { initialUrl: '/restricted' },
