@@ -195,6 +195,9 @@ importers:
         specifier: 4.5.4
         version: 4.5.4
     devDependencies:
+      '@trpc/client':
+        specifier: 11.19.0
+        version: 11.19.0(@trpc/server@11.19.0(typescript@5.9.3))(typescript@5.9.3)
       tsc-watch:
         specifier: 7.2.1
         version: 7.2.1(typescript@5.9.3)

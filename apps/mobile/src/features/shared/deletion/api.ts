@@ -45,7 +45,7 @@ export function useAccountDeletion() {
 
     async function reauthOf(proof: DeletionProof): Promise<DeleteAccountInput['reauth'] | null> {
       if (proof.kind === 'password') return { kind: 'password', password: proof.password };
-      const { nonce } = await api.auth.providerNonce.mutate();
+      const { nonce } = await api.auth.providerNonce.mutate({});
       const identity =
         proof.provider === 'google' && devSignInEnabled()
           ? { identityToken: devIdentityToken(nonce), email: DEV_EMAIL }

@@ -199,7 +199,7 @@
         }
       },
       "admins.regenerateRecoveryCodes": {
-        "input": { "$": { "type": "unknown" } },
+        "input": { "$": { "type": "object" } },
         "kind": "mutation",
         "output": {
           "$": { "type": "object" },
@@ -553,7 +553,7 @@
         }
       },
       "auth.signOut": {
-        "input": { "$": { "type": "unknown" } },
+        "input": { "$": { "type": "object" } },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
@@ -1001,7 +1001,7 @@
       },
       "auth.providerNonce": {
         "caller": "public",
-        "input": { "$": { "type": "unknown" } },
+        "input": { "$": { "type": "object" } },
         "kind": "mutation",
         "output": {
           "$": { "type": "object" },
@@ -1051,7 +1051,7 @@
       },
       "auth.signOut": {
         "caller": "user",
-        "input": { "$": { "type": "unknown" } },
+        "input": { "$": { "type": "object" } },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
@@ -1135,7 +1135,7 @@
       },
       "teacher.application.markApprovedShown": {
         "caller": "teacher",
-        "input": { "$": { "type": "unknown" } },
+        "input": { "$": { "type": "object" } },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },

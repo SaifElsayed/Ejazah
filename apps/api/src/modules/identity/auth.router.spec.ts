@@ -54,7 +54,7 @@ describe('the namespace', () => {
 
 describe('auth.providerNonce', () => {
   it('counts the authentication budget, then the client address, and mints a nonce', async () => {
-    const answer = await surface.anonymous().auth.providerNonce();
+    const answer = await surface.anonymous().auth.providerNonce({});
     expect(answer).toEqual({ nonce: expect.any(String), expiresAt: '2026-10-20T08:10:00Z' });
     expect(surface.counts()).toEqual([
       ['rate_limit_authentication_budget', '*'],
@@ -222,7 +222,7 @@ describe('auth.refresh', () => {
 
 describe('auth.signOut', () => {
   it('refuses an anonymous caller with UNAUTHENTICATED', async () => {
-    await expect(surface.anonymous().auth.signOut()).rejects.toMatchObject({
+    await expect(surface.anonymous().auth.signOut({})).rejects.toMatchObject({
       cause: { code: 'UNAUTHENTICATED' },
     });
   });
@@ -233,7 +233,7 @@ describe('auth.signOut', () => {
     identity.clock.advance(1);
     const other = await identity.sessions.issue(userId);
     const caller = await surface.bearing(accessToken);
-    await expect(caller.auth.signOut()).resolves.toBeUndefined();
+    await expect(caller.auth.signOut({})).resolves.toBeUndefined();
     await expect(identity.sessions.resolveUserSession(accessToken)).resolves.toBeNull();
     await expect(identity.sessions.resolveUserSession(other.accessToken)).resolves.not.toBeNull();
     const [first] = await rowsOf(database).sessions(userId);

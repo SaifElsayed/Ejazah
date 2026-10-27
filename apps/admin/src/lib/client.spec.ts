@@ -83,10 +83,12 @@ describe('the admin client', () => {
   });
 
   it('signs out on the server with the bearer, and clears the tab even when the server fails', async () => {
-    const { sessions, client, bearerOf } = setUp(() => refusal('INTERNAL', 500));
+    const { sessions, client, bearerOf, transport } = setUp(() => refusal('INTERNAL', 500));
     sessions.write({ token: 'token', step: 'verified' });
     await client.signOut();
     expect(bearerOf(0)).toBe('Bearer token');
+    // With a body: tRPC 11.19's server cannot read a mutation sent without one (T099).
+    expect(transport.mock.calls[0]?.[1]?.body).toBe('{}');
     expect(sessions.read()).toBeNull();
   });
 });

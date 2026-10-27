@@ -7,4 +7,5 @@ export * from './audit.js';
 export * from './auth.js';
 export * from './credentials.js';
 export * from './documents.js';
+export * from './empty-input.js';
 export * from './teachers.js';

@@ -10,6 +10,7 @@
 // through the idempotency table (app-surface.md: the table stores the outcome in plain JSON).
 import {
   emailSignInInput,
+  emptyInput,
   providerNonceOutput,
   refreshInput,
   refreshOutput,
@@ -85,7 +86,7 @@ const email = createAppRouter({
 
 export const authRouter = createAppRouter({
   providerNonce: publicProcedure({
-    input: z.void(),
+    input: emptyInput,
     output: providerNonceOutput,
     rateLimit: {
       key: PROVIDER_NONCE_RATE_LIMIT,
@@ -116,7 +117,7 @@ export const authRouter = createAppRouter({
   }).mutation(({ ctx, input }) => ctx.services.identity.sessions.refresh(input.refreshToken)),
 
   // A restricted account signs out like any other (FR-137).
-  signOut: userProcedure({ input: z.void(), output: z.void(), admitsRestricted: true }).mutation(
+  signOut: userProcedure({ input: emptyInput, output: z.void(), admitsRestricted: true }).mutation(
     async ({ ctx }) => {
       await ctx.services.identity.sessions.signOut(ctx.caller.sessionId);
     },

@@ -129,7 +129,7 @@ describe('admins.recoveryCodes.regenerate and admins.list', () => {
 
   it('the procedure without a code always refuses, changes nothing and audits nothing (T096; R-API-9 keeps its contract)', async () => {
     const before = await world.rows.recoveryCodes(actor.adminId);
-    expect(await codeOf(caller.admins.regenerateRecoveryCodes())).toBe('CODE_INVALID');
+    expect(await codeOf(caller.admins.regenerateRecoveryCodes({}))).toBe('CODE_INVALID');
     expect(await world.rows.recoveryCodes(actor.adminId)).toEqual(before);
     const actions = (await world.rows.auditEntriesOf(actor.adminId)).map((entry) => entry.action);
     expect(actions).not.toContain('admin.regenerate_recovery_codes');

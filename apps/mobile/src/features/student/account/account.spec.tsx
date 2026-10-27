@@ -142,7 +142,8 @@ describe('StudentAccount', () => {
       screen.getAllByRole('button', { name: ar('account.signOutSheet.confirm') }).at(-1)!,
     );
     await waitFor(() => expect(getSession()).toEqual({ kind: 'signed-out' }));
-    expect(mockApi.api.auth.signOut.mutate).toHaveBeenCalled();
+    // With a body: tRPC 11.19's server cannot read a mutation sent without one (T099).
+    expect(mockApi.api.auth.signOut.mutate).toHaveBeenCalledWith({});
     expect(mockApi.sessions.current()).toBeNull();
   });
 

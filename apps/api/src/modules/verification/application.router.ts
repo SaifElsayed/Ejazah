@@ -9,6 +9,7 @@ import {
   applicationReapplyInput,
   applicationResubmitInput,
   applicationSubmitInput,
+  emptyInput,
 } from '@ijazah/contracts';
 import { z } from 'zod';
 
@@ -47,7 +48,7 @@ export const applicationRouter = createAppRouter({
 
   markApprovedShown: teacherProcedure({
     admits: 'applicant',
-    input: z.void(),
+    input: emptyInput,
     output: z.void(),
   }).mutation(async ({ ctx }) => {
     await ctx.services.verification.application.markApprovedShown(ctx.caller.userId);
