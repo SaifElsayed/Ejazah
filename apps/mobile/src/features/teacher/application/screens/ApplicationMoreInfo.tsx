@@ -2,7 +2,7 @@
 // its date, then what may be replaced: a new PDF for each ijazah waiting on one (all of them before
 // the resubmission), and the identity document, if the note asks for it. «إعادة إرسال الطلب» sends
 // what was replaced (`teacher.application.resubmit`), which returns the application to the queue,
-// and opens its status.
+// and opens its status. T098: «حذف الحساب» at the foot, as on the status.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -26,7 +26,7 @@ import { PdfField, type UploadedPdf } from '../../../shared/documents';
 import { StackScreen } from '../../../shared/screen';
 import { useCredentials } from '../../credentials/api';
 import { useApplicationActions, useApplicationStatus } from '../api';
-import { useApplicationDate } from './ApplicationStatus';
+import { DeleteAccountAction, useApplicationDate } from './ApplicationStatus';
 
 export function ApplicationMoreInfo() {
   const t = useT();
@@ -151,6 +151,7 @@ export function ApplicationMoreInfo() {
               {t('common.state.actionError')}
             </Banner>
           ) : null}
+          <DeleteAccountAction />
         </View>
       )}
     </StackScreen>

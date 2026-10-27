@@ -8,6 +8,10 @@
 // T097 (FR-155): a sign-up refused because the identifiers belong to a banned person's deleted
 // account lands on `BannedSignedOut`, with no session: the banned title and the final line, the
 // support contact, and the way back to the start; nothing on it says an account was deleted.
+//
+// T098: the restricted screen, suspended or banned, either role, ends with «حذف الحساب», which
+// opens the deletion of the account's own role; the signed-out banned state has no account to
+// delete and offers none.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -195,6 +199,32 @@ describe('Restricted (FR-137)', () => {
     await fireEvent.press(screen.getByRole('button', { name: ar('account.restricted.signOut') }));
     expect(await screen.findByText(ar('account.signOutSheet.title'))).toBeTruthy();
   });
+});
+
+// T098 (App Store 5.1.1(v)): a suspended or banned account, either role, deletes from here; the
+// action opens the deletion of the account's own role and never the other's.
+describe('Restricted: the deletion (T098)', () => {
+  const cases = [
+    ['student', 'suspended', 'account.deleteAccount', '/(student)/account/delete'],
+    ['student', 'banned', 'account.deleteAccount', '/(student)/account/delete'],
+    ['teacher', 'suspended', 'teacher.account.deleteAccount', '/(teacher)/account/delete'],
+    ['teacher', 'banned', 'teacher.account.deleteAccount', '/(teacher)/account/delete'],
+  ] as const;
+
+  for (const [role, standing, label, route] of cases) {
+    it(`offers a ${standing} ${role} «حذف الحساب», opening the ${role}'s deletion`, async () => {
+      await inBothDirections(
+        as(role, standing, () => <Restricted />),
+        (_rendered, direction) => {
+          expect(screen.getByRole('button', { name: said(direction, label) })).toBeTruthy();
+        },
+      );
+      await renderIn('rtl', as(role, standing, () => <Restricted />)());
+      await fireEvent.press(screen.getByRole('button', { name: ar(label) }));
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith(route);
+    });
+  }
 });
 
 describe('BannedSignedOut (T097, FR-155)', () => {

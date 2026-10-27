@@ -6,7 +6,7 @@
 // banned account, which still reads its standing and its language on the restricted screen; the
 // profile and the time zone do not. What the service answers is proven by account.service.spec.ts.
 // `account.delete` (T082) admits a suspended account too (a restricted person may still leave,
-// FR-140), counts the caller on the authentication budget, and takes the typed word in either
+// FR-140) and a banned one (T098: the restricted screen opens the deletion), counts the caller on the authentication budget, and takes the typed word in either
 // language and nothing else; what the deletion does is deletion.service.spec.ts's.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
@@ -33,7 +33,7 @@ beforeEach(() => {
 
 const refused = (code: string) => ({ cause: { code } });
 
-async function signedIn(accountStatus: 'active' | 'suspended' = 'active') {
+async function signedIn(accountStatus: 'active' | 'suspended' | 'banned' = 'active') {
   const { userId } = await createAccount(database, { accountStatus });
   const { accessToken } = await identity.sessions.issue(userId);
   return { userId, caller: await surface.bearing(accessToken) };
@@ -198,6 +198,14 @@ describe('account.delete', () => {
       ['rate_limit_authentication_budget', '*'],
       ['rate_limit_authentication', userId],
     ]);
+  });
+
+  it('admits a banned account and hands the input to the deletion (T098)', async () => {
+    const recording = recordingDeletion();
+    surface = surfaceOf(identity, { deletion: recording.deletion });
+    const { userId, caller } = await signedIn('banned');
+    await expect(caller.account.delete(input)).resolves.toBeUndefined();
+    expect(recording.calls).toEqual([{ userId, input }]);
   });
 
   it('takes the typed word in English too, and refuses any other word before the deletion is reached', async () => {
