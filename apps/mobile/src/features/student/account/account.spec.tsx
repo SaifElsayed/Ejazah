@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
+import { inBothDirections, renderIn, unmarked } from '../../../design/primitives/__tests__/harness';
 import { getLocale, type MessageKey, setLocale, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
 import { getSession, setSession } from '../../../lib/session';
@@ -118,7 +118,7 @@ describe('StudentAccount', () => {
 
   it('switches the language in place and stores it on the account (FR-131)', async () => {
     await renderIn('rtl', withAccount()());
-    await fireEvent.press(screen.getByRole('radio', { name: 'English' }));
+    await fireEvent.press(screen.getByLabelText('English', { normalizer: unmarked }));
     await waitFor(() =>
       expect(mockApi.api.account.setLanguage.mutate).toHaveBeenCalledWith({ language: 'en' }),
     );

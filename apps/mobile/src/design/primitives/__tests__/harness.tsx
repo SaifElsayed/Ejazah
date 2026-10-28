@@ -2,6 +2,10 @@
 // both directions (Arabic right-to-left, English left-to-right) inside the theme, and two checks
 // run on every render: no physical direction anywhere in the rendered styles (start and end only),
 // and no colour that is not a semantic token of the scheme in force.
+//
+// T109: `unmarked` is the one way a spec compares translated text with written copy. `translate`
+// isolates every value and marks an Arabic string that opens with a Latin run; only
+// `i18n/index.spec.ts` asserts those marks.
 import { expect } from '@jest/globals';
 import { render } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
@@ -13,6 +17,14 @@ import { ThemeProvider } from '../../theme';
 import { type ColorScheme, tokens } from '../../tokens';
 
 export const directions: readonly Direction[] = ['rtl', 'ltr'];
+
+/** The direction marks `translate` writes (T109): first-strong isolate, pop isolate, RLM. */
+const DIRECTION_MARKS = /[⁨⁩‏]/g;
+
+/** `text` without its direction marks, to compare with written copy (T109). */
+export function unmarked(text: string): string {
+  return text.replace(DIRECTION_MARKS, '');
+}
 
 type Rendered = Awaited<ReturnType<typeof render>>;
 

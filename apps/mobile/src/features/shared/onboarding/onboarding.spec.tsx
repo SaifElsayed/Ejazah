@@ -12,11 +12,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 
-import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
+import {
+  colour,
+  inBothDirections,
+  renderIn,
+  styleOf,
+} from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, setLocale, translate } from '../../../i18n';
 import { nameOrder } from '../../../lib/formatters';
 import { getSession, setSession } from '../../../lib/session';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
+import { BirthDateSheet } from './components/BirthDateSheet';
 import { clearDraft, getDraft, startOnboarding, updateDraft } from './draft';
 import { OnboardProfile, Role, Terms, TimeZonePicker } from './index';
 
@@ -54,21 +60,6 @@ jest.mock('../../../lib/formatters', () => {
   return { ...actual, nameOrder: jest.fn(actual.nameOrder) };
 });
 
-jest.mock('@react-native-community/datetimepicker', () => {
-  const { createElement } = jest.requireActual<typeof import('react')>('react');
-  const { Pressable } = jest.requireActual<typeof import('react-native')>('react-native');
-  const { pickerDateOf } =
-    jest.requireActual<typeof import('@ijazah/time/calendar')>('@ijazah/time/calendar');
-  return {
-    __esModule: true,
-    default: ({ onChange }: { onChange: (event: { type: string }, date?: Date) => void }) =>
-      createElement(Pressable, {
-        testID: 'date-picker',
-        onPress: () => onChange({ type: 'set' }, pickerDateOf('2004-03-12')),
-      }),
-  };
-});
-
 let mockWebView: { uri: string; onError?: () => void } | null = null;
 jest.mock('react-native-webview', () => {
   const { createElement } = jest.requireActual<typeof import('react')>('react');
@@ -84,6 +75,12 @@ jest.mock('react-native-webview', () => {
 const said = (direction: 'rtl' | 'ltr', key: MessageKey, values?: Record<string, string>) =>
   translate(direction === 'rtl' ? 'ar' : 'en', key, values);
 const ar = (key: MessageKey, values?: Record<string, string>) => translate('ar', key, values);
+
+/** Opens the date-of-birth picker's choices in order (day, month, year), then Done. */
+async function pickDate(choices: readonly string[], done: string) {
+  for (const name of choices) await fireEvent.press(screen.getByRole('button', { name }));
+  await fireEvent.press(screen.getByRole('button', { name: done }));
+}
 
 const withQueries = (ui: ReactElement) => (
   <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
@@ -149,8 +146,7 @@ describe('OnboardProfile', () => {
     await fireEvent.press(
       screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
     );
-    await fireEvent.press(screen.getByTestId('date-picker'));
-    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.done') }));
+    await pickDate(['12', 'مارس', '2004'], ar('common.action.done'));
   };
 
   it('draws the fields, the zone from the device as a city, and the Terms unchecked', async () => {
@@ -179,6 +175,40 @@ describe('OnboardProfile', () => {
         expect(screen.queryByLabelText(said(direction, 'auth.field.email'))).toBeNull();
       },
     );
+  });
+
+  // T109: Android's own picker took no locale, so it showed English, left to right, in the
+  // system's colour; the picker is the app's, three lists side by side in one sheet.
+  it('picks the date of birth in a sheet of its own: day, month and year (T109)', async () => {
+    updateDraft({ role: 'student' });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
+    );
+    expect(screen.getByText(ar('onboarding.profile.birthDay'))).toBeTruthy();
+    expect(screen.getByText(ar('onboarding.profile.birthMonth'))).toBeTruthy();
+    expect(screen.getByText(ar('onboarding.profile.birthYear'))).toBeTruthy();
+    // It opens on 1 January 2000 until a date is chosen; 31 February is moved to 29 in 2000 and to
+    // 28 in 2001.
+    await fireEvent.press(screen.getByRole('button', { name: '31' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'فبراير' }));
+    expect(screen.queryByRole('button', { name: '30' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: '2001' }));
+    expect(screen.queryByRole('button', { name: '29' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.done') }));
+    expect(getDraft()?.dateOfBirth).toBe('2001-02-28');
+    expect(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }).props[
+        'accessibilityValue'
+      ],
+    ).toEqual({ text: '28 فبراير 2001' });
+    // Closed without Done, the choice is not kept.
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
+    );
+    await fireEvent.press(screen.getByRole('button', { name: '1990' }));
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.close') }));
+    expect(getDraft()?.dateOfBirth).toBe('2001-02-28');
   });
 
   it('asks the city when the device is on UTC, which no person lives by', async () => {
@@ -271,8 +301,7 @@ describe('OnboardProfile', () => {
     await fireEvent.press(
       screen.getByRole('button', { name: en('onboarding.profile.dateOfBirth') }),
     );
-    await fireEvent.press(screen.getByTestId('date-picker'));
-    await fireEvent.press(screen.getByRole('button', { name: en('common.action.done') }));
+    await pickDate(['12', 'March', '2004'], en('common.action.done'));
     await fireEvent.press(screen.getByRole('checkbox'));
     await fireEvent.press(screen.getByRole('button', { name: en('common.action.continue') }));
     await fireEvent.press(
@@ -349,6 +378,39 @@ describe('OnboardProfile', () => {
     expect(mockApi.sessions.current()).toBeNull();
     expect(mockNavigate).not.toHaveBeenCalledWith('/(auth)/banned');
     expect(getDraft()).not.toBeNull();
+  });
+});
+
+describe('BirthDateSheet (T109)', () => {
+  it('draws the day, month and year lists in the language, the chosen date marked', async () => {
+    await inBothDirections(
+      () => (
+        <BirthDateSheet
+          initial="2004-03-12"
+          earliest="1900-01-01"
+          latest="2026-10-28"
+          onDone={() => undefined}
+          onClose={() => undefined}
+        />
+      ),
+      (_rendered, direction) => {
+        expect(screen.getByText(said(direction, 'onboarding.profile.dateOfBirth'))).toBeTruthy();
+        expect(screen.getByText(said(direction, 'onboarding.profile.birthDay'))).toBeTruthy();
+        expect(screen.getByText(said(direction, 'onboarding.profile.birthMonth'))).toBeTruthy();
+        expect(screen.getByText(said(direction, 'onboarding.profile.birthYear'))).toBeTruthy();
+        const [march, april] = direction === 'rtl' ? ['مارس', 'أبريل'] : ['March', 'April'];
+        const background = (name: string) =>
+          styleOf(screen.getByRole('button', { name }))['backgroundColor'];
+        for (const chosen of ['12', march, '2004']) {
+          expect(background(chosen)).toBe(colour('light', 'primary-subtle'));
+        }
+        expect(background(april)).toBe('transparent');
+        // From the first year to this one, and no later.
+        expect(screen.getByRole('button', { name: '1900' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: '2026' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: '2027' })).toBeNull();
+      },
+    );
   });
 });
 

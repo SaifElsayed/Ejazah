@@ -5,14 +5,14 @@
 // 2026-10-17). A provider identity with no verified address proves one here by a code (FR-122).
 // «متابعة» opens the confirmation sheet, whose confirm creates the account. T097 (FR-155): a creation
 // refused as a banned person's (`ACCOUNT_RESTRICTED`) forgets the draft and lands on the signed-out
-// banned state.
+// banned state. T109: the date of birth is picked in the app's own sheet (`BirthDateSheet`), since
+// Android's picker takes no locale.
 import { displayName as displayNameSchema, emailAddress, type Gender } from '@ijazah/contracts';
-import { calendarDateOfPicked, pickerDateOf } from '@ijazah/time/calendar';
+import { calendarDateOfPicked } from '@ijazah/time/calendar';
 import { cityOf } from '@ijazah/time/cities';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import {
   ActionBar,
@@ -26,7 +26,6 @@ import {
   PageIntro,
   Segmented,
   Select,
-  Sheet,
   Steps,
   Text,
   TextLink,
@@ -43,6 +42,7 @@ import {
 } from '../../auth/components/SignInConflictSheet';
 import { BackBar, StackScreen } from '../../screen';
 import { type ReadyDraft, useOnboardingApi } from '../api';
+import { BirthDateSheet } from '../components/BirthDateSheet';
 import { ConfirmGenderSheet } from '../components/ConfirmGenderSheet';
 import { clearDraft, type OnboardingDraft, updateDraft, useDraft } from '../draft';
 import { useOnboardingSteps } from './Role';
@@ -76,7 +76,6 @@ export function OnboardProfile() {
   const onboarding = useOnboardingApi();
   const draft = useDraft();
   const [picking, setPicking] = useState(false);
-  const [picked, setPicked] = useState<Date | null>(null);
   const [codeSent, setCodeSent] = useState(false);
   const [codeError, setCodeError] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -127,28 +126,6 @@ export function OnboardProfile() {
       setBusy(false);
     }
   };
-
-  const pickDate = (event: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'ios') {
-      if (date !== undefined) setPicked(date);
-      return;
-    }
-    setPicking(false);
-    if (event.type === 'set' && date !== undefined) {
-      updateDraft({ dateOfBirth: calendarDateOfPicked(date) });
-    }
-  };
-
-  const picker = (
-    <DateTimePicker
-      value={picked ?? pickerDateOf(draft.dateOfBirth ?? PICKER_START)}
-      mode="date"
-      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-      minimumDate={pickerDateOf(EARLIEST_BIRTH)}
-      maximumDate={new Date()}
-      onChange={pickDate}
-    />
-  );
 
   const zone = draft.timezone;
   const city = zone === null ? null : cityOf(zone, locale);
@@ -208,13 +185,9 @@ export function OnboardProfile() {
           {...(draft.dateOfBirth === undefined
             ? {}
             : { value: format.calendarDate(draft.dateOfBirth) })}
-          onPress={() => {
-            setPicked(null);
-            setPicking(true);
-          }}
+          onPress={() => setPicking(true)}
         />
       </Field>
-      {picking && Platform.OS !== 'ios' ? picker : null}
       <Field label={t('onboarding.profile.timeZone')}>
         <Card variant="row">
           <Icon name="globe" tone="muted" />
@@ -283,17 +256,18 @@ export function OnboardProfile() {
           {error}
         </Text>
       ) : null}
-      <Sheet open={picking && Platform.OS === 'ios'} onClose={() => setPicking(false)}>
-        {picker}
-        <Button
-          label={t('common.action.done')}
-          layout="block"
-          onPress={() => {
+      {picking ? (
+        <BirthDateSheet
+          initial={draft.dateOfBirth ?? PICKER_START}
+          earliest={EARLIEST_BIRTH}
+          latest={calendarDateOfPicked(new Date())}
+          onDone={(dateOfBirth) => {
             setPicking(false);
-            if (picked !== null) updateDraft({ dateOfBirth: calendarDateOfPicked(picked) });
+            updateDraft({ dateOfBirth });
           }}
+          onClose={() => setPicking(false)}
         />
-      </Sheet>
+      ) : null}
       {ready === null ? null : (
         <ConfirmGenderSheet
           open={confirming}

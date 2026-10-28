@@ -45,7 +45,7 @@
     "language": "اللغة",
     "languages": {
       "ar": "العربية",
-      "en": "English"
+      "en": "\u200FEnglish"
     },
     "memberSince": "{gender, select, female {طالبة} other {طالب}} · منذ {date}",
     "notifications": "الإشعارات",
@@ -54,7 +54,7 @@
     "profile": "الملف الشخصي",
     "profileValue": "الاسم والصورة",
     "providers": {
-      "apple": "Apple",
+      "apple": "\u200FApple",
       "email": "البريد وكلمة المرور",
       "google": "جوجل"
     },
@@ -225,7 +225,7 @@
     "imageRejected": "لا يمكن إرسال الصور في المحادثة. أرسل ملف PDF أو مستندًا.",
     "message": "رسالة",
     "notSent": "لم تُرسل",
-    "pdf": "PDF",
+    "pdf": "\u200FPDF",
     "placeholder": "اكتب رسالة",
     "subtitle": "{subject} · {sessions, plural, one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}}"
   },
@@ -286,8 +286,8 @@
     },
     "file": {
       "pagesAndSize": "{pages, plural, one {صفحة واحدة} two {صفحتان} few {# صفحات} many {# صفحة} other {# صفحة}} · {size} م.ب",
-      "pdf": "PDF",
-      "pdfOnly": "PDF فقط",
+      "pdf": "\u200FPDF",
+      "pdfOnly": "\u200FPDF فقط",
       "sizeMb": "{size} م.ب",
       "uploadedAndSize": "تم الرفع · {size} م.ب"
     },
@@ -315,7 +315,7 @@
         "label": "اللغة"
       },
       "ar": "العربية",
-      "en": "English"
+      "en": "\u200FEnglish"
     },
     "package": {
       "full": "{subject} · {sessions, plural, one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}} · {minutes, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
@@ -327,7 +327,7 @@
       "short": "{done} من {total}"
     },
     "provider": {
-      "apple": "Apple",
+      "apple": "\u200FApple",
       "email": "البريد الإلكتروني",
       "google": "جوجل"
     },
@@ -491,6 +491,9 @@
     },
     "profile": {
       "agreeTerms": "أوافق على {terms}",
+      "birthDay": "اليوم",
+      "birthMonth": "الشهر",
+      "birthYear": "السنة",
       "chooseDate": "اختر التاريخ",
       "chooseTimeZone": "اختر مدينتك",
       "dateOfBirth": "تاريخ الميلاد",
@@ -1293,7 +1296,7 @@
       },
       "add": {
         "note": "تصبح المادة متاحة لك بعد المراجعة.",
-        "pdfOnly": "PDF فقط.",
+        "pdfOnly": "\u200FPDF فقط.",
         "picker": {
           "placeholder": "اختر المادة",
           "search": "ابحث في المواد",

@@ -1,7 +1,8 @@
 // T051 (FR-AUTH-4): a calendar date (`YYYY-MM-DD`, a date of birth) and the native date picker of
 // the phone, which shows and returns a day in the device's own zone. Built here, where datetimes are
 // built (R-TIME-1), and its own export (`@ijazah/time/calendar`) so the phone takes it without
-// Temporal. B14d: a calendar date a number of days earlier (the admin's audit).
+// Temporal. B14d: a calendar date a number of days earlier (the admin's audit). T109: the days of a
+// month, for the phone's own date-of-birth picker.
 
 const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -42,4 +43,26 @@ export function calendarDaysBefore(date: string, count: number): string {
     throw new RangeError(`calendar: "${date}" is not a calendar date`);
   }
   return new Date(noon - count * MILLISECONDS_PER_DAY).toISOString().slice(0, 'YYYY-MM-DD'.length);
+}
+
+/** The days of each month of the Gregorian calendar, February's in a common year. */
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
+const FEBRUARY = 2;
+
+/**
+ * The number of days in `month` (1 to 12) of `year` (T109: the date-of-birth picker offers no day
+ * the month lacks). Counted by the Gregorian rule, with no Date, so no zone moves it.
+ */
+export function daysInMonth(year: number, month: number): number {
+  const days = Number.isSafeInteger(year) ? MONTH_DAYS[month - 1] : undefined;
+  if (days === undefined) {
+    throw new RangeError(`calendar: ${String(year)}-${String(month)} is not a month`);
+  }
+  return month === FEBRUARY && isLeapYear(year) ? days + 1 : days;
+}
+
+/** Every fourth year, except a century that is not a fourth century. */
+function isLeapYear(year: number): boolean {
+  const divides = (divisor: number) => year % divisor === 0;
+  return divides(4) && (!divides(100) || divides(400));
 }

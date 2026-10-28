@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import { tokens } from '../tokens';
-import { colour, inBothDirections, nodesOf, styleOf } from './__tests__/harness';
+import { colour, inBothDirections, nodesOf, styleOf, unmarked } from './__tests__/harness';
 import {
   ActionBar,
   AppHeader,
@@ -197,7 +197,7 @@ describe('SearchRow', () => {
         await fireEvent.changeText(screen.getByPlaceholderText('ابحث عن معلم'), 'أحمد');
         expect(screen.getByText('2')).toBeTruthy();
         const name = direction === 'rtl' ? 'الفلاتر · 2 مفعّلة' : 'Filters · 2 active';
-        await fireEvent.press(screen.getByRole('button', { name }));
+        await fireEvent.press(screen.getByLabelText(name, { normalizer: unmarked }));
       },
     );
     expect(onChangeText).toHaveBeenCalledWith('أحمد');
