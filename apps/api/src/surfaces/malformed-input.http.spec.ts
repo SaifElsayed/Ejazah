@@ -19,8 +19,10 @@
 // application over fixture routers holds that a SyntaxError of our own, thrown by a handler or by
 // a schema's transform, stays the internal error, logged and reported; so does a failure of the
 // context factory. The upload routes, the webhook and the public pages are mounted beside the
-// surfaces and are reached as before.
-import { request as httpRequest } from 'node:http';
+// surfaces and are reached as before. What still reaches the adapter's exception handler (a write
+// that fails with an error other than an abort) is answered there, with the status our shape
+// carries hidden, and the server lives on; every error body is unchanged, byte for byte.
+import { request as httpRequest, ServerResponse } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -569,6 +571,96 @@ describe('nothing of the body reaches the log or the reporter (T108, R-SEC-2)', 
     expect(logged).not.toContain('JSON');
     expect(records.every((record) => record['level'] === 'info')).toBe(true);
     expect(reportError).not.toHaveBeenCalled();
+  });
+});
+
+describe('every error body is unchanged, byte for byte, with no `data` (T108)', () => {
+  const validation = '{"error":{"code":"VALIDATION_FAILED","message":"The request is not valid."}}';
+  const unauthenticated = '{"error":{"code":"UNAUTHENTICATED","message":"Sign in to continue."}}';
+  const invalidFields =
+    '{"error":{"code":"VALIDATION_FAILED","message":"The request is not valid.","details":' +
+    '[{"path":"email","code":"invalid_type"},{"path":"password","code":"invalid_type"}]}}';
+  const notFound = '{"error":{"code":"NOT_FOUND","message":"Not found."}}';
+  it.each([
+    ['a domain error', `${admin}/auth.signOut`, '{}', 401, unauthenticated],
+    ['a validation failure', `${admin}/auth.signIn`, '{}', 400, invalidFields],
+    ['an unknown path', `${app}/no.such.procedure`, '{}', 404, notFound],
+    ['an unreadable input', `${app}/auth.providerNonce`, '{', 400, validation],
+    ['a refused batch', `${app}/auth.providerNonce?batch=1`, '{"0":{}}', 400, validation],
+  ] as const)('%s: %s', async (_case, path, body, status, text) => {
+    expect(await textOf(path, { method: 'POST', headers: json, body })).toEqual({ status, text });
+  });
+
+  it('an unexpected 500', async () => {
+    const headers = { ...json, authorization: `Bearer ${FAILING_BEARER}` };
+    expect(await textOf(`${app}/auth.signOut`, { method: 'POST', headers, body: '{}' })).toEqual({
+      status: 500,
+      text: '{"error":{"code":"INTERNAL","message":"Something went wrong. Try again later."}}',
+    });
+  });
+});
+
+describe("what reaches tRPC's own exception handler is answered, and the server lives on (T108)", () => {
+  /** The header that marks the one request whose response write fails. */
+  const FAILS = 'x-t108-write-fails';
+
+  // The adapter's `writeResponse` waits on `drain` or `error` when a write returns false, and hands
+  // an error that is not an abort to its exception handler, which reads `shape.data.httpStatus` of
+  // our formatter's shape. A broken pipe or a reset is that error when it lands before the close.
+  // The handler's second `res.end` on the response tRPC already ended emits
+  // `ERR_STREAM_WRITE_AFTER_END` as `'error'`; the surface's listener hears it, so it is not thrown.
+  it('a response whose write fails with a broken pipe', async () => {
+    const escaped: unknown[] = [];
+    const onEscape = (reason: unknown): void => {
+      escaped.push(reason);
+    };
+    process.on('unhandledRejection', onEscape);
+    process.on('uncaughtException', onEscape);
+    const write = ServerResponse.prototype.write;
+    const failing = vi.spyOn(ServerResponse.prototype, 'write').mockImplementation(function (
+      this: ServerResponse,
+      ...args: unknown[]
+    ) {
+      if (this.req.headers[FAILS] === undefined) return Reflect.apply(write, this, args) as boolean;
+      const broken = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+      process.nextTick(() => this.emit('error', broken));
+      return false;
+    });
+    try {
+      const failed = await textOf(`${app}/auth.providerNonce?marker=${MARKER}`, {
+        method: 'POST',
+        headers: { ...json, [FAILS]: '1', 'x-t108-marker': MARKER },
+        body: `{"marker":"${MARKER}"}`,
+      });
+      expect(failed.status).toBe(500);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(escaped).toEqual([]);
+    } finally {
+      failing.mockRestore();
+      process.off('unhandledRejection', onEscape);
+      process.off('uncaughtException', onEscape);
+    }
+    expect(reportError).toHaveBeenCalledTimes(1);
+    // The listener's lines: warn, the error's code and message only, nothing of the request.
+    const warnLine = (errorCode: string, errorMessage: string) => ({
+      level: 'warn',
+      time: expect.any(String),
+      pid: expect.any(Number),
+      hostname: expect.any(String),
+      errorCode,
+      errorMessage,
+      msg: 'A surface response failed to write',
+    });
+    const warned = records.filter((record) => record['level'] === 'warn');
+    expect(warned).toEqual([
+      warnLine('EPIPE', 'write EPIPE'),
+      warnLine('ERR_STREAM_WRITE_AFTER_END', 'write after end'),
+    ]);
+    expect(JSON.stringify(warned)).not.toContain(MARKER);
+    expect(await post(`${app}/auth.providerNonce`, '{}')).toEqual({
+      status: 200,
+      body: { result: { data: NONCE } },
+    });
   });
 });
 

@@ -351,9 +351,17 @@ function surfaceHandler<TContext extends Correlated>(
   });
   // What tRPC would fail on before any procedure is refused here, before it, with the input
   // guard's log line (T108): the client's request, never reported. Some of these, reaching tRPC,
-  // would fail in its node adapter's own exception handler, whose answer our formatter's shape
-  // cannot feed, and the rejection would end the process.
+  // would fail in its node adapter's own exception handler instead of answering in our shape.
   return (request, response) => {
+    // That handler ends a response tRPC already ended when a write failed (T108): the second
+    // `res.end` emits `ERR_STREAM_WRITE_AFTER_END` as `'error'`, which unheard ends the process.
+    // Only listened to, never written; nothing of the request is logged.
+    response.on('error', (error: NodeJS.ErrnoException) => {
+      log.warn(
+        { errorCode: error.code, errorMessage: error.message },
+        'A surface response failed to write',
+      );
+    });
     const refusal = refusalOf(request);
     if (refusal === undefined) {
       handler(request, response);

@@ -154,7 +154,12 @@ export function toErrorShape(error: TRPCError): MappedError {
 }
 
 const formatter = {
-  errorFormatter: ({ error }: { error: TRPCError }) => toErrorShape(error).body,
+  errorFormatter: ({ error }: { error: TRPCError }) => {
+    const { body, status } = toErrorShape(error);
+    // tRPC's node adapter's own exception handler reads `shape.data.httpStatus`, and its throw where
+    // that is missing ends the process (T108). Non-enumerable, so no response body carries it.
+    return Object.defineProperty({ ...body }, 'data', { value: { httpStatus: status } });
+  },
 };
 
 const app = initTRPC
