@@ -293,6 +293,7 @@ export function TabBar({ items, activeRoute }: TabBarProps) {
             onPress={() => {
               if (!active) router.navigate(item.route as never);
             }}
+            cssInterop={false}
             style={({ pressed: down }) => [
               { flex: 1, minHeight: size.touch, alignItems: 'center', gap: space['1'] },
               down ? pressed : null,
@@ -340,6 +341,7 @@ export function SearchRow({ value, onChangeText, placeholder, filters }: SearchR
               : t('common.a11y.filters')
           }
           onPress={filters.onPress}
+          cssInterop={false}
           style={({ pressed: down }) => [
             {
               width: size['control-md'],
