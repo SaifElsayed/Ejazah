@@ -3,7 +3,8 @@
 // the ways in: Google, Apple on iOS only, email, and in a development build the stand-in. A
 // returning person lands through the guard; a new one goes to Role; an address another method
 // holds opens the conflict sheet. T097: a new account refused as a banned person's lands on the
-// signed-out banned state.
+// signed-out banned state. T106: the root paints the theme's background, as StackScreen does for
+// every other (auth) screen; the stack beneath draws React Navigation's light default.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
@@ -17,6 +18,7 @@ import {
   Segmented,
   Text,
 } from '../../../../design/primitives';
+import { useTheme } from '../../../../design/theme';
 import { tokens } from '../../../../design/tokens';
 import { type Locale, setLocale, useLocale, useT } from '../../../../i18n';
 import { BANNED_ROUTE, type SignInProvider, useAuthApi } from '../api';
@@ -26,6 +28,7 @@ import { devSignInEnabled } from '../dev-sign-in';
 export function Welcome() {
   const t = useT();
   const locale = useLocale();
+  const { color } = useTheme();
   const auth = useAuthApi();
   const [busy, setBusy] = useState<SignInProvider | null>(null);
   const [failed, setFailed] = useState(false);
@@ -47,7 +50,7 @@ export function Welcome() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: color.bg }}>
       <View
         style={{
           flex: 1,

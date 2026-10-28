@@ -7,11 +7,20 @@
 // T097 (FR-155): a new account refused with `ACCOUNT_RESTRICTED` (the identifiers of a banned
 // person's deleted account) lands on the signed-out banned state, storing no session, no draft and
 // no password; any other refusal keeps its message.
+//
+// T106: Welcome paints the theme's background itself, in both schemes, since the navigation stack
+// beneath it draws React Navigation's light default.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
-import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
+import {
+  colour,
+  inBothDirections,
+  renderIn,
+  styleOf,
+} from '../../../design/primitives/__tests__/harness';
+import type { ColorScheme } from '../../../design/tokens';
 import { getLocale, type MessageKey, translate } from '../../../i18n';
 import { getSession, setSession } from '../../../lib/session';
 import { clearDraft, getDraft } from '../onboarding/draft';
@@ -207,6 +216,16 @@ describe('Welcome', () => {
     expect(input.provider).toBe('google');
     expect(input.identityToken).toMatch(/^fake\.google\.[\w-]+\..+\.verified\.nonce-1$/);
     expect(mockIdentity).not.toHaveBeenCalled();
+  });
+
+  it.each<[ColorScheme, 'rtl' | 'ltr']>([
+    ['light', 'rtl'],
+    ['dark', 'ltr'],
+  ])('draws on the %s theme background (T106)', async (scheme, direction) => {
+    const rendered = await renderIn(direction, <Welcome />, scheme);
+    const provider = rendered.toJSON() as { children: { props: Record<string, unknown> }[] };
+    const [root] = provider.children;
+    expect(styleOf(root!)['backgroundColor']).toBe(colour(scheme, 'bg'));
   });
 });
 
