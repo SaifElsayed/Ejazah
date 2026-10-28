@@ -313,6 +313,7 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
 - The always-on staging environment and its deploy on merge (Phase 0's T092, FR-066, SC-008: live within fifteen minutes of a merge to `main`), deferred here by the owner on 2026-10-13. Staging holds synthetic data only. The production host is planned on a Hostinger VPS, its region decided once counsel answers on Egypt's Personal Data Protection Law (research R-19).
 - Phase 1's SC-101 run on iOS (the note under T090 in `specs/002-identity/tasks.md`): deferred by the owner on 2026-10-27, since a build for an iPhone needs a paid Apple Developer account; it is run before the first store submission, when that account exists.
 - `expo doctor` clean before the first store submission (the note under T101): the SDK 58 packages it reports behind their expected patch versions brought up, as a task of its own (the owner, 2026-10-27).
+- A restart policy for the API and the worker in the hosted Docker setup (`restart: unless-stopped` or the host's equivalent), so a process that ends is brought back (T108: B19a closed the paths found that ended it; the owner, 2026-10-28).
 - The full-codebase review that the Phase 0 schedule planned as a separate week is not inside the thirty days: it runs after day 30, in the improvement time, once the MVP is complete. Within the thirty days every batch still gets its own review.
 
 **Why separate this**
