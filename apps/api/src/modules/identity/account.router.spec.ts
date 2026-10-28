@@ -8,6 +8,13 @@
 // `account.delete` (T082) admits a suspended account too (a restricted person may still leave,
 // FR-140) and a banned one (T098: the restricted screen opens the deletion), counts the caller
 // on the authentication budget, and takes the typed word in either language and nothing else; what the deletion does is deletion.service.spec.ts's.
+//
+// B19a's three screen changes add no procedure, so R-MOBILE-13's server tests are the existing ones
+// (suite-gate.paths.ts: a screen-only change carries a module spec change too). The time-zone
+// picker (T104) calls `account.setTimezone`, whose refusal of the wrong caller is here. The
+// welcome screen (T106) reaches `auth.providerNonce` and `auth.signInWithProvider`, public and held
+// by the authentication budget, as auth.router.spec.ts proves. The Terms (T105) call no procedure:
+// the WebView loads the served `GET /terms`.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
