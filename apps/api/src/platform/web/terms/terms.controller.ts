@@ -16,6 +16,10 @@
 // a suspension or ban), and the closing line about notice before a change. The effective date the
 // board draws beside the version has no source yet: the version alone is shown until one exists.
 //
+// T105: `?theme=dark` or `?theme=light` draws the page in that scheme (the app's WebView passes its
+// own); any other value is ignored and never reaches the markup. The body is drawn on
+// `.web-surface`, which paints the scheme's background and text, inside the design's `gutter`.
+//
 // The copies are read from the package root, so the built `dist/` (which `tsc` emits without
 // `.html` files) serves the same fragments; a missing fragment stops the start.
 import { readFileSync } from 'node:fs';
@@ -24,7 +28,7 @@ import type { Locale } from '../../http/locale.js';
 import { TERMS_VERSION_SETTING } from '../../settings/keys.js';
 import type { SettingsReader } from '../../settings/settings-reader.js';
 import { html, raw, type SafeHtml } from '../html.js';
-import { renderPage } from '../page.js';
+import { PAGE_THEMES, type PageTheme, renderPage } from '../page.js';
 import type { WebRoute } from '../route.js';
 
 /** Where the Terms are served (public-pages.md). */
@@ -44,6 +48,12 @@ function readFragments(): Readonly<Record<Locale, SafeHtml>> {
   return { ar: read('ar'), en: read('en') };
 }
 
+/** The scheme `?theme=` asks for, when it is one of the design's; nothing otherwise. */
+function themeOf(query: URLSearchParams): PageTheme | undefined {
+  const asked = query.get('theme');
+  return PAGE_THEMES.find((theme) => theme === asked);
+}
+
 export interface TermsRouteDependencies {
   readonly settings: SettingsReader;
 }
@@ -51,17 +61,18 @@ export interface TermsRouteDependencies {
 export function termsRoute({ settings }: TermsRouteDependencies): WebRoute {
   const fragments = readFragments();
   return {
-    handle: async ({ lang }) => {
+    handle: async ({ lang, query }) => {
       const version = await settings.read(TERMS_VERSION_SETTING, termsVersion);
       const text = texts[lang];
       return {
         page: renderPage({
           lang,
+          theme: themeOf(query),
           title: text.title,
-          body: html`<main class="page">
+          body: html`<main class="web-surface gutter">
             <header>
               <h1>${text.title}</h1>
-              <p class="muted">${text.version} ${version}</p>
+              <p class="tone-muted">${text.version} ${version}</p>
             </header>
             ${fragments[lang]}
           </main>`,

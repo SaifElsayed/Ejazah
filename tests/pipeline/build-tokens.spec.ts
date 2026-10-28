@@ -211,6 +211,22 @@ describe('the API’s stylesheets (T004)', () => {
     expect(copy.endsWith(`\n${text}`)).toBe(true);
   });
 
+  // T105: the Terms page selects the dark scheme by `data-theme`, so the colours the API serves
+  // under it are pinned to the source's `color.dark`, key for key and in order.
+  it('serve under [data-theme="dark"] exactly tokens.json’s color.dark (T105)', () => {
+    const tokens = JSON.parse(
+      readFileSync(join(root, 'packages/tokens/tokens.json'), 'utf8'),
+    ) as TokenSource;
+    const served = readFileSync(join(root, `${api}tokens.css`), 'utf8');
+    const block = /\[data-theme="dark"\] \{\n([^}]*)\}/.exec(served)?.[1] ?? '';
+    const declared = block.split('\n').filter((line) => line.trim() !== '');
+    const expected = Object.entries(tokens.color.dark)
+      .filter(([key]) => !key.startsWith('$'))
+      .map(([key, value]) => `  --color-${key}: ${resolve(tokens, value)};`);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(declared).toEqual(expected);
+  });
+
   it('copy this repository’s components.css as it is', async () => {
     const files = await generateFromRepository(root);
     const design = readFileSync(join(root, COMPONENTS_SOURCE), 'utf8');

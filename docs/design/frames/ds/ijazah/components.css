@@ -57,6 +57,16 @@ body { margin: 0; }
   line-height: var(--text-body-line);
 }
 
+/* Web surface: a public page the API serves (Terms) paints its scheme's background over the whole
+   viewport, so a WebView or a browser never shows its own canvas behind the text. The spacing is
+   the page's (`.gutter`); named apart from the admin console's `.page`. `dvh` where it is known. */
+.web-surface {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* ---------- Text (primitive: Text variant · weight · tone) ---------- */
 .text-display  { font-size: var(--text-display-size);  line-height: var(--text-display-line);  font-weight: var(--weight-bold); }
 .text-title-1  { font-size: var(--text-title-1-size);  line-height: var(--text-title-1-line);  font-weight: var(--weight-bold); }

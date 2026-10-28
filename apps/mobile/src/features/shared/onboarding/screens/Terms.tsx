@@ -1,7 +1,8 @@
 // T051 (FR-AUTH-11, FR-127): the Terms, a modal route (`terms`) the onboarding form and the account
 // tab both open. The body is served content with its version, not app copy (decided 2026-10-17):
 // the API's `GET /terms?lang=` page (T039) in a WebView (owner's decision, 2026-10-20), so the text a
-// person accepts is the one the server holds. Acceptance is the box on the profile step.
+// person accepts is the one the server holds. Acceptance is the box on the profile step. T105: the
+// page is asked for in the app's scheme (`&theme=`), so it paints its own background and text in it.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -16,7 +17,7 @@ import { apiOrigin } from '../../../../lib/api';
 export function Terms() {
   const t = useT();
   const locale = useLocale();
-  const { color } = useTheme();
+  const { color, scheme } = useTheme();
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -54,7 +55,7 @@ export function Terms() {
           ) : null}
           <WebView
             key={attempt}
-            source={{ uri: `${apiOrigin()}/terms?lang=${locale}` }}
+            source={{ uri: `${apiOrigin()}/terms?lang=${locale}&theme=${scheme}` }}
             style={{ flex: 1, backgroundColor: color.bg }}
             onLoadEnd={() => setLoading(false)}
             onError={() => setFailed(true)}

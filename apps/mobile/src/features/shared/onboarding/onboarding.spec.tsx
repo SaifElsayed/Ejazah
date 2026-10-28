@@ -399,9 +399,17 @@ describe('Terms', () => {
   it("shows the served Terms in the person's language (FR-AUTH-11)", async () => {
     await renderIn('rtl', <Terms />);
     expect(screen.getByText(ar('onboarding.terms.title'))).toBeTruthy();
-    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=ar');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=ar&theme=light');
     await renderIn('ltr', <Terms />);
-    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=en');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=en&theme=light');
+    setLocale('ar');
+  });
+
+  it("asks for the served Terms in the app's scheme (T105)", async () => {
+    await renderIn('rtl', <Terms />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=ar&theme=dark');
+    await renderIn('ltr', <Terms />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=en&theme=dark');
     setLocale('ar');
   });
 
