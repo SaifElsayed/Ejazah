@@ -55,6 +55,14 @@ export function formatTime(instant: string, timeZone: string, locale: Locale): s
   return dateTime(locale, timeZone, { hour: 'numeric', minute: '2-digit' }).format(parse(instant));
 }
 
+/**
+ * The locale's order of names, for one sort of a whole list (T104). Each `localeCompare` builds a
+ * collator of its own, which Hermes makes slow enough to freeze a long list's screen.
+ */
+export function nameOrder(locale: Locale): (a: string, b: string) => number {
+  return new Intl.Collator(locale).compare;
+}
+
 function dateTime(
   locale: Locale,
   timeZone: string,
