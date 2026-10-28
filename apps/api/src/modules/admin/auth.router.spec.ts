@@ -220,7 +220,7 @@ describe('auth.me and auth.signOut', () => {
     // A code is accepted once per time step (RFC 6238 §5.2), so the second session waits for the next.
     world.clock.advance(TOTP_STEP_SECONDS);
     const other = await verifiedToken(surface, world, admin);
-    await expect((await surface.bearing(token)).auth.signOut()).resolves.toBeUndefined();
+    await expect((await surface.bearing(token)).auth.signOut({})).resolves.toBeUndefined();
     expect(await world.sessions.resolve(token)).toBeNull();
     expect(await world.sessions.resolve(other)).not.toBeNull();
     const [entry] = await world.rows.auditEntriesOf(admin.adminId);
@@ -240,7 +240,7 @@ describe('auth.me and auth.signOut', () => {
       code: 'UNAUTHENTICATED',
     });
     expect(
-      (await refusalOf((await surface.bearing(sessionToken)).auth.signOut())).body,
+      (await refusalOf((await surface.bearing(sessionToken)).auth.signOut({}))).body,
     ).toMatchObject({
       code: 'MFA_REQUIRED',
     });

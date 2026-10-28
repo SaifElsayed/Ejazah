@@ -170,6 +170,8 @@ describe('DeleteAccountSheet', () => {
     await confirmWith('account.delete.sheet.confirmGoogle');
     await waitFor(() => expect(getSession()).toEqual({ kind: 'signed-out' }));
     expect(mockIdentity).toHaveBeenCalledWith('google', 'nonce-1');
+    // With a body: tRPC 11.19's server cannot read a mutation sent without one (T099).
+    expect(mockApi.api.auth.providerNonce.mutate).toHaveBeenCalledWith({});
     expect(mockApi.api.account.delete.mutate).toHaveBeenCalledWith({
       confirmation: 'حذف',
       reauth: { kind: 'provider', identityToken: 'id-token-1', nonce: 'nonce-1' },

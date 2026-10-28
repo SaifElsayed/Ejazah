@@ -63,7 +63,7 @@ export function useAuthApi() {
     return {
       /** Google, Apple or, in development, the stand-in. */
       async withProvider(provider: SignInProvider): Promise<SignInOutcome> {
-        const { nonce } = await api.auth.providerNonce.mutate();
+        const { nonce } = await api.auth.providerNonce.mutate({});
         const identity =
           provider === 'dev'
             ? { identityToken: devIdentityToken(nonce), email: DEV_EMAIL }

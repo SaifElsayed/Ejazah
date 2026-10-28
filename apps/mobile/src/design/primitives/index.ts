@@ -3,7 +3,9 @@
 // primitive accepts and the decisions it refuses to delegate, and since T032 the primitive itself,
 // implemented against those types without widening them. Slot, CategoryTabs, Stats, StarInput,
 // Rating, SignaturePad, Progress, Meter and FilterChips are contracts only until the screens of
-// their phase implement them.
+// their phase implement them. A `Pressable` whose `style` is a function carries `cssInterop={false}`:
+// NativeWind's JSX runtime drops such a style (nativewind/nativewind#1128, T102), and
+// `__tests__/css-interop.spec.ts` refuses one without it.
 export type * from './types';
 export type * from './Text';
 export type * from './Icon';

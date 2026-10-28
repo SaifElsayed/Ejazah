@@ -90,7 +90,7 @@ export function createAdminClient(options: AdminClientOptions): AdminClient {
     untyped,
     async signOut() {
       try {
-        await untyped.mutation('auth.signOut');
+        await untyped.mutation('auth.signOut', {});
       } catch {
         // The tab forgets the session whatever the server answered: the token dies with the tab,
         // and the server's own expiry ends it.

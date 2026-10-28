@@ -11,6 +11,7 @@
 // kind's, audited like any call: the sign-out under `admin.sign_out`, `me` as a read (`auth.read`)
 // naming the reader, which no audit list shows (owner's decision 2026-10-21).
 import {
+  adminEmptyInput,
   adminMeOutput,
   adminMfaRecoverInput,
   adminMfaRecoverOutput,
@@ -98,11 +99,13 @@ export const authRouter = createAdminRouter({
     await ctx.services.auth.setPassword(input.inviteToken, input.password);
   }),
 
-  signOut: adminProcedure({ input: z.void(), output: z.void() }).mutation(async ({ ctx }) => {
-    const { adminId, sessionId } = ctx.administrator;
-    await ctx.services.sessions.signOut(sessionId, ctx.tx);
-    ctx.audit.record({ action: 'admin.sign_out', targetType: 'admin', targetId: adminId });
-  }),
+  signOut: adminProcedure({ input: adminEmptyInput, output: z.void() }).mutation(
+    async ({ ctx }) => {
+      const { adminId, sessionId } = ctx.administrator;
+      await ctx.services.sessions.signOut(sessionId, ctx.tx);
+      ctx.audit.record({ action: 'admin.sign_out', targetType: 'admin', targetId: adminId });
+    },
+  ),
 
   me: adminProcedure({ input: z.void(), output: adminMeOutput }).query(({ ctx }) => {
     const { adminId } = ctx.administrator;

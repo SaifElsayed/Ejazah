@@ -99,6 +99,7 @@ export function Button({
       accessibilityState={{ disabled, busy: loading }}
       disabled={inactive}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: 'row',
@@ -164,6 +165,7 @@ export function PressableIcon({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           width: size.touch,
@@ -225,6 +227,7 @@ export function TextLink({
       accessibilityRole="link"
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: 'row',

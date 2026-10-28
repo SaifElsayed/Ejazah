@@ -61,9 +61,11 @@ pnpm --filter @ijazah/mobile exec expo run:ios --device       # iOS: on macOS wi
 pnpm --filter @ijazah/mobile dev                              # later, when only JavaScript changed: Metro alone
 ```
 
-`app.json` names no `android.package` or `ios.bundleIdentifier` yet (the
-owner's decision, note under T006): the first build asks for one; keep it out
-of commits.
+`app.json` names the Android package and the iOS bundle identifier
+(`com.ijazah.app`) and the EAS project (B18, T090). Without a cable or Android
+Studio, EAS Build's free plan makes the same development build from `eas.json`'s
+`development` profile, an internal APK with the development client:
+`npx eas-cli build -p android --profile development`.
 
 **The fake provider.** One switch on each side. The API's
 `SIGN_IN_PROVIDER=fake` (the `.env.example` value) selects the stand-in that

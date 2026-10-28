@@ -38,6 +38,7 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@trpc/client": "11.19.0",
     "tsc-watch": "7.2.1"
   }
 }

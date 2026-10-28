@@ -6,6 +6,7 @@
 // the reader, which no audit list shows (owner's decision 2026-10-21). Mounted under `admins` by
 // `admin.router.ts`.
 import {
+  adminEmptyInput,
   adminRecoveryCodesOutput,
   adminRegenerateRecoveryCodesInput,
   adminsAddInput,
@@ -67,10 +68,12 @@ export const adminsRouter = createAdminRouter({
    * Deprecated by T096: new codes ask a current code of one's second factor, which this procedure's
    * input has no room for, and its contract stays as published (R-API-9: additive only). It refuses
    * every call, as a wrong code is refused, and writes nothing; `recoveryCodes.regenerate` replaces
-   * it. Removed once no client can call it (the panel never shipped a caller).
+   * it. Removed once no client can call it (the panel never shipped a caller). Its void input became
+   * the empty object in T099, by the owner's one-time exception, since a mutation sent without a
+   * body never reached it over HTTP.
    */
   regenerateRecoveryCodes: adminProcedure({
-    input: z.void(),
+    input: adminEmptyInput,
     output: adminRecoveryCodesOutput,
   }).mutation((): never => {
     throw new DomainError('CODE_INVALID');

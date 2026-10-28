@@ -145,6 +145,7 @@ export function Segmented({
             accessibilityLabel={option.label}
             accessibilityState={{ checked: selected }}
             onPress={() => onChange(option.value)}
+            cssInterop={false}
             style={({ pressed: down }) => [
               {
                 flex: inline ? 0 : 1,
@@ -195,6 +196,7 @@ export function Chip({
         : { accessibilityLabel: accessibilityLabel ?? label })}
       accessibilityState={{ selected }}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: 'row',
@@ -233,6 +235,7 @@ export function CheckRow({ label, checked, onChange, top = false }: CheckRowProp
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       onPress={() => onChange(!checked)}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: 'row',
@@ -282,6 +285,7 @@ function ChoiceRow({
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: 'row',
@@ -389,6 +393,7 @@ export function Select({
       accessibilityLabel={accessibilityLabel ?? label}
       {...(value === undefined ? {} : { accessibilityValue: { text: value } })}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: 'row',

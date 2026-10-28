@@ -192,6 +192,7 @@ export function Card({ variant = 'default', onPress, children }: CardProps) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [style, down ? pressed : null]}
     >
       {children}
@@ -329,6 +330,7 @@ export function ListRow({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [style, down ? { backgroundColor: color.hover } : null]}
     >
       {content}

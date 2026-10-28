@@ -69,7 +69,7 @@ export function useApplicationActions() {
 
       /** The once-only approved screen was shown (FR-152). */
       async markApprovedShown(): Promise<void> {
-        await client.api.teacher.application.markApprovedShown.mutate();
+        await client.api.teacher.application.markApprovedShown.mutate({});
         await refreshed();
       },
     };

@@ -40,7 +40,7 @@ function calls(caller: ReturnType<typeof surface.anonymous>) {
     'teacher.application.submit': () => caller.teacher.application.submit(submit),
     'teacher.application.resubmit': () => caller.teacher.application.resubmit(resubmit),
     'teacher.application.reapply': () => caller.teacher.application.reapply(application),
-    'teacher.application.markApprovedShown': () => caller.teacher.application.markApprovedShown(),
+    'teacher.application.markApprovedShown': () => caller.teacher.application.markApprovedShown({}),
   };
 }
 

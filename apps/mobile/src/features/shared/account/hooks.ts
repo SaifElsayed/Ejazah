@@ -30,7 +30,7 @@ export function useAccountActions() {
       },
 
       async signOut(): Promise<void> {
-        await client.api.auth.signOut.mutate().catch(() => undefined);
+        await client.api.auth.signOut.mutate({}).catch(() => undefined);
         await sessions.clear();
         setSession({ kind: 'signed-out' });
       },

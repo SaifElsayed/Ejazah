@@ -3,7 +3,7 @@
 // publishes) and the call retried; a refused refresh signs the person out. The decision is made on
 // the error's `code`, never on the status: SIGN_IN_FAILED and ONBOARDING_TOKEN_INVALID are 401 too
 // (note under T018). `platform.publicConfig` is read once and cached.
-import { describe, expect, it, jest } from '@jest/globals';
+import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
 
 import {
   createApiClient,
@@ -12,9 +12,24 @@ import {
   filePart,
   photoPart,
   UPLOAD_FILE_NAME,
-  UPLOAD_PHOTO_NAME,
+  UPLOAD_PHOTO_NAMES,
 } from './client';
 import type { SessionStore, SessionTokens } from './storage';
+
+// expo-file-system's `File` is a native module; here it reads the same known bytes for any path.
+const mockFileBytes = '%PDF-1.7 the picked file';
+const mockOpened: string[] = [];
+jest.mock('expo-file-system', () => ({
+  File: class {
+    constructor(uri: string) {
+      mockOpened.push(uri);
+    }
+
+    bytes(): Promise<Uint8Array> {
+      return Promise.resolve(new TextEncoder().encode(mockFileBytes));
+    }
+  },
+}));
 
 const url = 'https://api.test/trpc';
 
@@ -419,9 +434,9 @@ describe('the documents upload', () => {
   it('names every file document.pdf, never the person’s file name', () => {
     expect(UPLOAD_FILE_NAME).toBe('document.pdf');
     expect(filePart({ uri: 'file:///cache/sara-adel-id.pdf', name: 'sara-adel-id.pdf' })).toEqual({
-      uri: 'file:///cache/sara-adel-id.pdf',
       name: 'document.pdf',
       type: 'application/pdf',
+      bytes: expect.any(Function),
     });
   });
 
@@ -486,11 +501,16 @@ describe('the photo upload (T084)', () => {
 
   it('sends the image under a fixed name with the type the picker reported', () => {
     expect(photoPart(photo)).toEqual({
-      uri: 'file:///cache/IMG_0001.png',
-      name: UPLOAD_PHOTO_NAME,
+      name: UPLOAD_PHOTO_NAMES.png,
       type: 'image/png',
+      bytes: expect.any(Function),
     });
-    expect(UPLOAD_PHOTO_NAME).toBe('photo');
+    expect(photoPart({ ...photo, mimeType: 'image/jpeg' })).toEqual({
+      name: UPLOAD_PHOTO_NAMES.jpeg,
+      type: 'image/jpeg',
+      bytes: expect.any(Function),
+    });
+    expect(UPLOAD_PHOTO_NAMES).toEqual({ jpeg: 'photo.jpg', png: 'photo.png' });
   });
 
   it('raises a refusal whose code is read as a call’s is', async () => {
@@ -510,5 +530,87 @@ describe('the photo upload (T084)', () => {
       'no photos upload URL',
     );
     expect(fake.uploads).toEqual([]);
+  });
+});
+
+// T100: on the phone the global `fetch` is `expo/fetch`, whose multipart encoder takes a part that
+// is a string, a Blob or an object with `bytes()`, and throws on React Native's `{ uri, name, type }`
+// (`Unsupported FormDataPart implementation`). The body the client builds is run through Expo's own
+// encoder over React Native's FormData with Expo's patch, as on the device.
+describe('the multipart body expo/fetch sends (T100)', () => {
+  const documentsUrl = 'https://api.test/uploads/documents';
+  const photosUrl = 'https://api.test/uploads/photos';
+  const boundary = 'ExpoBoundaryT100';
+
+  type Encoder = (form: FormData, boundary?: string) => Promise<{ body: Uint8Array }>;
+  const { convertFormDataAsync } = jest.requireActual<{ convertFormDataAsync: Encoder }>(
+    'expo/src/winter/fetch/convertFormData',
+  );
+  const { installFormDataPatch } = jest.requireActual<{
+    installFormDataPatch: (formData: typeof FormData) => unknown;
+  }>('expo/src/winter/FormData');
+  const ReactNativeFormData = jest.requireActual<{ default: typeof FormData }>(
+    'react-native/Libraries/Network/FormData',
+  ).default;
+  installFormDataPatch(ReactNativeFormData);
+
+  const jestFormData = globalThis.FormData;
+  beforeAll(() => {
+    globalThis.FormData = ReactNativeFormData;
+  });
+  afterAll(() => {
+    globalThis.FormData = jestFormData;
+  });
+
+  /** The multipart body the upload would carry, as text, encoded by expo/fetch's encoder. */
+  async function encodedUpload(send: (client: ReturnType<typeof createApiClient>) => unknown) {
+    let form: FormData | undefined;
+    const fetchImpl = jest.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      form = init?.body as FormData;
+      return new Response(JSON.stringify({ documentId: 'd-1', photoUrl: 'https://files.test/p' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    const client = createApiClient({
+      url,
+      sessions: memorySessions({ accessToken: 'a1', refreshToken: 'r1' }).store,
+      documentsUploadUrl: documentsUrl,
+      photosUploadUrl: photosUrl,
+      onSignedOut: jest.fn(),
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    await send(client);
+    if (form === undefined) throw new Error('the upload was not sent');
+    const { body } = await convertFormDataAsync(form, boundary);
+    return new TextDecoder().decode(body);
+  }
+
+  it('encodes the document as document.pdf with its bytes, never the picked name', async () => {
+    const picked = { uri: 'file:///cache/sara-adel-id.pdf', name: 'sara-adel-id.pdf' };
+    const body = await encodedUpload((client) => client.uploadDocument('identity', picked));
+    expect(body).toContain('content-disposition: form-data; name="kind"\r\n\r\nidentity\r\n');
+    expect(body).toContain(
+      'content-disposition: form-data; name="file"; filename="document.pdf"\r\n' +
+        'content-type: application/pdf\r\n\r\n' +
+        `${mockFileBytes}\r\n`,
+    );
+    expect(mockOpened).toContain(picked.uri);
+    expect(body).not.toContain('sara-adel-id');
+  });
+
+  it.each([
+    ['image/jpeg', 'photo.jpg', 'IMG_0007.jpg'],
+    ['image/png', 'photo.png', 'IMG_0008.png'],
+  ])('encodes a %s photo as %s with its bytes, never the picked name', async (type, name, own) => {
+    const picked = { uri: `file:///cache/${own}`, name: own, mimeType: type };
+    const body = await encodedUpload((client) => client.uploadPhoto(picked));
+    expect(body).toContain(
+      `content-disposition: form-data; name="file"; filename="${name}"\r\n` +
+        `content-type: ${type}\r\n\r\n` +
+        `${mockFileBytes}\r\n`,
+    );
+    expect(mockOpened).toContain(picked.uri);
+    expect(body).not.toContain(own);
   });
 });

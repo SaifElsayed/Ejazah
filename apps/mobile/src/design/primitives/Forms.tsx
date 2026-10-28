@@ -361,6 +361,7 @@ export function Upload({
       accessibilityLabel={accessibilityLabel ?? label}
       {...(hint === undefined ? {} : { accessibilityHint: hint })}
       onPress={onPress}
+      cssInterop={false}
       style={({ pressed: down }) => [
         {
           flexDirection: tile ? 'column' : 'row',

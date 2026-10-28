@@ -410,7 +410,7 @@ describe('ApplicationStatus (FR-152)', () => {
       await screen.findByRole('button', { name: ar('teacher.application.approved.setupPayout') }),
     );
     await waitFor(() =>
-      expect(mockApi.api.teacher.application.markApprovedShown.mutate).toHaveBeenCalled(),
+      expect(mockApi.api.teacher.application.markApprovedShown.mutate).toHaveBeenCalledWith({}),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/payout'));
 

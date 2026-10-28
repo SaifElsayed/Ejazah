@@ -103,6 +103,8 @@ describe('Welcome', () => {
     await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
     await waitFor(() => expect(getSession()).toEqual({ kind: 'restoring' }));
     expect(mockIdentity).toHaveBeenCalledWith('google', 'nonce-1');
+    // With a body: tRPC 11.19's server cannot read a mutation sent without one (T099).
+    expect(mockApi.api.auth.providerNonce.mutate).toHaveBeenCalledWith({});
     expect(mockApi.api.auth.signInWithProvider.mutate).toHaveBeenCalledWith({
       provider: 'google',
       identityToken: 'google-token',
