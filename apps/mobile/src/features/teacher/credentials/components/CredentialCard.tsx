@@ -4,6 +4,7 @@
 // after its subject (the file's own name is not stored, owner's decision 2026-10-21) with its size
 // when the upload recorded one; an approved credential's PDF opens through a signed link. A
 // credential waiting on a document opens its request.
+// T110: a rejected credential says the reviewer's reason under its subject (spec.md, Edge cases).
 import type { CredentialSummary } from '@ijazah/contracts';
 import { View } from 'react-native';
 
@@ -53,6 +54,9 @@ export function CredentialCard({
         </View>
         <Badge label={t(status.label)} tone={status.tone} />
       </View>
+      {credential.status === 'rejected' && credential.note !== undefined ? (
+        <Text>{credential.note}</Text>
+      ) : null}
       {approved && credential.riwaya !== undefined ? (
         <Text variant="callout">
           {credential.tariq === undefined

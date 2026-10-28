@@ -2,10 +2,12 @@
 // subject, each uploaded as it is picked; «إرسال الطلب» waits until every subject has its PDF, then
 // sends the application (the first one keyed, a reapplication not) and opens its status. A refusal
 // keeps the draft and says so in place.
+// T110: each upload sits under its subject's name, as the board draws it, so two files that share
+// a name are still told apart.
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import { ActionBar, Banner, Button, PageIntro } from '../../../../design/primitives';
+import { ActionBar, Banner, Button, PageIntro, Section } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
 import { useSubjectName, useSubjects } from '../../../../lib/subjects';
 import { PdfField } from '../../../shared/documents';
@@ -57,20 +59,21 @@ export function ApplyIjazah() {
         lede={t('teacher.application.ijazahs.lede')}
       />
       {chosen.map((subject) => (
-        <PdfField
-          key={subject.id}
-          kind="credential"
-          file={draft.ijazahs[subject.id]}
-          label={t('teacher.application.ijazahs.upload', { subject: nameOf(subject) })}
-          hint={t('common.file.pdfOnly')}
-          onChange={(file) => {
-            // Read now, not at render: another subject's upload may have landed meanwhile.
-            const { [subject.id]: _replaced, ...others } = getApplication().ijazahs;
-            updateApplication({
-              ijazahs: file === undefined ? others : { ...others, [subject.id]: file },
-            });
-          }}
-        />
+        <Section key={subject.id} title={nameOf(subject)}>
+          <PdfField
+            kind="credential"
+            file={draft.ijazahs[subject.id]}
+            label={t('teacher.application.ijazahs.upload', { subject: nameOf(subject) })}
+            hint={t('common.file.pdfOnly')}
+            onChange={(file) => {
+              // Read now, not at render: another subject's upload may have landed meanwhile.
+              const { [subject.id]: _replaced, ...others } = getApplication().ijazahs;
+              updateApplication({
+                ijazahs: file === undefined ? others : { ...others, [subject.id]: file },
+              });
+            }}
+          />
+        </Section>
       ))}
       {failed ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
