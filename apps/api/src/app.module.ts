@@ -247,26 +247,70 @@ interface Correlated {
   readonly log: Logger;
 }
 
+/** A request a surface refuses before tRPC: the kernel code it answers, and why (T108). */
+interface Refusal {
+  readonly code: 'VALIDATION_FAILED' | 'NOT_FOUND';
+  readonly reason: string;
+}
+
 /**
- * Why tRPC would fail to read `request` before any procedure runs, judged from its method, URL and
- * headers alone, or undefined when it would not (T108). The body is never read here. A request
- * carrying `connectionParams`, which neither surface uses; a path `decodeURIComponent` refuses, as
- * tRPC decodes it; a request other than GET or HEAD whose content type is not JSON, by tRPC's own
- * predicate. A HEAD request is tRPC's 204 whatever it carries; a URL that does not parse is left to
- * tRPC as before.
+ * The methods tRPC serves and can carry: its node adapter builds a fetch `Request`, which refuses
+ * TRACE (T108). A preflight never reaches here: the browser headers (T136) answer OPTIONS.
  */
-function unreadableRequest(request: IncomingMessage): string | undefined {
-  if (request.method === 'HEAD') return undefined;
-  const url = URL.parse(request.url ?? '/', 'http://localhost');
-  if (url === null) return undefined;
-  if (url.searchParams.has('connectionParams')) return 'connection_params';
+const SURFACE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'POST']);
+
+/** One call's procedure path: names of letters, digits and `_`, joined by single dots. */
+const PROCEDURE_PATH = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*$/;
+
+/**
+ * The URL tRPC's node adapter builds for `request` (its `createURL`: the scheme, the `Host` header
+ * or `:authority`, `localhost` when neither), or null where building it throws.
+ */
+function urlAsTrpcBuildsIt(request: IncomingMessage): URL | null {
+  const encrypted = 'encrypted' in request.socket && request.socket.encrypted === true;
+  const protocol = request.headers[':scheme'] === 'https' || encrypted ? 'https:' : 'http:';
+  const host = request.headers.host ?? request.headers[':authority'] ?? 'localhost';
+  return URL.parse(request.url ?? '/', `${protocol}//${String(host)}`);
+}
+
+/**
+ * Whether the path after the surface's mount names procedures as tRPC reads it: decoded, split at
+ * commas for a batch, each call a well-formed name. An unknown well-formed name is tRPC's 404.
+ */
+function pathRefusal(url: URL): string | undefined {
+  let path: string;
   try {
-    decodeURIComponent(url.pathname);
+    path = decodeURIComponent(url.pathname.slice(1));
   } catch {
     return 'path_not_decodable';
   }
+  const calls = url.searchParams.get('batch') === '1' ? path.split(',') : [path];
+  return calls.every((call) => PROCEDURE_PATH.test(call)) ? undefined : 'path_malformed';
+}
+
+/**
+ * Why tRPC would fail on `request` before any procedure runs, judged from its method, URL and
+ * headers alone, or undefined when it would not (T108). The body is never read here. A method
+ * tRPC does not serve answers as tRPC's own unsupported method does, 404; the rest are the client's
+ * input that cannot be read, 400: a URL tRPC cannot build or cannot carry (credentials in it), a
+ * request carrying `connectionParams`, which neither surface uses, a procedure path that does not
+ * decode or is not well formed, and a request other than GET or HEAD whose content type is not
+ * JSON, by tRPC's own predicate. A HEAD request whose URL builds is tRPC's 204 whatever it carries.
+ */
+function refusalOf(request: IncomingMessage): Refusal | undefined {
+  if (!SURFACE_METHODS.has(request.method ?? '')) {
+    return { code: 'NOT_FOUND', reason: 'method_not_supported' };
+  }
+  const invalid = (reason: string): Refusal => ({ code: 'VALIDATION_FAILED', reason });
+  const url = urlAsTrpcBuildsIt(request);
+  if (url === null) return invalid('url_not_parsable');
+  if (url.username !== '' || url.password !== '') return invalid('url_carries_credentials');
+  if (request.method === 'HEAD') return undefined;
+  if (url.searchParams.has('connectionParams')) return invalid('connection_params');
+  const path = pathRefusal(url);
+  if (path !== undefined) return invalid(path);
   const json = request.headers['content-type']?.startsWith('application/json') === true;
-  if (request.method !== 'GET' && !json) return 'content_type_not_json';
+  if (request.method !== 'GET' && !json) return invalid('content_type_not_json');
   return undefined;
 }
 
@@ -303,18 +347,20 @@ function surfaceHandler<TContext extends Correlated>(
     },
   });
   // What tRPC would fail on before any procedure is refused here, before it, with the input
-  // guard's answer and log line (T108): the client's request, never reported.
+  // guard's log line (T108): the client's request, never reported. Some of these, reaching tRPC,
+  // would fail in its node adapter's own exception handler, whose answer our formatter's shape
+  // cannot feed, and the rejection would end the process.
   return (request, response) => {
-    const reason = unreadableRequest(request);
-    if (reason === undefined) {
+    const refusal = refusalOf(request);
+    if (refusal === undefined) {
       handler(request, response);
       return;
     }
     requestLogger(log, randomUUID()).info(
-      { errorCode: 'VALIDATION_FAILED', reason },
-      'A request whose input could not be read was refused',
+      { errorCode: refusal.code, reason: refusal.reason },
+      'A request tRPC could not read was refused',
     );
-    send(response, mapError(new DomainError('VALIDATION_FAILED')));
+    send(response, mapError(new DomainError(refusal.code)));
   };
 }
 

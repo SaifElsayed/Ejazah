@@ -6,6 +6,10 @@
 // immediately before its schema, and answers a failure of that read with `VALIDATION_FAILED`; the
 // surface handler refuses, before tRPC and without reading the body, what tRPC would fail on before
 // any procedure runs: `connectionParams`, a path that does not decode, a non-JSON content type.
+// It also refuses what tRPC's node adapter cannot turn into a fetch `Request` (a URL that does not
+// build, credentials in it, TRACE) and a malformed procedure path: a URL or a method of these
+// reached that adapter's exception handler, which our formatter's shape cannot feed, and the
+// rejection ended the process. Each such case checks that the next call is still answered.
 //
 // The application is built as main.ts builds it, with the real routers of both surfaces, and
 // listened on an ephemeral port; the requests are raw `fetch`es, since the tRPC client cannot send
@@ -16,6 +20,7 @@
 // a schema's transform, stays the internal error, logged and reported; so does a failure of the
 // context factory. The upload routes, the webhook and the public pages are mounted beside the
 // surfaces and are reached as before.
+import { request as httpRequest } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -416,6 +421,133 @@ async function textOf(path: string, init: RequestInit): Promise<{ status: number
   const response = await fetch(`${origin}${path}`, init);
   return { status: response.status, text: await response.text() };
 }
+
+/** How long a raw request waits for an answer: a request that crashed the handler gets none. */
+const ANSWER_WAIT_MS = 2_000;
+
+/**
+ * A request as written, through `node:http`: `fetch` refuses TRACE, rewrites no `Host` and cannot
+ * send what these cases send. It fails when no answer comes.
+ */
+function raw(
+  method: string,
+  path: string,
+  headers: Readonly<Record<string, string>> = {},
+  body?: string,
+): Promise<Answer> {
+  const { hostname, port } = new URL(origin);
+  return new Promise((resolve, reject) => {
+    const outgoing = httpRequest(
+      { host: hostname, port, method, path, headers, timeout: ANSWER_WAIT_MS },
+      (incoming) => {
+        let text = '';
+        incoming.setEncoding('utf8');
+        incoming.on('data', (chunk: string) => (text += chunk));
+        incoming.on('end', () =>
+          resolve({
+            status: incoming.statusCode ?? 0,
+            body: text === '' ? null : (JSON.parse(text) as unknown),
+          }),
+        );
+      },
+    );
+    outgoing.on('timeout', () => outgoing.destroy(new Error(`${method} ${path}: no answer`)));
+    outgoing.on('error', reject);
+    outgoing.end(body);
+  });
+}
+
+const json = { 'content-type': 'application/json' };
+
+describe('a request tRPC cannot turn into its own is refused before it, and the server lives on (T108)', () => {
+  const notFound: Answer = {
+    status: 404,
+    body: { error: { code: 'NOT_FOUND', message: 'Not found.' } },
+  };
+
+  /** The next call on the same server is answered: the handler and the process survived. */
+  async function stillServing(): Promise<void> {
+    expect(await post(`${app}/auth.providerNonce`, '{}')).toEqual({
+      status: 200,
+      body: { result: { data: NONCE } },
+    });
+  }
+
+  it.each([app, admin])('a URL that does not parse, on %s', async (surface) => {
+    expect(await raw('POST', `${surface}//`, json, '{}')).toEqual(unreadable);
+    expect((await raw('HEAD', `${surface}//`)).status).toBe(400);
+    await stillServing();
+  });
+
+  it.each([app, admin])('a host carrying credentials, on %s', async (surface) => {
+    const path = `${surface}/auth.signOut`;
+    expect(await raw('POST', path, { ...json, host: 'user:secret@localhost' }, '{}')).toEqual(
+      unreadable,
+    );
+    // The same credentials in an absolute-form request target, which Node accepts as written.
+    const absolute = `http://user:secret@localhost${path}`;
+    expect(await raw('POST', absolute, json, '{}')).toEqual(unreadable);
+    await stillServing();
+  });
+
+  it.each([app, admin])('a method tRPC cannot carry answers 404, on %s', async (surface) => {
+    const path = `${surface}/auth.signOut`;
+    expect(await raw('TRACE', path, json)).toEqual(notFound);
+    // A method a Request can carry but tRPC does not serve answered 404 already: the same answer.
+    expect(await raw('PUT', path, json, '{}')).toEqual(notFound);
+    expect(await raw('DELETE', path, { 'content-type': 'text/plain' }, 'x')).toEqual(notFound);
+    await stillServing();
+  });
+
+  it.each([
+    ['an empty procedure path', `${app}/`],
+    ['an empty procedure path', `${admin}//x`],
+    ['an empty segment', `${app}/auth..signOut`],
+    ['a slash inside the path', `${admin}/auth.signOut/x`],
+    ['a comma outside a batch', `${app}/auth.providerNonce,auth.providerNonce`],
+    ['an empty call in a batch', `${app}/auth.providerNonce,?batch=1`],
+    ['a character outside the names', `${app}/auth.provider%20Nonce`],
+  ])('a malformed procedure path, %s: %s', async (_case, path) => {
+    expect(await raw('POST', path, json, '{}')).toEqual(unreadable);
+  });
+
+  it.each([`${app}/no.such.procedure`, `${admin}/nothing`])(
+    'a well-formed unknown path is still 404: %s',
+    async (path) => {
+      expect(await raw('POST', path, json, '{}')).toEqual(notFound);
+      expect(records.filter((record) => record['reason'] !== undefined)).toEqual([]);
+    },
+  );
+
+  it('a preflight never reaches the surfaces: the browser headers answer it', async () => {
+    const preflight = await raw('OPTIONS', `${app}/auth.signOut`, {
+      origin: 'https://elsewhere.invalid',
+      'access-control-request-method': 'POST',
+    });
+    expect(preflight.status).toBe(204);
+    expect(records).toEqual([]);
+  });
+
+  it('logs each refusal once at info with a correlation id, and reports none', async () => {
+    await raw('POST', `${app}//`, json, '{}');
+    await raw('TRACE', `${admin}/auth.signOut`, json);
+    expect(records).toEqual([
+      expect.objectContaining({
+        level: 'info',
+        errorCode: 'VALIDATION_FAILED',
+        reason: 'url_not_parsable',
+        correlationId: expect.any(String),
+      }),
+      expect.objectContaining({
+        level: 'info',
+        errorCode: 'NOT_FOUND',
+        reason: 'method_not_supported',
+        correlationId: expect.any(String),
+      }),
+    ]);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+});
 
 describe('nothing of the body reaches the log or the reporter (T108, R-SEC-2)', () => {
   it('holds for every refusal above', async () => {
