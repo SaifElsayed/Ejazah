@@ -6,7 +6,7 @@
 // immediately before its schema, and answers a failure of that read with `VALIDATION_FAILED`; the
 // surface handler refuses, before tRPC and without reading the body, what tRPC would fail on before
 // any procedure runs: `connectionParams`, a path that does not decode, a non-JSON content type.
-// It also refuses what tRPC's node adapter cannot turn into a fetch `Request` (a URL that does not
+// Batching is off, so a batch of either form is refused 400 whole, by tRPC. It also refuses what tRPC's node adapter cannot turn into a fetch `Request` (a URL that does not
 // build, credentials in it, TRACE) and a malformed procedure path: a URL or a method of these
 // reached that adapter's exception handler, which our formatter's shape cannot feed, and the
 // rejection ended the process. Each such case checks that the next call is still answered.
@@ -279,26 +279,33 @@ describe('an unreadable input answers 400 VALIDATION_FAILED on both surfaces (T1
     expect(await send(`${path}?input=%7B`, {}, bearer)).toEqual(unreadable);
   });
 
-  // A batch keeps tRPC's own status (app.module.ts, `responseMeta`), unchanged here: each call's
-  // answer is in the body.
-  const batchRefused = { status: 200, body: [refused, refused] };
+  // Batching is off on both surfaces (app.module.ts, `allowBatching`): neither client sends a
+  // batch, so any batch, well formed or not, is tRPC's own refusal, answered 400 in our shape
+  // before any call's input is read, and the next single call is still answered.
+  async function singleCallAnswered(): Promise<void> {
+    expect(await post(`${app}/auth.providerNonce`, '{}')).toEqual({
+      status: 200,
+      body: { result: { data: NONCE } },
+    });
+  }
 
-  it('a GET batch with a broken input, on either surface: each call refused', async () => {
-    expect(
-      await send(`${app}/catalog.subjects.list,platform.publicConfig?batch=1&input=%7B`),
-    ).toEqual(batchRefused);
-    expect(
-      await send(`${admin}/auth.me,home.summary?batch=1&input=%7B`, {}, 'admin-bearer'),
-    ).toEqual(batchRefused);
+  it.each([
+    ['a GET batch', `${app}/catalog.subjects.list,platform.publicConfig?batch=1`, undefined],
+    ['a GET batch, broken input', `${app}/catalog.subjects.list?batch=1&input=%7B`, undefined],
+    ['a GET batch', `${admin}/auth.me,home.summary?batch=1`, 'admin-bearer'],
+  ] as const)('%s is refused: %s', async (_case, path, bearer) => {
+    expect(await send(path, {}, bearer)).toEqual(unreadable);
+    await singleCallAnswered();
   });
 
-  it('a POST batch with a broken body, on either surface: each call refused', async () => {
-    expect(await post(`${app}/auth.providerNonce,auth.providerNonce?batch=1`, '{"0":')).toEqual(
-      batchRefused,
-    );
-    expect(
-      await post(`${admin}/auth.signOut,auth.signOut?batch=1`, '{"0":', 'admin-bearer'),
-    ).toEqual(batchRefused);
+  it.each([
+    ['a POST batch', `${app}/auth.providerNonce,auth.providerNonce?batch=1`, '{"0":{},"1":{}}'],
+    ['a POST batch, broken body', `${app}/auth.providerNonce?batch=1`, '{"0":'],
+    ['a POST batch', `${admin}/auth.signOut,auth.signOut?batch=1`, '{"0":{},"1":{}}'],
+  ] as const)('%s is refused: %s', async (_case, path, body) => {
+    const bearer = path.startsWith(admin) ? 'admin-bearer' : undefined;
+    expect(await post(path, body, bearer)).toEqual(unreadable);
+    await singleCallAnswered();
   });
 
   it('logs each refusal once at info with its correlation id, and reports none', async () => {

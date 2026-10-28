@@ -326,6 +326,9 @@ function surfaceHandler<TContext extends Correlated>(
     // A body past the limit is refused as it streams in, never read whole (T150, FR-077):
     // tRPC's PAYLOAD_TOO_LARGE, answered 413 in the one shape and not reported as unexpected.
     maxBodySize,
+    // Neither client batches (both use `httpLink`), so a batch is refused whole before any call's
+    // input is read: tRPC's `BAD_REQUEST`, answered 400 `VALIDATION_FAILED` (T108).
+    allowBatching: false,
     createContext: async ({ req }) =>
       (await createContext(req)) as inferRouterContext<SurfaceRouter<TContext>>,
     onError: ({ error, ctx }) => {
@@ -336,13 +339,13 @@ function surfaceHandler<TContext extends Correlated>(
       reportError(cause, context?.correlationId);
     },
     // tRPC answers 500 for every error a procedure throws; the status follows the kernel's mapping
-    // instead. A batch keeps tRPC's own status, since its calls may have failed differently.
+    // instead. With batching off, a response carries at most one error, a refused batch included.
     // tRPC also sets its own `Vary`, replacing the `Vary: Origin` of the CORS middleware (T136), so
     // `Origin` is appended back: a cache must not serve one origin's answer to another.
-    responseMeta: ({ errors, info }) => {
+    responseMeta: ({ errors }) => {
       const headers = { vary: ['Origin'] };
       const [first] = errors;
-      if (first === undefined || info?.isBatchCall === true) return { headers };
+      if (first === undefined) return { headers };
       return { status: toErrorShape(first).status, headers };
     },
   });
