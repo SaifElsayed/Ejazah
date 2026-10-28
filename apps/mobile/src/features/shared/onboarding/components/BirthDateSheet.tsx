@@ -47,6 +47,7 @@ export function BirthDateSheet({
         />
         <Column
           label={t('onboarding.profile.birthMonth')}
+          wide
           options={choices.months.map((month) => ({ value: month, label: format.month(month) }))}
           value={parts.month}
           onChange={(month) => choose({ month })}
@@ -70,11 +71,14 @@ export function BirthDateSheet({
 /** One list, scrolled to its chosen row when it opens. */
 function Column({
   label,
+  wide = false,
   options,
   value,
   onChange,
 }: {
   readonly label: string;
+  /** The month's names need twice a number's room, «September» on one line at a large font. */
+  readonly wide?: boolean;
   readonly options: readonly { readonly value: number; readonly label: string }[];
   readonly value: number;
   readonly onChange: (value: number) => void;
@@ -82,7 +86,7 @@ function Column({
   const scroller = useRef<ScrollViewInstance>(null);
   const placed = useRef(false);
   return (
-    <View style={{ flex: 1, minWidth: 0 }}>
+    <View style={{ flex: wide ? 2 : 1, minWidth: 0 }}>
       <List header={label}>
         <ScrollView ref={scroller} style={{ maxHeight: tokens.size['media-preview'] }}>
           {options.map((option) => (

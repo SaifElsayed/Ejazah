@@ -135,9 +135,10 @@ export function OnboardProfile() {
       : zone === deviceTimeZone()
         ? t('onboarding.profile.timeZoneFromDevice', { city })
         : city;
+  // `translate` isolates the value (T109), so the split takes the isolates with the placeholder.
   const [beforeLink = '', afterLink = ''] = t('onboarding.profile.agreeTerms', {
     terms: LINK,
-  }).split(LINK);
+  }).split(`\u2068${LINK}\u2069`);
 
   return (
     <StackScreen

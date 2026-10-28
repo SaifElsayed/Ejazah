@@ -226,6 +226,14 @@ describe('OnboardProfile', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/terms');
   });
 
+  it("splits the Terms sentence around its link with no stray isolate (T109's device check)", async () => {
+    updateDraft({ role: 'student' });
+    await renderIn('ltr', <OnboardProfile />);
+    // The piece before the link, whole and with no mark; the one after it, empty and not drawn.
+    expect(screen.getByText('I agree to the')).toBeTruthy();
+    expect(screen.queryByText('\u2069')).toBeNull();
+  });
+
   it('confirms the student and creates the account in one call, then lands it', async () => {
     updateDraft({ role: 'student' });
     mockApi.api.onboarding.complete.mutate.mockResolvedValue({
@@ -411,6 +419,28 @@ describe('BirthDateSheet (T109)', () => {
         expect(screen.queryByRole('button', { name: '2027' })).toBeNull();
       },
     );
+  });
+
+  it("gives the month's names twice a number's room (T109's device check: «September» wrapped)", async () => {
+    await renderIn(
+      'ltr',
+      <BirthDateSheet
+        initial="2004-09-12"
+        earliest="1900-01-01"
+        latest="2026-10-28"
+        onDone={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    /** The flex of the column a list header stands in. */
+    const share = (header: string) => {
+      let node = screen.getByText(header).parent;
+      while (node !== null && styleOf(node)['flex'] === undefined) node = node.parent;
+      return node === null ? undefined : styleOf(node)['flex'];
+    };
+    expect(share('Day')).toBe(1);
+    expect(share('Month')).toBe(2);
+    expect(share('Year')).toBe(1);
   });
 });
 
