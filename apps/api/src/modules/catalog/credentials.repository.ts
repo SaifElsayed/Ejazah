@@ -136,10 +136,12 @@ export async function readCredentialQueue(tx: Pick<Transaction, 'teacherCredenti
   readonly addedSubjects: number;
   readonly oldestSubmittedAt: Date | null;
 }> {
+  // A deleted account's credential is not in the review list, so the card does not count it (T121).
+  const pending = { status: 'pending', teacher: { deletedAt: null } } as const;
   const [open, addedSubjects, oldest] = await Promise.all([
-    tx.teacherCredential.count({ where: { status: 'pending' } }),
-    tx.teacherCredential.count({ where: { status: 'pending', submittedWithApplication: false } }),
-    tx.teacherCredential.aggregate({ where: { status: 'pending' }, _min: { createdAt: true } }),
+    tx.teacherCredential.count({ where: pending }),
+    tx.teacherCredential.count({ where: { ...pending, submittedWithApplication: false } }),
+    tx.teacherCredential.aggregate({ where: pending, _min: { createdAt: true } }),
   ]);
   return { open, addedSubjects, oldestSubmittedAt: oldest._min.createdAt };
 }
