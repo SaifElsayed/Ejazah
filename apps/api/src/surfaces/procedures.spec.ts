@@ -19,7 +19,7 @@
 // factor is unverified with `MFA_REQUIRED` (FR-170); `adminPublicProcedure` is anonymous, exists on
 // the administrator instance only and names its rate limit, applied from the limiter the
 // administrator context carries.
-import { type AnyProcedure, TRPCError } from '@trpc/server';
+import { type AnyProcedure, initTRPC, TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import { z, ZodError } from 'zod';
 import { DomainError } from '../platform/errors/domain-error.js';
@@ -30,6 +30,8 @@ import {
 } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../platform/settings/settings-reader.js';
+import { adminRouter } from './admin.router.js';
+import { appRouter } from './app.router.js';
 import {
   type AdminSession,
   createAdminContext,
@@ -43,6 +45,7 @@ import {
   createAdminRouter,
   createAppCallerFactory,
   createAppRouter,
+  inputsReadUnguarded,
   publicProcedure,
   studentProcedure,
   teacherProcedure,
@@ -618,5 +621,46 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
       'student',
       'teacher',
     ]);
+  });
+});
+
+describe('every kind reads its input through the guard, immediately before the schema (T108)', () => {
+  const anyone = { key: defaultRateLimits.search, subjectOf: () => 'anyone' } as const;
+  const takes = { input: z.object({}), output: z.string() };
+
+  it('passes a procedure of each of the six kinds', () => {
+    const user = createAppRouter({
+      open: publicProcedure({ ...takes, rateLimit: anyone }).mutation(() => 'open'),
+      student: studentProcedure(takes).mutation(() => 'student'),
+      user: userProcedure(takes).mutation(() => 'user'),
+      teacher: teacherProcedure({ ...takes, admits: 'applicant' }).mutation(() => 'teacher'),
+      limited: userProcedure({ ...takes, rateLimit: anyone }).query(() => 'limited'),
+    });
+    const administrator = createAdminRouter({
+      act: adminProcedure(takes).mutation(() => 'act'),
+      signIn: adminPublicProcedure({ ...takes, rateLimit: anyone }).mutation(() => 'in'),
+    });
+    expect(inputsReadUnguarded(user)).toEqual([]);
+    expect(inputsReadUnguarded(administrator)).toEqual([]);
+  });
+
+  it('names a kind built without the guard, and a procedure with no input at all', () => {
+    // A kind of this spec's own, on a tRPC instance the surfaces never mount: what a new kind that
+    // forgot the guard would build.
+    const stray = initTRPC.create();
+    const unguarded = stray.router({
+      bare: stray.procedure.input(z.object({})).mutation(() => 'bare'),
+      authFirst: stray.procedure
+        .use(({ next }) => next())
+        .input(z.object({}))
+        .mutation(() => 'auth'),
+      none: stray.procedure.query(() => 'none'),
+    });
+    expect(inputsReadUnguarded(unguarded)).toEqual(['authFirst', 'bare', 'none']);
+  });
+
+  it('holds on the two real surfaces', () => {
+    expect(inputsReadUnguarded(appRouter)).toEqual([]);
+    expect(inputsReadUnguarded(adminRouter)).toEqual([]);
   });
 });

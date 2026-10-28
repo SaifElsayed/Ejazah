@@ -1,5 +1,5 @@
 // T019 — every interpolation is escaped; only `raw()` inserts markup (FR-144, ADR 0021 D5,
-// research R-111).
+// research R-111). T105: a page given a scheme names it on `<html>`; one given none is unchanged.
 import { describe, expect, it } from 'vitest';
 import { escapeHtml, html, raw, SafeHtml } from './html.js';
 import { directionOf, renderPage } from './page.js';
@@ -74,5 +74,19 @@ describe('the page layout (T019)', () => {
     const page = renderPage({ lang: 'en', title: hostile, body: html`` }).toString();
     expect(page).not.toContain('<script');
     expect(page).toContain('<title>&lt;script&gt;');
+  });
+
+  it('names the scheme it is given on <html>, and only adds that attribute (T105)', () => {
+    const page = { lang: 'ar', title: 'الشروط', body: html`<p>نص</p>` } as const;
+    const plain = renderPage(page).toString();
+    const dark = renderPage({ ...page, theme: 'dark' }).toString();
+    const light = renderPage({ ...page, theme: 'light' }).toString();
+    expect(dark).toContain('<html lang="ar" dir="rtl" data-theme="dark">');
+    expect(light).toContain('<html lang="ar" dir="rtl" data-theme="light">');
+    // No scheme, no attribute: the deletion pages and the error page are byte for byte as before.
+    expect(plain).toContain('<html lang="ar" dir="rtl">');
+    expect(plain).not.toContain('data-theme');
+    expect(dark.replace(' data-theme="dark"', '')).toBe(plain);
+    expect(light.replace(' data-theme="light"', '')).toBe(plain);
   });
 });

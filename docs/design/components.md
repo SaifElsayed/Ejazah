@@ -121,6 +121,14 @@ pieces only a desktop needs:
 Dialogs that need a reason (decision, suspend, revoke, require ID, confirm a binding action) are
 the Dialog primitive with a Field, Choices and the actions at the end.
 
+## The public web pages — `apps/api/src/platform/web/`
+
+The pages the API serves to a browser or a WebView (ADR 0021 D5) load the same two stylesheets.
+
+| Component      | Props                                                                                                                                                             | Design         |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **WebSurface** | the page's root: its scheme's background and text over the full viewport height, nothing else; the spacing is `.gutter`'s; the scheme is `data-theme` on `<html>` | `.web-surface` |
+
 ## Checklist before a component ships
 
 - Reads correctly in RTL and LTR.

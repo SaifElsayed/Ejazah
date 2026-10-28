@@ -564,10 +564,10 @@ describe('the comparison reads the base’s committed snapshot through git (owne
     );
   });
 
-  // T099: the owner's one-time exception of 2026-10-27. Five mutations published with a void input
-  // take an empty object instead, because tRPC 11.19's client sends a void mutation with no body
-  // and the server cannot read it; that one change on those five passes, and nothing else does.
-  describe('the one-time exception for the five void mutations (T099, owner’s decision 2026-10-27)', () => {
+  // T107: T099's one-time exception (the owner's decision of 2026-10-27) is gone, since the base
+  // now records the five void mutations' input as an object: a field's type change is refused
+  // again whatever the procedure, these five included.
+  describe('no exception for a field type change (T107, T099’s exception removed)', () => {
     const FIVE = [
       ['admin', 'admins.regenerateRecoveryCodes'],
       ['admin', 'auth.signOut'],
@@ -575,74 +575,31 @@ describe('the comparison reads the base’s committed snapshot through git (owne
       ['app', 'auth.signOut'],
       ['app', 'teacher.application.markApprovedShown'],
     ] as const;
-    const SIXTH = ['app', 'account.signOutEverywhere'] as const;
 
-    /** `paths`, each a mutation whose whole input is of `inputType`, with a whole output of `outputType`. */
+    /** `paths`, each a mutation whose whole input is of `inputType`, with a whole output of `unknown`. */
     function holding(
       paths: readonly (readonly [Surface, string])[],
       inputType: string,
-      outputType = 'unknown',
     ): ContractSnapshot {
       const procedures: Record<Surface, Record<string, ProcedureEntry>> = { admin: {}, app: {} };
       for (const [surface, path] of paths) {
         procedures[surface][path] = {
           kind: 'mutation',
           input: { $: { type: inputType } },
-          output: { $: { type: outputType } },
+          output: { $: { type: 'unknown' } },
         };
       }
       return { enums: { contracts: {}, prisma: {} }, procedures };
     }
 
-    it('passes the five, each input changed from unknown to object', async () => {
+    it('refuses the five void mutations’ input changed from unknown to object, naming R-API-9', async () => {
       const { cwd, ref } = await baseHolding(holding(FIVE, 'unknown'));
-      const head = holding(FIVE, 'object');
-      expect(compareWithBase({ head, ref, cwd })).toEqual({ ok: true, message: '' });
-    });
-
-    it('refuses the same change on a sixth procedure, naming R-API-9', async () => {
-      const { cwd, ref } = await baseHolding(holding([...FIVE, SIXTH], 'unknown'));
-      const head = holding([...FIVE, SIXTH], 'object');
-      const result = compareWithBase({ head, ref, cwd });
-      expect(result.ok).toBe(false);
-      expect(result.message).toContain('R-API-9');
-      expect(result.message).toContain(
-        'input  app  account.signOutEverywhere  $  type unknown → object',
-      );
-      expect(result.message).not.toContain('auth.providerNonce');
-    });
-
-    it('refuses a different input change on the five, naming R-API-9', async () => {
-      const { cwd, ref } = await baseHolding(holding(FIVE, 'unknown'));
-      const head = holding(FIVE, 'string');
-      const result = compareWithBase({ head, ref, cwd });
+      const result = compareWithBase({ head: holding(FIVE, 'object'), ref, cwd });
       expect(result.ok).toBe(false);
       expect(result.message).toContain('R-API-9');
       for (const [surface, path] of FIVE) {
-        expect(result.message).toContain(`input  ${surface}  ${path}  $  type unknown → string`);
+        expect(result.message).toContain(`input  ${surface}  ${path}  $  type unknown → object`);
       }
-    });
-
-    it('refuses an output change on the five, naming R-API-9', async () => {
-      const { cwd, ref } = await baseHolding(holding(FIVE, 'unknown'));
-      const head = holding(FIVE, 'object', 'object');
-      const result = compareWithBase({ head, ref, cwd });
-      expect(result.ok).toBe(false);
-      expect(result.message).toContain('R-API-9');
-      expect(result.message).toContain('output  app  auth.providerNonce  $  type unknown → object');
-      expect(result.message).not.toMatch(/^ {2}input /m);
-    });
-
-    it('refuses the removal of one of the five, naming R-API-9', async () => {
-      const { cwd, ref } = await baseHolding(holding(FIVE, 'unknown'));
-      const head = holding(
-        FIVE.filter(([, path]) => path !== 'auth.providerNonce'),
-        'object',
-      );
-      const result = compareWithBase({ head, ref, cwd });
-      expect(result.ok).toBe(false);
-      expect(result.message).toContain('R-API-9');
-      expect(result.message).toContain('procedure  app  auth.providerNonce (mutation)');
     });
   });
 });

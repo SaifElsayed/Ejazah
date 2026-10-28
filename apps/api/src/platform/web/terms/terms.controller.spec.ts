@@ -3,12 +3,17 @@
 // inserted with `raw()`, shown with the `terms_version` setting read on every request; the app's
 // Terms modal is a WebView of this route. The helper's guarantees (the strict policy, no cookie,
 // the anonymous limit, `?lang=en`) are T019's and are asserted here only as this page carries them.
+//
+// T105: `?theme=dark|light` names the app's scheme on `<html>`, any other value is left out of the
+// page, and the page paints its own background (`.web-surface`) with classes the served
+// `components.css` defines.
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApplication } from '../../../app.module.js';
 import { RateLimiter } from '../../guards/rate-limit.guard.js';
 import { createLogger } from '../../logging/logger.js';
 import { SettingError, type SettingsReader } from '../../settings/settings-reader.js';
+import { designAssets } from '../assets.js';
 import { PUBLIC_PAGE_CSP } from '../route.js';
 import { TERMS_PATH, termsRoute } from './terms.controller.js';
 import {
@@ -121,6 +126,56 @@ describe('GET /terms (T039, FR-127)', () => {
     const page = await (await fetch(`${origin}/terms`)).text();
     expect(page).toContain('2026-10&lt;b&gt;x&lt;/b&gt;');
     expect(page).not.toContain('<b>x</b>');
+  });
+
+  it('names the scheme ?theme= asks for, dark or light, on <html> (T105)', async () => {
+    version = '2026-10';
+    const dark = await (await fetch(`${origin}/terms?theme=dark`)).text();
+    expect(dark).toContain('<html lang="ar" dir="rtl" data-theme="dark">');
+    const light = await (await fetch(`${origin}/terms?lang=en&theme=light`)).text();
+    expect(light).toContain('<html lang="en" dir="ltr" data-theme="light">');
+  });
+
+  it('leaves any other ?theme= out of the page, never written (T105)', async () => {
+    version = '2026-10';
+    const odd = ['"><script>alert(1)</script>', 'blue', 'system', 'DARK', ''];
+    for (const theme of odd) {
+      const response = await fetch(`${origin}/terms?theme=${encodeURIComponent(theme)}`);
+      expect(response.status).toBe(200);
+      const page = await response.text();
+      expect(page).toContain('<html lang="ar" dir="rtl">');
+      expect(page).not.toContain('data-theme');
+      expect(page).not.toContain('<script');
+      expect(page).not.toContain('blue');
+    }
+    const none = await (await fetch(`${origin}/terms`)).text();
+    expect(none).not.toContain('data-theme');
+  });
+
+  it('draws the body on its own surface with the gutter, the muted lines in tone-muted (T105)', async () => {
+    version = '2026-10';
+    for (const query of ['', '?lang=en']) {
+      const page = await (await fetch(`${origin}/terms${query}`)).text();
+      expect(page).toContain('<main class="web-surface gutter">');
+      expect(page).not.toContain('class="page"');
+      expect(page).not.toContain('class="muted"');
+      expect(page.match(/class="tone-muted"/g)?.length).toBe(2);
+    }
+  });
+
+  it('uses only classes the served components.css defines, in both languages (T105)', async () => {
+    version = '2026-10';
+    const components = designAssets().find((asset) => asset.name === 'components.css');
+    const rules = (components?.body ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const defined = new Set([...rules.matchAll(/\.([a-z][a-z0-9_-]*)/g)].map((match) => match[1]));
+    for (const query of ['?theme=dark', '?lang=en&theme=light']) {
+      const page = await (await fetch(`${origin}/terms${query}`)).text();
+      const used = [...page.matchAll(/class="([^"]*)"/g)].flatMap((match) =>
+        (match[1] ?? '').split(/\s+/).filter(Boolean),
+      );
+      expect(used.length).toBeGreaterThan(0);
+      expect(used.filter((name) => !defined.has(name))).toEqual([]);
+    }
   });
 
   it('answers the error page, not the page, when the version is not stored (FR-034)', async () => {

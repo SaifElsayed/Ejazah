@@ -24,6 +24,7 @@ import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { ME_QUERY_KEY } from '../../../../lib/account';
 import { useApi } from '../../../../lib/api';
+import { nameOrder } from '../../../../lib/formatters';
 import { useSession } from '../../../../lib/session';
 import { deviceTimeZone } from '../../../../lib/time-zone';
 import { updateDraft, useDraft } from '../draft';
@@ -45,13 +46,18 @@ export function TimeZonePicker() {
   const device = deviceTimeZone();
   const deviceCity = device === null ? null : cityOf(device, locale);
 
-  const cities = useMemo(() => {
-    const wanted = query.trim().toLocaleLowerCase();
+  // T104: sorted once per language with one collator. `localeCompare` builds a collator on every
+  // call, and Hermes took 5.4 s on the phone for the list, so the picker drew seconds late.
+  const sorted = useMemo(() => {
+    const order = nameOrder(locale);
     return timeZoneCities
       .map((city) => ({ zone: city.zone, name: city[locale] }))
-      .filter(({ name }) => wanted === '' || name.toLocaleLowerCase().includes(wanted))
-      .sort((a, b) => a.name.localeCompare(b.name, locale));
-  }, [locale, query]);
+      .sort((a, b) => order(a.name, b.name));
+  }, [locale]);
+  const cities = useMemo(() => {
+    const wanted = query.trim().toLocaleLowerCase();
+    return sorted.filter(({ name }) => wanted === '' || name.toLocaleLowerCase().includes(wanted));
+  }, [sorted, query]);
 
   const choose = async (zone: string) => {
     setFailed(false);

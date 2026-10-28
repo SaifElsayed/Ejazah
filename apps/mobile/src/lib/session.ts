@@ -36,6 +36,7 @@ export type SessionState =
       readonly applicationStatus: TeacherApplicationStatus;
     };
 
+// The anchor of app/(auth)/_layout.tsx (T103); the two must name the same route.
 const WELCOME = '/(auth)/welcome';
 const RESTRICTED = '/restricted';
 

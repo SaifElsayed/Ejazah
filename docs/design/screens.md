@@ -30,10 +30,12 @@ The product decisions the inventory left open were taken on the owner's instruct
 - **Routing.** `(student)/checkout/processing` is a route presented as a transparent modal; `time-zone`
   and `terms` are modal routes whose back arrow dismisses. After a sign-in the router lands: no
   account → Role; student → Main; teacher with an open application → ApplicationStatus; approved
-  teacher → TeacherHome; restricted account → AccountRestricted / TeacherRestricted. ApplicationMoreInfo
-  is the pushed route `(teacher)/application/more-info`; ApplicationApproved shows once on the first
-  launch after approval, then the tabs; a notification tap lands on TeacherHome. CertificateNameSheet
-  belongs to `student/credentials`. The cancel and make-up sheets stay under `teacher/sessions`.
+  teacher → TeacherHome; restricted account → AccountRestricted / TeacherRestricted. Signing out or
+  deleting the account lands on Welcome, the first screen of the sign-in group, with nothing behind it.
+  ApplicationMoreInfo is the pushed route `(teacher)/application/more-info`; ApplicationApproved shows
+  once on the first launch after approval, then the tabs; a notification tap lands on TeacherHome.
+  CertificateNameSheet belongs to `student/credentials`. The cancel and make-up sheets stay under
+  `teacher/sessions`.
 - **Transitions.** CheckoutPrevious with a processing previous order goes to Processing; PaymentFailed at
   zero goes to CheckoutExpired. The home's current-enrollment card opens EnrollmentDetail. WriteReview
   closes by going back; after sending, the toast `common.toast.reviewSent` and back. A refund choice on

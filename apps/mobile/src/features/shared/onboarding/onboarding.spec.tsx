@@ -7,12 +7,14 @@
 // T097 (FR-155): `complete` refused with `ACCOUNT_RESTRICTED` (the identifiers of a banned person's
 // deleted account) lands on the signed-out banned state and forgets the draft, storing no session.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { timeZoneCities } from '@ijazah/time/cities';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, setLocale, translate } from '../../../i18n';
+import { nameOrder } from '../../../lib/formatters';
 import { getSession, setSession } from '../../../lib/session';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
 import { clearDraft, getDraft, startOnboarding, updateDraft } from './draft';
@@ -42,6 +44,15 @@ jest.mock('../auth/providers', () => ({ nativeIdentity: jest.fn() }));
 
 let mockDeviceZone: string | null = 'Africa/Cairo';
 jest.mock('../../../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
+
+// The real order of names, counted: the picker builds one per language (T104).
+const actualFormatters =
+  jest.requireActual<typeof import('../../../lib/formatters')>('../../../lib/formatters');
+jest.mock('../../../lib/formatters', () => {
+  const actual =
+    jest.requireActual<typeof import('../../../lib/formatters')>('../../../lib/formatters');
+  return { ...actual, nameOrder: jest.fn(actual.nameOrder) };
+});
 
 jest.mock('@react-native-community/datetimepicker', () => {
   const { createElement } = jest.requireActual<typeof import('react')>('react');
@@ -389,6 +400,53 @@ describe('TimeZonePicker', () => {
     expect(mockNavigate).toHaveBeenCalledWith('back');
     setLocale('ar');
   });
+
+  // T104: the 418 cities sorted by `localeCompare` froze the phone's JavaScript thread for 5.4 s
+  // on Hermes, so the picker drew seconds after it opened. One `Intl.Collator` per language sorts
+  // them once; a search filters the sorted list and never sorts again.
+  const cityNames = (): string[] =>
+    screen
+      .getAllByRole('radio')
+      .map((radio) => String(within(radio).getAllByText(/\S/)[0]?.props.children));
+  const sortedIn = (locale: 'ar' | 'en'): string[] =>
+    timeZoneCities.map((city) => city[locale]).sort(actualFormatters.nameOrder(locale));
+
+  it('lists the cities in the order of each language (T104)', async () => {
+    for (const direction of ['ltr', 'rtl'] as const) {
+      const locale = direction === 'rtl' ? 'ar' : 'en';
+      const rendered = await renderIn(direction, withQueries(<TimeZonePicker />));
+      const listed = cityNames().filter((name) => timeZoneCities.some((c) => c[locale] === name));
+      expect(listed.length).toBeGreaterThan(1);
+      expect(listed).toEqual(sortedIn(locale).slice(0, listed.length));
+      await rendered.unmount();
+    }
+  });
+
+  it('sorts with one collator per language, never `localeCompare`, and not again on a search (T104)', async () => {
+    const compare = jest.spyOn(String.prototype, 'localeCompare');
+    const collators = jest.mocked(nameOrder);
+    collators.mockClear();
+    await renderIn('ltr', withQueries(<TimeZonePicker />));
+    for (const typed of ['D', 'Du', 'Dub']) {
+      await fireEvent.changeText(
+        screen.getByPlaceholderText(translate('en', 'onboarding.timeZone.searchPlaceholder')),
+        typed,
+      );
+    }
+    expect(compare).not.toHaveBeenCalled();
+    expect(collators).toHaveBeenCalledTimes(1);
+    expect(collators).toHaveBeenCalledWith('en');
+    compare.mockRestore();
+  });
+
+  it('sorts again in the new language when the language changes (T104)', async () => {
+    await renderIn('ltr', withQueries(<TimeZonePicker />));
+    expect(cityNames()).toContain(sortedIn('en')[0]);
+    await act(() => setLocale('ar'));
+    const listed = cityNames().filter((name) => timeZoneCities.some((c) => c.ar === name));
+    expect(listed).toEqual(sortedIn('ar').slice(0, listed.length));
+    expect(listed[0]).toBe(sortedIn('ar')[0]);
+  });
 });
 
 describe('Terms', () => {
@@ -399,9 +457,17 @@ describe('Terms', () => {
   it("shows the served Terms in the person's language (FR-AUTH-11)", async () => {
     await renderIn('rtl', <Terms />);
     expect(screen.getByText(ar('onboarding.terms.title'))).toBeTruthy();
-    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=ar');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=ar&theme=light');
     await renderIn('ltr', <Terms />);
-    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=en');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=en&theme=light');
+    setLocale('ar');
+  });
+
+  it("asks for the served Terms in the app's scheme (T105)", async () => {
+    await renderIn('rtl', <Terms />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=ar&theme=dark');
+    await renderIn('ltr', <Terms />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/terms?lang=en&theme=dark');
     setLocale('ar');
   });
 
