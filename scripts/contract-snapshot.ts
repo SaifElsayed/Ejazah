@@ -464,51 +464,6 @@ function parentOf(field: string): string {
   return field.slice(0, Math.max(field.lastIndexOf('.'), 1));
 }
 
-/** One change of a field's recorded type, as the comparison names it. */
-interface TypeChange {
-  readonly surface: Surface;
-  readonly path: string;
-  readonly direction: Direction;
-  readonly field: string;
-  readonly before: string;
-  readonly after: string;
-}
-
-// A ONE-TIME R-API-9 EXCEPTION, decided by the owner on 2026-10-27 (T099). These five mutations were
-// published with a void input, which tRPC 11.19's client sends with no body and its server cannot
-// read (it answers 500), so none of them ever worked over HTTP, and the app has not shipped; they
-// now take an empty object. Only this exact change on these exact entries passes: any other change
-// to them, their removal, and the same change on any other procedure still fail. Remove this list
-// in the nearest batch after T099 merges, when the snapshot that records the change is the base.
-const ONE_TIME_TYPE_CHANGES: readonly TypeChange[] = (
-  [
-    ['admin', 'admins.regenerateRecoveryCodes'],
-    ['admin', 'auth.signOut'],
-    ['app', 'auth.providerNonce'],
-    ['app', 'auth.signOut'],
-    ['app', 'teacher.application.markApprovedShown'],
-  ] as const
-).map(([surface, path]) => ({
-  surface,
-  path,
-  direction: 'input',
-  field: '$',
-  before: 'unknown',
-  after: 'object',
-}));
-
-function isOneTimeTypeChange(change: TypeChange): boolean {
-  return ONE_TIME_TYPE_CHANGES.some(
-    (allowed) =>
-      allowed.surface === change.surface &&
-      allowed.path === change.path &&
-      allowed.direction === change.direction &&
-      allowed.field === change.field &&
-      allowed.before === change.before &&
-      allowed.after === change.after,
-  );
-}
-
 /** The breaks of one field an old client reads (output) or sends (input), one line each. */
 function fieldBreaks(
   surface: Surface,
@@ -520,8 +475,7 @@ function fieldBreaks(
 ): string[] {
   const breaks: string[] = [];
   const at = `${direction}  ${surface}  ${path}  ${field}`;
-  const change = { surface, path, direction, field, before: before.type, after: after.type };
-  if (before.type !== after.type && !isOneTimeTypeChange(change)) {
+  if (before.type !== after.type) {
     breaks.push(`${at}  type ${before.type} → ${after.type}`);
   }
   if (before.values !== undefined && after.values === undefined) {
