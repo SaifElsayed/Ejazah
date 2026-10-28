@@ -340,7 +340,7 @@
       },
       "loadError": {
         "text": "No answer arrived. Nothing changed in the data; try again, and if it keeps failing, tell the operations team.",
-        "title": "Could not load {page}"
+        "title": "{page} could not be loaded"
       },
       "minor": "Minor",
       "minutes": "{count, plural, one {# minute} other {# minutes}}",
@@ -1262,7 +1262,7 @@
         "arrivedYesterday": "Arrived yesterday",
         "compensationHint": "Opened automatically when an enrollment ends before all its sessions",
         "oldest": "{days, plural, one {Oldest # day ago} other {Oldest # days ago}}",
-        "oldestToday": "Oldest from today",
+        "oldestToday": "Oldest arrived today",
         "waiting": "{waiting, plural, one {one waiting on the applicant} other {# waiting on the applicant}}"
       },
       "subtitle": "{date} · {city} time",

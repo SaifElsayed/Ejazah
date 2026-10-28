@@ -68,9 +68,14 @@ describe('AdminHome (FR-176)', () => {
             }),
           ),
         ).toBeTruthy();
+        // The card is titled as its page, as AdminHomeEn draws it; the sidebar keeps the short name
+        // (T112).
         const applications = (
-          await screen.findByText(t('admin.nav.items.applications'), { selector: '.text-headline' })
+          await screen.findByText(t('admin.applications.title'), { selector: '.text-headline' })
         ).closest('a') as HTMLElement;
+        if (locale === 'en') {
+          expect(within(applications).getByText('Teacher applications')).toBeTruthy();
+        }
         expect(within(applications).getByText('3')).toBeTruthy();
         expect(
           within(applications).getByText(
@@ -129,6 +134,21 @@ describe('AdminHome (FR-176)', () => {
     );
     expect(await screen.findByText(ar('admin.home.queue.oldestToday'))).toBeTruthy();
     expect(screen.getByText(ar('admin.home.actionsEmpty.title'))).toBeTruthy();
+  });
+
+  // T112 (b): the English the board's other cards write («Oldest 3 days ago», «Arrived yesterday»).
+  it('says in English an oldest that arrived today (T112)', async () => {
+    setLocale('en');
+    open(
+      fakeApi({
+        queues: {
+          applications: { open: 1, oldestAgeHours: 5, waitingOnApplicant: 0 },
+          credentials: { open: 0, addedSubjects: 0 },
+        },
+        latestActions: [],
+      }),
+    );
+    expect(await screen.findByText('Oldest arrived today')).toBeTruthy();
   });
 
   it('names the administrator in the sidebar and counts the queues, one summary read in strict mode', async () => {

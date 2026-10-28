@@ -2,7 +2,8 @@
 // two queue cards this phase builds (the board's other six land with their phases), each with its
 // open count and what it says of the oldest (from today when under a day), how many wait on the
 // applicant, how many are for an added subject; then the latest actions as the audit names them,
-// the whole log one link away. An empty list, and a summary that could not be read, are said.
+// the whole log one link away. An empty list, and a summary that could not be read, are said. The
+// applications card is titled as its page, «Teacher applications» on AdminHomeEn (T112).
 import { useNavigate } from 'react-router';
 
 import {
@@ -81,7 +82,7 @@ export function AdminHome() {
               <QueueCard
                 href="/applications"
                 icon="user-check"
-                title={t('admin.nav.items.applications')}
+                title={t('admin.applications.title')}
                 count={answer.queues.applications.open}
                 {...hintOf(
                   [

@@ -1,5 +1,6 @@
 // T071 (FR-160 to FR-162, FR-166): the selected application's detail (`AdminApplications`' panel).
-// The header: the applicant, their gender, city and date, the minor flag (FR-132) and the status.
+// The header: the applicant, their gender, city and date, the minor flag (FR-132) and the status,
+// with the account's standing beside it while the account is not active (T112).
 // Each document opens in the viewer, view only (B14b-2). An open identity request is shown with its
 // reason, and the document it brought opens in the person's context, with its two decisions;
 // «طلب إثبات هوية» is offered on an active account with none open (FR-166). An approved teacher's
@@ -53,6 +54,21 @@ const CREDENTIAL_TONE = {
   rejected: 'danger',
 } as const;
 
+/** The account's standing, as the boards chip it (`AdminUsers`, `AdminDocumentViewer`). */
+const ACCOUNT_TEXT: Readonly<
+  Record<Exclude<ApplicationDetail['accountStatus'], 'active'>, MessageKey>
+> = {
+  suspended: 'admin.status.account.suspended',
+  verification_required: 'admin.status.account.verificationPending',
+  banned: 'admin.status.account.banned',
+};
+
+const ACCOUNT_TONE = {
+  suspended: 'danger',
+  verification_required: 'warning',
+  banned: 'danger',
+} as const;
+
 export function ApplicationPanel({ teacherUserId }: { readonly teacherUserId: string }) {
   const t = useT();
   const detail = useApplication(teacherUserId);
@@ -87,6 +103,13 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
   const changeable =
     approved &&
     (detail.accountStatus === 'active' || detail.accountStatus === 'verification_required');
+  // The account's standing beside the application's chip while it is not active (T112); a ban
+  // the application's own chip already says is not said twice.
+  const shownStanding =
+    detail.accountStatus === 'active' ||
+    (detail.accountStatus === 'banned' && detail.status === 'banned')
+      ? null
+      : detail.accountStatus;
   const allowed = allowedFor(detail.status);
   const blocked = blockedReasons(detail);
   const subjectName = (subject: { nameAr: string; nameEn: string }) =>
@@ -199,6 +222,9 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
             </span>
             {detail.isMinor ? <Badge label={t('admin.common.minor')} tone="warning" /> : null}
             <Badge label={t(STATUS_TEXT[detail.status])} tone="neutral" />
+            {shownStanding === null ? null : (
+              <Badge label={t(ACCOUNT_TEXT[shownStanding])} tone={ACCOUNT_TONE[shownStanding]} />
+            )}
           </>
         }
         actions={
@@ -290,7 +316,7 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
             <div className="self-start">
               <TextLink
                 label={t('admin.applications.detail.reviewCredential')}
-                icon={{ name: locale === 'ar' ? 'chevron-left' : 'chevron-right' }}
+                icon={{ name: 'chevron-right' }}
                 onPress={() =>
                   void navigate(
                     toReview === undefined

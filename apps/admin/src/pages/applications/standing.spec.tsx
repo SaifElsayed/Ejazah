@@ -224,6 +224,45 @@ describe('the standing of an approved teacher (FR-173)', () => {
     );
   });
 
+  // T112 (c): the account's standing beside the application's chip, while the account is not active.
+  it.each([
+    ['suspended', 'admin.status.account.suspended', 'danger'],
+    ['verification_required', 'admin.status.account.verificationPending', 'warning'],
+    ['banned', 'admin.status.account.banned', 'danger'],
+  ] as const)(
+    'shows a %s account beside the application’s chip, in both languages',
+    async (accountStatus, text, tone) => {
+      await inBothLocales(
+        () => open(fakeApi(detailOf({ accountStatus }))),
+        async (t) => {
+          await detail();
+          const header = within(document.querySelector('.panel__header') as HTMLElement);
+          expect(header.getByText(t('admin.status.application.approved'))).toBeTruthy();
+          expect(header.getByText(t(text)).classList.contains(`badge--${tone}`)).toBe(true);
+        },
+      );
+    },
+  );
+
+  it('shows no standing on an active account, and a ban once when the application is banned too', async () => {
+    const { view } = open();
+    const header = async () => {
+      await detail();
+      return within(document.querySelector('.panel__header') as HTMLElement);
+    };
+    const active = await header();
+    for (const key of [
+      'admin.status.account.suspended',
+      'admin.status.account.verificationPending',
+      'admin.status.account.banned',
+    ] as const) {
+      expect(active.queryByText(ar(key))).toBeNull();
+    }
+    view.unmount();
+    open(fakeApi(detailOf({ status: 'banned', accountStatus: 'banned' })));
+    expect((await header()).getAllByText(ar('admin.status.account.banned'))).toHaveLength(1);
+  });
+
   it('offers no standing action on an application still open', async () => {
     open(fakeApi(detailOf({ status: 'in_review' })));
     const panel = await detail();

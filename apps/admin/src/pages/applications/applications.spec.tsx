@@ -6,9 +6,10 @@
 // FR-161's three conditions hold, each one said, and confirmed with an optional note; the decision
 // dialog's three kinds; and the actions each state allows. The documents and the identity request
 // are `identity.spec.tsx`'s (B14b-2).
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { Icon } from '../../design/components';
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
 import { dayMonth, dayMonthYear } from '../../lib/format';
 import { panelTimeZone, todayIn } from '../../lib/zone';
@@ -231,6 +232,23 @@ describe('AdminApplications (FR-160)', () => {
     expect(await opened.findByText(rowB.displayName)).toBeTruthy();
   });
 
+  // T112 (a): one chevron in both languages, which `icon--flip` turns to the reading way in Arabic.
+  it('points «مراجعة الإجازة» the reading way in both languages (T112)', async () => {
+    const { container, unmount } = render(<Icon name="chevron-right" size="sm" />);
+    const right = container.innerHTML;
+    unmount();
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        const detail = within(await select(rowA.displayName));
+        const link = await detail.findByRole('button', {
+          name: t('admin.applications.detail.reviewCredential'),
+        });
+        expect(link.querySelector('svg')?.outerHTML).toBe(right);
+      },
+    );
+  });
+
   it('marks a minor in the detail’s header (FR-132)', async () => {
     open();
     const detail = within(await select(rowB.displayName));
@@ -315,6 +333,15 @@ describe('AdminApplications (FR-160)', () => {
     api.applications.list.query.mockResolvedValue({ rows: [rowA], total: 1, pageSize: 25 });
     press(ar('admin.common.action.retry'));
     expect(await screen.findByText(rowA.email)).toBeTruthy();
+  });
+
+  // T112 (b): the page's name opens the English sentence, where its capital belongs.
+  it('says in English which list could not load, with no capital inside the sentence (T112)', async () => {
+    setLocale('en');
+    const api = fakeApi();
+    api.applications.list.query.mockRejectedValue(refusal('INTERNAL'));
+    open(api);
+    expect(await screen.findByText('Teacher applications could not be loaded')).toBeTruthy();
   });
 });
 
