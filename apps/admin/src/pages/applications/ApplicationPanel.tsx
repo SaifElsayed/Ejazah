@@ -4,9 +4,9 @@
 // Each document opens in the viewer, view only (B14b-2). An open identity request is shown with its
 // reason, and the document it brought opens in the person's context, with its two decisions;
 // «طلب إثبات هوية» is offered on an active account with none open (FR-166). An approved teacher's
-// standing is changed here (T073, `StandingDialogs.tsx`). The call is recorded
-// by its day (the browser's date field, its latest day today in the panel's zone), its outcome and
-// its notes, while the application is open. The footer offers the actions the status admits;
+// standing is changed here (T073, `StandingDialogs.tsx`). The call is recorded by its day (typed day
+// / month / year as the board draws it, T111; its latest day today in the panel's zone), its outcome
+// and its notes, while the application is open. The footer offers the actions the status admits;
 // «اعتماد» waits for the three conditions, each one said.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -27,6 +27,7 @@ import {
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { calendarDateOfDayField, dayFieldOf, dayFieldText } from '../../lib/day-field';
 import { cityName, dayMonthYear } from '../../lib/format';
 import { panelTimeZone, todayIn } from '../../lib/zone';
 import { AdminDocumentViewer, type DocumentViewerProps } from '../documents/AdminDocumentViewer';
@@ -430,7 +431,9 @@ function CallRecord({
   const locale = useLocale();
   const zone = panelTimeZone();
   const actions = useApplicationActions();
-  const [day, setDay] = useState(detail.call.completedOn ?? '');
+  const [typed, setTyped] = useState(
+    detail.call.completedOn === undefined ? '' : dayFieldOf(detail.call.completedOn),
+  );
   const [outcome, setOutcome] = useState<string>(detail.call.outcome ?? '');
   const [notes, setNotes] = useState(detail.call.notes ?? '');
   const [state, setState] = useState<'idle' | 'saved' | 'future' | 'failed'>('idle');
@@ -466,8 +469,12 @@ function CallRecord({
     );
   }
 
-  const ready = day !== '' && outcome !== '' && notes.trim() !== '';
+  const day = calendarDateOfDayField(typed);
+  const unknownDay = day === undefined && typed.length === 'DD/MM/YYYY'.length;
+  const future = day !== undefined && day > todayIn(zone);
+  const ready = day !== undefined && !future && outcome !== '' && notes.trim() !== '';
   const save = () => {
+    if (day === undefined) return;
     setState('idle');
     actions.recordCall.mutate(
       {
@@ -498,18 +505,20 @@ function CallRecord({
       <div className="grid-2 gap-3">
         <Field
           label={t('admin.applications.detail.callDate')}
-          hint={t('admin.applications.detail.callDatePlaceholder')}
-          {...(state === 'future' ? { error: t('admin.applications.detail.callFuture') } : {})}
+          {...(unknownDay
+            ? { error: t('admin.applications.detail.callDateInvalid') }
+            : future || state === 'future'
+              ? { error: t('admin.applications.detail.callFuture') }
+              : {})}
         >
           <Input
-            value={day}
+            value={typed}
             onChangeText={(value) => {
-              setDay(value);
+              setTyped(dayFieldText(value));
               setState('idle');
             }}
-            keyboard="date"
-            max={todayIn(zone)}
-            ltr
+            keyboard="numeric"
+            placeholder={t('admin.applications.detail.callDatePlaceholder')}
           />
         </Field>
         <div className="field">

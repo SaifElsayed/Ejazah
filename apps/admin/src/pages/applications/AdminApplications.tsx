@@ -6,7 +6,7 @@
 // back to the first page. The table lists the tab's page, oldest first, with the pager the page size
 // answers; a row opens its detail beside it, and `?teacher=` opens one at once (the credentials'
 // «طلب الانضمام», T072). An empty tab, an empty search and a list that could not be read each say
-// so.
+// so. T111: «أُرسل» wraps rather than being cut at the table's edge.
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 
@@ -152,7 +152,11 @@ export function AdminApplications() {
                 { key: 'applicant', header: t('admin.applications.columns.applicant') },
                 { key: 'subjects', header: t('admin.applications.columns.subjects') },
                 { key: 'call', header: t('admin.applications.columns.call') },
-                { key: 'submitted', header: t('admin.applications.columns.submitted') },
+                {
+                  key: 'submitted',
+                  header: t('admin.applications.columns.submitted'),
+                  wrap: true,
+                },
               ]}
               rows={listed.rows.map((row) => ({
                 key: row.teacherUserId,

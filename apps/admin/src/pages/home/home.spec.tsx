@@ -100,14 +100,14 @@ describe('AdminHome (FR-176)', () => {
         expect(
           screen.getByText(timeOfDay(latest.occurredAt, locale, zone), { exact: false }),
         ).toBeTruthy();
-        expect(
-          screen.getByRole('link', {
-            name: t('admin.audit.targetNamed', {
-              type: t('admin.audit.targets.teacherApplication'),
-              name: latest.targetName,
-            }),
+        const target = screen.getByRole('link', {
+          name: t('admin.audit.targetNamed', {
+            type: t('admin.audit.targets.teacherApplication'),
+            name: latest.targetName,
           }),
-        ).toBeTruthy();
+        });
+        // T111: «الهدف» wraps rather than being cut at the table's edge.
+        expect(target.closest('td')?.className).toBe('table__wrap');
       },
     );
   });

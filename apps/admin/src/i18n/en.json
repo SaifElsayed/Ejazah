@@ -81,6 +81,7 @@
         "ban": "Ban",
         "call": "Verification call · outside the app",
         "callDate": "Call date",
+        "callDateInvalid": "This date does not exist. Write the day, then the month, then the year.",
         "callDatePlaceholder": "dd / mm / yyyy",
         "callFuture": "The call date cannot be after today.",
         "callNotes": "Call notes",

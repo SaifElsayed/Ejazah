@@ -1,7 +1,9 @@
 // T036: DataTable (docs/design/components.md, "The admin panel"; design `.table`). Columns, rows,
 // the selected row (its start-side indicator is the stylesheet's, in both directions), numeric cells
 // in the Latin face left to right (`.table__num`), and a footer with the count and the Pager. A
-// selectable row is reached by Tab and chosen by click, Enter or Space.
+// selectable row is reached by Tab and chosen by click, Enter or Space. T111: a long text cell ends in
+// an ellipsis after two lines (`.table__clip`), its full text in its title; the live console scrolls
+// the table sideways rather than clipping it.
 import clsx from 'clsx';
 import type { KeyboardEvent } from 'react';
 
@@ -17,6 +19,8 @@ export interface DataTableColumn {
   readonly end?: boolean;
   /** Text that may wrap (a reason); every other cell stays on one line. */
   readonly wrap?: boolean;
+  /** Long text that ends in an ellipsis after two lines, its full text in the row's `titles`. */
+  readonly clip?: boolean;
 }
 
 export interface DataTableProps {
@@ -24,6 +28,8 @@ export interface DataTableProps {
   readonly rows: readonly {
     readonly key: string;
     readonly cells: Readonly<Record<string, Content>>;
+    /** The full text of a clipped cell, shown on hover. */
+    readonly titles?: Readonly<Record<string, string>>;
   }[];
   readonly selectedKey?: string;
   readonly onSelect?: (key: string) => void;
@@ -73,7 +79,13 @@ export function DataTable({ columns, rows, selectedKey, onSelect, footer }: Data
               >
                 {columns.map((column) => (
                   <td key={column.key} className={cellClass(column)}>
-                    {row.cells[column.key]}
+                    {column.clip ? (
+                      <span className="table__clip" title={row.titles?.[column.key]}>
+                        {row.cells[column.key]}
+                      </span>
+                    ) : (
+                      row.cells[column.key]
+                    )}
                   </td>
                 ))}
               </tr>

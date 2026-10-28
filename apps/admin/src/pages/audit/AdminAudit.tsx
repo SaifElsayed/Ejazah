@@ -5,6 +5,8 @@
 // the action as the panel names it, the target by its current name (a link where this phase has its
 // page), the reason; the pager the page size answers. A row opens its entry beside the table. The
 // board's filter panel (the range, the administrator, the action) is not drawn and is not built.
+// T111: the target wraps, as drawn, and the reason ends in an ellipsis after two lines, in full on
+// hover.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -99,8 +101,8 @@ export function AdminAudit() {
           { key: 'time', header: t('admin.audit.columns.time') },
           { key: 'admin', header: t('admin.audit.columns.admin') },
           { key: 'action', header: t('admin.audit.columns.action') },
-          { key: 'target', header: t('admin.audit.columns.target') },
-          { key: 'reason', header: t('admin.audit.columns.reason') },
+          { key: 'target', header: t('admin.audit.columns.target'), wrap: true },
+          { key: 'reason', header: t('admin.audit.columns.reason'), clip: true },
         ]}
         rows={listed.rows.map((row) => {
           const href = targetHref(row);
@@ -127,6 +129,7 @@ export function AdminAudit() {
               reason:
                 row.reason === undefined ? null : <bdi className="tone-muted">{row.reason}</bdi>,
             },
+            ...(row.reason === undefined ? {} : { titles: { reason: row.reason } }),
           };
         })}
         {...(selected === null ? {} : { selectedKey: selected })}

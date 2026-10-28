@@ -40,6 +40,17 @@ describe('Console', () => {
     );
   });
 
+  // T111: the panel in a browser window is the live console, which fills the window and scrolls;
+  // the boards' fixed frame is `.console` alone.
+  it('is the live console, beside the frame’s own class', () => {
+    inBothDirections(
+      () => <p>page</p>,
+      ({ frame }) => {
+        expect([...frame.classList]).toEqual(['console', 'console--live']);
+      },
+    );
+  });
+
   it('follows the system’s dark scheme', () => {
     vi.stubGlobal(
       'matchMedia',

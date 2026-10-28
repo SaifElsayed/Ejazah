@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Icon } from '../../design/components';
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
 import { dayMonth, dayMonthYear } from '../../lib/format';
-import { panelTimeZone, todayIn } from '../../lib/zone';
+import { daysBefore, panelTimeZone, todayIn } from '../../lib/zone';
 import {
   currentPath,
   inBothLocales,
@@ -158,7 +158,10 @@ describe('AdminApplications (FR-160)', () => {
             }),
           ),
         ).toBeTruthy();
-        expect(screen.getByText(dayMonth(rowA.submittedAt, locale, panelTimeZone()))).toBeTruthy();
+        // T111: «أُرسل» wraps rather than being cut at the table's edge.
+        expect(
+          screen.getByText(dayMonth(rowA.submittedAt, locale, panelTimeZone())).className,
+        ).toBe('table__wrap');
         expect(
           screen.getByText(t('admin.applications.pagerSummary', { shown: 2, total: 2 })),
         ).toBeTruthy();
@@ -351,12 +354,16 @@ describe('the call record (FR-161)', () => {
     api.applications.recordCall.mutate.mockResolvedValue(undefined);
     const detail = within(await select(rowA.displayName));
     const date = await detail.findByLabelText(ar('admin.applications.detail.callDate'));
-    expect(date.getAttribute('type')).toBe('date');
-    expect(date.getAttribute('max')).toBe(todayIn(panelTimeZone()));
-    expect(detail.getByText(ar('admin.applications.detail.callDatePlaceholder'))).toBeTruthy();
+    // T111: a day / month / year field, as drawn, not the browser's month / day / year.
+    expect(date.getAttribute('type')).toBe('text');
+    expect(date.getAttribute('inputmode')).toBe('numeric');
+    expect(date.getAttribute('placeholder')).toBe(
+      ar('admin.applications.detail.callDatePlaceholder'),
+    );
     const save = detail.getByRole('button', { name: ar('admin.applications.detail.saveCall') });
     expect(save).toHaveProperty('disabled', true);
-    fireEvent.change(date, { target: { value: '2026-10-20' } });
+    fireEvent.change(date, { target: { value: '20102026' } });
+    expect(date).toHaveProperty('value', '20/10/2026');
     fireEvent.click(detail.getByRole('button', { name: ar('admin.applications.detail.suitable') }));
     fireEvent.change(detail.getByLabelText(ar('admin.applications.detail.callNotes')), {
       target: { value: 'تحقّقت من الاسم والسند.' },
@@ -372,6 +379,44 @@ describe('the call record (FR-161)', () => {
     });
   });
 
+  // T111: the field reads the day first; a month / day / year text names no month.
+  it('says a day the calendar does not have, and holds the save', async () => {
+    const { api } = open();
+    const detail = within(await select(rowA.displayName));
+    const date = await detail.findByLabelText(ar('admin.applications.detail.callDate'));
+    fireEvent.click(detail.getByRole('button', { name: ar('admin.applications.detail.suitable') }));
+    fireEvent.change(detail.getByLabelText(ar('admin.applications.detail.callNotes')), {
+      target: { value: 'ملاحظة' },
+    });
+    const save = detail.getByRole('button', { name: ar('admin.applications.detail.saveCall') });
+    fireEvent.change(date, { target: { value: '10/20/2026' } });
+    expect(detail.getByText(ar('admin.applications.detail.callDateInvalid'))).toBeTruthy();
+    expect(save).toHaveProperty('disabled', true);
+    fireEvent.change(date, { target: { value: '20/10/2026' } });
+    expect(detail.queryByText(ar('admin.applications.detail.callDateInvalid'))).toBeNull();
+    expect(save).toHaveProperty('disabled', false);
+    expect(api.applications.recordCall.mutate).not.toHaveBeenCalled();
+  });
+
+  // T111: the browser's picker refused a day after today (`max`); the typed field says it itself.
+  it('says a day after today in the panel’s zone before sending it', async () => {
+    const { api } = open();
+    const detail = within(await select(rowA.displayName));
+    const [year, month, day] = daysBefore(todayIn(panelTimeZone()), -1).split('-');
+    fireEvent.change(await detail.findByLabelText(ar('admin.applications.detail.callDate')), {
+      target: { value: `${day ?? ''}${month ?? ''}${year ?? ''}` },
+    });
+    fireEvent.click(detail.getByRole('button', { name: ar('admin.applications.detail.suitable') }));
+    fireEvent.change(detail.getByLabelText(ar('admin.applications.detail.callNotes')), {
+      target: { value: 'ملاحظة' },
+    });
+    expect(detail.getByText(ar('admin.applications.detail.callFuture'))).toBeTruthy();
+    expect(
+      detail.getByRole('button', { name: ar('admin.applications.detail.saveCall') }),
+    ).toHaveProperty('disabled', true);
+    expect(api.applications.recordCall.mutate).not.toHaveBeenCalled();
+  });
+
   it('says a day after today in place', async () => {
     const { api } = open();
     api.applications.recordCall.mutate.mockRejectedValue(
@@ -379,7 +424,7 @@ describe('the call record (FR-161)', () => {
     );
     const detail = within(await select(rowA.displayName));
     fireEvent.change(await detail.findByLabelText(ar('admin.applications.detail.callDate')), {
-      target: { value: '2026-10-20' },
+      target: { value: '20/10/2026' },
     });
     fireEvent.click(
       detail.getByRole('button', { name: ar('admin.applications.detail.unsuitable') }),
