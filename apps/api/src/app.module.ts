@@ -24,7 +24,11 @@
 // Outside both surfaces (an unknown path, a framework failure), a Nest filter sends the same shape
 // in the same envelope, `{ error: { code, message, details? } }`, rather than Nest's own. An error
 // the mapping marks unexpected is logged on the request's logger, with its correlation identifier,
-// and reported (T111); the client sees only the internal error.
+// and reported (T111); the client sees only the internal error. A request whose input cannot be
+// read is the client's, never unexpected (T108): the caller kinds answer a body or GET `input` that
+// is not JSON `VALIDATION_FAILED`, and each surface's handler refuses the same way, before tRPC and
+// without reading the body, what tRPC would fail on before any procedure runs; each refusal is one
+// info line with its correlation id and nothing of the body, never reported.
 //
 // NEST LOGS THROUGH THE KERNEL LOGGER (T100), never through the console, so its records carry the
 // redaction list like every other. Nest's body parser is off: tRPC reads its own body, and the
@@ -64,6 +68,7 @@
 //
 // `main.ts` builds this application after the configuration validated and is the only caller in
 // production; a spec passes fixture routers in place of the real ones.
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   type ArgumentsHost,
@@ -91,7 +96,7 @@ import {
   READINESS,
   type Readiness,
 } from './platform/health/health.controller.js';
-import type { Logger } from './platform/logging/logger.js';
+import { type Logger, requestLogger } from './platform/logging/logger.js';
 import {
   DESIGN_ASSETS_PATH,
   designAssetsRoute,
@@ -242,6 +247,29 @@ interface Correlated {
   readonly log: Logger;
 }
 
+/**
+ * Why tRPC would fail to read `request` before any procedure runs, judged from its method, URL and
+ * headers alone, or undefined when it would not (T108). The body is never read here. A request
+ * carrying `connectionParams`, which neither surface uses; a path `decodeURIComponent` refuses, as
+ * tRPC decodes it; a request other than GET or HEAD whose content type is not JSON, by tRPC's own
+ * predicate. A HEAD request is tRPC's 204 whatever it carries; a URL that does not parse is left to
+ * tRPC as before.
+ */
+function unreadableRequest(request: IncomingMessage): string | undefined {
+  if (request.method === 'HEAD') return undefined;
+  const url = URL.parse(request.url ?? '/', 'http://localhost');
+  if (url === null) return undefined;
+  if (url.searchParams.has('connectionParams')) return 'connection_params';
+  try {
+    decodeURIComponent(url.pathname);
+  } catch {
+    return 'path_not_decodable';
+  }
+  const json = request.headers['content-type']?.startsWith('application/json') === true;
+  if (request.method !== 'GET' && !json) return 'content_type_not_json';
+  return undefined;
+}
+
 /** One surface's tRPC handler, mounted by Nest under the surface's path. */
 function surfaceHandler<TContext extends Correlated>(
   router: SurfaceRouter<TContext>,
@@ -249,7 +277,7 @@ function surfaceHandler<TContext extends Correlated>(
   log: Logger,
   maxBodySize: number,
 ): (request: IncomingMessage, response: ServerResponse) => void {
-  return createHTTPHandler({
+  const handler = createHTTPHandler({
     router,
     // A body past the limit is refused as it streams in, never read whole (T150, FR-077):
     // tRPC's PAYLOAD_TOO_LARGE, answered 413 in the one shape and not reported as unexpected.
@@ -274,6 +302,20 @@ function surfaceHandler<TContext extends Correlated>(
       return { status: toErrorShape(first).status, headers };
     },
   });
+  // What tRPC would fail on before any procedure is refused here, before it, with the input
+  // guard's answer and log line (T108): the client's request, never reported.
+  return (request, response) => {
+    const reason = unreadableRequest(request);
+    if (reason === undefined) {
+      handler(request, response);
+      return;
+    }
+    requestLogger(log, randomUUID()).info(
+      { errorCode: 'VALIDATION_FAILED', reason },
+      'A request whose input could not be read was refused',
+    );
+    send(response, mapError(new DomainError('VALIDATION_FAILED')));
+  };
 }
 
 /** The HTTP application with both surfaces mounted, not yet listening. */

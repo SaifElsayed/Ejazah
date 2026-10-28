@@ -62,6 +62,14 @@
 // wraps an input that failed its schema as `BAD_REQUEST` with the `ZodError` as cause, and an
 // output that failed its schema as `INTERNAL_SERVER_ERROR` with the `ZodError` as cause; the first
 // is the validation failure with its paths, the second the internal error (T169).
+//
+// AN INPUT THAT CANNOT BE READ IS THE CLIENT'S (T108). tRPC reads the input lazily, when the schema
+// asks for it, and wraps a body or GET `input` that is not JSON as `BAD_REQUEST` with the parser's
+// SyntaxError as cause, which the formatter cannot tell from a SyntaxError our own schema or
+// handler throws. So every kind reads the raw input itself, after its authentication and
+// immediately before its schema, and answers a failure of that read `VALIDATION_FAILED`: decided by
+// where it failed, never by the error's type, so a SyntaxError of ours stays the internal error.
+// `inputsReadUnguarded` names a procedure built without it.
 import {
   type AnyTRPCProcedure,
   type AnyTRPCRouter,
@@ -80,6 +88,7 @@ import {
   type RateLimitKey,
   throttle,
 } from '../platform/guards/rate-limit.guard.js';
+import type { Logger } from '../platform/logging/logger.js';
 import type {
   AccountStatus,
   AdminContext,
@@ -126,8 +135,10 @@ const transportCodes: Partial<Record<TRPCError['code'], ErrorCode>> = {
 
 /**
  * The one response for a failed procedure call: T101's mapping of what was thrown. A tRPC error
- * wrapping one of ours is mapped by its cause; one tRPC raised itself (an unknown path, a body that
- * does not parse) by its code. An output that failed its schema (a `ZodError` tRPC wrapped as
+ * wrapping one of ours is mapped by its cause; one tRPC raised itself with no cause (an unknown
+ * path) by its code. An input that cannot be read reaches here already wrapping our
+ * `VALIDATION_FAILED`, from the kinds' input guard (T108), so a cause tRPC's own reading left is
+ * never mapped here. An output that failed its schema (a `ZodError` tRPC wrapped as
  * `INTERNAL_SERVER_ERROR`, T169) is the internal error, unexpected: the paths are the response's,
  * not the client's. Everything else is the internal error.
  */
@@ -186,6 +197,25 @@ export function createAdminRouter<TRecord extends SurfaceRecord<AdminMeta>>(reco
  * verification module's `identityVerification`, R-121).
  */
 export const mergeAppRouters = app.mergeRouters;
+
+/**
+ * Names every procedure of `router` whose input schema is not immediately preceded by the kinds'
+ * input guard (T108): one built on a kind that omits it would answer an unreadable input 500.
+ */
+export function inputsReadUnguarded(router: AnyTRPCRouter): string[] {
+  const procedures = Object.entries(router._def.procedures as Record<string, AnyTRPCProcedure>);
+  return procedures
+    .filter(([, procedure]) => {
+      // tRPC keeps the chain on the definition without typing it there.
+      const { middlewares = [] } = procedure._def as { readonly middlewares?: readonly unknown[] };
+      const schema = middlewares.findIndex(
+        (middleware) => (middleware as { readonly _type?: string })._type === 'input',
+      );
+      return schema < 1 || !inputGuards.has(middlewares[schema - 1]);
+    })
+    .map(([path]) => path)
+    .sort();
+}
 
 /** Calls a user-surface router in process, through the same middleware as over HTTP. */
 export const createAppCallerFactory = app.createCallerFactory;
@@ -326,6 +356,49 @@ const requireAdministrator = admin.middleware(({ ctx, next }) => {
   return next({ ctx: { administrator } });
 });
 
+/**
+ * Reads the request's raw input as tRPC reads it, so a failure of that read is answered here
+ * (T108). `getRawInput` runs only tRPC's own reading of the request (the body or the GET `input`,
+ * then JSON), never a schema or a handler of ours, so its failure is the client's input that
+ * cannot be read: `VALIDATION_FAILED`, logged once at info with the request's correlation id and
+ * nothing of the input or of the parser's message (which can quote the body, R-SEC-2), and never
+ * reported. A body past the limit stays tRPC's `PAYLOAD_TOO_LARGE` (T150). The value is cached by
+ * tRPC, so the schema reads it again without a second read.
+ */
+async function readInput(getRawInput: () => Promise<unknown>, log: Logger): Promise<void> {
+  try {
+    await getRawInput();
+  } catch (cause) {
+    if (cause instanceof TRPCError && cause.code === 'PAYLOAD_TOO_LARGE') throw cause;
+    log.info(
+      { errorCode: 'VALIDATION_FAILED', reason: 'input_unreadable' },
+      'A request whose input could not be read was refused',
+    );
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      cause: new DomainError('VALIDATION_FAILED', undefined, { cause }),
+    });
+  }
+}
+
+/** The user surface's input guard: after the kind's authentication, before its schema (T108). */
+const readAppInput = app.middleware(async ({ ctx, getRawInput, next }) => {
+  await readInput(getRawInput, ctx.log);
+  return next();
+});
+
+/** The administrator surface's input guard, as the user surface's (T108). */
+const readAdminInput = admin.middleware(async ({ ctx, getRawInput, next }) => {
+  await readInput(getRawInput, ctx.log);
+  return next();
+});
+
+/** The middleware every kind runs immediately before its input schema (T108). */
+const inputGuards: ReadonlySet<unknown> = new Set<unknown>([
+  ...readAppInput._middlewares,
+  ...readAdminInput._middlewares,
+]);
+
 /** Anyone, authenticated or not; always rate limited, by the declaration it carries. */
 export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
@@ -346,6 +419,7 @@ export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
   }
   return app.procedure
     .meta(appMeta('public', rateLimit))
+    .use(readAppInput)
     .input(input)
     .output(output)
     .use(throttle(rateLimit));
@@ -364,6 +438,7 @@ function signedIn<TIn, TInOut, TOutIn, TOutOut>(
   const builder = app.procedure
     .meta(appMeta(role ?? 'user', rateLimit))
     .use(requireUser({ role, admitsRestricted }))
+    .use(readAppInput)
     .input(input)
     .output(output);
   return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
@@ -408,6 +483,7 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
     .meta(appMeta('teacher', rateLimit))
     .use(requireUser({ role: 'teacher', admitsRestricted }))
     .use(requireStanding(admits))
+    .use(readAppInput)
     .input(input)
     .output(output);
   return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
@@ -440,6 +516,7 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
 > {
   return admin.procedure
     .use(requireAdministrator)
+    .use(readAdminInput)
     .input(input)
     .output(output)
     .use(({ ctx, next }) => {
@@ -487,6 +564,7 @@ export function adminPublicProcedure<TIn, TInOut, TOutIn, TOutOut>({
   }
   return admin.procedure
     .meta({ surface: 'admin', rateLimit: rateLimit.key })
+    .use(readAdminInput)
     .input(input)
     .output(output)
     .use(throttle(rateLimit));

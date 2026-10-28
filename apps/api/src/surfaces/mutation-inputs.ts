@@ -1,7 +1,8 @@
 // T099: a mutation reaches its procedure over HTTP only when its client sends a body. tRPC 11.19's
 // client (`httpLink`) sends a mutation whose input is `undefined` with no body at all, and its
-// server's JSON handler reads every mutation's body as JSON, so an empty one fails before any
-// procedure runs (500). A mutation that takes nothing therefore takes the contracts' empty object
+// server's JSON handler reads every mutation's body as JSON, so an empty one fails before the
+// procedure's schema runs (400 `VALIDATION_FAILED` since T108; 500 before it). A mutation that
+// takes nothing therefore takes the contracts' empty object
 // (`emptyInput`, `adminEmptyInput`), and this check finds any mutation whose input still accepts
 // `undefined`, on either surface, so none can be declared again.
 import type { AnyProcedure, AnyRouter } from '@trpc/server';
