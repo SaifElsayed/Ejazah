@@ -159,6 +159,18 @@ describe("the user's side", () => {
     });
   });
 
+  // T128: an accepted document never reads above the form of a request opened after it.
+  it('get answers no outcome once a new request opens after an accepted one', async () => {
+    const { userId, requestId } = await requested(true);
+    await service.accept(TX, ADMIN, { requestId });
+    await service.requireIdentity(TX, ADMIN, { userId, reason: 'بلاغ آخر' });
+    expect(await person.get(userId)).toEqual({
+      open: true,
+      reason: 'بلاغ آخر',
+      requestedAt: NOW.toISOString(),
+    });
+  });
+
   it('get answers the latest closed request only: a replaced one, then its replacement accepted', async () => {
     const { userId, requestId } = await requested(true);
     const next = await service.requestAnother(TX, ADMIN, { requestId, note: 'الوجه الخلفي' });

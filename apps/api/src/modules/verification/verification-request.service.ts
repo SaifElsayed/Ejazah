@@ -256,7 +256,8 @@ export class IdentityVerificationService {
 
 /**
  * How the latest closed request ended (T115): accepted, or replaced by the open request whose reason
- * the person reads, since a replaced row keeps its own first reason. An `expired` one shows none.
+ * the person reads, since a replaced row keeps its own first reason. An `expired` one shows none, and
+ * an accepted one only while nothing is open, so it never sits above a new request's form (T128).
  */
 function outcomeOf(
   closed: ClosedRequestRecord | null,
@@ -264,7 +265,9 @@ function outcomeOf(
 ): z.input<typeof identityVerificationOutcome> | undefined {
   if (closed === null || closed.resolvedAt === null) return undefined;
   const resolvedAt = closed.resolvedAt.toISOString();
-  if (closed.status === 'satisfied') return { status: 'satisfied', resolvedAt };
+  if (closed.status === 'satisfied') {
+    return open === null ? { status: 'satisfied', resolvedAt } : undefined;
+  }
   if (closed.status === 'replaced' && open !== null) {
     return { status: 'replaced', resolvedAt, reason: open.reason };
   }
