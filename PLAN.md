@@ -83,6 +83,8 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** let a teacher apply and an admin approve them, with the identity model built right the first time.
 
+**Phase 1 closed on 2026-10-29** (B19d, T092), on its eleventh working day of seven: an overflow of four days. Cause: the first runs on a real device (T090, T091) found defects that stop a person, fixed in B18 and B19a to B19c (T099 to T116, T121, T122), and T092's own run found two more, fixed in B19d (T155, T156). Nothing went to the descope ladder; the follow-ups found on the way are recorded in `specs/002-identity/tasks.md`, each with its timing. SC-101's and SC-105's runs on iOS moved to Phase 6 (the owner's decisions of 2026-10-27 and 2026-10-28), and the phase was proved on one device, the owner's Android phone.
+
 **SRS:** FR-AUTH-1…15, §2.2, FR-VERIFY-1…11, FR-PROFILE-11, FR-ISNAD-1/2, FR-ADMIN-1/17/19, FR-PAYG-12…16, FR-LOC-1/2/3
 
 **What this phase delivers**
