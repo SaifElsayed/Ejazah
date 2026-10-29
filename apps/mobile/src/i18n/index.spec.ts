@@ -71,7 +71,9 @@ describe('t: a Latin value or opening inside Arabic (T109)', () => {
   });
 
   it('isolates a number and a plural count, and chooses a branch on the bare value', () => {
-    expect(t('common.format.progress', { done: 3, total: 12 })).toBe('\u20683\u2069 من \u206812\u2069');
+    expect(t('common.format.progress', { done: 3, total: 12 })).toBe(
+      '\u20683\u2069 من \u206812\u2069',
+    );
     expect(t('common.format.sessions', { count: 3 })).toBe('\u20683\u2069 جلسات');
     expect(t('common.format.sessions', { count: 1 })).toBe('جلسة واحدة');
     setLocale('en');
