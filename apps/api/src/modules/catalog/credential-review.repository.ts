@@ -1,7 +1,8 @@
 // T069: the credential review's queries over this module's `teacher_credentials` and `isnad_entries`
 // (FR-163, FR-164), each on the administrator kind's transaction it is handed. The teacher's name
 // comes through the credential's relation to `users`, a soft-deleted teacher's credentials left out
-// of every read (R-DB-3); the reviewer's name through its relation to `admin_users`. The queue's
+// of every read (R-DB-3), and a banned account's out of the queue's list and count (T122,
+// `UNBANNED_TEACHER`); the reviewer's name through its relation to `admin_users`. The queue's
 // search is the teacher's name as typed, in any case, `%` and `_` as themselves (`like-literal.ts`).
 //
 // Every write is conditional on the state it moves from, so two reviewers racing on one credential
@@ -13,6 +14,7 @@ import { Prisma } from '@prisma/client';
 
 import { likeLiteral } from '../../platform/db/like-literal.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { UNBANNED_TEACHER } from './credentials.repository.js';
 import type {
   Approval,
   Correction,
@@ -37,7 +39,7 @@ export async function reviewPage(
   const rows = await tx.teacherCredential.findMany({
     where: {
       status: filter.status,
-      teacher: { deletedAt: null, ...teacherNamed(filter.search) },
+      teacher: { deletedAt: null, ...UNBANNED_TEACHER, ...teacherNamed(filter.search) },
     },
     orderBy: decided
       ? [{ reviewedAt: 'desc' }, { id: 'desc' }]
@@ -62,7 +64,7 @@ export function reviewCount(tx: Client, filter: ReviewFilter): Promise<number> {
   return tx.teacherCredential.count({
     where: {
       status: filter.status,
-      teacher: { deletedAt: null, ...teacherNamed(filter.search) },
+      teacher: { deletedAt: null, ...UNBANNED_TEACHER, ...teacherNamed(filter.search) },
     },
   });
 }

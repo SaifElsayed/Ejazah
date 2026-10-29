@@ -9,9 +9,10 @@
 // read (FR-132) and the call's day. The call is recorded by its day (owner's decision 2026-10-22):
 // the panel names its zone, and a day after today there is refused. `approve` is refused with every
 // reason that holds (FR-161: the call not recorded, a credential of the application undecided, none
-// approved) and grants the approved credentials' subjects; `reject` ends an open application,
-// `requestInfo` sets one in review waiting on the applicant, and `ban` is the standing's one
-// function with the note the applicant sees (owner's decision 2026-10-22). An `unsuitable` call
+// approved) and grants the approved credentials' subjects; `reject` ends an open application and
+// closes its undecided credentials with the rejection's note (T122), `requestInfo` sets one in
+// review waiting on the applicant, and `ban` is the standing's one function with the note the
+// applicant sees (owner's decision 2026-10-22). An `unsuitable` call
 // blocks nothing: the reviewer decides. Each decision writes the note the applicant sees and its
 // moment. Every method runs on the administrator kind's transaction (`tx`).
 import type {
@@ -46,6 +47,10 @@ import type {
   CallRecord,
 } from '../identity/index.js';
 
+/** A rejected application's undecided credentials closed (T122), catalog's entry's shape. */
+export type { CredentialClosure } from '../catalog/index.js';
+import type { CredentialClosure } from '../catalog/index.js';
+
 /** The admin lists' page size (the admin and catalog modules read the same key). */
 export const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
 
@@ -72,6 +77,7 @@ export interface CredentialOfApplicant {
 
 export type OpenIdentityRequest = z.input<typeof openIdentityRequest>;
 
+
 /** What the review reads and writes, each on the call's transaction (`stores.ts`). */
 export interface ApplicationReviewStore {
   page(
@@ -88,6 +94,8 @@ export interface ApplicationReviewStore {
   recordCall(tx: Transaction, userId: string, call: CallRecord): Promise<boolean>;
   decide(tx: Transaction, userId: string, decision: ApplicationDecision): Promise<boolean>;
   grantSubjects(tx: Transaction, userId: string, subjectIds: readonly string[]): Promise<void>;
+  /** Rejects those still `pending` or `needs_document` (catalog's entry, T122); how many it moved. */
+  closeCredentials(tx: Transaction, closure: CredentialClosure): Promise<number>;
 }
 
 /** The standing's ban, identity's (`standing.service.ts`). */
@@ -242,13 +250,30 @@ export class ApplicationReviewService {
     return { subjectIds };
   }
 
-  /** `applications.reject`: an open application, with the note the applicant sees. */
-  reject(
+  /**
+   * `applications.reject`: an open application, with the note the applicant sees. Once the decision
+   * lands, the application's credentials still undecided are rejected with the same note, admin and
+   * moment (T122), so none stays «قيد المراجعة» after the application is closed.
+   */
+  async reject(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsRejectInput>,
   ): Promise<void> {
-    return this.#decide(tx, adminId, input.teacherUserId, 'reject', input.note);
+    const at = this.#now();
+    await this.#decide(tx, adminId, input.teacherUserId, 'reject', input.note, at);
+    const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
+    const undecided = ofApplication(
+      applicant,
+      await this.#store.credentialsOf(tx, [applicant.userId]),
+    ).filter(({ status }) => status === 'pending' || status === 'needs_document');
+    if (undecided.length === 0) return;
+    await this.#store.closeCredentials(tx, {
+      credentialIds: undecided.map(({ credentialId }) => credentialId),
+      reason: input.note,
+      adminId,
+      at,
+    });
   }
 
   /** `applications.requestInfo`: an application in review waits on the applicant (`needs_document`). */
@@ -275,8 +300,9 @@ export class ApplicationReviewService {
     userId: string,
     kind: 'reject' | 'request_info',
     note: string,
+    at: Date = this.#now(),
   ): Promise<void> {
-    const written = await this.#store.decide(tx, userId, { kind, adminId, at: this.#now(), note });
+    const written = await this.#store.decide(tx, userId, { kind, adminId, at, note });
     if (!written) await this.#refuseMoved(tx, userId);
   }
 

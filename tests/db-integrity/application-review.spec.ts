@@ -1,7 +1,8 @@
 // T068 — the application review's, the identity requests' and the standing's queries over the real
 // tables (identity's `applicants.repository.ts`, `application.repository.ts` and
 // `standing.repository.ts`; verification's `verification-requests.repository.ts`; catalog's
-// `revokeSubjects`), each reached through its module's entry. The parents (a person, an
+// `revokeSubjects`, and `closeUndecidedCredentials` with the documents queue and the teacher's list
+// it changes, T122), each reached through its module's entry. The parents (a person, an
 // administrator, a document, a subject) are committed first, as every probe here writes them; each
 // probe then runs the queries on one transaction it rolls back. The queue is a whole table other
 // probes fill while this one runs, so each probe names its applicant with a token of its own.
@@ -9,7 +10,11 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { revokeSubjects } from '../../apps/api/src/modules/catalog/index.js';
+import {
+  credentialReviewStore,
+  listCredentials,
+  revokeSubjects,
+} from '../../apps/api/src/modules/catalog/index.js';
 import {
   applicantsCount,
   applicantsPage,
@@ -33,6 +38,7 @@ import {
   type Db,
   insertRow,
   makeAdmin,
+  makeCredential,
   makeSubject,
   makeUser,
 } from './harness';
@@ -188,6 +194,66 @@ describe('the decisions', () => {
       (await readApplicant(tx, userId))?.status,
     ]);
     expect(outcomes).toEqual([true, false, true, false, false, 'rejected']);
+  });
+});
+
+describe("a rejection's undecided credentials (T122)", () => {
+  it('rejects the undecided ones with the note, out of the documents queue, and keeps a decided one', async () => {
+    const token = randomUUID().slice(0, 8);
+    const { userId } = await applicant({ displayName: `closed ${token}` });
+    const adminId = await makeAdmin(db);
+    const pending = await makeCredential(db, {
+      teacherId: userId,
+      subjectId: await makeSubject(db),
+    });
+    const waiting = await makeCredential(db, {
+      teacherId: userId,
+      subjectId: await makeSubject(db),
+      status: 'needs_document',
+    });
+    const approved = await makeCredential(db, {
+      teacherId: userId,
+      subjectId: await makeSubject(db),
+      status: 'approved',
+    });
+    const at = new Date('2026-10-22T10:00:00Z');
+    const [moved, again, listed, queued, counted, reviewers] = await rolledBack(
+      async (tx) =>
+        [
+          await createApplicationReviewStore().closeCredentials(tx, {
+            credentialIds: [pending, waiting, approved],
+            reason: 'المؤهل لا يغطي ورش',
+            adminId,
+            at,
+          }),
+          await createApplicationReviewStore().closeCredentials(tx, {
+            credentialIds: [pending, waiting],
+            reason: 'مرة ثانية',
+            adminId,
+            at,
+          }),
+          await listCredentials(tx, userId),
+          await credentialReviewStore.page(tx, { status: 'pending', search: token }, 0, 10),
+          await credentialReviewStore.count(tx, { status: 'needs_document', search: token }),
+          await tx.teacherCredential.findMany({
+            where: { id: { in: [pending, approved] } },
+            select: { id: true, reviewedByAdminId: true },
+          }),
+        ] as const,
+    );
+    expect([moved, again, queued, counted]).toEqual([2, 0, [], 0]);
+    const byId = new Map(listed.map((row) => [row.id, row]));
+    for (const id of [pending, waiting]) {
+      expect(byId.get(id)).toMatchObject({
+        status: 'rejected',
+        reviewReason: 'المؤهل لا يغطي ورش',
+        reviewedAt: at,
+      });
+    }
+    expect(byId.get(approved)).toMatchObject({ status: 'approved', reviewReason: null });
+    expect(byId.get(approved)?.reviewedAt).not.toEqual(at);
+    expect(reviewers.find((row) => row.id === pending)?.reviewedByAdminId).toBe(adminId);
+    expect(reviewers.find((row) => row.id === approved)?.reviewedByAdminId).not.toBe(adminId);
   });
 });
 

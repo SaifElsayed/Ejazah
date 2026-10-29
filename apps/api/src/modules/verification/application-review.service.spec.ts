@@ -299,6 +299,51 @@ describe('reject, requestInfo and ban', () => {
     }
   });
 
+  it("reject closes the application's undecided credentials with its note, its admin and its moment (T122)", async () => {
+    const userId = store.plant({
+      credentials: [
+        { subject: HAFS, status: 'pending' },
+        { subject: WARSH, status: 'needs_document' },
+        { subject: HAFS, status: 'approved' },
+      ],
+    });
+    const added = store.plantOther(userId, 'pending', false);
+    await service.reject(TX, ADMIN, {
+      teacherUserId: userId,
+      reasonChoice: 'qualification_gap',
+      note: 'المؤهل لا يغطي ورش',
+    });
+    const statuses = (await store.credentialsOf(TX, [userId])).map(({ credentialId, status }) => ({
+      credentialId,
+      status,
+    }));
+    const [pending, waiting, approved] = statuses;
+    expect(statuses.map(({ status }) => status)).toEqual([
+      'rejected',
+      'rejected',
+      'approved',
+      'pending',
+    ]);
+    const review = { reason: 'المؤهل لا يغطي ورش', adminId: ADMIN, at: NOW };
+    expect(store.reviews.get(pending?.credentialId ?? '')).toEqual(review);
+    expect(store.reviews.get(waiting?.credentialId ?? '')).toEqual(review);
+    expect(store.reviews.has(approved?.credentialId ?? '')).toBe(false);
+    expect(store.reviews.has(added)).toBe(false);
+  });
+
+  it('requestInfo and a refused reject close no credential (T122)', async () => {
+    const userId = store.plant({ credentials: [{ subject: HAFS, status: 'pending' }] });
+    await service.requestInfo(TX, ADMIN, { teacherUserId: userId, needed: ['other'], note: 'x' });
+    const rejected = store.plant({
+      status: 'rejected',
+      credentials: [{ subject: HAFS, status: 'pending' }],
+    });
+    await refusal(
+      service.reject(TX, ADMIN, { teacherUserId: rejected, reasonChoice: 'other', note: 'x' }),
+    );
+    expect(store.reviews.size).toBe(0);
+  });
+
   it('requestInfo sets needs_document with the note, from review only', async () => {
     const userId = store.plant();
     await service.requestInfo(TX, ADMIN, {

@@ -1,6 +1,7 @@
 // T065 — the admin home's two queue cards over the real tables, as the admin module reads them
 // through the identity and catalog modules' entries (`readApplicationQueue`, `readCredentialQueue`;
-// R-API-6, FR-176), a deleted account left out as the lists leave it (T121). A count is over the
+// R-API-6, FR-176), a deleted account left out as the lists leave it (T121), and a banned
+// account's credential too (T122). A count is over the
 // whole table, which other probes fill while this one runs, so each probe reads inside one
 // REPEATABLE READ transaction: it counts, writes its own rows through the owning modules' entries
 // on that transaction, counts again and rolls everything back. The
@@ -170,6 +171,27 @@ describe('the credentials card', () => {
         createdAt: new Date('1970-06-01T00:00:00Z'),
       });
       await tx.user.update({ where: { id: teacher.userId }, data: { deletedAt: new Date() } });
+      return [counted, await readCredentialQueue(tx)] as const;
+    });
+    expect(after).toEqual(before);
+  });
+
+  it("leaves out a banned account's credential, as the credentials list does (T122)", async () => {
+    const teacher = await personWithDocument('credential');
+    const subject = await makeSubject(db);
+    const [before, after] = await onOneSnapshot(async (tx) => {
+      const counted = await readCredentialQueue(tx);
+      await addCredential(tx, {
+        teacherUserId: teacher.userId,
+        subjectId: subject,
+        documentId: teacher.documentId,
+        submittedWithApplication: false,
+        createdAt: new Date('1970-06-01T00:00:00Z'),
+      });
+      await tx.user.update({
+        where: { id: teacher.userId },
+        data: { accountStatus: 'banned' },
+      });
       return [counted, await readCredentialQueue(tx)] as const;
     });
     expect(after).toEqual(before);

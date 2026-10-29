@@ -8,6 +8,7 @@ import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import {
   activeSubjectsAmong,
   addCredential,
+  closeUndecidedCredentials,
   type CredentialRow,
   credentialsOfTeachers,
   grantSubjects,
@@ -133,6 +134,7 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
     recordCall: recordApplicationCall,
     decide: decideApplication,
     grantSubjects,
+    closeCredentials: closeUndecidedCredentials,
   };
 }
 

@@ -314,7 +314,7 @@ One ijazah PDF per subject with its transcription; the chain hangs under it (ADR
 | submitted_with_application | boolean | Whether it came with an application («عند التقدّم») or was added after approval |
 | created_at / updated_at | timestamptz | |
 
-One approved credential per teacher and subject: partial unique `(teacher_user_id, subject_id) WHERE status = 'approved'` (§15 rule 23). A rejected credential stays as history; a new upload for the same subject is a new row.
+One approved credential per teacher and subject: partial unique `(teacher_user_id, subject_id) WHERE status = 'approved'` (§15 rule 23). A rejected credential stays as history; a new upload for the same subject is a new row. Rejecting an application closes its undecided credentials: each still `pending` or `needs_document` becomes `rejected` with the rejection's note as `review_reason`, its administrator and its moment (T122).
 
 ### `isnad_entries`
 
