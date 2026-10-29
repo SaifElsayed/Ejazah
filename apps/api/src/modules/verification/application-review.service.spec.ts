@@ -43,6 +43,7 @@ beforeEach(() => {
     standing: {
       ban: async (_tx, _adminId, userId, applicant) => {
         bans.push({ userId, applicantNote: applicant?.applicantNote ?? '' });
+        return { applicationStatus: 'rejected' };
       },
     },
     settings,
@@ -239,7 +240,11 @@ describe('approve', () => {
       note: 'مرحبًا بك',
     });
     expect(store.granted).toEqual([{ userId, subjectIds: [HAFS.id] }]);
-    expect(answer).toEqual({ subjectIds: [HAFS.id] });
+    expect(answer).toEqual({
+      before: { status: 'in_review' },
+      after: { status: 'approved' },
+      subjectIds: [HAFS.id],
+    });
   });
 
   it('refuses with every reason that holds: the call, an undecided credential, none approved', async () => {
@@ -296,6 +301,36 @@ describe('approve', () => {
     expect((await refusal(service.approve(TX, ADMIN, { teacherUserId: userId }))).code).toBe(
       'CONFLICT',
     );
+  });
+});
+
+describe("the decisions' status before and after (T116)", () => {
+  it('reject answers the status it moved from, in review or waiting', async () => {
+    const inReview = store.plant();
+    const waiting = store.plant({ status: 'needs_document' });
+    const input = { reasonChoice: 'other', note: 'x' } as const;
+    expect(await service.reject(TX, ADMIN, { teacherUserId: inReview, ...input })).toEqual({
+      before: { status: 'in_review' },
+      after: { status: 'rejected' },
+    });
+    expect(await service.reject(TX, ADMIN, { teacherUserId: waiting, ...input })).toEqual({
+      before: { status: 'needs_document' },
+      after: { status: 'rejected' },
+    });
+  });
+
+  it('requestInfo answers in review to waiting', async () => {
+    const userId = store.plant();
+    expect(
+      await service.requestInfo(TX, ADMIN, { teacherUserId: userId, needed: ['other'], note: 'x' }),
+    ).toEqual({ before: { status: 'in_review' }, after: { status: 'needs_document' } });
+  });
+
+  it("ban answers the application status the standing's ban moved from", async () => {
+    const userId = store.plant({ status: 'rejected' });
+    expect(
+      await service.ban(TX, ADMIN, { teacherUserId: userId, reasonChoice: 'other', note: 'x' }),
+    ).toEqual({ before: { status: 'rejected' }, after: { status: 'banned' } });
   });
 });
 

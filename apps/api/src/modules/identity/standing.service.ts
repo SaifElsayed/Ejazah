@@ -73,6 +73,10 @@ export interface StandingMove<Field extends string, Value extends string> {
 }
 
 type AccountMove = StandingMove<'accountStatus', AccountStatus>;
+/** A ban's move, and the application status it moved from, the applicant's entry's before. */
+type BanMove = AccountMove & {
+  readonly applicationStatus: NonNullable<Standing['teacher']>['applicationStatus'];
+};
 type VerificationMove = StandingMove<
   'verificationStatus',
   NonNullable<Standing['teacher']>['verificationStatus']
@@ -158,7 +162,7 @@ export class StandingService {
     adminId: string,
     userId: string,
     applicant?: { readonly applicantNote: string },
-  ): Promise<AccountMove> {
+  ): Promise<BanMove> {
     const standing = await this.#teacher(tx, userId);
     const { applicationStatus, verificationStatus } = standing.teacher;
     const allowed =
@@ -186,7 +190,10 @@ export class StandingService {
       ));
     if (!banned) throw conflict(await this.#teacher(tx, userId));
     await this.#end(tx, userId, 'banned');
-    return accountMove(standing.accountStatus, 'banned');
+    return {
+      ...accountMove(standing.accountStatus, 'banned'),
+      applicationStatus: standing.teacher.applicationStatus,
+    };
   }
 
   /**

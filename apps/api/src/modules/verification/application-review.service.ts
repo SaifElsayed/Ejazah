@@ -44,6 +44,7 @@ import type {
   ApplicantDetail,
   ApplicantRow,
   ApplicantsFilter,
+  ApplicantStatus,
   CallRecord,
 } from '../identity/index.js';
 
@@ -97,14 +98,20 @@ export interface ApplicationReviewStore {
   closeCredentials(tx: Transaction, closure: CredentialClosure): Promise<number>;
 }
 
-/** The standing's ban, identity's (`standing.service.ts`). */
+/** The standing's ban, identity's (`standing.service.ts`): the application status it moved from. */
 export interface ApplicantBan {
   ban(
     tx: Transaction,
     adminId: string,
     userId: string,
     applicant?: { readonly applicantNote: string },
-  ): Promise<unknown>;
+  ): Promise<{ readonly applicationStatus: ApplicantStatus | null }>;
+}
+
+/** A decision's application status before and after, for its audit entry (T116). */
+export interface DecisionMove {
+  readonly before: { readonly status: ApplicantStatus | null };
+  readonly after: { readonly status: ApplicantStatus };
 }
 
 export interface ApplicationReviewDependencies {
@@ -233,7 +240,7 @@ export class ApplicationReviewService {
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsApproveInput>,
-  ): Promise<{ readonly subjectIds: string[] }> {
+  ): Promise<DecisionMove & { readonly subjectIds: string[] }> {
     const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
     if (applicant.status !== 'in_review') throw conflict(applicant.status);
     const credentials = ofApplication(
@@ -264,51 +271,68 @@ export class ApplicationReviewService {
     }
     const subjectIds = approved.map((credential) => credential.subject.id);
     await this.#store.grantSubjects(tx, applicant.userId, subjectIds);
-    return { subjectIds };
+    return { before: { status: 'in_review' }, after: { status: 'approved' }, subjectIds };
   }
 
   /**
    * `applications.reject`: an open application, with the note the applicant sees. Once the decision
    * lands, the application's credentials still undecided are rejected with the same note, admin and
-   * moment (T122), so none stays «قيد المراجعة» after the application is closed.
+   * moment (T122), so none stays «قيد المراجعة» after the application is closed. Answers the status
+   * it moved from, read before the decision with the application its credentials need (T116).
    */
   async reject(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsRejectInput>,
-  ): Promise<void> {
+  ): Promise<DecisionMove> {
+    const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
+    const move: DecisionMove = {
+      before: { status: applicant.status },
+      after: { status: 'rejected' },
+    };
     const at = this.#now();
     await this.#decide(tx, adminId, input.teacherUserId, 'reject', input.note, at);
-    const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
     const undecided = ofApplication(
       applicant,
       await this.#store.credentialsOf(tx, [applicant.userId]),
     ).filter(({ status }) => status === 'pending' || status === 'needs_document');
-    if (undecided.length === 0) return;
-    await this.#store.closeCredentials(tx, {
-      credentialIds: undecided.map(({ credentialId }) => credentialId),
-      reason: input.note,
-      adminId,
-      at,
-    });
+    if (undecided.length > 0) {
+      await this.#store.closeCredentials(tx, {
+        credentialIds: undecided.map(({ credentialId }) => credentialId),
+        reason: input.note,
+        adminId,
+        at,
+      });
+    }
+    return move;
   }
 
-  /** `applications.requestInfo`: an application in review waits on the applicant (`needs_document`). */
-  requestInfo(
+  /**
+   * `applications.requestInfo`: an application in review waits on the applicant (`needs_document`).
+   * The decision moves only from `in_review`, so a landed one moved from it (T116).
+   */
+  async requestInfo(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsRequestInfoInput>,
-  ): Promise<void> {
-    return this.#decide(tx, adminId, input.teacherUserId, 'request_info', input.note);
+  ): Promise<DecisionMove> {
+    await this.#decide(tx, adminId, input.teacherUserId, 'request_info', input.note);
+    return { before: { status: 'in_review' }, after: { status: 'needs_document' } };
   }
 
-  /** `applications.ban`: the standing's one ban, the note written to the application. */
+  /**
+   * `applications.ban`: the standing's one ban, the note written to the application; the status it
+   * moved from is the one the standing read (T116).
+   */
   async ban(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsBanInput>,
-  ): Promise<void> {
-    await this.#standing.ban(tx, adminId, input.teacherUserId, { applicantNote: input.note });
+  ): Promise<DecisionMove> {
+    const { applicationStatus } = await this.#standing.ban(tx, adminId, input.teacherUserId, {
+      applicantNote: input.note,
+    });
+    return { before: { status: applicationStatus }, after: { status: 'banned' } };
   }
 
   async #decide(

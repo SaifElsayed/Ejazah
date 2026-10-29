@@ -296,11 +296,17 @@ describe("the audit entry's before and after (T116)", () => {
     });
   });
 
-  it('ban answers the account status it moved from', async () => {
+  it('ban answers the account status it moved from, and the application status for the applicant', async () => {
     const userId = approvedTeacher('suspended');
-    expect(await standing.ban(TX, ADMIN, userId)).toEqual({
+    expect(await standing.ban(TX, ADMIN, userId)).toMatchObject({
       before: { accountStatus: 'suspended' },
       after: { accountStatus: 'banned' },
+    });
+    const rejected = applicant('rejected');
+    expect(await standing.ban(TX, ADMIN, rejected, { applicantNote: 'معدَّلة' })).toEqual({
+      before: { accountStatus: 'active' },
+      after: { accountStatus: 'banned' },
+      applicationStatus: 'rejected',
     });
   });
 

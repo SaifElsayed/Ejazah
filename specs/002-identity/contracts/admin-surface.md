@@ -109,7 +109,7 @@ The standing's states (T068, batch B13b; data-model.md, ADR 0016 D2):
 - **`reinstate`.** It moves a suspended teacher back to `active`, or to `verification_required` while an identity request of theirs is `open` (T113, owner's decision 2026-10-28). A ban is not lifted (FR-162).
 - **Sessions and consequences.** Each of the three ends every session (`revoked_reason` `account_suspended`, `admin_action`, `account_banned`). Each calls `onAccountTerminated(tx, userId, cause)` (`identity/consequences.ts`, empty in this phase).
 - **Refusals.** A refusal is `CONFLICT` on `teacherUserId`, naming the standing. A person with no teacher profile is `NOT_FOUND`.
-- **The audit.** Each entry is on the person (`user`), with the reason and the standing it moved to.
+- **The audit.** Each entry is on the person (`user`), with the reason, the standing it moved from as its `before` and the standing it moved to as its `after` (T116).
 
 ## `admins` — the admins page (FR-174)
 

@@ -329,22 +329,18 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof applicationsApproveInput>,
-    ): Promise<{ readonly subjectIds: string[] }>;
-    reject(
-      tx: Transaction,
-      actorId: string,
-      input: z.output<typeof applicationsRejectInput>,
-    ): Promise<void>;
+    ): Promise<{
+      readonly before: AuditSnapshot;
+      readonly after: AuditSnapshot;
+      readonly subjectIds: string[];
+    }>;
+    reject(tx: Transaction, actorId: string, input: z.output<typeof applicationsRejectInput>): Move;
     requestInfo(
       tx: Transaction,
       actorId: string,
       input: z.output<typeof applicationsRequestInfoInput>,
-    ): Promise<void>;
-    ban(
-      tx: Transaction,
-      actorId: string,
-      input: z.output<typeof applicationsBanInput>,
-    ): Promise<void>;
+    ): Move;
+    ban(tx: Transaction, actorId: string, input: z.output<typeof applicationsBanInput>): Move;
   };
   /** The document viewer and the identity requests (FR-160, FR-166; T068), the verification module's. */
   readonly documents: {
