@@ -167,6 +167,50 @@ describe('the API client', () => {
     expect(server.calls.filter((call) => call.path === 'auth.refresh')).toHaveLength(1);
   });
 
+  // T156: a launch after the back key can hold two screen trees, each with its own client, over one store.
+  it('refreshes once for calls of two clients over the same store refused together', async () => {
+    const server = fakeServer((call) => {
+      if (call.path === 'auth.refresh') return ok({ accessToken: 'a2', refreshToken: 'r2' });
+      return call.bearer === 'a2' ? ok(subjects) : refused('UNAUTHENTICATED');
+    });
+    const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });
+    const onSignedOut = jest.fn();
+    const [first, second] = [0, 1].map(() =>
+      createApiClient({ url, sessions: sessions.store, onSignedOut, fetch: server.fetch }),
+    );
+    await expect(
+      Promise.all([
+        first?.api.catalog.subjects.list.query(),
+        second?.api.catalog.subjects.list.query(),
+      ]),
+    ).resolves.toEqual([subjects, subjects]);
+    expect(server.calls.filter((call) => call.path === 'auth.refresh')).toHaveLength(1);
+    expect(sessions.current()).toEqual({ accessToken: 'a2', refreshToken: 'r2' });
+    expect(onSignedOut).not.toHaveBeenCalled();
+  });
+
+  it('keeps the session when the refused token is no longer the stored one, and sends the call again', async () => {
+    const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });
+    const server = fakeServer((call) => {
+      if (call.path === 'auth.refresh') {
+        // Another refresh rotated r1 and stored its answer before this refusal came back.
+        void sessions.store.write({ accessToken: 'a3', refreshToken: 'r3' });
+        return refused('UNAUTHENTICATED');
+      }
+      return call.bearer === 'a3' ? ok(subjects) : refused('UNAUTHENTICATED');
+    });
+    const onSignedOut = jest.fn();
+    const client = createApiClient({
+      url,
+      sessions: sessions.store,
+      onSignedOut,
+      fetch: server.fetch,
+    });
+    await expect(client.api.catalog.subjects.list.query()).resolves.toEqual(subjects);
+    expect(sessions.current()).toEqual({ accessToken: 'a3', refreshToken: 'r3' });
+    expect(onSignedOut).not.toHaveBeenCalled();
+  });
+
   it('signs out when the refresh is refused, and the call fails', async () => {
     const server = fakeServer((call) =>
       call.path === 'auth.refresh' ? refused('UNAUTHENTICATED') : refused('UNAUTHENTICATED'),
