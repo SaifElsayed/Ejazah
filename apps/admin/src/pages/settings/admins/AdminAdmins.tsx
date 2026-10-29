@@ -4,7 +4,8 @@
 // the pager the page size answers, by name as the server orders it (B14d: the board's «حسب آخر
 // دخول» says what the server does not). A row opens its detail beside the table, read from the row
 // (there is no `admins.get`): who added it and when, the second factor and the codes left, the last
-// sign-in. Another's active account offers the second-factor reset and the disabling; one's own says
+// sign-in. Another's active account offers the disabling, and the second-factor reset when it has a
+// second factor (T116); one's own says
 // another administrator does those and offers new recovery codes; a disabled account offers nothing.
 // The board's audit count and support request have no data in this phase and are not drawn.
 import { useState } from 'react';
@@ -248,12 +249,14 @@ function AdminDetail({
           ) : undefined
         ) : (
           <>
-            <Button
-              label={t('admin.admins.detail.resetMfa')}
-              variant="secondary"
-              icon={{ name: 'key-round' }}
-              onPress={() => onOpen('reset')}
-            />
+            {admin.mfaEnrolled ? (
+              <Button
+                label={t('admin.admins.detail.resetMfa')}
+                variant="secondary"
+                icon={{ name: 'key-round' }}
+                onPress={() => onOpen('reset')}
+              />
+            ) : null}
             <Button
               label={t('admin.admins.detail.disable')}
               variant="danger"

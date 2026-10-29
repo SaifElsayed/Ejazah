@@ -6,6 +6,7 @@
 // rejected. A verified one is corrected with a reason; each generation it changes says what it was.
 // One waiting on a file, or rejected, shows what the teacher was told. Every decision is confirmed
 // (`CredentialConfirm`). A long chain shows its ends and folds its middle until it is opened.
+// «اعتماد» waits until the credential's file has loaded beside the panel (T116).
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -48,7 +49,14 @@ const SHOWN_LAST = 2;
 
 type Chain = readonly (readonly string[])[];
 
-export function CredentialPanel({ credentialId }: { readonly credentialId: string }) {
+export function CredentialPanel({
+  credentialId,
+  loadedDocument,
+}: {
+  readonly credentialId: string;
+  /** The document whose PDF has loaded beside the panel, if any. */
+  readonly loadedDocument: string | null;
+}) {
   const t = useT();
   const credential = useCredential(credentialId);
   // Said above the panel, which the next read draws anew (B14c review, round 1, finding 1).
@@ -74,6 +82,7 @@ export function CredentialPanel({ credentialId }: { readonly credentialId: strin
       <Transcription
         key={`${detail.credentialId}-${detail.status}`}
         detail={detail}
+        fileLoaded={loadedDocument === detail.documentId}
         onMoved={() => setMoved(true)}
         onDeciding={() => setMoved(false)}
       />
@@ -83,10 +92,12 @@ export function CredentialPanel({ credentialId }: { readonly credentialId: strin
 
 function Transcription({
   detail,
+  fileLoaded,
   onMoved,
   onDeciding,
 }: {
   readonly detail: CredentialDetail;
+  readonly fileLoaded: boolean;
   readonly onMoved: () => void;
   /** A new decision begins: the last one's sentence goes (B14c review, round 2). */
   readonly onDeciding: () => void;
@@ -226,7 +237,8 @@ function Transcription({
             <>
               <Button
                 label={t('admin.credentials.panel.approve')}
-                disabled={!complete}
+                // A reminder on the screen, not a protection (R-MOBILE-13): the server's rule is T120.
+                disabled={!complete || !fileLoaded}
                 onPress={() =>
                   setDeciding({
                     kind: 'approve',
