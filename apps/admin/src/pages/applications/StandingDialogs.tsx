@@ -185,7 +185,14 @@ export function ReinstateDialog({
         <h3 className="group-label">{t('admin.dialogs.confirm.common.effectsTitle')}</h3>
         <p className="row row--top gap-2 text-callout">
           <Icon name="user-check" size="sm" />
-          <span>{t('admin.dialogs.confirm.reactivateAccount.effects.reinstated')}</span>
+          <span>
+            {t(
+              // T113: an open identity request keeps the account `verification_required`.
+              detail.identityRequest === undefined
+                ? 'admin.dialogs.confirm.reactivateAccount.effects.reinstated'
+                : 'admin.dialogs.confirm.reactivateAccount.effects.reinstatedAwaitingIdentity',
+            )}
+          </span>
         </p>
       </section>
       <Field label={t('admin.dialogs.confirm.reactivateAccount.reasonLabel')}>

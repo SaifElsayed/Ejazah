@@ -184,6 +184,38 @@ describe('the standing of an approved teacher (FR-173)', () => {
     await waitFor(() => expect(api.applications.get.query).toHaveBeenCalledTimes(2));
   });
 
+  // T113: under an open identity request the account lands on `verification_required`, and the
+  // dialog names that state rather than «نشط».
+  it('says a reinstated teacher with an open identity request awaits proof of identity', async () => {
+    open(
+      fakeApi(
+        detailOf({
+          accountStatus: 'suspended',
+          identityRequest: {
+            requestId: '01a18400-0000-7000-8000-0000000000aa',
+            reason: 'الصورة غير واضحة',
+            requestedAt: '2026-10-20T09:00:00.000Z',
+          },
+        }),
+      ),
+    );
+    const panel = await detail();
+    fireEvent.click(
+      panel.getByRole('button', { name: ar('admin.dialogs.confirm.reactivateAccount.confirm') }),
+    );
+    const reinstating = await dialog(
+      ar('admin.dialogs.confirm.reactivateAccount.title', { name: row.displayName }),
+    );
+    expect(
+      reinstating.getByText(
+        ar('admin.dialogs.confirm.reactivateAccount.effects.reinstatedAwaitingIdentity'),
+      ),
+    ).toBeTruthy();
+    expect(
+      reinstating.queryByText(ar('admin.dialogs.confirm.reactivateAccount.effects.reinstated')),
+    ).toBeNull();
+  });
+
   it('reinstates a suspended teacher with the reason, and says a refusal', async () => {
     const { api } = open(fakeApi(detailOf({ accountStatus: 'suspended' })));
     api.teachers.reinstate.mutate.mockRejectedValueOnce(refusal('CONFLICT'));
