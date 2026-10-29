@@ -20,6 +20,7 @@ import type { ReactElement } from 'react';
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
+import { formatDate } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../__tests__/api-double';
 import { getSession, setSession } from '../../../lib/session';
 import { BannedSignedOut, IdentityRequestCard, Restricted, VerifyIdentity } from './index';
@@ -383,6 +384,67 @@ describe('VerifyIdentity (FR-166)', () => {
         ).toBeNull();
       },
     );
+  });
+
+  // T115 (b): how the latest closed request ended, as a banner, in both languages.
+  const RESOLVED = '2026-10-23T09:00:00.000Z';
+  const on = (direction: 'rtl' | 'ltr') =>
+    formatDate(RESOLVED, 'Africa/Cairo', direction === 'rtl' ? 'ar' : 'en');
+
+  it('says the document was accepted, and when, once the request is closed', async () => {
+    request({ open: false, lastOutcome: { status: 'satisfied', resolvedAt: RESOLVED } });
+    await inBothDirections(
+      as('student', 'active', () => <VerifyIdentity />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(
+            translate(
+              direction === 'rtl' ? 'ar' : 'en',
+              'account.verifyIdentity.outcome.satisfied',
+              {
+                date: on(direction),
+              },
+            ),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('says the last document was not accepted, when, and why, over the new request', async () => {
+    const reason = 'الوجه الخلفي غير واضح';
+    request({
+      ...open,
+      reason,
+      lastOutcome: { status: 'replaced', resolvedAt: RESOLVED, reason },
+    });
+    await inBothDirections(
+      as('teacher', 'verification_required', () => <VerifyIdentity />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(
+            translate(
+              direction === 'rtl' ? 'ar' : 'en',
+              'account.verifyIdentity.outcome.replaced',
+              {
+                date: on(direction),
+              },
+            ),
+          ),
+        ).toBeTruthy();
+        expect(screen.getAllByText(reason).length).toBeGreaterThan(0);
+        expect(
+          screen.getByRole('button', { name: said(direction, 'account.verifyIdentity.submit') }),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('draws no outcome banner when there is none', async () => {
+    request(open);
+    await renderIn('rtl', as('student', 'verification_required', () => <VerifyIdentity />)());
+    expect(await screen.findByText(ar('account.verifyIdentity.intro'))).toBeTruthy();
+    expect(screen.queryByText(/قبلنا|لم نقبل/)).toBeNull();
   });
 
   it('says there is no request when none is open', async () => {

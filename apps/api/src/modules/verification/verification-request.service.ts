@@ -10,7 +10,7 @@
 //
 // The administrator's methods run on the administrator kind's transaction (`tx`); the user's open
 // their own through the store (`run`).
-import type { identityVerificationGetOutput } from '@ijazah/contracts';
+import type { identityVerificationGetOutput, identityVerificationOutcome } from '@ijazah/contracts';
 import type { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -34,12 +34,20 @@ export interface IdentityRequestRecord {
   } | null;
 }
 
+/** A closed request as the person's side reads it (T115). */
+export interface ClosedRequestRecord {
+  readonly status: 'satisfied' | 'expired' | 'replaced';
+  readonly resolvedAt: Date | null;
+}
+
 /** What the requests read and write, each on the transaction it is handed (`stores.ts`). */
 export interface IdentityRequestStore {
   run<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
   /** The live person's account status, identity's; null for none. */
   accountStatusOf(tx: Transaction, userId: string): Promise<AccountStatus | null>;
   openRequestOf(tx: Transaction, userId: string): Promise<IdentityRequestRecord | null>;
+  /** The person's latest closed request, by when it closed; null for none. */
+  lastClosedRequestOf(tx: Transaction, userId: string): Promise<ClosedRequestRecord | null>;
   readRequest(tx: Transaction, requestId: string): Promise<IdentityRequestRecord | null>;
   openRequest(
     tx: Transaction,
@@ -203,12 +211,15 @@ export class IdentityVerificationService {
     this.#store = dependencies.store;
   }
 
-  /** `account.identityVerification.get`: the user's open request, if any. */
+  /** `account.identityVerification.get`: the user's open request, if any, and the last outcome. */
   get(userId: string): Promise<z.input<typeof identityVerificationGetOutput>> {
     return this.#store.run(async (tx) => {
       const request = await this.#store.openRequestOf(tx, userId);
-      if (request === null) return { open: false };
+      const outcome = outcomeOf(await this.#store.lastClosedRequestOf(tx, userId), request);
+      const lastOutcome = outcome === undefined ? {} : { lastOutcome: outcome };
+      if (request === null) return { open: false, ...lastOutcome };
       return {
+        ...lastOutcome,
         open: true,
         reason: request.reason,
         requestedAt: request.requestedAt.toISOString(),
@@ -241,6 +252,23 @@ export class IdentityVerificationService {
       if (!attached) throw conflict('documentId', 'submitted');
     });
   }
+}
+
+/**
+ * How the latest closed request ended (T115): accepted, or replaced by the open request whose reason
+ * the person reads, since a replaced row keeps its own first reason. An `expired` one shows none.
+ */
+function outcomeOf(
+  closed: ClosedRequestRecord | null,
+  open: IdentityRequestRecord | null,
+): z.input<typeof identityVerificationOutcome> | undefined {
+  if (closed === null || closed.resolvedAt === null) return undefined;
+  const resolvedAt = closed.resolvedAt.toISOString();
+  if (closed.status === 'satisfied') return { status: 'satisfied', resolvedAt };
+  if (closed.status === 'replaced' && open !== null) {
+    return { status: 'replaced', resolvedAt, reason: open.reason };
+  }
+  return undefined;
 }
 
 function conflict(path: string, code: string): DomainError {

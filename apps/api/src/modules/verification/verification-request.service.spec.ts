@@ -140,7 +140,45 @@ describe("the user's side", () => {
       open: true,
       reason: 'الصورة غير واضحة',
       requestedAt: NOW.toISOString(),
+      lastOutcome: {
+        status: 'replaced',
+        resolvedAt: NOW.toISOString(),
+        reason: 'الصورة غير واضحة',
+      },
     });
+  });
+
+  // T115 (b): the latest closed request, so the phone can say how the review ended.
+  it('get answers the accepted request as the last outcome, with when, once nothing is open', async () => {
+    const { userId, requestId } = await requested(true);
+    expect((await person.get(userId)).lastOutcome).toBeUndefined();
+    await service.accept(TX, ADMIN, { requestId });
+    expect(await person.get(userId)).toEqual({
+      open: false,
+      lastOutcome: { status: 'satisfied', resolvedAt: NOW.toISOString() },
+    });
+  });
+
+  it('get answers the latest closed request only: a replaced one, then its replacement accepted', async () => {
+    const { userId, requestId } = await requested(true);
+    const next = await service.requestAnother(TX, ADMIN, { requestId, note: 'الوجه الخلفي' });
+    expect((await person.get(userId)).lastOutcome).toEqual({
+      status: 'replaced',
+      resolvedAt: NOW.toISOString(),
+      reason: 'الوجه الخلفي',
+    });
+    await person.submit(userId, { documentType: 'passport', documentId: store.upload(userId) });
+    await service.accept(TX, ADMIN, { requestId: next.requestId });
+    expect((await person.get(userId)).lastOutcome).toEqual({
+      status: 'satisfied',
+      resolvedAt: NOW.toISOString(),
+    });
+  });
+
+  it('get answers no outcome for an expired request, which no Phase 1 path writes', async () => {
+    const { userId, requestId } = await requested(true);
+    store.expire(requestId, NOW);
+    expect(await person.get(userId)).toEqual({ open: false });
   });
 
   it("submit refuses another person's document, and no open request", async () => {

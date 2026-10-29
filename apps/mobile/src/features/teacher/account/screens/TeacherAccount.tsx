@@ -3,10 +3,11 @@
 // approved badge, and the settings the student's tab has. The teaching list and the delete row are
 // added with their screens (owner's decision, 2026-10-20): «إجازاتي» since B11b (T059), with the
 // count waiting for review from `teacher.credentials.list`; «حساب الاستلام» since B15 (T078), for an
-// approved teacher, to the payout's state, with «موثّق» once `account.me` says verified (the only
-// badge drawn, open-items 18); the danger row «حذف الحساب» since B16 (T084), after the settings, to
+// approved teacher, to the payout's state, its badge each state of `teacher.payout.get` as
+// PayoutSetup reads it (T115: `account.me` reads a rejection with no reason as pending); the danger row «حذف الحساب» since B16 (T084), after the settings, to
 // the deletion; the public profile, the signature and the rating with their phases; the
 // notifications with theirs.
+import type { PayoutState } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -23,7 +24,7 @@ import {
   Text,
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
-import { useT } from '../../../../i18n';
+import { type MessageKey, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import {
   AccountFailed,
@@ -34,8 +35,35 @@ import {
 } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
 import { useCredentials } from '../../credentials';
-import { PAYOUT_ROUTE } from '../../payout';
+import { PAYOUT_ROUTE, usePayout } from '../../payout';
 import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../navigation';
+
+/** The payout row's badge for each state; none while no account is configured (T115). */
+const PAYOUT_BADGE = {
+  not_configured: undefined,
+  pending_verification: { label: 'status.payout.verifying', tone: 'warning' },
+  verified: { label: 'status.payout.verified', tone: 'success' },
+  rejected: { label: 'status.payout.rejected', tone: 'danger' },
+} as const satisfies Record<
+  PayoutState,
+  { readonly label: MessageKey; readonly tone: 'warning' | 'success' | 'danger' } | undefined
+>;
+
+/** «حساب الاستلام», for an approved teacher, with the state `teacher.payout.get` answers. */
+function PayoutRow() {
+  const t = useT();
+  const payout = usePayout();
+  const badge = payout.data === undefined ? undefined : PAYOUT_BADGE[payout.data.state];
+  return (
+    <ListRow
+      label={t('teacher.account.payout')}
+      {...(badge === undefined
+        ? {}
+        : { trailing: <Badge label={t(badge.label)} tone={badge.tone} /> })}
+      onPress={() => router.push(PAYOUT_ROUTE)}
+    />
+  );
+}
 
 export function TeacherAccount() {
   const t = useT();
@@ -99,15 +127,7 @@ export function TeacherAccount() {
                   })}
               onPress={() => router.push('/(teacher)/credentials')}
             />
-            {account.teacher?.verificationStatus === 'approved' ? (
-              <ListRow
-                label={t('teacher.account.payout')}
-                {...(account.teacher.payout.verified
-                  ? { trailing: <Badge label={t('status.payout.verified')} tone="success" /> }
-                  : {})}
-                onPress={() => router.push(PAYOUT_ROUTE)}
-              />
-            ) : null}
+            {account.teacher?.verificationStatus === 'approved' ? <PayoutRow /> : null}
           </List>
           <AccountSettings me={account} />
           <List>

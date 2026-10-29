@@ -827,6 +827,14 @@
         "output": {
           "$": { "type": "object" },
           "$.documentType": { "type": "string", "values": ["national_id", "passport"] },
+          "$.lastOutcome": { "type": "object" },
+          "$.lastOutcome.reason": { "type": "string" },
+          "$.lastOutcome.resolvedAt": { "required": true, "type": "string" },
+          "$.lastOutcome.status": {
+            "required": true,
+            "type": "string",
+            "values": ["replaced", "satisfied"]
+          },
           "$.open": { "required": true, "type": "boolean" },
           "$.reason": { "type": "string" },
           "$.requestedAt": { "type": "string" },

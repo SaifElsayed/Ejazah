@@ -5,7 +5,7 @@
 // conditional on the state it moves from, so two administrators racing on one request cannot both
 // move it; a write answers whether it landed.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import type { IdentityRequestRecord } from './verification-request.service.js';
+import type { ClosedRequestRecord, IdentityRequestRecord } from './verification-request.service.js';
 
 type Client = Pick<Transaction, 'verificationRequest' | 'verificationDocument'>;
 
@@ -29,6 +29,24 @@ export async function openRequestOf(
     },
   });
   return row === null ? null : recordOf(row);
+}
+
+/** The person's latest closed request, by when it closed (T115); null for none. */
+export async function lastClosedRequestOf(
+  tx: Client,
+  userId: string,
+): Promise<ClosedRequestRecord | null> {
+  const row = await tx.verificationRequest.findFirst({
+    where: { userId, status: { not: 'open' } },
+    orderBy: [
+      { resolvedAt: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'desc' },
+      { id: 'desc' },
+    ],
+    select: { status: true, resolvedAt: true },
+  });
+  if (row === null || row.status === 'open') return null;
+  return { status: row.status, resolvedAt: row.resolvedAt };
 }
 
 /** One request; null when it is not there. */

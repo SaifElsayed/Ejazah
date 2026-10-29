@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { Transaction } from '../../../platform/db/prisma.repository.js';
 import type {
+  ClosedRequestRecord,
   IdentityRequestRecord,
   IdentityRequestStore,
 } from '../verification-request.service.js';
@@ -52,6 +53,12 @@ export class MemoryRequestStore implements IdentityRequestStore {
     return this.#requests.filter((request) => request.userId === userId);
   }
 
+  /** Closes `requestId` as `expired`, which no Phase 1 path writes (T115). */
+  expire(requestId: string, at: Date): void {
+    const held = this.#requests.find((request) => request.id === requestId);
+    if (held !== undefined) Object.assign(held, { status: 'expired', resolvedAt: at });
+  }
+
   async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
     return work(TX);
   }
@@ -65,6 +72,18 @@ export class MemoryRequestStore implements IdentityRequestStore {
       (request) => request.userId === userId && request.status === 'open',
     );
     return held === undefined ? null : recordOf(held);
+  }
+
+  async lastClosedRequestOf(_tx: Transaction, userId: string): Promise<ClosedRequestRecord | null> {
+    // The latest by when it closed, the later write on a tie, as the query orders them.
+    const closedAt = (request: Held) => request.resolvedAt?.toISOString() ?? '';
+    let latest: Held | undefined;
+    for (const request of this.#requests) {
+      if (request.userId !== userId || request.status === 'open') continue;
+      if (latest === undefined || closedAt(request) >= closedAt(latest)) latest = request;
+    }
+    if (latest === undefined || latest.status === 'open') return null;
+    return { status: latest.status, resolvedAt: latest.resolvedAt };
   }
 
   async readRequest(_tx: Transaction, requestId: string): Promise<IdentityRequestRecord | null> {
