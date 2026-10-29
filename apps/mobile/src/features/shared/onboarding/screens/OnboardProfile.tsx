@@ -31,7 +31,7 @@ import {
   TextLink,
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
-import { useLocale, useT } from '../../../../i18n';
+import { isolate, useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
 import { useFormatters } from '../../../../lib/formatters';
 import { deviceTimeZone } from '../../../../lib/time-zone';
@@ -138,7 +138,7 @@ export function OnboardProfile() {
   // `translate` isolates the value (T109), so the split takes the isolates with the placeholder.
   const [beforeLink = '', afterLink = ''] = t('onboarding.profile.agreeTerms', {
     terms: LINK,
-  }).split(`\u2068${LINK}\u2069`);
+  }).split(isolate(LINK));
 
   return (
     <StackScreen

@@ -123,8 +123,13 @@ const VALUES: ReadonlySet<number> = new Set([
   4, // time
   7, // pound, a plural's `#`
 ]);
-const FIRST_STRONG_ISOLATE = '⁨';
-const POP_DIRECTIONAL_ISOLATE = '⁩';
+const FIRST_STRONG_ISOLATE = '\u2068';
+const POP_DIRECTIONAL_ISOLATE = '\u2069';
+
+/** `value` between the isolates `translate` puts around every interpolated value (T109). */
+export function isolate(value: string): string {
+  return `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
+}
 
 /** The template with every value between isolates, through the branches of a select or plural. */
 function isolated(elements: readonly Element[]): Element[] {

@@ -19,7 +19,7 @@ import { type ColorScheme, tokens } from '../../tokens';
 export const directions: readonly Direction[] = ['rtl', 'ltr'];
 
 /** The direction marks `translate` writes (T109): first-strong isolate, pop isolate, RLM. */
-const DIRECTION_MARKS = /[⁨⁩‏]/g;
+const DIRECTION_MARKS = /[\u2068\u2069\u200F]/g;
 
 /** `text` without its direction marks, to compare with written copy (T109). */
 export function unmarked(text: string): string {

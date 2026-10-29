@@ -19,7 +19,6 @@ import {
   inBothDirections,
   renderIn,
   styleOf,
-  unmarked,
 } from '../../../design/primitives/__tests__/harness';
 import type { ColorScheme } from '../../../design/tokens';
 import { getLocale, type MessageKey, translate } from '../../../i18n';
@@ -98,7 +97,7 @@ describe('Welcome', () => {
 
   it('switches the language in place', async () => {
     await renderIn('rtl', <Welcome />);
-    await fireEvent.press(screen.getByLabelText('English', { normalizer: unmarked }));
+    await fireEvent.press(screen.getByRole('radio', { name: /English/ }));
     expect(getLocale()).toBe('en');
   });
 

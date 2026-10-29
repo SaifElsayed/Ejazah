@@ -63,34 +63,34 @@ describe('t: plurals', () => {
 describe('t: a Latin value or opening inside Arabic (T109)', () => {
   it('isolates a value, so the sentence keeps its order and its address whole', () => {
     expect(t('auth.signInConflict.bodyGoogle', { email: 'amal@example.com' })).toBe(
-      '⁨amal@example.com⁩ مسجّل بحساب Google. ادخل به.',
+      '\u2068amal@example.com\u2069 مسجّل بحساب Google. ادخل به.',
     );
     expect(t('teacher.payout.rejected.supportNote', { email: 'support@ijazah.app' })).toBe(
-      'إن تكرر الرفض، راسل فريق الدعم: ⁨support@ijazah.app⁩',
+      'إن تكرر الرفض، راسل فريق الدعم: \u2068support@ijazah.app\u2069',
     );
   });
 
   it('isolates a number and a plural count, and chooses a branch on the bare value', () => {
-    expect(t('common.format.progress', { done: 3, total: 12 })).toBe('⁨3⁩ من ⁨12⁩');
-    expect(t('common.format.sessions', { count: 3 })).toBe('⁨3⁩ جلسات');
+    expect(t('common.format.progress', { done: 3, total: 12 })).toBe('\u20683\u2069 من \u206812\u2069');
+    expect(t('common.format.sessions', { count: 3 })).toBe('\u20683\u2069 جلسات');
     expect(t('common.format.sessions', { count: 1 })).toBe('جلسة واحدة');
     setLocale('en');
-    expect(t('common.format.sessions', { count: 2 })).toBe('⁨2⁩ sessions');
+    expect(t('common.format.sessions', { count: 2 })).toBe('\u20682\u2069 sessions');
   });
 
   it('starts every Arabic string whose first strong letter is Latin with a right-to-left mark', () => {
-    expect(t('teacher.credentials.add.pdfOnly')).toBe('‏PDF فقط.');
+    expect(t('teacher.credentials.add.pdfOnly')).toBe('\u200FPDF فقط.');
     const latinFirst = allKeys().filter((key) =>
       renderings('ar', key).some((text) => {
         // A value is isolated, so the paragraph's direction comes from the text around it.
-        const strong = /[\p{L}‏]/u.exec(text.replace(/⁨[^⁩]*⁩/g, ''))?.[0];
+        const strong = /[\p{L}\u200F]/u.exec(text.replace(/\u2068[^\u2069]*\u2069/g, ''))?.[0];
         return strong !== undefined && /\p{Script=Latin}/u.test(strong);
       }),
     );
     expect(latinFirst).toEqual([]);
     // English is left-to-right throughout and carries no mark.
     const marked = allKeys().filter((key) =>
-      renderings('en', key).some((text) => text.includes('‏')),
+      renderings('en', key).some((text) => text.includes('\u200F')),
     );
     expect(marked).toEqual([]);
   });
