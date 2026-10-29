@@ -133,6 +133,17 @@ type DecisionInput = z.output<typeof adminCredentialsRejectInput>;
 type CorrectInput = z.output<typeof adminCredentialsCorrectInput>;
 type Transcription = z.input<typeof adminCredentialTranscription>;
 
+/** The transcription a pending credential holds before its approval, none of it written yet. */
+type PriorTranscription = {
+  readonly [K in keyof Omit<Transcription, 'chain'>]-?: Transcription[K] | null;
+} & { readonly chain: Transcription['chain'] };
+
+/** An approval's transcription before and after it, for the audit entry (T116). */
+export interface ApprovalMove {
+  readonly before: PriorTranscription;
+  readonly after: Transcription;
+}
+
 export class CredentialReviewService {
   readonly #store: CredentialReviewStore;
   readonly #settings: SettingsReader;
@@ -177,7 +188,7 @@ export class CredentialReviewService {
   }
 
   /** `credentials.approve`: the transcription written; what was written, for the audit entry. */
-  async approve(tx: Transaction, adminId: string, input: ApproveInput): Promise<Transcription> {
+  async approve(tx: Transaction, adminId: string, input: ApproveInput): Promise<ApprovalMove> {
     const record = await this.#readOrRefuse(tx, input.credentialId);
     if (record.status !== 'pending') throw conflict(record.status);
     if (await this.#store.hasApproved(tx, record.teacher.userId, record.subject.id)) {
@@ -200,10 +211,18 @@ export class CredentialReviewService {
       await this.#store.grantSubjects(tx, record.teacher.userId, [record.subject.id]);
     }
     return {
-      holderName: input.holderName,
-      riwaya: input.riwaya,
-      tariq: input.tariq ?? null,
-      chain: positioned(chain),
+      before: {
+        holderName: record.holderName,
+        riwaya: record.riwaya,
+        tariq: record.tariq,
+        chain: record.chain.map(generationOf),
+      },
+      after: {
+        holderName: input.holderName,
+        riwaya: input.riwaya,
+        tariq: input.tariq ?? null,
+        chain: positioned(chain),
+      },
     };
   }
 

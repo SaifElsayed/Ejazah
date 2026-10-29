@@ -271,6 +271,54 @@ describe('the identity request', () => {
   });
 });
 
+describe("the audit entry's before and after (T116)", () => {
+  it('suspend answers the account status it moved from, active or under an identity request', async () => {
+    const active = approvedTeacher();
+    const underRequest = store.plant({
+      accountStatus: 'verification_required',
+      teacher: { verificationStatus: 'approved', applicationStatus: 'approved' },
+    });
+    expect(await standing.suspend(TX, ADMIN, active)).toEqual({
+      before: { accountStatus: 'active' },
+      after: { accountStatus: 'suspended' },
+    });
+    expect(await standing.suspend(TX, ADMIN, underRequest)).toEqual({
+      before: { accountStatus: 'verification_required' },
+      after: { accountStatus: 'suspended' },
+    });
+  });
+
+  it('revokeApproval answers the verification status it moved from', async () => {
+    const userId = approvedTeacher('suspended');
+    expect(await standing.revokeApproval(TX, ADMIN, userId, 'شكوى')).toEqual({
+      before: { verificationStatus: 'approved' },
+      after: { verificationStatus: 'revoked' },
+    });
+  });
+
+  it('ban answers the account status it moved from', async () => {
+    const userId = approvedTeacher('suspended');
+    expect(await standing.ban(TX, ADMIN, userId)).toEqual({
+      before: { accountStatus: 'suspended' },
+      after: { accountStatus: 'banned' },
+    });
+  });
+
+  it('reinstate answers the state it landed on, verification_required under an open request', async () => {
+    const plain = approvedTeacher('suspended');
+    const requested = approvedTeacher('suspended');
+    openIdentityRequests.add(requested);
+    expect(await standing.reinstate(TX, ADMIN, plain)).toEqual({
+      before: { accountStatus: 'suspended' },
+      after: { accountStatus: 'active' },
+    });
+    expect(await standing.reinstate(TX, ADMIN, requested)).toEqual({
+      before: { accountStatus: 'suspended' },
+      after: { accountStatus: 'verification_required' },
+    });
+  });
+});
+
 describe('the consequences registry', () => {
   it('calls every subscriber in the order it subscribed, with the cause', async () => {
     const registry = new AccountConsequences();

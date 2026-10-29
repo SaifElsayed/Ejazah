@@ -77,7 +77,6 @@ export interface CredentialOfApplicant {
 
 export type OpenIdentityRequest = z.input<typeof openIdentityRequest>;
 
-
 /** What the review reads and writes, each on the call's transaction (`stores.ts`). */
 export interface ApplicationReviewStore {
   page(
@@ -105,7 +104,7 @@ export interface ApplicantBan {
     adminId: string,
     userId: string,
     applicant?: { readonly applicantNote: string },
-  ): Promise<void>;
+  ): Promise<unknown>;
 }
 
 export interface ApplicationReviewDependencies {
@@ -116,6 +115,15 @@ export interface ApplicationReviewDependencies {
 }
 
 type ListRow = z.input<typeof applicationsListOutput>['rows'][number];
+
+/** The call's day and outcome, as the audit entry holds them; null for none recorded. */
+type CallState = { readonly completedOn: string | null; readonly outcome: string | null };
+
+/** A recorded call before and after, for the audit entry (T116). */
+export interface CallMove {
+  readonly before: CallState;
+  readonly after: CallState;
+}
 
 export class ApplicationReviewService {
   readonly #store: ApplicationReviewStore;
@@ -188,12 +196,15 @@ export class ApplicationReviewService {
     };
   }
 
-  /** `applications.recordCall`: the call's day, outcome and notes on an open application. */
+  /**
+   * `applications.recordCall`: the call's day, outcome and notes on an open application; answers the
+   * day and the outcome before and after it, notes left out as the entry leaves them (T116).
+   */
   async recordCall(
     tx: Transaction,
     _adminId: string,
     input: z.output<typeof applicationsRecordCallInput>,
-  ): Promise<void> {
+  ): Promise<CallMove> {
     let today: string;
     try {
       today = localDateIn(this.#now(), input.timeZone);
@@ -203,12 +214,18 @@ export class ApplicationReviewService {
     }
     // ISO calendar dates order as strings do.
     if (input.completedOn > today) throw invalid('completedOn', 'future');
+    const { callCompletedOn, callOutcome } = await this.#readOrRefuse(tx, input.teacherUserId);
+    const before = {
+      completedOn: callCompletedOn === null ? null : calendarDateOf(callCompletedOn),
+      outcome: callOutcome,
+    };
     const written = await this.#store.recordCall(tx, input.teacherUserId, {
       completedOn: dateColumnOf(input.completedOn),
       outcome: input.outcome,
       notes: input.notes,
     });
     if (!written) await this.#refuseMoved(tx, input.teacherUserId);
+    return { before, after: { completedOn: input.completedOn, outcome: input.outcome } };
   }
 
   /** `applications.approve`: refused with every blocking reason; the approved subjects granted. */
@@ -286,12 +303,12 @@ export class ApplicationReviewService {
   }
 
   /** `applications.ban`: the standing's one ban, the note written to the application. */
-  ban(
+  async ban(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsBanInput>,
   ): Promise<void> {
-    return this.#standing.ban(tx, adminId, input.teacherUserId, { applicantNote: input.note });
+    await this.#standing.ban(tx, adminId, input.teacherUserId, { applicantNote: input.note });
   }
 
   async #decide(

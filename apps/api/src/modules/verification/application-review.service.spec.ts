@@ -171,6 +171,25 @@ describe('recordCall', () => {
     });
   });
 
+  it('answers the call before and after it, none before the first (T116)', async () => {
+    const userId = store.plant();
+    expect(await service.recordCall(TX, ADMIN, { teacherUserId: userId, ...call })).toEqual({
+      before: { completedOn: null, outcome: null },
+      after: { completedOn: '2026-10-22', outcome: 'unsuitable' },
+    });
+    expect(
+      await service.recordCall(TX, ADMIN, {
+        teacherUserId: userId,
+        ...call,
+        completedOn: '2026-10-21',
+        outcome: 'suitable',
+      }),
+    ).toEqual({
+      before: { completedOn: '2026-10-22', outcome: 'unsuitable' },
+      after: { completedOn: '2026-10-21', outcome: 'suitable' },
+    });
+  });
+
   it("refuses a day after today in the panel's zone", async () => {
     const userId = store.plant();
     expect(

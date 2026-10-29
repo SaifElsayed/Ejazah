@@ -50,7 +50,10 @@ function surface() {
       credentials: [],
       call: {},
     }),
-    recordCall: record('recordCall', undefined),
+    recordCall: record('recordCall', {
+      before: { completedOn: '2026-10-20', outcome: 'unsuitable' },
+      after: { completedOn: '2026-10-21', outcome: 'suitable' },
+    }),
     approve: record('approve', { subjectIds: ['0199d0a0-0000-7000-8000-000000000051'] }),
     reject: record('reject', undefined),
     requestInfo: record('requestInfo', undefined),
@@ -113,13 +116,14 @@ describe('the administrator kind', () => {
 describe('the audit entries', () => {
   const target = { adminId: SPEC_ADMIN, targetType: 'teacher_application', targetId: APPLICANT };
 
-  it('recordCall: the day and the outcome, not the notes', async () => {
+  it('recordCall: the day and the outcome before (T116) and after, not the notes', async () => {
     const { as, written } = surface();
     await CALLS['applications.recordCall']!(as(VERIFIED));
     expect(written).toEqual([
       {
         ...target,
         action: 'application.record_call',
+        before: { completedOn: '2026-10-20', outcome: 'unsuitable' },
         after: { completedOn: '2026-10-21', outcome: 'suitable' },
       },
     ]);

@@ -83,7 +83,7 @@ import type {
   homeSummaryOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
-import type { AuditWriter } from '../platform/audit/audit-writer.js';
+import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
@@ -223,6 +223,9 @@ export interface Administration {
 /** What a service answers: the value its procedure's output schema parses. */
 type Answer<TSchema extends z.ZodType> = Promise<z.input<TSchema>>;
 
+/** What an action moved, as its audit entry's `before` and `after` hold it (T116). */
+type Move = Promise<{ readonly before: AuditSnapshot; readonly after: AuditSnapshot }>;
+
 /**
  * The admin module's services as the administrator surface's procedures call them (T067): the port
  * this file declares and `modules/admin` implements, bound once by `main.ts`. Each administrator
@@ -287,7 +290,10 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof adminCredentialsApproveInput>,
-    ): Answer<typeof adminCredentialTranscription>;
+    ): Promise<{
+      readonly before: AuditSnapshot;
+      readonly after: z.input<typeof adminCredentialTranscription>;
+    }>;
     reject(
       tx: Transaction,
       actorId: string,
@@ -318,7 +324,7 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof applicationsRecordCallInput>,
-    ): Promise<void>;
+    ): Move;
     approve(
       tx: Transaction,
       actorId: string,
@@ -361,15 +367,10 @@ export interface AdminSurfaceServices {
   };
   /** An approved teacher's standing (FR-165; T068), the identity module's. */
   readonly teachers: {
-    suspend(tx: Transaction, actorId: string, teacherUserId: string): Promise<void>;
-    revokeApproval(
-      tx: Transaction,
-      actorId: string,
-      teacherUserId: string,
-      reason: string,
-    ): Promise<void>;
-    ban(tx: Transaction, actorId: string, teacherUserId: string): Promise<void>;
-    reinstate(tx: Transaction, actorId: string, teacherUserId: string): Promise<void>;
+    suspend(tx: Transaction, actorId: string, teacherUserId: string): Move;
+    revokeApproval(tx: Transaction, actorId: string, teacherUserId: string, reason: string): Move;
+    ban(tx: Transaction, actorId: string, teacherUserId: string): Move;
+    reinstate(tx: Transaction, actorId: string, teacherUserId: string): Move;
   };
 }
 

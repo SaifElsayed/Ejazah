@@ -4,6 +4,7 @@
 // actor is the session's administrator, never the input's. Each decision's entry targets the
 // application (`teacher_application`, the applicant's id), so its history is `audit.list` filtered on
 // that target; the note the applicant sees is the entry's reason and the dialog's choice its after.
+// The call's entry holds its day and outcome before and after, as the review answers them (T116).
 // The list and the detail are reads (`applications.read`) naming the reader. Mounted under
 // `applications` by `admin.router.ts`.
 import {
@@ -42,12 +43,17 @@ export const applicationsRouter = createAdminRouter({
 
   recordCall: adminProcedure({ input: applicationsRecordCallInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      await ctx.services.applications.recordCall(ctx.tx, ctx.administrator.adminId, input);
+      const { before, after } = await ctx.services.applications.recordCall(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
       ctx.audit.record({
         action: 'application.record_call',
         targetType: TARGET,
         targetId: input.teacherUserId,
-        after: { completedOn: input.completedOn, outcome: input.outcome },
+        before,
+        after,
       });
     },
   ),
