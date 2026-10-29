@@ -102,7 +102,8 @@ export const identityDocumentType = z.enum(['national_id', 'passport']);
 
 /**
  * T115: how the person's latest closed request ended and when; a `replaced` one carries the reason
- * of the open request that replaced it. An `expired` request shows no outcome.
+ * of the open request that replaced it. An `expired` request shows no outcome, and a `satisfied` one
+ * shows only while no request is open (T128).
  */
 export const identityVerificationOutcome = z.object({
   status: z.enum(['satisfied', 'replaced']),

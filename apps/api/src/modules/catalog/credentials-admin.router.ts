@@ -5,8 +5,10 @@
 // for another document and of a correction is mandatory in the schema and goes into the entry as
 // typed; an approval's optional note goes there too, the transcription it wrote is the entry's
 // after and the pending one's, none of it written, its before (T116); a correction's entry holds
-// the transcription before and after (FR-164). The list and the panel are reads
-// (`credentials.read`) naming the reader, which no audit list shows (owner's decision 2026-10-21).
+// the transcription before and after (FR-164); a request for another document's, the application it
+// set waiting on the applicant, when it set one, as its before and after (T155). The list and the
+// panel are reads (`credentials.read`) naming the reader, which no audit list shows (owner's
+// decision 2026-10-21).
 // Mounted under `credentials` by `admin.router.ts`.
 import {
   adminCredentialsApproveInput,
@@ -74,12 +76,17 @@ export const credentialsAdminRouter = createAdminRouter({
     input: adminCredentialsRequestDocumentInput,
     output: z.void(),
   }).mutation(async ({ ctx, input }) => {
-    await ctx.services.credentials.requestDocument(ctx.tx, ctx.administrator.adminId, input);
+    const move = await ctx.services.credentials.requestDocument(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
     ctx.audit.record({
       action: 'credential.request_document',
       targetType: 'credential',
       targetId: input.credentialId,
       reason: input.reason,
+      ...move,
     });
   }),
 

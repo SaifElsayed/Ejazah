@@ -223,6 +223,77 @@ describe('reject and requestDocument', () => {
   );
 });
 
+describe("requestDocument and the teacher's application (T155)", () => {
+  it('moves an application in review to needs_document with the note and the moment, in the same call', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    store.applyingAs(TEACHER, 'in_review');
+    const move = await serviceOver(store).requestDocument(TX, ADMIN, {
+      credentialId,
+      reason: 'الصفحة الأخيرة ناقصة',
+    });
+    expect(store.held(credentialId).status).toBe('needs_document');
+    expect(store.applications.get(TEACHER)).toEqual({
+      status: 'needs_document',
+      note: 'الصفحة الأخيرة ناقصة',
+      decidedAt: NOW,
+      decidedBy: ADMIN,
+    });
+    expect(move).toEqual({
+      before: { applicationStatus: 'in_review' },
+      after: { applicationStatus: 'needs_document' },
+    });
+  });
+
+  it('leaves an application already waiting on the applicant as it is', async () => {
+    const store = new MemoryReviewStore();
+    const first = store.plant();
+    const second = store.plant({ subject: OTHER_SUBJECT });
+    store.applyingAs(TEACHER, 'in_review');
+    const service = serviceOver(store);
+    await service.requestDocument(TX, ADMIN, { credentialId: first, reason: 'الختم غير واضح' });
+    const move = await service.requestDocument(TX, ADMIN, {
+      credentialId: second,
+      reason: 'الصفحة الأولى ناقصة',
+    });
+    expect(store.held(second).status).toBe('needs_document');
+    expect(store.applications.get(TEACHER)).toMatchObject({
+      status: 'needs_document',
+      note: 'الختم غير واضح',
+    });
+    expect(move).toEqual({});
+  });
+
+  it("leaves an approved teacher's application unchanged for an added subject", async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant({ submittedWithApplication: false });
+    store.approveTeacher(TEACHER);
+    store.applyingAs(TEACHER, 'approved');
+    const move = await serviceOver(store).requestDocument(TX, ADMIN, {
+      credentialId,
+      reason: 'الملف غير مقروء',
+    });
+    expect(store.held(credentialId).status).toBe('needs_document');
+    expect(store.applications.get(TEACHER)).toEqual({
+      status: 'approved',
+      note: null,
+      decidedAt: null,
+      decidedBy: null,
+    });
+    expect(move).toEqual({});
+  });
+
+  it('moves no application when the credential was not pending', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant({ status: 'rejected' });
+    store.applyingAs(TEACHER, 'in_review');
+    expect(
+      await codeOf(serviceOver(store).requestDocument(TX, ADMIN, { credentialId, reason: 'سبب' })),
+    ).toBe('CONFLICT');
+    expect(store.applications.get(TEACHER)?.status).toBe('in_review');
+  });
+});
+
 describe('correct', () => {
   it('answers the transcription before and after, and changes only the fields given', async () => {
     const store = new MemoryReviewStore();

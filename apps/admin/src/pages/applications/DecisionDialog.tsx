@@ -2,7 +2,9 @@
 // switched in place: reject, ask for information, ban; each with its reasons as radio cards, the
 // mandatory note the applicant reads, its banner, and the line on the audit log. «طلب معلومات» asks
 // for one thing, as the board draws it, sent as the contract's one-item list (owner's decision at
-// B14b's check). A failure is said in the dialog, which stays open; a decision closes it.
+// B14b's check). A failure is said in the dialog, which stays open; a decision closes it. Another
+// ijazah is not asked for here but on its credential (`credentials.requestDocument`), which gives
+// the applicant the field to send it (T155).
 import { useState } from 'react';
 
 import {
@@ -62,7 +64,6 @@ const KINDS: Readonly<Record<DecisionKind, KindText>> = {
     footer: 'admin.dialogs.decision.requestInfo.footer',
     reasons: [
       ['id_unclear', 'admin.dialogs.decision.requestInfo.reasons.idUnclear'],
-      ['ijazah_unreadable', 'admin.dialogs.decision.requestInfo.reasons.ijazahUnreadable'],
       ['name_mismatch', 'admin.dialogs.decision.requestInfo.reasons.nameMismatch'],
       ['other', 'admin.dialogs.decision.requestInfo.reasons.other'],
     ],

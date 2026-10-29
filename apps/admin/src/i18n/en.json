@@ -205,6 +205,7 @@
       },
       "fields": {
         "accountStatus": "Account status",
+        "applicationStatus": "Application status",
         "chain": "Chain",
         "completedOn": "Call date",
         "documentId": "Document",
@@ -241,6 +242,9 @@
       "values": {
         "no": "No",
         "none": "—",
+        "retiredReasons": {
+          "ijazahUnreadable": "Ijazah file unreadable or incomplete"
+        },
         "verification": {
           "approved": "Approved",
           "pending": "In review",
@@ -852,7 +856,6 @@
           "noteLabel": "What the applicant must provide (required)",
           "reasons": {
             "idUnclear": "ID image unclear or incomplete",
-            "ijazahUnreadable": "Ijazah file unreadable or incomplete",
             "nameMismatch": "Name on the ijazah does not match the ID",
             "other": "Another reason"
           }

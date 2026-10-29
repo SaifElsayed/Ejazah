@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { toErrorShape } from '../../surfaces/procedures.js';
 import { type CredentialsCaller, NOW, surfaceOver } from './credentials-admin.fixtures.js';
-import { ADMIN, MemoryReviewStore } from './credential-review.fixtures.js';
+import { ADMIN, MemoryReviewStore, TEACHER } from './credential-review.fixtures.js';
 
 async function codeOf(call: Promise<unknown>): Promise<string> {
   const thrown: unknown = await call.then(
@@ -143,6 +143,31 @@ describe('credentials.reject and credentials.requestDocument', () => {
         targetType: 'credential',
         targetId: credentialId,
         reason: 'الختم غير واضح',
+      },
+    ]);
+  });
+
+  it("requestDocument's entry holds the application it set waiting on the applicant (T155)", async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    store.applyingAs(TEACHER, 'in_review');
+    const surface = surfaceOver(store);
+    await surface
+      .verified()
+      .credentials.requestDocument({ credentialId, reason: 'الختم غير واضح' });
+    expect(store.applications.get(TEACHER)).toMatchObject({
+      status: 'needs_document',
+      note: 'الختم غير واضح',
+    });
+    expect(surface.written).toEqual([
+      {
+        adminId: ADMIN,
+        action: 'credential.request_document',
+        targetType: 'credential',
+        targetId: credentialId,
+        reason: 'الختم غير واضح',
+        before: { applicationStatus: 'in_review' },
+        after: { applicationStatus: 'needs_document' },
       },
     ]);
   });

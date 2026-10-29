@@ -1,7 +1,7 @@
 import { configDefaults, defineConfig, mergeConfig } from 'vitest/config';
 import base from './packages/config/vitest.base';
 
-// Two projects (B8, T035–T037). `node` is every spec the repository had before: the API, the
+// Three projects (B8, T035–T037; T132). `node` is every spec the repository had before: the API, the
 // packages, the scripts and the pipeline tests. `admin` is the administrator panel's specs, rendered
 // in jsdom with React Testing Library; a browser module resolves a workspace package through Vite's
 // client conditions, so the `@ijazah/source` condition is named there beside Vite's defaults, as
@@ -18,6 +18,8 @@ const nodeExclude = [
   'apps/mobile/**',
   // B8: the panel's specs run in the `admin` project below.
   'apps/admin/**',
+  // T132: the integrity probes run in the `db-integrity` project below.
+  'tests/db-integrity/**',
 ];
 
 export default mergeConfig(
@@ -37,6 +39,19 @@ export default mergeConfig(
               'packages/**/src/**/*.spec.ts',
             ],
             exclude: nodeExclude,
+          },
+        },
+        {
+          // T132: a probe of `schema-check.spec.ts` alters shared tables inside a rolled-back
+          // transaction, and a file running beside it on the same tables deadlocked (B19d's
+          // quickstart run, 2026-10-29: two of three runs red). Its files run one at a time, and
+          // only once the other projects are done, under `pnpm test:db-integrity` and `pnpm test`.
+          extends: true,
+          test: {
+            name: 'db-integrity',
+            include: ['tests/db-integrity/**/*.spec.ts'],
+            fileParallelism: false,
+            sequence: { groupOrder: 1 },
           },
         },
         {

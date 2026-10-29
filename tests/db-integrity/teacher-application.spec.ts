@@ -6,11 +6,17 @@
 // moves from, decided by the database, so two requests racing from one state cannot both move it,
 // and a keyed retry answers the first outcome. Rows are committed (the services open their own
 // transactions) and every probe's rows are its own, so a probe asserts its rows, not totals.
+// T155: the credential review's request for another ijazah over the same tables, which sets the
+// application in review waiting on the applicant, and the resubmission that returns both.
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { grantSubjects } from '../../apps/api/src/modules/catalog/index.js';
+import {
+  createCredentialReviewService,
+  type CredentialReviewService,
+  grantSubjects,
+} from '../../apps/api/src/modules/catalog/index.js';
 import { readApplication } from '../../apps/api/src/modules/identity/index.js';
 import {
   createVerificationServices,
@@ -46,6 +52,7 @@ const settings: SettingsReader = {
 let db: Db;
 let database: Database;
 let services: VerificationServices;
+let review: CredentialReviewService;
 
 beforeAll(async () => {
   db = await connectAsApplication();
@@ -61,6 +68,7 @@ beforeAll(async () => {
     settings,
     idempotency: new IdempotencyService({ store: new IdempotencyRepository(database), settings }),
   });
+  review = createCredentialReviewService({ settings });
 });
 
 afterAll(async () => {
@@ -381,5 +389,100 @@ describe('the credentials over the tables (T057)', () => {
       [userId],
     );
     expect(rows.map(({ subject_id }) => subject_id)).toEqual([...subjects].sort());
+  });
+});
+
+describe('a request for another ijazah and the application (T155)', () => {
+  /** `credentials.requestDocument` as the administrator kind runs it, on one committed transaction. */
+  function requestDocument(adminId: string, credentialId: string, reason: string) {
+    return database.$transaction((tx) =>
+      review.requestDocument(tx, adminId, { credentialId, reason }),
+    );
+  }
+
+  async function decidedOf(userId: string) {
+    const { rows } = await db.query(
+      `SELECT application_status, application_note, application_decided_by_admin_id,
+              application_decided_at IS NOT NULL AS decided
+         FROM teacher_profiles WHERE user_id = $1`,
+      [userId],
+    );
+    return rows[0];
+  }
+
+  it('sets the application in review waiting on the applicant, and a resubmission returns both', async () => {
+    const { userId, application } = await applicant();
+    await services.application.submit(userId, { ...application, idempotencyKey: key() });
+    const adminId = await makeAdmin(db);
+    const [asked, other] = await credentialsOf(userId);
+
+    await expect(requestDocument(adminId, asked!.id, 'الصفحة الأخيرة ناقصة')).resolves.toEqual({
+      before: { applicationStatus: 'in_review' },
+      after: { applicationStatus: 'needs_document' },
+    });
+    expect(await decidedOf(userId)).toEqual({
+      application_status: 'needs_document',
+      application_note: 'الصفحة الأخيرة ناقصة',
+      application_decided_by_admin_id: adminId,
+      decided: true,
+    });
+    await expect(services.application.get(userId)).resolves.toMatchObject({
+      status: 'needs_document',
+      note: 'الصفحة الأخيرة ناقصة',
+    });
+
+    // A second request leaves the application waiting with the first one's note.
+    await expect(requestDocument(adminId, other!.id, 'الختم غير واضح')).resolves.toEqual({});
+    expect(await decidedOf(userId)).toMatchObject({
+      application_status: 'needs_document',
+      application_note: 'الصفحة الأخيرة ناقصة',
+    });
+
+    const replaced = [await upload(userId), await upload(userId)];
+    await services.application.resubmit(userId, {
+      credentials: [
+        { credentialId: asked!.id, documentId: replaced[0]! },
+        { credentialId: other!.id, documentId: replaced[1]! },
+      ],
+    });
+    expect((await profileOf(userId))[0]).toMatchObject({ application_status: 'in_review' });
+    expect(
+      (await credentialsOf(userId)).map(({ id, document_id, status }) => ({
+        id,
+        document_id,
+        status,
+      })),
+    ).toEqual([
+      { id: asked!.id, document_id: replaced[0], status: 'pending' },
+      { id: other!.id, document_id: replaced[1], status: 'pending' },
+    ]);
+  });
+
+  it("leaves an approved teacher's application as it is for an added subject", async () => {
+    const { userId, application } = await applicant();
+    await services.application.submit(userId, { ...application, idempotencyKey: key() });
+    await db.query(
+      `UPDATE teacher_profiles SET application_status = 'approved', verification_status = 'approved'
+        WHERE user_id = $1`,
+      [userId],
+    );
+    const { credentialId } = await services.credentials.add(userId, {
+      subjectId: await makeSubject(db),
+      documentId: await upload(userId),
+    });
+
+    await expect(
+      requestDocument(await makeAdmin(db), credentialId, 'الملف غير مقروء'),
+    ).resolves.toEqual({});
+    expect(await decidedOf(userId)).toEqual({
+      application_status: 'approved',
+      application_note: null,
+      application_decided_by_admin_id: null,
+      decided: false,
+    });
+    expect((await credentialsOf(userId)).find(({ id }) => id === credentialId)).toMatchObject({
+      status: 'needs_document',
+      submitted_with_application: false,
+    });
   });
 });

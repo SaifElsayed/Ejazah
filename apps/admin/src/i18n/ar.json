@@ -205,6 +205,7 @@
       },
       "fields": {
         "accountStatus": "حالة الحساب",
+        "applicationStatus": "حالة الطلب",
         "chain": "السند",
         "completedOn": "يوم المكالمة",
         "documentId": "الوثيقة",
@@ -241,6 +242,9 @@
       "values": {
         "no": "لا",
         "none": "—",
+        "retiredReasons": {
+          "ijazahUnreadable": "ملف الإجازة غير مقروء أو ناقص"
+        },
         "verification": {
           "approved": "معتمد",
           "pending": "قيد المراجعة",
@@ -852,7 +856,6 @@
           "noteLabel": "ما المطلوب من المتقدّم (إلزامي)",
           "reasons": {
             "idUnclear": "صورة الهوية غير واضحة أو ناقصة",
-            "ijazahUnreadable": "ملف الإجازة غير مقروء أو ناقص",
             "nameMismatch": "الاسم في الإجازة لا يطابق الهوية",
             "other": "سبب آخر"
           }

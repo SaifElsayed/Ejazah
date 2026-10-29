@@ -7,7 +7,10 @@
 // contracts/auth.ts) and the call is sent again with the new token; calls refused together share
 // one refresh. A refresh the server refuses (UNAUTHENTICATED) clears the session and calls
 // `onSignedOut`; any other failure of the refresh (INTERNAL, RATE_LIMITED, offline) keeps the
-// session, and the call fails as any offline call does. The
+// session, and the call fails as any offline call does. T156: the refresh of a stored token is one
+// per runtime, not per client, since a launch after the back key can mount a second screen tree,
+// and its own client, in the runtime the first still holds; and a refusal of a token the store no
+// longer holds (another refresh replaced it) is no sign-out, the call is sent again instead. The
 // decision is made on the error's `code`, never on the HTTP status: SIGN_IN_FAILED and
 // ONBOARDING_TOKEN_INVALID are 401 too (note under T018). `auth.refresh` is mounted in B10, so it
 // is called by name through an untyped client and its answer parsed with `refreshOutput`.
@@ -95,6 +98,9 @@ export class ApiRefusal extends Error {
 const UNAUTHENTICATED = 'UNAUTHENTICATED';
 const STATUS_UNAUTHORIZED = 401;
 
+/** The refreshes on their way, by the refresh token they present: one per token in the runtime (T156). */
+const refreshesInFlight = new Map<string, Promise<boolean>>();
+
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const { url, sessions, onSignedOut } = options;
   const transport = options.fetch ?? fetch;
@@ -103,21 +109,18 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const refresher = createTRPCUntypedClient({
     links: [httpLink({ url, fetch: asFetchEsque(transport) })],
   });
-  let refreshing: Promise<boolean> | null = null;
-
-  async function refreshOnce(): Promise<boolean> {
-    const current = await sessions.read();
-    if (current === null) return false;
+  async function refreshOnce(presented: string): Promise<boolean> {
     try {
-      const answer = await refresher.mutation('auth.refresh', {
-        refreshToken: current.refreshToken,
-      });
+      const answer = await refresher.mutation('auth.refresh', { refreshToken: presented });
       await sessions.write(refreshOutput.parse(answer));
       return true;
     } catch (error) {
       // Only a refused token signs out (FR-135 answers every refusal UNAUTHENTICATED); a failure of
       // the server, a throttle, or no answer at all keeps the session (review of B6, finding 1).
       if (errorCodeOf(error) === UNAUTHENTICATED) {
+        // A token another refresh has replaced meanwhile was refused, not the session (T156).
+        const stored = await sessions.read();
+        if (stored !== null && stored.refreshToken !== presented) return true;
         await sessions.clear();
         onSignedOut();
         return false;
@@ -126,11 +129,17 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
   }
 
-  function refresh(): Promise<boolean> {
-    refreshing ??= refreshOnce().finally(() => {
-      refreshing = null;
+  async function refresh(): Promise<boolean> {
+    const current = await sessions.read();
+    if (current === null) return false;
+    const presented = current.refreshToken;
+    const pending = refreshesInFlight.get(presented);
+    if (pending !== undefined) return pending;
+    const started = refreshOnce(presented).finally(() => {
+      refreshesInFlight.delete(presented);
     });
-    return refreshing;
+    refreshesInFlight.set(presented, started);
+    return started;
   }
 
   async function send(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

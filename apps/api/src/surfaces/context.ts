@@ -278,7 +278,8 @@ export interface AdminSurfaceServices {
   /**
    * The credential review (FR-163, FR-164; T069), the catalog module's, composed into the admin
    * module's services. Approval answers the transcription and a correction the transcription before
-   * and after, for the call's audit entry.
+   * and after, for the call's audit entry; a request for another document the application it set
+   * waiting on the applicant, if any (T155).
    */
   readonly credentials: {
     list(
@@ -303,7 +304,7 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof adminCredentialsRequestDocumentInput>,
-    ): Promise<void>;
+    ): Promise<{ readonly before?: AuditSnapshot; readonly after?: AuditSnapshot }>;
     correct(
       tx: Transaction,
       actorId: string,

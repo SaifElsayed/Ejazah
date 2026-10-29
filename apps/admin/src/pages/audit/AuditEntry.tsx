@@ -34,6 +34,7 @@ const FIELD_TEXT: Readonly<Record<string, MessageKey>> = {
   chain: 'admin.audit.fields.chain',
   reasonChoice: 'admin.audit.fields.reasonChoice',
   needed: 'admin.audit.fields.needed',
+  applicationStatus: 'admin.audit.fields.applicationStatus',
   subjectIds: 'admin.audit.fields.subjectIds',
   requestId: 'admin.audit.fields.requestId',
   documentId: 'admin.audit.fields.documentId',
@@ -76,6 +77,10 @@ const APPLICATION_STATUS_TEXT: Readonly<Record<string, MessageKey>> = {
   rejected: 'admin.status.application.rejected',
   banned: 'admin.status.application.banned',
 };
+/** A reason the dialog no longer offers, still named in older entries (T155). */
+const RETIRED_REASON_TEXT: Readonly<Record<string, MessageKey>> = {
+  ijazah_unreadable: 'admin.audit.values.retiredReasons.ijazahUnreadable',
+};
 const DECISION_OF_ACTION: Readonly<Record<string, keyof typeof DECISION_REASONS>> = {
   'application.reject': 'reject',
   'application.request_info': 'requestInfo',
@@ -84,12 +89,12 @@ const DECISION_OF_ACTION: Readonly<Record<string, keyof typeof DECISION_REASONS>
 
 /** The word the panel has for `value` of `field` in an entry of `action`, if it has one. */
 function wordOf(action: string, field: string, value: string): MessageKey | undefined {
-  if (action.startsWith('application.') && field === 'status') {
+  if ((action.startsWith('application.') && field === 'status') || field === 'applicationStatus') {
     return APPLICATION_STATUS_TEXT[value];
   }
   const decision = DECISION_OF_ACTION[action];
   if (decision !== undefined && (field === 'reasonChoice' || field === 'needed')) {
-    return DECISION_REASONS[decision].get(value);
+    return DECISION_REASONS[decision].get(value) ?? RETIRED_REASON_TEXT[value];
   }
   return STANDING_TEXT[field]?.[value];
 }
@@ -131,7 +136,8 @@ function Detail({ entry }: { readonly entry: Entry }) {
         <span>
           {value
             .map((item) => {
-              const itemWord = typeof item === 'string' ? wordOf(entry.action, field, item) : undefined;
+              const itemWord =
+                typeof item === 'string' ? wordOf(entry.action, field, item) : undefined;
               return itemWord === undefined ? plainText(field, item, t, locale, zone) : t(itemWord);
             })
             .join(locale === 'ar' ? '، ' : ', ')}

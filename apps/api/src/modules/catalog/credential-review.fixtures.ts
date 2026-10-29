@@ -1,11 +1,14 @@
 // T063: the credential review's store held in memory, for the service's spec. It keeps the rules the
 // database keeps (a conditional write moves only the state it names; one approved credential per
 // teacher and subject, rule 23), so the service's own rules are what the spec proves; the real
-// queries are `tests/db-integrity/credential-review.spec.ts`'s.
+// queries are `tests/db-integrity/credential-review.spec.ts`'s. T155 adds the teachers' applications,
+// which a request for another document moves only from `in_review`, as identity's
+// `decideApplication` does.
 import { randomUUID } from 'node:crypto';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type {
+  ApplicationDocumentRequest,
   Approval,
   CredentialReviewStore,
   Correction,
@@ -33,6 +36,14 @@ export const OTHER_SUBJECT = {
 /** Stands in for the call's transaction, which the memory store never reads. */
 export const TX = {} as Transaction;
 
+/** A teacher's application as the request for another document reads and moves it (T155). */
+export interface HeldApplication {
+  status: 'in_review' | 'needs_document' | 'approved';
+  note: string | null;
+  decidedAt: Date | null;
+  decidedBy: string | null;
+}
+
 interface Held {
   id: string;
   teacher: { userId: string; displayName: string };
@@ -59,6 +70,8 @@ export class MemoryReviewStore implements CredentialReviewStore {
   readonly #approvedTeachers = new Set<string>();
   readonly granted: { teacherUserId: string; subjectIds: readonly string[] }[] = [];
   readonly administrators = new Map<string, string>([[ADMIN, 'هالة سعيد']]);
+  /** The teachers' applications, by teacher; a teacher with none planted has none to move (T155). */
+  readonly applications = new Map<string, HeldApplication>();
 
   /** A credential waiting for review unless `status` says otherwise; its id. */
   plant(
@@ -103,6 +116,11 @@ export class MemoryReviewStore implements CredentialReviewStore {
 
   approveTeacher(userId: string): void {
     this.#approvedTeachers.add(userId);
+  }
+
+  /** The teacher's application in `status`, no reviewer's note on it yet (T155). */
+  applyingAs(userId: string, status: HeldApplication['status']): void {
+    this.applications.set(userId, { status, note: null, decidedAt: null, decidedBy: null });
   }
 
   held(id: string): Held {
@@ -208,6 +226,22 @@ export class MemoryReviewStore implements CredentialReviewStore {
               names: [...names],
             })),
           }),
+    });
+    return true;
+  }
+
+  async requestApplicationDocument(
+    _tx: Transaction,
+    userId: string,
+    request: ApplicationDocumentRequest,
+  ): Promise<boolean> {
+    const application = this.applications.get(userId);
+    if (application?.status !== 'in_review') return false;
+    Object.assign(application, {
+      status: 'needs_document',
+      note: request.note,
+      decidedAt: request.at,
+      decidedBy: request.adminId,
     });
     return true;
   }
