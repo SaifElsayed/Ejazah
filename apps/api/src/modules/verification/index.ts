@@ -52,6 +52,9 @@ export type { ApplicationReviewService, VerificationRequestService };
 /** The review's and the requests' stores, for the probe of their queries (`tests/db-integrity/application-review.spec.ts`). */
 export { createApplicationReviewStore, createIdentityRequestStore } from './stores.js';
 
+/** The person's open identity request, for identity's reinstatement (T113), composed by the admin module. */
+export { openRequestOf } from './verification-requests.repository.js';
+
 /** What the module's routers call, carried by every request in `AppServices.verification`. */
 export interface VerificationServices {
   readonly application: Pick<

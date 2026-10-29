@@ -6,7 +6,8 @@
 // account active; a ban is permanent and one function for the applicant (`applications.ban`, the
 // note written to the application) and the teacher (`teachers.ban`), owner's decision 2026-10-22,
 // reaching a revoked teacher and a rejected applicant too;
-// only a suspended teacher is reinstated (FR-165), and no ban is lifted from the panel (FR-162).
+// only a suspended teacher is reinstated (FR-165), to `verification_required` while an identity
+// request is open (T113), and no ban is lifted from the panel (FR-162).
 // Each of the three ends every session of the person (`user_sessions.revoked_reason`) and calls the
 // one consequences entry (`consequences.ts`), all on the administrator kind's transaction, so the
 // change, the revocations, the consequences and the audit entry commit together.
@@ -69,6 +70,8 @@ export interface StandingDependencies {
   readonly consequences: AccountConsequences;
   /** Removes the teacher's subjects (catalog's `teacher_subjects`), on the action's transaction. */
   readonly revokeSubjects: (tx: Transaction, teacherUserId: string) => Promise<void>;
+  /** Whether the person has an `open` identity request (verification's), on the action's transaction. */
+  readonly hasOpenIdentityRequest: (tx: Transaction, userId: string) => Promise<boolean>;
   readonly now?: () => Date;
 }
 
@@ -76,12 +79,14 @@ export class StandingService {
   readonly #store: StandingStore;
   readonly #consequences: AccountConsequences;
   readonly #revokeSubjects: StandingDependencies['revokeSubjects'];
+  readonly #hasOpenIdentityRequest: StandingDependencies['hasOpenIdentityRequest'];
   readonly #now: () => Date;
 
   constructor(dependencies: StandingDependencies) {
     this.#store = dependencies.store;
     this.#consequences = dependencies.consequences;
     this.#revokeSubjects = dependencies.revokeSubjects;
+    this.#hasOpenIdentityRequest = dependencies.hasOpenIdentityRequest;
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -165,11 +170,17 @@ export class StandingService {
     await this.#end(tx, userId, 'banned');
   }
 
-  /** `teachers.reinstate`: a suspended teacher back to active; no consequence is undone here. */
+  /**
+   * `teachers.reinstate`: a suspended teacher back to `active`, or to `verification_required` while
+   * an identity request is open (T113, owner's decision 2026-10-28); no consequence is undone here.
+   */
   async reinstate(tx: Transaction, _adminId: string, teacherUserId: string): Promise<void> {
     const standing = await this.#teacher(tx, teacherUserId);
     if (standing.accountStatus !== 'suspended') throw conflict(standing);
-    if (!(await this.#store.moveAccount(tx, teacherUserId, ['suspended'], 'active'))) {
+    const to: AccountStatus = (await this.#hasOpenIdentityRequest(tx, teacherUserId))
+      ? 'verification_required'
+      : 'active';
+    if (!(await this.#store.moveAccount(tx, teacherUserId, ['suspended'], to))) {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
   }

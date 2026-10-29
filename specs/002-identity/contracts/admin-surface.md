@@ -106,7 +106,7 @@ The standing's states (T068, batch B13b; data-model.md, ADR 0016 D2):
 - **`suspend`.** It moves an approved teacher who is `active` or under an identity request (`verification_required`; B13b review, owner's decision 2026-10-22). It writes `account_status` only.
 - **`revokeApproval`.** It moves an approved teacher, active or suspended. It also deletes the teacher's `teacher_subjects` (owner's decision 2026-10-22, FR-153); a new approval grants them again.
 - **`ban`.** It moves a teacher approved or whose approval was revoked, and writes `account_status = banned` and `verification_status = banned`. It is the same function as `applications.ban`, which moves an `in_review`, `needs_document` or `rejected` application (B13b review, owner's decision 2026-10-22: a fraud found after a revocation or a rejection is banned at once).
-- **`reinstate`.** It moves a suspended teacher back to `active`. A ban is not lifted (FR-162).
+- **`reinstate`.** It moves a suspended teacher back to `active`, or to `verification_required` while an identity request of theirs is `open` (T113, owner's decision 2026-10-28). A ban is not lifted (FR-162).
 - **Sessions and consequences.** Each of the three ends every session (`revoked_reason` `account_suspended`, `admin_action`, `account_banned`). Each calls `onAccountTerminated(tx, userId, cause)` (`identity/consequences.ts`, empty in this phase).
 - **Refusals.** A refusal is `CONFLICT` on `teacherUserId`, naming the standing. A person with no teacher profile is `NOT_FOUND`.
 - **The audit.** Each entry is on the person (`user`), with the reason and the standing it moved to.

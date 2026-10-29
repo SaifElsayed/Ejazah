@@ -5,7 +5,8 @@
 // a revocation writes `verification_status = revoked` and `application_status = rejected` with the
 // reason as the note, removes the teacher's subjects and keeps the account active; a ban is
 // permanent and is one function for the applicant and the teacher, the applicant's note written to
-// the application; only a suspended teacher is reinstated. An identity request moves an active
+// the application; only a suspended teacher is reinstated, to `verification_required` while an
+// identity request is open and to `active` otherwise (T113). An identity request moves an active
 // account to `verification_required` and back. Over a store held in memory that keeps the
 // database's rules; the queries are probed in `tests/db-integrity/application-review.spec.ts`.
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -21,12 +22,14 @@ const NOW = new Date('2026-10-22T10:00:00Z');
 let store: MemoryStandingStore;
 let consequences: { userId: string; cause: TerminationCause }[];
 let subjectsRevoked: string[];
+let openIdentityRequests: Set<string>;
 let standing: StandingService;
 
 beforeEach(() => {
   store = new MemoryStandingStore();
   consequences = [];
   subjectsRevoked = [];
+  openIdentityRequests = new Set();
   const registry = new AccountConsequences();
   registry.subscribe(async (_tx, userId, cause) => {
     consequences.push({ userId, cause });
@@ -37,6 +40,7 @@ beforeEach(() => {
     revokeSubjects: async (_tx, userId) => {
       subjectsRevoked.push(userId);
     },
+    hasOpenIdentityRequest: async (_tx, userId) => openIdentityRequests.has(userId),
     now: () => NOW,
   });
 });
@@ -225,10 +229,18 @@ describe('ban', () => {
 });
 
 describe('reinstate', () => {
-  it('returns a suspended teacher to active, calling no consequence', async () => {
+  it('returns a suspended teacher with no open identity request to active, calling no consequence', async () => {
     const userId = approvedTeacher('suspended');
     await standing.reinstate(TX, ADMIN, userId);
     expect(store.person(userId).accountStatus).toBe('active');
+    expect(consequences).toEqual([]);
+  });
+
+  it('returns a suspended teacher with an open identity request to verification_required (T113)', async () => {
+    const userId = approvedTeacher('suspended');
+    openIdentityRequests.add(userId);
+    await standing.reinstate(TX, ADMIN, userId);
+    expect(store.person(userId).accountStatus).toBe('verification_required');
     expect(consequences).toEqual([]);
   });
 
