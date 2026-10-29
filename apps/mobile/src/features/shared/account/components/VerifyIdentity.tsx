@@ -45,13 +45,18 @@ const UPLOAD = {
   },
 } as const;
 
-/** How the latest closed request ended, dated in the account's zone (T115). */
+/**
+ * How the latest closed request ended, dated in the account's zone (T115). A replacement's reason
+ * is said once: `withReason` is false while the «سبب الطلب» card shows it on the same screen.
+ */
 function OutcomeBanner({
   outcome,
   zone,
+  withReason,
 }: {
   readonly outcome: IdentityVerificationOutcome;
   readonly zone: string;
+  readonly withReason: boolean;
 }) {
   const t = useT();
   const format = useFormatters();
@@ -69,7 +74,9 @@ function OutcomeBanner({
         <Text variant="caption" weight="bold">
           {t('account.verifyIdentity.outcome.replaced', { date })}
         </Text>
-        {outcome.reason === undefined ? null : <Text variant="caption">{outcome.reason}</Text>}
+        {!withReason || outcome.reason === undefined ? null : (
+          <Text variant="caption">{outcome.reason}</Text>
+        )}
       </View>
     </Banner>
   );
@@ -87,9 +94,11 @@ export function VerifyIdentity() {
   const answer = request.data;
   const asking = answer?.open === true && answer.submittedAt === undefined;
   const zone = me.data?.timezone;
+  // The form draws the open request's reason in its own card.
+  const reasonCard = asking && answer.reason !== undefined;
   const outcome =
     answer?.lastOutcome === undefined || zone === undefined ? null : (
-      <OutcomeBanner outcome={answer.lastOutcome} zone={zone} />
+      <OutcomeBanner outcome={answer.lastOutcome} zone={zone} withReason={!reasonCard} />
     );
 
   async function send(): Promise<void> {
@@ -165,7 +174,7 @@ export function VerifyIdentity() {
             </Banner>
           ) : null}
           <Text>{t('account.verifyIdentity.intro')}</Text>
-          {answer.reason === undefined ? null : (
+          {!reasonCard ? null : (
             <Card>
               <Text variant="headline">{t('account.verifyIdentity.reasonTitle')}</Text>
               <Text>{answer.reason}</Text>

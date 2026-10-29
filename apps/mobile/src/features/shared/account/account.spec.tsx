@@ -411,7 +411,9 @@ describe('VerifyIdentity (FR-166)', () => {
     );
   });
 
-  it('says the last document was not accepted, when, and why, over the new request', async () => {
+  // The reason is said once: beside «سبب الطلب» the banner leaves it to the card (the owner's
+  // condition of 2026-10-29), and wherever that card is not drawn the banner says it.
+  it('says the last document was not accepted, and when, over the new request and its reason', async () => {
     const reason = 'الوجه الخلفي غير واضح';
     request({
       ...open,
@@ -432,10 +434,33 @@ describe('VerifyIdentity (FR-166)', () => {
             ),
           ),
         ).toBeTruthy();
-        expect(screen.getAllByText(reason).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(reason)).toHaveLength(1);
+        expect(screen.getByText(said(direction, 'account.verifyIdentity.reasonTitle'))).toBeTruthy();
         expect(
           screen.getByRole('button', { name: said(direction, 'account.verifyIdentity.submit') }),
         ).toBeTruthy();
+      },
+    );
+  });
+
+  it('says why the last document was not accepted when the new one is already sent', async () => {
+    const reason = 'الوجه الخلفي غير واضح';
+    request({
+      ...open,
+      reason,
+      submittedAt: REQUESTED,
+      lastOutcome: { status: 'replaced', resolvedAt: RESOLVED, reason },
+    });
+    await inBothDirections(
+      as('teacher', 'verification_required', () => <VerifyIdentity />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(said(direction, 'account.verifyIdentity.submitted.title')),
+        ).toBeTruthy();
+        expect(
+          screen.queryByText(said(direction, 'account.verifyIdentity.reasonTitle')),
+        ).toBeNull();
+        expect(screen.getAllByText(reason)).toHaveLength(1);
       },
     );
   });
