@@ -2,7 +2,9 @@
 // `.console`, `.sidebar`, `.nav-item`, `.page`, `.toolbar`, `.search-row`, `.split`, `.panel`, `.kv`,
 // `.doc-thumb`, `.queue-card`, `.pager`, `.auth-card`). Console is the frame: its `dir` and `lang`
 // follow the language (T035), its density is the compact one, its scheme the system's; a dialog
-// opens inside it so the console's classes and direction reach the dialog too.
+// opens inside it so the console's classes and direction reach the dialog too. T111: it is the live
+// console (`.console--live`), which fills the window and scrolls; the boards' `.console` stays the
+// fixed frame.
 import clsx from 'clsx';
 import {
   createContext,
@@ -61,7 +63,7 @@ export function Console({ children }: ConsoleProps) {
   return (
     <div
       ref={setFrame}
-      className="console"
+      className="console console--live"
       dir={directionOf(locale)}
       lang={locale}
       data-density="compact"

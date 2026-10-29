@@ -118,7 +118,7 @@ describe('StudentAccount', () => {
 
   it('switches the language in place and stores it on the account (FR-131)', async () => {
     await renderIn('rtl', withAccount()());
-    await fireEvent.press(screen.getByRole('radio', { name: 'English' }));
+    await fireEvent.press(screen.getByRole('radio', { name: /English/ }));
     await waitFor(() =>
       expect(mockApi.api.account.setLanguage.mutate).toHaveBeenCalledWith({ language: 'en' }),
     );

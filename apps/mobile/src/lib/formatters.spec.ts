@@ -6,9 +6,11 @@ import {
   formatCalendarDate,
   formatDate,
   formatFullDate,
+  formatMonth,
   formatNumber,
   formatTime,
   formatWeekdayDate,
+  formatYear,
 } from './formatters';
 
 const instant = '2026-10-15T07:02:00Z';
@@ -46,6 +48,19 @@ describe('formatters', () => {
     expect(formatCalendarDate('2004-03-12', 'ar')).toBe('12 مارس 2004');
     expect(formatCalendarDate('2004-03-12', 'en')).toBe('March 12, 2004');
     expect(() => formatCalendarDate('2004-02-30', 'ar')).toThrow(RangeError);
+  });
+
+  it('names a month in the language, for the date-of-birth picker (T109)', () => {
+    expect(formatMonth(3, 'ar')).toBe('مارس');
+    expect(formatMonth(3, 'en')).toBe('March');
+    expect(formatMonth(12, 'ar')).toBe('ديسمبر');
+    expect(formatMonth(1, 'en')).toBe('January');
+    expect(() => formatMonth(13, 'ar')).toThrow(RangeError);
+  });
+
+  it('writes a year whole, with no grouping mark (T109)', () => {
+    expect(formatYear(2004, 'ar')).toBe('2004');
+    expect(formatYear(1900, 'en')).toBe('1900');
   });
 
   it('refuses an instant that does not parse, never printing "Invalid Date"', () => {

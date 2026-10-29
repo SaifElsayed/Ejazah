@@ -97,7 +97,7 @@ describe('Welcome', () => {
 
   it('switches the language in place', async () => {
     await renderIn('rtl', <Welcome />);
-    await fireEvent.press(screen.getByRole('radio', { name: 'English' }));
+    await fireEvent.press(screen.getByRole('radio', { name: /English/ }));
     expect(getLocale()).toBe('en');
   });
 

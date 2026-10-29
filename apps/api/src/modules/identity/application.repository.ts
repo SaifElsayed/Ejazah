@@ -146,13 +146,16 @@ export async function readApplicationQueue(tx: Client): Promise<{
   readonly oldestSubmittedAt: Date | null;
   readonly waitingOnApplicant: number;
 }> {
+  // A deleted account's application is not in the applications list, so the card does not count
+  // it (T121).
+  const live = { user: { deletedAt: null } } as const;
   const [open, waitingOnApplicant] = await Promise.all([
     tx.teacherProfile.aggregate({
-      where: { applicationStatus: 'in_review' },
+      where: { applicationStatus: 'in_review', ...live },
       _count: { _all: true },
       _min: { applicationSubmittedAt: true },
     }),
-    tx.teacherProfile.count({ where: { applicationStatus: 'needs_document' } }),
+    tx.teacherProfile.count({ where: { applicationStatus: 'needs_document', ...live } }),
   ]);
   return {
     open: open._count._all,

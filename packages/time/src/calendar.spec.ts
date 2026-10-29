@@ -2,7 +2,7 @@
 // same calendar date, whatever the device's zone, since the picker shows the day in that zone.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { calendarDateOfPicked, calendarDaysBefore, pickerDateOf } from './calendar.js';
+import { calendarDateOfPicked, calendarDaysBefore, daysInMonth, pickerDateOf } from './calendar.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -36,5 +36,25 @@ describe('calendarDaysBefore (B14d: the audit’s last days)', () => {
   it('refuses a date that does not exist, and a count that is not a whole number', () => {
     expect(() => calendarDaysBefore('2026-02-30', 1)).toThrow(RangeError);
     expect(() => calendarDaysBefore('2026-10-25', 1.5)).toThrow(RangeError);
+  });
+});
+
+describe('daysInMonth (T109: the date-of-birth picker’s days)', () => {
+  it('counts the days of each month of the Gregorian calendar', () => {
+    const counts = Array.from({ length: 12 }, (_, index) => daysInMonth(2023, index + 1));
+    expect(counts).toEqual([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]);
+  });
+
+  it('gives February 29 days in a leap year: every fourth, not a century, every fourth century', () => {
+    expect(daysInMonth(2004, 2)).toBe(29);
+    expect(daysInMonth(1900, 2)).toBe(28);
+    expect(daysInMonth(2000, 2)).toBe(29);
+    expect(daysInMonth(2026, 2)).toBe(28);
+  });
+
+  it('refuses a month or a year that is not one', () => {
+    expect(() => daysInMonth(2004, 0)).toThrow(RangeError);
+    expect(() => daysInMonth(2004, 13)).toThrow(RangeError);
+    expect(() => daysInMonth(2004.5, 2)).toThrow(RangeError);
   });
 });

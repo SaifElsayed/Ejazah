@@ -129,6 +129,22 @@ describe('AdminAudit (FR-175)', () => {
     );
   });
 
+  // T111: the long text columns are not cut at the table's edge: the target wraps, as the board
+  // draws it, and the reason ends in an ellipsis after two lines with its full text on hover.
+  it('wraps the target and clips the reason, its full text on hover (T111)', async () => {
+    open();
+    const reason = await screen.findByText(suspended.reason);
+    expect(reason.parentElement?.className).toBe('table__clip');
+    expect(reason.parentElement?.getAttribute('title')).toBe(suspended.reason);
+    const target = screen.getByText(
+      ar('admin.audit.targetNamed', {
+        type: ar('admin.audit.targets.user'),
+        name: suspended.targetName,
+      }),
+    );
+    expect(target.closest('td')?.className).toBe('table__wrap');
+  });
+
   it('reads the first page of the last thirty days in the panel’s zone, once in strict mode', async () => {
     const { api } = open(fakeApi(), { strict: true });
     await screen.findByText(ar('admin.audit.actions.teacherSuspend'));

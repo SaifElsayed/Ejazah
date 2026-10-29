@@ -1,8 +1,9 @@
 // T065 — the admin home's two queue cards over the real tables, as the admin module reads them
 // through the identity and catalog modules' entries (`readApplicationQueue`, `readCredentialQueue`;
-// R-API-6, FR-176). A count is over the whole table, which other probes fill while this one runs,
-// so each probe reads inside one REPEATABLE READ transaction: it counts, writes its own rows through
-// the owning modules' entries on that transaction, counts again and rolls everything back. The
+// R-API-6, FR-176), a deleted account left out as the lists leave it (T121). A count is over the
+// whole table, which other probes fill while this one runs, so each probe reads inside one
+// REPEATABLE READ transaction: it counts, writes its own rows through the owning modules' entries
+// on that transaction, counts again and rolls everything back. The
 // snapshot is the transaction's, so the difference is exactly its own rows. The parents the entries
 // need (a person, a document) are committed first, as every probe here writes them.
 //
@@ -99,6 +100,24 @@ describe('the applications card', () => {
     expect(after.oldestSubmittedAt).toEqual(oldest);
     expect(after.waitingOnApplicant).toBe(before.waitingOnApplicant);
   });
+
+  it("leaves out a deleted account's application, as the applications list does (T121)", async () => {
+    const person = await personWithDocument('national_id');
+    const [before, after] = await onOneSnapshot(async (tx) => {
+      const counted = await readApplicationQueue(tx);
+      await setApplication(tx, person.userId, {
+        kind: 'open',
+        from: null,
+        qualificationSummary: 'Probe summary',
+        identityDocumentId: person.documentId,
+        identityDocumentType: 'national_id',
+        submittedAt: new Date('1970-06-01T00:00:00Z'),
+      });
+      await tx.user.update({ where: { id: person.userId }, data: { deletedAt: new Date() } });
+      return [counted, await readApplicationQueue(tx)] as const;
+    });
+    expect(after).toEqual(before);
+  });
 });
 
 describe('the credentials card', () => {
@@ -136,5 +155,23 @@ describe('the credentials card', () => {
     expect(after.oldestSubmittedAt?.getTime()).toBeLessThanOrEqual(
       Date.parse('2026-10-20T09:00:00Z'),
     );
+  });
+
+  it("leaves out a deleted account's credential, as the credentials list does (T121)", async () => {
+    const teacher = await personWithDocument('credential');
+    const subject = await makeSubject(db);
+    const [before, after] = await onOneSnapshot(async (tx) => {
+      const counted = await readCredentialQueue(tx);
+      await addCredential(tx, {
+        teacherUserId: teacher.userId,
+        subjectId: subject,
+        documentId: teacher.documentId,
+        submittedWithApplication: false,
+        createdAt: new Date('1970-06-01T00:00:00Z'),
+      });
+      await tx.user.update({ where: { id: teacher.userId }, data: { deletedAt: new Date() } });
+      return [counted, await readCredentialQueue(tx)] as const;
+    });
+    expect(after).toEqual(before);
   });
 });

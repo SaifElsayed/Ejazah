@@ -1221,3 +1221,22 @@ button.pager__page { border: 0; background: transparent; cursor: pointer; font: 
 .console .category-tabs { margin-inline: 0; padding-inline: 0; }
 .console .option-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .console .page-body > .search-row { flex: none; }
+
+/* ======================================================================
+   The live console (T111). A board draws `.console`: the fixed web frame,
+   every box inside it clipped. The admin panel in a browser window adds
+   `.console--live`: the window is the frame; the sidebar, the page body,
+   the list, the detail and a panel's body scroll, so a panel's actions
+   stay in view; a table scrolls sideways inside its border, its count and
+   pager kept in view; a long text cell ends in an ellipsis after two
+   lines, its full text in its title. Nothing above changes for a board.
+   ====================================================================== */
+.console--live { width: auto; height: 100vh; height: 100dvh; }
+.console--live .sidebar { overflow-y: auto; }
+.console--live .page-body { overflow-y: auto; }
+.console--live .split__list { overflow-y: auto; }
+.console--live .split__detail { overflow-y: auto; }
+.console--live .panel__body { overflow-y: auto; }
+.console--live .table-wrap { flex-shrink: 0; overflow-x: auto; }
+.console--live .table-footer { position: sticky; inset-inline-start: 0; }
+.console--live .table__clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }

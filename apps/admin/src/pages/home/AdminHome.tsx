@@ -2,7 +2,9 @@
 // two queue cards this phase builds (the board's other six land with their phases), each with its
 // open count and what it says of the oldest (from today when under a day), how many wait on the
 // applicant, how many are for an added subject; then the latest actions as the audit names them,
-// the whole log one link away. An empty list, and a summary that could not be read, are said.
+// the whole log one link away. An empty list, and a summary that could not be read, are said. The
+// applications card is titled as its page, «Teacher applications» on AdminHomeEn (T112). T111: the
+// target wraps rather than being cut at the table's edge.
 import { useNavigate } from 'react-router';
 
 import {
@@ -81,7 +83,7 @@ export function AdminHome() {
               <QueueCard
                 href="/applications"
                 icon="user-check"
-                title={t('admin.nav.items.applications')}
+                title={t('admin.applications.title')}
                 count={answer.queues.applications.open}
                 {...hintOf(
                   [
@@ -143,7 +145,7 @@ export function AdminHome() {
                   { key: 'time', header: t('admin.home.columns.time') },
                   { key: 'admin', header: t('admin.home.columns.admin') },
                   { key: 'action', header: t('admin.home.columns.action') },
-                  { key: 'target', header: t('admin.home.columns.target') },
+                  { key: 'target', header: t('admin.home.columns.target'), wrap: true },
                 ]}
                 rows={answer.latestActions.map((row) => {
                   const href = targetHref(row);

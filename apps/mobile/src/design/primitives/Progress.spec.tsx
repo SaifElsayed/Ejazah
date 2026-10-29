@@ -3,7 +3,7 @@ import { describe, expect, it } from '@jest/globals';
 import { screen } from '@testing-library/react-native';
 
 import { tokens } from '../tokens';
-import { colour, inBothDirections, nodesOf, styleOf } from './__tests__/harness';
+import { colour, inBothDirections, nodesOf, styleOf, unmarked } from './__tests__/harness';
 import { Steps, Timeline } from './index';
 
 describe('Steps', () => {
@@ -21,7 +21,7 @@ describe('Steps', () => {
         ]);
         expect(styleOf(screen.getByText('الوثائق'))['fontWeight']).toBe(tokens.font.weight.bold);
         const name = direction === 'rtl' ? 'الخطوة 2 من 3' : 'Step 2 of 3';
-        expect(screen.getByLabelText(name)).toBeTruthy();
+        expect(screen.getByLabelText(name, { normalizer: unmarked })).toBeTruthy();
       },
     );
   });

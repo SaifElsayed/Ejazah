@@ -106,7 +106,7 @@ pieces only a desktop needs:
 
 | Component                       | Props                                                                                                                              | Design                                                            |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **Console**                     | the frame: sidebar at the start, the page beside it; `dir` from the language                                                       | `.console`                                                        |
+| **Console**                     | the frame: sidebar at the start, the page beside it; `dir` from the language; live (T111): fills the window, scrolls               | `.console`, `.console--live`                                      |
 | **Sidebar / NavItem**           | the brand, the queues with their open counts (Badge), the signed-in admin, the language Segmented                                  | `.sidebar`, `.nav-item--active`, `.nav-item__count`               |
 | **Page / PageHeader / Toolbar** | title, subtitle, header actions; a toolbar of search (`layout.panel` wide) and filters                                             | `.page`, `.page-header`, `.toolbar`                               |
 | **Split**                       | a list and the selected item's detail panel (`layout.panel`), the detail sliding in from the start                                 | `.split`, `.split__list`, `.split__detail`                        |

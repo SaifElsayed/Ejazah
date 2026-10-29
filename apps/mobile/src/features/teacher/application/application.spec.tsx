@@ -3,7 +3,8 @@
 // only when every subject has one), the upload of each PDF as it is picked, the first application
 // keyed and a reapplication not; the status in each drawn state (in review with its timeline, a
 // document asked for, rejected with the way to reapply, approved once, then the payout since B15);
-// and the resubmission of what a reviewer asked for.
+// and the resubmission of what a reviewer asked for. Each ijazah upload sits under its subject's
+// name (T110).
 //
 // T098 (App Store 5.1.1(v)): with the tabs closed, an applicant deletes from the status (in review,
 // a document asked for, rejected) and from the request for a document: «حذف الحساب» at the foot
@@ -238,6 +239,27 @@ describe('ApplyIjazah', () => {
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/application/status'));
     expect(getApplication().subjectIds).toEqual([]);
+  });
+
+  it('keeps each subject’s name as the title above its upload once a file is chosen (T110)', async () => {
+    const same = { name: 'ejazah-test.pdf', sizeBytes: 1000 };
+    chooseTwo();
+    updateApplication({
+      ijazahs: {
+        [QURAN.id]: { documentId: '0193a6f0-0000-7000-8000-0000000000e1', ...same },
+        [TAJWEED.id]: { documentId: '0193a6f0-0000-7000-8000-0000000000e2', ...same },
+      },
+    });
+    await inBothDirections(
+      withQueries(() => <ApplyIjazah />),
+      async (_rendered, direction) => {
+        expect(await screen.findAllByText(same.name)).toHaveLength(2);
+        for (const subject of [QURAN, TAJWEED]) {
+          const name = direction === 'rtl' ? subject.nameAr : subject.nameEn;
+          expect(screen.getByRole('header', { name })).toBeTruthy();
+        }
+      },
+    );
   });
 
   it('reapplies after a rejection through `reapply`, with no key', async () => {

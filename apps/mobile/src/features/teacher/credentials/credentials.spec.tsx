@@ -3,7 +3,8 @@
 // and the chain read-only on an approved one (the middle folded when long, the holder last), the
 // date sent on a waiting one, the PDF row named after its subject; a credential waiting on a
 // document opens its request, whose new PDF is sent with `replaceDocument`; a subject is added by
-// choosing it (the subjects already held disabled with their status) and uploading its PDF.
+// choosing it (the subjects already held disabled with their status) and uploading its PDF. A
+// rejected credential shows the reviewer's reason (T110).
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -83,6 +84,15 @@ const waiting = {
   submittedAt: SENT,
   reviewedAt: REVIEWED,
   note: 'الملف غير واضح',
+  document: { sizeBytes: 1000 },
+};
+const rejected = {
+  credentialId: '0193a6f0-0000-7000-8000-0000000000c4',
+  subject: TAJWEED,
+  status: 'rejected',
+  submittedAt: SENT,
+  reviewedAt: REVIEWED,
+  note: 'لا تطابق الاسم',
   document: { sizeBytes: 1000 },
 };
 
@@ -178,6 +188,18 @@ describe('TeacherCredentials', () => {
             said(direction, 'teacher.credentials.fileName', { subject: named(direction, TAJWEED) }),
           ),
         ).toBeTruthy();
+      },
+    );
+  });
+
+  it('shows a rejected credential with the reviewer’s reason (T110)', async () => {
+    mockApi.api.teacher.credentials.list.query.mockResolvedValue([approved, rejected]);
+    await inBothDirections(
+      withQueries(() => <TeacherCredentials />),
+      async (_rendered, direction) => {
+        expect(await screen.findByText(named(direction, TAJWEED))).toBeTruthy();
+        expect(screen.getByText(said(direction, 'status.credential.rejected'))).toBeTruthy();
+        expect(screen.getByText('لا تطابق الاسم')).toBeTruthy();
       },
     );
   });

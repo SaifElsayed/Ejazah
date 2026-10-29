@@ -491,6 +491,9 @@
     },
     "profile": {
       "agreeTerms": "I agree to the {terms}",
+      "birthDay": "Day",
+      "birthMonth": "Month",
+      "birthYear": "Year",
       "chooseDate": "Choose the date",
       "chooseTimeZone": "Choose your city",
       "dateOfBirth": "Date of birth",

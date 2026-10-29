@@ -67,6 +67,38 @@ describe('DataTable', () => {
     );
   });
 
+  // T111: a long text cell ends in an ellipsis after two lines in the live console, its full text
+  // on hover; a cell that may wrap still wraps (`.table__wrap`).
+  it('clips a long text cell, its full text in its title, and wraps a wrapping one', () => {
+    inBothDirections(
+      () => (
+        <DataTable
+          columns={[
+            { key: 'reason', header: 'Reason', clip: true },
+            { key: 'target', header: 'Target', wrap: true },
+          ]}
+          rows={[
+            {
+              key: 'a',
+              cells: { reason: <bdi>A long reason</bdi>, target: 'A request' },
+              titles: { reason: 'A long reason' },
+            },
+            { key: 'b', cells: { reason: null, target: 'A request' } },
+          ]}
+        />
+      ),
+      ({ view }) => {
+        const clipped = view.getByText('A long reason').parentElement;
+        expect(clipped?.className).toBe('table__clip');
+        expect(clipped?.getAttribute('title')).toBe('A long reason');
+        expect(clipped?.parentElement?.tagName).toBe('TD');
+        const [, , second] = view.getAllByRole('row');
+        expect(second?.querySelector('.table__clip')?.hasAttribute('title')).toBe(false);
+        expect(view.getAllByText('A request')[0]?.className).toBe('table__wrap');
+      },
+    );
+  });
+
   it('ends with the count and the pager', () => {
     inBothDirections(
       () => (
