@@ -249,7 +249,9 @@ describe('AdminAudit (FR-175)', () => {
     open(api);
     const cells = await screen.findAllByText(ar('admin.audit.actions.teacherSuspend'));
     fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
-    return within(await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }));
+    return within(
+      await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }),
+    );
   }
 
   it('reads an application approval as the application’s states, not the credential’s', async () => {
@@ -270,7 +272,9 @@ describe('AdminAudit (FR-175)', () => {
       before: { status: 'needs_document' },
       after: { status: 'rejected', reasonChoice: 'name_mismatch' },
     });
-    expect(await rejected.findByText(ar('admin.dialogs.decision.reasons.nameMismatch'))).toBeTruthy();
+    expect(
+      await rejected.findByText(ar('admin.dialogs.decision.reasons.nameMismatch')),
+    ).toBeTruthy();
     expect(rejected.getByText(ar('admin.status.application.waitingOnApplicant'))).toBeTruthy();
     expect(rejected.getByText(ar('admin.status.application.rejected'))).toBeTruthy();
     cleanup();
@@ -292,6 +296,30 @@ describe('AdminAudit (FR-175)', () => {
     });
     expect(await banned.findByText(ar('admin.status.application.banned'))).toBeTruthy();
     expect(banned.getByText(ar('admin.dialogs.decision.ban.reasons.forgedDocuments'))).toBeTruthy();
+  });
+
+  // T155: a credential's request for another file names the application it set waiting, and an
+  // older request's retired reason keeps its words.
+  it('reads the application a document request moved, and a retired reason of an older entry', async () => {
+    const requested = await detailOf({
+      action: 'credential.request_document',
+      before: { applicationStatus: 'in_review' },
+      after: { applicationStatus: 'needs_document' },
+    });
+    expect(await requested.findByText(ar('admin.audit.fields.applicationStatus'))).toBeTruthy();
+    expect(requested.getByText(ar('admin.status.application.inReview'))).toBeTruthy();
+    expect(requested.getByText(ar('admin.status.application.waitingOnApplicant'))).toBeTruthy();
+    expect(requested.queryByText('needs_document')).toBeNull();
+    cleanup();
+    const older = await detailOf({
+      action: 'application.request_info',
+      before: { status: 'in_review' },
+      after: { status: 'needs_document', needed: ['ijazah_unreadable'] },
+    });
+    expect(
+      await older.findByText(ar('admin.audit.values.retiredReasons.ijazahUnreadable')),
+    ).toBeTruthy();
+    expect(older.queryByText('ijazah_unreadable')).toBeNull();
   });
 
   it('links a credential’s entry to its credential', async () => {

@@ -8,6 +8,13 @@
 // approved credential's alone, changes only the fields it names, and answers the transcription
 // before and after for its audit entry (FR-164). The teacher never edits the chain.
 //
+// T155: the request for another document on a credential sent with an application also sets that
+// application, while it is in review, waiting on the applicant (`needs_document`), with the
+// credential's reason as its note and the decision's moment, on the same transaction, so the
+// applicant reaches the field to send the PDF; identity's `decideApplication` moves it, from
+// `in_review` only, so one already waiting keeps its note and an approved teacher's added subject
+// moves no application. The move is the entry's before and after.
+//
 // Every write is conditional on the state it moves from, decided by the database (the store), so two
 // reviewers racing on one credential cannot both move it; the one that lost reads the state again to
 // answer NOT_FOUND or CONFLICT. Each method runs on the administrator kind's transaction (`tx`), so
@@ -88,6 +95,20 @@ export interface Decision {
   readonly at: Date;
 }
 
+/** The application set waiting on the applicant by a request for another document (T155). */
+export interface ApplicationDocumentRequest {
+  readonly adminId: string;
+  readonly at: Date;
+  /** The credential's reason, which the applicant reads as the application's note. */
+  readonly note: string;
+}
+
+/** The application a request for another document moved, for its audit entry; empty for none (T155). */
+export interface DocumentRequestMove {
+  readonly before?: { readonly applicationStatus: 'in_review' };
+  readonly after?: { readonly applicationStatus: 'needs_document' };
+}
+
 /** A correction of an approved credential: the whole transcription after it, the chain when changed. */
 export interface Correction {
   readonly credentialId: string;
@@ -114,6 +135,15 @@ export interface CredentialReviewStore {
   correct(tx: Transaction, correction: Correction): Promise<boolean>;
   /** Whether the teacher is approved (identity's `teacher_profiles`). */
   isApprovedTeacher(tx: Transaction, userId: string): Promise<boolean>;
+  /**
+   * Sets the teacher's application waiting on the applicant while it is in review (identity's
+   * `decideApplication`); whether it moved (T155).
+   */
+  requestApplicationDocument(
+    tx: Transaction,
+    userId: string,
+    request: ApplicationDocumentRequest,
+  ): Promise<boolean>;
   grantSubjects(
     tx: Transaction,
     teacherUserId: string,
@@ -231,9 +261,29 @@ export class CredentialReviewService {
     return this.#decide(tx, adminId, input, ['pending', 'needs_document'], 'rejected');
   }
 
-  /** `credentials.requestDocument`: a pending credential waits for another PDF. */
-  requestDocument(tx: Transaction, adminId: string, input: DecisionInput): Promise<void> {
-    return this.#decide(tx, adminId, input, ['pending'], 'needs_document');
+  /**
+   * `credentials.requestDocument`: a pending credential waits for another PDF, and the application
+   * it was sent with, while in review, waits on the applicant with its reason (T155).
+   */
+  async requestDocument(
+    tx: Transaction,
+    adminId: string,
+    input: DecisionInput,
+  ): Promise<DocumentRequestMove> {
+    const record = await this.#readOrRefuse(tx, input.credentialId);
+    const at = this.#now();
+    await this.#decide(tx, adminId, input, ['pending'], 'needs_document', at);
+    if (!record.submittedWithApplication) return {};
+    const moved = await this.#store.requestApplicationDocument(tx, record.teacher.userId, {
+      adminId,
+      at,
+      note: input.reason,
+    });
+    if (!moved) return {};
+    return {
+      before: { applicationStatus: 'in_review' },
+      after: { applicationStatus: 'needs_document' },
+    };
   }
 
   /** `credentials.correct`: an approved credential's transcription, before and after (FR-164). */
@@ -270,6 +320,7 @@ export class CredentialReviewService {
     input: DecisionInput,
     from: readonly ReviewStatus[],
     to: Decision['to'],
+    at: Date = this.#now(),
   ): Promise<void> {
     const written = await this.#store.decide(tx, {
       credentialId: input.credentialId,
@@ -277,7 +328,7 @@ export class CredentialReviewService {
       to,
       reason: input.reason,
       adminId,
-      at: this.#now(),
+      at,
     });
     if (!written) await this.#refuseMoved(tx, input.credentialId);
   }

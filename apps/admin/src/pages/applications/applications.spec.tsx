@@ -573,6 +573,21 @@ describe('the decision dialog (FR-162)', () => {
     );
   });
 
+  it('offers no ijazah choice: another ijazah is asked for on its credential (T155)', async () => {
+    const { dialog } = await decide('admin.applications.detail.requestInfo');
+    const group = within(
+      dialog.getByRole('group', { name: ar('admin.dialogs.decision.requestInfo.legend') }),
+    );
+    expect(group.getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual(
+      [
+        ar('admin.dialogs.decision.requestInfo.reasons.idUnclear'),
+        ar('admin.dialogs.decision.requestInfo.reasons.nameMismatch'),
+        ar('admin.dialogs.decision.requestInfo.reasons.other'),
+      ],
+    );
+    expect(dialog.queryByText('ملف الإجازة غير مقروء أو ناقص')).toBeNull();
+  });
+
   it('bans with a reason, switched to in place, and says a failure without closing', async () => {
     const { api, dialog } = await decide('admin.applications.detail.reject');
     api.applications.ban.mutate.mockRejectedValue(refusal('INTERNAL'));

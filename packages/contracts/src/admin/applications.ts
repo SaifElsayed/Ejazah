@@ -26,7 +26,12 @@ export const rejectReasonChoice = z.enum([
   'other',
 ]);
 
-/** `AdminDecisionDialogInfo` «ما المطلوب». */
+/**
+ * `AdminDecisionDialogInfo` «ما المطلوب». Another ijazah is asked for on its credential,
+ * `credentials.requestDocument`, which gives the applicant the field to send it (T155).
+ * @deprecated `ijazah_unreadable`: the panel no longer offers it; it stays published until the
+ * contract gate has a path to deprecate and then remove a value (R-API-9, T154).
+ */
 export const requestInfoChoice = z.enum([
   'id_unclear',
   'ijazah_unreadable',
