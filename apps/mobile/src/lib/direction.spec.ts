@@ -42,6 +42,14 @@ describe('direction', () => {
     expect(mirrors('mail', 'rtl')).toBe(false);
   });
 
+  // T114: drawn unmirrored on every board (`StudentAccount`, `SignOutSheet`, `TeacherAccount`,
+  // `PayoutStart`, `PayoutRejected`, the admin sidebar).
+  it('never mirrors the sign-out, external-link and retry icons', () => {
+    for (const icon of ['log-out', 'external-link', 'rotate-ccw'] as const) {
+      expect(mirrors(icon, 'rtl')).toBe(false);
+    }
+  });
+
   it('useDirection reads the provided direction', async () => {
     for (const direction of ['rtl', 'ltr'] as const) {
       const wrapper = ({ children }: { children: ReactNode }) =>

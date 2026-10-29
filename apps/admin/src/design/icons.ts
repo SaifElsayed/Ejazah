@@ -85,7 +85,4 @@ export const directionalIcons = [
   'chevron-right',
   'chevron-left',
   'arrow-left',
-  'log-out',
-  'external-link',
-  'rotate-ccw',
 ] as const satisfies readonly IconName[];

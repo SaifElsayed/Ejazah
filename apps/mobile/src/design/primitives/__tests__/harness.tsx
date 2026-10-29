@@ -7,9 +7,9 @@
 // isolates every value and marks an Arabic string that opens with a Latin run; only
 // `i18n/index.spec.ts` asserts those marks.
 import { expect } from '@jest/globals';
-import { render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
-import { StyleSheet } from 'react-native';
+import { DeviceEventEmitter, Platform, StyleSheet } from 'react-native';
 
 import { setLocale } from '../../../i18n';
 import { type Direction, DirectionContext } from '../../../lib/direction';
@@ -172,4 +172,36 @@ export function expectTokenColours(rendered: Rendered, scheme: ColorScheme): voi
 /** The colour token a value of `scheme` is, for readable assertions. */
 export function colour(scheme: ColorScheme, token: keyof (typeof tokens.color)['light']): string {
   return tokens.color[scheme][token];
+}
+
+type Instance = ReturnType<Rendered['getByText']>;
+
+/** The phone's screen height in the keyboard specs (T114), the frame the lifted view fills. */
+const SCREEN_HEIGHT = 800;
+
+/**
+ * T114: lays the nearest keyboard-avoiding view above `inside` over the whole screen, raises a
+ * keyboard `height` tall the way the platform in force announces it, and answers how far that view
+ * lifts what it holds (its bottom padding); 0 when nothing above `inside` avoids the keyboard.
+ */
+export async function liftedBy(inside: Instance, height: number): Promise<number> {
+  let host: Instance | null = inside.parent;
+  while (host !== null && (typeof host.type !== 'string' || host.props['onLayout'] === undefined))
+    host = host.parent;
+  if (host === null) return 0;
+  const avoiding = host;
+  await fireEvent(avoiding, 'layout', {
+    nativeEvent: { layout: { x: 0, y: 0, width: 0, height: SCREEN_HEIGHT } },
+    persist: () => undefined,
+  });
+  await act(async () => {
+    DeviceEventEmitter.emit(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', {
+      endCoordinates: { screenX: 0, screenY: SCREEN_HEIGHT - height, width: 0, height },
+      duration: 0,
+      easing: 'keyboard',
+    });
+    await Promise.resolve();
+  });
+  const bottom = styleOf(avoiding)['paddingBottom'];
+  return typeof bottom === 'number' ? bottom : 0;
 }

@@ -1,9 +1,20 @@
 // T032: Sheet and Dialog (R-MOBILE-4/5/6): every modal flow, in both directions.
+//
+// T114: a Sheet lifts what it holds over the keyboard on both platforms, since its `Modal` is a
+// window the screen's own keyboard avoidance does not reach.
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 
 import { tokens } from '../tokens';
-import { colour, inBothDirections, nodesOf, styleOf } from './__tests__/harness';
+import {
+  colour,
+  inBothDirections,
+  liftedBy,
+  nodesOf,
+  renderIn,
+  styleOf,
+} from './__tests__/harness';
 import { Dialog, Sheet, Text } from './index';
 
 describe('Sheet', () => {
@@ -35,6 +46,20 @@ describe('Sheet', () => {
     );
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  for (const os of ['ios', 'android'] as const) {
+    it(`keeps its confirm button above the keyboard on ${os} (T114)`, async () => {
+      jest.replaceProperty(Platform, 'OS', os);
+      await renderIn(
+        'rtl',
+        <Sheet open title="حذف الحساب" onClose={() => undefined}>
+          <Text>تأكيد</Text>
+        </Sheet>,
+      );
+      expect(await liftedBy(screen.getByText('تأكيد'), 300)).toBe(300);
+      jest.restoreAllMocks();
+    });
+  }
 
   it('renders nothing while closed', async () => {
     await inBothDirections(
