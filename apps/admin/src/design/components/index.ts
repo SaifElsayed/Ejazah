@@ -3,6 +3,7 @@
 // with the design's own classes (`components.css`, generated from the design under
 // `check:generated`), and the console pieces only a desktop needs. Pages compose these; they do not
 // draw buttons or colours of their own.
+import '../fonts.css';
 import '../tokens.css';
 import '../components.css';
 

@@ -77,10 +77,14 @@ describe('approve', () => {
       { position: 3, names: ['زر بن حبيش'] },
     ]);
     expect(answer).toEqual({
-      holderName: TRANSCRIPTION.holderName,
-      riwaya: TRANSCRIPTION.riwaya,
-      tariq: TRANSCRIPTION.tariq,
-      chain: held.chain,
+      // The pending credential's transcription before it, for the audit entry's before (T116).
+      before: { holderName: null, riwaya: null, tariq: null, chain: [] },
+      after: {
+        holderName: TRANSCRIPTION.holderName,
+        riwaya: TRANSCRIPTION.riwaya,
+        tariq: TRANSCRIPTION.tariq,
+        chain: held.chain,
+      },
     });
   });
 
@@ -89,7 +93,7 @@ describe('approve', () => {
     const credentialId = store.plant();
     const { tariq: _omitted, ...withoutTariq } = TRANSCRIPTION;
     const answer = await serviceOver(store).approve(TX, ADMIN, { credentialId, ...withoutTariq });
-    expect(answer.tariq).toBeNull();
+    expect(answer.after.tariq).toBeNull();
     expect(store.held(credentialId).tariq).toBeNull();
   });
 

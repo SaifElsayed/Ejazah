@@ -8,6 +8,7 @@ import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import {
   activeSubjectsAmong,
   addCredential,
+  closeUndecidedCredentials,
   type CredentialRow,
   credentialsOfTeachers,
   grantSubjects,
@@ -33,6 +34,7 @@ import { documentSizes, documentsOwnedAmong } from './verification.repository.js
 import {
   attachDocument,
   documentUploadedAt,
+  lastClosedRequestOf,
   openRequest,
   openRequestOf,
   readRequest,
@@ -132,6 +134,7 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
     recordCall: recordApplicationCall,
     decide: decideApplication,
     grantSubjects,
+    closeCredentials: closeUndecidedCredentials,
   };
 }
 
@@ -142,6 +145,7 @@ export function createIdentityRequestStore(database: Database): IdentityRequestS
     run,
     accountStatusOf: async (tx, userId) => (await readStanding(tx, userId))?.accountStatus ?? null,
     openRequestOf,
+    lastClosedRequestOf,
     readRequest,
     openRequest,
     attachDocument,

@@ -2,8 +2,8 @@
 // "`applications`"; FR-160 to FR-162). Every procedure is the administrator kind: it refuses an
 // anonymous caller and one whose second factor is not verified, and writes the action's audit entry
 // with the actor from the session, nothing of a refused call. Each decision is described on the
-// application (`teacher_application`) with the note the applicant sees as its reason and the
-// dialog's choice as its after; the list and the detail are reads naming the reader. What the review
+// application (`teacher_application`) with the note the applicant sees as its reason, the status it
+// moved from as its before and the status it moved to beside the dialog's choice as its after (T116); the list and the detail are reads naming the reader. What the review
 // does is `application-review.service.spec.ts`'s; the services here record what reached them.
 import { describe, expect, it } from 'vitest';
 
@@ -50,11 +50,24 @@ function surface() {
       credentials: [],
       call: {},
     }),
-    recordCall: record('recordCall', undefined),
-    approve: record('approve', { subjectIds: ['0199d0a0-0000-7000-8000-000000000051'] }),
-    reject: record('reject', undefined),
-    requestInfo: record('requestInfo', undefined),
-    ban: record('ban', undefined),
+    recordCall: record('recordCall', {
+      before: { completedOn: '2026-10-20', outcome: 'unsuitable' },
+      after: { completedOn: '2026-10-21', outcome: 'suitable' },
+    }),
+    approve: record('approve', {
+      before: { status: 'in_review' },
+      after: { status: 'approved' },
+      subjectIds: ['0199d0a0-0000-7000-8000-000000000051'],
+    }),
+    reject: record('reject', {
+      before: { status: 'needs_document' },
+      after: { status: 'rejected' },
+    }),
+    requestInfo: record('requestInfo', {
+      before: { status: 'in_review' },
+      after: { status: 'needs_document' },
+    }),
+    ban: record('ban', { before: { status: 'rejected' }, after: { status: 'banned' } }),
   };
   const contexts = adminContextsOver({ applications });
   return {
@@ -113,43 +126,65 @@ describe('the administrator kind', () => {
 describe('the audit entries', () => {
   const target = { adminId: SPEC_ADMIN, targetType: 'teacher_application', targetId: APPLICANT };
 
-  it('recordCall: the day and the outcome, not the notes', async () => {
+  it('recordCall: the day and the outcome before (T116) and after, not the notes', async () => {
     const { as, written } = surface();
     await CALLS['applications.recordCall']!(as(VERIFIED));
     expect(written).toEqual([
       {
         ...target,
         action: 'application.record_call',
+        before: { completedOn: '2026-10-20', outcome: 'unsuitable' },
         after: { completedOn: '2026-10-21', outcome: 'suitable' },
       },
     ]);
   });
 
-  it('approve: the subjects granted, and the note as the reason when there is one', async () => {
+  it('approve: the status before (T116), the status and the subjects granted after, the note as the reason when there is one', async () => {
     const { as, written } = surface();
     await as(VERIFIED).applications.approve({ teacherUserId: APPLICANT, note: 'مرحبًا' });
     await as(VERIFIED).applications.approve({ teacherUserId: APPLICANT });
-    const after = { subjectIds: ['0199d0a0-0000-7000-8000-000000000051'] };
+    const before = { status: 'in_review' };
+    const after = { status: 'approved', subjectIds: ['0199d0a0-0000-7000-8000-000000000051'] };
     expect(written).toEqual([
-      { ...target, action: 'application.approve', reason: 'مرحبًا', after },
-      { ...target, action: 'application.approve', after },
+      { ...target, action: 'application.approve', reason: 'مرحبًا', before, after },
+      { ...target, action: 'application.approve', before, after },
     ]);
   });
 
   it.each([
-    ['reject', 'application.reject', { reasonChoice: 'qualification_gap' }],
-    ['ban', 'application.ban', { reasonChoice: 'forged_documents' }],
-    ['requestInfo', 'application.request_info', { needed: ['id_unclear', 'other'] }],
+    [
+      'reject',
+      'application.reject',
+      'needs_document',
+      'rejected',
+      { reasonChoice: 'qualification_gap' },
+    ],
+    ['ban', 'application.ban', 'rejected', 'banned', { reasonChoice: 'forged_documents' }],
+    [
+      'requestInfo',
+      'application.request_info',
+      'in_review',
+      'needs_document',
+      { needed: ['id_unclear', 'other'] },
+    ],
   ] as const)(
-    '%s: the note as the reason, the choice as the after',
-    async (procedure, action, choice) => {
+    '%s: the note as the reason, the status before (T116), the status and the choice after',
+    async (procedure, action, from, to, choice) => {
       const { as, written, reached } = surface();
       await (as(VERIFIED).applications[procedure] as (input: object) => Promise<void>)({
         teacherUserId: APPLICANT,
         note: 'ما يراه المتقدّم',
         ...choice,
       });
-      expect(written).toEqual([{ ...target, action, reason: 'ما يراه المتقدّم', after: choice }]);
+      expect(written).toEqual([
+        {
+          ...target,
+          action,
+          reason: 'ما يراه المتقدّم',
+          before: { status: from },
+          after: { status: to, ...choice },
+        },
+      ]);
       expect(reached[0]?.[0]).toBe(procedure);
       expect(reached[0]?.[1]).toBe(SPEC_ADMIN);
     },

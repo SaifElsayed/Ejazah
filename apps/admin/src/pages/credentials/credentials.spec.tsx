@@ -4,13 +4,14 @@
 // transcription (holder, riwaya, tariq, the chain by generation) and the three decisions, each
 // confirmed with what it truly does; the correction of a verified chain with its reason, each changed
 // generation saying what it was; the document beside the panel, one link per credential, opened full
-// in the viewer; a credential that moved meanwhile; the empty tabs; `?credential=` selecting one.
+// in the viewer; a credential that moved meanwhile; the empty tabs; `?credential=` selecting one;
+// «اعتماد» held until the file has loaded (T116).
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
 import { dayMonth, dayMonthYear } from '../../lib/format';
-import { openPdf } from '../../lib/pdf';
+import { openPdf, type PdfFile } from '../../lib/pdf';
 import { panelTimeZone } from '../../lib/zone';
 import {
   currentPath,
@@ -19,6 +20,7 @@ import {
   query,
   refusal,
   renderApp,
+  type Translate,
 } from '../../test/app-harness';
 
 vi.mock('../../lib/pdf', () => ({
@@ -128,6 +130,18 @@ const ar = (key: MessageKey, values?: Record<string, string | number>) =>
 function open(api = fakeApi(), { at = '/credentials', strict = false } = {}) {
   return { ...renderApp({ at, session: verified, api, strict }), api };
 }
+
+/** «اعتماد» offered: the transcription written and the file beside it loaded (T116). */
+const approvable = (form: ReturnType<typeof within>) =>
+  waitFor(() =>
+    expect(
+      (
+        form.getByRole('button', {
+          name: ar('admin.credentials.panel.approve'),
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
 
 const t_ = (key: MessageKey, values?: Record<string, string | number>) =>
   translate(getLocale(), key, values);
@@ -296,6 +310,7 @@ describe('the transcription and the decisions (FR-163)', () => {
     );
     addName(form, 2, 'عثمان بن عفان');
     addName(form, 2, 'أُبيّ بن كعب');
+    await approvable(form);
     return form;
   }
 
@@ -355,6 +370,7 @@ describe('the transcription and the decisions (FR-163)', () => {
       form.getByRole('button', { name: ar('admin.credentials.panel.addGeneration') }),
     );
     addName(form, 1, 'رسول الله ﷺ');
+    await approvable(form);
     fireEvent.click(form.getByRole('button', { name: ar('admin.credentials.panel.approve') }));
     const confirm = await dialog(
       ar('admin.dialogs.confirm.approveCredential.title', {
@@ -502,6 +518,57 @@ describe('the transcription and the decisions (FR-163)', () => {
       confirm.getByRole('button', { name: ar('admin.dialogs.confirm.approveCredential.confirm') }),
     );
     expect(await confirm.findByText(ar('admin.credentials.panel.subjectApproved'))).toBeTruthy();
+  });
+});
+
+describe('«اعتماد» once the file has loaded (T116)', () => {
+  const PDF: PdfFile = { pageCount: 2, renderPage: vi.fn(async () => {}), close: vi.fn() };
+
+  /** Writes a complete transcription in the language drawn. */
+  function fill(form: ReturnType<typeof within>, t: Translate) {
+    type(form.getByLabelText(t('admin.credentials.panel.holderName')), 'ياسر بن محمود حمدي');
+    type(form.getByLabelText(t('admin.credentials.panel.riwaya')), 'حفص عن عاصم');
+    fireEvent.click(form.getByRole('button', { name: t('admin.credentials.panel.addGeneration') }));
+    addName(form, 1, 'رسول الله ﷺ');
+  }
+
+  const approveButton = (form: ReturnType<typeof within>, t: Translate) =>
+    form.getByRole('button', { name: t('admin.credentials.panel.approve') }) as HTMLButtonElement;
+
+  it('holds «اعتماد» on a written transcription until its PDF has loaded, in both languages', async () => {
+    let load: (() => void) | undefined;
+    await inBothLocales(
+      () => {
+        load = undefined;
+        vi.mocked(openPdf).mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              load = () => resolve(PDF);
+            }),
+        );
+        return open();
+      },
+      async (t, locale) => {
+        const form = await select(
+          rowA.teacher.displayName,
+          locale === 'ar' ? QURAN.nameAr : QURAN.nameEn,
+        );
+        fill(form, t);
+        await waitFor(() => expect(load).toBeDefined());
+        expect(approveButton(form, t).disabled).toBe(true);
+        load?.();
+        await waitFor(() => expect(approveButton(form, t).disabled).toBe(false));
+      },
+    );
+  });
+
+  it('keeps «اعتماد» held when the file cannot be read', async () => {
+    vi.mocked(openPdf).mockRejectedValueOnce(new Error('unreadable'));
+    open();
+    const form = await select(rowA.teacher.displayName, QURAN.nameAr);
+    fill(form, ar);
+    expect(await screen.findByText(ar('admin.dialogs.documentViewer.loadError'))).toBeTruthy();
+    expect(approveButton(form, ar).disabled).toBe(true);
   });
 });
 

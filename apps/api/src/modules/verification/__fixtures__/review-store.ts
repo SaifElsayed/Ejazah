@@ -12,6 +12,7 @@ import type {
   ApplicationReviewStore,
   ApplicationDecision,
   CallRecord,
+  CredentialClosure,
   CredentialOfApplicant,
   OpenIdentityRequest,
 } from '../application-review.service.js';
@@ -37,6 +38,8 @@ export class MemoryReviewStore implements ApplicationReviewStore {
   readonly #credentials: CredentialOfApplicant[] = [];
   readonly #requests = new Map<string, OpenIdentityRequest>();
   readonly granted: { userId: string; subjectIds: readonly string[] }[] = [];
+  /** Each credential's review as a closure wrote it (T122): the reason, the reviewer, the moment. */
+  readonly reviews = new Map<string, Omit<CredentialClosure, 'credentialIds'>>();
 
   /** An application in `status`, sent with a credential per subject in `credentials`; its user id. */
   plant(
@@ -88,10 +91,11 @@ export class MemoryReviewStore implements ApplicationReviewStore {
     return userId;
   }
 
-  /** A credential of the applicant that is not the current application's: added, or an older one. */
-  plantOther(userId: string, status: Status, submittedWithApplication: boolean): void {
+  /** A credential of the applicant that is not the current application's: added, or an older one; its id. */
+  plantOther(userId: string, status: Status, submittedWithApplication: boolean): string {
+    const credentialId = randomUUID();
     this.#credentials.push({
-      credentialId: randomUUID(),
+      credentialId,
       teacherUserId: userId,
       subject: WARSH,
       status,
@@ -99,6 +103,7 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       submittedWithApplication,
       createdAt: new Date('2026-09-01T09:00:00Z'),
     });
+    return credentialId;
   }
 
   openRequest(userId: string, request: Omit<OpenIdentityRequest, 'requestId'>): string {
@@ -193,6 +198,20 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       ...(decision.kind === 'approve' ? { approvedBy: decision.adminId } : {}),
     });
     return true;
+  }
+
+  /** Rejects those of the credentials still pending or waiting on a document; how many it moved. */
+  async closeCredentials(_tx: Transaction, closure: CredentialClosure): Promise<number> {
+    const { credentialIds, ...review } = closure;
+    let moved = 0;
+    for (const credential of this.#credentials) {
+      if (!credentialIds.includes(credential.credentialId)) continue;
+      if (credential.status !== 'pending' && credential.status !== 'needs_document') continue;
+      Object.assign(credential, { status: 'rejected' });
+      this.reviews.set(credential.credentialId, review);
+      moved += 1;
+    }
+    return moved;
   }
 
   async grantSubjects(

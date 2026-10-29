@@ -5,7 +5,8 @@
 // selected administrator's detail from its row; adding one by name and address, an address taken
 // said in place; resetting another's second factor and disabling another's account, each with its
 // reason; on one's own account, the note that another administrator does those, and new recovery
-// codes for a current code of one's own second factor (T096), shown once.
+// codes for a current code of one's own second factor (T096), shown once; no second-factor reset
+// for an administrator who has none (T116).
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -202,6 +203,21 @@ describe('AdminAdmins (FR-174)', () => {
         ).toBeTruthy();
         expect(detail.getByRole('button', { name: t('admin.admins.detail.disable') })).toBeTruthy();
         expect(detail.queryByText(t('admin.admins.detail.selfNote'))).toBeNull();
+        expect(detail.getByText(t('admin.admins.detail.footer'))).toBeTruthy();
+      },
+    );
+  });
+
+  it('offers no second-factor reset to an administrator without one, in both languages (T116)', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        const detail = await select(invited.displayName);
+        expect(detail.getByText(t('admin.admins.mfa.notSetUp'))).toBeTruthy();
+        expect(
+          detail.queryByRole('button', { name: t('admin.admins.detail.resetMfa') }),
+        ).toBeNull();
+        expect(detail.getByRole('button', { name: t('admin.admins.detail.disable') })).toBeTruthy();
         expect(detail.getByText(t('admin.admins.detail.footer'))).toBeTruthy();
       },
     );

@@ -6,7 +6,9 @@
 // account active; a ban is permanent and one function for the applicant (`applications.ban`, the
 // note written to the application) and the teacher (`teachers.ban`), owner's decision 2026-10-22,
 // reaching a revoked teacher and a rejected applicant too;
-// only a suspended teacher is reinstated (FR-165), and no ban is lifted from the panel (FR-162).
+// only a suspended teacher is reinstated (FR-165), to `verification_required` while an identity
+// request is open (T113), and no ban is lifted from the panel (FR-162).
+// Each action answers what it moved, the state before and after, for its audit entry (T116).
 // Each of the three ends every session of the person (`user_sessions.revoked_reason`) and calls the
 // one consequences entry (`consequences.ts`), all on the administrator kind's transaction, so the
 // change, the revocations, the consequences and the audit entry commit together.
@@ -64,11 +66,29 @@ export function standingStoreOver(database: Database): StandingStore {
 
 const PATH = 'teacherUserId';
 
+/** What a standing action moved, as its audit entry's `before` and `after` hold it (T116). */
+export interface StandingMove<Field extends string, Value extends string> {
+  readonly before: { readonly [K in Field]: Value };
+  readonly after: { readonly [K in Field]: Value };
+}
+
+type AccountMove = StandingMove<'accountStatus', AccountStatus>;
+/** A ban's move, and the application status it moved from, the applicant's entry's before. */
+type BanMove = AccountMove & {
+  readonly applicationStatus: NonNullable<Standing['teacher']>['applicationStatus'];
+};
+type VerificationMove = StandingMove<
+  'verificationStatus',
+  NonNullable<Standing['teacher']>['verificationStatus']
+>;
+
 export interface StandingDependencies {
   readonly store: StandingStore;
   readonly consequences: AccountConsequences;
   /** Removes the teacher's subjects (catalog's `teacher_subjects`), on the action's transaction. */
   readonly revokeSubjects: (tx: Transaction, teacherUserId: string) => Promise<void>;
+  /** Whether the person has an `open` identity request (verification's), on the action's transaction. */
+  readonly hasOpenIdentityRequest: (tx: Transaction, userId: string) => Promise<boolean>;
   readonly now?: () => Date;
 }
 
@@ -76,12 +96,14 @@ export class StandingService {
   readonly #store: StandingStore;
   readonly #consequences: AccountConsequences;
   readonly #revokeSubjects: StandingDependencies['revokeSubjects'];
+  readonly #hasOpenIdentityRequest: StandingDependencies['hasOpenIdentityRequest'];
   readonly #now: () => Date;
 
   constructor(dependencies: StandingDependencies) {
     this.#store = dependencies.store;
     this.#consequences = dependencies.consequences;
     this.#revokeSubjects = dependencies.revokeSubjects;
+    this.#hasOpenIdentityRequest = dependencies.hasOpenIdentityRequest;
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -90,7 +112,7 @@ export class StandingService {
    * follow-up 2, owner's decision 2026-10-22); the request stays open, and its acceptance leaves
    * the suspension as it is.
    */
-  async suspend(tx: Transaction, _adminId: string, teacherUserId: string): Promise<void> {
+  async suspend(tx: Transaction, _adminId: string, teacherUserId: string): Promise<AccountMove> {
     const standing = await this.#teacher(tx, teacherUserId);
     const suspendable: readonly AccountStatus[] = ['active', 'verification_required'];
     if (
@@ -103,6 +125,7 @@ export class StandingService {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
     await this.#end(tx, teacherUserId, 'suspended');
+    return accountMove(standing.accountStatus, 'suspended');
   }
 
   /** `teachers.revokeApproval`: an approved teacher, active or suspended. */
@@ -111,7 +134,7 @@ export class StandingService {
     adminId: string,
     teacherUserId: string,
     reason: string,
-  ): Promise<void> {
+  ): Promise<VerificationMove> {
     const standing = await this.#teacher(tx, teacherUserId);
     if (standing.teacher.verificationStatus !== 'approved' || standing.accountStatus === 'banned') {
       throw conflict(standing);
@@ -122,6 +145,10 @@ export class StandingService {
     }
     await this.#revokeSubjects(tx, teacherUserId);
     await this.#end(tx, teacherUserId, 'approval_revoked');
+    return {
+      before: { verificationStatus: standing.teacher.verificationStatus },
+      after: { verificationStatus: 'revoked' },
+    };
   }
 
   /**
@@ -135,7 +162,7 @@ export class StandingService {
     adminId: string,
     userId: string,
     applicant?: { readonly applicantNote: string },
-  ): Promise<void> {
+  ): Promise<BanMove> {
     const standing = await this.#teacher(tx, userId);
     const { applicationStatus, verificationStatus } = standing.teacher;
     const allowed =
@@ -163,15 +190,26 @@ export class StandingService {
       ));
     if (!banned) throw conflict(await this.#teacher(tx, userId));
     await this.#end(tx, userId, 'banned');
+    return {
+      ...accountMove(standing.accountStatus, 'banned'),
+      applicationStatus: standing.teacher.applicationStatus,
+    };
   }
 
-  /** `teachers.reinstate`: a suspended teacher back to active; no consequence is undone here. */
-  async reinstate(tx: Transaction, _adminId: string, teacherUserId: string): Promise<void> {
+  /**
+   * `teachers.reinstate`: a suspended teacher back to `active`, or to `verification_required` while
+   * an identity request is open (T113, owner's decision 2026-10-28); no consequence is undone here.
+   */
+  async reinstate(tx: Transaction, _adminId: string, teacherUserId: string): Promise<AccountMove> {
     const standing = await this.#teacher(tx, teacherUserId);
     if (standing.accountStatus !== 'suspended') throw conflict(standing);
-    if (!(await this.#store.moveAccount(tx, teacherUserId, ['suspended'], 'active'))) {
+    const to: AccountStatus = (await this.#hasOpenIdentityRequest(tx, teacherUserId))
+      ? 'verification_required'
+      : 'active';
+    if (!(await this.#store.moveAccount(tx, teacherUserId, ['suspended'], to))) {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
+    return accountMove('suspended', to);
   }
 
   /** An identity request opened: an active account waits on it; whether it moved. */
@@ -208,6 +246,10 @@ export class StandingService {
     if (standing?.teacher == null) throw new DomainError('NOT_FOUND');
     return { ...standing, teacher: standing.teacher };
   }
+}
+
+function accountMove(before: AccountStatus, after: AccountStatus): AccountMove {
+  return { before: { accountStatus: before }, after: { accountStatus: after } };
 }
 
 /** CONFLICT naming the standing: the account's when it is not active, else the teacher's. */

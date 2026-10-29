@@ -3,7 +3,9 @@
 // transaction, the action's audit entry described, the output parsed by its schema (R-API-1). The
 // actor is the session's administrator, never the input's. Each decision's entry targets the
 // application (`teacher_application`, the applicant's id), so its history is `audit.list` filtered on
-// that target; the note the applicant sees is the entry's reason and the dialog's choice its after.
+// that target; the note the applicant sees is the entry's reason, the status the decision moved from
+// its before, and the status it moved to beside the dialog's choice its after. The call's entry holds
+// its day and outcome before and after. Each as the review answers it (T116).
 // The list and the detail are reads (`applications.read`) naming the reader. Mounted under
 // `applications` by `admin.router.ts`.
 import {
@@ -42,19 +44,24 @@ export const applicationsRouter = createAdminRouter({
 
   recordCall: adminProcedure({ input: applicationsRecordCallInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      await ctx.services.applications.recordCall(ctx.tx, ctx.administrator.adminId, input);
+      const { before, after } = await ctx.services.applications.recordCall(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
       ctx.audit.record({
         action: 'application.record_call',
         targetType: TARGET,
         targetId: input.teacherUserId,
-        after: { completedOn: input.completedOn, outcome: input.outcome },
+        before,
+        after,
       });
     },
   ),
 
   approve: adminProcedure({ input: applicationsApproveInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      const { subjectIds } = await ctx.services.applications.approve(
+      const { before, after, subjectIds } = await ctx.services.applications.approve(
         ctx.tx,
         ctx.administrator.adminId,
         input,
@@ -64,46 +71,62 @@ export const applicationsRouter = createAdminRouter({
         targetType: TARGET,
         targetId: input.teacherUserId,
         ...(input.note === undefined ? {} : { reason: input.note }),
-        after: { subjectIds },
+        before,
+        after: { ...after, subjectIds },
       });
     },
   ),
 
   reject: adminProcedure({ input: applicationsRejectInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      await ctx.services.applications.reject(ctx.tx, ctx.administrator.adminId, input);
+      const { before, after } = await ctx.services.applications.reject(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
       ctx.audit.record({
         action: 'application.reject',
         targetType: TARGET,
         targetId: input.teacherUserId,
         reason: input.note,
-        after: { reasonChoice: input.reasonChoice },
+        before,
+        after: { ...after, reasonChoice: input.reasonChoice },
       });
     },
   ),
 
   requestInfo: adminProcedure({ input: applicationsRequestInfoInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      await ctx.services.applications.requestInfo(ctx.tx, ctx.administrator.adminId, input);
+      const { before, after } = await ctx.services.applications.requestInfo(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
       ctx.audit.record({
         action: 'application.request_info',
         targetType: TARGET,
         targetId: input.teacherUserId,
         reason: input.note,
-        after: { needed: input.needed },
+        before,
+        after: { ...after, needed: input.needed },
       });
     },
   ),
 
   ban: adminProcedure({ input: applicationsBanInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      await ctx.services.applications.ban(ctx.tx, ctx.administrator.adminId, input);
+      const { before, after } = await ctx.services.applications.ban(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
       ctx.audit.record({
         action: 'application.ban',
         targetType: TARGET,
         targetId: input.teacherUserId,
         reason: input.note,
-        after: { reasonChoice: input.reasonChoice },
+        before,
+        after: { ...after, reasonChoice: input.reasonChoice },
       });
     },
   ),

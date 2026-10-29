@@ -20,6 +20,7 @@ import type { ReactElement } from 'react';
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
+import { formatDate } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../__tests__/api-double';
 import { getSession, setSession } from '../../../lib/session';
 import { BannedSignedOut, IdentityRequestCard, Restricted, VerifyIdentity } from './index';
@@ -383,6 +384,92 @@ describe('VerifyIdentity (FR-166)', () => {
         ).toBeNull();
       },
     );
+  });
+
+  // T115 (b): how the latest closed request ended, as a banner, in both languages.
+  const RESOLVED = '2026-10-23T09:00:00.000Z';
+  const on = (direction: 'rtl' | 'ltr') =>
+    formatDate(RESOLVED, 'Africa/Cairo', direction === 'rtl' ? 'ar' : 'en');
+
+  it('says the document was accepted, and when, once the request is closed', async () => {
+    request({ open: false, lastOutcome: { status: 'satisfied', resolvedAt: RESOLVED } });
+    await inBothDirections(
+      as('student', 'active', () => <VerifyIdentity />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(
+            translate(
+              direction === 'rtl' ? 'ar' : 'en',
+              'account.verifyIdentity.outcome.satisfied',
+              {
+                date: on(direction),
+              },
+            ),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  // The reason is said once: beside «سبب الطلب» the banner leaves it to the card (the owner's
+  // condition of 2026-10-29), and wherever that card is not drawn the banner says it.
+  it('says the last document was not accepted, and when, over the new request and its reason', async () => {
+    const reason = 'الوجه الخلفي غير واضح';
+    request({
+      ...open,
+      reason,
+      lastOutcome: { status: 'replaced', resolvedAt: RESOLVED, reason },
+    });
+    await inBothDirections(
+      as('teacher', 'verification_required', () => <VerifyIdentity />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(
+            translate(
+              direction === 'rtl' ? 'ar' : 'en',
+              'account.verifyIdentity.outcome.replaced',
+              {
+                date: on(direction),
+              },
+            ),
+          ),
+        ).toBeTruthy();
+        expect(screen.getAllByText(reason)).toHaveLength(1);
+        expect(screen.getByText(said(direction, 'account.verifyIdentity.reasonTitle'))).toBeTruthy();
+        expect(
+          screen.getByRole('button', { name: said(direction, 'account.verifyIdentity.submit') }),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('says why the last document was not accepted when the new one is already sent', async () => {
+    const reason = 'الوجه الخلفي غير واضح';
+    request({
+      ...open,
+      reason,
+      submittedAt: REQUESTED,
+      lastOutcome: { status: 'replaced', resolvedAt: RESOLVED, reason },
+    });
+    await inBothDirections(
+      as('teacher', 'verification_required', () => <VerifyIdentity />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(said(direction, 'account.verifyIdentity.submitted.title')),
+        ).toBeTruthy();
+        expect(
+          screen.queryByText(said(direction, 'account.verifyIdentity.reasonTitle')),
+        ).toBeNull();
+        expect(screen.getAllByText(reason)).toHaveLength(1);
+      },
+    );
+  });
+
+  it('draws no outcome banner when there is none', async () => {
+    request(open);
+    await renderIn('rtl', as('student', 'verification_required', () => <VerifyIdentity />)());
+    expect(await screen.findByText(ar('account.verifyIdentity.intro'))).toBeTruthy();
+    expect(screen.queryByText(/قبلنا|لم نقبل/)).toBeNull();
   });
 
   it('says there is no request when none is open', async () => {

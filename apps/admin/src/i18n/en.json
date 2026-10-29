@@ -732,6 +732,7 @@
             "active": "The account becomes active again: they can sign in, book and join sessions.",
             "notified": "{name} is notified.",
             "reinstated": "The account becomes active again, and its owner can sign in.",
+            "reinstatedAwaitingIdentity": "The account returns to «Awaiting proof of identity», since its identity request is still open; its owner can sign in to send the document.",
             "sessions": "Sessions cancelled during the suspension do not come back; their compensation is in the account’s case under Compensation."
           },
           "reasonLabel": "Reason for reactivation (required)",

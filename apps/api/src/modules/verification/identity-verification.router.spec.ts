@@ -64,6 +64,21 @@ describe('account.identityVerification.get and account.identityVerification.subm
     ]);
   });
 
+  // T115 (b): `lastOutcome` is declared in the output, so the parser keeps it.
+  it('answers the last outcome the service read', async () => {
+    const { verification } = recordingServices();
+    const lastOutcome = {
+      status: 'replaced',
+      resolvedAt: '2026-10-22T10:00:00.000Z',
+      reason: 'الوجه الخلفي غير واضح',
+    } as const;
+    const answer = { open: true, reason: lastOutcome.reason, lastOutcome };
+    verification.identityVerification.get = async () => answer;
+    expect(await surfaceOf(verification).as('student').account.identityVerification.get()).toEqual(
+      answer,
+    );
+  });
+
   it('declares the user kind on both', () => {
     for (const path of [
       'account.identityVerification.get',

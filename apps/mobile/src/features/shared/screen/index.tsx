@@ -1,7 +1,7 @@
 // T034: the frame of a tab root (`.screen`, `.screen__body`): its header, then a body that scrolls
 // with the gutter and the gaps of the design. The top inset is the tab layout's; the tab bar is too.
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 
 import { IconButton } from '../../../design/primitives';
 import { useTheme } from '../../../design/theme';
@@ -50,10 +50,8 @@ export function StackScreen({
 }) {
   const { color } = useTheme();
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: color.bg }}
-    >
+    // T114: padding on Android too; under edge-to-edge the window no longer shrinks for the keyboard.
+    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: color.bg }}>
       {header}
       <ScrollView
         keyboardShouldPersistTaps="handled"

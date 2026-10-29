@@ -61,7 +61,7 @@ describe('the administrator kind', () => {
 });
 
 describe('credentials.approve', () => {
-  it('audits credential.approve with the transcription written and the note', async () => {
+  it('audits credential.approve with the transcription before (T116) and after, and the note', async () => {
     const store = new MemoryReviewStore();
     const credentialId = store.plant();
     const surface = surfaceOver(store);
@@ -75,6 +75,7 @@ describe('credentials.approve', () => {
         targetType: 'credential',
         targetId: credentialId,
         reason: 'السند مقروء كاملًا',
+        before: { holderName: null, riwaya: null, tariq: null, chain: [] },
         after: {
           holderName: 'عمر بن فاروق',
           riwaya: 'حفص عن عاصم',

@@ -21,6 +21,7 @@ import {
 import {
   type ApplicationReviewService,
   createVerificationAdminServices,
+  openRequestOf,
   type VerificationRequestService,
 } from '../verification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
@@ -99,6 +100,8 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     store: standingStoreOver(dependencies.database),
     consequences: dependencies.consequences ?? new AccountConsequences(),
     revokeSubjects,
+    // A reinstatement lands on `verification_required` while verification's request is open (T113).
+    hasOpenIdentityRequest: async (tx, userId) => (await openRequestOf(tx, userId)) !== null,
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   });
   return {

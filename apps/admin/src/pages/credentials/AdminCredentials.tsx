@@ -6,8 +6,9 @@
 // credential's file one page at a time, opened full in `AdminDocumentViewer` (the `credential`
 // context) over the same link. `?credential=` opens one at once (the application's «مراجعة
 // الإجازة»). An empty tab, an empty search and a list that could not be read each say so; the
-// filter the board draws beside the search has no content drawn, so it is not built.
-import { useState } from 'react';
+// filter the board draws beside the search has no content drawn, so it is not built. The panel's
+// «اعتماد» waits for the file beside it to load (T116).
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import {
@@ -66,6 +67,7 @@ export function AdminCredentials() {
   const search = useSettled(typed);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(params.get('credential'));
+  const [loadedDocument, setLoadedDocument] = useState<string | null>(null);
   const list = useCredentialsPage(tab, search, page);
   const count = useCredentialCount().data;
 
@@ -222,13 +224,19 @@ export function AdminCredentials() {
               </div>
             </section>
           ) : (
-            <CredentialPanel key={selected} credentialId={selected} />
+            <CredentialPanel
+              key={selected}
+              credentialId={selected}
+              loadedDocument={loadedDocument}
+            />
           )
         }
         detail={
           <div className="stack gap-4">
             {table}
-            {selected === null ? null : <SelectedDocument credentialId={selected} />}
+            {selected === null ? null : (
+              <SelectedDocument credentialId={selected} onLoaded={setLoadedDocument} />
+            )}
           </div>
         }
       />
@@ -236,22 +244,31 @@ export function AdminCredentials() {
   );
 }
 
+interface Loaded {
+  /** Said with the document's id once its PDF has opened, so the panel's «اعتماد» may follow. */
+  readonly onLoaded: (documentId: string) => void;
+}
+
 /** The selected credential's file beside the panel, once its credential is read. */
-function SelectedDocument({ credentialId }: { readonly credentialId: string }) {
+function SelectedDocument({ credentialId, onLoaded }: { readonly credentialId: string } & Loaded) {
   const detail = useCredential(credentialId).data;
   return detail === undefined ? null : (
-    <CredentialDocument key={detail.documentId} detail={detail} />
+    <CredentialDocument key={detail.documentId} detail={detail} onLoaded={onLoaded} />
   );
 }
 
 /** The file one page at a time, opened full in the viewer over the same link (one view). */
-function CredentialDocument({ detail }: { readonly detail: CredentialDetail }) {
+function CredentialDocument({ detail, onLoaded }: { readonly detail: CredentialDetail } & Loaded) {
   const t = useT();
   const locale = useLocale();
   const zone = panelTimeZone();
   const link = useDocumentLink(detail.documentId);
   const pdf = usePdf(link.data?.url);
   const [full, setFull] = useState(false);
+  const opened = pdf.file !== undefined;
+  useEffect(() => {
+    if (opened) onLoaded(detail.documentId);
+  }, [opened, detail.documentId, onLoaded]);
   const title = t('admin.credentials.panel.title', {
     subject: locale === 'ar' ? detail.subject.nameAr : detail.subject.nameEn,
     teacher: detail.teacher.displayName,

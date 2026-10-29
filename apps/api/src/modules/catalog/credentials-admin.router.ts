@@ -3,10 +3,11 @@
 // transaction, the action's audit entry described, the output parsed by its schema (R-API-1). The
 // actor is the session's administrator, never the input's. The reason of a rejection, of a request
 // for another document and of a correction is mandatory in the schema and goes into the entry as
-// typed; an approval's optional note goes there too, and the transcription it wrote is the entry's
-// after; a correction's entry holds the transcription before and after (FR-164). The list and the
-// panel are reads (`credentials.read`) naming the reader, which no audit list shows (owner's decision
-// 2026-10-21). Mounted under `credentials` by `admin.router.ts`.
+// typed; an approval's optional note goes there too, the transcription it wrote is the entry's
+// after and the pending one's, none of it written, its before (T116); a correction's entry holds
+// the transcription before and after (FR-164). The list and the panel are reads
+// (`credentials.read`) naming the reader, which no audit list shows (owner's decision 2026-10-21).
+// Mounted under `credentials` by `admin.router.ts`.
 import {
   adminCredentialsApproveInput,
   adminCredentialsCorrectInput,
@@ -41,7 +42,7 @@ export const credentialsAdminRouter = createAdminRouter({
 
   approve: adminProcedure({ input: adminCredentialsApproveInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      const after = await ctx.services.credentials.approve(
+      const { before, after } = await ctx.services.credentials.approve(
         ctx.tx,
         ctx.administrator.adminId,
         input,
@@ -51,6 +52,7 @@ export const credentialsAdminRouter = createAdminRouter({
         targetType: 'credential',
         targetId: input.credentialId,
         ...(input.note === undefined ? {} : { reason: input.note }),
+        before,
         after,
       });
     },

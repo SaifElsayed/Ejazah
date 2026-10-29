@@ -9,9 +9,10 @@
 // read (FR-132) and the call's day. The call is recorded by its day (owner's decision 2026-10-22):
 // the panel names its zone, and a day after today there is refused. `approve` is refused with every
 // reason that holds (FR-161: the call not recorded, a credential of the application undecided, none
-// approved) and grants the approved credentials' subjects; `reject` ends an open application,
-// `requestInfo` sets one in review waiting on the applicant, and `ban` is the standing's one
-// function with the note the applicant sees (owner's decision 2026-10-22). An `unsuitable` call
+// approved) and grants the approved credentials' subjects; `reject` ends an open application and
+// closes its undecided credentials with the rejection's note (T122), `requestInfo` sets one in
+// review waiting on the applicant, and `ban` is the standing's one function with the note the
+// applicant sees (owner's decision 2026-10-22). An `unsuitable` call
 // blocks nothing: the reviewer decides. Each decision writes the note the applicant sees and its
 // moment. Every method runs on the administrator kind's transaction (`tx`).
 import type {
@@ -43,8 +44,13 @@ import type {
   ApplicantDetail,
   ApplicantRow,
   ApplicantsFilter,
+  ApplicantStatus,
   CallRecord,
 } from '../identity/index.js';
+
+/** A rejected application's undecided credentials closed (T122), catalog's entry's shape. */
+export type { CredentialClosure } from '../catalog/index.js';
+import type { CredentialClosure } from '../catalog/index.js';
 
 /** The admin lists' page size (the admin and catalog modules read the same key). */
 export const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -88,16 +94,24 @@ export interface ApplicationReviewStore {
   recordCall(tx: Transaction, userId: string, call: CallRecord): Promise<boolean>;
   decide(tx: Transaction, userId: string, decision: ApplicationDecision): Promise<boolean>;
   grantSubjects(tx: Transaction, userId: string, subjectIds: readonly string[]): Promise<void>;
+  /** Rejects those still `pending` or `needs_document` (catalog's entry, T122); how many it moved. */
+  closeCredentials(tx: Transaction, closure: CredentialClosure): Promise<number>;
 }
 
-/** The standing's ban, identity's (`standing.service.ts`). */
+/** The standing's ban, identity's (`standing.service.ts`): the application status it moved from. */
 export interface ApplicantBan {
   ban(
     tx: Transaction,
     adminId: string,
     userId: string,
     applicant?: { readonly applicantNote: string },
-  ): Promise<void>;
+  ): Promise<{ readonly applicationStatus: ApplicantStatus | null }>;
+}
+
+/** A decision's application status before and after, for its audit entry (T116). */
+export interface DecisionMove {
+  readonly before: { readonly status: ApplicantStatus | null };
+  readonly after: { readonly status: ApplicantStatus };
 }
 
 export interface ApplicationReviewDependencies {
@@ -108,6 +122,15 @@ export interface ApplicationReviewDependencies {
 }
 
 type ListRow = z.input<typeof applicationsListOutput>['rows'][number];
+
+/** The call's day and outcome, as the audit entry holds them; null for none recorded. */
+type CallState = { readonly completedOn: string | null; readonly outcome: string | null };
+
+/** A recorded call before and after, for the audit entry (T116). */
+export interface CallMove {
+  readonly before: CallState;
+  readonly after: CallState;
+}
 
 export class ApplicationReviewService {
   readonly #store: ApplicationReviewStore;
@@ -180,12 +203,15 @@ export class ApplicationReviewService {
     };
   }
 
-  /** `applications.recordCall`: the call's day, outcome and notes on an open application. */
+  /**
+   * `applications.recordCall`: the call's day, outcome and notes on an open application; answers the
+   * day and the outcome before and after it, notes left out as the entry leaves them (T116).
+   */
   async recordCall(
     tx: Transaction,
     _adminId: string,
     input: z.output<typeof applicationsRecordCallInput>,
-  ): Promise<void> {
+  ): Promise<CallMove> {
     let today: string;
     try {
       today = localDateIn(this.#now(), input.timeZone);
@@ -195,12 +221,18 @@ export class ApplicationReviewService {
     }
     // ISO calendar dates order as strings do.
     if (input.completedOn > today) throw invalid('completedOn', 'future');
+    const { callCompletedOn, callOutcome } = await this.#readOrRefuse(tx, input.teacherUserId);
+    const before = {
+      completedOn: callCompletedOn === null ? null : calendarDateOf(callCompletedOn),
+      outcome: callOutcome,
+    };
     const written = await this.#store.recordCall(tx, input.teacherUserId, {
       completedOn: dateColumnOf(input.completedOn),
       outcome: input.outcome,
       notes: input.notes,
     });
     if (!written) await this.#refuseMoved(tx, input.teacherUserId);
+    return { before, after: { completedOn: input.completedOn, outcome: input.outcome } };
   }
 
   /** `applications.approve`: refused with every blocking reason; the approved subjects granted. */
@@ -208,7 +240,7 @@ export class ApplicationReviewService {
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsApproveInput>,
-  ): Promise<{ readonly subjectIds: string[] }> {
+  ): Promise<DecisionMove & { readonly subjectIds: string[] }> {
     const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
     if (applicant.status !== 'in_review') throw conflict(applicant.status);
     const credentials = ofApplication(
@@ -239,34 +271,68 @@ export class ApplicationReviewService {
     }
     const subjectIds = approved.map((credential) => credential.subject.id);
     await this.#store.grantSubjects(tx, applicant.userId, subjectIds);
-    return { subjectIds };
+    return { before: { status: 'in_review' }, after: { status: 'approved' }, subjectIds };
   }
 
-  /** `applications.reject`: an open application, with the note the applicant sees. */
-  reject(
+  /**
+   * `applications.reject`: an open application, with the note the applicant sees. Once the decision
+   * lands, the application's credentials still undecided are rejected with the same note, admin and
+   * moment (T122), so none stays «قيد المراجعة» after the application is closed. Answers the status
+   * it moved from, read before the decision with the application its credentials need (T116).
+   */
+  async reject(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsRejectInput>,
-  ): Promise<void> {
-    return this.#decide(tx, adminId, input.teacherUserId, 'reject', input.note);
+  ): Promise<DecisionMove> {
+    const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
+    const move: DecisionMove = {
+      before: { status: applicant.status },
+      after: { status: 'rejected' },
+    };
+    const at = this.#now();
+    await this.#decide(tx, adminId, input.teacherUserId, 'reject', input.note, at);
+    const undecided = ofApplication(
+      applicant,
+      await this.#store.credentialsOf(tx, [applicant.userId]),
+    ).filter(({ status }) => status === 'pending' || status === 'needs_document');
+    if (undecided.length > 0) {
+      await this.#store.closeCredentials(tx, {
+        credentialIds: undecided.map(({ credentialId }) => credentialId),
+        reason: input.note,
+        adminId,
+        at,
+      });
+    }
+    return move;
   }
 
-  /** `applications.requestInfo`: an application in review waits on the applicant (`needs_document`). */
-  requestInfo(
+  /**
+   * `applications.requestInfo`: an application in review waits on the applicant (`needs_document`).
+   * The decision moves only from `in_review`, so a landed one moved from it (T116).
+   */
+  async requestInfo(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsRequestInfoInput>,
-  ): Promise<void> {
-    return this.#decide(tx, adminId, input.teacherUserId, 'request_info', input.note);
+  ): Promise<DecisionMove> {
+    await this.#decide(tx, adminId, input.teacherUserId, 'request_info', input.note);
+    return { before: { status: 'in_review' }, after: { status: 'needs_document' } };
   }
 
-  /** `applications.ban`: the standing's one ban, the note written to the application. */
-  ban(
+  /**
+   * `applications.ban`: the standing's one ban, the note written to the application; the status it
+   * moved from is the one the standing read (T116).
+   */
+  async ban(
     tx: Transaction,
     adminId: string,
     input: z.output<typeof applicationsBanInput>,
-  ): Promise<void> {
-    return this.#standing.ban(tx, adminId, input.teacherUserId, { applicantNote: input.note });
+  ): Promise<DecisionMove> {
+    const { applicationStatus } = await this.#standing.ban(tx, adminId, input.teacherUserId, {
+      applicantNote: input.note,
+    });
+    return { before: { status: applicationStatus }, after: { status: 'banned' } };
   }
 
   async #decide(
@@ -275,8 +341,9 @@ export class ApplicationReviewService {
     userId: string,
     kind: 'reject' | 'request_info',
     note: string,
+    at: Date = this.#now(),
   ): Promise<void> {
-    const written = await this.#store.decide(tx, userId, { kind, adminId, at: this.#now(), note });
+    const written = await this.#store.decide(tx, userId, { kind, adminId, at, note });
     if (!written) await this.#refuseMoved(tx, userId);
   }
 

@@ -1,7 +1,8 @@
 // T068 — the administrator surface's `teachers` namespace as it is served (admin-surface.md
 // "`teachers`"; FR-165). Every procedure is the administrator kind (refusals, one transaction, the
 // entry with the session's actor, nothing of a refused call); each action is audited on the person
-// with its mandatory reason and the standing it moved to. What the standing does is
+// with its mandatory reason, the standing it moved from as `before` (T116) and the one it moved to
+// as `after`, both as the standing answers them. What the standing does is
 // `standing.service.spec.ts`'s.
 import { describe, expect, it } from 'vitest';
 
@@ -18,18 +19,36 @@ const callerFor = createAdminCallerFactory(createAdminRouter({ teachers: teacher
 
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000c1';
 
+/** What the standing answers it moved; a reinstatement under an identity request (T113). */
+const MOVES = {
+  suspend: {
+    before: { accountStatus: 'verification_required' },
+    after: { accountStatus: 'suspended' },
+  },
+  revokeApproval: {
+    before: { verificationStatus: 'approved' },
+    after: { verificationStatus: 'revoked' },
+  },
+  ban: { before: { accountStatus: 'suspended' }, after: { accountStatus: 'banned' } },
+  reinstate: {
+    before: { accountStatus: 'suspended' },
+    after: { accountStatus: 'verification_required' },
+  },
+} as const;
+
 function surface() {
   const reached: unknown[][] = [];
   const record =
-    (name: string) =>
-    async (...args: unknown[]): Promise<void> => {
+    <T>(name: string, move: T) =>
+    async (...args: unknown[]): Promise<T> => {
       reached.push([name, ...args.slice(1)]);
+      return move;
     };
   const teachers: AdminSurfaceServices['teachers'] = {
-    suspend: record('suspend'),
-    revokeApproval: record('revokeApproval'),
-    ban: record('ban'),
-    reinstate: record('reinstate'),
+    suspend: record('suspend', MOVES.suspend),
+    revokeApproval: record('revokeApproval', MOVES.revokeApproval),
+    ban: record('ban', MOVES.ban),
+    reinstate: record('reinstate', MOVES.reinstate),
   };
   const contexts = adminContextsOver({ teachers });
   return {
@@ -50,15 +69,10 @@ async function codeOf(call: Promise<unknown>): Promise<string> {
 }
 
 const ACTIONS = [
-  ['teachers.suspend', 'suspend', 'teacher.suspend', { accountStatus: 'suspended' }],
-  [
-    'teachers.revokeApproval',
-    'revokeApproval',
-    'teacher.revoke',
-    { verificationStatus: 'revoked' },
-  ],
-  ['teachers.ban', 'ban', 'teacher.ban', { accountStatus: 'banned' }],
-  ['teachers.reinstate', 'reinstate', 'teacher.reinstate', { accountStatus: 'active' }],
+  ['teachers.suspend', 'suspend', 'teacher.suspend', MOVES.suspend],
+  ['teachers.revokeApproval', 'revokeApproval', 'teacher.revoke', MOVES.revokeApproval],
+  ['teachers.ban', 'ban', 'teacher.ban', MOVES.ban],
+  ['teachers.reinstate', 'reinstate', 'teacher.reinstate', MOVES.reinstate],
 ] as const;
 
 describe('the administrator kind', () => {
@@ -79,8 +93,8 @@ describe('the administrator kind', () => {
 
 describe('the audit entries', () => {
   it.each(ACTIONS)(
-    '%s audits %s on the person with the reason',
-    async (_path, procedure, action, after) => {
+    '%s audits %s on the person with the reason, the standing before and after (T116)',
+    async (_path, procedure, action, { before, after }) => {
       const { as, written, reached } = surface();
       await as(VERIFIED).teachers[procedure]({ teacherUserId: TEACHER, reason: 'شكوى موثّقة' });
       expect(written).toEqual([
@@ -90,6 +104,7 @@ describe('the audit entries', () => {
           targetType: 'user',
           targetId: TEACHER,
           reason: 'شكوى موثّقة',
+          before,
           after,
         },
       ]);

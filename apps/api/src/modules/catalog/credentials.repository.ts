@@ -97,6 +97,46 @@ export async function replaceCredentialDocument(
   return count === 1;
 }
 
+/** What closes a rejected application's undecided credentials (T122): their ids, the reason, who, when. */
+export interface CredentialClosure {
+  readonly credentialIds: readonly string[];
+  readonly reason: string;
+  readonly adminId: string;
+  readonly at: Date;
+}
+
+/**
+ * Rejects those of the credentials still `pending` or `needs_document`, with the rejection's note as
+ * their reason, its administrator and its moment (T122). The write is conditional on that status, so
+ * a credential decided a moment before keeps its decision. How many it moved.
+ */
+export async function closeUndecidedCredentials(
+  tx: Pick<Transaction, 'teacherCredential'>,
+  closure: CredentialClosure,
+): Promise<number> {
+  if (closure.credentialIds.length === 0) return 0;
+  const { count } = await tx.teacherCredential.updateMany({
+    where: {
+      id: { in: [...closure.credentialIds] },
+      status: { in: ['pending', 'needs_document'] },
+    },
+    data: {
+      status: 'rejected',
+      reviewReason: closure.reason,
+      reviewedByAdminId: closure.adminId,
+      reviewedAt: closure.at,
+    },
+  });
+  return count;
+}
+
+/**
+ * The teacher whose credentials the documents queue holds, beside `deletedAt: null` (T121): not a
+ * banned account (T122). One condition for the queue's list (`credential-review.repository.ts`) and
+ * the admin home's count (`readCredentialQueue`); nothing is written on the credentials.
+ */
+export const UNBANNED_TEACHER = { accountStatus: { not: 'banned' } } as const;
+
 /** Makes the subjects the teacher's on `tx`; a subject already theirs is kept as it is. */
 export async function grantSubjects(
   tx: Pick<Transaction, 'teacherSubject'>,
@@ -136,8 +176,9 @@ export async function readCredentialQueue(tx: Pick<Transaction, 'teacherCredenti
   readonly addedSubjects: number;
   readonly oldestSubmittedAt: Date | null;
 }> {
-  // A deleted account's credential is not in the review list, so the card does not count it (T121).
-  const pending = { status: 'pending', teacher: { deletedAt: null } } as const;
+  // A deleted (T121) or banned (T122) account's credential is not in the review list, so the card
+  // does not count it.
+  const pending = { status: 'pending', teacher: { deletedAt: null, ...UNBANNED_TEACHER } } as const;
   const [open, addedSubjects, oldest] = await Promise.all([
     tx.teacherCredential.count({ where: pending }),
     tx.teacherCredential.count({ where: { ...pending, submittedWithApplication: false } }),

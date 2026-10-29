@@ -106,6 +106,10 @@
       },
       "intro": "We need an identity document to confirm your account details.",
       "none": "There is no identity request on your account now.",
+      "outcome": {
+        "replaced": "We could not accept your previous document on {date}, and need another one.",
+        "satisfied": "We accepted your identity document on {date}."
+      },
       "reasonTitle": "Why we ask",
       "submit": "Send for review",
       "submitted": {
@@ -648,6 +652,7 @@
       "unpublished": "Not published"
     },
     "payout": {
+      "rejected": "Rejected",
       "verified": "Verified",
       "verifying": "Being verified"
     },

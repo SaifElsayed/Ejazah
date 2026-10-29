@@ -179,6 +179,11 @@ describe('the icon lists', () => {
     expect(renderIconsTs(icons, 'admin')).toContain('[dir="rtl"]');
   });
 
+  // T114: `log-out`, `external-link` and `rotate-ccw` are drawn unmirrored on every board.
+  it('mirrors only the icons that point along the reading direction (T114)', () => {
+    expect(DIRECTIONAL_ICONS).toEqual(['chevron-right', 'chevron-left', 'arrow-left']);
+  });
+
   it('fails a directional icon missing from the registry', () => {
     const { 'chevron-left': _left, ...without } = icons;
     expect(() => renderIconsTs(without, 'mobile')).toThrow('chevron-left');

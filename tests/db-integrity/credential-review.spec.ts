@@ -1,6 +1,6 @@
 // T069 — the credential review's queries over the real tables (`credential-review.repository.ts`,
 // reached through the catalog module's entry as `credentialReviewStore`;
-// FR-163, FR-164, rule 23, rule 28, R-DB-3). The parents a credential needs (a person, a subject, an
+// FR-163, FR-164, rule 23, rule 28, R-DB-3; a banned account's left out of the queue, T122). The parents a credential needs (a person, a subject, an
 // administrator, the PDF's document) and the credentials themselves are committed first, as every
 // probe here writes them; each probe then runs the repository on one transaction it rolls back. The
 // queue is a whole table other probes fill while this one runs, so each probe names its teacher with
@@ -122,6 +122,28 @@ describe('the queue', () => {
     );
     expect(count).toBe(0);
     expect(record).toBeNull();
+  });
+});
+
+describe("a banned account's credentials (T122)", () => {
+  it('leaves them out of the queue and its count, and writes nothing on them', async () => {
+    const token = randomUUID().slice(0, 8);
+    const banned = await teacherAndSubject(`banned ${token}`);
+    const credentialId = await makeCredential(db, { ...banned });
+    await db.query("UPDATE users SET account_status = 'banned' WHERE id = $1", [banned.teacherId]);
+    const [rows, count, record] = await rolledBack(
+      async (tx) =>
+        [
+          await store.page(tx, { status: 'pending', search: `banned ${token}` }, 0, 10),
+          await store.count(tx, { status: 'pending', search: `banned ${token}` }),
+          await tx.teacherCredential.findUnique({
+            where: { id: credentialId },
+            select: { status: true },
+          }),
+        ] as const,
+    );
+    expect([rows, count]).toEqual([[], 0]);
+    expect(record).toEqual({ status: 'pending' });
   });
 });
 

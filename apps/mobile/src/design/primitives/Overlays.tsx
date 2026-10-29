@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   View,
@@ -90,7 +91,8 @@ export function Sheet({ open, onClose, title, snapPoints, children }: SheetProps
   if (!open) return null;
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      {/* T114: the Modal is its own window, which the screen's keyboard avoidance never reaches. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
         {/* The scrim closes the sheet for a touch; a screen reader closes it from the header. */}
         <Pressable
           accessible={false}
@@ -149,7 +151,7 @@ export function Sheet({ open, onClose, title, snapPoints, children }: SheetProps
           </View>
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

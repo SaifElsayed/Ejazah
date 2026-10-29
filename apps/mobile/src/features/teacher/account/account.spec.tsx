@@ -3,6 +3,8 @@
 // teaching list holds «إجازاتي» since B11b (T059), with the count waiting for review, and «حساب
 // الاستلام» since B15 (T078), with «موثّق» once verified; the profile and signature come with their
 // phases. The danger row «حذف الحساب» opens the deletion since B16 (T084).
+//
+// T115 (a): the payout row's badge is each state of `teacher.payout.get`, as PayoutSetup reads it.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -119,21 +121,49 @@ describe('TeacherAccount', () => {
   });
 
   it('lists «حساب الاستلام» under teaching, «موثّق» once verified, and opens the payout (T078)', async () => {
-    await inBothDirections(withAccount(), (_rendered, direction) => {
+    mockApi.api.teacher.payout.get.query.mockResolvedValue({ state: 'verified' });
+    await inBothDirections(withAccount(), async (_rendered, direction) => {
       expect(screen.getByText(said(direction, 'teacher.account.payout'))).toBeTruthy();
-      expect(screen.getByText(said(direction, 'status.payout.verified'))).toBeTruthy();
+      expect(await screen.findByText(said(direction, 'status.payout.verified'))).toBeTruthy();
     });
     await renderIn('rtl', withAccount()());
     await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.payout')));
     expect(mockPush).toHaveBeenCalledWith('/(teacher)/payout');
   });
 
-  it('draws no badge on the payout row before the account is verified', async () => {
+  it.each([
+    ['pending_verification', 'status.payout.verifying'],
+    ['rejected', 'status.payout.rejected'],
+  ] as const)(
+    'draws the %s payout as the payout screen reads it, whatever account.me says (T115)',
+    async (state, badge) => {
+      // `account.me` reads a rejection with no reason as pending; the row follows the payout's own state.
+      mockApi.api.teacher.payout.get.query.mockResolvedValue({ state });
+      await inBothDirections(
+        withAccount({ configured: true, verified: false }),
+        async (_rendered, direction) => {
+          expect(await screen.findByText(said(direction, badge))).toBeTruthy();
+          expect(screen.queryByText(said(direction, 'status.payout.verified'))).toBeNull();
+        },
+      );
+      expect(mockApi.api.teacher.payout.get.query).toHaveBeenCalled();
+    },
+  );
+
+  it('draws no badge on the payout row while no account is configured (T115)', async () => {
+    mockApi.api.teacher.payout.get.query.mockResolvedValue({ state: 'not_configured' });
     await inBothDirections(
-      withAccount({ configured: true, verified: false }),
-      (_rendered, direction) => {
+      withAccount({ configured: false, verified: false }),
+      async (_rendered, direction) => {
+        await waitFor(() => expect(mockApi.api.teacher.payout.get.query).toHaveBeenCalled());
         expect(screen.getByText(said(direction, 'teacher.account.payout'))).toBeTruthy();
-        expect(screen.queryByText(said(direction, 'status.payout.verified'))).toBeNull();
+        for (const badge of [
+          'status.payout.verified',
+          'status.payout.verifying',
+          'status.payout.rejected',
+        ] as const) {
+          expect(screen.queryByText(said(direction, badge))).toBeNull();
+        }
       },
     );
   });

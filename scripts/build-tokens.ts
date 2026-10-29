@@ -90,14 +90,7 @@ export interface TokenSource {
 export type IconSource = Readonly<Record<string, string>>;
 
 /** Icons that point along the reading direction and therefore mirror in RTL (design.md). */
-export const DIRECTIONAL_ICONS = [
-  'chevron-right',
-  'chevron-left',
-  'arrow-left',
-  'log-out',
-  'external-link',
-  'rotate-ccw',
-] as const;
+export const DIRECTIONAL_ICONS = ['chevron-right', 'chevron-left', 'arrow-left'] as const;
 
 const ALIAS = /^\{(.+)\}$/;
 

@@ -43,6 +43,7 @@ beforeEach(() => {
     standing: {
       ban: async (_tx, _adminId, userId, applicant) => {
         bans.push({ userId, applicantNote: applicant?.applicantNote ?? '' });
+        return { applicationStatus: 'rejected' };
       },
     },
     settings,
@@ -171,6 +172,25 @@ describe('recordCall', () => {
     });
   });
 
+  it('answers the call before and after it, none before the first (T116)', async () => {
+    const userId = store.plant();
+    expect(await service.recordCall(TX, ADMIN, { teacherUserId: userId, ...call })).toEqual({
+      before: { completedOn: null, outcome: null },
+      after: { completedOn: '2026-10-22', outcome: 'unsuitable' },
+    });
+    expect(
+      await service.recordCall(TX, ADMIN, {
+        teacherUserId: userId,
+        ...call,
+        completedOn: '2026-10-21',
+        outcome: 'suitable',
+      }),
+    ).toEqual({
+      before: { completedOn: '2026-10-22', outcome: 'unsuitable' },
+      after: { completedOn: '2026-10-21', outcome: 'suitable' },
+    });
+  });
+
   it("refuses a day after today in the panel's zone", async () => {
     const userId = store.plant();
     expect(
@@ -220,7 +240,11 @@ describe('approve', () => {
       note: 'مرحبًا بك',
     });
     expect(store.granted).toEqual([{ userId, subjectIds: [HAFS.id] }]);
-    expect(answer).toEqual({ subjectIds: [HAFS.id] });
+    expect(answer).toEqual({
+      before: { status: 'in_review' },
+      after: { status: 'approved' },
+      subjectIds: [HAFS.id],
+    });
   });
 
   it('refuses with every reason that holds: the call, an undecided credential, none approved', async () => {
@@ -280,6 +304,36 @@ describe('approve', () => {
   });
 });
 
+describe("the decisions' status before and after (T116)", () => {
+  it('reject answers the status it moved from, in review or waiting', async () => {
+    const inReview = store.plant();
+    const waiting = store.plant({ status: 'needs_document' });
+    const input = { reasonChoice: 'other', note: 'x' } as const;
+    expect(await service.reject(TX, ADMIN, { teacherUserId: inReview, ...input })).toEqual({
+      before: { status: 'in_review' },
+      after: { status: 'rejected' },
+    });
+    expect(await service.reject(TX, ADMIN, { teacherUserId: waiting, ...input })).toEqual({
+      before: { status: 'needs_document' },
+      after: { status: 'rejected' },
+    });
+  });
+
+  it('requestInfo answers in review to waiting', async () => {
+    const userId = store.plant();
+    expect(
+      await service.requestInfo(TX, ADMIN, { teacherUserId: userId, needed: ['other'], note: 'x' }),
+    ).toEqual({ before: { status: 'in_review' }, after: { status: 'needs_document' } });
+  });
+
+  it("ban answers the application status the standing's ban moved from", async () => {
+    const userId = store.plant({ status: 'rejected' });
+    expect(
+      await service.ban(TX, ADMIN, { teacherUserId: userId, reasonChoice: 'other', note: 'x' }),
+    ).toEqual({ before: { status: 'rejected' }, after: { status: 'banned' } });
+  });
+});
+
 describe('reject, requestInfo and ban', () => {
   it('reject writes the note and the moment, from review or from waiting', async () => {
     const inReview = store.plant();
@@ -297,6 +351,51 @@ describe('reject, requestInfo and ban', () => {
         decidedBy: ADMIN,
       });
     }
+  });
+
+  it("reject closes the application's undecided credentials with its note, its admin and its moment (T122)", async () => {
+    const userId = store.plant({
+      credentials: [
+        { subject: HAFS, status: 'pending' },
+        { subject: WARSH, status: 'needs_document' },
+        { subject: HAFS, status: 'approved' },
+      ],
+    });
+    const added = store.plantOther(userId, 'pending', false);
+    await service.reject(TX, ADMIN, {
+      teacherUserId: userId,
+      reasonChoice: 'qualification_gap',
+      note: 'المؤهل لا يغطي ورش',
+    });
+    const statuses = (await store.credentialsOf(TX, [userId])).map(({ credentialId, status }) => ({
+      credentialId,
+      status,
+    }));
+    const [pending, waiting, approved] = statuses;
+    expect(statuses.map(({ status }) => status)).toEqual([
+      'rejected',
+      'rejected',
+      'approved',
+      'pending',
+    ]);
+    const review = { reason: 'المؤهل لا يغطي ورش', adminId: ADMIN, at: NOW };
+    expect(store.reviews.get(pending?.credentialId ?? '')).toEqual(review);
+    expect(store.reviews.get(waiting?.credentialId ?? '')).toEqual(review);
+    expect(store.reviews.has(approved?.credentialId ?? '')).toBe(false);
+    expect(store.reviews.has(added)).toBe(false);
+  });
+
+  it('requestInfo and a refused reject close no credential (T122)', async () => {
+    const userId = store.plant({ credentials: [{ subject: HAFS, status: 'pending' }] });
+    await service.requestInfo(TX, ADMIN, { teacherUserId: userId, needed: ['other'], note: 'x' });
+    const rejected = store.plant({
+      status: 'rejected',
+      credentials: [{ subject: HAFS, status: 'pending' }],
+    });
+    await refusal(
+      service.reject(TX, ADMIN, { teacherUserId: rejected, reasonChoice: 'other', note: 'x' }),
+    );
+    expect(store.reviews.size).toBe(0);
   });
 
   it('requestInfo sets needs_document with the note, from review only', async () => {
