@@ -84,6 +84,13 @@ const KINDS: Readonly<Record<DecisionKind, KindText>> = {
   },
 };
 
+/** Each decision's reasons by the contract's value, as its dialog names them (the audit log reads them). */
+export const DECISION_REASONS: Readonly<Record<DecisionKind, ReadonlyMap<string, MessageKey>>> = {
+  reject: new Map(KINDS.reject.reasons),
+  requestInfo: new Map(KINDS.requestInfo.reasons),
+  ban: new Map(KINDS.ban.reasons),
+};
+
 export function DecisionDialog({
   detail,
   initial,

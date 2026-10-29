@@ -5,7 +5,7 @@
 // the target by its current name and the reason; the pager the page size answers; the selected
 // entry's detail with what changed, its reason and its number; the empty log and a log that could
 // not be read.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
@@ -239,6 +239,59 @@ describe('AdminAudit (FR-175)', () => {
     expect(await detail.findByText(ar('admin.audit.values.verification.revoked'))).toBeTruthy();
     expect(detail.getByText(ar('admin.audit.values.verification.approved'))).toBeTruthy();
     expect(detail.queryByText('revoked')).toBeNull();
+  });
+
+  // T116 (c): an application decision's status reads as the application's state, never the
+  // credential's; its reasons as the dialog's; a value with no word as stored (owner, 2026-10-29).
+  async function detailOf(entry: Record<string, unknown>) {
+    const api = fakeApi();
+    api.audit.get.query.mockResolvedValue({ ...suspended, ...entry });
+    open(api);
+    const cells = await screen.findAllByText(ar('admin.audit.actions.teacherSuspend'));
+    fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+    return within(await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }));
+  }
+
+  it('reads an application approval as the application’s states, not the credential’s', async () => {
+    const detail = await detailOf({
+      action: 'application.approve',
+      before: { status: 'in_review' },
+      after: { status: 'approved', subjectIds: ['01a18400-0000-7000-8000-0000000000aa'] },
+    });
+    expect(await detail.findByText(ar('admin.status.application.inReview'))).toBeTruthy();
+    expect(detail.getByText(ar('admin.status.application.approved'))).toBeTruthy();
+    expect(detail.queryByText(ar('admin.status.credential.verified'))).toBeNull();
+    expect(detail.queryByText('in_review')).toBeNull();
+  });
+
+  it('reads a decision’s reasons as the dialog names them, and an unknown value as stored', async () => {
+    const rejected = await detailOf({
+      action: 'application.reject',
+      before: { status: 'needs_document' },
+      after: { status: 'rejected', reasonChoice: 'name_mismatch' },
+    });
+    expect(await rejected.findByText(ar('admin.dialogs.decision.reasons.nameMismatch'))).toBeTruthy();
+    expect(rejected.getByText(ar('admin.status.application.waitingOnApplicant'))).toBeTruthy();
+    expect(rejected.getByText(ar('admin.status.application.rejected'))).toBeTruthy();
+    cleanup();
+    const asked = await detailOf({
+      action: 'application.request_info',
+      before: { status: 'in_review' },
+      after: { status: 'needs_document', needed: ['id_unclear', 'future_need'] },
+    });
+    expect(
+      await asked.findByText(
+        `${ar('admin.dialogs.decision.requestInfo.reasons.idUnclear')}، future_need`,
+      ),
+    ).toBeTruthy();
+    cleanup();
+    const banned = await detailOf({
+      action: 'application.ban',
+      before: { status: 'in_review' },
+      after: { status: 'banned', reasonChoice: 'forged_documents' },
+    });
+    expect(await banned.findByText(ar('admin.status.application.banned'))).toBeTruthy();
+    expect(banned.getByText(ar('admin.dialogs.decision.ban.reasons.forgedDocuments'))).toBeTruthy();
   });
 
   it('links a credential’s entry to its credential', async () => {

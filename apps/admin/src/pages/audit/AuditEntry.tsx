@@ -17,6 +17,7 @@ import {
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { dayMonthYear, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
+import { DECISION_REASONS } from '../applications/DecisionDialog';
 import { actionText, targetHref, targetText } from './actions';
 import { type AuditEntry as Entry, useAuditEntry } from './queries';
 
@@ -64,6 +65,35 @@ const STANDING_TEXT: Readonly<Record<string, Readonly<Record<string, MessageKey>
   },
 };
 
+/**
+ * An application decision's own words (T116 (c)): its `status` is the application's, not a
+ * credential's, and its reasons are its dialog's. A value with no word is shown as stored.
+ */
+const APPLICATION_STATUS_TEXT: Readonly<Record<string, MessageKey>> = {
+  in_review: 'admin.status.application.inReview',
+  needs_document: 'admin.status.application.waitingOnApplicant',
+  approved: 'admin.status.application.approved',
+  rejected: 'admin.status.application.rejected',
+  banned: 'admin.status.application.banned',
+};
+const DECISION_OF_ACTION: Readonly<Record<string, keyof typeof DECISION_REASONS>> = {
+  'application.reject': 'reject',
+  'application.request_info': 'requestInfo',
+  'application.ban': 'ban',
+};
+
+/** The word the panel has for `value` of `field` in an entry of `action`, if it has one. */
+function wordOf(action: string, field: string, value: string): MessageKey | undefined {
+  if (action.startsWith('application.') && field === 'status') {
+    return APPLICATION_STATUS_TEXT[value];
+  }
+  const decision = DECISION_OF_ACTION[action];
+  if (decision !== undefined && (field === 'reasonChoice' || field === 'needed')) {
+    return DECISION_REASONS[decision].get(value);
+  }
+  return STANDING_TEXT[field]?.[value];
+}
+
 export function AuditEntry({ entryId }: { readonly entryId: string }) {
   const t = useT();
   const entry = useAuditEntry(entryId);
@@ -88,8 +118,26 @@ function Detail({ entry }: { readonly entry: Entry }) {
   const href = targetHref(entry);
   const changes = changesOf(entry.before, entry.after);
   const valueOf = (field: string, value: unknown) => {
-    const standing = typeof value === 'string' ? STANDING_TEXT[field]?.[value] : undefined;
-    if (standing !== undefined) return <Badge label={t(standing)} tone="neutral" />;
+    const word = typeof value === 'string' ? wordOf(entry.action, field, value) : undefined;
+    if (word !== undefined) {
+      return field === 'reasonChoice' ? (
+        <span>{t(word)}</span>
+      ) : (
+        <Badge label={t(word)} tone="neutral" />
+      );
+    }
+    if (Array.isArray(value) && field !== 'chain') {
+      return (
+        <span>
+          {value
+            .map((item) => {
+              const itemWord = typeof item === 'string' ? wordOf(entry.action, field, item) : undefined;
+              return itemWord === undefined ? plainText(field, item, t, locale, zone) : t(itemWord);
+            })
+            .join(locale === 'ar' ? '، ' : ', ')}
+        </span>
+      );
+    }
     if (typeof value === 'boolean') {
       return (
         <Badge
