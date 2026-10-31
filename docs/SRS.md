@@ -299,14 +299,17 @@ Enforced at the data layer, not the UI layer. Teachers of the opposite gender ar
 
 The rule is symmetric, which makes it simpler to reason about and simpler to test than the asymmetric v1.1 rule it replaces: there is exactly one legal pairing — same gender.
 
-**Visibility predicate** *(v1.3, ADR 0006)*. A Teacher is visible to a requester on any Student-facing path — search, browse, direct profile access, booking, token issuance — if and only if all four hold:
+**Visibility predicate** *(v1.3, ADR 0006)*. A Teacher is visible to a requester on any Student-facing path — search, browse, direct profile access, booking, token issuance — if and only if all five hold:
 
 ```
 teacher.gender = requester.gender
 AND teacher_profile.verification_status = 'approved'      (FR-DISC-5)
 AND teacher.deleted_at IS NULL
 AND teacher_profile.payout_verified_at IS NOT NULL                (FR-PAYG-14, v1.4)
+AND teacher.account_status NOT IN ('suspended', 'banned')         (2026-10-31)
 ```
+
+Booking and token issuance further require `teacher.account_status = 'active'`: a Teacher whose account is Verification-Required stays visible, as FR-VERIFY-10 restricts the account's new bookings and not its existence, but cannot be booked until the account is active again *(2026-10-31, Phase 2's Spec Kit cycle; the owner's decision of 2026-10-29, task T143 of `specs/002-identity/tasks.md`)*.
 
 The predicate is implemented once, as the repository filter every Teacher-returning query on a Student-facing path must take (Constitution R-GENDER-5), and is enforced identically in both directions: a Male requester never receives Female Teacher data and a Female requester never receives Male Teacher data (NFR-SEC-4). Counts and facets are computed after the predicate is applied (R-GENDER-3).
 

@@ -1,6 +1,6 @@
 # ADR 0006 — Gender visibility predicate and review uniqueness
 
-**Status:** accepted; the D1 predicate gains a fourth conjunct (payout verified) in [ADR 0007](0007-direct-gateway-checkout.md) · **Date:** 2026-09-05 · **Addendum to:** [ADR 0005](0005-phase-0-document-amendments.md)
+**Status:** accepted; the D1 predicate gains a fourth conjunct (payout verified) in [ADR 0007](0007-direct-gateway-checkout.md) and a fifth (the account's standing) on 2026-10-31 · **Date:** 2026-09-05 · **Addendum to:** [ADR 0005](0005-phase-0-document-amendments.md)
 
 ## Context
 
@@ -31,6 +31,8 @@ teacher.gender = requester.gender
 AND teacher_profile.verification_status = 'approved'
 AND teacher.deleted_at IS NULL
 ```
+
+**Amended 2026-10-31 (Phase 2's Spec Kit cycle; the owner's decision of 2026-10-29, task T143 of `specs/002-identity/tasks.md`).** The predicate also leaves out a teacher whose account is suspended or banned: `AND teacher.account_status NOT IN ('suspended', 'banned')`. A teacher whose account is `verification_required` stays visible (FR-VERIFY-10 restricts new bookings, not existence), and booking and token issuance further require `teacher.account_status = 'active'`. SRS §3.7.1 states the whole predicate; the adversarial suite proves both conditions in both directions.
 
 The predicate lives in SRS §3.7.1 and is implemented as the single repository
 filter in `catalog` that R-GENDER-5 requires. NFR-SEC-4 is rewritten so that it
