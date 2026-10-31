@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — two remain: FR-371 (the real gateway adapter while OPEN-11 is open) and FR-381 (the notices of FR-PAYG-5/18/19 before Phase 4's notifications); put to the owner with the specification
+- [x] No [NEEDS CLARIFICATION] markers remain — the two of the first draft (FR-371, FR-381) were decided by the owner on 2026-10-31 and are recorded under Clarifications
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
