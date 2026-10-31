@@ -90,6 +90,7 @@ never collides with Phase 1's FR-201 to FR-217.
 - Q: May a package's price be zero? → A: No. A price of zero is refused when the package is saved; the gateway's signed paid event is the only confirmation (FR-311, FR-PAYG-3).
 - Q: Does the name search ignore the differences of Arabic spelling? → A: Yes. أ, إ and آ count as ا; ى and ئ as ي; ؤ as و; ة as ه; diacritics and tatweel are removed; Latin letters ignore case; the same on the stored name and on what the student types. The search runs only inside the visibility predicate, T143's standing included, so it never returns a hidden teacher, with a test of its own (FR-333, SC-314).
 - Decision (the owner, 2026-10-31, not a question): a package's session length and a slot's length are 30, 45 or 60 minutes, nothing else. The requirement comes from the SRS, not from the board, so FR-PROFILE-2 and FR-PROFILE-4 are amended with it, and the two boards that drew 45/60 now draw the three (`PackageEditor`, `SlotEditor`). Anything the boards show that the SRS does not say is put to the owner before it is written here.
+- Q: Seven behaviours of this specification came from the boards, not the SRS; which stay? → A: Six stay, each the owner's decision of 2026-10-31: a package's track and length are frozen after its first enrollment (FR-312, SRS FR-PROFILE-3 amended); the package's subject list offers only approved subjects, which withdraws the draft for a subject under review that FR-PROFILE-11 left open (FR-311, SRS FR-PROFILE-11 amended); the result card's nearest slot and lowest price per session (FR-335); the checkout countdown that continues offline (FR-358); enrollments ordered by next session and the next session on the home (FR-390); the «غير منشورة» marker and the banner to payout setup (FR-315). The profile shows the price per session and the track's remedy line, but not the chain: the riwaya, the tariq and the chain stay in Phase 4 with FR-ISNAD-5 (FR-336).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -123,12 +124,12 @@ stand-in and confirm everything appears with no action by the teacher.
 **Acceptance Scenarios**:
 
 1. **Given** an approved teacher, **When** they edit the profile, **Then** the bio, the qualification summary and the photo are saved, the display name is editable from the teacher's own account tab (T158), and the gender is shown, never editable (FR-PROFILE-1, FR-PROFILE-7, R-GENDER-6).
-2. **Given** the package editor, **When** the subject is picked, **Then** only subjects with an approved credential are offered, with an entry to add a subject (FR-PROFILE-11, `PackageSubjectPicker`).
+2. **Given** the package editor, **When** the subject is picked, **Then** only subjects with an approved credential are offered, with an entry to add a subject (FR-PROFILE-11 as amended on 2026-10-31; the owner's decision of 2026-10-31).
 3. **Given** a package, **When** it is saved, **Then** it has a subject, a track, a session count of at least one, a session length of 30, 45 or 60 minutes and a price in piasters of more than zero, shown in pounds (FR-PROFILE-2 as amended on 2026-10-31, ADR 0018 D1, R-MONEY-1).
-4. **Given** a package with at least one enrollment, **When** the teacher edits it, **Then** its track and session length cannot change, a new price applies only to later purchases, and existing enrollments keep their snapshot (FR-PROFILE-3, DEC-24, screens.md rules).
+4. **Given** a package with at least one enrollment, **When** the teacher edits it, **Then** its track and session length cannot change, a new price applies only to later purchases, and existing enrollments keep their snapshot (FR-PROFILE-3 as amended on 2026-10-31, DEC-24; the owner's decision of 2026-10-31).
 5. **Given** a package or a slot, **When** the teacher deactivates it, **Then** no new purchase can use it, and every enrollment and session already made on it is unchanged (FR-PROFILE-3, FR-PROFILE-9).
 6. **Given** a slot, **When** it is created, **Then** it stores the day of the week, the local start time, the length and the teacher's zone at creation; never a UTC instant (FR-PROFILE-4, Architecture §9).
-7. **Given** a teacher whose payout account is not verified, **When** they open their packages, **Then** each active package carries «غير منشورة» and a banner leads to payout setup; on verification the packages and slots are visible to students with no step by the teacher (FR-PROFILE-10, FR-PAYG-14, FR-PAYG-15, `PackagesLocked`).
+7. **Given** a teacher whose payout account is not verified, **When** they open their packages, **Then** each active package carries «غير منشورة» and a banner leads to payout setup (the owner's decision of 2026-10-31); on verification the packages and slots are visible to students with no step by the teacher (FR-PROFILE-10, FR-PAYG-14, FR-PAYG-15, `PackagesLocked`).
 8. **Given** a teacher who replaces the payout account, **When** the change is made, **Then** they leave discovery and cannot be booked until the new account is verified, and their confirmed enrollments are unaffected (FR-PAYG-16).
 
 ---
@@ -138,7 +139,7 @@ stand-in and confirm everything appears with no action by the teacher.
 A student opens Discovery and sees teachers sectioned by subject, each tab with
 the number of teachers the student may see. They search by subject or by the
 start of a teacher's name, filter by track, minimum rating and riwaya, and open
-a profile with its packages, its chain of transmission and its reviews summary.
+a profile with its packages and its reviews summary.
 A teacher of the other gender, an unapproved teacher, a teacher whose payout is
 not verified, a deleted teacher and a suspended or banned teacher are absent
 everywhere — in results, counts and direct access alike.
@@ -164,7 +165,7 @@ adversarial suite passes in both directions.
 4. **Given** a name search, **When** a prefix of a display name is typed, **Then** the matching teachers the predicate allows are returned with the match highlighted, and a teacher of the other gender is never returned whatever the prefix (FR-DISC-1, ADR 0021 D6).
 5. **Given** the filters, **When** the student filters by track, by minimum rating (all, then 5 down to 1 stars and up) or, for a subject with riwayas on approved credentials, by riwaya, **Then** the results narrow accordingly, the dropdown closes on apply or on its trigger, and each applied filter is a chip removable on its own (FR-DISC-1).
 6. **Given** a teacher whose account is `verification_required`, **When** a student browses, **Then** the teacher is visible, but a hold on their slot is refused; a suspended or banned teacher is not visible at all (SRS §3.7.1 as amended 2026-10-31, FR-VERIFY-10, T143).
-7. **Given** the profile, **When** it is shown, **Then** it carries the display name, the gender, the photo stripped of its metadata (T145), the bio, the subjects with an approved credential, each such credential's riwaya, tariq and chain, the aggregate rating and review count (none yet: the no-reviews line), and the active packages with their track, length, total price and price per session (FR-DISC-4, FR-PROFILE-6, FR-PROFILE-7, `TeacherProfile`).
+7. **Given** the profile, **When** it is shown, **Then** it carries the display name, the gender, the photo stripped of its metadata (T145), the bio, the subjects with an approved credential, the aggregate rating and review count (none yet: the no-reviews line), and the active packages with their track, the track's remedy line, length, total price and price per session; no riwaya, tariq or chain, which are Phase 4's (FR-DISC-4, FR-PROFILE-6, FR-PROFILE-7, FR-ISNAD-5; the owner's decision of 2026-10-31).
 8. **Given** the adversarial suite, **When** it runs in CI on every commit, **Then** it attacks every procedure of this phase that returns teacher data by direct call, forged and guessed ids, a tampered token and client-supplied gender, in both directions, and blocks the merge on any leak (NFR-COMP-1, FR-064 of Phase 0).
 
 ---
@@ -317,24 +318,24 @@ adds only what this phase decides about it.
 **Teacher profile, packages and availability**
 
 - **FR-310**: An approved teacher MUST be able to read and edit their public profile: photo, bio and qualification summary; the display name through the account's profile entry, reachable from the teacher's account tab (FR-PROFILE-1, T158).
-- **FR-311**: A teacher MUST be able to create, edit, deactivate and reactivate packages, each with a subject among the teacher's approved subjects, a track, a session count of at least one, a session length of 30, 45 or 60 minutes and a price in piasters of more than zero (FR-PROFILE-2 as amended on 2026-10-31, FR-PROFILE-3, FR-PROFILE-11, ADR 0018 D1).
-- **FR-312**: Once a package has an enrollment, its track and session length MUST NOT change; its price MAY change and applies only to later purchases (FR-PROFILE-3, screens.md rules).
+- **FR-311**: A teacher MUST be able to create, edit, deactivate and reactivate packages, each with a subject among the teacher's approved subjects only (no package for a subject under review, the owner's decision of 2026-10-31), a track, a session count of at least one, a session length of 30, 45 or 60 minutes and a price in piasters of more than zero (FR-PROFILE-2 as amended on 2026-10-31, FR-PROFILE-3, FR-PROFILE-11, ADR 0018 D1).
+- **FR-312**: Once a package has an enrollment, its track and session length MUST NOT change; its price MAY change and applies only to later purchases (FR-PROFILE-3 as amended on 2026-10-31; the owner's decision of 2026-10-31).
 - **FR-313**: A teacher MUST be able to create, deactivate and reactivate weekly slots of a day of the week, a local start time and a length of 30, 45 or 60 minutes, stored with the teacher's IANA zone at creation and never as a UTC instant (FR-PROFILE-4, FR-PROFILE-9).
 - **FR-317**: A slot that overlaps another active slot of the same teacher MUST be refused when it is saved or reactivated, the overlap counted over the whole week in the teacher's zone (a slot may cross midnight into the next day, and Saturday's end wraps to Sunday); the database's refusal of overlapping sessions at booking (FR-369) stays as the second line for two saves at the same moment (the owner's decision of 2026-10-31).
 - **FR-318**: While an enrollment awaiting payment or confirmed, or an active hold, uses a slot, its day, start time and length MUST NOT change; the teacher disables it and adds a new one; a slot no enrollment or hold uses MAY be edited (FR-PROFILE-9; the owner's decision of 2026-10-31).
 - **FR-314**: Deactivating a package or a slot MUST stop new holds on it and MUST NOT change any enrollment or session already made on it (FR-PROFILE-3, FR-PROFILE-9).
-- **FR-315**: A teacher whose payout account is not verified MUST be able to draft packages and slots, and MUST see them marked unpublished; they MUST become visible to students on verification with no action by the teacher, and invisible again from a payout replacement until the new account is verified (FR-PROFILE-10, FR-PAYG-14, FR-PAYG-15, FR-PAYG-16).
+- **FR-315**: A teacher whose payout account is not verified MUST be able to draft packages and slots, and MUST see them marked «غير منشورة» with a banner to payout setup (the owner's decision of 2026-10-31); they MUST become visible to students on verification with no action by the teacher, and invisible again from a payout replacement until the new account is verified (FR-PROFILE-10, FR-PAYG-14, FR-PAYG-15, FR-PAYG-16).
 - **FR-316**: Subjects MUST be shown in Arabic on Arabic screens and in English on English screens from their two stored names; this phase adds no admin page to create subjects, and the seeded list stays the catalogue (ADR 0021 D1, FR-LOC-1).
 
 **Discovery**
 
-- **FR-330**: Every query that returns a teacher, or a teacher's package, slot, credential, chain or rating, on a student-facing path MUST go through one repository filter that takes the requester's gender and applies the five conjuncts of SRS §3.7.1; no unfiltered method MAY be callable from a student-facing path (R-GENDER-5, ADR 0006 D1, FR-DISC-3, FR-DISC-5).
+- **FR-330**: Every query that returns a teacher, or a teacher's package, slot, credential or rating, on a student-facing path MUST go through one repository filter that takes the requester's gender and applies the five conjuncts of SRS §3.7.1; no unfiltered method MAY be callable from a student-facing path (R-GENDER-5, ADR 0006 D1, FR-DISC-3, FR-DISC-5).
 - **FR-331**: A request for an excluded teacher's profile, packages or slots MUST receive the answer a nonexistent teacher receives (404), carrying no field of that teacher (R-GENDER-1, R-GENDER-2).
 - **FR-332**: The browse view MUST be sectioned by subject, with a tab for all subjects and one per subject, each showing the number of teachers visible to the requester, counted after the predicate (FR-DISC-2, R-GENDER-3).
 - **FR-333**: Search MUST match by subject and by a prefix of the teacher's display name, and MUST run only inside the visibility predicate of FR-330, T143's standing included, so that it never returns a hidden teacher; the name is compared after the same normalisation on the stored name and on the typed text — أ, إ and آ to ا; ى and ئ to ي; ؤ to و; ة to ه; diacritics and tatweel removed; Latin letters without case — and the matched part of the name is marked (FR-DISC-1, FR-DISC-3, T143; the owner's decision of 2026-10-31).
 - **FR-334**: Results MUST be filterable by track, by minimum rating (all, then 5 down to 1 stars and up) and, where the selected subject has riwayas on approved credentials, by riwaya; applied filters MUST appear as chips removable one by one (FR-DISC-1, ADR 0021 D6).
-- **FR-335**: A result card MUST show the teacher's name, subjects, riwaya, track badges, a short bio, the rating and review count, the nearest free slot of an active package, and the lowest price per session of the teacher's active packages, all computed after the predicate (FR-DISC-2, `Discovery`, R-GENDER-3).
-- **FR-336**: The profile MUST show the display name, gender, photo, bio, qualification, subjects with an approved credential, each such credential's riwaya, tariq and chain, the aggregate rating and review count, and the active packages with their track, its remedy line, the session length, the total price and the price per session (FR-DISC-4, FR-PROFILE-6, FR-PROFILE-7, ADR 0017, ADR 0018 D2, `TeacherProfile`).
+- **FR-335**: A result card MUST show the teacher's name, subjects, track badges, a short bio, the rating and review count, the nearest free slot of an active package (the first session the student would get by FR-368's rule), and the lowest price per session of the teacher's active packages, all computed after the predicate (FR-DISC-2, R-GENDER-3; the nearest slot and the lowest price per session, the owner's decision of 2026-10-31). No riwaya is shown on the card in this phase (FR-ISNAD-5 is Phase 4's); the riwaya filter of FR-334 stays.
+- **FR-336**: The profile MUST show the display name, gender, photo, bio, qualification, subjects with an approved credential, the aggregate rating and review count, and the active packages with their track, the track's remedy line, the session length, the total price and the price per session; it MUST NOT show a credential's riwaya, tariq or chain, which stay in Phase 4 with FR-ISNAD-5 (FR-DISC-4, FR-PROFILE-6, FR-PROFILE-7, ADR 0018 D2; the price per session, the remedy line and the chain's absence, the owner's decision of 2026-10-31).
 - **FR-337**: Any per-session price shown MUST be computed only in `packages/money` (R-MONEY-5).
 - **FR-338**: Search MUST be limited by the configured search rate limit per subject (NFR-SEC-10, §3.14).
 
@@ -348,7 +349,7 @@ adds only what this phase decides about it.
 - **FR-355**: Every gateway order created on a hold, a Retry included, MUST expire no later than the hold's expiry minus the grace, where the gateway allows the expiry to be set (FR-PAYG-6).
 - **FR-356**: Retry MUST create a new order on the same hold while an order can still be created on it; choosing another slot MUST follow FR-BOOK-12 (FR-PAYG-18).
 - **FR-357**: Placing a hold, paying and retrying MUST be safe to repeat with the same idempotency key, returning the first outcome (FR-042 of Phase 0, R-API-14, ADR 0008 D2), and MUST be limited by the configured payment initiation rate limit (NFR-SEC-10).
-- **FR-358**: The checkout screen MUST show the one payment summary (teacher, then the package as subject · sessions · minutes with its track badge, then the price) and a countdown to the order's expiry that continues offline (screens.md rules, `Checkout`).
+- **FR-358**: The checkout screen MUST show the one payment summary (teacher, then the package as subject · sessions · minutes with its track badge, then the price) and a countdown to the order's expiry that continues offline (the owner's decision of 2026-10-31).
 
 **Events, confirmation and generation**
 
@@ -380,7 +381,7 @@ adds only what this phase decides about it.
 
 **Enrollment lists**
 
-- **FR-390**: The student MUST see their enrollments, active and ended, ordered by next session, each with upcoming, completed and remaining sessions, and an enrollment's detail with its sessions; the home MUST show the next session (FR-BOOK-7, `Enrollments`, `EnrollmentDetail`, `Main`).
+- **FR-390**: The student MUST see their enrollments, active and ended, ordered by next session (the owner's decision of 2026-10-31), each with upcoming, completed and remaining sessions, and an enrollment's detail with its sessions; the home MUST show the next session (FR-BOOK-7; the order and the home's next session, the owner's decision of 2026-10-31).
 - **FR-391**: The teacher MUST see «طلابي», active and ended, searchable by the student's name in both tabs, each enrollment's detail with its sessions, and «اليوم» with the day's sessions (FR-BOOK-7, ADR 0021 D6, `TeacherStudents`, `TeacherEnrollment`, `TeacherHome`).
 - **FR-392**: Sessions remaining and completed MUST be derived, never stored (R-DB-4).
 - **FR-393**: Every session time MUST be shown in the teacher's zone and the viewer's zone (ADR 0009 D5).
@@ -441,7 +442,7 @@ plan names any column or check it adds (T140).
 - The cycle runs on 2026-10-31, a weekend day, and is not counted; implementation starts on day 12, 2026-11-01 (PLAN.md).
 - The seeded subjects are the catalogue in this phase; an admin page to add subjects is not drawn and is not added (ADR 0021 D1 governs its validation when it comes).
 - Drafting before payout verification needs no published flag: a package or slot is visible exactly when it is active and its teacher passes the predicate, so verification publishes everything at once (FR-PROFILE-10, FR-PAYG-15).
-- The chain shown on a profile is the approved credential's transcription from Phase 1; since only approved credentials are shown, no "unverified" label renders (R-HONEST-2). The other surfaces of FR-ISNAD-5 are Phase 4's.
+- No credential's riwaya, tariq or chain is shown to a student in this phase; they are shown with FR-ISNAD-5 in Phase 4 (the owner's decision of 2026-10-31).
 - Reviews do not exist before Phase 4: the profile shows the no-reviews line and the rating filter's buckets other than "all" return no teacher until then.
 - Session reminders (FR-BOOK-8) are scheduled by Phase 4's notification jobs, which also reschedule them on re-resolution (PLAN.md, Phase 4); this phase generates no reminder.
 - The report sheet on a profile, the cancellation, make-up, dispute and review controls on the enrollment screens, and the admin's `/enrollments` page belong to Phases 3 and 4; their entries are absent here, and the monitor's link to a cancelled enrollment appears with that page.
