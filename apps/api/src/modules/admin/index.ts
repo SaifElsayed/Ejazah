@@ -87,7 +87,11 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly inviteQueue: AdminInviteQueue;
   /** For the document viewer's signed links (T068). */
   readonly storage: Pick<StoragePort, 'temporaryLink'>;
-  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+  /**
+   * The process's column cipher (`createColumnCipher`): the second factor's secret and the document
+   * viewer's keys, read under the previous key too while a rotation runs (T134).
+   */
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   /** The one registry of an account's end (FR-142), shared with the identity module's deletion (B16). */
   readonly consequences?: AccountConsequences;
 }

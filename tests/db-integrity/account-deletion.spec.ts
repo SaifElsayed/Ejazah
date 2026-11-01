@@ -118,6 +118,7 @@ beforeAll(async () => {
     database,
     settings,
     encryptionKey: KEY,
+    cipher,
     marks: new MemorySingleUseMarks(() => new Date()),
     signIn: {
       verifyIdentityToken: unreachable,

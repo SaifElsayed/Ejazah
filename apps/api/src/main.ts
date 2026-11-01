@@ -122,7 +122,9 @@ const sessions = {
 };
 
 // The column cipher (R-DB-8): the documents route encrypts a document's storage key with it, and
-// the credentials' links decrypt it (T024, T057).
+// the credentials' links decrypt it (T024, T057); onboarding and deletion read Apple's grant, and
+// the administrator's sign-in and admins page the second factor's secret, with it, so each reads a
+// value under the previous key too while a rotation runs (T134).
 const cipher = createColumnCipher(config);
 
 // What the user surface's procedures read (T038): the settings reader, the support address from
@@ -147,6 +149,7 @@ const services = {
   subjects: catalog.createSubjectsService(database),
   identity: identity.createIdentityServices({
     ...identityBase,
+    cipher,
     marks: createRedisSingleUseMarks({
       redisUrl: config.REDIS_URL,
       onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),

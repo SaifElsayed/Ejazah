@@ -1,5 +1,5 @@
 // PUBLIC ENTRY of the identity module (T017). Other modules import this file and nothing below it (R-API-3).
-import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
+import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { NodeHandler } from '../../platform/web/route.js';
@@ -82,6 +82,11 @@ export interface IdentityServices {
 
 /** What the module's services are built over, bound once by `main.ts`. */
 export interface IdentityServiceDependencies extends IdentityDependencies {
+  /**
+   * The process's column cipher (`createColumnCipher`): onboarding's and deletion's Apple grant, read
+   * under the previous key too while a rotation runs (T134).
+   */
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   /** The single-use marks in Redis: nonces and onboarding tokens (`platform/redis`). */
   readonly marks: SingleUseMarks;
   readonly signIn: SignInPort;
@@ -104,6 +109,7 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
 export function createIdentityServices({
+  cipher,
   marks,
   signIn: signInPort,
   email,
@@ -118,7 +124,7 @@ export function createIdentityServices({
 }: IdentityServiceDependencies): IdentityServices {
   const sessions = new SessionService(base);
   const codes = new OneTimeCodes({ ...base, email, log });
-  const onboarding = new OnboardingService({ ...base, marks, sessions, codes });
+  const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });
   return {
     sessions,
     signIn: new SignInService({ ...base, marks, signIn: signInPort, onboarding, sessions }),
@@ -128,6 +134,7 @@ export function createIdentityServices({
     payout: new PayoutService({ ...base, payment, idempotency }),
     deletion: new DeletionService({
       ...base,
+      cipher,
       consequences,
       marks,
       signIn: signInPort,

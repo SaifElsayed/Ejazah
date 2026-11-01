@@ -271,6 +271,14 @@ describe('verifyMfa', () => {
     expect((await refusal(world.auth.verifyMfa('unknown', code))).code).toBe('ADMIN_SIGN_IN_FAILED');
     expect((await refusal(world.auth.verifyMfa(token, code))).code).toBe('ADMIN_SIGN_IN_FAILED');
   });
+
+  it('reads a secret written under the previous key once ENCRYPTION_KEY is rotated (T134)', async () => {
+    const rotated = buildAdmin(database, { rotated: true });
+    const admin = await rotated.createAdministrator();
+    const { sessionToken } = await rotated.auth.signIn(admin.email, admin.password);
+    await rotated.auth.verifyMfa(sessionToken, await totpCode(admin.secret, rotated.clock.now()));
+    expect(await rotated.sessions.resolve(sessionToken)).toMatchObject({ mfaVerified: true });
+  });
 });
 
 describe('setup', () => {

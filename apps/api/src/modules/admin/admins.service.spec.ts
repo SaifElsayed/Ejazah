@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { totpCode } from '../../platform/crypto/totp.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import {
@@ -239,6 +240,16 @@ describe('regenerateRecoveryCodes asks the current second factor (T096)', () => 
       world.admins.regenerateRecoveryCodes(tx, admin.adminId, right),
     );
     expect((await world.rows.administrator(admin.adminId)).failedSignInCount).toBe(0);
+  });
+
+  it('reads a secret written under the previous key once ENCRYPTION_KEY is rotated (T134)', async () => {
+    const rotated = buildAdmin(database, { rotated: true });
+    const admin = await rotated.createAdministrator();
+    const code = await totpCode(admin.secret, rotated.clock.now());
+    const fresh = await inTransaction(database, (tx) =>
+      rotated.admins.regenerateRecoveryCodes(tx, admin.adminId, code),
+    );
+    expect(fresh.recoveryCodes).toHaveLength(10);
   });
 });
 
