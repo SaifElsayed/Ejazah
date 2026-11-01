@@ -42,7 +42,7 @@ happened to return (R-HONEST-4).
 - **Identifiers.** UUIDs as strings; a document id is the one `POST
 /uploads/documents` returned and the caller owns.
 - **Rate limits.** Every public procedure names its settings key; the keys of
-  this phase are the four of Phase 0 plus `rate_limit_public_page`, `rate_limit_upload`, `rate_limit_token_refresh` and `rate_limit_provider_nonce`.
+  this phase are the four of Phase 0 plus `rate_limit_public_page`, `rate_limit_upload`, `rate_limit_token_refresh` and `rate_limit_provider_nonce`; T133 adds `rate_limit_provider_nonce_budget`, `rate_limit_admin_authentication` and `rate_limit_admin_authentication_budget`.
 - **What is not here.** No discovery, profile, package, availability, booking,
   payment order, session, notification or certificate procedure; no procedure
   that returns another user's teacher data to a user (the first is Phase 2's).
