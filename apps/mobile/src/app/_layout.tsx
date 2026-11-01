@@ -11,6 +11,10 @@
 // device's insets here, the tab groups in their own layouts.
 //
 // T074: `restricted` and `verify-identity` sit outside the role groups and take the insets here.
+//
+// T136: a session that ends (a sign-out, the account's deletion) leaves nothing typed behind on the
+// phone: the teacher's application draft (its `reapply` mode with it), the onboarding draft and the
+// pending address with its password are cleared with the query cache.
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Redirect, Stack, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -20,6 +24,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Banner, Button } from '../design/primitives';
 import { DirectionProvider, ThemeProvider, useTheme } from '../design/theme';
 import { tokens } from '../design/tokens';
+import { clearPendingEmail } from '../features/shared/auth/pending';
+import { clearDraft as clearOnboardingDraft } from '../features/shared/onboarding/draft';
+import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
 import { ApiProvider, useApi } from '../lib/api';
@@ -54,9 +61,14 @@ function SessionGuard({ queries }: { readonly queries: QueryClient }) {
   const segments = useSegments();
   useRestoreSession();
   const me = useLanding();
-  // What one account read is never shown to the next on a shared device (review of B6, finding 4).
+  // What one account read is never shown to the next on a shared device (review of B6, finding 4),
+  // nor what one person typed: every draft, and the pending address with its password (T136).
   useEffect(() => {
-    if (session.kind === 'signed-out') queries.clear();
+    if (session.kind !== 'signed-out') return;
+    queries.clear();
+    clearApplication();
+    clearOnboardingDraft();
+    clearPendingEmail();
   }, [session.kind, queries]);
   const destination = destinationFor(session);
   if (destination === null) {

@@ -7,6 +7,8 @@
 // holds the `(auth)` routes that sort before `welcome` (expo-router 58 reseeds a group at its first
 // route by name length when the guard's Redirect unmounts the navigator), and the back, the
 // system's and the arrow's, raises no `GO_BACK` and never returns to a screen open before.
+// T136: signing out or deleting the account leaves no draft behind on the phone: the teacher's
+// application (its `reapply` mode with it), the onboarding's, and the pending address and password.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,8 +16,22 @@ import { router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
 import { BackHandler, Text, View } from 'react-native';
 
+import { Button } from '../design/primitives';
 import { fakeProcedures } from '../features/shared/__tests__/api-double';
+import {
+  clearPendingEmail,
+  getPendingEmail,
+  setPendingEmail,
+} from '../features/shared/auth/pending';
+import { useAccountDeletion } from '../features/shared/deletion';
+import { clearDraft, getDraft, startOnboarding } from '../features/shared/onboarding/draft';
 import { BackBar } from '../features/shared/screen';
+import {
+  clearApplication,
+  getApplication,
+  startApplication,
+  updateApplication,
+} from '../features/teacher/application/draft';
 import { type MessageKey, setLocale, translate } from '../i18n';
 import { setSession } from '../lib/session';
 import RootLayout from '../app/_layout';
@@ -500,5 +516,115 @@ describe('signing out or deleting the account (T103)', () => {
     expect(rendered.getSegments()).toEqual(['(auth)', 'welcome']);
     expect(await pressSystemBack()).toBe(false);
     expect(goBackRaised()).toBe(false);
+  });
+});
+
+describe('signing out or deleting the account leaves no draft behind (T136)', () => {
+  const applicant = account('teacher_application', {
+    role: 'teacher',
+    teacher: {
+      applicationStatus: 'rejected',
+      verificationStatus: 'pending',
+      payout: { configured: false, verified: false },
+    },
+  });
+
+  /** What one person left on the phone: every draft, and the pending address with its password. */
+  function leaveDraftsBehind(): void {
+    startApplication('reapply');
+    updateApplication({ subjectIds: ['subject-1'], qualification: 'إجازة بحفص' });
+    startOnboarding({
+      onboardingToken: 'onboarding-token',
+      identity: 'email',
+      emailVerified: true,
+      email: 'amal@example.test',
+      password: 'the typed password',
+      timezone: 'Africa/Cairo',
+    });
+    setPendingEmail('amal@example.test', 'the typed password');
+  }
+
+  function expectNothingLeft(): void {
+    expect(getApplication()).toMatchObject({
+      mode: 'submit',
+      subjectIds: [],
+      qualification: '',
+      identity: undefined,
+      ijazahs: {},
+    });
+    expect(getDraft()).toBeNull();
+    expect(getPendingEmail()).toBeNull();
+  }
+
+  afterEach(() => {
+    clearApplication();
+    clearDraft();
+    clearPendingEmail();
+  });
+
+  it("an applicant signs out from the application's status", async () => {
+    mockApi.account.me.query.mockResolvedValue(applicant);
+    mockApi.teacher.application.get.query.mockResolvedValue({
+      status: 'rejected',
+      submittedAt: '2026-02-03T09:00:00Z',
+      subjectCount: 2,
+      note: 'الإجازة غير واضحة',
+      callRecorded: false,
+      decidedAt: '2026-02-05T09:00:00Z',
+      approvedShown: false,
+    });
+    setSession({
+      kind: 'signed-in',
+      landing: 'teacher_application',
+      applicationStatus: 'rejected',
+    });
+    await renderRouter(
+      {
+        ...routes,
+        '(teacher)/application/status': require('../app/(teacher)/application/status').default,
+      },
+      { initialUrl: '/(teacher)/application/status' },
+    );
+    expect(await screen.findByText(ar('teacher.application.rejected.heading'))).toBeTruthy();
+    leaveDraftsBehind();
+    const [open] = await screen.findAllByRole('button', {
+      name: new RegExp(ar('common.action.signOut')),
+    });
+    await fireEvent.press(open!);
+    const [confirm] = screen
+      .getAllByRole('button', { name: ar('account.signOutSheet.confirm') })
+      .filter((button) => button !== open);
+    await fireEvent.press(confirm!);
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    expectNothingLeft();
+  });
+
+  it('an applicant deletes the account', async () => {
+    const Deletion = () => {
+      const deletion = useAccountDeletion();
+      return (
+        <Button
+          label="delete"
+          onPress={() =>
+            void deletion.deleteAccount('DELETE', { kind: 'password', password: 'secret' })
+          }
+        />
+      );
+    };
+    mockApi.account.me.query.mockResolvedValue(applicant);
+    setSession({
+      kind: 'signed-in',
+      landing: 'teacher_application',
+      applicationStatus: 'rejected',
+    });
+    await renderRouter(
+      { ...routes, '(teacher)/account/delete': Deletion },
+      { initialUrl: '/(teacher)/account/delete' },
+    );
+    leaveDraftsBehind();
+    await fireEvent.press(await screen.findByRole('button', { name: 'delete' }));
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    expect(mockApi.account.delete.mutate).toHaveBeenCalledTimes(1);
+    expectNothingLeft();
   });
 });
