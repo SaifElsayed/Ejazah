@@ -6,7 +6,8 @@
 // `requestInfo` and `applications.ban` (the account's row first, then the application's), and the
 // identity document's `accept` and `requestAnother` (the account's row). Wherever one transaction
 // takes both, the account's row comes first (the owner's decision of 2026-11-01). T161 adds the
-// resubmission and a credential's document request, both on the application's row.
+// resubmission and a credential's document request, both on the application's row; T142 a
+// credential's approval, on the same row, against a revocation.
 //
 // HOW A RACE IS STAGED, as `booking-concurrency.spec.ts` stages it. Transaction A runs its move and
 // stays open; transaction B starts its move and is seen waiting on a lock by a watcher reading
@@ -470,5 +471,33 @@ describe("a resubmission and a credential's document request (T161)", () => {
     );
     expect(ended).toMatchObject({ thrown: { code: 'APPLICATION_INCOMPLETE' } });
     expect(await applicationStatusOf(userId)).toBe('needs_document');
+  });
+});
+
+async function subjectsOf(userId: string): Promise<number> {
+  const { rows } = await db.query<{ count: string }>(
+    'SELECT count(*)::text AS count FROM teacher_subjects WHERE teacher_user_id = $1',
+    [userId],
+  );
+  return Number(rows[0]?.count ?? '0');
+}
+
+describe("a credential's approval and a revocation (T142)", () => {
+  it('an approval waits for a revocation, then grants no subject to the teacher no longer approved', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'approved' });
+    const adminId = await makeAdmin(db);
+    const { credentialId } = await applicationCredential(userId);
+    const ended = await race(
+      (tx) => standing.revokeApproval(tx, adminId, userId, 'وثائق لا تطابق'),
+      (tx) =>
+        credentials.approve(tx, adminId, {
+          credentialId,
+          holderName: 'عمر بن فاروق',
+          riwaya: 'حفص عن عاصم',
+          chain: [{ names: ['رسول الله ﷺ'] }, { names: ['جبريل'] }],
+        }),
+    );
+    expect(ended).toMatchObject({ value: { after: { holderName: 'عمر بن فاروق' } } });
+    expect(await subjectsOf(userId)).toBe(0);
   });
 });

@@ -222,6 +222,11 @@ export class CredentialReviewService {
   /** `credentials.approve`: the transcription written; what was written, for the audit entry. */
   async approve(tx: Transaction, adminId: string, input: ApproveInput): Promise<ApprovalMove> {
     const record = await this.#readOrRefuse(tx, input.credentialId);
+    // The teacher's application row locked before the credential moves (T142): a revocation, which
+    // writes that row, commits first or waits, so whether the teacher is approved is read as it is
+    // when the subject is granted. Taken before the credential's own write, as a rejection of the
+    // application takes it before closing its credentials, so the two never wait on each other.
+    await this.#store.lockApplication(tx, record.teacher.userId);
     if (record.status !== 'pending') throw conflict(record.status);
     if (await this.#store.hasApproved(tx, record.teacher.userId, record.subject.id)) {
       throw conflict('subject_approved');
