@@ -137,6 +137,18 @@ describe('auth.email', () => {
     expect(codeMailedTo(identity.mails(), address)).toMatch(/^\d{6}$/);
   });
 
+  it('requestSignUpCode hands the password to the service: a breached one is PASSWORD_WEAK, no code (T137)', async () => {
+    const address = uniqueEmail();
+    await expect(
+      surface.anonymous().auth.email.requestSignUpCode({ email: address, password: 'password123' }),
+    ).rejects.toMatchObject({ cause: { code: 'PASSWORD_WEAK' } });
+    expect(surface.counts()).toEqual([
+      ['rate_limit_one_time_code_budget', '*'],
+      ['rate_limit_one_time_code', address],
+    ]);
+    expect(identity.mails()).toEqual([]);
+  });
+
   it('verifySignUpCode counts the address alone and answers the onboarding token', async () => {
     const address = uniqueEmail();
     await identity.emailAuth.requestSignUpCode(address);

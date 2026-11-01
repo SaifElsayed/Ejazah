@@ -84,6 +84,35 @@ describe('the sign-up code', () => {
     expect(text.indexOf('رمز التحقق')).toBeLessThan(text.indexOf('verification code'));
     expect(text).toContain('10');
   });
+
+  // T137 (the owner's decision of 2026-11-01): the password travels with the request, so a breached
+  // one is told at the step that holds its field, for a new address and one in use alike.
+  it('refuses a breached password with PASSWORD_WEAK before any code, for every address', async () => {
+    const fresh = uniqueEmail();
+    const taken = (await emailAccount()).email;
+    for (const address of [fresh, taken]) {
+      await expect(
+        identity.emailAuth.requestSignUpCode(address, 'password123'),
+      ).rejects.toMatchObject({ code: 'PASSWORD_WEAK' });
+      expect(await rowsOf(database).codes(address)).toEqual([]);
+    }
+    // The one code hash is the decoy the code store makes when it is built; none is made for a send.
+    expect(hashers.codeHasher.hash).toHaveBeenCalledTimes(1);
+    expect(identity.mails()).toEqual([]);
+  });
+
+  it('sends the code for a sound password, which it keeps nowhere', async () => {
+    const address = uniqueEmail();
+    await expect(
+      identity.emailAuth.requestSignUpCode(address, 'a new long passphrase'),
+    ).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(identity.mails()).toHaveLength(1));
+    expect(codeMailedTo(identity.mails(), address)).toMatch(/^\d{6}$/);
+    expect(JSON.stringify(await rowsOf(database).codes(address))).not.toContain(
+      'a new long passphrase',
+    );
+    expect(hashers.passwords.hash).not.toHaveBeenCalledWith('a new long passphrase');
+  });
 });
 
 describe('verifySignUpCode', () => {

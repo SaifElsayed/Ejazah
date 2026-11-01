@@ -88,6 +88,23 @@ describe('the auth inputs', () => {
   it('refuse an address that is not one', () => {
     expect(auth.requestSignUpCodeInput.safeParse({ email: 'not-an-address' }).success).toBe(false);
   });
+
+  // T137: the sign-up code request may carry the password, so a breached one is told at the first
+  // step; its bounds are onboarding's, the one pair.
+  it('take the sign-up password optionally, by the one pair of bounds', () => {
+    const at = (password?: string) =>
+      auth.requestSignUpCodeInput.safeParse(
+        password === undefined ? { email: EMAIL } : { email: EMAIL, password },
+      );
+    expect(at().success).toBe(true);
+    expect(at('a'.repeat(PASSWORD_MIN_LENGTH)).success).toBe(true);
+    expect(at('a'.repeat(PASSWORD_MIN_LENGTH)).data).toEqual({
+      email: EMAIL,
+      password: 'a'.repeat(PASSWORD_MIN_LENGTH),
+    });
+    expect(at('a'.repeat(PASSWORD_MIN_LENGTH - 1)).success).toBe(false);
+    expect(at('a'.repeat(PASSWORD_MAX_LENGTH + 1)).success).toBe(false);
+  });
 });
 
 describe('the auth outputs', () => {
@@ -120,8 +137,7 @@ describe('the auth outputs', () => {
 
   it('answer the nonce with its expiry as an instant', () => {
     expect(
-      auth.providerNonceOutput.safeParse({ nonce: 'n', expiresAt: '2026-10-20T08:10:00Z' })
-        .success,
+      auth.providerNonceOutput.safeParse({ nonce: 'n', expiresAt: '2026-10-20T08:10:00Z' }).success,
     ).toBe(true);
     expect(auth.providerNonceOutput.safeParse({ nonce: 'n', expiresAt: 'soon' }).success).toBe(
       false,

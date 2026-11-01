@@ -69,7 +69,14 @@ export const signInWithProviderOutput = z.discriminatedUnion('outcome', [
   }),
 ]);
 
-export const requestSignUpCodeInput = z.object({ email: emailAddress });
+/**
+ * The password the person chose may come with the request (T137), so a breached one is told at the
+ * step that holds its field; the bounds are onboarding's, and the breached check is the service's.
+ */
+export const requestSignUpCodeInput = z.object({
+  email: emailAddress,
+  password: password.optional(),
+});
 
 export const verifySignUpCodeInput = z.object({ email: emailAddress, code: oneTimeCode });
 

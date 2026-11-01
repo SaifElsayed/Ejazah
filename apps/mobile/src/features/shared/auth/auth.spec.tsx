@@ -11,7 +11,7 @@
 // T106: Welcome paints the theme's background itself, in both schemes, since the navigation stack
 // beneath it draws React Navigation's light default.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
 import {
@@ -26,18 +26,20 @@ import { getSession, setSession } from '../../../lib/session';
 import { clearDraft, getDraft } from '../onboarding/draft';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
 import { EmailSignIn, EmailSignUp, ForgotPassword, Otp, ResetPassword, Welcome } from './index';
-import { getPendingEmail, setPendingEmail } from './pending';
+import { clearPendingEmail, getPendingEmail, setPendingEmail } from './pending';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 
 const mockNavigate = jest.fn();
+let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   router: {
     push: (route: unknown) => mockNavigate(route),
     replace: (route: unknown) => mockNavigate(route),
     back: () => mockNavigate('back'),
   },
+  useLocalSearchParams: () => mockParams,
 }));
 
 const mockIdentity = jest.fn<(provider: string, nonce: string) => Promise<unknown>>();
@@ -57,6 +59,7 @@ const ar = (key: MessageKey, values?: Record<string, string>) => translate('ar',
 beforeEach(() => {
   mockApi = fakeApi();
   mockNavigate.mockReset();
+  mockParams = {};
   mockIdentity.mockReset();
   mockDevEnabled = false;
   setSession({ kind: 'signed-out' });
@@ -320,7 +323,51 @@ describe('EmailSignUp', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(auth)/otp'));
     expect(mockApi.api.auth.email.requestSignUpCode.mutate).toHaveBeenCalledWith({
       email: 'Amal@Example.com',
+      password: 'a long secret',
     });
+  });
+
+  /** The password field's own column: the nearest view holding its input and not the confirmation's. */
+  const passwordField = (
+    inside: ReturnType<typeof screen.getByText>,
+    direction: 'rtl' | 'ltr' = 'rtl',
+  ) => {
+    for (let at = inside.parent; at !== null; at = at.parent) {
+      if (within(at).queryByLabelText(said(direction, 'auth.field.password')) !== null) {
+        expect(
+          within(at).queryByLabelText(said(direction, 'auth.field.confirmPassword')),
+        ).toBeNull();
+        return at;
+      }
+    }
+    throw new Error('no field holds the text');
+  };
+
+  // T137 (the owner's decision of 2026-11-01): a breached password is told at the step that holds
+  // its field, under the field, and no code goes out.
+  it('says a breached password under its own field, the code screen not opened', async () => {
+    mockApi.api.auth.email.requestSignUpCode.mutate.mockRejectedValue(apiError('PASSWORD_WEAK'));
+    clearPendingEmail();
+    await renderIn('rtl', <EmailSignUp />);
+    await fill('amal@example.com', 'password123', 'password123');
+    const told = await screen.findByText(ar('auth.password.weak'));
+    expect(passwordField(told)).toBeTruthy();
+    expect(screen.queryByText(ar('auth.password.minLength'))).toBeNull();
+    expect(screen.queryByText(ar('common.state.actionError'))).toBeNull();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(getPendingEmail()).toBeNull();
+  });
+
+  it('says a breached password under its field when the last step leads back here', async () => {
+    mockParams = { problem: 'password_weak' };
+    await inBothDirections(
+      () => <EmailSignUp />,
+      (_rendered, direction) => {
+        expect(
+          passwordField(screen.getByText(said(direction, 'auth.password.weak')), direction),
+        ).toBeTruthy();
+      },
+    );
   });
 });
 

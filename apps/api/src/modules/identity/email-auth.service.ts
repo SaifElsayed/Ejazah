@@ -1,9 +1,11 @@
 // T047: the email account (FR-120, FR-128, FR-129, research R-104, R-105).
 //
 // SIGN-UP. A code goes to every well-formed address, the same answer whether the address is in use
-// or not; only once the code verifies is an address in use told, with its account's method
-// (FR-123), so the conflict reaches only someone who controls the mailbox and nothing is
-// enumerated. A verified code yields an onboarding token for the address. An address a banned
+// or not. A password sent with the request is checked against the breached list first (T137): a
+// weak one answers PASSWORD_WEAK and sends no code, for every address alike, and is kept nowhere;
+// `onboarding.complete` checks it again. Only once the code verifies is an address in use told,
+// with its account's method (FR-123), so the conflict reaches only someone who controls the mailbox
+// and nothing is enumerated. A verified code yields an onboarding token for the address. An address a banned
 // person's deleted account left (T097, FR-155) is refused after the code, ACCOUNT_RESTRICTED with no
 // detail and no token; the code request answers it as any other (R-104).
 //
@@ -69,7 +71,8 @@ export class EmailAuthService {
   }
 
   /** Sends a sign-up code to any well-formed address; the same answer for every one. */
-  async requestSignUpCode(email: string): Promise<void> {
+  async requestSignUpCode(email: string, password?: string): Promise<void> {
+    if (password !== undefined && isBreached(password)) throw new DomainError('PASSWORD_WEAK');
     await this.#dependencies.codes.send(normalizeEmail(email), 'signup');
   }
 

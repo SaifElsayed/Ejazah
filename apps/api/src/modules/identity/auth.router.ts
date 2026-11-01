@@ -54,7 +54,7 @@ const email = createAppRouter({
     output: z.void(),
     rateLimit: { key: oneTimeCode, budget: oneTimeCodeBudget, subjectOf: byAddress },
   }).mutation(async ({ ctx, input }) => {
-    await ctx.services.identity.emailAuth.requestSignUpCode(input.email);
+    await ctx.services.identity.emailAuth.requestSignUpCode(input.email, input.password);
   }),
 
   verifySignUpCode: publicProcedure({
