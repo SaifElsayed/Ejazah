@@ -72,7 +72,7 @@ not a setting, a contract bound or a conversion (R-MONEY-12); money only in `pay
 person, with overflow stated and sent to the descope ladder.
 
 **Scale/Scope**: 38 SRS ids plus the ADR-carried ones; FR-301 to FR-414 and SC-301 to SC-314; 2 migrations, 1 new
-table, 4 new columns, 5 settings rows; 23 user-surface procedures and 2 administrator-surface procedures
+table, 3 new columns, 5 settings rows; 23 user-surface procedures and 2 administrator-surface procedures
 ([contracts/](./contracts/)); 4 jobs; the stand-in's hosted page; about 45 drawn screens and states (screens.md §4 to
 §6, §13, §14 and `/payments`).
 
@@ -108,7 +108,7 @@ specs/003-booking/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification, clarified 2026-10-31
 ├── research.md          # Phase 0 output — 22 decisions (R-201 to R-222)
-├── data-model.md        # Phase 1 output — 1 table, 5 columns, the fold, rules 36–39, 5 settings rows, 2 migrations
+├── data-model.md        # Phase 1 output — 1 table, 3 columns, the fold, rules 36–39, 5 settings rows, 2 migrations
 ├── quickstart.md        # Phase 1 output — validation guide, the device run marked as the owner's
 ├── contracts/
 │   ├── README.md

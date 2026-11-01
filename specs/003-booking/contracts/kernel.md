@@ -27,7 +27,7 @@ side gains `payments` in `AdminSurfaceServices`. `main.ts` binds:
 | Job | Schedule | Payload | Double-run spec |
 |---|---|---|---|
 | `confirm-enrollment` | queued by the webhook | `{ paymentId }` | twice = once: one confirmation, one set of sessions, one event row |
-| `expire-pending-payments` | every minute | `{}` | twice = once; an enrollment with a `paid` order is never cancelled, it is handed to `confirm-enrollment` (M2) |
+| `expire-pending-payments` | every minute | `{}` | twice = once; an enrollment with a `paid` order is never cancelled; every `paid` order older than `checkout_confirmation_timeout_seconds` whose enrollment is not `confirmed` and has no compensation case is handed to `confirm-enrollment`, whatever the enrollment's status (M2, round 2 N1) |
 | `expire-holds` | every minute | `{}` | twice = once |
 | `reresolve-session-instants` (`tzdata-reresolve`) | at worker start and daily | `{}` | twice = once under the same tz version |
 

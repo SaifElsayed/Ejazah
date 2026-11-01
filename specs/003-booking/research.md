@@ -174,7 +174,7 @@ checkout procedures (`checkout.hold`, `checkout.pay`, `checkout.retry`, `checkou
 place a hold, and Pay must call `createCheckout` outside any transaction (ARCHITECTURE §8.1). Every write to
 `slot_holds` and `enrollments` is a function of `booking/index.ts` taking the caller's `tx`:
 `placeHold`, `releaseHoldsBeforePlacing`, `createEnrollmentOnHold`, `holdStillActive` (the conditional update),
-`confirmEnrollment`, `releaseAndCancel`, `cancelPending`. ARCHITECTURE §8.1 is followed step by step.
+`confirmEnrollment`, `releaseAndCancel`, `cancelPending`, and `recordOrderFailed` for the order events of R-214. ARCHITECTURE §8.1 is followed step by step.
 
 **Rationale.** The README of `payments` already gives it "student: start checkout"; putting the port calls and the
 hold writes in one module would make one of them read the other's tables.
@@ -270,8 +270,10 @@ is unchanged.
   database refusal (unique violation on `slot_holds`, exclusion violation on `sessions`) it rolls back and runs the
   refusal transaction (release, `slot_unavailable`, `moderation.openCompensationCase`, a `cancelled` outcome).
 - `expire-pending-payments` (every minute): ARCHITECTURE §8.1's enrollment-keyed release, never for an enrollment with a
-  `paid` order: the job asks `payments`' entry for those and enqueues `confirm-enrollment` for each, so a lost enqueue
-  never cancels a paid enrollment (PR #109's review, M2).
+  `paid` order. It also recovers a lost enqueue by the order, not by the enrollment's status: every `paid` order older than `checkout_confirmation_timeout_seconds` whose enrollment is not `confirmed` and has no compensation case is handed to `confirm-enrollment` (job id `paymentId`, through `payments`' entry), whatever the enrollment's status. A new
+  checkout (FR-BOOK-12) or another student's hold (FR-351) may have cancelled that enrollment meanwhile; the job then
+  confirms it by the late branch or opens one compensation case by the refusal branch, so a paid enrollment never stays
+  cancelled without one (PR #109's review, M2 and round 2 N1).
 - `expire-holds` (every minute): releases expired holds with no enrollment.
 
 Their cadence is a cron in the job declaration, as Phase 1's sweeps; every window they read is a setting (R-MONEY-12).
