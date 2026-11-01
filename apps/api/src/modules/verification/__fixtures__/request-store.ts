@@ -34,6 +34,8 @@ export class MemoryRequestStore implements IdentityRequestStore {
   readonly accounts = new Map<string, AccountStatus>();
   readonly #requests: Held[] = [];
   readonly #documents = new Map<string, string>();
+  /** Each lock and each read of the account and its open request, in order (T126). */
+  readonly journal: string[] = [];
 
   /** A live person; the id. */
   person(accountStatus: AccountStatus = 'active'): string {
@@ -63,11 +65,17 @@ export class MemoryRequestStore implements IdentityRequestStore {
     return work(TX);
   }
 
+  async lockAccount(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock:${userId}`);
+  }
+
   async accountStatusOf(_tx: Transaction, userId: string): Promise<AccountStatus | null> {
+    this.journal.push(`account:${userId}`);
     return this.accounts.get(userId) ?? null;
   }
 
   async openRequestOf(_tx: Transaction, userId: string): Promise<IdentityRequestRecord | null> {
+    this.journal.push(`request:${userId}`);
     const held = this.#requests.find(
       (request) => request.userId === userId && request.status === 'open',
     );

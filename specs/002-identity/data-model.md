@@ -250,7 +250,10 @@ follows.
 | `provider_nonce_ttl_minutes`              | 10                                   | FR-121 (`auth.providerNonce`)                                                                                                                                   |
 | `document_link_ttl_seconds`               | 300                                  | FR-151 (every signed document link)                                                                                                                             |
 | `rate_limit_token_refresh`                | `{ limit: 30, window_seconds: 60 }`  | FR-135 (`auth.refresh`, by the token's hash)                                                                                                                    |
-| `rate_limit_provider_nonce`               | `{ limit: 20, window_seconds: 60 }`  | FR-121 (`auth.providerNonce`, by the client address; the authentication budget caps the path)                                                                   |
+| `rate_limit_provider_nonce`               | `{ limit: 20, window_seconds: 60 }`  | FR-121 (`auth.providerNonce`, by the client address; its own budget caps the path, T133)                                                                   |
+| `rate_limit_provider_nonce_budget` | `{ limit: 1000, window_seconds: 900 }` | T133: `auth.providerNonce`'s budget, its own, at the authentication budget's value |
+| `rate_limit_admin_authentication` | `{ limit: 10, window_seconds: 900 }` | T133: the admin surface's six anonymous procedures, a subject key of their own, at `rate_limit_authentication`'s value |
+| `rate_limit_admin_authentication_budget` | `{ limit: 1000, window_seconds: 900 }` | T133: the admin sign-in's budget, its own, at the authentication budget's value |
 | `document_unreferenced_purge_after_hours` | 72                                   | `purge-unreferenced-documents` (T093): an upload no submission points at is deleted after it                                                                    |
 | `document_unreferenced_max_per_user`      | 30                                   | `POST /uploads/documents` (T093): the unreferenced documents a person may hold; an application needs eleven at most (ten credentials and the identity document) |
 

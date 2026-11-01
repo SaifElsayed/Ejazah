@@ -40,6 +40,8 @@ export class MemoryReviewStore implements ApplicationReviewStore {
   readonly granted: { userId: string; subjectIds: readonly string[] }[] = [];
   /** Each credential's review as a closure wrote it (T122): the reason, the reviewer, the moment. */
   readonly reviews = new Map<string, Omit<CredentialClosure, 'credentialIds'>>();
+  /** Each lock and each read of an applicant, in order: `lock:<id>`, `read:<id>` (T126). */
+  readonly journal: string[] = [];
 
   /** An application in `status`, sent with a credential per subject in `credentials`; its user id. */
   plant(
@@ -144,7 +146,12 @@ export class MemoryReviewStore implements ApplicationReviewStore {
     return this.#matching(filter).length;
   }
 
+  async lockApplication(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock:${userId}`);
+  }
+
   async read(_tx: Transaction, userId: string): Promise<ApplicantDetail | null> {
+    this.journal.push(`read:${userId}`);
     return this.#applicants.get(userId) ?? null;
   }
 

@@ -43,6 +43,8 @@ export interface ClosedRequestRecord {
 /** What the requests read and write, each on the transaction it is handed (`stores.ts`). */
 export interface IdentityRequestStore {
   run<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+  /** Locks the account's row until the transaction ends, identity's (T126). */
+  lockAccount(tx: Transaction, userId: string): Promise<void>;
   /** The live person's account status, identity's; null for none. */
   accountStatusOf(tx: Transaction, userId: string): Promise<AccountStatus | null>;
   openRequestOf(tx: Transaction, userId: string): Promise<IdentityRequestRecord | null>;
@@ -116,6 +118,9 @@ export class VerificationRequestService {
     adminId: string,
     input: { readonly userId: string; readonly reason: string },
   ): Promise<{ readonly requestId: string }> {
+    // The account's lock first (T126): a reinstatement or a suspension meanwhile commits before this
+    // reads the account, and one that starts after waits until the request is written.
+    await this.#store.lockAccount(tx, input.userId);
     const status = await this.#store.accountStatusOf(tx, input.userId);
     if (status === null) throw new DomainError('NOT_FOUND');
     if ((await this.#store.openRequestOf(tx, input.userId)) !== null) {

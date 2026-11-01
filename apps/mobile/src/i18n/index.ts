@@ -24,6 +24,9 @@
 //   interpolates, a `#` included, is wrapped in a first-strong isolate (U+2068 … U+2069), which the
 //   paragraph's direction skips; a select or plural chooses on the bare value. An Arabic string
 //   that opens with a Latin run («PDF فقط.») starts with a right-to-left mark in `ar.json`.
+// - T123 (2026-10-29, the owner's decision): with no strong letter outside the isolates Android
+//   falls back to left to right, so «{date} · {time}» read in reverse. `translate` starts such an
+//   Arabic rendering with a right-to-left mark; English gains none.
 import { IntlMessageFormat } from 'intl-messageformat';
 import { useCallback, useSyncExternalStore } from 'react';
 import { I18nManager } from 'react-native';
@@ -106,7 +109,7 @@ export function translate(locale: Locale, key: MessageKey, values?: MessageValue
   const text = format.format(values);
   // The catalogue holds no rich-text tag, so a template always formats to a string.
   if (typeof text !== 'string') throw new TypeError(`i18n: "${key}" did not format to text`);
-  return text;
+  return locale === 'ar' && onlyValues(text) ? `${RIGHT_TO_LEFT_MARK}${text}` : text;
 }
 
 type Element = ReturnType<IntlMessageFormat['getAst']>[number];
@@ -125,6 +128,20 @@ const VALUES: ReadonlySet<number> = new Set([
 ]);
 const FIRST_STRONG_ISOLATE = '\u2068';
 const POP_DIRECTIONAL_ISOLATE = '\u2069';
+
+const RIGHT_TO_LEFT_MARK = '\u200F';
+const ISOLATED_RUNS = /\u2068[^\u2069]*\u2069/g;
+const STRONG = /[\p{L}\u200F]/u;
+
+/**
+ * Whether `text` holds a value and no strong letter outside the isolates: Android would lay that
+ * paragraph out left to right (T123). A string with no value, a separator such as «، », is joined
+ * into another paragraph and is never one of its own.
+ */
+function onlyValues(text: string): boolean {
+  const outside = text.replace(ISOLATED_RUNS, '');
+  return outside !== text && !STRONG.test(outside);
+}
 
 /** `value` between the isolates `translate` puts around every interpolated value (T109). */
 export function isolate(value: string): string {

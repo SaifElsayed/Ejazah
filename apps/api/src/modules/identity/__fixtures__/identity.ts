@@ -12,6 +12,7 @@ import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 import { z } from 'zod';
 
+import { columnKeyId, createColumnCipher } from '../../../platform/crypto/encryption.js';
 import { openDatabase, type Database } from '../../../platform/db/prisma.repository.js';
 import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
 import type { StoragePort } from '../../../platform/ports/storage/storage.port.js';
@@ -61,6 +62,19 @@ export function settingsOf(values: Readonly<Record<string, unknown>>): SettingsR
 
 /** A key of the configuration's shape: 32 random bytes, base64. */
 export const SPEC_ENCRYPTION_KEY = randomBytes(32).toString('base64');
+
+/**
+ * The key a rotation moves to, SPEC_ENCRYPTION_KEY then being the previous one (T134): drawn until
+ * its key id differs, as the cipher refuses two keys sharing one.
+ */
+export const ROTATED_ENCRYPTION_KEY = keyBeside(SPEC_ENCRYPTION_KEY);
+
+function keyBeside(previous: string): string {
+  for (;;) {
+    const key = randomBytes(32).toString('base64');
+    if (columnKeyId(key) !== columnKeyId(previous)) return key;
+  }
+}
 
 function databaseUrl(): string {
   const fromDotenv: Record<string, string> = {};
@@ -212,6 +226,11 @@ export function buildIdentity(
     readonly codeHasher: CodeHasher;
     /** The mail port; the recording stand-in unless a spec needs one that hangs or fails. */
     readonly email: EmailPort;
+    /**
+     * After a rotation (T134): ENCRYPTION_KEY is ROTATED_ENCRYPTION_KEY and SPEC_ENCRYPTION_KEY the
+     * previous one, so a value a spec encrypts under the spec key is one written before it.
+     */
+    readonly rotated: boolean;
   }> = {},
 ) {
   const clock = new SpecClock();
@@ -222,7 +241,12 @@ export function buildIdentity(
   const signInPort = new SpecSignInPort();
   const warnings: unknown[] = [];
   const log = { warn: (entry: unknown) => void warnings.push(entry) };
-  const base = { database, settings, encryptionKey: SPEC_ENCRYPTION_KEY, now: clock.now };
+  const encryptionKey = overrides.rotated === true ? ROTATED_ENCRYPTION_KEY : SPEC_ENCRYPTION_KEY;
+  const cipher = createColumnCipher({
+    ENCRYPTION_KEY: encryptionKey,
+    ...(overrides.rotated === true ? { ENCRYPTION_KEY_PREVIOUS: SPEC_ENCRYPTION_KEY } : {}),
+  });
+  const base = { database, settings, encryptionKey, now: clock.now };
   const sessions = new SessionService(base);
   const codes = new OneTimeCodes({
     ...base,
@@ -230,7 +254,7 @@ export function buildIdentity(
     log,
     ...(overrides.codeHasher === undefined ? {} : { hasher: overrides.codeHasher }),
   });
-  const onboarding = new OnboardingService({ ...base, marks, sessions, codes });
+  const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });
   const signIn = new SignInService({ ...base, marks, signIn: signInPort, onboarding, sessions });
   const emailAuth = new EmailAuthService({
     ...base,
@@ -245,6 +269,8 @@ export function buildIdentity(
     account,
     clock,
     settings,
+    encryptionKey,
+    cipher,
     marks,
     email: recorder,
     signInPort,

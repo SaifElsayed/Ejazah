@@ -34,7 +34,7 @@
 //   `erase-deleted-files`, and no log line names the address, a key or a token (R-SEC-2).
 import type { DeleteAccountInput } from '@ijazah/contracts';
 
-import { ColumnCipher } from '../../platform/crypto/encryption.js';
+import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import { hashPassword, verifyPassword } from '../../platform/crypto/hashing.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
@@ -75,6 +75,8 @@ export interface FileErasure {
 
 /** What the deletion is built over, beside the module's own dependencies. */
 export interface DeletionDependencies extends IdentityDependencies {
+  /** The process's column cipher: Apple's grant read under the previous key too while a rotation runs (T134). */
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
   readonly consequences: AccountConsequences;
   /** The provider nonce's single-use mark (`auth.providerNonce`). */
   readonly marks: Pick<SingleUseMarks, 'take'>;
@@ -107,7 +109,7 @@ export class DeletionService {
   readonly #photos: DeletedPhotosRepository;
   readonly #banned: BannedIdentifiers;
   readonly #transactions;
-  readonly #cipher: ColumnCipher;
+  readonly #cipher: Pick<ColumnCipher, 'decrypt'>;
   readonly #passwords: PasswordHashing;
   readonly #report: (error: unknown) => void;
   readonly #defer: (work: Promise<void>) => void;
@@ -122,7 +124,7 @@ export class DeletionService {
     this.#photos = new DeletedPhotosRepository(dependencies.database);
     this.#banned = new BannedIdentifiers(dependencies);
     this.#transactions = transactionsOver(dependencies.database);
-    this.#cipher = new ColumnCipher(dependencies.encryptionKey);
+    this.#cipher = dependencies.cipher;
     this.#passwords = dependencies.passwords ?? { hash: hashPassword, verify: verifyPassword };
     this.#report = dependencies.report ?? reportError;
     this.#defer = dependencies.defer ?? ((work) => void work);

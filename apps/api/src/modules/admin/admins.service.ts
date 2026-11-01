@@ -18,7 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { addMinutes } from '@ijazah/time';
 import { z } from 'zod';
 
-import { ColumnCipher } from '../../platform/crypto/encryption.js';
+import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import { OtpHasher } from '../../platform/crypto/hashing.js';
 import { generateTotpSecret, verifyTotp } from '../../platform/crypto/totp.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -51,6 +51,8 @@ export interface AdminsDependencies {
   readonly database: Database;
   readonly settings: SettingsReader;
   readonly encryptionKey: string;
+  /** The process's column cipher, reading under the previous key too while a rotation runs (T134). */
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly sessions: Pick<AdminSessionService, 'revokeAll'>;
   readonly inviteQueue: AdminInviteQueue;
   readonly now?: () => Date;
@@ -64,7 +66,7 @@ export class AdminsService {
   readonly #settings: SettingsReader;
   readonly #sessions: AdminsDependencies['sessions'];
   readonly #inviteQueue: AdminInviteQueue;
-  readonly #cipher: ColumnCipher;
+  readonly #cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly #recoveryHasher: OtpHasher;
   readonly #now: () => Date;
   readonly #database: Database;
@@ -76,7 +78,7 @@ export class AdminsService {
     this.#settings = dependencies.settings;
     this.#sessions = dependencies.sessions;
     this.#inviteQueue = dependencies.inviteQueue;
-    this.#cipher = new ColumnCipher(dependencies.encryptionKey);
+    this.#cipher = dependencies.cipher;
     this.#recoveryHasher = new OtpHasher(dependencies.encryptionKey);
     this.#now = dependencies.now ?? (() => new Date());
   }

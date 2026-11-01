@@ -30,7 +30,7 @@ import { addHours, addMinutes } from '@ijazah/time';
 import { z } from 'zod';
 
 import { isBreached } from '../../platform/crypto/breached-passwords/index.js';
-import { ColumnCipher } from '../../platform/crypto/encryption.js';
+import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import {
   hashPassword,
   OtpHasher,
@@ -73,6 +73,8 @@ export interface AdminAuthDependencies {
   readonly database: Database;
   readonly settings: SettingsReader;
   readonly encryptionKey: string;
+  /** The process's column cipher, reading under the previous key too while a rotation runs (T134). */
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly sessions: Pick<AdminSessionService, 'issue' | 'pending' | 'markVerified'>;
   readonly now?: () => Date;
   readonly passwords?: PasswordHashing;
@@ -104,7 +106,7 @@ export class AdminAuthService {
   readonly #recoveryCodes: AdminRecoveryCodesRepository;
   readonly #settings: SettingsReader;
   readonly #sessions: AdminAuthDependencies['sessions'];
-  readonly #cipher: ColumnCipher;
+  readonly #cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly #recoveryHasher: OtpHasher;
   readonly #invites: InviteTokens;
   readonly #passwords: PasswordHashing;
@@ -119,7 +121,7 @@ export class AdminAuthService {
     this.#recoveryCodes = new AdminRecoveryCodesRepository(dependencies.database);
     this.#settings = dependencies.settings;
     this.#sessions = dependencies.sessions;
-    this.#cipher = new ColumnCipher(dependencies.encryptionKey);
+    this.#cipher = dependencies.cipher;
     this.#recoveryHasher = new OtpHasher(dependencies.encryptionKey);
     this.#invites = new InviteTokens(dependencies.encryptionKey);
     this.#passwords = dependencies.passwords ?? { hash: hashPassword, verify: verifyPassword };

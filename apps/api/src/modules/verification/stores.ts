@@ -22,6 +22,8 @@ import {
   type ApplicationChange,
   type ApplicationRecord,
   decideApplication,
+  lockAccount,
+  lockApplication,
   readApplicant,
   readApplication,
   readStanding,
@@ -101,6 +103,7 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
   return {
     page: applicantsPage,
     count: applicantsCount,
+    lockApplication,
     read: readApplicant,
     credentialsOf: async (tx, userIds) =>
       (await credentialsOfTeachers(tx, userIds)).map((row) => ({
@@ -143,6 +146,7 @@ export function createIdentityRequestStore(database: Database): IdentityRequestS
   const { run } = transactionsOver(database);
   return {
     run,
+    lockAccount,
     accountStatusOf: async (tx, userId) => (await readStanding(tx, userId))?.accountStatus ?? null,
     openRequestOf,
     lastClosedRequestOf,

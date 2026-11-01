@@ -87,6 +87,8 @@ export interface ApplicationReviewStore {
     take: number,
   ): Promise<ApplicantRow[]>;
   count(tx: Transaction, filter: ApplicantsFilter): Promise<number>;
+  /** Locks the application's row until the transaction ends, identity's (T126). */
+  lockApplication(tx: Transaction, userId: string): Promise<void>;
   read(tx: Transaction, userId: string): Promise<ApplicantDetail | null>;
   credentialsOf(tx: Transaction, userIds: readonly string[]): Promise<CredentialOfApplicant[]>;
   documentUploadedAt(tx: Transaction, documentId: string): Promise<Date | null>;
@@ -221,6 +223,8 @@ export class ApplicationReviewService {
     }
     // ISO calendar dates order as strings do.
     if (input.completedOn > today) throw invalid('completedOn', 'future');
+    // The transaction's first statement (T126): the call read as `before` is the one this replaces.
+    await this.#store.lockApplication(tx, input.teacherUserId);
     const { callCompletedOn, callOutcome } = await this.#readOrRefuse(tx, input.teacherUserId);
     const before = {
       completedOn: callCompletedOn === null ? null : calendarDateOf(callCompletedOn),
@@ -285,6 +289,8 @@ export class ApplicationReviewService {
     adminId: string,
     input: z.output<typeof applicationsRejectInput>,
   ): Promise<DecisionMove> {
+    // Under the application's lock (T126), the status read as `before` is the one rejected.
+    await this.#store.lockApplication(tx, input.teacherUserId);
     const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
     const move: DecisionMove = {
       before: { status: applicant.status },

@@ -9,7 +9,12 @@ import { createHmac } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createColumnCipher, deriveSubkey } from '../../platform/crypto/encryption.js';
+import {
+  ColumnCipher,
+  columnKeyId,
+  createColumnCipher,
+  deriveSubkey,
+} from '../../platform/crypto/encryption.js';
 import { verifyPassword } from '../../platform/crypto/hashing.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import {
@@ -19,6 +24,7 @@ import {
   type Identity,
   openSpecDatabase,
   rowsNaming,
+  ROTATED_ENCRYPTION_KEY,
   rowsOf,
   specIdentityToken,
   SPEC_ENCRYPTION_KEY,
@@ -161,6 +167,44 @@ describe('complete', () => {
     ).toBe('fake-refresh.apple.code-1');
   });
 
+  it('reads a grant blob written under the previous key once ENCRYPTION_KEY is rotated (T134)', async () => {
+    identity = buildIdentity(database, { rotated: true });
+    const { onboardingToken } = await providerToken('apple', { authorizationCode: 'code-2' });
+    // The token's blob put under the previous key and the token signed again under the current
+    // one: a real token minted before the rotation fails its signature first.
+    const [, payload = ''] = onboardingToken.split('.');
+    const carried = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
+      jti: string;
+      identity: Record<string, unknown>;
+    };
+    const blob = new ColumnCipher(SPEC_ENCRYPTION_KEY).encrypt(
+      'fake-refresh.apple.code-2',
+      'auth_identities.provider_refresh_token_encrypted',
+      carried.jti,
+    );
+    const body = `v1.${Buffer.from(
+      JSON.stringify({
+        ...carried,
+        identity: { ...carried.identity, grant: blob.toString('base64url') },
+      }),
+    ).toString('base64url')}`;
+    const key = deriveSubkey(ROTATED_ENCRYPTION_KEY, 'ijazah:onboarding-token:v1');
+    const resigned = `${body}.${createHmac('sha256', key).update(body).digest('base64url')}`;
+
+    const answer = await identity.onboarding.complete({ ...answers, onboardingToken: resigned });
+    const userId = (await identity.sessions.resolveUserSession(answer.accessToken))?.userId ?? '';
+    const [row] = await rowsOf(database).identities(userId);
+    const stored = row?.providerRefreshTokenEncrypted ?? new Uint8Array();
+    expect(stored[0]).toBe(columnKeyId(ROTATED_ENCRYPTION_KEY));
+    expect(
+      identity.cipher.decrypt(
+        stored,
+        'auth_identities.provider_refresh_token_encrypted',
+        row?.id ?? '',
+      ),
+    ).toBe('fake-refresh.apple.code-2');
+  });
+
   it('hashes the password of an email identity, and requires one exactly there', async () => {
     const { onboardingToken, email } = await emailToken();
     await expect(
@@ -292,6 +336,7 @@ describe('nothing before the account', () => {
       database,
       settings: identity.settings,
       encryptionKey: SPEC_ENCRYPTION_KEY,
+      cipher: identity.cipher,
       now: identity.clock.now,
       marks: identity.marks,
       sessions: failingSessions,

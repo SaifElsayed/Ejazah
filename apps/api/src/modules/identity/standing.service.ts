@@ -8,7 +8,9 @@
 // reaching a revoked teacher and a rejected applicant too;
 // only a suspended teacher is reinstated (FR-165), to `verification_required` while an identity
 // request is open (T113), and no ban is lifted from the panel (FR-162).
-// Each action answers what it moved, the state before and after, for its audit entry (T116).
+// Each action answers what it moved, the state before and after, for its audit entry (T116);
+// suspend, ban and reinstate lock the account's row before they read it (T126), so the `before`
+// they answer is the state they moved and a concurrent move on the account waits for them.
 // Each of the three ends every session of the person (`user_sessions.revoked_reason`) and calls the
 // one consequences entry (`consequences.ts`), all on the administrator kind's transaction, so the
 // change, the revocations, the consequences and the audit entry commit together.
@@ -24,6 +26,7 @@ import type { AccountConsequences } from './consequences.js';
 import {
   type AccountStatus,
   banTeacherProfile,
+  lockAccount,
   moveAccountStatus,
   type ProfileBan,
   type ProfileDecision,
@@ -35,6 +38,8 @@ import { type SessionRevokedReason, UserSessionsRepository } from './user-sessio
 
 /** What the standing reads and writes, each on the call's transaction (`standing.repository.ts`). */
 export interface StandingStore {
+  /** Locks the account's row until the transaction ends (T126). */
+  lockAccount(tx: Transaction, userId: string): Promise<void>;
   read(tx: Transaction, userId: string): Promise<Standing | null>;
   moveAccount(
     tx: Transaction,
@@ -56,6 +61,7 @@ export interface StandingStore {
 export function standingStoreOver(database: Database): StandingStore {
   const sessions = new UserSessionsRepository(database);
   return {
+    lockAccount,
     read: readStanding,
     moveAccount: moveAccountStatus,
     revokeApproval: revokeTeacherApproval,
@@ -113,6 +119,7 @@ export class StandingService {
    * the suspension as it is.
    */
   async suspend(tx: Transaction, _adminId: string, teacherUserId: string): Promise<AccountMove> {
+    await this.#store.lockAccount(tx, teacherUserId);
     const standing = await this.#teacher(tx, teacherUserId);
     const suspendable: readonly AccountStatus[] = ['active', 'verification_required'];
     if (
@@ -163,6 +170,7 @@ export class StandingService {
     userId: string,
     applicant?: { readonly applicantNote: string },
   ): Promise<BanMove> {
+    await this.#store.lockAccount(tx, userId);
     const standing = await this.#teacher(tx, userId);
     const { applicationStatus, verificationStatus } = standing.teacher;
     const allowed =
@@ -201,6 +209,9 @@ export class StandingService {
    * an identity request is open (T113, owner's decision 2026-10-28); no consequence is undone here.
    */
   async reinstate(tx: Transaction, _adminId: string, teacherUserId: string): Promise<AccountMove> {
+    // Under the account's lock, an identity request opened meanwhile is committed before this reads
+    // it, so the account never lands `active` with a request open (T126).
+    await this.#store.lockAccount(tx, teacherUserId);
     const standing = await this.#teacher(tx, teacherUserId);
     if (standing.accountStatus !== 'suspended') throw conflict(standing);
     const to: AccountStatus = (await this.#hasOpenIdentityRequest(tx, teacherUserId))

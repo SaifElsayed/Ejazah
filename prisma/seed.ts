@@ -130,6 +130,11 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_provider_nonce', { limit: 20, window_seconds: 60 }],
   ['document_unreferenced_purge_after_hours', 72],
   ['document_unreferenced_max_per_user', 30],
+  // T133: the administrator's sign-in counts under a subject key and a budget of its own, and the
+  // provider nonce under a budget of its own, each at the value the shared key holds.
+  ['rate_limit_admin_authentication', { limit: 10, window_seconds: 900 }],
+  ['rate_limit_admin_authentication_budget', { limit: 1000, window_seconds: 900 }],
+  ['rate_limit_provider_nonce_budget', { limit: 1000, window_seconds: 900 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

@@ -334,6 +334,26 @@ describe("the decisions' status before and after (T116)", () => {
   });
 });
 
+describe("the application's lock (T126)", () => {
+  it("recordCall locks the application's row before it reads the call it answers as before", async () => {
+    const userId = store.plant();
+    await service.recordCall(TX, ADMIN, {
+      teacherUserId: userId,
+      completedOn: '2026-10-22',
+      timeZone: 'Africa/Cairo',
+      outcome: 'suitable',
+      notes: 'أجاب عن الأسئلة',
+    });
+    expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
+  });
+
+  it("reject locks the application's row before it reads the status it answers as before", async () => {
+    const userId = store.plant();
+    await service.reject(TX, ADMIN, { teacherUserId: userId, reasonChoice: 'other', note: 'x' });
+    expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
+  });
+});
+
 describe('reject, requestInfo and ban', () => {
   it('reject writes the note and the moment, from review or from waiting', async () => {
     const inReview = store.plant();

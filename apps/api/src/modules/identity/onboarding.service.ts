@@ -26,7 +26,7 @@ import { z } from 'zod';
 
 import { isBreached } from '../../platform/crypto/breached-passwords/index.js';
 import {
-  ColumnCipher,
+  type ColumnCipher,
   deriveSubkey,
   ONBOARDING_TOKEN_LABEL,
 } from '../../platform/crypto/encryption.js';
@@ -95,6 +95,8 @@ export interface CompleteInput {
 }
 
 export interface OnboardingDependencies extends IdentityDependencies {
+  /** The process's column cipher, reading under the previous key too while a rotation runs (T134). */
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly marks: SingleUseMarks;
   readonly sessions: Pick<SessionService, 'issue'>;
   readonly codes: Pick<OneTimeCodes, 'send' | 'verify'>;
@@ -111,7 +113,7 @@ export class OnboardingService {
   readonly #transactions;
   readonly #dependencies: OnboardingDependencies;
   readonly #key: Buffer;
-  readonly #cipher: ColumnCipher;
+  readonly #cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly #now: () => Date;
 
   constructor(dependencies: OnboardingDependencies) {
@@ -120,10 +122,10 @@ export class OnboardingService {
     this.#banned = new BannedIdentifiers(dependencies);
     this.#transactions = transactionsOver(dependencies.database);
     this.#key = deriveSubkey(dependencies.encryptionKey, ONBOARDING_TOKEN_LABEL);
-    // The current key only: the token's HMAC is under the current key too, so a token minted before
-    // a rotation fails its signature first, and costs the person one more sign-in (R-102; review of
-    // B9, finding 1).
-    this.#cipher = new ColumnCipher(dependencies.encryptionKey);
+    // The process's cipher, as every encrypted value is read (T134). The token's HMAC is under the
+    // current key alone, so a token minted before a rotation still fails its signature first, and
+    // costs the person one more sign-in (R-102; review of B9, finding 1).
+    this.#cipher = dependencies.cipher;
     this.#now = dependencies.now ?? (() => new Date());
   }
 

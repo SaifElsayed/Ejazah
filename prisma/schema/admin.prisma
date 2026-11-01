@@ -124,7 +124,8 @@ model AuditLog {
   occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  // RESTRICT on update too: a cascade would rewrite the row past the revoked UPDATE (T135).
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([adminId])
   @@map("audit_logs")

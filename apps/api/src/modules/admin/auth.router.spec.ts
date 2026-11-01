@@ -45,8 +45,8 @@ async function refusalOf(call: Promise<unknown>) {
 }
 
 describe('the namespace', () => {
-  it('declares the six sign-in procedures on the anonymous kind with the authentication limit, and signOut and me on the administrator kind', () => {
-    const limited = { surface: 'admin', rateLimit: 'rate_limit_authentication' };
+  it('declares the six sign-in procedures on the anonymous kind with the administrator’s own authentication limit (T133), and signOut and me on the administrator kind', () => {
+    const limited = { surface: 'admin', rateLimit: 'rate_limit_admin_authentication' };
     for (const path of [
       'auth.signIn',
       'auth.mfa.verify',
@@ -63,15 +63,15 @@ describe('the namespace', () => {
 });
 
 describe('auth.signIn', () => {
-  it('counts the authentication budget, then the address in lower case, and answers what comes next', async () => {
+  it('counts the administrator’s own authentication budget, then the address in lower case, and answers what comes next', async () => {
     const admin = await world.createAdministrator();
     const answer = await surface
       .anonymous()
       .auth.signIn({ email: admin.email.toUpperCase(), password: admin.password });
     expect(answer).toEqual({ next: 'mfa', sessionToken: expect.any(String) });
     expect(surface.counts()).toEqual([
-      ['rate_limit_authentication_budget', '*'],
-      ['rate_limit_authentication', admin.email],
+      ['rate_limit_admin_authentication_budget', '*'],
+      ['rate_limit_admin_authentication', admin.email],
     ]);
   });
 
@@ -99,7 +99,9 @@ describe('auth.signIn', () => {
   });
 
   it('stands the throttle in front of the lockout: a refused attempt never reaches the password, so it never counts', async () => {
-    const throttled = surfaceOf(world, database, { refuseAfter: { rate_limit_authentication: 2 } });
+    const throttled = surfaceOf(world, database, {
+      refuseAfter: { rate_limit_admin_authentication: 2 },
+    });
     const admin = await world.createAdministrator();
     const answers: unknown[] = [];
     for (let attempt = 0; attempt < 7; attempt += 1) {
@@ -142,7 +144,10 @@ describe('the second factor', () => {
         .anonymous()
         .auth.mfa.verify({ sessionToken, code: await world.currentCode(admin.adminId) }),
     ).resolves.toBeUndefined();
-    expect(surface.counts().at(-1)).toEqual(['rate_limit_authentication', sha256(sessionToken)]);
+    expect(surface.counts().at(-1)).toEqual([
+      'rate_limit_admin_authentication',
+      sha256(sessionToken),
+    ]);
     expect(await world.sessions.resolve(sessionToken)).toMatchObject({ mfaVerified: true });
   });
 
@@ -158,7 +163,7 @@ describe('the second factor', () => {
     );
     expect(wrong.body).toMatchObject({ code: 'CODE_INVALID' });
     expect(surface.counts().at(-1)).toEqual([
-      'rate_limit_authentication',
+      'rate_limit_admin_authentication',
       sha256(first.sessionToken),
     ]);
 
@@ -175,7 +180,7 @@ describe('the second factor', () => {
       manualKey: expect.any(String),
     });
     expect(surface.counts().at(-1)).toEqual([
-      'rate_limit_authentication',
+      'rate_limit_admin_authentication',
       sha256(second.sessionToken),
     ]);
     const confirmed = await surface.anonymous().auth.mfa.setup.confirm({
@@ -184,7 +189,7 @@ describe('the second factor', () => {
     });
     expect(confirmed.recoveryCodes).toHaveLength(10);
     expect(surface.counts().at(-1)).toEqual([
-      'rate_limit_authentication',
+      'rate_limit_admin_authentication',
       sha256(second.sessionToken),
     ]);
   });
@@ -196,7 +201,7 @@ describe('the second factor', () => {
         .auth.setPassword({ inviteToken: 'v1.altered', password: 'a long enough password' }),
     );
     expect(shape.body).toMatchObject({ code: 'INVITE_INVALID' });
-    expect(surface.counts()).toEqual([['rate_limit_authentication', sha256('v1.altered')]]);
+    expect(surface.counts()).toEqual([['rate_limit_admin_authentication', sha256('v1.altered')]]);
   });
 });
 

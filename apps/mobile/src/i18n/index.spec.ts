@@ -80,21 +80,91 @@ describe('t: a Latin value or opening inside Arabic (T109)', () => {
     expect(t('common.format.sessions', { count: 2 })).toBe('\u20682\u2069 sessions');
   });
 
-  it('starts every Arabic string whose first strong letter is Latin with a right-to-left mark', () => {
+  it('starts every Arabic string whose first strong letter is Latin, or that has none, with a right-to-left mark', () => {
     expect(t('teacher.credentials.add.pdfOnly')).toBe('\u200FPDF فقط.');
-    const latinFirst = allKeys().filter((key) =>
+    const notRightToLeft = allKeys().filter((key) =>
       renderings('ar', key).some((text) => {
-        // A value is isolated, so the paragraph's direction comes from the text around it.
+        // A value is isolated, so the paragraph's direction comes from the text around it; with no
+        // strong letter there, Android falls back to left to right (T123). A string with no value
+        // («، », the chain's separator) is joined into another paragraph, never one of its own.
         const strong = /[\p{L}\u200F]/u.exec(text.replace(/\u2068[^\u2069]*\u2069/g, ''))?.[0];
-        return strong !== undefined && /\p{Script=Latin}/u.test(strong);
+        if (strong === undefined) return text.includes('\u2068');
+        return /\p{Script=Latin}/u.test(strong);
       }),
     );
-    expect(latinFirst).toEqual([]);
+    expect(notRightToLeft).toEqual([]);
     // English is left-to-right throughout and carries no mark.
     const marked = allKeys().filter((key) =>
       renderings('en', key).some((text) => text.includes('\u200F')),
     );
     expect(marked).toEqual([]);
+  });
+});
+
+// T123: Android falls back to left to right when a paragraph has no strong letter outside its
+// isolates, so an Arabic template made only of values («{date} · {time}») read in reverse. Its
+// Arabic rendering starts with a right-to-left mark; its English one gains none.
+describe('t: an Arabic template made only of values (T123)', () => {
+  // The 37 keys of `ar.json` on 2026-10-29 (tasks.md T123).
+  const valuesOnly: readonly MessageKey[] = [
+    'common.format.dateTime',
+    'common.package.withTeacher',
+    'common.time.dateTime',
+    'common.time.inZone',
+    'common.time.range',
+    'notifications.items.enrollmentTerminated.body',
+    'notifications.items.reminderTomorrow.body',
+    'notifications.teacher.ijazahApproved.meta',
+    'notifications.teacher.sessionSoon.meta',
+    'session.ended.timeValue',
+    'session.pre.teacher.timeRange',
+    'session.room.timer',
+    'student.cancelPicker.option',
+    'student.cancelRequest.sessionValue',
+    'student.cancelRespond.quote',
+    'student.checkout.slotWithCity',
+    'student.checkoutConfirmed.sessionDate',
+    'student.checkoutProcessing.summary',
+    'student.credentials.teacherIssued',
+    'student.discovery.card.meta',
+    'student.discovery.card.ratingCount',
+    'student.dispute.sessionMeta',
+    'student.enrollmentDetail.session.row',
+    'student.enrollments.reviewPrompt.subtitle',
+    'student.home.package',
+    'student.home.sessionTitle',
+    'student.makeupProposal.slot',
+    'student.teacherProfile.genderSubject',
+    'student.teacherProfile.isnad.meta',
+    'student.teacherProfile.isnad.more',
+    'student.teacherProfile.reviewLine',
+    'student.teacherReviews.reviewMeta',
+    'teacher.cancel.picker.option',
+    'teacher.enrollment.sessions.row',
+    'teacher.ijazahRequest.sent.sentAtValue',
+    'teacher.profile.subjectWithRiwaya',
+    'web.verify.issuedValue',
+  ];
+
+  it('starts with one right-to-left mark in Arabic', () => {
+    expect(t('common.time.range', { start: '9:00', end: '10:00' })).toBe(
+      '\u200F\u20689:00\u2069 – \u206810:00\u2069',
+    );
+    const unmarkedKeys = valuesOnly.filter((key) =>
+      renderings('ar', key).some((text) => !/^\u200F(?!\u200F)/u.test(text)),
+    );
+    expect(unmarkedKeys).toEqual([]);
+  });
+
+  it('gains no mark in English', () => {
+    setLocale('en');
+    expect(t('common.time.range', { start: '9:00', end: '10:00' })).toBe(
+      '\u20689:00\u2069 – \u206810:00\u2069',
+    );
+    const markedKeys = valuesOnly.filter((key) =>
+      renderings('en', key).some((text) => text.includes('\u200F')),
+    );
+    expect(markedKeys).toEqual([]);
   });
 });
 

@@ -33,6 +33,12 @@ import { normalizeEmail } from './one-time-codes.js';
 /** `auth.providerNonce`'s own limit (app-surface.md), a seeded setting. */
 export const PROVIDER_NONCE_RATE_LIMIT = 'rate_limit_provider_nonce' satisfies RateLimitKey;
 
+/**
+ * `auth.providerNonce`'s own platform-wide budget (T133), a seeded setting: a mint flood spread
+ * over many addresses stops here and spends nothing of the sign-in's budget.
+ */
+export const PROVIDER_NONCE_BUDGET = 'rate_limit_provider_nonce_budget' satisfies RateLimitKey;
+
 /** `auth.refresh`'s own limit (research R-101), a seeded setting. */
 export const TOKEN_REFRESH_RATE_LIMIT = 'rate_limit_token_refresh' satisfies RateLimitKey;
 
@@ -90,7 +96,7 @@ export const authRouter = createAppRouter({
     output: providerNonceOutput,
     rateLimit: {
       key: PROVIDER_NONCE_RATE_LIMIT,
-      budget: authenticationBudget,
+      budget: PROVIDER_NONCE_BUDGET,
       subjectOf: ({ ctx }) => ctx.clientAddress,
     },
   }).mutation(({ ctx }) => ctx.services.identity.signIn.providerNonce()),

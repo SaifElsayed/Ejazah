@@ -147,7 +147,8 @@ export function buildDeletion(
   const deletion = new DeletionService({
     database,
     settings: identity.settings,
-    encryptionKey: SPEC_ENCRYPTION_KEY,
+    encryptionKey: identity.encryptionKey,
+    cipher: identity.cipher,
     now: identity.clock.now,
     consequences,
     marks: identity.marks,
@@ -181,7 +182,10 @@ export function buildDeletion(
 
 export type Deletion = ReturnType<typeof buildDeletion>;
 
-/** Apple's grant, encrypted to the identity row it is written on, as onboarding encrypts it. */
+/**
+ * Apple's grant, encrypted to the identity row it is written on, as onboarding encrypts it: under
+ * the spec key, the previous one in a rotated world (T134).
+ */
 export function encryptedGrant(refreshToken: string, identityId: string): Uint8Array {
   return new ColumnCipher(SPEC_ENCRYPTION_KEY).encrypt(refreshToken, GRANT_COLUMN, identityId);
 }

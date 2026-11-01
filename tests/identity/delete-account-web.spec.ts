@@ -20,6 +20,7 @@ import type { AddressInfo } from 'node:net';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption';
 import {
   closeDatabase,
   openDatabase,
@@ -115,10 +116,12 @@ describe('the web deletion end to end (T081, FR-143)', () => {
       level: 'info',
       destination: { write: (line) => void lines.push(line) },
     });
+    const encryptionKey = randomBytes(32).toString('base64');
     const services = createIdentityServices({
       database,
       settings,
-      encryptionKey: randomBytes(32).toString('base64'),
+      encryptionKey,
+      cipher: new ColumnCipher(encryptionKey),
       marks: new MemorySingleUseMarks(() => new Date()),
       signIn: {
         verifyIdentityToken: unexpected,

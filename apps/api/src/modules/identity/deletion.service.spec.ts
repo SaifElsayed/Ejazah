@@ -365,6 +365,20 @@ describe('account.delete: after the commit (B16 check, decisions 1 and 3)', () =
     expect(spec.events.indexOf('revoke')).toBeGreaterThan(spec.events.indexOf('committed'));
   });
 
+  it('revokes a grant written under the previous key once ENCRYPTION_KEY is rotated (T134)', async () => {
+    spec = buildDeletion(database, { rotated: true });
+    const caller = await providerAccount('apple', 'apple-grant-before-rotation');
+    await deleteWith(caller.userId, await providerProof('apple', caller.subject));
+    await spec.settle();
+    expect(spec.reports).toEqual([]);
+    expect(spec.signInPort.calls.filter(({ operation }) => operation === 'revoke')).toEqual([
+      {
+        operation: 'revoke',
+        args: [{ provider: 'apple', refreshToken: 'apple-grant-before-rotation' }],
+      },
+    ]);
+  });
+
   it('revokes nothing for a Google account or an Apple one without a stored grant', async () => {
     const google = await providerAccount('google');
     const apple = await providerAccount('apple');

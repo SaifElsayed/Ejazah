@@ -33,6 +33,8 @@ export const TX = {} as Transaction;
 
 export class MemoryStandingStore implements StandingStore {
   readonly #people = new Map<string, Person>();
+  /** Each lock and each read of the standing, in order: `lock:<id>`, `read:<id>` (T126). */
+  readonly journal: string[] = [];
 
   /** A person with one live session, a teacher when `teacher` is given; the id. */
   plant(
@@ -59,7 +61,12 @@ export class MemoryStandingStore implements StandingStore {
     return person;
   }
 
+  async lockAccount(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock:${userId}`);
+  }
+
   async read(_tx: Transaction, userId: string): Promise<Standing | null> {
+    this.journal.push(`read:${userId}`);
     const person = this.#people.get(userId);
     if (person === undefined) return null;
     return {

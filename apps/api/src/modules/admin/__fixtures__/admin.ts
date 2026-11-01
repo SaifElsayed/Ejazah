@@ -9,7 +9,11 @@ import { addSeconds } from '@ijazah/time';
 import { config as readDotenv } from 'dotenv';
 import type { z } from 'zod';
 
-import { ColumnCipher } from '../../../platform/crypto/encryption.js';
+import {
+  ColumnCipher,
+  columnKeyId,
+  createColumnCipher,
+} from '../../../platform/crypto/encryption.js';
 import { hashPassword } from '../../../platform/crypto/hashing.js';
 import { generateTotpSecret, totpCode } from '../../../platform/crypto/totp.js';
 import { openDatabase, type Database, type Transaction } from '../../../platform/db/prisma.repository.js';
@@ -49,6 +53,19 @@ export function settingsOf(values: Readonly<Record<string, unknown>>): SettingsR
 
 /** A key of the configuration's shape: 32 random bytes, base64. */
 export const SPEC_ENCRYPTION_KEY = randomBytes(32).toString('base64');
+
+/**
+ * The key a rotation moves to, SPEC_ENCRYPTION_KEY then being the previous one (T134): drawn until
+ * its key id differs, as the cipher refuses two keys sharing one.
+ */
+export const ROTATED_ENCRYPTION_KEY = keyBeside(SPEC_ENCRYPTION_KEY);
+
+function keyBeside(previous: string): string {
+  for (;;) {
+    const key = randomBytes(32).toString('base64');
+    if (columnKeyId(key) !== columnKeyId(previous)) return key;
+  }
+}
 
 export const SPEC_PANEL_ORIGIN = 'https://admin.ijazah.test';
 
@@ -108,12 +125,24 @@ export function buildAdmin(
     readonly settings: Readonly<Record<string, unknown>>;
     /** The password hashing the sign-in uses; replaced to prove a refusal does the same work. */
     readonly passwords: PasswordHashing;
+    /**
+     * After a rotation (T134): the services run under ROTATED_ENCRYPTION_KEY with SPEC_ENCRYPTION_KEY
+     * the previous one, while `createAdministrator` still writes under the spec key, as before it.
+     */
+    readonly rotated: boolean;
   }> = {},
 ) {
   const clock = new SpecClock();
   const settings = settingsOf({ ...SEEDED_ADMIN_SETTINGS, ...overrides.settings });
-  const base = { database, settings, encryptionKey: SPEC_ENCRYPTION_KEY, now: clock.now };
+  const rotated = overrides.rotated === true;
+  const encryptionKey = rotated ? ROTATED_ENCRYPTION_KEY : SPEC_ENCRYPTION_KEY;
+  const base = { database, settings, encryptionKey, now: clock.now };
   const cipher = new ColumnCipher(SPEC_ENCRYPTION_KEY);
+  // What the services hold: the process's cipher, reading under the previous key too once rotated.
+  const serviceCipher = createColumnCipher({
+    ENCRYPTION_KEY: encryptionKey,
+    ...(rotated ? { ENCRYPTION_KEY_PREVIOUS: SPEC_ENCRYPTION_KEY } : {}),
+  });
   const rows = new SpecAdminRows(database);
   const sessions = new AdminSessionService(base);
   const queued: string[] = [];
@@ -165,7 +194,7 @@ export function buildAdmin(
   /** The secret the row holds now, decrypted (setup writes a fresh one). */
   async function storedSecret(adminId: string): Promise<string> {
     const row = await rows.administrator(adminId);
-    return cipher.decrypt(row.mfaSecretEncrypted, MFA_SECRET_COLUMN, adminId);
+    return serviceCipher.decrypt(row.mfaSecretEncrypted, MFA_SECRET_COLUMN, adminId);
   }
 
   /** The current code of the row's secret on the spec's clock. */
@@ -185,11 +214,13 @@ export function buildAdmin(
     queued,
     auth: new AdminAuthService({
       ...base,
+      cipher: serviceCipher,
       sessions,
       ...(overrides.passwords === undefined ? {} : { passwords: overrides.passwords }),
     }),
     admins: new AdminsService({
       ...base,
+      cipher: serviceCipher,
       sessions,
       inviteQueue: { queue: async (adminId) => void queued.push(adminId) },
     }),

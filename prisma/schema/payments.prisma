@@ -58,8 +58,9 @@ model PaymentEvent {
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Restrict, not the optional relation's SET NULL: a NULL would turn an order event into a
-  // recipient event (note under T059).
-  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  // recipient event (note under T059). RESTRICT on update too: a cascade would rewrite the row past
+  // the revoked UPDATE (T135).
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([paymentId])
   @@map("payment_events")
