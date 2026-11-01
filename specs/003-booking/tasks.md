@@ -1,0 +1,235 @@
+---
+description: 'Task list for Phase 2 — Catalog, discovery, booking'
+---
+
+# Tasks: Phase 2 — Catalog, discovery, booking
+
+**Input**: Design documents from `/specs/003-booking/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
+
+**Tests**: Included, and not optional, as in Phase 1: tests before implementation, each observed red for the right reason; every job with its double-run spec (R-API-14); every procedure under the coverage floor; every student-facing procedure in the adversarial suite (FR-410); every gateway event in a spec produced by the stand-in harness over HTTP (SC-302). Until `002:T124` lands, every run is on `ijazah_integrity` (both URLs checked), never on `ijazah`.
+
+**Organization**: Phase 1's follow-ups first (they live in `specs/002-identity/tasks.md` and keep their numbers there), then setup, the foundational work no story can start without, the five stories of spec.md in priority order, the proofs and the close, and two follow-ups timed outside this phase. The batches at the end are the unit of delivery: one branch, one pull request, one review by Saif's review session, at most six tasks (PLAN.md).
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel — different files, no dependency on incomplete work
+- **[Story]**: US1–US5, mapping to spec.md
+- A task of `specs/002-identity/tasks.md` is written `002:T123`; a bare id is this file's. Every task names its file path.
+
+## Path Conventions
+
+The three applications of Phase 0 (plan.md, "Source Code"): `apps/mobile/src/` (`app/` routes, `features/`, `design/`, `lib/`), `apps/admin/src/` (`pages/`), `apps/api/src/` (`modules/<module>/`, `platform/`, `surfaces/`, `jobs/`), `packages/`, `prisma/`, `scripts/`, `tests/`. A batch made only of `002:` tasks is cut from `develop` as `Ejazah_app/002-identity/<ids>` and its commits say `Ejazah_app(002-identity)`; every other batch is `Ejazah_app/003-booking/<ids>` with `Ejazah_app(003-booking)`. A task's note goes under its line, as in Phases 0 and 1.
+
+---
+
+## Carried from Phase 1
+
+**Purpose**: The follow-ups PLAN.md times into Phase 2 (FR-301 to FR-306). Their lines, notes and `[x]` marks stay in `specs/002-identity/tasks.md`; this table only places them. None of this phase's code starts before the first three batches are merged (FR-301; the owner's decision of 2026-11-01).
+
+| Task | What | Timing (its own line) | Batch | What here waits for it |
+|---|---|---|---|---|
+| 002:T123 | Arabic templates made only of values read right to left on Android | Phase 2's first batch, before any Phase 2 screen | B20 | every screen task; FR-414 |
+| 002:T126 | An identity request and a reinstatement never cross; the row lock | Phase 2's first batch; before booking relies on `verification_required` | B20 | T005, T033, T036 |
+| 002:T129 | The input guard's refusal carries no cause | Phase 2's first batch; before Phase 2 code logs a cause | B20 | every API task |
+| 002:T133 | One flood never locks the other surface's sign-in | Phase 2's first batch | B20 | — |
+| 002:T134 | Every encrypted column reads while the key is rotated | Phase 2's first batch | B20 | T004 (`checkout_url_encrypted` joins the list) |
+| 002:T135 | Append-only rows cannot be rewritten through a key update | Phase 2's first batch | B20 | T004 (`enrollment_events` follows the rule) |
+| 002:T136 | Signing out leaves no draft behind on the phone | Phase 2's first batch | B21 | — |
+| 002:T137 | The picker scrolls; a weak password is never a dead end | Phase 2's first batch | B21 | T021 (the subject picker) |
+| 002:T138 | The data screens use the offline pattern | Phase 2's first batch | B21 | T015, every data screen |
+| 002:T140 | The database refuses what the ERD forbids (as amended 2026-10-31: price > 0, lengths 30/45/60) | Phase 2's first batch | B21 | T004 (rules 36–38 are its own), T018, T019 |
+| 002:T160 | The deletion sheet's confirm button reads whole in English | Phase 2's first batch | B21 | — |
+| 002:T162 | The applicant reads each asked credential's reason | Phase 2's first batch | B21 | — |
+| 002:T139 | The documents match the schema and the modules | Phase 2's first batch | B22 | T055 (Phase 2's own document pass builds on it) |
+| 002:T141 | `modules/payments` joins the coverage floor | Phase 2's first batch | B22 | T054 |
+| 002:T161 | A resubmission and a credential's document request never cross | before Phase 2 relies on the application's states | B22 | T018 (`teacherProcedure({ admits: 'approved' })`) |
+| 002:T142 | A credential's approval never crosses a revocation; a banned teacher cannot reapply | before discovery reads `teacher_subjects` | B22 | T018, T025 |
+| 002:T145 | A profile photo loses its metadata before others see it | before a teacher's photo is shown to students | B22 | T027, T030 |
+| 002:T146 | The phone's calls time out | before checkout relies on the phone's calls | B22 | T045, T046 |
+| 002:T143 | The visibility predicate leaves out a restricted teacher | before the code that reads the predicate | B23, as T010 | T025 to T028, T032, T033 |
+| 002:T158 | A teacher can change the display name | with Phase 2's teacher profile screens | B26, beside T023 | — |
+| 002:T144 | Every suspension and ban goes through `StandingService` | before the first Phase 2 code that suspends or bans | none in this phase | No code of this phase suspends or bans (R-222); plan.md names it; it stays open for Phase 3's plan |
+
+The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; T160 and T162 two), split over B20, B21 and B22 with T123, T126 and T129 in the first.
+
+---
+
+## Phase 1: Setup
+
+**Purpose**: What every later task is written against.
+
+- [ ] T001 [P] Install, at exact versions recorded in the note: `expo-web-browser` and `@react-native-community/netinfo` in `apps/mobile/package.json`, `fast-check` as a dev dependency in `packages/time/package.json`; rebuild the development build and say so in `docs/RUNBOOK.md`'s mobile section (plan.md, Technical Context; R-211, R-217)
+- [ ] T002 [P] Plant the five settings rows of data-model.md §4 (`first_session_lead_hours` 24, `checkout_processing_poll_seconds` 2, `checkout_confirming_poll_seconds` 30, `checkout_confirming_poll_window_minutes` 10, `discovery_page_size` 20) in `prisma/seed.ts`, update the count and values in `tests/seed/seed.spec.ts`, list them in `docs/SRS.md` §3.14; `platform.publicConfig`'s output gains `checkout: { processingPollSeconds, confirmationTimeoutSeconds, confirmingPollSeconds, confirmingPollWindowMinutes }` (contracts/app-surface.md, additive, R-API-9) (FR-383, FR-412)
+- [ ] T003 [P] Add the error codes of contracts/README.md (`NOT_BOOKABLE`, `ACCOUNT_NOT_ACTIVE`, `SLOT_TAKEN`, `PREVIOUS_CHECKOUT`, `HOLD_EXPIRED`, `ORDER_NOT_PAYABLE`, `SUBJECT_NOT_APPROVED`, `SLOT_OVERLAP`, `SLOT_IN_USE`, `PACKAGE_FROZEN`) to `errorCodes` in `apps/api/src/platform/errors/domain-error.ts` with their HTTP status, and the phone's Arabic and English messages for each one its screens show, `check:i18n` green
+
+---
+
+## Phase 2: Foundational (blocking prerequisites)
+
+**Purpose**: The schema pass, the kernel's locks, time and money, the predicate, the stand-in and the phone's foundations. No story starts before its part here is merged.
+
+- [ ] T004 The Phase 2 pass migration (data-model.md §2.2 to §2.5, §6 item 2), forward-only, after `002:T140`'s: `ijazah_fold(text)` IMMUTABLE PARALLEL SAFE, `users.display_name_folded` generated and its `text_pattern_ops` index `WHERE deleted_at IS NULL`, `enrollments.quoted_first_session_local_date date NOT NULL`, `payments.expires_at` and `payments.checkout_url_encrypted bytea`, enum `enrollment_event_kind` and table `enrollment_events` with its two checks and UPDATE, DELETE and TRUNCATE revoked from the application role (rule 39), its foreign keys as `002:T135` sets append-only ones; in `prisma/schema.prisma`, `prisma/migrations/`; `enrollment_events` → booking in `packages/config/module-tables.json` with `tests/lint-plugin/table-ownership.spec.ts`, `tests/seed/seed.spec.ts` and `tests/seed/migrate-from-empty.spec.ts` counted in the same task; `checkout_url_encrypted` joins `reencrypt-columns`' list (`002:T134`); probes in `tests/db-integrity/` for rule 39 and for every fold equivalence of FR-333 (SC-314's data); `docs/ERD.md` v1.11 changelog and §15 rule 39
+- [ ] T005 [P] Kernel locks in `apps/api/src/platform/db/row-lock.ts`: widen `lockRows`' closed table union (created by `002:T126`) to `enrollments` and `availability_slots`, and add `lockKey(tx, scope, id)` over `pg_advisory_xact_lock(hashtext(scope), hashtext(id))` with the closed scope `'teacher-slots'`; specs that two callers serialise and that the lock ends at commit and rollback (contracts/kernel.md, R-206)
+- [ ] T006 [P] `apps/api/src/platform/db/deferred-constraints.ts` (`withDeferredSessionConstraints(tx)`) and `apps/api/src/platform/db/db-errors.ts` (`isUniqueViolation(error, constraint)`, `isExclusionViolation(error, constraint)`), with database specs that each names exactly `slot_holds_slot_id_active_key`, `slot_holds_student_user_id_active_key` and the two session exclusions and rethrows anything else (contracts/kernel.md, R-210, R-215)
+- [ ] T007 [P] `packages/time`: `firstOccurrenceAfter(slot, instant, leadHours)`, the requested local date and start on `Occurrence`, `weeklyIntervalsOverlap(a, b)` on the 10 080-minute week circle (a slot may cross midnight; Saturday wraps to Sunday), and `secondsUntil(instant, now)` in `packages/time/src/calendar.ts`; example specs with Cairo's 2026 and 2027 changes and the Friday 00:30 gap (R-209, R-206, R-217, R-TIME-1)
+- [ ] T008 [P] `packages/time` properties with `fast-check` over every zone the city list offers: generation equals `resolveOccurrences`' declared resolution, local fields keep what was asked, instants strictly increase, and `weeklyIntervalsOverlap` is symmetric and agrees with a minute-by-minute check (R-211, SC-303)
+- [ ] T009 [P] `packages/money`: `perSession(total, sessionCount)` rounded half up to the piaster and `lowest(amounts)`, with specs; `formatPounds(amount, locale)` in `apps/mobile/src/lib/formatters.ts` and `apps/admin/src/lib/format.ts` (none when whole on the phone, two decimals in the panel, `common.format.price`) (R-212, FR-337, R-MONEY-5)
+- [ ] T010 The visibility predicate, implementing `002:T143`: `apps/api/src/modules/identity/visible-teachers.repository.ts` taking a `RequesterGender` brand and `purpose: 'discover' | 'book'`, the five conjuncts of SRS §3.7.1 (gender, approved, not deleted, payout verified, `account_status NOT IN (suspended, banned)`) and `account_status = 'active'` for `'book'`, exported through `modules/identity/index.ts` as the only way any module learns which teachers a student may see; `require-requester-gender` applies to it; a spec per conjunct; adversarial cases in `tests/adversarial/` for both of `002:T143`'s conditions (a suspended or banned teacher invisible; a `verification_required` teacher visible but not bookable), both directions (R-201, FR-303, FR-330)
+- [ ] T011 The adversarial procedure harness in `tests/adversarial/procedure-harness.ts`: each student-facing procedure registers its attacks (direct call, forged and guessed ids, a tampered token, client-supplied gender) in both directions, an excluded teacher must answer exactly as a nonexistent one (404 and no field), and a spec fails when a student procedure of the router is not registered, so every later procedure enters the suite (R-202, FR-410, SC-304)
+- [ ] T012 [P] The stand-in's hosted page (contracts/gateway.md): `GET` and `POST /stand-in/checkout/:gatewayOrderId` in `apps/api/src/platform/web/`, mounted only while `PAYMENT_GATEWAY=fake`; `FakePaymentAdapter` in `apps/api/src/platform/ports/payment/` signs `paid` (transaction id, fee, net), `failed` and cancel-as-`failed` with its secret and sends them over HTTP to `POST /webhooks/payment`; `createCheckout` returns the page on `API_PUBLIC_ORIGIN` and an order expiry; `cancelCheckout` answers per order as configured; a spec that the route does not exist with another gateway (R-213, FR-372, FR-374)
+- [ ] T013 The test harness `tests/support/gateway-stand-in.ts` (`paid`, `failed`, `expired`, `recipientVerified`, `recipientRejected`, `deliver`, `deliverTwice`, `deliverInOrder`, `tamper(event, 'wrong_secret' | 'no_signature' | 'body_changed')`, `onCancel`); `scripts/dev/emit-recipient-event.ts` and `recipient-events.spec.ts` move onto it; a webhook spec: each forged variant answers 401 and writes nothing (contracts/gateway.md, R-213, FR-372, SC-302, SC-311)
+- [ ] T014 [P] The phone's new primitives in `apps/mobile/src/design/primitives/`: `Slot`, `CategoryTabs`, `FilterChips` and `Stats` from their contracts in `docs/design/components.md`, and the countdown line; each with its spec, Arabic and English, right to left; any change to a contract goes through the design system with an impact summary first
+- [ ] T015 [P] The phone's plumbing in `apps/mobile/src/lib/`: TanStack Query's `onlineManager` fed by `@react-native-community/netinfo`, `focusManager` fed by `AppState`, so `OfflineBanner` shows offline (the pattern `002:T138` brings to the data screens) and queries read again on foreground; specs (R-217, FR-383)
+
+**Checkpoint**: the schema, the predicate, the harnesses and the primitives exist; the stories can start.
+
+---
+
+## Phase 3: User Story 1 — An approved teacher offers packages at weekly times (Priority: P1)
+
+**Goal**: An approved teacher writes the profile, creates packages on both tracks and weekly slots; drafts until the payout is verified, published on verification with no step.
+
+**Independent Test**: As an approved teacher with an unverified payout, write the profile, two packages, three slots; a same-gender student sees nothing; `recipientVerified` through the harness; everything appears (spec.md, US1; quickstart.md §3).
+
+- [ ] T016 [P] [US1] Contracts in `packages/contracts/src/`: `teacher-profile.ts`, `packages.ts` (length `30 | 45 | 60`, price in piasters > 0, track, `published` and `frozen` on output), `slots.ts` (day 0–6, local start, length `30 | 45 | 60`, zone on output); every procedure with both schemas; `pnpm contract:snapshot` updated (contracts/app-surface.md, FR-413)
+- [ ] T017 [US1] `teacher.profile.get/update` in `apps/api/src/modules/identity/teacher-profile.router.ts` and its service: bio, qualification summary, photo key; the gender shown, never written; specs (R-218, FR-310, FR-PROFILE-1, R-GENDER-6)
+- [ ] T018 [US1] Packages in `apps/api/src/modules/catalog/` (`packages.repository.ts`, `packages.service.ts`, `packages.router.ts`): `teacher.packages.list/create/update` under `teacherProcedure({ admits: 'approved' })`; the subject must be one of the teacher's `teacher_subjects` (`SUBJECT_NOT_APPROVED`); deactivate and reactivate; track and length refused once the package has an enrollment (`PACKAGE_FROZEN`, through T020's port), a new price for later purchases only; `published` from the payout state through identity's entry; specs (R-218, FR-311, FR-312, FR-314, FR-315)
+- [ ] T019 [US1] Slots in `apps/api/src/modules/catalog/` (`slots.repository.ts`, `slots.service.ts`, `slots.router.ts`): `teacher.slots.list/create/update`, the teacher's zone at creation, never a UTC instant; on create and reactivate, `weeklyIntervalsOverlap` against the teacher's active slots under `lockKey('teacher-slots', teacherId)` (`SLOT_OVERLAP`, Sunday 23:30 for 60 against Monday 00:00 refused); day, start and length refused while in use (`SLOT_IN_USE`, through T020's port); specs, and a probe in `tests/db-integrity/` that two concurrent overlapping saves leave one (R-206, R-207, FR-313, FR-317, FR-318)
+- [ ] T020 [US1] The `CatalogUse` port in `apps/api/src/modules/catalog/catalog-use.port.ts`, booking's `slotInUse` (an active hold, or an enrollment `pending_payment` or `confirmed` before its release) and `packageHasEnrollment` in `apps/api/src/modules/booking/`, bound in `apps/api/src/main.ts`; `AppServices` in `apps/api/src/surfaces/context.ts` gains `teacherProfile` and `catalog`; specs (R-207, contracts/kernel.md)
+- [ ] T021 [P] [US1] The teacher's packages on the phone: `apps/mobile/src/app/(teacher)/(tabs)/packages.tsx` and `apps/mobile/src/app/(teacher)/packages/[id].tsx` with `features/teacher/packages/` — `Packages`, `PackagesEmpty`, `PackagesLocked` («غير منشورة» on each active package and the banner to payout setup), `PackageEditor` (30, 45 or 60; price in pounds; frozen fields shown as such), `PackageSubjectPicker` (approved subjects only, an entry to add a subject), `PackageDeactivateSheet` (screens.md §13; FR-311, FR-312, FR-315)
+- [ ] T022 [P] [US1] The teacher's availability on the phone: `apps/mobile/src/app/(teacher)/(tabs)/availability.tsx` with `features/teacher/availability/` — `Availability`, `AvailabilityEmpty`, `SlotEditor` (30, 45 or 60; `SLOT_OVERLAP` and `SLOT_IN_USE` said plainly), `SlotDisableSheet` (screens.md §13; FR-313, FR-317, FR-318)
+- [ ] T023 [P] [US1] The teacher's public profile on the phone: `apps/mobile/src/app/(teacher)/profile.tsx` with `features/teacher/profile/` (`ProfileEditor`: photo, bio, qualification; the gender shown), beside `002:T158`'s display-name entry in the account tab (screens.md §12; FR-310)
+
+**Checkpoint**: US1 is demonstrable on the phone with the harness's `recipientVerified`.
+
+---
+
+## Phase 4: User Story 2 — A student finds only the teachers they may see (Priority: P1)
+
+**Goal**: Discovery by subject tab, search, filters and profile, every path after the predicate; an excluded teacher answers as a nonexistent one.
+
+**Independent Test**: Teachers of both genders and in every excluded state; as a male and a female student, browse, search, filter, open by id; the adversarial suite passes both ways (spec.md, US2).
+
+- [ ] T024 [P] [US2] Contracts in `packages/contracts/src/discovery.ts`: `discovery.browse` (opaque cursor carrying the last card's rating, count, name and id), `discovery.filters`, `discovery.teacher`; both schemas; the snapshot updated (contracts/app-surface.md)
+- [ ] T025 [US2] `apps/api/src/modules/catalog/discovery.service.ts`: the cards (subjects, track badges from active packages, bio excerpt, rating, review count, `lowest` of `perSession` over active packages), the subject tabs' counts on the first page, the track, minimum-rating and riwaya filters, the riwaya values of `discovery.filters`, the name search on `display_name_folded` through identity's entry with the matched length, all filtered by T010's ids; one total order `COALESCE(average_rating, 0) DESC, review_count DESC, display_name ASC, id ASC` in the ORDER BY and the keyset condition alike, pages of `discovery_page_size`; specs: a teacher with no review after every rated one, and two teachers of one name, rating and count on either side of a page boundary each appearing once (R-204 as amended 2026-11-01, FR-332 to FR-335, FR-338)
+- [ ] T026 [US2] Booking's reads for discovery in `apps/api/src/modules/booking/`: offerable and occupied slots (R-205, release from the week after the final session plus `slot_release_buffer_weeks`), `lastSessionDateOf(tx, enrollmentIds)` exported by `apps/api/src/modules/sessions/index.ts`, the nearest free slot per teacher of a page by `firstOccurrenceAfter` with `first_session_lead_hours`; the `discovery` router in `booking/discovery.router.ts` composing catalog's cards and these reads under the same visible set, `rate_limit_search` on every call; specs, including FR-394's release week (R-205, FR-335, FR-394)
+- [ ] T027 [US2] `discovery.teacher` in `apps/api/src/modules/booking/discovery.router.ts` over catalog's profile read: display name, gender, the photo (stripped, `002:T145`), bio, qualification, approved subjects, rating and review count, active packages with track, remedy line, length, total and per-session price; no riwaya, tariq or chain; an excluded or unknown teacher answers `NOT_FOUND` with no field (FR-331, FR-336)
+- [ ] T028 [US2] Discovery in the adversarial suite (T011's harness): `discovery.browse` (tabs, counts, filters, search), `discovery.filters`, `discovery.teacher`, both directions, every excluded state; and SC-314's search spec in `tests/adversarial/`: every spelling variant FR-333 folds, against teachers in each excluded state sharing a prefix with visible ones (FR-410, SC-304, SC-314)
+- [ ] T029 [P] [US2] Discovery on the phone: `apps/mobile/src/app/(student)/(tabs)/discovery.tsx` with `features/student/discovery/` — `Discovery` (`CategoryTabs` with counts, cards with nearest slot and lowest per-session price, pages), `DiscoveryFilter`, `DiscoveryFiltered` (`FilterChips`, each removable), `DiscoverySearch` (the matched prefix marked), `DiscoveryEmpty`, `DiscoverySearchEmpty`, `DiscoveryNoTeachers`, offline and load-error states (screens.md §4; FR-332 to FR-335)
+- [ ] T030 [P] [US2] The teacher's profile on the phone: `apps/mobile/src/app/(student)/discovery/[teacherId].tsx` (`TeacherProfile`: packages with track, remedy line, length, total and per-session price, the no-reviews line, no chain; `NOT_FOUND` as an unknown teacher) (screens.md §4; FR-336)
+
+**Checkpoint**: US2 is demonstrable on seeded data, and the suite blocks on any leak.
+
+---
+
+## Phase 5: User Story 3 — A student holds a slot, pays, and the gateway alone confirms (Priority: P1)
+
+**Goal**: Booking sheet, hold, checkout, order, signed event, one confirmation path with generation; failure, retry, expiry, late payment.
+
+**Independent Test**: Against the stand-in with no credential: a purchase to the success screen; a replay changes nothing; an expired hold cancels its enrollment; two students race one slot; a late paid event opens a compensation case (spec.md, US3; quickstart.md §1, §4).
+
+- [ ] T031 [P] [US3] Contracts in `packages/contracts/src/`: `booking.ts` (`booking.slots`), `checkout.ts` (`checkout.hold`, `pay`, `retry`, `current`, `continue`, `status`), with `idempotencyKey` on `hold`, `pay` and `retry` and the three listed in `packages/contracts/src/idempotent-procedures.ts`; the snapshot updated (contracts/app-surface.md, FR-357)
+- [ ] T032 [US3] `booking.slots` in `apps/api/src/modules/booking/`: the package's teacher's offerable slots of exactly its length (T026), minus those whose first occurrence overlaps the student's own scheduled sessions, each with its first and last session dates by FR-368's rule from now, in both zones; `NOT_FOUND` for an excluded teacher; specs (R-205, R-209, FR-350, FR-386)
+- [ ] T033 [US3] Holds in `apps/api/src/modules/booking/holds.service.ts` and its repository, functions of booking's entry taking the caller's transaction: place a hold as FR-351 orders it (release the slot's and the student's expired holds with FR-363's cancellations, insert with `slot_hold_ttl_minutes` plus `slot_hold_grace_minutes`, then the overlap checks; `SLOT_TAKEN` keeps nothing); release with its enrollment's cancellation and an `enrollment_events` row in the same transaction; FR-353's refusals (`NOT_BOOKABLE`, `ACCOUNT_NOT_ACTIVE`, the buyer is the teacher); probes in `tests/db-integrity/`: 200 concurrent holds on one slot leave one, on one student's two slots one (R-208, R-216, FR-351 to FR-353, FR-363, SC-306)
+- [ ] T034 [P] [US3] `generateForEnrollment(tx, enrollment, confirmedAt)` in `apps/api/src/modules/sessions/generation.service.ts`, exported by `sessions/index.ts`: consecutive weeks from `firstOccurrenceAfter` with `first_session_lead_hours`, numbered from one, local date, start and zone stored, instants cached by `packages/time`; the database's overlap refusal leaves no session; specs (R-209, FR-368, FR-369)
+- [ ] T035 [P] [US3] `openCompensationCase(tx, enrollmentId)` in `apps/api/src/modules/moderation/`, exported by its `index.ts`: one `disputes` row of `kind = compensation_case` per enrollment, a second call a no-op; specs (FR-362, FR-DISPUTE-5)
+- [ ] T036 [US3] Checkout in `apps/api/src/modules/payments/checkout.service.ts` and `checkout.router.ts` (ARCHITECTURE §8.1 step for step): `checkout.hold` with FR-BOOK-12's branches (`cancelCheckout` outside any transaction; `PREVIOUS_CHECKOUT`); `checkout.pay`: the order created outside the transaction with `expires_at` no later than the hold's expiry minus the grace, then one transaction that finds the hold active by a conditional update, writes the enrollment `pending_payment` with its snapshot and `quoted_first_session_local_date`, links the hold, records the order and its encrypted address, the address handed over only after commit (`HOLD_EXPIRED` otherwise, the order cancelled where the gateway allows); `checkout.retry` (`ORDER_NOT_PAYABLE` past the hold's expiry minus the grace); all three idempotent and under `rate_limit_payment_initiation`; `AppServices` gains `booking` and `checkout`; specs (R-208, FR-352, FR-354 to FR-357)
+- [ ] T037 [US3] `checkout.current`, `checkout.continue` and `checkout.status` in `apps/api/src/modules/payments/checkout.router.ts`, with the owner's conditions of 2026-11-01 on the address: `continue` answers `NOT_FOUND` unless the enrollment is the caller's and decrypts only while the order is `created` and before its `expires_at` (`ORDER_NOT_PAYABLE` otherwise); `apps/api/src/platform/logging/logger.ts`'s redaction list gains `url`, `uri` and `link` with `checkout`; specs for another student, a `paid`, `failed` and `expired` order, a `created` order past `expires_at`, and a logged response and error carrying the address (data-model.md §2.4.1, FR-BOOK-12 (c))
+- [ ] T038 [US3] The webhook's order branch in `apps/api/src/modules/payments/order-events.service.ts` (contracts/gateway.md, R-214): one transaction inserting `payment_events` (a duplicate `provider_event_id` answers 200 and does nothing), moving `payments.status` monotonically (a `paid` order moves only to `refunded`), recording the transaction id, fee and net as reported on `paid`, appending `enrollment_events(order_failed)` on `failed`, clearing `checkout_url_encrypted` when the order leaves `created`; after commit, on `paid`, enqueueing `confirm-enrollment({ paymentId })`; an unknown order answered 200 and reported; specs through T013's harness (FR-360, FR-365, FR-367)
+- [ ] T039 [US3] `apps/api/src/jobs/confirm-enrollment.ts`, registered in `worker.ts`: with the hold active, one transaction confirms (`booking.confirmEnrollment`, the only writer of `confirmed_at`), converts the hold, calls T034 and appends `enrollment_events(confirmed)`; with the hold released, FR-PAYG-19's re-hold and confirm where the database allows; on exactly the refusals T006 names, the refusal branch (release, `slot_unavailable`, T035 once, `enrollment_events(cancelled)`), anything else rethrown; double-run spec; 100 replays of one paid event leave one confirmation, one converted hold and one set of sessions (R-215, FR-361, FR-362, SC-305)
+- [ ] T040 [US3] `apps/api/src/jobs/expire-pending-payments.ts` and `expire-holds.ts`, every minute, windows from settings: release expired holds and mark expired orders, the enrollment cancelled `payment_failed` when its last order failed and `payment_expired` otherwise, an `enrollment_events` row each; double-run specs (R-215, FR-363, FR-364)
+- [ ] T041 [US3] Booking subscribes to identity's `AccountConsequences` in `apps/api/src/modules/booking/termination.subscriber.ts`, bound in `apps/api/src/main.ts`: a student's suspension, ban or deletion releases their hold and cancels a pending enrollment (`admin`, or `account_deleted`); a teacher's suspension, ban, approval revoked or deletion releases holds on their slots and cancels pending enrollments (`teacher_suspended`, or `account_deleted`); an `enrollment_events` row each; specs (R-219; FR-AUTH-14's confirmed part is T059)
+- [ ] T042 [US3] The proofs of the confirmation path: the R-HONEST-1 gate in `tests/pipeline/confirmation-path.spec.ts` (every write of `enrollments.status = 'confirmed'` or `confirmed_at` is `booking.confirmEnrollment`, called only from `confirm-enrollment`), and FR-373's scenarios in `apps/api/src/modules/payments/stand-in-delivery.spec.ts` through the harness: `deliverTwice`, `deliverInOrder` reversed, a paid event after the hold expired and after it was re-held, each with its outcome and its `enrollment_events` rows (contracts/kernel.md, FR-366, FR-373, FR-385, SC-307, SC-311, SC-313)
+- [ ] T043 [US3] Booking and checkout in the adversarial suite (T011's harness): `booking.slots`, `checkout.hold`, `checkout.pay`, `checkout.retry`, `checkout.current`, `checkout.continue`, `checkout.status`, both directions; a `verification_required` teacher's slot refused at hold; a teacher suspended between hold and pay (FR-410, FR-303, SC-304)
+- [ ] T044 [P] [US3] The booking sheet on the phone, over `(student)/discovery/[teacherId]` in `features/student/booking/`: package, then `Slot`s of its length in both zones with first and last session dates, «متابعة إلى الدفع» with an idempotency key, `SlotTaken` (screens.md §5; FR-350, FR-351, FR-386)
+- [ ] T045 [P] [US3] Checkout on the phone: `apps/mobile/src/app/(student)/checkout/index.tsx`, `expired.tsx`, `previous.tsx` with `features/student/checkout/` — the one payment summary, the countdown by `secondsUntil` that continues offline, pay through `openAuthSessionAsync(checkoutUrl, 'ijazah://checkout/return')`, `CheckoutExpired`, `CheckoutPrevious` (`checkout.current`, `checkout.continue`) (screens.md §5; R-217, FR-358, FR-382)
+- [ ] T046 [P] [US3] Outcomes on the phone: `apps/mobile/src/app/(student)/checkout/processing.tsx`, `confirmed.tsx`, `failed.tsx`, `slot-unavailable.tsx` — `Processing` reading `checkout.status` every `processingPollSeconds` until the timeout, `ProcessingDelayed` and the Confirming release, `PaymentSuccess` only on the server's `confirmed` (receipt, order reference, amount, sessions, and the first session moved said plainly), `PaymentFailed` with Retry, `PaymentSlotUnavailable` (screens.md §5; FR-380 to FR-382, FR-386)
+
+**Checkpoint**: US3 passes in CI against the stand-in, and the purchase runs on the phone.
+
+---
+
+## Phase 6: User Story 4 — Sessions keep their local time, and both people see them (Priority: P2)
+
+**Goal**: Generation proved across Cairo's changes, instants re-resolved on new zone data, both people's lists in both zones.
+
+**Independent Test**: An enrollment straddling Cairo's spring and autumn changes; every session at the slot's local time; both lists show the same sessions in both zones (spec.md, US4; quickstart.md §2).
+
+- [ ] T047 [US4] Generation across Cairo's changes in `tests/db-integrity/generation-dst.spec.ts`: a Thursday 23:30 slot of 60 minutes and an 8-session package across the 2027 spring and autumn changes, and the Friday 00:30 gap slot; every local date and start as requested, the gap week `shifted_forward`, the repeat `first_of_two`, instants equal to `packages/time`'s (SC-303, ADR 0009 D1)
+- [ ] T048 [US4] `apps/api/src/jobs/reresolve-session-instants.ts` at worker start and daily: under `withDeferredSessionConstraints`, recompute scheduled sessions' cached instants when `process.versions.tz` differs from the last run's, by ERD §15 rule 19; double-run spec (R-210, FR-370)
+- [ ] T049 [US4] The lists in `apps/api/src/modules/booking/`: contracts `packages/contracts/src/enrollments.ts` and `teacher-students.ts`; `enrollments.list/get` (active and ended, ordered by next session, upcoming, completed and remaining derived), `teacher.students.list/get` (the student's name searched on `display_name_folded` in both tabs, through identity's entry), `teacher.today`; every time in the teacher's zone and the viewer's; the fields each side sees limited to its screens (no date of birth, minor flag, documents or dispute history to the teacher); specs (FR-390 to FR-393, FR-395)
+- [ ] T050 [P] [US4] The student's enrollments and home on the phone: `apps/mobile/src/app/(student)/(tabs)/enrollments.tsx`, `enrollments/[id].tsx`, `enrollments/ended.tsx`, `(tabs)/index.tsx` — `Enrollments`, `EnrollmentsEmpty`, `EnrollmentsEnded`, `EnrollmentsEndedEmpty`, `EnrollmentDetail` (this phase's session statuses), `Main` with the next session and `StudentHomeEmpty`, `MainOffline`; the Confirming badge read every `confirmingPollSeconds` for at most `confirmingPollWindowMinutes`, then FR-384's message with the order reference, the support address and «تحقق مرة أخرى» (screens.md §3, §6; FR-383, FR-384, FR-390, SC-312)
+- [ ] T051 [P] [US4] The teacher's day and students on the phone: `apps/mobile/src/app/(teacher)/(tabs)/index.tsx`, `(tabs)/students.tsx`, `students/[enrollmentId].tsx`, `students/ended.tsx` — `TeacherHome`, `TeacherHomeEmpty`, `TeacherStudents` (search in both tabs), `TeacherStudentsEmpty`, `TeacherStudentsEnded`, `TeacherEnrollment` and its ijazah-track state as far as this phase has data (screens.md §14; FR-391, FR-393)
+
+**Checkpoint**: US4's lists show every session in both zones, and the DST proofs pass.
+
+---
+
+## Phase 7: User Story 5 — An admin sees every order and can move no money (Priority: P2)
+
+**Goal**: A read-only monitor of every gateway order, its figures as reported and its events.
+
+**Independent Test**: After US3's purchases, every order with its reported figures, the `slot_unavailable` order's link, no control that writes (spec.md, US5; quickstart.md §5).
+
+- [ ] T052 [US5] The monitor's procedures: contracts in `packages/contracts/src/admin/payments.ts`; `payments.list` (status filter, search by order reference or student name, newest first, keyset pages of `admin_list_page_size`) and `payments.get` (amounts as reported, references, the enrollment's package and progress through booking's entry, events as a timeline) in `apps/api/src/modules/payments/payments-admin.router.ts` on the admin router; each call writes its `payments.listed` or `payments.viewed` audit entry and nothing else; `AdminSurfaceServices` gains `payments`; a spec that no monitor procedure writes beyond its audit entry (R-220, FR-400 to FR-402)
+- [ ] T053 [P] [US5] `/payments` in the panel: `apps/admin/src/pages/payments/` (`DataTable`, `Toolbar`, `FilterChips`, `Pager`, `Split`, `Timeline`, a dash where not paid), the `AdminNav` entry, behind the second factor as every admin page; specs (FR-400, FR-402, `AdminPayments`)
+
+**Checkpoint**: the monitor shows every order; nothing on it writes.
+
+---
+
+## Phase 8: Proofs and the close
+
+- [ ] T054 [P] The coverage floor in `packages/config/vitest.base.ts` widens to `modules/booking`, `modules/sessions` and `modules/moderation` (`modules/payments` by `002:T141`); the magic-number gate `scripts/magic-number-gate.ts` covers the new modules' code, every number a setting, a contract bound or a conversion; the money gates still find no piaster arithmetic outside `packages/money` and no wallet, ledger, escrow or balance (contracts/kernel.md, FR-411, FR-412, SC-308)
+- [ ] T055 [P] Phase 2's document pass, on `002:T139`'s: `docs/ARCHITECTURE.md`'s module graph (plan.md, Structure Decision), the module READMEs of `catalog`, `booking`, `payments`, `sessions` and `moderation`, `docs/SRS.md` §6.1 with `enrollment_events`, the table counts (42) everywhere `002:T139` corrected them
+- [ ] T056 The real gateway adapter (FR-371, R-221): if OPEN-11's written answers arrive before the last batch starts, that batch adds the gateway's member to `PaymentGateway`, its adapter beside the stand-in in `apps/api/src/platform/ports/payment/`, its configuration keys (production still refusing the stand-in) and the owner's sandbox run of quickstart §4 steps 3 to 5 (SC-301); otherwise this line stays open, timed before Phase 6, with the reason in its note
+- [ ] T057 The close: quickstart.md §1 and §2 on the last batch's commit, each run's output in its own file; the owner's device run of §3 to §5 on the Android phone, five attempts at most per step, SC-310's two seconds measured; the first-wave follow-ups checked `[x]` in `specs/002-identity/tasks.md` (FR-301); `PLAN.md`'s Phase 2 section updated with the close date
+
+---
+
+## Follow-ups timed outside this phase
+
+- [ ] T058 Discovery ranks a lone high rating above a well-established one (the owner's review of the plan, 2026-11-01): T025's order puts a teacher with one 5-star review above one with 4.9 from a hundred; a ranking that weighs the review count (for example a Bayesian average with the platform's mean as prior) is designed and decided later. Not scheduled; the owner's decision of 2026-11-01
+- [ ] T059 FR-AUTH-14's confirmed part (the owner's review of the plan, 2026-11-01): a student's deletion cancels their remaining sessions `cancelled_by_admin` and their confirmed enrollments `account_deleted`, with no compensation case; a teacher's deletion has FR-SESS-16's effect, compensation cases included. This phase writes the confirmed enrollments and sessions and T041 handles holds and pending enrollments; cancelling a session is Phase 3's. Timed Phase 3's first batch (the owner's decision of 2026-11-01), so that it falls to neither phase by omission; Phase 3's plan carries it
+
+---
+
+## Dependencies and Execution Order
+
+- **Carried from Phase 1** (B20 to B22) before anything else of this phase; `002:T143` is written as T010 in B23.
+- **Setup** (T001 to T003) and **Foundational** (T004 to T015) before the stories; T004 after `002:T140`, T005 after `002:T126`.
+- **US1** before **US2** on data (discovery needs packages and slots), though US2's API can be specified on seeded rows; **US3** needs US2's offerable slots (T026) and US1's port (T020); **US4** needs US3's confirmation; **US5** needs US3's orders.
+- Within a story: contracts, then the API with its specs, then the screens.
+- **Proofs and the close** last; T056 by the gateway's answers; T058 and T059 outside this phase.
+
+### Parallel within a batch (the owner's decision of 2026-10-26)
+
+Independent tasks of one batch run as parallel lanes, the shared files (`main.ts`, `context.ts`, `packages/contracts/src/index.ts`, the snapshot) integrated by the implementing session. For example, in B24: T005, T006, T007, T008, T009 and T012 touch different files.
+
+---
+
+## Batches
+
+At most six tasks each, in this order; one pull request each, reviewed by Saif's review session.
+
+| Batch | Tasks | What |
+|---|---|---|
+| B20 | 002:T123, 002:T126, 002:T129, 002:T133, 002:T134, 002:T135 | First wave: the marks, the locks, the cause, the sign-in budgets, key rotation, append-only keys |
+| B21 | 002:T136, 002:T137, 002:T138, 002:T140, 002:T160, 002:T162 | First wave: the phone's follow-ups and the column checks |
+| B22 | 002:T139, 002:T141, 002:T161, 002:T142, 002:T145, 002:T146 | The first wave's last two, and the four that must precede this phase's code |
+| B23 | T001, T002, T003, T004, T010, T011 | Setup, the schema pass, the predicate (`002:T143`), the adversarial harness |
+| B24 | T005, T006, T007, T008, T009, T012 | Locks, database refusals, time, money, the stand-in's page |
+| B25 | T013, T016, T017, T018, T019, T020 | The harness; US1's API |
+| B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing; US1's screens |
+| B27 | T024, T025, T026, T027, T028 | US2's API and its adversarial cases |
+| B28 | T029, T030, T031, T032, T034, T035 | US2's screens; US3's contracts, booking sheet read, generation, the case |
+| B29 | T033, T036, T037, T038, T039, T040 | US3's core: holds, checkout, the address, order events, confirmation, expiry |
+| B30 | T041, T042, T043, T044, T045, T046 | US3's terminations, proofs and screens |
+| B31 | T047, T048, T049, T050, T051 | US4 |
+| B32 | T052, T053, T054, T055, T056, T057 | US5, the gates, the documents, the gateway (if answered), the close |
+
+## Implementation Strategy
+
+The MVP of this phase is US1 to US3: a teacher offers, a student finds and pays, the signed event alone confirms. US4 and US5 complete the phase's definition of done (DST, both lists, the monitor). Each batch merges to `develop` before the next starts; a batch that grows past six tasks or its day is stated when it happens, not forecast.
