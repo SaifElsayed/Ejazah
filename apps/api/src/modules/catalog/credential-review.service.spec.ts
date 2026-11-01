@@ -158,6 +158,20 @@ describe('approve', () => {
     await serviceOver(store).approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION });
     expect(store.granted).toEqual([]);
   });
+
+  it("locks the teacher's account, then the application, before the credential moves and the teacher's approval is read (T142)", async () => {
+    // The account first (the owner's decision of 2026-11-01), as a ban takes them.
+    const store = new MemoryReviewStore();
+    store.approveTeacher(TEACHER);
+    const credentialId = store.plant({ submittedWithApplication: false });
+    await serviceOver(store).approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION });
+    expect(store.journal).toEqual([
+      `lock-account:${TEACHER}`,
+      `lock:${TEACHER}`,
+      `approve:${credentialId}`,
+      `approved-teacher:${TEACHER}`,
+    ]);
+  });
 });
 
 describe('reject and requestDocument', () => {
@@ -291,6 +305,14 @@ describe("requestDocument and the teacher's application (T155)", () => {
       await codeOf(serviceOver(store).requestDocument(TX, ADMIN, { credentialId, reason: 'سبب' })),
     ).toBe('CONFLICT');
     expect(store.applications.get(TEACHER)?.status).toBe('in_review');
+  });
+
+  it("locks the teacher's application before it moves the credential (T161)", async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    store.applyingAs(TEACHER, 'in_review');
+    await serviceOver(store).requestDocument(TX, ADMIN, { credentialId, reason: 'سبب' });
+    expect(store.journal).toEqual([`lock:${TEACHER}`, `decide:${credentialId}`]);
   });
 });
 

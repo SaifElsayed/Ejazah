@@ -285,6 +285,33 @@ describe('the application over the tables (T056)', () => {
     await expect(services.application.get(userId)).resolves.toMatchObject({ subjectCount: 2 });
   });
 
+  it('refuses a reapplication from a teacher revoked then banned, whose application stays rejected (T142)', async () => {
+    const { userId, application } = await applicant();
+    await services.application.submit(userId, { ...application, idempotencyKey: key() });
+    // `teachers.revokeApproval` leaves `revoked` and `rejected`; `teachers.ban` then writes only
+    // `verification_status` (`banTeacherProfile`), so the application is still `rejected`.
+    await db.query(
+      `UPDATE teacher_profiles SET verification_status = 'banned', application_status = 'rejected',
+              application_note = 'سُحب الاعتماد', application_decided_at = now()
+        WHERE user_id = $1`,
+      [userId],
+    );
+    const again = {
+      ...application,
+      identityDocument: { type: 'passport' as const, documentId: await upload(userId) },
+      credentials: [
+        { subjectId: application.subjectIds[0]!, documentId: await upload(userId) },
+        { subjectId: application.subjectIds[1]!, documentId: await upload(userId) },
+      ],
+    };
+    await expect(services.application.reapply(userId, again)).rejects.toEqual(refused('CONFLICT'));
+    expect((await profileOf(userId))[0]).toMatchObject({
+      verification_status: 'banned',
+      application_status: 'rejected',
+    });
+    expect(await credentialsOf(userId)).toHaveLength(2);
+  });
+
   it('marks the approved screen shown once, while approved', async () => {
     const { userId, application } = await applicant();
     await services.application.submit(userId, { ...application, idempotencyKey: key() });
