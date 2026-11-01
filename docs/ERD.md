@@ -43,7 +43,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` · `admin_sessions` · `admin_recovery_codes` |
 | PLATFORM | `platform` (kernel, not a module) | `idempotency_keys` |
 
-Forty tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), and `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
+Forty-one tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`), and `banned_identifiers` of T097 (migration `20261026000100`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
 
 ## 2. Identity
 
@@ -973,7 +973,7 @@ The decision is the owner's on the review of PR #84 (observation 9): research R-
 | # | Change | Migration |
 |---|---|---|
 | 1 | §2 `user_session_retired_tokens`; `user_sessions.previous_refresh_token_hash` reads for the grace window only | `20261020000000_user_session_retired_tokens` |
-| 2 | §1 counts forty tables; §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
+| 2 | §1 counts forty tables (forty-one since v1.10, `banned_identifiers`); §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
 
 ## Changelog — v1.5 → v1.6 (the manual time zone kept, 2026-10-20)
 
