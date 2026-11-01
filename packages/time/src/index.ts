@@ -49,9 +49,15 @@ export interface ResolvedInstant {
   readonly disambiguation: Disambiguation;
 }
 
-/** One resolved occurrence of a slot — a future `sessions` row's two instants. */
+/**
+ * One resolved occurrence of a slot — a future `sessions` row's two instants. The requested fields
+ * are what was asked for (T007, ADR 0009 D1: `scheduled_date_local`, `scheduled_start_time_local`),
+ * the inherited local fields where it landed; they differ only when a gap shifted it forward.
+ */
 export interface Occurrence extends ResolvedInstant {
   readonly endsAt: UtcInstant;
+  readonly requestedLocalDate: LocalDate;
+  readonly requestedStartTimeLocal: LocalTime;
 }
 
 /**

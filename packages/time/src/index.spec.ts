@@ -69,6 +69,8 @@ describe('T032 the public surface carries no Temporal object (FR-017)', () => {
       endsAt: '2025-04-18T08:00:00Z',
       utcOffsetMinutes: 120,
       disambiguation: 'exact',
+      requestedLocalDate: FRIDAY,
+      requestedStartTimeLocal: '09:00:00',
     });
   });
 
@@ -149,6 +151,8 @@ describe('T033 each occurrence is resolved alone (FR-018, R-TIME-2)', () => {
       endsAt: '2025-04-24T23:30:00Z',
       utcOffsetMinutes: 180,
       disambiguation: 'shifted_forward',
+      requestedLocalDate: '2025-04-25',
+      requestedStartTimeLocal: '00:30:00',
     });
   });
 
@@ -169,6 +173,8 @@ describe('T033 each occurrence is resolved alone (FR-018, R-TIME-2)', () => {
       endsAt: '2025-10-30T22:30:00Z',
       utcOffsetMinutes: 180,
       disambiguation: 'first_of_two',
+      requestedLocalDate: '2025-10-30',
+      requestedStartTimeLocal: '23:30:00',
     });
   });
 });
