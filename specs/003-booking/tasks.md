@@ -227,7 +227,7 @@ At most six tasks each, in this order; one pull request each, reviewed by Saif's
 | D13 Mon 11/2 | B23 | T001, T002, T003, T004, T010, T011 | Setup, the schema pass, the predicate (`002:T143`), the adversarial harness |
 | D14 Tue 11/3 | B24 | T005, T006, T007, T008, T009, T012 | Locks, database refusals, time, money, the stand-in's page |
 | D14 Tue 11/3 | B25 | T020, T013, T016, T017, T018, T019 | US1's port first (T018 and T019 call it, analysis L2); the harness; US1's API |
-| D15 Wed 11/4 | B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing (T014 and T015 before the screens); US1's screens; `002:T123`'s device check on the first of them that renders one of its 37 keys (the owner's decision of 2026-11-01) |
+| D15 Wed 11/4 | B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing (T014 and T015 before the screens); US1's screens; `002:T123`'s device check on the first of them that renders one of its 37 keys, and in the Arabic device run the offline banner in Arabic too (`002:T138`, held by its spec alone) (the owner's decisions of 2026-11-01) |
 | D16 Thu 11/5 | B27 | 002:T145, T024, T025, T026, T027, T028 | The photo's metadata first (T027 shows the photo); US2's API and its adversarial cases |
 | D16 Thu 11/5 | B28 | T029, T030, T031, T032, T034, T035 | US2's screens; US3's contracts, booking sheet read, generation, the case |
 | D17 Sun 11/8 | B29 | T033, T036, T037, T038, T039, T040 | US3's core: holds, checkout, the address, order events, confirmation, expiry |
