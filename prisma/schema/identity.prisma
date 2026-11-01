@@ -131,6 +131,9 @@ model UserSession {
   retiredTokens UserSessionRetiredToken[]
 
   @@index([userId])
+  // T140 (ERD §14): the grace window's lookup by the hash the last rotation retired; without it a
+  // presented token that matches no current hash scans the table.
+  @@index([previousRefreshTokenHash])
   @@map("user_sessions")
 }
 
