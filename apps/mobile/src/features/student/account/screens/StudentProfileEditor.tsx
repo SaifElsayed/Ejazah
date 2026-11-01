@@ -26,8 +26,9 @@ import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { pickPhoto } from '../../../../lib/files';
 import { useFormatters } from '../../../../lib/formatters';
-import { AccountFailed, AccountLoading, initialsOf } from '../../../shared/account';
+import { AccountLoading, initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
+import { NotLoaded } from '../../../shared/states';
 import { useProfileActions } from '../api';
 import { leaveToAccount } from '../navigation';
 
@@ -99,11 +100,11 @@ export function StudentProfileEditor() {
       }
     >
       {account === undefined ? (
-        me.isError ? (
-          <AccountFailed onRetry={() => void me.refetch()} />
-        ) : (
-          <AccountLoading />
-        )
+        <NotLoaded
+          failed={me.isError}
+          onRetry={() => void me.refetch()}
+          loading={<AccountLoading />}
+        />
       ) : (
         <>
           {failed ? (

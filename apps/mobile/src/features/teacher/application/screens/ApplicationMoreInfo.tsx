@@ -22,9 +22,9 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useSubjectName } from '../../../../lib/subjects';
-import { AccountFailed } from '../../../shared/account';
 import { PdfField, type UploadedPdf } from '../../../shared/documents';
 import { StackScreen } from '../../../shared/screen';
+import { NotLoaded } from '../../../shared/states';
 import { useCredentials } from '../../credentials/api';
 import { useApplicationActions, useApplicationStatus } from '../api';
 import { DeleteAccountAction, useApplicationDate } from './ApplicationStatus';
@@ -95,16 +95,14 @@ export function ApplicationMoreInfo() {
       }
     >
       {answer === undefined || credentials.data === undefined ? (
-        application.isError || credentials.isError ? (
-          <AccountFailed
-            onRetry={() => {
-              void application.refetch();
-              void credentials.refetch();
-            }}
-          />
-        ) : (
-          <Skeleton shape="block" />
-        )
+        <NotLoaded
+          failed={application.isError || credentials.isError}
+          onRetry={() => {
+            void application.refetch();
+            void credentials.refetch();
+          }}
+          loading={<Skeleton shape="block" />}
+        />
       ) : (
         <View style={{ gap: tokens.space['5'] }}>
           <Card variant="warning">

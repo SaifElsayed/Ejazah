@@ -31,8 +31,8 @@ import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
 import { PdfField, type UploadedPdf } from '../../documents';
 import { StackScreen } from '../../screen';
+import { NotLoaded } from '../../states';
 import { useIdentityActions, useIdentityRequest } from '../identity';
-import { AccountFailed } from './AccountSettings';
 
 const UPLOAD = {
   national_id: {
@@ -142,11 +142,11 @@ export function VerifyIdentity() {
       }
     >
       {answer === undefined ? (
-        request.isError ? (
-          <AccountFailed onRetry={() => void request.refetch()} />
-        ) : (
-          <Skeleton shape="block" />
-        )
+        <NotLoaded
+          failed={request.isError}
+          onRetry={() => void request.refetch()}
+          loading={<Skeleton shape="block" />}
+        />
       ) : !answer.open ? (
         <>
           {outcome}

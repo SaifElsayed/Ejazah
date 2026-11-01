@@ -4,8 +4,8 @@
 // lead here, so each lands on the state the server holds.
 import { Skeleton } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
-import { AccountFailed } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
+import { NotLoaded } from '../../../shared/states';
 import { usePayout } from '../api';
 import { PayoutHeader } from '../components/PayoutHeader';
 import { PayoutRejected } from './PayoutRejected';
@@ -20,11 +20,11 @@ export function Payout() {
   if (answer === undefined) {
     return (
       <StackScreen header={<PayoutHeader title={t('teacher.payout.start.title')} />}>
-        {payout.isError ? (
-          <AccountFailed onRetry={() => void payout.refetch()} />
-        ) : (
-          <Skeleton shape="block" />
-        )}
+        <NotLoaded
+          failed={payout.isError}
+          onRetry={() => void payout.refetch()}
+          loading={<Skeleton shape="block" />}
+        />
       </StackScreen>
     );
   }

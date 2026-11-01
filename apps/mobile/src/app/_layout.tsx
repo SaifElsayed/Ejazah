@@ -15,6 +15,10 @@
 // T136: a session that ends (a sign-out, the account's deletion) leaves nothing typed behind on the
 // phone: the teacher's application draft (its `reapply` mode with it), the onboarding draft and the
 // pending address with its password are cleared with the query cache.
+//
+// T138 (FR-205): NetInfo drives the query cache's connection (lib/online.ts), once per process as
+// TanStack's React Native guide does; with no connection `account.me` waits, so the launch says it
+// cannot load rather than waiting on a blank screen.
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Redirect, Stack, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -30,6 +34,7 @@ import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
 import { ApiProvider, useApi } from '../lib/api';
+import { followNetInfo } from '../lib/online';
 import {
   allows,
   destinationFor,
@@ -40,6 +45,8 @@ import {
   useSession,
 } from '../lib/session';
 import { deviceTimeZone } from '../lib/time-zone';
+
+followNetInfo();
 
 export default function RootLayout() {
   const [queries] = useState(() => new QueryClient());
@@ -72,7 +79,11 @@ function SessionGuard({ queries }: { readonly queries: QueryClient }) {
   }, [session.kind, queries]);
   const destination = destinationFor(session);
   if (destination === null) {
-    return me.isError ? <LaunchFailed onRetry={() => void me.refetch()} /> : <Waiting />;
+    return me.isError || me.isPaused ? (
+      <LaunchFailed onRetry={() => void me.refetch()} />
+    ) : (
+      <Waiting />
+    );
   }
   if (!allows(session, segments)) return <Redirect href={destination as never} />;
   return <Routes />;

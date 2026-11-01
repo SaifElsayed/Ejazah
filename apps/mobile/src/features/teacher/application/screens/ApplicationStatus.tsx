@@ -29,8 +29,9 @@ import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
-import { AccountFailed, IdentityRequestCard, SignOutSheet } from '../../../shared/account';
+import { IdentityRequestCard, SignOutSheet } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
+import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../../account/navigation';
 import { useApplicationStatus } from '../api';
 import { startApplication } from '../draft';
@@ -73,13 +74,14 @@ export function ApplicationStatus() {
         />
       }
     >
+      {answer === undefined ? null : <OfflineNotice onRetry={() => void application.refetch()} />}
       <IdentityRequestCard />
       {answer === undefined ? (
-        application.isError ? (
-          <AccountFailed onRetry={() => void application.refetch()} />
-        ) : (
-          <Skeleton shape="block" />
-        )
+        <NotLoaded
+          failed={application.isError}
+          onRetry={() => void application.refetch()}
+          loading={<Skeleton shape="block" />}
+        />
       ) : answer.status === 'rejected' ? (
         <View style={{ gap: tokens.space['5'] }}>
           <Card variant="hero">

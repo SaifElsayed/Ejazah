@@ -1,11 +1,15 @@
 // T034 (FR-205): the states the design does not draw, as screens.md's states tables assign them:
 // skeleton rows while a list loads, a danger banner with a retry when it fails, and the offline
 // pattern (a warning banner announced as a status, with a retry) on every tab root and list.
+// T138: the screens reach them through `NotLoaded`, in place of data not read yet, and
+// `OfflineNotice`, over cached data, by the connection the query cache knows (lib/online.ts).
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { Banner, Button, Skeleton, TextLink } from '../../../design/primitives';
 import { tokens } from '../../../design/tokens';
 import { useT } from '../../../i18n';
+import { useOnline } from '../../../lib/online';
 
 /** Skeleton rows in place of a list: an avatar, a title and a line each. */
 export function LoadingRows({ rows = 3 }: { readonly rows?: number }) {
@@ -51,4 +55,31 @@ export function OfflineBanner({ onRetry }: { readonly onRetry: () => void }) {
       <TextLink label={t('common.action.retry')} onPress={onRetry} />
     </View>
   );
+}
+
+/**
+ * In place of data not read yet: with no connection the offline banner (the read waits for one),
+ * after a failed read the danger banner, else the loading shapes (the screen's own, or rows).
+ */
+export function NotLoaded({
+  failed,
+  onRetry,
+  loading = <LoadingRows />,
+}: {
+  readonly failed: boolean;
+  readonly onRetry: () => void;
+  readonly loading?: ReactNode;
+}) {
+  const online = useOnline();
+  if (!online) return <OfflineBanner onRetry={onRetry} />;
+  if (failed) return <LoadError onRetry={onRetry} />;
+  return loading;
+}
+
+/**
+ * Over cached data on a tab root or a list (the `MainOffline` pattern): the offline banner while
+ * there is no connection, nothing while there is one.
+ */
+export function OfflineNotice({ onRetry }: { readonly onRetry: () => void }) {
+  return useOnline() ? null : <OfflineBanner onRetry={onRetry} />;
 }

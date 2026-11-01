@@ -9,9 +9,10 @@
 // system's and the arrow's, raises no `GO_BACK` and never returns to a screen open before.
 // T136: signing out or deleting the account leaves no draft behind on the phone: the teacher's
 // application (its `reapply` mode with it), the onboarding's, and the pending address and password.
+// T138: a launch with no connection says it cannot load instead of waiting on a blank screen.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { useQueryClient } from '@tanstack/react-query';
+import { onlineManager, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
 import { BackHandler, Text, View } from 'react-native';
@@ -125,6 +126,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env['EXPO_PUBLIC_API_URL'];
+  onlineManager.setOnline(true);
 });
 
 describe('the root layout', () => {
@@ -132,6 +134,16 @@ describe('the root layout', () => {
     setSession({ kind: 'restoring' });
     await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
     expect(screen.queryByText('welcome')).toBeNull();
+  });
+
+  // T138: with no connection the read of `account.me` waits for one, so the launch says so.
+  it('says it cannot load, with a retry, when it launches with no connection', async () => {
+    onlineManager.setOnline(false);
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
+    expect(screen.getByRole('button', { name: ar('common.action.retry') })).toBeTruthy();
+    expect(mockApi.account.me.query).not.toHaveBeenCalled();
   });
 
   it('lands a signed-out person on the welcome screen', async () => {
