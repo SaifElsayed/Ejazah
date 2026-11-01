@@ -186,8 +186,8 @@ hold writes in one module would make one of them read the other's tables.
 
 ## R-209 — Generation: requested local dates, the 24-hour lead, and what the student was shown
 
-**Decision.** `packages/time` gains `firstOccurrenceAfter(slot, { notBefore: UtcInstant, leadHours })` returning the
-first local date whose resolved start is at least `leadHours` after `notBefore`, and `resolveOccurrences` gains the
+**Decision.** `packages/time` gains `firstOccurrenceAfter(slot, instant: Date, leadHours)` (as built in T007, B24) returning the
+first local date whose resolved start is at least `leadHours` after `instant`, and `resolveOccurrences` gains the
 requested local date and time on each `Occurrence` (`requestedLocalDate`, `requestedStartTimeLocal`), because ADR 0009
 D1 stores what was asked for, not where a gap moved it. `sessions/generation.service.ts`
 (`generateForEnrollment(tx, { enrollmentId, teacherUserId, studentUserId, slot, count, confirmedAt })`) writes one row
