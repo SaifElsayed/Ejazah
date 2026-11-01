@@ -15,7 +15,7 @@
 // transaction stays usable after the refusal and the probe can go on to the next statement. A
 // refusal is identified by its SQLSTATE, never by message text: 42501 insufficient privilege,
 // 23514 check violation, 23505 unique violation, 23502 not-null violation, 23P01 exclusion
-// violation, 42703 undefined column.
+// violation, 42703 undefined column, 23001 restrict violation.
 //
 // HOW ROWS ARE BUILT. `insertRow` writes one row by column name and returns its id. Columns are the
 // ERD's (docs/ERD.md), snake_case as in the database. A Prisma `@updatedAt` column has no database
@@ -50,6 +50,7 @@ export const SQLSTATE = {
   notNullViolation: '23502',
   exclusionViolation: '23P01',
   undefinedColumn: '42703',
+  restrictViolation: '23001',
 } as const;
 
 function required(name: string): string {
