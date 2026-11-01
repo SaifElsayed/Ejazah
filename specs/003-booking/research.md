@@ -18,6 +18,9 @@ as it stands on `develop` f2389ff (read on 2026-10-31); where it names existing 
 
 - `visibleTeachers(tx, requester, { purpose: 'discover' | 'book', teacherIds?, namePrefix? })` → the public fields of
   each visible teacher (id, display name, gender, photo key, bio, qualification summary, rating, review count);
+- `visibleTeacherPage(tx, requester, { candidateIds, namePrefix?, minRating?, after?, limit })` → the same rows for one
+  page of discovery, in R-204's order (the owner's decisions of 2026-11-01, analysis C2): the order's keys are identity's columns, so identity orders
+  and pages them; catalog passes only the ids its own tables allow;
 - `isVisibleTeacher(tx, requester, teacherId, purpose)` → the same row or `null`.
 
 `purpose: 'discover'` applies the five conjuncts; `'book'` adds `account_status = 'active'` (T143). Both are exported
@@ -56,9 +59,10 @@ ARCHITECTURE §10 has three layers).
 
 **Decision.** `users` gains a generated column `display_name_folded text GENERATED ALWAYS AS (ijazah_fold(display_name))
 STORED`, with `ijazah_fold` an `IMMUTABLE` SQL function: `lower()`, then `translate()` of أإآ→ا, ى ئ→ي, ؤ→و, ة→ه,
-then `regexp_replace` removing the tashkeel range (U+064B–U+065F, U+0670) and tatweel (U+0640). An index
-`users (display_name_folded text_pattern_ops)` serves the prefix. The typed text is folded by the same function in the
-query (`display_name_folded LIKE ijazah_fold($q) || '%'`, the pattern escaped with `platform/db/like-literal.ts`). The
+then `regexp_replace` removing the tashkeel range (U+064B–U+065F, U+0670) and tatweel (U+0640). No index: R-DB-9
+asks for a measured slow query first, and T057 measures (analysis C1). The typed text is folded by the same function
+through a kernel helper in `platform/db/` (raw SQL stays there, R-API-6), and identity's repository matches the folded
+column by that prefix, the pattern escaped with `platform/db/like-literal.ts`. The
 highlight is computed on the server as the length of the matched prefix in the original name's characters, returned
 with the result; the phone marks it. Subject search uses the same function over `subjects.name_ar`/`name_en`, no index
 (a few dozen rows).
@@ -76,15 +80,23 @@ fuzzy) than the prefix the SRS asks for.
 **Decision.** `catalog/discovery.service.ts` serves `discovery.browse` (a subject tab or all, the filters, a cursor) and
 `discovery.teacher` (the profile). Search is `browse` with a `query`. A page is `discovery_page_size` cards (a new
 setting, default 20), keyset-paged on one total order (the owner's decision of 2026-11-01):
-`COALESCE(average_rating, 0) DESC`, `review_count DESC`, `display_name ASC`, then the teacher's id `ASC`. A teacher with
-no review has a NULL `average_rating`, which PostgreSQL sorts first in a descending order, so the new teacher would top
-every list; the `COALESCE` is written in the ORDER BY and in the keyset condition alike (a rating runs 1 to 5, so 0 sorts
-after every rated teacher, and the condition never compares a NULL). The id comes last because names repeat: on the
-name alone a page boundary between two teachers of one name, rating and count could repeat a card or skip one. The
-cursor carries the four values; the condition is the expanded form of the mixed directions (rating `<`, or equal and
-count `<`, or both equal and name `>`, or all three equal and id `>`), with the name compared in the collation the ORDER BY
-uses. Two specs: a teacher with no review comes after every teacher with one; two teachers of one name, rating and
-count on either side of a page boundary each appear exactly once across the two pages. A single 5-star review ranking
+`average_rating DESC NULLS LAST`, `review_count DESC`, `display_name ASC`, then the teacher's id `ASC`. The order's keys
+are identity's columns (`teacher_profiles`, `users`), so the page is ordered and cut by identity's
+`visibleTeacherPage` (R-201) through Prisma, `orderBy: { averageRating: { sort: 'desc', nulls: 'last' } }` as
+`modules/verification/verification-requests.repository.ts` line 42 already writes it; catalog computes the candidate
+ids its own tables allow (subject, track, riwaya, an active package) among the visible ones and builds the cards of the
+page it gets back (the owner's decisions of 2026-11-01, analysis C2; `COALESCE` would need raw SQL outside `platform/db/`, and gives the same order since a
+rating runs 1 to 5). A teacher with no review has a NULL `average_rating`, which PostgreSQL sorts first in a descending
+order unless told otherwise, so `NULLS LAST` is written in the ORDER BY and its NULL branch in the keyset condition: after
+a cursor with a rating, the next rows are a lower rating, or the same rating and a lower count (and so on), or a NULL
+rating; after a cursor with a NULL rating, only NULL-rated rows with a lower count, or the same count and a later name,
+or the same name and a later id. The id comes last because names repeat: on the name alone a page boundary between two
+teachers of one name, rating and count could repeat a card or skip one. The cursor carries the four values, the name
+compared in the collation the ORDER BY uses. Three specs: a teacher with no review comes after every teacher with one;
+two teachers of one name, rating and count on either side of a page boundary each appear exactly once across the two
+pages; a page whose last row is a teacher with no review is followed by a page that repeats and skips no one, since
+the next page is cut from that row and that is where `NULLS LAST` can go wrong (the owner's decision of 2026-11-01). A
+single 5-star review ranking
 above 4.9 from a hundred is a known weakness of this order, recorded as a follow-up in `tasks.md` and not changed now.
 Each card carries
 the teacher's subjects, track badges (from active packages), the lowest price per session (R-212) and the nearest free

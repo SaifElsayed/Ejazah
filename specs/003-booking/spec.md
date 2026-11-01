@@ -296,7 +296,7 @@ order with the figures the gateway reported, a paid order cancelled
 - A confirmation arrives later than the student's checkout, past the first session the student was shown: the first session moves to the next occurrence that meets the lead, and the success screen says so (FR-386).
 - A slot whose local start falls in the spring-forward gap every year (a Friday at 00:30 in Cairo): every session but the one in the gap's week keeps its time; that one resolves forward (ADR 0009 D1).
 - The student's zone differs from the teacher's: slots and sessions show both zones; the hold and the generation use only the teacher's zone frozen in the snapshot (ADR 0009 D5).
-- A student deletes their account with an enrollment awaiting payment: the deletion releases the active hold and cancels that enrollment with `account_deleted`, as ADR 0015 D4 cancels a confirmed one; the plan checks what Phase 1's deletion already does with holds.
+- A student deletes their account with an enrollment awaiting payment: the deletion releases the active hold and cancels that enrollment with `account_deleted` (R-219). Phase 1's deletion touches no hold or enrollment. The confirmed part of FR-AUTH-14 (remaining sessions `cancelled_by_admin`, confirmed enrollments `account_deleted`, a deleted teacher with FR-SESS-16's effect) needs Phase 3's session cancellation and lands in Phase 3's first batch (tasks.md T059; the owner's decision of 2026-11-01).
 - The confirmation timeout passes with no answer: the student is released with the Confirming state, and the badge clears when the enrollment is next read as confirmed.
 
 ## Requirements _(mandatory)_

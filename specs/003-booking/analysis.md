@@ -4,6 +4,11 @@
 contracts) and [tasks.md](./tasks.md) at commit 908723d, against `.specify/memory/constitution.md`. Read-only: no
 artefact was changed by this run; the remediations below wait for the owner's word.
 
+**Remediation (2026-11-01).** The owner approved the nine as written, with one addition to C2: a third paging spec, a
+page whose last row is a teacher with no review followed by a page that repeats and skips no one. Applied to spec.md
+(I1), research.md (R-201, R-203, R-204), data-model.md (§2.2, §6), plan.md (the R-DB row, the review-only tier,
+re-check 6) and tasks.md (T004, T009, T010, T011, T025, T028, T038, T056, B25's order).
+
 ## Findings
 
 | ID | Category | Severity | Location | Summary | Recommendation |

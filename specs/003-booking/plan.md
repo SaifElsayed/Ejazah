@@ -87,14 +87,14 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 | R-GENDER | The predicate lives once, takes `RequesterGender`, and every student path filters by its answer; not found is one shape; counts after the predicate (R-201, R-202) | The adversarial suite's procedure harness and its cases, blocking (FR-410, SC-304) | **PASS** |
 | R-MOBILE | Every screen from its board as decided; every string from the catalogue (the Phase 2 keys already exist); every colour a token; later phases' controls absent, not disabled (R-MOBILE-13) | The primitives whose contracts already exist (`Slot`, `CategoryTabs`, `FilterChips`, `Stats`) | **PASS** |
 | R-API | Thin routers, services with the rules, repositories with the queries; modules reach each other only through `index.ts` and the two inverted bindings (R-207, R-219); every procedure with both schemas; additive snapshot; the port speaks the domain | The row and key locks, the deferred constraints, the database-refusal names (contracts/kernel.md) | **PASS** |
-| R-DB | Two forward migrations; one append-only table with its revoke; one encrypted column joining re-encryption; one index justified by FR-333; nothing derived stored (occupancy, counts, remaining sessions) | Rules 36 to 39 | **PASS** |
+| R-DB | Two forward migrations; one append-only table with its revoke; one encrypted column joining re-encryption; no new index (R-DB-9, analysis C1); nothing derived stored (occupancy, counts, remaining sessions) | Rules 36 to 39 | **PASS** |
 | R-SEC | Rate limits on search and payment initiation; signatures verified on the raw body before any handler; the stand-in's page exists only where `fake` is allowed; the hosted URL encrypted at rest | None new | **PASS** |
 | R-SESS | No session runs; generation only | None | **PASS** |
 | R-HONEST | The phone renders success only from the server's confirmed row; the Confirming state and FR-384's message never claim a failure the server did not report; the teacher sees no date of birth, minor flag, document or dispute history | The R-HONEST-1 confirmation-path test assigned to Phase 2 (contracts/kernel.md, SC-307) | **PASS** |
 | R-PROC | Spec, two clarification rounds and plan precede code; requirements from the SRS, board-only behaviour decided by the owner first; every batch one branch, one PR, one review | The coverage floor widened | **PASS** |
 
-**Review-only tier.** Live in this phase: R-API-5 (the port's names stay the domain's, R-213), R-DB-9 (the one new
-index, justified), R-PROC-3 (no rule invented at the keyboard: the overlap, freeze, lead and fold rules are the
+**Review-only tier.** Live in this phase: R-API-5 (the port's names stay the domain's, R-213), R-DB-9 (no new index
+without a measured slow query, analysis C1), R-PROC-3 (no rule invented at the keyboard: the overlap, freeze, lead and fold rules are the
 owner's), R-MOBILE-3, R-MOBILE-12 and R-MOBILE-14 (the new screens).
 
 **Gate result: PASS.** No unjustified violation; two structural costs are recorded in Complexity Tracking.
@@ -214,9 +214,11 @@ worth recording, and the owner's review of 2026-11-01 a sixth and two conditions
    owner's decision of 2026-11-01).
 5. **`packages/money` gains its first operation.** Its header says none is added until a requirement names it; FR-337
    names the per-session price, rounded half up to the piaster, for display only.
-6. **Discovery's order is total** (R-204, the owner's decision of 2026-11-01). `COALESCE(average_rating, 0) DESC`, then
+6. **Discovery's order is total** (R-204, the owner's decision of 2026-11-01). `average_rating DESC NULLS LAST`, then
    the review count, the name, and the id last, in the ORDER BY and the keyset condition alike, so a teacher with no
-   review never tops the list and a page boundary between two teachers of one name neither repeats nor skips a card;
-   a spec for each. Ranking a lone 5-star review above 4.9 from a hundred is a follow-up for later.
+   review never tops the list and a page boundary between two teachers of one name neither repeats nor skips a card.
+   The keys are identity's columns, so identity's `visibleTeacherPage` orders and pages through Prisma, and catalog
+   passes only candidate ids (analysis C2, R-API-6). Three specs: the unrated teacher last, the same-name boundary, and a
+   page ending on an unrated teacher followed by a page that repeats and skips no one. Ranking a lone 5-star review above 4.9 from a hundred is a follow-up for later.
 
 **Re-check result: PASS.**

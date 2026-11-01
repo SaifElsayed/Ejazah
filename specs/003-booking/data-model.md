@@ -50,8 +50,9 @@ T140's other items (`isnad_entries.position >= 1`, the audit label, the `previou
 `ؤ` → `و`, `ة` → `ه`, then `regexp_replace` removing U+064B–U+065F, U+0670 and U+0640. Declared in the migration (raw
 SQL in a migration is allowed, R-DB-1); the application's queries call it through the kernel's raw-SQL helpers only.
 
-Index: `users (display_name_folded text_pattern_ops) WHERE deleted_at IS NULL` — the prefix search. R-DB-9: justified
-by FR-333 itself, a prefix match on every keystroke under the search rate limit.
+No index (analysis C1, R-DB-9): an index beyond ERD §14 needs a measured slow query first. At the launch cohort's size
+the prefix match reads the visible set, already one indexed read (R-201). T057 measures SC-310 on the phone; a slow
+search found there becomes a follow-up with its measured query, and only then the index.
 
 ### 2.3 `enrollments` — what the student was shown (R-209)
 
@@ -154,7 +155,7 @@ exclusion constraints as second line); a slot in use keeps its day, time and len
 ## 6. Migrations
 
 1. **T140's checks** (first batch): §2.1, with probes in `tests/db-integrity`.
-2. **The Phase 2 pass**: `ijazah_fold`, `users.display_name_folded` and its index; `enrollments.quoted_first_session_local_date`;
+2. **The Phase 2 pass**: `ijazah_fold`, `users.display_name_folded` (no index, §2.2); `enrollments.quoted_first_session_local_date`;
    `payments.expires_at` and `checkout_url_encrypted`; `enrollment_event_kind` and `enrollment_events` with its rule;
    the five settings rows in the seed. Probes for rule 39 and for the fold's equivalences (SC-314's data).
 
