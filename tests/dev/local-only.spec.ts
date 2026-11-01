@@ -9,9 +9,9 @@ import {
   apiOriginOf,
   connectReadOnly,
   type Connection,
-  environment,
   localOnlyRefusal,
 } from '../../scripts/dev/local-only';
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
 
 const LOCAL = {
   NODE_ENV: 'development',
@@ -93,10 +93,11 @@ describe('the API origin', () => {
   });
 });
 
-describe('the read-only connection', () => {
+// T124: skipped unless IJAZAH_DB_SPECS=1, the URL from the environment only (PR #112's review, round 1).
+describe('the read-only connection', { tags: ['database'] }, () => {
   let db: Connection;
   beforeAll(async () => {
-    db = await connectReadOnly(environment()['DATABASE_URL'] ?? '');
+    db = await connectReadOnly(specDatabaseUrl('DATABASE_URL'));
   });
   afterAll(async () => {
     await db.end();
