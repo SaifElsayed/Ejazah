@@ -9,7 +9,8 @@
 // resubmission and a credential's document request, both on the application's row; T142 a
 // credential's approval, on the same row, against a revocation. Both approvals lock the account
 // before the application, since their grant references the teacher's `users` row and a ban holds
-// it while it waits on the application (the owner's decision of 2026-11-01).
+// it while it waits on the application (the owner's decision of 2026-11-01); so does a
+// reapplication, whose new credentials reference the same row (PR #112's review, round 1).
 //
 // HOW A RACE IS STAGED, as `booking-concurrency.spec.ts` stages it. Transaction A runs its move and
 // stays open; transaction B starts its move and is seen waiting on a lock by a watcher reading
@@ -95,7 +96,7 @@ afterAll(async () => {
 /** A committed person with a submitted application in the given states; the user's id. */
 async function teacher(values: {
   accountStatus: 'active' | 'suspended';
-  applicationStatus: 'in_review' | 'needs_document' | 'approved';
+  applicationStatus: 'in_review' | 'needs_document' | 'rejected' | 'approved';
 }): Promise<string> {
   const userId = await makeUser(db, { account_status: values.accountStatus });
   const documentId = await insertRow(db, 'verification_documents', {
@@ -515,12 +516,22 @@ function settled<T>(transaction: Promise<T>): Promise<Ended<T>> {
   );
 }
 
+/** A write a move makes after its locks, where a probe pauses it: the model and the method. */
+type PausePoint =
+  | { readonly model: 'teacherSubject'; readonly method: 'createMany' }
+  | { readonly model: 'teacherCredential'; readonly method: 'create' };
+
 /**
- * `tx` as a move sees it, except that granting subjects (`teacherSubject.createMany`, whose foreign
- * key to `users` takes a key-share lock on the teacher's row) first says it was reached and waits
- * for `resumed`, so the move pauses holding every lock it took before the grant.
+ * `tx` as a move sees it, except that the write at `at` (one whose foreign key to `users` takes a
+ * key-share lock on the teacher's row) first says it was reached and waits for `resumed`, so the
+ * move pauses holding every lock it took before that write.
  */
-function pausedBeforeGrant(tx: Transaction, reached: () => void, resumed: Promise<void>) {
+function pausedBefore(
+  tx: Transaction,
+  at: PausePoint,
+  reached: () => void,
+  resumed: Promise<void>,
+): Transaction {
   const bound = (target: object, key: string | symbol): unknown => {
     const value: unknown = Reflect.get(target, key);
     return typeof value === 'function'
@@ -529,28 +540,30 @@ function pausedBeforeGrant(tx: Transaction, reached: () => void, resumed: Promis
   };
   return new Proxy(tx, {
     get: (target, key) => {
-      if (key !== 'teacherSubject') return bound(target, key);
-      const subjects = target.teacherSubject;
-      return new Proxy(subjects, {
-        get: (inner, name) =>
-          name === 'createMany'
-            ? async (...args: unknown[]): Promise<unknown> => {
-                reached();
-                await resumed;
-                return (inner.createMany as (...given: unknown[]) => Promise<unknown>)(...args);
-              }
-            : bound(inner, name),
+      if (key !== at.model) return bound(target, key);
+      const delegate = Reflect.get(target, key) as object;
+      return new Proxy(delegate, {
+        get: (inner, name) => {
+          if (name !== at.method) return bound(inner, name);
+          const write = bound(inner, name) as (...given: unknown[]) => Promise<unknown>;
+          return async (...args: unknown[]): Promise<unknown> => {
+            reached();
+            await resumed;
+            return write(...args);
+          };
+        },
       });
     },
   });
 }
 
 /**
- * A runs `first` up to its grant of subjects and pauses there; B runs `second` and is seen waiting;
- * A resumes. Answers how each ended: without the account's lock first, A's grant then waits on B's
+ * A runs `first` up to the write at `at` and pauses there; B runs `second` and is seen waiting;
+ * A resumes. Answers how each ended: without the account's lock first, A's write then waits on B's
  * account lock while B waits on A's application lock, and PostgreSQL aborts one (40P01).
  */
-async function raceAtGrant<T>(
+async function raceAt<T>(
+  at: PausePoint,
   first: (tx: Transaction) => Promise<unknown>,
   second: (tx: Transaction) => Promise<T>,
 ): Promise<{ readonly first: Ended<unknown>; readonly second: Ended<T> }> {
@@ -563,7 +576,7 @@ async function raceAtGrant<T>(
     reach = resolve;
   });
   const a = settled(
-    database.$transaction((tx) => first(pausedBeforeGrant(tx, reach, resumed)), OPTIONS),
+    database.$transaction((tx) => first(pausedBefore(tx, at, reach, resumed)), OPTIONS),
   );
   await Promise.race([reached, a]);
   let pidOfB = (_pid: number): void => undefined;
@@ -585,6 +598,8 @@ async function raceAtGrant<T>(
   return { first: await a, second: await b };
 }
 
+const GRANT: PausePoint = { model: 'teacherSubject', method: 'createMany' };
+
 describe('an approval and a ban of the same teacher, the account locked first (T164, T142)', () => {
   it('applications.approve and teachers.ban: the ban waits, then bans the teacher approved', async () => {
     const userId = await teacher({ accountStatus: 'active', applicationStatus: 'in_review' });
@@ -595,7 +610,8 @@ describe('an approval and a ban of the same teacher, the account locked first (T
               verification_call_outcome = 'suitable' WHERE user_id = $1`,
       [userId],
     );
-    const ended = await raceAtGrant(
+    const ended = await raceAt(
+      GRANT,
       (tx) => review.applications.approve(tx, adminId, { teacherUserId: userId }),
       (tx) => standing.ban(tx, adminId, userId),
     );
@@ -622,7 +638,8 @@ describe('an approval and a ban of the same teacher, the account locked first (T
     const userId = await teacher({ accountStatus: 'active', applicationStatus: 'approved' });
     const adminId = await makeAdmin(db);
     const { credentialId } = await applicationCredential(userId);
-    const ended = await raceAtGrant(
+    const ended = await raceAt(
+      GRANT,
       (tx) =>
         credentials.approve(tx, adminId, {
           credentialId,
@@ -644,5 +661,52 @@ describe('an approval and a ban of the same teacher, the account locked first (T
     });
     expect(await accountStatusOf(userId)).toBe('banned');
     expect(await subjectsOf(userId)).toBe(1);
+  });
+});
+
+describe('a reapplication and a ban of the same teacher, the account locked first (T142)', () => {
+  it('the ban waits for the reapplication, then bans the application it opened', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'rejected' });
+    const adminId = await makeAdmin(db);
+    await db.query(
+      `UPDATE teacher_profiles SET application_note = 'الوثائق لا تطابق الاسم',
+              application_decided_at = now() WHERE user_id = $1`,
+      [userId],
+    );
+    const subjectId = await makeSubject(db);
+    const [identityDocumentId, pdfId] = await Promise.all([
+      insertRow(db, 'verification_documents', {
+        user_id: userId,
+        document_type: 'passport',
+        storage_key_encrypted: Buffer.from('probe'),
+      }),
+      insertRow(db, 'verification_documents', {
+        user_id: userId,
+        document_type: 'credential',
+        storage_key_encrypted: Buffer.from('probe'),
+      }),
+    ]);
+    const ended = await raceAt(
+      { model: 'teacherCredential', method: 'create' },
+      (tx) =>
+        applicationIn(tx).reapply(userId, {
+          subjectIds: [subjectId],
+          qualificationSummary: 'إجازة في حفص',
+          identityDocument: { type: 'passport', documentId: identityDocumentId },
+          credentials: [{ subjectId, documentId: pdfId }],
+        }),
+      (tx) =>
+        review.applications.ban(tx, adminId, {
+          teacherUserId: userId,
+          reasonChoice: 'other',
+          note: 'وثائق مزورة',
+        }),
+    );
+    expect(ended).toEqual({
+      first: { value: undefined },
+      second: { value: { before: { status: 'in_review' }, after: { status: 'banned' } } },
+    });
+    expect(await accountStatusOf(userId)).toBe('banned');
+    expect(await applicationStatusOf(userId)).toBe('banned');
   });
 });

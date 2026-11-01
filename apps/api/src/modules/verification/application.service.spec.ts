@@ -294,6 +294,17 @@ describe('reapply (FR-155)', () => {
     await expect(service.get(APPLICANT)).resolves.toMatchObject({ subjectCount: 1 });
   });
 
+  it("locks the account's row before it reads or opens the application (T142)", async () => {
+    // The account first, the order a ban takes it (the owner's decision of 2026-11-01): the new
+    // credentials reference the teacher's `users` row, so holding only the application, their
+    // insert would wait on a ban holding the account while the ban waits on the application.
+    await submitted();
+    stores.decide(APPLICANT, 'rejected', LATER, 'الوثائق لا تطابق الاسم المسجّل');
+    stores.journal.length = 0;
+    await service.reapply(APPLICANT, application());
+    expect(stores.journal.slice(0, 2)).toEqual([`lock-account:${APPLICANT}`, `read:${APPLICANT}`]);
+  });
+
   it('refuses from every other state with CONFLICT, and a banned application with FORBIDDEN', async () => {
     await expect(service.reapply(APPLICANT, application())).rejects.toEqual(refused('CONFLICT'));
     await submitted();
