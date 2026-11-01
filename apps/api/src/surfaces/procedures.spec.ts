@@ -663,4 +663,26 @@ describe('every kind reads its input through the guard, immediately before the s
     expect(inputsReadUnguarded(appRouter)).toEqual([]);
     expect(inputsReadUnguarded(adminRouter)).toEqual([]);
   });
+
+  it('refuses an unreadable input with a VALIDATION_FAILED that carries no cause (T129, R-SEC-2)', async () => {
+    // tRPC's own read failed, its cause the parser's message quoting the body.
+    const unreadable = new TRPCError({
+      code: 'BAD_REQUEST',
+      cause: new SyntaxError(`Unexpected end of JSON input: {"marker":"${secret}`),
+    });
+    const echo = user._def.procedures.echo as AnyProcedure;
+    const thrown: unknown = await echo({
+      ctx: appContext(null),
+      getRawInput: () => Promise.reject(unreadable),
+      path: 'echo',
+      type: 'query',
+      signal: undefined,
+      batchIndex: 0,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect((thrown as TRPCError).cause).toEqual(new DomainError('VALIDATION_FAILED'));
+    expect(((thrown as TRPCError).cause as DomainError).cause).toBeUndefined();
+  });
 });

@@ -368,21 +368,19 @@ const requireAdministrator = admin.middleware(({ ctx, next }) => {
  * cannot be read: `VALIDATION_FAILED`, logged once at info with the request's correlation id and
  * nothing of the input or of the parser's message (which can quote the body, R-SEC-2), and never
  * reported. A body past the limit stays tRPC's `PAYLOAD_TOO_LARGE` (T150). The value is cached by
- * tRPC, so the schema reads it again without a second read.
+ * tRPC, so the schema reads it again without a second read. The refusal carries no cause (T129):
+ * the read's failure quotes the body, and the logger writes an error's cause chain.
  */
 async function readInput(getRawInput: () => Promise<unknown>, log: Logger): Promise<void> {
   try {
     await getRawInput();
-  } catch (cause) {
-    if (cause instanceof TRPCError && cause.code === 'PAYLOAD_TOO_LARGE') throw cause;
+  } catch (failure) {
+    if (failure instanceof TRPCError && failure.code === 'PAYLOAD_TOO_LARGE') throw failure;
     log.info(
       { errorCode: 'VALIDATION_FAILED', reason: 'input_unreadable' },
       'A request whose input could not be read was refused',
     );
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      cause: new DomainError('VALIDATION_FAILED', undefined, { cause }),
-    });
+    throw new TRPCError({ code: 'BAD_REQUEST', cause: new DomainError('VALIDATION_FAILED') });
   }
 }
 
