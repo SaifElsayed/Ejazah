@@ -1,6 +1,6 @@
 # Ijazah — System Architecture
 
-_Version 3.2 · Companion to SRS v1.4, ERD v1.4, Constitution 2.3 · September 2026_
+_Version 3.2 · Companion to SRS v1.4, ERD v1.11, Constitution 2.4.2 · September 2026_
 _Adds ports-and-adapters for external capabilities. Supersedes v3.0. Amended by [ADR 0007](adr/0007-direct-gateway-checkout.md): direct gateway checkout with 0% commission and zero custody, payment port and payments module, post-approval payout gate; by [ADR 0005](adr/0005-phase-0-document-amendments.md): eleven modules with unified table ownership, worker as a second process of the API, `surfaces/` router directory, per-path coverage floor, `develop` as the integration branch; by [ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md): a session's local time is the schedule and its UTC instants are recomputed when time zone rules change; and by [ADR 0010](adr/0010-database-refuses-double-booking.md): the database refuses double booking, the slot hold outlives the gateway order, and the payment port can cancel an unpaid order._
 _Amended 2026-10-18 by the Phase 1 ERD pass and document pass (batch B3, [PR #78](https://github.com/SaifElsayed/Ejazah/pull/78), `specs/002-identity/`, tasks T014 and T015): §3.2 gains the sign-in port and §3.4 counts seven ports; §4 lists the six Phase 1 tables under their modules; §7.2 states the caller kinds Phase 1 adds; §12 says what `/ready` checks today; §14 names the secret nets that exist._
 
@@ -233,7 +233,7 @@ ijazah/
 └── docs/             SRS · ARCHITECTURE · ERD · RUNBOOK · adr/ · design/ (design.md · components.md · screens.md · frames/ · source/)
 ```
 
-Why the schema is split per module: thirty-nine tables in one file, edited daily by three people, produces constant merge conflicts in the most dangerous file in the repo. Prisma's multi-file schema folder removes that entirely, and the file boundaries reinforce module ownership.
+Why the schema is split per module: forty-one tables in one file, edited daily by three people, produces constant merge conflicts in the most dangerous file in the repo. Prisma's multi-file schema folder removes that entirely, and the file boundaries reinforce module ownership.
 
 **The public web pages are routes of the API (ADR 0021 D5).** The certificate verification page (`/verify/:code`, `?lang=en` for English), the account deletion page (`/delete-account`, its code step and its done step) and the Terms body (the version FR-AUTH-11 records in `terms_acceptances`) are server-rendered pages of `apps/api` on its own origin, under their own paths and never mixed with the procedure routes. They are rendered from templates that escape every value by default (a name, a code, a reason are untrusted data) and load the design stylesheet (§6.3); they send the NFR-SEC-11 (its header set and the CORS origin allowlist) header set with a strict `Content-Security-Policy`, set no cookie, and run under the same rate limits as the anonymous procedures. An unknown or malformed verification code answers 404; a revoked ijazah answers 200 with its revocation state and the public reason (FR-IJAZAH-8). The signed PDF URLs and the deletion code come from the same services the procedures use. No separate deploy, no public route in the admin SPA, no paid hosting before launch; moving the pages to a static site later relocates templates, nothing else.
 
