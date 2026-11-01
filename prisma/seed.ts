@@ -81,6 +81,9 @@ const SUBJECTS = [
  * or admin flow reads, from `admin_lockout_attempts` on, each at its default and named with its
  * unit. The limits a person changes are in SRS §3.14; the purge windows and the refresh grace are
  * operational and listed under it as such.
+ *
+ * Phase 2 (T002, specs/003-booking/data-model.md §4, FR-412): the five rows booking, checkout and
+ * discovery read, from `first_session_lead_hours` on, listed in SRS §3.14.
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
@@ -135,6 +138,13 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_admin_authentication', { limit: 10, window_seconds: 900 }],
   ['rate_limit_admin_authentication_budget', { limit: 1000, window_seconds: 900 }],
   ['rate_limit_provider_nonce_budget', { limit: 1000, window_seconds: 900 }],
+  // T002 (Phase 2, specs/003-booking/data-model.md §4): the first session's lead, the three numbers
+  // the phone polls a checkout by (FR-383), and the discovery page's size.
+  ['first_session_lead_hours', 24],
+  ['checkout_processing_poll_seconds', 2],
+  ['checkout_confirming_poll_seconds', 30],
+  ['checkout_confirming_poll_window_minutes', 10],
+  ['discovery_page_size', 20],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

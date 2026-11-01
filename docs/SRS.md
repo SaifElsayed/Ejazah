@@ -591,9 +591,14 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | Upload rate limit (requests per window) *(Phase 1)* | 20 per 600 s | NFR-SEC-10 |
 | Token refresh rate limit (per token, per window) *(Phase 1)* | 30 per 60 s | NFR-SEC-10 |
 | Provider nonce rate limit (per client address, per window) *(Phase 1)* | 20 per 60 s | NFR-SEC-10 |
+| First session lead after confirmation (hours) *(Phase 2)* | 24 | FR-BOOK-4; FR-368, FR-386 (003-booking) |
+| Checkout Processing status read interval (seconds) *(Phase 2)* | 2 | FR-PAYG-18; FR-383 (003-booking) |
+| Checkout Confirming status read interval (seconds) *(Phase 2)* | 30 | FR-PAYG-18; FR-383 (003-booking) |
+| Checkout Confirming read window from release (minutes) *(Phase 2)* | 10 | FR-PAYG-18; FR-383, FR-384 (003-booking) |
+| Discovery page size (teachers) *(Phase 2)* | 20 | FR-DISC-1, FR-DISC-2; FR-332 to FR-335 (003-booking) |
 | Currency                                    | EGP             | §2.5                           |
 
-Operational settings *(Phase 1)*, seeded with the table above and adjustable the same way, but read by the sweeps and the session service rather than by a person's decision: one-time code purge after 24 hours; expired session purge after 30 days; refresh-token reuse grace of 30 seconds; stale push token purge after 90 days. Every key is seeded by `prisma/seed.ts` at its default (`specs/002-identity/data-model.md` §4).
+Operational settings *(Phase 1)*, seeded with the table above and adjustable the same way, but read by the sweeps and the session service rather than by a person's decision: one-time code purge after 24 hours; expired session purge after 30 days; refresh-token reuse grace of 30 seconds; stale push token purge after 90 days. Every key is seeded by `prisma/seed.ts` at its default (`specs/002-identity/data-model.md` §4; `specs/003-booking/data-model.md` §4 for the *(Phase 2)* rows).
 
 Rule/action settings (not numeric): teacher application decision; teacher status override; dispute resolution override; gender declaration correction; review moderation; ijazah revocation and barring; ID-verification requirement *(v1.3)*.
 

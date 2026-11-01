@@ -8,22 +8,58 @@
 // router is a static value the contract snapshot reads. It is a query, so an HTTP cache may hold
 // its answer; the apps cache the last value and never block start-up on it.
 //
+// T002 (FR-383, FR-412): it also answers the four numbers the phone reads a pending checkout by,
+// each from its setting on every call, so an administrator's change reaches the phone without a
+// release. The keys are named here because nothing else on the server reads them.
+//
 // The file lives beside the surfaces, not under `platform/`, because a procedure is built from the
 // surface's caller kinds and the kernel depends on nothing above it (ARCHITECTURE §4; PR #79
 // review, finding 1).
-import { publicConfigOutput, termsVersion } from '@ijazah/contracts';
+import { checkoutPolling, publicConfigOutput, termsVersion } from '@ijazah/contracts';
 import { z } from 'zod';
 import { TERMS_VERSION_SETTING } from '../platform/settings/keys.js';
 import { PUBLIC_PAGE_RATE_LIMIT } from '../platform/web/route.js';
 import { createAppRouter, publicProcedure } from './procedures.js';
+
+/** Each checkout number's setting (specs/003-booking/data-model.md §4; SRS §3.14). */
+const CHECKOUT_SETTINGS = {
+  confirmationTimeoutSeconds: 'checkout_confirmation_timeout_seconds',
+  processingPollSeconds: 'checkout_processing_poll_seconds',
+  confirmingPollSeconds: 'checkout_confirming_poll_seconds',
+  confirmingPollWindowMinutes: 'checkout_confirming_poll_window_minutes',
+} as const;
 
 export const platformRouter = createAppRouter({
   publicConfig: publicProcedure({
     input: z.void(),
     output: publicConfigOutput,
     rateLimit: { key: PUBLIC_PAGE_RATE_LIMIT, subjectOf: ({ ctx }) => ctx.clientAddress },
-  }).query(async ({ ctx }) => ({
-    supportEmail: ctx.services.publicConfig.supportEmail,
-    termsVersion: await ctx.services.settings.read(TERMS_VERSION_SETTING, termsVersion),
-  })),
+  }).query(async ({ ctx }) => {
+    const { settings } = ctx.services;
+    const read = (field: keyof typeof CHECKOUT_SETTINGS) =>
+      settings.read(CHECKOUT_SETTINGS[field], checkoutPolling.shape[field]);
+    const [
+      version,
+      confirmationTimeoutSeconds,
+      processingPollSeconds,
+      confirmingPollSeconds,
+      confirmingPollWindowMinutes,
+    ] = await Promise.all([
+      settings.read(TERMS_VERSION_SETTING, termsVersion),
+      read('confirmationTimeoutSeconds'),
+      read('processingPollSeconds'),
+      read('confirmingPollSeconds'),
+      read('confirmingPollWindowMinutes'),
+    ]);
+    return {
+      supportEmail: ctx.services.publicConfig.supportEmail,
+      termsVersion: version,
+      checkout: {
+        confirmationTimeoutSeconds,
+        processingPollSeconds,
+        confirmingPollSeconds,
+        confirmingPollWindowMinutes,
+      },
+    };
+  }),
 });

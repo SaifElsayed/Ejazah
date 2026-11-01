@@ -1122,6 +1122,11 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.checkout": { "required": true, "type": "object" },
+          "$.checkout.confirmationTimeoutSeconds": { "required": true, "type": "integer" },
+          "$.checkout.confirmingPollSeconds": { "required": true, "type": "integer" },
+          "$.checkout.confirmingPollWindowMinutes": { "required": true, "type": "integer" },
+          "$.checkout.processingPollSeconds": { "required": true, "type": "integer" },
           "$.supportEmail": { "required": true, "type": "string" },
           "$.termsVersion": { "required": true, "type": "string" }
         }

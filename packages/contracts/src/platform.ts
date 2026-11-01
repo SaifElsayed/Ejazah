@@ -8,10 +8,29 @@ export const emailAddress = z.email();
 /** The version of the Terms a person accepts: the `terms_version` setting's value (FR-127). */
 export const termsVersion = z.string().min(1).max(32);
 
-/** `platform.publicConfig`'s answer: the support address and the current Terms version. */
+/** A whole number of seconds or minutes a setting holds, at least one. */
+const settingCount = z.int().positive();
+
+/**
+ * The numbers the phone reads a pending checkout by (T002, FR-383), each from its setting:
+ * Processing reads every `processingPollSeconds` until `confirmationTimeoutSeconds`; Confirming
+ * reads every `confirmingPollSeconds` for at most `confirmingPollWindowMinutes`.
+ */
+export const checkoutPolling = z.object({
+  confirmationTimeoutSeconds: settingCount,
+  processingPollSeconds: settingCount,
+  confirmingPollSeconds: settingCount,
+  confirmingPollWindowMinutes: settingCount,
+});
+
+/**
+ * `platform.publicConfig`'s answer: the support address, the current Terms version and (T002) the
+ * checkout numbers.
+ */
 export const publicConfigOutput = z.object({
   supportEmail: emailAddress,
   termsVersion,
+  checkout: checkoutPolling,
 });
 
 export type PublicConfig = z.infer<typeof publicConfigOutput>;
