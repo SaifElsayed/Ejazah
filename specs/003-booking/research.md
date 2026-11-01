@@ -368,7 +368,7 @@ written into `tasks.md` with its timing before Phase 6 (FR-371).
 
 ## R-222 — What Phase 1's follow-ups ask of this plan
 
-**Decision.** The first batches land T123, T126, T129, T133 to T141, T160 and T162 (FR-301). Two of them meet this
+**Decision.** The first batches land T123, T126, T129, T133 to T140, T160 and T162, and B31 lands T141 (FR-301, as amended 2026-11-01). Two of them meet this
 plan: T140's migration carries the column checks of [data-model.md](./data-model.md) §2, and since the owner's
 decisions of 2026-10-31 it writes `price_piasters > 0` (not `>= 0`) and the lengths `IN (30, 45, 60)` (where T140 left
 "durations > 0" open); T140's line is amended to say so. T126's locks are the first use of the kernel's row-lock
