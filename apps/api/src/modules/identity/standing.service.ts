@@ -10,7 +10,8 @@
 // request is open (T113), and no ban is lifted from the panel (FR-162).
 // Each action answers what it moved, the state before and after, for its audit entry (T116);
 // suspend, ban and reinstate lock the account's row before they read it (T126), so the `before`
-// they answer is the state they moved and a concurrent move on the account waits for them.
+// they answer is the state they moved and a concurrent move on the account waits for them; a ban
+// then locks the application's row too (T164), always after the account's.
 // Each of the three ends every session of the person (`user_sessions.revoked_reason`) and calls the
 // one consequences entry (`consequences.ts`), all on the administrator kind's transaction, so the
 // change, the revocations, the consequences and the audit entry commit together.
@@ -22,6 +23,7 @@
 // NOT_FOUND for a person who is not a teacher (or not there).
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { lockApplication } from './application.repository.js';
 import type { AccountConsequences } from './consequences.js';
 import {
   type AccountStatus,
@@ -40,6 +42,8 @@ import { type SessionRevokedReason, UserSessionsRepository } from './user-sessio
 export interface StandingStore {
   /** Locks the account's row until the transaction ends (T126). */
   lockAccount(tx: Transaction, userId: string): Promise<void>;
+  /** Locks the application's `teacher_profiles` row until the transaction ends (T164). */
+  lockApplication(tx: Transaction, userId: string): Promise<void>;
   read(tx: Transaction, userId: string): Promise<Standing | null>;
   moveAccount(
     tx: Transaction,
@@ -62,6 +66,7 @@ export function standingStoreOver(database: Database): StandingStore {
   const sessions = new UserSessionsRepository(database);
   return {
     lockAccount,
+    lockApplication,
     read: readStanding,
     moveAccount: moveAccountStatus,
     revokeApproval: revokeTeacherApproval,
@@ -171,6 +176,9 @@ export class StandingService {
     applicant?: { readonly applicantNote: string },
   ): Promise<BanMove> {
     await this.#store.lockAccount(tx, userId);
+    // The application's lock after the account's, the one order both are taken in (T164), so the
+    // application status answered as the applicant's `before` is the one banned.
+    await this.#store.lockApplication(tx, userId);
     const standing = await this.#teacher(tx, userId);
     const { applicationStatus, verificationStatus } = standing.teacher;
     const allowed =

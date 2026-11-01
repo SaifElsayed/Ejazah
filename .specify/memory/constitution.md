@@ -36,7 +36,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.4.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.3. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
+Version 2.4.2. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.11. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -380,6 +380,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.4.2 | 2026-11-01 | PATCH (T139, from the full review of 2026-10-24): the header names ERD v1.11, the version the schema has been at since T140, instead of v1.3. A companion version only; no rule changed. Follows 2.4.1. |
 | 2.4.1 | 2026-10-12 | PATCH (T167, from the review of PR #63): the R-MONEY-1 cell and the Phase 0 CI row of the enforcement map name the schema gate, whose `piasters-type` check has refused a `_piasters` column that is not an integer type since T070. A mechanism the cell omitted, as R-DB-4's was in 2.4.0; no prohibition changed. Follows 2.4.0. |
 | 2.4.0 | 2026-10-12 | MINOR (T165, from T130's register `specs/001-foundations/checklists/rule-proofs.md`, owner's decision 2026-10-12): the enforcement map and the rule cells are made to say what holds each rule. Map rows aligned to their cells: R-SEC-1 leaves the lint row (no lint rule holds it); R-SEC-10 carries the `REVIEW` tag; the `RT` tier names the caller kinds and the jobs beside `platform/`, where R-API-12 and R-SESS-3 are held; the CI row is split by the phase that builds each gate, so the Phase 0 row claims only gates Phase 0 built; R-API-13 no longer names disbursement, retired by ADR 0005 and ADR 0007. Tiers claimed without a mechanism, corrected: R-TIME-3 and R-DB-8 are held by the CI schema gate, not by the database; R-SEC-1 no longer names GitHub push protection, unavailable on this repository (second note under T090); R-PROC-11 is held by table ownership (`LINT`, R-API-6) and review, since the application role may write `settings`; R-SEC-8 keeps `TYPE` (T162's `surface` discriminant) and its separate tables become review's, per the ERD; R-MOBILE-13 keeps `CI`, built with the first mobile feature. A mechanism a cell omitted: R-DB-4 gains `CI`, the schema gate's declared-cache and derived-value checks, and stays on the PR checklist, which keeps twelve items, because whether any other value is derived is still judged by a reviewer. R-TIME-6 and R-GENDER-4 move from `TYPE` to `LINT`: T159's `time/no-client-timestamp` and `gender/no-authority-in-input`. Rationale: SC-003 counts a rule claiming a machine mechanism without a failing case as unproven, so a cell that names a mechanism nothing holds is a false claim the count cannot clear. No prohibition is removed or weakened, so no ADR. Follows 2.3.1. |
 | 2.3.1 | 2026-10-05 | ADR 0010. PATCH: R-DB-4 lists `sessions.teacher_user_id` and `student_user_id` among the declared caches, copied from the enrollment at generation and never changed, so the exclusion constraints of ERD §15.19 can refuse overlapping sessions. R-DB-4 already permitted a new cache through an ADR, so no prohibition changed. Follows 2.3.0. |
@@ -401,4 +402,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.4.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-10-12
+**Version**: 2.4.2 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-01

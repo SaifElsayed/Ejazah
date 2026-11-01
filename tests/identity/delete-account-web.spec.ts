@@ -13,6 +13,7 @@
 // recording fake of the deletion. This case needs the deletion's bodies (T082, lane A of B16):
 // before they land the email step answers 500, and the first assertion names the step-zero
 // rejection.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';

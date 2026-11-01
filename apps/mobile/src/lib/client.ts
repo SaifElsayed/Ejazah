@@ -31,6 +31,11 @@
 // `bytes()`, and throws on React Native's `{ uri, name, type }`; so a file part is its fixed name,
 // its type and a `bytes()` that reads the picked file through expo-file-system when it is sent.
 //
+// THE TIMEOUTS (T146). Every request takes a timeout, the refresh among them: a call or a refresh
+// within `CALL_TIMEOUT_MS`, an upload within `UPLOAD_TIMEOUT_MS`. A request past it is aborted
+// and fails as an unreachable server's does, with no API code; a refresh that hangs thus fails,
+// the calls waiting on it are freed with the session kept, and the next call refreshes afresh.
+//
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
 import { type PublicConfig, publicConfigOutput, refreshOutput } from '@ijazah/contracts';
@@ -98,6 +103,11 @@ export class ApiRefusal extends Error {
 const UNAUTHENTICATED = 'UNAUTHENTICATED';
 const STATUS_UNAUTHORIZED = 401;
 
+/** How long a call, the refresh among them, waits for its answer before it fails (T146). */
+export const CALL_TIMEOUT_MS = 30_000;
+/** How long an upload waits for its answer: a 10 MiB file (NFR-SEC-9) over a slow network (T146). */
+export const UPLOAD_TIMEOUT_MS = 120_000;
+
 /** The refreshes on their way, by the refresh token they present: one per token in the runtime (T156). */
 const refreshesInFlight = new Map<string, Promise<boolean>>();
 
@@ -105,9 +115,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const { url, sessions, onSignedOut } = options;
   const transport = options.fetch ?? fetch;
 
-  // The refresh goes without a bearer and without the retry below.
+  // The refresh goes without a bearer and without the retry below, and within its timeout (T146).
   const refresher = createTRPCUntypedClient({
-    links: [httpLink({ url, fetch: asFetchEsque(transport) })],
+    links: [httpLink({ url, fetch: asFetchEsque(timed(transport, CALL_TIMEOUT_MS)) })],
   });
   async function refreshOnce(presented: string): Promise<boolean> {
     try {
@@ -142,20 +152,25 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     return started;
   }
 
-  async function send(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const session = await sessions.read();
-    const headers = new Headers(init?.headers);
-    if (session === null) headers.delete('authorization');
-    else headers.set('authorization', `Bearer ${session.accessToken}`);
-    return transport(input, { ...init, headers });
+  /** The session's transport: each send, the retry after a refresh among them, within `timeoutMs`. */
+  function sessionFetchWithin(timeoutMs: number): Transport {
+    const sendTimed = timed(transport, timeoutMs);
+    async function send(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+      const session = await sessions.read();
+      const headers = new Headers(init?.headers);
+      if (session === null) headers.delete('authorization');
+      else headers.set('authorization', `Bearer ${session.accessToken}`);
+      return sendTimed(input, { ...init, headers });
+    }
+    return async (input, init) => {
+      const first = await send(input, init);
+      if (first.status !== STATUS_UNAUTHORIZED || !(await isUnauthenticated(first))) return first;
+      if (!(await refresh().catch(() => false))) return first;
+      return send(input, init);
+    };
   }
-
-  const sessionFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const first = await send(input, init);
-    if (first.status !== STATUS_UNAUTHORIZED || !(await isUnauthenticated(first))) return first;
-    if (!(await refresh().catch(() => false))) return first;
-    return send(input, init);
-  };
+  const sessionFetch = sessionFetchWithin(CALL_TIMEOUT_MS);
+  const uploadFetch = sessionFetchWithin(UPLOAD_TIMEOUT_MS);
 
   const api = createTRPCClient<AppRouter>({
     links: [httpLink({ url, fetch: asFetchEsque(sessionFetch) })],
@@ -171,7 +186,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       body.append('kind', kind);
       // Expo's FormData keeps the part as it is; expo/fetch reads its name, type and bytes.
       body.append('file', filePart(file) as unknown as Blob);
-      const response = await sessionFetch(target, { method: 'POST', body });
+      const response = await uploadFetch(target, { method: 'POST', body });
       const answer: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new ApiRefusal(answer);
       return documentIdOf(answer);
@@ -181,7 +196,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (target === undefined) throw new Error('uploadPhoto: no photos upload URL');
       const body = new FormData();
       body.append('file', photoPart(file) as unknown as Blob);
-      const response = await sessionFetch(target, { method: 'POST', body });
+      const response = await uploadFetch(target, { method: 'POST', body });
       const answer: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new ApiRefusal(answer);
       return photoUrlOf(answer);
@@ -197,6 +212,48 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       return config;
     },
   };
+}
+
+/** A transport: the platform's `fetch`, or the one a test hands in. */
+type Transport = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/**
+ * The transport within a timeout (T146). Past `timeoutMs` the request is aborted and the call fails
+ * with an error that carries no API code, as an unreachable server's does, whether or not the
+ * transport heeds its signal; the caller's own signal (tRPC's cancellation) still aborts it. The
+ * timer and the listener go as soon as the call settles.
+ */
+function timed(transport: Transport, timeoutMs: number): Transport {
+  return (input, init) =>
+    new Promise<Response>((resolve, reject) => {
+      const controller = new AbortController();
+      const caller = init?.signal ?? undefined;
+      const cancel = () => controller.abort(caller?.reason);
+      const finish = (settle: () => void) => {
+        clearTimeout(timer);
+        caller?.removeEventListener('abort', cancel);
+        settle();
+      };
+      const timer = setTimeout(() => {
+        const timedOut = new Error(`The call had no answer within ${timeoutMs} ms`);
+        timedOut.name = 'TimeoutError';
+        controller.abort(timedOut);
+        finish(() => reject(timedOut));
+      }, timeoutMs);
+      if (caller?.aborted === true) cancel();
+      else caller?.addEventListener('abort', cancel);
+      transport(input, { ...init, signal: controller.signal })
+        .then(async (response) => {
+          // The answer has come when its body is read, not its headers (PR #112, round 1, Minor 4).
+          const body = await response.text();
+          const { status, statusText, headers } = response;
+          return new Response(body === '' ? null : body, { status, statusText, headers });
+        })
+        .then(
+          (response) => finish(() => resolve(response)),
+          (error: unknown) => finish(() => reject(error)),
+        );
+    });
 }
 
 /** The transport `httpLink` takes (tRPC names the type but does not export it). */

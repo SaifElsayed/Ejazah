@@ -19,6 +19,7 @@
 // - The web: the email step answers every address the same, with one hashing each, writing an
 //   `account_deletion` code only for an account and mailing it after the commit; the confirm step
 //   runs the same deletion on the right code and answers false, deleting nothing, on a wrong one.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomInt, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';

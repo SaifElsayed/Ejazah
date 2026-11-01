@@ -12,8 +12,12 @@ The device run is the owner's, on the Android phone (as Phase 1 was proved on on
 ## Prerequisites
 
 - Phase 1's quickstart prerequisites, on `develop` after this phase's batches merge.
-- Tests and probes run on the integrity database only (`ijazah_integrity`, both URLs checked), never on `ijazah`, until
-  T124 lands. The database is migrated and seeded fresh, not reset (the owner's decision of 2026-10-29, B19d).
+- Tests and probes run on the integrity database only (`ijazah_integrity`, both URLs checked), never on `ijazah`, even with
+  `IJAZAH_DB_SPECS=1` set (the owner's decision of 2026-11-01). The database is migrated and seeded fresh, not reset (the owner's decision of 2026-10-29, B19d).
+- A spec that writes to a database runs only with `IJAZAH_DB_SPECS=1` set beside the two `ijazah_integrity` URLs in the
+  environment (T124, the owner's decision of 2026-11-01): the specs never read the URLs from `.env`, and a missing URL
+  refuses the run, naming it. Without the variable, 47 files and the database describes of five `tests/dev` files
+  report skipped and nothing connects.
 - `PAYMENT_GATEWAY=fake` and `API_PUBLIC_ORIGIN` reachable from the phone on the LAN, so the stand-in's hosted page opens
   in the phone's browser sheet. No gateway credential (SC-302).
 - A development build of the app with `expo-web-browser` installed (`docs/RUNBOOK.md`, the mobile section).

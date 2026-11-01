@@ -9,20 +9,17 @@
 // FORCE. The application role's URL for it is `DATABASE_URL` with the database name replaced: the
 // seed and the checksum run as the application role, as the running system does (research R-5).
 //
-// `.env` is read into a scratch object and only the two database URLs are taken from it, each only
-// when the environment does not carry it, as tests/db-integrity/harness.ts does (T114).
+// T124: both URLs come from the environment only, never from `.env` (the owner's decision of
+// 2026-11-01), and only once IJAZAH_DB_SPECS=1; without it nothing here connects.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 
-const fromDotenv: Record<string, string> = {};
-readDotenv({ processEnv: fromDotenv, quiet: true });
-for (const key of ['DATABASE_URL', 'DATABASE_URL_OWNER'] as const) {
-  const value = fromDotenv[key];
-  if (process.env[key] === undefined && value !== undefined) process.env[key] = value;
-}
+import {
+  assertDatabaseSpecs,
+  specDatabaseUrl,
+} from '../../apps/api/src/platform/db/spec-database.fixtures';
 
 const root = join(__dirname, '..', '..');
 const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js');
@@ -30,11 +27,11 @@ const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js');
 /** Long enough for a cold Prisma CLI to apply the whole history on a slow machine. */
 export const MIGRATE_TIMEOUT_MILLISECONDS = 120_000;
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (value === undefined || value === '' || !URL.canParse(value)) {
+function required(name: 'DATABASE_URL' | 'DATABASE_URL_OWNER'): string {
+  const value = specDatabaseUrl(name);
+  if (!URL.canParse(value)) {
     throw new Error(
-      `${name} is not set to a connection string: the seed specs need it in the environment or in .env (quickstart §1)`,
+      `${name} is not set to a connection string: the seed specs need one (quickstart §1)`,
     );
   }
   return value;
@@ -116,6 +113,7 @@ export function migrate(database: FreshDatabase): Promise<MigrateResult> {
 
 /** A client connected to `url`, its session in `timeZone` when one is given. End it after. */
 export async function connect(url: string, timeZone?: string): Promise<pg.Client> {
+  assertDatabaseSpecs();
   const db = new pg.Client({
     connectionString: url,
     connectionTimeoutMillis: 5_000,

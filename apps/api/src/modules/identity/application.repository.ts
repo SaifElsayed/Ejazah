@@ -5,7 +5,7 @@
 //
 // A write is conditional on the state it moves from, decided by the database: the first application
 // creates the profile (the unique `user_id` refuses a second one written meanwhile), a reapplication
-// moves `rejected`, a resubmission `needs_document`, and the approved screen is marked once. So two
+// moves `rejected` of a teacher not banned (T142), a resubmission `needs_document`, and the approved screen is marked once. So two
 // requests racing from one state cannot both move it.
 import { Prisma } from '@prisma/client';
 
@@ -92,7 +92,9 @@ export class ApplicationRepository {
       identityDocumentType: application.identityDocumentType,
     };
     const { count } = await this.#tx.teacherProfile.updateMany({
-      where: { userId, applicationStatus: application.from },
+      // A banned teacher never reapplies (T142): `teachers.ban` after a revocation leaves the
+      // application `rejected` and writes only `verification_status`.
+      where: { userId, applicationStatus: application.from, verificationStatus: { not: 'banned' } },
       data,
     });
     if (count === 1 || application.from !== null) return count === 1;

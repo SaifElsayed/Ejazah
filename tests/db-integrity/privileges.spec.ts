@@ -7,6 +7,7 @@
 // would have the door the revocation closes (T065 revokes both). Removal of a user, session,
 // enrollment or ijazah is a soft deletion instead, proved by T053; an audit row has no removal path
 // at all, proved by T054.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SQLSTATE, attempt, connectAsApplication, inRollback, type Db } from './harness';
 

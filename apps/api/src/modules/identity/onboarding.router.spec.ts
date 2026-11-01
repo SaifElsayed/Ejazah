@@ -6,6 +6,7 @@
 // onboarding token, never parsing it in `subjectOf`, is not keyed (its `jti` is its single use),
 // and writes the account in the request's language (the session's, or the default for an
 // anonymous caller; the phone sets the chosen language after landing).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { hashLookupToken } from '../../platform/crypto/hashing.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

@@ -11,6 +11,7 @@
 // - The photo follows the same rule through the identity module's store: a deleted person's photo
 //   key is held until its file is gone.
 // - The documents sweep (T093) passes over a row whose key is already gone.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';

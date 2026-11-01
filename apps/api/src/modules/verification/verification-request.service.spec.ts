@@ -300,6 +300,25 @@ describe('accept and requestAnother', () => {
       ).toBe('NOT_FOUND');
     },
   );
+
+  it.each([
+    ['accept', 'resolve'],
+    ['requestAnother', 'replace'],
+  ] as const)(
+    "%s locks the request's account before it reads the request it decides from (T164)",
+    async (action, write) => {
+      const { userId, requestId } = await requested(true);
+      store.journal.length = 0;
+      await service[action](TX, ADMIN, { requestId, note: 'x' });
+      // The first read finds only whose request it is, which never changes.
+      expect(store.journal).toEqual([
+        `read-request:${requestId}`,
+        `lock:${userId}`,
+        `read-request:${requestId}`,
+        `${write}:${requestId}`,
+      ]);
+    },
+  );
 });
 
 describe('link', () => {

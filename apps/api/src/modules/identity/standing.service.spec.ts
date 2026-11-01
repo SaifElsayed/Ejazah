@@ -347,14 +347,22 @@ describe("the account's lock (T126)", () => {
     expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
   });
 
-  it('ban locks the account before it reads the standing, by either path', async () => {
+  it('ban locks the account, then the application, before it reads the standing, by either path (T164)', async () => {
     const teacher = approvedTeacher();
     await standing.ban(TX, ADMIN, teacher);
-    expect(store.journal.slice(0, 2)).toEqual([`lock:${teacher}`, `read:${teacher}`]);
+    expect(store.journal.slice(0, 3)).toEqual([
+      `lock:${teacher}`,
+      `lock-application:${teacher}`,
+      `read:${teacher}`,
+    ]);
     store.journal.length = 0;
     const rejected = applicant('rejected');
     await standing.ban(TX, ADMIN, rejected, { applicantNote: 'معدَّلة' });
-    expect(store.journal.slice(0, 2)).toEqual([`lock:${rejected}`, `read:${rejected}`]);
+    expect(store.journal.slice(0, 3)).toEqual([
+      `lock:${rejected}`,
+      `lock-application:${rejected}`,
+      `read:${rejected}`,
+    ]);
   });
 
   it('reinstate locks the account before it reads the standing and the open request', async () => {

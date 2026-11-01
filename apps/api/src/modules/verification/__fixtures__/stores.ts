@@ -46,6 +46,11 @@ export class MemoryStores implements VerificationStores {
   readonly documents = new Map<string, { userId: string; sizeBytes: number | null }>();
   /** Every write a call made, by kind, so a refusal can be shown to have written nothing. */
   readonly writes: string[] = [];
+  /**
+   * Each lock (`lock-account:<id>` the account's, T142; `lock:<id>` the application's, T161), each
+   * read of the application and each of its credentials, in order.
+   */
+  readonly journal: string[] = [];
 
   run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
     return work(TX);
@@ -114,7 +119,16 @@ export class MemoryStores implements VerificationStores {
     return profile;
   }
 
+  async lockAccount(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock-account:${userId}`);
+  }
+
+  async lockApplication(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock:${userId}`);
+  }
+
   async readApplication(_tx: Transaction, userId: string): Promise<ApplicationRecord | null> {
+    this.journal.push(`read:${userId}`);
     return this.profiles.get(userId) ?? null;
   }
 
@@ -166,6 +180,7 @@ export class MemoryStores implements VerificationStores {
   }
 
   async credentialsOf(_tx: Transaction, userId: string): Promise<CredentialRecord[]> {
+    this.journal.push(`credentials:${userId}`);
     return this.credentialsFor(userId).map(({ teacherUserId: _teacher, ...credential }) => {
       const subject = SUBJECTS.find(({ id }) => id === credential.subjectId);
       if (subject === undefined) throw new Error(`no subject ${credential.subjectId}`);

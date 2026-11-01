@@ -133,6 +133,10 @@ export interface CredentialReviewStore {
   decide(tx: Transaction, decision: Decision): Promise<boolean>;
   /** Writes the correction while the credential is approved; whether it wrote. */
   correct(tx: Transaction, correction: Correction): Promise<boolean>;
+  /** Locks the teacher's account, identity's `users` row, until the transaction ends (T142). */
+  lockAccount(tx: Transaction, userId: string): Promise<void>;
+  /** Locks the teacher's application, identity's `teacher_profiles` row, until the transaction ends (T161). */
+  lockApplication(tx: Transaction, userId: string): Promise<void>;
   /** Whether the teacher is approved (identity's `teacher_profiles`). */
   isApprovedTeacher(tx: Transaction, userId: string): Promise<boolean>;
   /**
@@ -220,6 +224,15 @@ export class CredentialReviewService {
   /** `credentials.approve`: the transcription written; what was written, for the audit entry. */
   async approve(tx: Transaction, adminId: string, input: ApproveInput): Promise<ApprovalMove> {
     const record = await this.#readOrRefuse(tx, input.credentialId);
+    // The teacher's application row locked before the credential moves (T142): a revocation, which
+    // writes that row, commits first or waits, so whether the teacher is approved is read as it is
+    // when the subject is granted. Taken before the credential's own write, as a rejection of the
+    // application takes it before closing its credentials, so the two never wait on each other.
+    // The account's lock comes first, the order a ban takes them (the owner's decision of
+    // 2026-11-01): the grant's `teacher_subjects` row references the teacher's `users` row, so
+    // holding only the application, the grant would wait on a ban that waits on the application.
+    await this.#store.lockAccount(tx, record.teacher.userId);
+    await this.#store.lockApplication(tx, record.teacher.userId);
     if (record.status !== 'pending') throw conflict(record.status);
     if (await this.#store.hasApproved(tx, record.teacher.userId, record.subject.id)) {
       throw conflict('subject_approved');
@@ -271,6 +284,10 @@ export class CredentialReviewService {
     input: DecisionInput,
   ): Promise<DocumentRequestMove> {
     const record = await this.#readOrRefuse(tx, input.credentialId);
+    // The application's lock before the credential moves (T161), so a resubmission meanwhile
+    // commits first, or waits and then reads the credential waiting. A credential's teacher never
+    // changes, so reading it before the lock reads nothing the lock guards.
+    await this.#store.lockApplication(tx, record.teacher.userId);
     const at = this.#now();
     await this.#decide(tx, adminId, input, ['pending'], 'needs_document', at);
     if (!record.submittedWithApplication) return {};

@@ -5,6 +5,7 @@
 // rotates it, the retired hash kept for the grace window: presented within it, it is answered once
 // more; presented after it, it revokes the session (reuse detection). A refused token says nothing
 // of why. Over the real database and a clock of the spec's own.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHash, createHmac } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

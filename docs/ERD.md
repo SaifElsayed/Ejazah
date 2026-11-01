@@ -1,10 +1,10 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.11 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog*
+*Version 1.11 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.2 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog*
 
 ## 0. How to read this
 
-This is the complete data model for the MVP — 40 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
+This is the complete data model for the MVP — 41 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
 > **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
@@ -43,7 +43,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` · `admin_sessions` · `admin_recovery_codes` |
 | PLATFORM | `platform` (kernel, not a module) | `idempotency_keys` |
 
-Forty tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), and `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
+Forty-one tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`), and `banned_identifiers` of T097 (migration `20261026000100`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
 
 ## 2. Identity
 
@@ -155,7 +155,7 @@ Exists only for users holding the teacher role. 1:1 with the role.
 |---|---|---|
 | id | uuid | PK |
 | user_id | FK → users, unique | |
-| bio | text | |
+| bio | text | NOT NULL, so it is written `''` where there is none: the first application creates the profile with an empty bio until the profile editor (Phase 2), and account deletion erases a teacher's bio to `''` (ADR 0015 D3, FR-AUTH-14) |
 | photo_key | text, nullable | Unused since the Phase 1 pass: the photo of either role is `users.photo_key`; the column stays |
 | qualification_summary | text | Years/type, FR-PROFILE-1 |
 | verification_status | enum pending · approved · rejected · suspended · banned · revoked | FR-AUTH-9, FR-VERIFY-8/9. `revoked` (Phase 1 pass, FR-165): a withdrawn approval, the teacher returns only through a new application; `suspended` stays the account-level word and is no longer written here |
@@ -973,7 +973,7 @@ The decision is the owner's on the review of PR #84 (observation 9): research R-
 | # | Change | Migration |
 |---|---|---|
 | 1 | §2 `user_session_retired_tokens`; `user_sessions.previous_refresh_token_hash` reads for the grace window only | `20261020000000_user_session_retired_tokens` |
-| 2 | §1 counts forty tables; §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
+| 2 | §1 counts forty tables (forty-one since v1.10, `banned_identifiers`); §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
 
 ## Changelog — v1.5 → v1.6 (the manual time zone kept, 2026-10-20)
 

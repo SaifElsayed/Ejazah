@@ -55,6 +55,10 @@ export type NewCredential = NewCredentialRow;
 export interface VerificationStores {
   /** Runs `work` in one transaction: committed if it resolves, rolled back if it throws. */
   run<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+  /** Locks the account's `users` row until the transaction ends, identity's (T142). */
+  lockAccount(tx: Transaction, userId: string): Promise<void>;
+  /** Locks the application's row until the transaction ends, identity's (T161). */
+  lockApplication(tx: Transaction, userId: string): Promise<void>;
   /** The applicant's application, or null before the profile exists. */
   readApplication(tx: Transaction, userId: string): Promise<ApplicationRecord | null>;
   /** Writes the change while the application is in the state it requires; whether it wrote. */
@@ -84,6 +88,8 @@ export function createVerificationStores(database: Database): VerificationStores
   const { run } = transactionsOver(database);
   return {
     run,
+    lockAccount,
+    lockApplication,
     readApplication,
     setApplication,
     activeSubjectsAmong,
@@ -103,6 +109,7 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
   return {
     page: applicantsPage,
     count: applicantsCount,
+    lockAccount,
     lockApplication,
     read: readApplicant,
     credentialsOf: async (tx, userIds) =>

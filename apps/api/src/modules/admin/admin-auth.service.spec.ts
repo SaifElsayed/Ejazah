@@ -15,6 +15,7 @@
 // its order is asserted through the router (T067, B12b), where the throttle is.
 //
 // Over the real database and a clock of the spec's own.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomBytes } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

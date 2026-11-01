@@ -4,6 +4,7 @@
 // neither the disabling nor the second-factor reset may be turned on oneself. The reset itself and
 // the recovery codes are `admin-auth.service.spec.ts`'s. T067 adds `me` and the admins page's
 // list. Over the real database.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

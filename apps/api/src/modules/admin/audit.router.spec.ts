@@ -3,6 +3,7 @@
 // action ending in `.read` with the reader as its target, since none has a single target (owner's
 // decision 2026-10-21); what the lists answer is `audit-query.service.spec.ts`'s and
 // `home.service.spec.ts`'s.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase } from '../../platform/db/prisma.repository.js';

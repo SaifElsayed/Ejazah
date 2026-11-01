@@ -11,6 +11,7 @@
 // Not probed: `waitingOnApplicant`, the applications needing a document. No entry moves an
 // application to `needs_document` before the admin's request for one (T068), and a row committed
 // for it would be counted by both reads; its filter is the one beside `in_review`.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

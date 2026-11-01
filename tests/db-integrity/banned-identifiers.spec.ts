@@ -3,6 +3,7 @@
 // probe first writes a valid row, so a refusal is the rule and not a broken row, then the forbidden
 // one, as the application role in a transaction that is rolled back (SC-113). Observed red before
 // `20261026000100_banned_identifiers`: the table was missing.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomBytes } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

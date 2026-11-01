@@ -6,6 +6,7 @@
 // message, the same work. A reset request answers every address with the same sentence and the same
 // work, and its mail leaves after the commit without being awaited; a reset signs in and revokes
 // every other session. The mails are the stand-in's, read back for their codes.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hashPassword, OtpHasher, verifyPassword } from '../../platform/crypto/hashing.js';

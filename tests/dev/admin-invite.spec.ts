@@ -58,7 +58,8 @@ async function plantSeededAdministrator(db: Db): Promise<void> {
   );
 }
 
-describe('the invite', () => {
+// T124: skipped unless IJAZAH_DB_SPECS=1.
+describe('the invite', { tags: ['database'] }, () => {
   let db: Db;
   beforeAll(async () => {
     db = await connectAsApplication();

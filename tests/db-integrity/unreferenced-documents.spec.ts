@@ -9,6 +9,7 @@
 // object's removal inside that deletion: the foreign keys refuse a row pointed at meanwhile, and
 // an object that cannot be removed keeps its row. Rows are committed (the store opens its own
 // transaction) and every probe's rows are its own, so a probe asserts membership, not totals.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';

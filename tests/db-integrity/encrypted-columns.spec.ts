@@ -16,6 +16,7 @@
 //
 // NOTHING IS LEFT BEHIND: every write runs inside one Prisma interactive transaction that always
 // ends by throwing `ROLLBACK`, as in `soft-delete.spec.ts`.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createEncryptedColumns as identityColumns } from '../../apps/api/src/modules/identity/index.js';
