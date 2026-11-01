@@ -21,7 +21,7 @@ migration (ERD changelog v1.10 → v1.11), as Phase 1 did.
 | `sessions` | sessions | `generateForEnrollment` in the confirm job; the re-resolution job (R-210) |
 | `payments` | payments | `checkout.pay`, `checkout.retry`, the order-event handler, the sweeps, a new checkout's cancellation |
 | `payment_events` | payments | the webhook (order events, as recipient events since Phase 1) |
-| `disputes` (`kind = compensation_case`) | moderation | `openCompensationCase` in the confirm job's refusal branch |
+| `disputes` (`kind = compensation_case`) | moderation | `openCompensationCase(tx, enrollmentId, reason)`, the reason one of a fixed list in code (`slot_unavailable`, `party_restricted`, `duplicate_payment`) written to the existing `disputes.reason`, no new column; one open case per enrollment and reason (the owner's decisions of 2026-11-01, PR #109's review round 2); called in the confirm job's refusal branch |
 
 ## 2. Changes
 
@@ -90,10 +90,10 @@ Append-only record of each outcome a later notification needs (FR-385).
 | `enrollment_id` | FK → enrollments | Plain index (FR-035 of Phase 0) |
 | `kind` | enum `enrollment_event_kind`: `confirmed` · `order_failed` · `cancelled` | |
 | `cancellation_reason` | enum `cancellation_reason`, nullable | Set exactly when `kind = 'cancelled'` (check constraint) |
-| `payment_id` | FK → payments, nullable | Set for `order_failed`, the order that failed; payments' id is a reference, not a read of the row (booking never reads `payments`, R-API-6) |
+| `payment_id` | FK → payments, nullable | Set for `order_failed` (the order that failed) and for `confirmed` (the order that confirmed it, so a later paid order of the same enrollment is told apart from a replay, FR-375; the owner's decisions of 2026-11-01, PR #109's review round 2); payments' id is a reference, not a read of the row (booking never reads `payments`, R-API-6) |
 | `occurred_at` | timestamptz | The transaction's instant |
 
-Rules: `CHECK ((kind = 'cancelled') = (cancellation_reason IS NOT NULL))`; `CHECK ((kind = 'order_failed') = (payment_id IS NOT NULL))`;
+Rules: `CHECK ((kind = 'cancelled') = (cancellation_reason IS NOT NULL))`; `CHECK ((kind IN ('order_failed', 'confirmed')) = (payment_id IS NOT NULL))`;
 UPDATE, DELETE and TRUNCATE revoked from the application role (ERD §15 rule 21's pattern). `packages/config/module-tables.json`
 gives it to `booking`.
 

@@ -263,9 +263,11 @@ is unchanged.
 **Decision.** Three jobs (`apps/api/src/jobs/`), each with a `runOnceAndTwice` spec:
 
 - `confirm-enrollment({ paymentId })`: ARCHITECTURE §8.1 verbatim. It locks the enrollment row (`lockRows`), returns
-  if it is confirmed by this order or a compensation case exists for it; if it is confirmed by another order (the
-  student paid twice) it opens a compensation case and leaves the enrollment as it is (FR-375); if R-219 cancelled it,
-  it takes the refusal branch at once (FR-362); otherwise it then tries one transaction (hold conversion by conditional
+  if it is confirmed by this order or a compensation case exists for it; if its `confirmed` event names another order (the
+  student paid twice) it opens a `duplicate_payment` case and leaves the enrollment as it is (FR-375); if R-219 cancelled
+  it, it takes the refusal branch at once (`party_restricted`, FR-362); before a late branch it checks the parties with
+  no new rule, the teacher by R-201's predicate with `purpose: 'book'` and the student by `account_status = 'active'`,
+  and takes the refusal branch (`party_restricted`) if either fails; otherwise it then tries one transaction (hold conversion by conditional
   update, or the late branch's release-and-re-hold; `booking.confirmEnrollment`; `sessions.generateForEnrollment`); on a
   database refusal (unique violation on `slot_holds`, exclusion violation on `sessions`) it rolls back and runs the
   refusal transaction (release, `slot_unavailable`, `moderation.openCompensationCase`, a `cancelled` outcome).
