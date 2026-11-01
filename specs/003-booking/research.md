@@ -75,7 +75,18 @@ fuzzy) than the prefix the SRS asks for.
 
 **Decision.** `catalog/discovery.service.ts` serves `discovery.browse` (a subject tab or all, the filters, a cursor) and
 `discovery.teacher` (the profile). Search is `browse` with a `query`. A page is `discovery_page_size` cards (a new
-setting, default 20), ordered by rating then review count then name, keyset-paged on that order. Each card carries
+setting, default 20), keyset-paged on one total order (the owner's decision of 2026-11-01):
+`COALESCE(average_rating, 0) DESC`, `review_count DESC`, `display_name ASC`, then the teacher's id `ASC`. A teacher with
+no review has a NULL `average_rating`, which PostgreSQL sorts first in a descending order, so the new teacher would top
+every list; the `COALESCE` is written in the ORDER BY and in the keyset condition alike (a rating runs 1 to 5, so 0 sorts
+after every rated teacher, and the condition never compares a NULL). The id comes last because names repeat: on the
+name alone a page boundary between two teachers of one name, rating and count could repeat a card or skip one. The
+cursor carries the four values; the condition is the expanded form of the mixed directions (rating `<`, or equal and
+count `<`, or both equal and name `>`, or all three equal and id `>`), with the name compared in the collation the ORDER BY
+uses. Two specs: a teacher with no review comes after every teacher with one; two teachers of one name, rating and
+count on either side of a page boundary each appear exactly once across the two pages. A single 5-star review ranking
+above 4.9 from a hundred is a known weakness of this order, recorded as a follow-up in `tasks.md` and not changed now.
+Each card carries
 the teacher's subjects, track badges (from active packages), the lowest price per session (R-212) and the nearest free
 slot (R-205). The subject tabs' counts come with the first page. The riwaya filter's values come from
 `discovery.filters({ subjectId })`: the distinct `teacher_credentials.riwaya` of approved credentials of visible
@@ -292,8 +303,12 @@ student (`suspended`, `banned`, `account_deleted`) it releases the student's act
 `pending_payment` enrollment on it (`account_deleted` for a deletion, `admin` for a suspension or ban); on a
 teacher's (`suspended`, `banned`, `approval_revoked`, `account_deleted`) it releases holds on the teacher's slots and
 cancels their pending enrollments (`teacher_suspended`, or `account_deleted`). Each writes an `enrollment_events` row.
-A confirmed enrollment's consequences (its sessions cancelled, a compensation case) are Phase 3's (FR-SESS-16,
-ADR 0015 D4, ADR 0018 D5) and are recorded there.
+FR-AUTH-14's remaining part is not this subscriber's: a deleted student's remaining sessions cancelled
+`cancelled_by_admin` and their confirmed enrollments cancelled `account_deleted`, with no compensation case; a deleted
+teacher's deletion with FR-SESS-16's effect, compensation cases included. Confirmed enrollments and sessions first exist
+in this phase, but cancelling a session is Phase 3's (FR-SESS-16, ADR 0015 D4, ADR 0018 D5), so that part is a task of
+its own in `tasks.md`, timed Phase 3's first batch (the owner's decision of 2026-11-01), and falls to neither phase by
+omission.
 
 **Rationale.** Phase 1's deletion writes no enrollment (`identity/deletion.service.ts` line 195 calls the registry;
 no subscriber touches booking). Without this a deleted student's hold would block a slot until it expires, and a
@@ -324,4 +339,7 @@ decisions of 2026-10-31 it writes `price_piasters > 0` (not `>= 0`) and the leng
 "durations > 0" open); T140's line is amended to say so. T126's locks are the first use of the kernel's row-lock
 helper (`platform/db/row-lock.ts`), which R-206, R-207 and R-215 use too. T142 and T161 land before discovery reads
 `teacher_subjects` and before this phase reads the application's states. T145 strips a photo's metadata before
-R-204's cards show it. T146's timeouts precede R-217.
+R-204's cards show it. T146's timeouts precede R-217. T143 has no code to change: Phase 1 wrote no predicate, so it is
+implemented by writing R-201's repository with the fifth conjunct and its adversarial cases, before any code reads it.
+No code of this phase suspends or bans an account (R-219 only reacts to identity's registry, which `StandingService`
+calls), so T144's part here is this plan naming it; it stays open for Phase 3's plan.

@@ -194,7 +194,7 @@ router because the card's nearest slot needs holds and enrollments, which catalo
 ## Post-Design Constitution Re-Check
 
 Re-evaluated after the design artefacts were written. No gate changed from PASS; the design surfaced five points
-worth recording:
+worth recording, and the owner's review of 2026-11-01 a sixth and two conditions:
 
 1. **T140's line changes.** It says `price_piasters >= 0` and leaves the lengths open; the owner's decisions of
    2026-10-31 make the check `> 0` and the lengths `IN (30, 45, 60)`. The line in `specs/002-identity/tasks.md` is
@@ -204,10 +204,19 @@ worth recording:
    Phase 1's reads do. The monitor still writes nothing else.
 3. **The hosted checkout's address is kept, encrypted.** FR-BOOK-12 (c) offers "continue the previous payment", which
    needs the address the gateway returned; it may carry a payment token, so it is a secret column (R-DB-8) cleared
-   when the order is no longer payable.
-4. **Account deletion now reaches holds and pending enrollments** (R-219). Phase 1's deletion writes no enrollment; a
-   confirmed enrollment's consequences stay Phase 3's, with FR-SESS-16 and ADR 0018 D5.
+   when the order is no longer payable. The owner's conditions of 2026-11-01: it is read back only for the student who
+   owns the order, only while the order is `created` and before its `expires_at`, and never logged (data-model
+   §2.4.1).
+4. **Account deletion now reaches holds and pending enrollments** (R-219). Phase 1's deletion writes no enrollment.
+   FR-AUTH-14's remaining part (a deleted student's sessions `cancelled_by_admin` and confirmed enrollments
+   `account_deleted` with no compensation case; a deleted teacher with FR-SESS-16's effect) needs this phase's
+   enrollments and Phase 3's session cancellation, so it is a task of `tasks.md` timed Phase 3's first batch (the
+   owner's decision of 2026-11-01).
 5. **`packages/money` gains its first operation.** Its header says none is added until a requirement names it; FR-337
    names the per-session price, rounded half up to the piaster, for display only.
+6. **Discovery's order is total** (R-204, the owner's decision of 2026-11-01). `COALESCE(average_rating, 0) DESC`, then
+   the review count, the name, and the id last, in the ORDER BY and the keyset condition alike, so a teacher with no
+   review never tops the list and a page boundary between two teachers of one name neither repeats nor skips a card;
+   a spec for each. Ranking a lone 5-star review above 4.9 from a hundred is a follow-up for later.
 
 **Re-check result: PASS.**

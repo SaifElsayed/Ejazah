@@ -64,7 +64,18 @@ by FR-333 itself, a prefix match on every keystroke under the search rate limit.
 | Column | Type | Notes |
 |---|---|---|
 | `expires_at` | timestamptz | The order's expiry as created: no later than the hold's expiry minus the grace (FR-355). Read by Retry (can an order still be created) and by FR-BOOK-12's "still payable" |
-| `checkout_url_encrypted` | bytea, nullable | The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), kept so that FR-BOOK-12 (c) can offer "continue the previous payment"; set to NULL when the order leaves `created`. Joins `reencrypt-columns`' list |
+| `checkout_url_encrypted` | bytea, nullable | The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), kept so that FR-BOOK-12 (c) can offer "continue the previous payment"; set to NULL when the order leaves `created`. Joins `reencrypt-columns`' list. Read back only by `checkout.continue`, only for the student who owns the order's enrollment, and only while the order is `created` and `expires_at` is in the future; never written to a log (the owner's decision of 2026-11-01, §2.4.1) |
+
+#### 2.4.1 Who reads the address back
+
+The owner's decision of 2026-11-01. `checkout.pay` and `checkout.retry` return the address the gateway gave to the
+student who asked for it, in the same call. Afterwards only `checkout.continue` decrypts it, and only when all three
+hold: the enrollment is the caller's (another student's id answers `NOT_FOUND`, as R-202's no-existence rule says), the
+order is `created`, and its `expires_at` is after now. Otherwise it answers `ORDER_NOT_PAYABLE` and decrypts nothing.
+The address is never logged: `apps/api/src/platform/logging/logger.ts`'s redaction list gains `url`, `uri` and `link`
+with `checkout` (`checkoutUrl` is not covered today), error reports go through the same list, and a spec logs a response
+and an error carrying it and finds it redacted. Specs cover the other student, a `paid`, `failed` and `expired` order,
+and a `created` order past `expires_at`.
 
 ### 2.5 `enrollment_events` — new, owned by `booking` (R-216)
 
