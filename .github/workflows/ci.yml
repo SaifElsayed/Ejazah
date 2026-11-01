@@ -130,7 +130,11 @@ jobs:
       # T086 — the whole suite with coverage, because a run over some specs only would fail the
       # floor of a path it never loaded. The integrity probes run once, in stage 4, as the
       # application role; leaving them out here changes no covered path.
+      # T124 — the specs that write to a database run only where a variable says so, here, on this
+      # job's throwaway database.
       - name: Unit and property tests with the 80% coverage floor (R-PROC-5)
+        env:
+          IJAZAH_DB_SPECS: '1'
         run: pnpm test -- --coverage --exclude 'tests/db-integrity/**'
       # B6 — the phone's specs: Jest with jest-expo and React Native Testing Library, the toolchain
       # Expo documents (owner's decision, 2026-10-19); Vitest cannot load React Native.
@@ -282,7 +286,10 @@ jobs:
           psql --set ON_ERROR_STOP=1 --username ijazah_owner --dbname ijazah
           < docker/initdb/01-application-role.sql
       - run: pnpm db:migrate
+      # T124 — the probes write to a database, so they run only where a variable says so.
       - name: Integrity probes as the application role against the migrated database
+        env:
+          IJAZAH_DB_SPECS: '1'
         run: pnpm test:db-integrity
 
   stage-5-build:

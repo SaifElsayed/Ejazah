@@ -7,6 +7,7 @@
 // index (KeyTakenError), and is answered from it. A `delete` that requires its row turned that
 // into P2025, an unexpected error. The race reduces to one deterministic case: removing an id that
 // no row carries, through the real repository in a real Prisma transaction. Nothing is written.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {

@@ -8,6 +8,7 @@
 // transactions) and every probe's rows are its own, so a probe asserts its rows, not totals.
 // T155: the credential review's request for another ijazah over the same tables, which sets the
 // application in review waiting on the applicant, and the resubmission that returns both.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

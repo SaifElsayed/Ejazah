@@ -4,6 +4,7 @@
 // delivery repeats the mail rather than making a second link. The mail is written in both languages,
 // Arabic first, since an administrator has no language column. Nothing is prepared for an
 // administrator who needs no link, and a missing one is an error, for the queue to retry.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHmac } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

@@ -7,6 +7,7 @@
 // the contract names), and that a call reaches its service and answers in the published shape. What
 // the services decide is proven by their own specs (B9); `auth.signOut`, the one signed-in
 // procedure here, proves its kind's refusal for the authorization gate (T028, R-MOBILE-13).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { hashLookupToken, hashPassword } from '../../platform/crypto/hashing.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

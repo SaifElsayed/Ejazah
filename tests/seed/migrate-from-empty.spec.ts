@@ -11,6 +11,7 @@
 //
 // Observed red before commit by two mutations, each since removed: a migration creating a table
 // outside the model failed the last case, and a migration that does not parse failed the first two.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type pg from 'pg';

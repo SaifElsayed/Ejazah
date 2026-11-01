@@ -208,7 +208,8 @@ describe('the event', () => {
 
 // The end-to-end case: a database of its own, migrated, with one approved teacher whose payout is
 // configured and pending, and the real route listening on this machine.
-describe('a replay is a no-op end to end (T079, FR-PAYG-4)', () => {
+// T124: skipped unless IJAZAH_DB_SPECS=1.
+describe('a replay is a no-op end to end (T079, FR-PAYG-4)', { tags: ['database'] }, () => {
   const ENCRYPTION_KEY = randomBytes(32).toString('base64');
   const recipientRef = `fake_rcp_${randomUUID()}`;
   const lines: string[] = [];

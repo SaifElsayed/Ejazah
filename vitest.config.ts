@@ -1,4 +1,5 @@
 import { configDefaults, defineConfig, mergeConfig } from 'vitest/config';
+import { databaseTag } from './apps/api/src/platform/db/spec-database.fixtures';
 import base from './packages/config/vitest.base';
 
 // Three projects (B8, T035–T037; T132). `node` is every spec the repository had before: the API, the
@@ -28,6 +29,9 @@ export default mergeConfig(
     test: {
       // T114 (PR #49 review m1): every run starts with no provider key (SC-005).
       setupFiles: ['tests/support/no-provider-keys.setup.ts'],
+      // T124: a spec that writes to a database carries the tag `database`, its cases skipped unless
+      // IJAZAH_DB_SPECS=1 (apps/api/src/platform/db/spec-database.fixtures.ts).
+      tags: [databaseTag()],
       projects: [
         {
           extends: true,

@@ -6,7 +6,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { addSeconds } from '@ijazah/time';
-import { config as readDotenv } from 'dotenv';
 import type { z } from 'zod';
 
 import {
@@ -17,6 +16,7 @@ import {
 import { hashPassword } from '../../../platform/crypto/hashing.js';
 import { generateTotpSecret, totpCode } from '../../../platform/crypto/totp.js';
 import { openDatabase, type Database, type Transaction } from '../../../platform/db/prisma.repository.js';
+import { specDatabaseUrl, whenDatabaseSpecs } from '../../../platform/db/spec-database.fixtures.js';
 import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
 import { MemorySingleUseMarks } from '../../../platform/redis/single-use-marks.fixtures.js';
 import { SettingError, type SettingsReader } from '../../../platform/settings/settings-reader.js';
@@ -71,13 +71,15 @@ export const SPEC_PANEL_ORIGIN = 'https://admin.ijazah.test';
 
 /** The application role's client, as the API opens it. */
 export function openSpecDatabase(): Database {
-  const fromDotenv: Record<string, string> = {};
-  readDotenv({ processEnv: fromDotenv, quiet: true });
-  const url = process.env['DATABASE_URL'] ?? fromDotenv['DATABASE_URL'];
-  if (url === undefined || url === '') {
-    throw new Error('admin specs: DATABASE_URL is not set (quickstart §1)');
-  }
-  return openDatabase(url, { poolMax: 4, statementTimeoutMs: 30_000, idleInTransactionTimeoutMs: 30_000 });
+  // T124: while IJAZAH_DB_SPECS is off, a stand-in that refuses every use; nothing is opened. Once
+  // on, the URL comes from the environment only, refused naming the variable when it is missing.
+  return whenDatabaseSpecs(() =>
+    openDatabase(specDatabaseUrl('DATABASE_URL'), {
+      poolMax: 4,
+      statementTimeoutMs: 30_000,
+      idleInTransactionTimeoutMs: 30_000,
+    }),
+  );
 }
 
 /** A clock the spec moves. */

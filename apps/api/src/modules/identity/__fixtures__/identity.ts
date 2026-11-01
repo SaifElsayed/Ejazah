@@ -8,12 +8,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { addSeconds } from '@ijazah/time';
-import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 import { z } from 'zod';
 
 import { columnKeyId, createColumnCipher } from '../../../platform/crypto/encryption.js';
 import { openDatabase, type Database } from '../../../platform/db/prisma.repository.js';
+import { specDatabaseUrl, whenDatabaseSpecs } from '../../../platform/db/spec-database.fixtures.js';
 import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
 import type { StoragePort } from '../../../platform/ports/storage/storage.port.js';
 import {
@@ -77,22 +77,21 @@ function keyBeside(previous: string): string {
 }
 
 function databaseUrl(): string {
-  const fromDotenv: Record<string, string> = {};
-  readDotenv({ processEnv: fromDotenv, quiet: true });
-  const url = process.env['DATABASE_URL'] ?? fromDotenv['DATABASE_URL'];
-  if (url === undefined || url === '') {
-    throw new Error('identity specs: DATABASE_URL is not set (quickstart §1)');
-  }
-  return url;
+  // T124: from the environment only, refused naming the variable when it is missing.
+  return specDatabaseUrl('DATABASE_URL');
 }
 
 /** The application role's client, as the API opens it. */
 export function openSpecDatabase(): Database {
-  return openDatabase(databaseUrl(), {
-    poolMax: 4,
-    statementTimeoutMs: 30_000,
-    idleInTransactionTimeoutMs: 30_000,
-  });
+  // T124: while IJAZAH_DB_SPECS is off, a stand-in that refuses every use; nothing is opened. Once
+  // on, the URL comes from the environment only, refused naming the variable when it is missing.
+  return whenDatabaseSpecs(() =>
+    openDatabase(databaseUrl(), {
+      poolMax: 4,
+      statementTimeoutMs: 30_000,
+      idleInTransactionTimeoutMs: 30_000,
+    }),
+  );
 }
 
 /** A clock the spec moves. */

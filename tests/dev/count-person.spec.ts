@@ -123,7 +123,8 @@ describe('the guard', () => {
   });
 });
 
-describe('over the local database (rolled back)', () => {
+// T124: skipped unless IJAZAH_DB_SPECS=1.
+describe('over the local database (rolled back)', { tags: ['database'] }, () => {
   let db: Db;
   beforeAll(async () => {
     db = await connectAsApplication();

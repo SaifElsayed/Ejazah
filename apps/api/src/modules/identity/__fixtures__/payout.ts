@@ -6,10 +6,10 @@
 // says in which order the port and the idempotent transaction were reached (B15 check, decision 5).
 import { randomInt, randomUUID } from 'node:crypto';
 
-import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 
 import type { Database, Transaction } from '../../../platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../../platform/db/spec-database.fixtures.js';
 import { IdempotencyRepository } from '../../../platform/idempotency/idempotency.repository.js';
 import {
   IdempotencyService,
@@ -140,13 +140,8 @@ export async function createApprovedTeacher(
 }
 
 function databaseUrl(): string {
-  const fromDotenv: Record<string, string> = {};
-  readDotenv({ processEnv: fromDotenv, quiet: true });
-  const url = process.env['DATABASE_URL'] ?? fromDotenv['DATABASE_URL'];
-  if (url === undefined || url === '') {
-    throw new Error('payout specs: DATABASE_URL is not set (quickstart §1)');
-  }
-  return url;
+  // T124: from the environment only, refused naming the variable when it is missing.
+  return specDatabaseUrl('DATABASE_URL');
 }
 
 /**

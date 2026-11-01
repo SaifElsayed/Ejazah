@@ -5,6 +5,7 @@
 // mid-way leaves no row; the token's `jti` is claimed once in Redis; nothing of the person is stored
 // before `complete` commits, so an abandoned flow leaves no row anywhere. Over the real database,
 // the stand-ins and in-memory marks.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHmac } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';

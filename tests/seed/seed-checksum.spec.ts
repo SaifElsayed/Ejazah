@@ -5,6 +5,7 @@
 // two credential columns left out (note under T074). Each change below is made inside a transaction
 // that is rolled back, and the checksum is read inside it. T072 proves two seeds agree; this file
 // proves what the checksum reads and what it does not.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';

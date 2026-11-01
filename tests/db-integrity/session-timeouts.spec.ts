@@ -7,6 +7,7 @@
 // three configured values, as the application role (the harness proves the role first). The two
 // settings are read back with SHOW on the client's own session, and a statement longer than the
 // limit is cut by the server with SQLSTATE 57014. Nothing is written.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   closeDatabase,

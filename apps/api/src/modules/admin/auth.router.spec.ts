@@ -5,6 +5,7 @@
 // names), the throttle standing in front of the lockout (FR-172), one refusal for every failed
 // sign-in whatever the cause, and the two signed-in procedures audited like any other call. What
 // the services decide is proven by their own specs (B12a).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHash } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

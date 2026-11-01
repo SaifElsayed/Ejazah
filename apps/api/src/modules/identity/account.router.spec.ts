@@ -15,6 +15,7 @@
 // welcome screen (T106) reaches `auth.providerNonce` and `auth.signInWithProvider`, public and held
 // by the authentication budget, as auth.router.spec.ts proves. The Terms (T105) call no procedure:
 // the WebView loads the served `GET /terms`.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

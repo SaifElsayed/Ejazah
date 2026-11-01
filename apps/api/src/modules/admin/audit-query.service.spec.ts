@@ -9,6 +9,7 @@
 // naming a target of its own, so specs running together never see each other's rows; the person's
 // name comes from a stand-in reader, as `target-label.spec.ts` reads it (the person is the
 // identity module's row).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { addHours, addMinutes } from '@ijazah/time';

@@ -5,6 +5,7 @@
 // column that would let a removal happen as an update instead: `audit_logs` has no `deleted_at`,
 // so setting one fails as an undefined column (42703), and no column of the table names a removal.
 // A row can still be written, so the refusal is the rule and not a dead table.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SQLSTATE,

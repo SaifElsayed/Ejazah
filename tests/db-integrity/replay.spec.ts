@@ -5,6 +5,7 @@
 // the forbidden one: the same `provider_event_id` again (23505), a gateway event with none (23502),
 // a second payment with the same `gateway_order_id` (23505). Every probe runs as the application
 // role in a transaction that is rolled back.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SQLSTATE,

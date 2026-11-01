@@ -11,6 +11,7 @@
 // Each probe first writes a valid row, so a rejection is the rule and not a broken row, and then
 // the forbidden one, expecting the SQLSTATE of the constraint kind: 23514 for a check, 23505 for a
 // unique. Every probe runs as the application role in a transaction that is rolled back.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SQLSTATE,

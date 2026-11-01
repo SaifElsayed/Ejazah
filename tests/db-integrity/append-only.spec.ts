@@ -11,6 +11,7 @@
 // rewrote the event row through the cascade, past the revoked UPDATE. A migration made them
 // `ON UPDATE RESTRICT`: the parent's key update is refused with 23001 and the row keeps its key.
 // The catalogue probe holds every foreign key of the three tables to RESTRICT, a later one too.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {

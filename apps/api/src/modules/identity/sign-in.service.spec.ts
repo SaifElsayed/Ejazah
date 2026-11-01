@@ -5,6 +5,7 @@
 // prefill; an existing one a session and its landing. An email that already belongs to another
 // account is refused with that account's method, never signed in to or merged (FR-123). Over the
 // real database, the sign-in stand-in and in-memory marks.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase } from '../../platform/db/prisma.repository.js';

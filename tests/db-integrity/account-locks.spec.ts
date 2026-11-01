@@ -12,6 +12,7 @@
 // T126 names. A and B commit, so the rows are real; each probe writes a person of its own, and the
 // parents stay as the other probes here leave theirs. All three connections are the application
 // role: PostgreSQL hides the wait of another role's session from a non-superuser.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { revokeSubjects } from '../../apps/api/src/modules/catalog/index.js';

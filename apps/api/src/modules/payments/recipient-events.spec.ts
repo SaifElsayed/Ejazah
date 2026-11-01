@@ -7,6 +7,7 @@
 // nothing of what identity does with the verdict (lane A of B15 holds those specs). Each event id
 // is fresh, so specs running together never meet. The log is captured line by line and the error
 // reporting recorded, so "nothing of the raw body is logged" is a sweep over both.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHash, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

@@ -17,6 +17,7 @@
 //
 // Written before T074 and T075, it imported the two as namespaces cast to a declared API, so
 // `pnpm typecheck` stayed green while it was red; since T075 it imports them by name.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomBytes } from 'node:crypto';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
