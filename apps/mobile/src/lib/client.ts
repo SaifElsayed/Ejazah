@@ -242,10 +242,17 @@ function timed(transport: Transport, timeoutMs: number): Transport {
       }, timeoutMs);
       if (caller?.aborted === true) cancel();
       else caller?.addEventListener('abort', cancel);
-      transport(input, { ...init, signal: controller.signal }).then(
-        (response) => finish(() => resolve(response)),
-        (error: unknown) => finish(() => reject(error)),
-      );
+      transport(input, { ...init, signal: controller.signal })
+        .then(async (response) => {
+          // The answer has come when its body is read, not its headers (PR #112, round 1, Minor 4).
+          const body = await response.text();
+          const { status, statusText, headers } = response;
+          return new Response(body === '' ? null : body, { status, statusText, headers });
+        })
+        .then(
+          (response) => finish(() => resolve(response)),
+          (error: unknown) => finish(() => reject(error)),
+        );
     });
 }
 
