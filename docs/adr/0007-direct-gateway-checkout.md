@@ -1,6 +1,6 @@
 # ADR 0007 — Direct gateway checkout with post-approval teacher payout configuration
 
-**Status:** accepted · **Date:** 2026-09-06 · **Supersedes:** ADR 0005 decision D1 (the off-platform direct-payment model) and the parts of ADR 0006 D1 that stated the visibility predicate without payout readiness. · **Amended by:** [ADR 0010](0010-database-refuses-double-booking.md), two points of D4: the hold timing (the slot hold outlives the gateway order by a grace) and the port's operations (the port also cancels an unpaid order, which moves no money).
+**Status:** accepted · **Date:** 2026-09-06 · **Supersedes:** ADR 0005 decision D1 (the off-platform direct-payment model) and the parts of ADR 0006 D1 that stated the visibility predicate without payout readiness. · **Amended by:** [ADR 0010](0010-database-refuses-double-booking.md), two points of D4: the hold timing (the slot hold outlives the gateway order by a grace) and the port's operations (the port also cancels an unpaid order, which moves no money). Amended on 2026-10-31 (task T143 of `specs/002-identity/tasks.md`): the predicate gains a fifth conjunct, the account's standing (SRS §3.7.1, ADR 0006 D1).
 
 ## Context
 
@@ -48,7 +48,7 @@ recipient reference, encrypted (R-DB-8), plus `payout_configured_at` and
 `payout_verified_at` on `teacher_profiles`. Until the gateway verifies the
 account, the teacher **cannot publish availability or packages, does not appear
 in discovery, and cannot be booked**. The visibility predicate of ADR 0006 gains
-a fourth conjunct: `teacher_profile.payout_verified_at IS NOT NULL`.
+a fourth conjunct: `teacher_profile.payout_verified_at IS NOT NULL`. (On 2026-10-31 it gained a fifth, the account's standing: a suspended or banned teacher is left out, and booking requires an active account; SRS §3.7.1.)
 
 ### D4 — Module and port shape
 
