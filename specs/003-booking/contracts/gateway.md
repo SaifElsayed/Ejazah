@@ -16,10 +16,11 @@
 
 1. Verify the signature on the raw body; refuse with 401 and write nothing on a wrong or missing signature or a body
    changed after signing (FR-372).
-2. In one transaction: insert `payment_events` (unique `provider_event_id`; a duplicate answers 200 and does nothing);
+2. In one transaction: insert `payment_events` (unique `provider_event_id`; a duplicate answers 200 and writes nothing, but a duplicate `paid`
+   event still enqueues step 3's job, so an enqueue lost after a commit is recovered);
    move `payments.status` monotonically (data-model §3); on `paid`, record the transaction id, fee and net as reported;
-   on `failed`, append `enrollment_events(order_failed)`; clear `checkout_url_encrypted` when the order leaves `created`.
-3. After commit, on `paid`: enqueue `confirm-enrollment({ paymentId })`.
+   on `failed`, append the `order_failed` outcome through `booking.recordOrderFailed` (booking's table); clear `checkout_url_encrypted` when the order leaves `created`.
+3. After commit, on `paid`: enqueue `confirm-enrollment({ paymentId })` with the job id `paymentId`.
 4. Answer 200 `{ received: true }`.
 
 An order event for an unknown `gatewayOrderId` cannot be recorded, since ERD rule 20 forbids an order event without

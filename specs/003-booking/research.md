@@ -26,8 +26,9 @@ as it stands on `develop` f2389ff (read on 2026-10-31); where it names existing 
 `purpose: 'discover'` applies the five conjuncts; `'book'` adds `account_status = 'active'` (T143). Both are exported
 from `identity/index.ts`. `catalog` (discovery, the profile) and `booking` (the hold, the slots) call them and then
 filter their own tables by the returned ids (`teacher_user_id = ANY($ids)`); a `null` becomes the not-found answer
-(R-202). Counts per subject are computed by catalog over `teacher_subjects` restricted to the returned ids, so they
-are after the predicate by construction (R-GENDER-3).
+(R-202). Counts per subject are computed by catalog over the same candidate set the cards use (a visible teacher with
+an active package in that subject), so they are after the predicate by construction (R-GENDER-3) and match the list
+(SC-310; PR #109's review, follow-up 1).
 
 **Rationale.** R-API-6 forbids catalog to reach `users` or `teacher_profiles`; R-GENDER-5's lint rule
 (`eslint-plugin-ijazah/rules/require-requester-gender.js`) checks exactly a `*.repository.*` method whose return type
@@ -57,19 +58,21 @@ ARCHITECTURE §10 has three layers).
 
 ## R-203 — Name search folds Arabic spelling in the database
 
-**Decision.** `users` gains a generated column `display_name_folded text GENERATED ALWAYS AS (ijazah_fold(display_name))
-STORED`, with `ijazah_fold` an `IMMUTABLE` SQL function: `lower()`, then `translate()` of أإآ→ا, ى ئ→ي, ؤ→و, ة→ه,
+**Decision.** No column (PR #109's review, M5; the owner's decision of 2026-11-01): a stored fold would be a derived value R-DB-4 does not
+list. `ijazah_fold` is an `IMMUTABLE` SQL function declared by the migration: `lower()`, then `translate()` of أإآ→ا, ى ئ→ي, ؤ→و, ة→ه,
 then `regexp_replace` removing the tashkeel range (U+064B–U+065F, U+0670) and tatweel (U+0640). No index: R-DB-9
-asks for a measured slow query first, and T057 measures (analysis C1). The typed text is folded by the same function
-through a kernel helper in `platform/db/` (raw SQL stays there, R-API-6), and identity's repository matches the folded
-column by that prefix, the pattern escaped with `platform/db/like-literal.ts`. The
+asks for a measured slow query first, and T057 measures (analysis C1). One kernel query, `idsWithFoldedNamePrefix(tx, candidateIds, typed)` in
+`platform/db/folded-name.ts` (raw SQL stays there, R-API-6), applies the one function to both sides,
+`ijazah_fold(display_name) LIKE ijazah_fold($typed) || '%' ESCAPE '\'`, the typed text's `%`, `_` and `\` escaped by
+`platform/db/like-literal.ts` first, so that a typed `%` or `_` matches only itself (a spec); identity's repository
+restricts its page to the ids it returns. The
 highlight is computed on the server as the length of the matched prefix in the original name's characters, returned
 with the result; the phone marks it. Subject search uses the same function over `subjects.name_ar`/`name_en`, no index
 (a few dozen rows).
 
 **Rationale.** One fold, in one place, applied identically to both sides, is the only way FR-333's "same normalisation
-on the stored name and the typed text" holds; a generated column cannot drift from the name. A generated column is
-written by the database, not by any module, so identity's ownership of `users` is untouched.
+on the stored name and the typed text" holds; the fold runs in the query, so it cannot drift
+from the name and nothing derived is stored (R-DB-4).
 
 **Alternatives considered.** Folding in TypeScript on both sides: two implementations to keep equal, and no index.
 `unaccent`: an extension whose rules are Latin-centred and do not do أ→ا. Trigram search: a different feature (infix,
@@ -245,11 +248,14 @@ signing, and gains:
 ## R-214 — The webhook records order events and enqueues confirmation
 
 **Decision.** `payments/order-events.service.ts` handles a verified order event in one transaction: insert
-`payment_events` (unique `provider_event_id`; a duplicate is a no-op answered 200), then move the `payments` row
+`payment_events` (unique `provider_event_id`; a duplicate writes nothing and is answered 200, but a duplicate `paid`
+event still enqueues `confirm-enrollment`, so an enqueue lost after a commit is recovered by the gateway's retry;
+PR #109's review, M2), then move the `payments` row
 monotonically — `created → paid | failed | expired`, `paid → refunded`; a `failed` or `expired` arriving after `paid`
 changes nothing — recording transaction id, fee and net only from a `paid` event, and after commit enqueue
-`confirm-enrollment({ paymentId })` for a `paid` event and `expire-pending-payments` work for nothing (the sweep finds
-it). A `failed` event appends an `order_failed` outcome (R-216). The recipient branch of `recipient-events.service.ts`
+`confirm-enrollment({ paymentId })` with the job id `paymentId` for a `paid` event and `expire-pending-payments` work for nothing (the sweep finds
+it). A `failed` event appends an `order_failed` outcome through booking's entry, `booking.recordOrderFailed(tx,
+enrollmentId, paymentId)`, since `enrollment_events` is booking's table (R-216, R-API-6). The recipient branch of `recipient-events.service.ts`
 is unchanged.
 
 ## R-215 — `confirm-enrollment`, the expiry sweeps, and their idempotence
@@ -257,11 +263,15 @@ is unchanged.
 **Decision.** Three jobs (`apps/api/src/jobs/`), each with a `runOnceAndTwice` spec:
 
 - `confirm-enrollment({ paymentId })`: ARCHITECTURE §8.1 verbatim. It locks the enrollment row (`lockRows`), returns
-  if it is confirmed or a compensation case exists for it, then tries one transaction (hold conversion by conditional
+  if it is confirmed by this order or a compensation case exists for it; if it is confirmed by another order (the
+  student paid twice) it opens a compensation case and leaves the enrollment as it is (FR-375); if R-219 cancelled it,
+  it takes the refusal branch at once (FR-362); otherwise it then tries one transaction (hold conversion by conditional
   update, or the late branch's release-and-re-hold; `booking.confirmEnrollment`; `sessions.generateForEnrollment`); on a
   database refusal (unique violation on `slot_holds`, exclusion violation on `sessions`) it rolls back and runs the
   refusal transaction (release, `slot_unavailable`, `moderation.openCompensationCase`, a `cancelled` outcome).
-- `expire-pending-payments` (every minute): ARCHITECTURE §8.1's enrollment-keyed release.
+- `expire-pending-payments` (every minute): ARCHITECTURE §8.1's enrollment-keyed release, never for an enrollment with a
+  `paid` order: the job asks `payments`' entry for those and enqueues `confirm-enrollment` for each, so a lost enqueue
+  never cancels a paid enrollment (PR #109's review, M2).
 - `expire-holds` (every minute): releases expired holds with no enrollment.
 
 Their cadence is a cron in the job declaration, as Phase 1's sweeps; every window they read is a setting (R-MONEY-12).
@@ -304,8 +314,8 @@ pattern, used for the first time).
 (`identity/teacher-profile.router.ts`); T158 adds the account tab's entry to the existing `account.updateProfile` for
 the display name. Packages and slots are catalog's (`teacher.packages.*`, `teacher.slots.*`, kind
 `teacherProcedure({ admits: 'approved' })`: drafting is allowed before payout verification, FR-315). «طلابي» and
-«اليوم» are booking's reads (`teacher.students.list/get`, `teacher.today`), the student's name searched with
-`ijazah_fold` on the student's `display_name_folded` through identity's entry. A package's subject must be one of the
+«اليوم» are booking's reads (`teacher.students.list/get`, `teacher.today`), the student's name searched through the
+kernel's `idsWithFoldedNamePrefix` (R-203). A package's subject must be one of the
 teacher's `teacher_subjects` (FR-311, FR-PROFILE-11 as amended).
 
 ## R-219 — Account terminations reach holds and pending enrollments
@@ -315,6 +325,9 @@ student (`suspended`, `banned`, `account_deleted`) it releases the student's act
 `pending_payment` enrollment on it (`account_deleted` for a deletion, `admin` for a suspension or ban); on a
 teacher's (`suspended`, `banned`, `approval_revoked`, `account_deleted`) it releases holds on the teacher's slots and
 cancels their pending enrollments (`teacher_suspended`, or `account_deleted`). Each writes an `enrollment_events` row.
+A paid event that still arrives for an enrollment cancelled here takes FR-PAYG-19's refusal branch at once: it stays
+cancelled and one compensation case is opened (FR-362). FR-PAYG-6 and FR-BOOK-9 are amended to list these releases
+(the owner's decision of 2026-11-01, citing FR-VERIFY-8).
 FR-AUTH-14's remaining part is not this subscriber's: a deleted student's remaining sessions cancelled
 `cancelled_by_admin` and their confirmed enrollments cancelled `account_deleted`, with no compensation case; a deleted
 teacher's deletion with FR-SESS-16's effect, compensation cases included. Confirmed enrollments and sessions first exist

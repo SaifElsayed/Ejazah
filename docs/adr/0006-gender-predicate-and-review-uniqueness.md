@@ -35,7 +35,12 @@ AND teacher.deleted_at IS NULL
 **Amended 2026-10-31 (Phase 2's Spec Kit cycle; the owner's decision of 2026-10-29, task T143 of `specs/002-identity/tasks.md`).** The predicate also leaves out a teacher whose account is suspended or banned: `AND teacher.account_status NOT IN ('suspended', 'banned')`. A teacher whose account is `verification_required` stays visible (FR-VERIFY-10 restricts new bookings, not existence), and booking and token issuance further require `teacher.account_status = 'active'`. SRS §3.7.1 states the whole predicate; the adversarial suite proves both conditions in both directions.
 
 The predicate lives in SRS §3.7.1 and is implemented as the single repository
-filter in `catalog` that R-GENDER-5 requires. NFR-SEC-4 is rewritten so that it
+filter that R-GENDER-5 requires, in `identity` (amended 2026-11-01: the predicate
+reads only `users` and `teacher_profiles`, identity's tables under R-API-6, so
+`identity/visible-teachers.repository.ts` holds it and orders and pages the
+visible teachers; `catalog` and `booking` filter their own tables by the ids it
+returns; the owner's approval of the Phase 2 analysis, C2, `specs/003-booking/`
+R-201 and R-204). NFR-SEC-4 is rewritten so that it
 binds both directions equally. The adversarial suite (FR-064, T087) must run
 every case in both directions: male requester against female teachers and
 female requester against male teachers.

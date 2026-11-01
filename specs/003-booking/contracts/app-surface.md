@@ -18,7 +18,7 @@ visibility predicate first (research R-201, R-202).
 |---|---|---|---|---|
 | `teacher.packages.list` | teacher(approved) | `{}` | `{ published, packages: [{ id, subject, track, sessionCount, sessionDurationMinutes, price_piasters, perSession_piasters, isActive, activeEnrollmentCount, frozen }] }` | `frozen` true once an enrollment exists (FR-312); `perSession_piasters` by `packages/money` (R-212) |
 | `teacher.packages.create` | teacher(approved), idempotent | `{ subjectId, track, sessionCount, sessionDurationMinutes: 30 \| 45 \| 60, price_piasters, isActive, idempotencyKey }` | the package | `SUBJECT_NOT_APPROVED` unless the subject is in the teacher's `teacher_subjects` (FR-311); `price_piasters` > 0 |
-| `teacher.packages.update` | teacher(approved) | `{ packageId, sessionCount?, track?, sessionDurationMinutes?, price_piasters?, isActive? }` | the package | `PACKAGE_FROZEN` for track or length once an enrollment exists; a price change applies to later purchases (FR-312) |
+| `teacher.packages.update` | teacher(approved) | `{ packageId, sessionCount?, track?, sessionDurationMinutes?, price_piasters?, isActive? }` | the package | `PACKAGE_FROZEN` for track or length once an enrollment exists; a price change applies to later purchases (FR-312); only the caller's own package: another teacher's id answers `NOT_FOUND` and writes nothing (PR #109's review, M3) |
 
 ## `teacher.slots` — catalog (FR-313, FR-314, FR-317, FR-318)
 
@@ -26,7 +26,7 @@ visibility predicate first (research R-201, R-202).
 |---|---|---|---|---|
 | `teacher.slots.list` | teacher(approved) | `{}` | `{ timezone, slots: [{ id, dayOfWeek, startTimeLocal, durationMinutes, isActive, state: 'free' \| 'booked' \| 'disabled' }] }` | `booked` = in use (R-207), derived |
 | `teacher.slots.create` | teacher(approved), idempotent | `{ dayOfWeek, startTimeLocal, durationMinutes: 30 \| 45 \| 60, idempotencyKey }` | the slot | Zone = the teacher's at creation; `SLOT_OVERLAP` on the week (R-206) |
-| `teacher.slots.update` | teacher(approved) | `{ slotId, dayOfWeek?, startTimeLocal?, durationMinutes?, isActive? }` | the slot | `SLOT_IN_USE` for day, time or length while a hold or a pending or confirmed enrollment uses it; deactivation always allowed; reactivation re-checks overlap |
+| `teacher.slots.update` | teacher(approved) | `{ slotId, dayOfWeek?, startTimeLocal?, durationMinutes?, isActive? }` | the slot | `SLOT_IN_USE` for day, time or length while a hold or a pending or confirmed enrollment uses it; deactivation always allowed; reactivation re-checks overlap; only the caller's own slot: another teacher's id answers `NOT_FOUND` and writes nothing (M3) |
 
 ## `discovery` — booking's router over catalog's service (FR-330 to FR-338, R-204, R-205)
 
@@ -47,11 +47,11 @@ visibility predicate first (research R-201, R-202).
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
 | `checkout.hold` | student, idempotent, `rate_limit_payment_initiation` | `{ packageId, slotId, idempotencyKey }` | `{ holdId, expiresAt, summary, firstSession, lastSession }` | FR-351/352/353; `SLOT_TAKEN`; `NOT_BOOKABLE`; `ACCOUNT_NOT_ACTIVE`; `PREVIOUS_CHECKOUT` (FR-BOOK-12 (b)/(c)) |
-| `checkout.pay` | student, idempotent, `rate_limit_payment_initiation` | `{ holdId, idempotencyKey }` | `{ enrollmentId, checkoutUrl, orderExpiresAt }` | ARCHITECTURE §8.1: order created outside the transaction, recorded and handed over only if the hold is still active (FR-354); `HOLD_EXPIRED` otherwise |
-| `checkout.retry` | student, idempotent, `rate_limit_payment_initiation` | `{ enrollmentId, idempotencyKey }` | `{ checkoutUrl, orderExpiresAt }` | A new order on the same hold; `ORDER_NOT_PAYABLE` past the hold's expiry minus the grace (FR-356) |
+| `checkout.pay` | student, idempotent, `rate_limit_payment_initiation` | `{ holdId, idempotencyKey }` | `{ enrollmentId, checkoutUrl, orderExpiresAt }` | ARCHITECTURE §8.1: order created outside the transaction, recorded and handed over only if the hold is still active (FR-354); `HOLD_EXPIRED` otherwise; only the caller's own hold: another student's id answers `NOT_FOUND`, no order is created and nothing is written (M3) |
+| `checkout.retry` | student, idempotent, `rate_limit_payment_initiation` | `{ enrollmentId, idempotencyKey }` | `{ checkoutUrl, orderExpiresAt }` | A new order on the same hold; `ORDER_NOT_PAYABLE` past the hold's expiry minus the grace (FR-356); only the caller's own enrollment: `NOT_FOUND` otherwise, nothing written (M3) |
 | `checkout.current` | student | `{}` | `{ hold?: { holdId, expiresAt, enrollmentId?, summary, lastOrder?: { status, expiresAt, canContinue } } }` | What `CheckoutPrevious` shows; `canContinue` when the last order is still payable |
 | `checkout.continue` | student | `{ enrollmentId }` | `{ checkoutUrl, orderExpiresAt }` | Reopens the payable order's hosted page (FR-BOOK-12 (c)): `NOT_FOUND` unless the enrollment is the caller's; `ORDER_NOT_PAYABLE`, with nothing decrypted, unless the order is `created` and its `expires_at` is after now; the address is never logged (data-model §2.4.1) |
-| `checkout.status` | student | `{ enrollmentId }` | `{ status, cancellationReason?, lastOrder: { status, reference, gross_piasters }, summary, sessions?: [{ sequenceNumber, localDate, startTimeLocal, timezone, startsAt, endsAt }], firstSessionMoved?: { quoted, actual } }` | Read by Processing, the Confirming badge and the success screen (FR-380 to FR-386); `confirmed` only from the server's row (R-HONEST-1) |
+| `checkout.status` | student | `{ enrollmentId }` | `{ status, cancellationReason?, lastOrder: { status, reference, gross_piasters }, summary, sessions?: [{ sequenceNumber, localDate, startTimeLocal, timezone, startsAt, endsAt }], firstSessionMoved?: { quoted, actual } }` | Read by Processing, the Confirming badge and the success screen (FR-380 to FR-386); `confirmed` only from the server's row (R-HONEST-1); only the caller's own enrollment: `NOT_FOUND` otherwise (M3) |
 
 ## `enrollments` and the teacher's lists — booking (FR-390 to FR-395)
 

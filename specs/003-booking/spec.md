@@ -44,7 +44,7 @@ with its cause (PLAN.md, "Extending a phase", "When a phase slips anyway").
 
 **Carried from Phase 1.** `specs/002-identity/tasks.md` holds follow-ups whose
 time is this phase (PLAN.md, Phase 2, the owner's decisions of 2026-10-29):
-T123, T126, T129, T133 to T141, T160 and T162 land in Phase 2's first batch;
+T123, T126, T129, T133 to T141, T160 and T162 land in Phase 2's first three batches (B20 to B22, the owner's decision of 2026-11-01);
 T142 before discovery reads `teacher_subjects`; T143 before the code that reads
 the visibility predicate; T145 before a teacher's photo is shown to a student;
 T146 before checkout relies on the phone's calls; T161 before this phase relies
@@ -91,6 +91,13 @@ never collides with Phase 1's FR-201 to FR-217.
 - Q: Does the name search ignore the differences of Arabic spelling? → A: Yes. أ, إ and آ count as ا; ى and ئ as ي; ؤ as و; ة as ه; diacritics and tatweel are removed; Latin letters ignore case; the same on the stored name and on what the student types. The search runs only inside the visibility predicate, T143's standing included, so it never returns a hidden teacher, with a test of its own (FR-333, SC-314).
 - Decision (the owner, 2026-10-31, not a question): a package's session length and a slot's length are 30, 45 or 60 minutes, nothing else. The requirement comes from the SRS, not from the board, so FR-PROFILE-2 and FR-PROFILE-4 are amended with it, and the two boards that drew 45/60 now draw the three (`PackageEditor`, `SlotEditor`). Anything the boards show that the SRS does not say is put to the owner before it is written here.
 - Q: Seven behaviours of this specification came from the boards, not the SRS; which stay? → A: Six stay, each the owner's decision of 2026-10-31: a package's track and length are frozen after its first enrollment (FR-312, SRS FR-PROFILE-3 amended); the package's subject list offers only approved subjects, which withdraws the draft for a subject under review that FR-PROFILE-11 left open (FR-311, SRS FR-PROFILE-11 amended); the result card's nearest slot and lowest price per session (FR-335); the checkout countdown that continues offline (FR-358); enrollments ordered by next session and the next session on the home (FR-390); the «غير منشورة» marker and the banner to payout setup (FR-315). The profile shows the price per session and the track's remedy line, but not the chain: the riwaya, the tariq and the chain stay in Phase 4 with FR-ISNAD-5 (FR-336).
+
+### Session 2026-11-01
+
+- Decision (the owner, on the plan and the analysis): discovery is ordered by rating with no review last, then review count, name and id, in the order and in the paging; ranking by confidence is a later follow-up (tasks.md T058).
+- Decision (the owner, on PR #109's review): an account suspended, banned, revoked or deleted releases its holds and cancels its enrollments awaiting payment (R-219), with FR-PAYG-6 and FR-BOOK-9 amended in the SRS, FR-VERIFY-8 cited; a paid event that still arrives for such an enrollment takes the refusal branch, which opens a compensation case (FR-362). FR-AUTH-14's confirmed part is Phase 3's first batch (tasks.md T059).
+- Decision (the owner, on PR #109's review): a second paid order on a confirmed enrollment is recorded and opens a compensation case, the enrollment unchanged (FR-375).
+- Decision (the owner, on the plan): the hosted checkout's address is read back only by the order's own student, only while the order is payable and unexpired, and never logged.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -289,7 +296,7 @@ order with the figures the gateway reported, a paid order cancelled
 - The paid event arrives before the app reaches Processing, or never reaches the app: the server confirms regardless, and the app reads Confirmed on its next read (FR-PAYG-17).
 - The paid event arrives twice, or out of order with a failed event for an older order of the same hold: each event is recorded once; the enrollment is confirmed once (FR-PAYG-4, FR-PAYG-5).
 - The teacher deactivates the slot or the package while a student holds it: the hold and its checkout complete; the deactivation stops later holds only (FR-PROFILE-3, FR-PROFILE-9).
-- The teacher's payout is replaced, or the teacher is suspended, while a student is in checkout: the hold already placed may complete if paid; the hold is refused if not yet placed (FR-PAYG-16, T143). What a suspension does to confirmed enrollments is Phase 3's (FR-SESS-16).
+- The teacher's payout is replaced while a student is in checkout: the hold already placed may complete if paid; a new hold is refused (FR-PAYG-16). The teacher or the student is suspended, banned, revoked or deleted while a student is in checkout: the hold is released and the enrollment awaiting payment cancelled at once (R-219); a paid event that still arrives takes the refusal branch, the enrollment stays cancelled and one compensation case is opened (FR-362; the owner's decision of 2026-11-01). What a suspension does to confirmed enrollments is Phase 3's (FR-SESS-16).
 - A teacher's gender is corrected by an admin while a student holds their slot: the predicate is read at each step; the next step for an incompatible student is the 404 a nonexistent teacher gets (FR-GENDER-7's enrollment consequences are Phase 3's).
 - A package priced at zero: refused when it is saved, since the gateway's signed paid event is the only confirmation (FR-311, FR-PAYG-3, FR-PAYG-8).
 - Two slots saved at the same moment that overlap: the save-time check may pass both; the database refuses the second overlapping session at booking (FR-317, FR-369).
@@ -308,7 +315,7 @@ adds only what this phase decides about it.
 
 **Carried from Phase 1**
 
-- **FR-301**: Phase 2's first batch MUST land T123, T126, T129, T133 to T141, T160 and T162 of `specs/002-identity/tasks.md` before any other batch of this phase starts (PLAN.md, Phase 2, the owner's decision of 2026-10-29).
+- **FR-301**: Phase 2's first three batches (B20 to B22) MUST land T123, T126, T129, T133 to T141, T160 and T162 of `specs/002-identity/tasks.md` before any other batch of this phase starts (PLAN.md, Phase 2, the owner's decision of 2026-10-29).
 - **FR-302**: T142 MUST land before any procedure of this phase reads `teacher_subjects`; T161 before any procedure of this phase reads the application's states.
 - **FR-303**: The visibility predicate MUST include the account's standing as SRS §3.7.1 states it since 2026-10-31: discovery leaves out a suspended or banned teacher; holds, checkout and any token issuance require the teacher's account to be active (T143).
 - **FR-304**: A teacher's photo MUST reach a student only after its metadata is stripped (T145).
@@ -355,7 +362,7 @@ adds only what this phase decides about it.
 
 - **FR-360**: The webhook MUST verify each event's signature on the raw body before any handler runs, persist it once under its unique non-null provider event id, store a hash of the body and never the body, and acknowledge a replay with no effect (FR-PAYG-4, R-MONEY-8, R-MONEY-9, ERD `payment_events`).
 - **FR-361**: A persisted paid event MUST be processed by `confirm-enrollment`, which MUST, where the hold is active, in one transaction set the enrollment confirmed with `confirmed_at`, convert the hold and generate every session; it MUST be idempotent (FR-PAYG-5, FR-BOOK-4).
-- **FR-362**: `confirm-enrollment` MUST follow FR-PAYG-19 for a paid event whose hold was released: re-hold and confirm where the database allows; otherwise release, cancel with `slot_unavailable`, open exactly one compensation case on the enrollment (`disputes.kind = compensation_case`) and keep nothing of the refused transaction (ADR 0010 D5, FR-DISPUTE-5).
+- **FR-362**: `confirm-enrollment` MUST follow FR-PAYG-19 for a paid event whose hold was released: re-hold and confirm where the database allows; otherwise release, cancel with `slot_unavailable`, open exactly one compensation case on the enrollment (`disputes.kind = compensation_case`) and keep nothing of the refused transaction (ADR 0010 D5, FR-DISPUTE-5). Where the enrollment was cancelled because a party's account was suspended, banned, revoked or deleted, a paid event that still arrives MUST take the refusal branch at once: the enrollment stays cancelled with its reason and one compensation case is opened (SRS FR-PAYG-6 and FR-PAYG-19 as amended, FR-VERIFY-8; the owner's decision of 2026-11-01).
 - **FR-363**: Every release of a hold without conversion MUST cancel its enrollment in the same transaction with the reason ADR 0010 D7 gives: `payment_failed` or `payment_expired` on expiry, `checkout_abandoned` by the student's new checkout, `slot_unavailable` under FR-362 (FR-PAYG-6).
 - **FR-364**: `expire-pending-payments` and the hold-expiry sweep MUST release expired holds and mark expired orders, under FR-363, idempotently, with their cadence and windows read from settings (FR-PAYG-6, R-MONEY-12, R-API-14).
 - **FR-365**: A failed or cancelled order event MUST mark that order failed and leave its hold in place (FR-PAYG-6).
@@ -368,6 +375,7 @@ adds only what this phase decides about it.
 - **FR-372**: The stand-in MUST behave as a real gateway at the boundary: it sends each order's and each recipient's events to the server's webhook over HTTP, signed with a secret of its own configuration, so that they pass the same raw-body signature check and the same persistence a real gateway's would; the server MUST refuse an event with a wrong or missing signature, or a body changed after signing, before any handler runs (FR-PAYG-4, R-MONEY-9).
 - **FR-373**: The stand-in MUST be able, on a test's command, to deliver an event twice, to deliver two events in the reverse of the order they happened, and to deliver an order's paid event after its hold has expired or been released; the server MUST then confirm at most once, never undo a confirmation on a late failure or expiry, and handle the late payment by FR-362 (FR-PAYG-4, FR-PAYG-5, FR-PAYG-19).
 - **FR-374**: The stand-in MUST produce the event types `paid`, `failed`, `expired` and `recipient_verified` (and `recipient_rejected`, which Phase 1's payout flow already uses), each with a unique provider event id and the order or recipient reference it reports on, and a paid event with the fields it reports (transaction reference, gross, fee, net) (FR-PAYG-7, ERD `payment_events`).
+- **FR-375**: A paid event for a second order of an enrollment already confirmed (the student paid twice) MUST be recorded, MUST leave the enrollment's status unchanged, and MUST open one compensation case on that enrollment through the same function as FR-362 (SRS FR-PAYG-19 as amended, FR-DISPUTE-5, FR-PAYG-10; the owner's decision of 2026-11-01).
 
 **Processing and the app's honesty**
 

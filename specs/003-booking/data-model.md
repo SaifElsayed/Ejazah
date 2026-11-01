@@ -4,8 +4,8 @@
 
 Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through v1.10); Phase 1 wrote none of them
 except `subjects` (seeded), `teacher_subjects` (granted by approval) and the recipient events of `payment_events`.
-This phase writes them for the first time. The pass below is what it adds: one table, five columns, one function,
-one index, the column checks T140 carries, and five settings rows. The ERD is amended in the same batch as each
+This phase writes them for the first time. The pass below is what it adds: one table, four columns, one function,
+no index, the column checks T140 carries, and five settings rows. The ERD is amended in the same batch as each
 migration (ERD changelog v1.10 → v1.11), as Phase 1 did.
 
 ## 1. Who writes what
@@ -17,7 +17,7 @@ migration (ERD changelog v1.10 → v1.11), as Phase 1 did.
 | `availability_slots` | catalog | `teacher.slots.create/update` |
 | `slot_holds` | booking | `checkout.hold`, `checkout.pay` (link), the confirm job, the sweeps, the termination subscriber (R-219) |
 | `enrollments` | booking | `checkout.pay` (create), the confirm job (confirm), every release without conversion (cancel) |
-| `enrollment_events` (new) | booking | every transaction that confirms, fails an order, or cancels (R-216) |
+| `enrollment_events` (new) | booking | every transaction that confirms, fails an order, or cancels (R-216); `payments` appends `order_failed` through booking's entry `recordOrderFailed` |
 | `sessions` | sessions | `generateForEnrollment` in the confirm job; the re-resolution job (R-210) |
 | `payments` | payments | `checkout.pay`, `checkout.retry`, the order-event handler, the sweeps, a new checkout's cancellation |
 | `payment_events` | payments | the webhook (order events, as recipient events since Phase 1) |
@@ -40,11 +40,13 @@ T140's migration, amended by the owner's decisions of 2026-10-31 (R-222):
 
 T140's other items (`isnad_entries.position >= 1`, the audit label, the `previous_refresh_token_hash` index) are its own.
 
-### 2.2 `users` — the folded name (R-203)
+### 2.2 The folded name (R-203)
 
-| Column | Type | Notes |
-|---|---|---|
-| `display_name_folded` | text, `GENERATED ALWAYS AS (ijazah_fold(display_name)) STORED` | Written by the database only; NULL when `display_name` is NULL (an erased account). Read by discovery's name search and «طلابي»'s student search |
+No column (PR #109's review, M5; the owner's decision of 2026-11-01): a stored fold is a derived value R-DB-4 does not list. The fold
+runs inside one kernel query, `idsWithFoldedNamePrefix(tx, candidateIds, typed)` in
+`apps/api/src/platform/db/folded-name.ts`: `ijazah_fold(display_name) LIKE ijazah_fold($typed) || '%' ESCAPE '\'`,
+the one function on both sides, the typed text's `%`, `_` and `\` escaped by `like-literal.ts` before the LIKE; a spec
+that a typed `%` or `_` matches only itself. Read by discovery's name search and «طلابي»'s student search.
 
 `ijazah_fold(text) RETURNS text IMMUTABLE PARALLEL SAFE`: `lower`, then `translate` of `أإآ` → `ا`, `ىئ` → `ي`,
 `ؤ` → `و`, `ة` → `ه`, then `regexp_replace` removing U+064B–U+065F, U+0670 and U+0640. Declared in the migration (raw
@@ -112,6 +114,8 @@ No `booked` flag on a slot, no stored "sessions remaining" (R-DB-4): occupancy a
 | `cancelled` | `confirmed` | `confirm-enrollment`, late branch (FR-PAYG-19) | the same, after a new hold |
 | `pending_payment` | `cancelled` | hold expiry (`payment_failed` / `payment_expired`), new checkout (`checkout_abandoned`), refusal (`slot_unavailable`), termination (R-219) | `cancellation_reason`; the hold released in the same transaction; an event `cancelled` |
 | `cancelled` (late, refused) | stays `cancelled` | refusal branch | reason `slot_unavailable`; one compensation case; an event `cancelled` |
+| `cancelled` by a termination (R-219) | stays `cancelled` | `confirm-enrollment` on a late paid event (FR-362) | its reason kept; one compensation case |
+| `confirmed` | stays `confirmed` | `confirm-enrollment` on a second paid order (FR-375) | one compensation case |
 
 `completed` and `terminated_no_show` are Phase 3's.
 
@@ -119,7 +123,9 @@ No `booked` flag on a slot, no stored "sessions remaining" (R-DB-4): occupancy a
 
 `created → paid | failed | expired`; `paid → refunded` (Phase 3's compensation, learned from the gateway). Monotonic: an
 event that would move a `paid` order elsewhere than `refunded` is recorded in `payment_events` and changes nothing
-(FR-373). A Retry is a new row; at most one row per enrollment reaches `paid` by the confirm job's idempotence.
+(FR-373). A Retry is a new row. Nothing stops a second order of one enrollment from reaching `paid` (the student paid twice): the
+webhook records it, and the confirm job opens a compensation case on the enrollment and leaves it as it is (FR-375,
+the owner's decision of 2026-11-01).
 
 ### Slot hold
 
@@ -155,7 +161,7 @@ exclusion constraints as second line); a slot in use keeps its day, time and len
 ## 6. Migrations
 
 1. **T140's checks** (first batch): §2.1, with probes in `tests/db-integrity`.
-2. **The Phase 2 pass**: `ijazah_fold`, `users.display_name_folded` (no index, §2.2); `enrollments.quoted_first_session_local_date`;
+2. **The Phase 2 pass**: `ijazah_fold` (no column, no index, §2.2); `enrollments.quoted_first_session_local_date`;
    `payments.expires_at` and `checkout_url_encrypted`; `enrollment_event_kind` and `enrollment_events` with its rule;
    the five settings rows in the seed. Probes for rule 39 and for the fold's equivalences (SC-314's data).
 
