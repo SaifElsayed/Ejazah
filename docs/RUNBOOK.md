@@ -67,6 +67,15 @@ Studio, EAS Build's free plan makes the same development build from `eas.json`'s
 `development` profile, an internal APK with the development client:
 `npx eas-cli build -p android --profile development`.
 
+**A new native module means a new development build.** Metro reloads
+JavaScript only; a package with native code reaches the phone only in a build
+made after it was installed, so an older build fails when the code first
+calls it. `expo-web-browser` (the hosted checkout, Phase 2 T001) is one: after
+it, the development build is rebuilt on EAS with the `development` profile
+(the command above) and the new APK installed on the device. It needs no
+`plugins` entry in `app.json`: its config plugin does nothing unless asked
+for an option this app does not use.
+
 **The fake provider.** One switch on each side. The API's
 `SIGN_IN_PROVIDER=fake` (the `.env.example` value) selects the stand-in that
 accepts an unsigned token (`platform/ports/sign-in/fake.adapter.ts`);
