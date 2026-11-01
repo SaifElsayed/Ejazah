@@ -12,6 +12,12 @@
 // short, long or breached password, wrong credentials or a locked account). Where the contract
 // says "with … in details", the detail travels as a `FieldIssue` — `path` names what the detail
 // is about and `code` carries it — so the shape stays the one shape (R-API-9).
+//
+// T003 (Phase 2, specs/003-booking/contracts/README.md "Errors"): the codes the booking phase adds.
+// The contract states no HTTP status; each takes the status of the Phase 1 code it resembles: a
+// refusal by the caller's own standing or entitlement is 403 (as `ACCOUNT_RESTRICTED`,
+// `DOCUMENT_NOT_OWNED`), a refusal by the current state of a teacher, slot, hold, order or package
+// is 409 (as `APPROVAL_BLOCKED`).
 
 /** One field-level validation problem: where, and what kind. Never the value that was sent. */
 export interface FieldIssue {
@@ -56,6 +62,23 @@ export const errorCodes = {
   APPROVAL_BLOCKED: { status: 409, message: 'The application cannot be approved yet.' },
   APPLICATION_INCOMPLETE: { status: 409, message: 'The application is not complete.' },
   DOCUMENT_NOT_OWNED: { status: 403, message: 'This document is not yours.' },
+  // Phase 2 (T003). A visible teacher whose account is not active (T143).
+  NOT_BOOKABLE: { status: 409, message: 'This teacher cannot be booked now.' },
+  // The student's own account is `verification_required` (FR-VERIFY-10).
+  ACCOUNT_NOT_ACTIVE: { status: 403, message: 'This account cannot book now.' },
+  // The hold was refused: the slot is held, occupied or overlapping.
+  SLOT_TAKEN: { status: 409, message: 'This slot was just taken.' },
+  // FR-BOOK-12; `enrollmentId`, `state` (`processing` | `payable`) and `expiresAt` in details.
+  PREVIOUS_CHECKOUT: { status: 409, message: 'A previous checkout is not finished.' },
+  HOLD_EXPIRED: { status: 409, message: 'The time to pay has ended.' },
+  // Retry or continue past the last moment an order may be created on the hold.
+  ORDER_NOT_PAYABLE: { status: 409, message: 'This order can no longer be paid.' },
+  SUBJECT_NOT_APPROVED: { status: 403, message: 'This subject is not approved for you.' },
+  // The other slot's id in details.
+  SLOT_OVERLAP: { status: 409, message: 'This slot overlaps another of your slots.' },
+  SLOT_IN_USE: { status: 409, message: 'This slot is in use and cannot change.' },
+  // Track or length after the package's first enrollment.
+  PACKAGE_FROZEN: { status: 409, message: 'The track and length cannot change now.' },
 } as const satisfies Record<string, { status: number; message: string }>;
 
 export type ErrorCode = keyof typeof errorCodes;
