@@ -87,6 +87,8 @@ export interface ApplicationReviewStore {
     take: number,
   ): Promise<ApplicantRow[]>;
   count(tx: Transaction, filter: ApplicantsFilter): Promise<number>;
+  /** Locks the account's `users` row until the transaction ends, identity's (T164). */
+  lockAccount(tx: Transaction, userId: string): Promise<void>;
   /** Locks the application's row until the transaction ends, identity's (T126). */
   lockApplication(tx: Transaction, userId: string): Promise<void>;
   read(tx: Transaction, userId: string): Promise<ApplicantDetail | null>;
@@ -245,7 +247,11 @@ export class ApplicationReviewService {
     adminId: string,
     input: z.output<typeof applicationsApproveInput>,
   ): Promise<DecisionMove & { readonly subjectIds: string[] }> {
-    // Under the application's lock (T164), the call and the status read are the ones approved.
+    // Under the application's lock (T164), the call and the status read are the ones approved. The
+    // account's lock comes first, the order a ban takes them (the owner's decision of 2026-11-01):
+    // the grant's `teacher_subjects` row references the teacher's `users` row, so holding only the
+    // application, the grant would wait on a ban holding the account while the ban waits on it.
+    await this.#store.lockAccount(tx, input.teacherUserId);
     await this.#store.lockApplication(tx, input.teacherUserId);
     const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
     if (applicant.status !== 'in_review') throw conflict(applicant.status);

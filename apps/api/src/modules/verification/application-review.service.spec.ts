@@ -353,10 +353,16 @@ describe("the application's lock (T126)", () => {
     expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
   });
 
-  it("approve locks the application's row before it reads the state it decides from (T164)", async () => {
+  it("approve locks the account's row, then the application's, before it reads the state it decides from (T164)", async () => {
+    // The account first (the owner's decision of 2026-11-01): the grant's foreign key to `users`
+    // would otherwise wait on a ban holding the account while the ban waits on the application.
     const userId = store.plant();
     await refusal(service.approve(TX, ADMIN, { teacherUserId: userId }));
-    expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
+    expect(store.journal.slice(0, 3)).toEqual([
+      `lock-account:${userId}`,
+      `lock:${userId}`,
+      `read:${userId}`,
+    ]);
   });
 
   it("requestInfo locks the application's row before its decision (T164)", async () => {

@@ -106,6 +106,7 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
   return {
     page: applicantsPage,
     count: applicantsCount,
+    lockAccount,
     lockApplication,
     read: readApplicant,
     credentialsOf: async (tx, userIds) =>

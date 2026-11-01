@@ -7,7 +7,9 @@
 // identity document's `accept` and `requestAnother` (the account's row). Wherever one transaction
 // takes both, the account's row comes first (the owner's decision of 2026-11-01). T161 adds the
 // resubmission and a credential's document request, both on the application's row; T142 a
-// credential's approval, on the same row, against a revocation.
+// credential's approval, on the same row, against a revocation. Both approvals lock the account
+// before the application, since their grant references the teacher's `users` row and a ban holds
+// it while it waits on the application (the owner's decision of 2026-11-01).
 //
 // HOW A RACE IS STAGED, as `booking-concurrency.spec.ts` stages it. Transaction A runs its move and
 // stays open; transaction B starts its move and is seen waiting on a lock by a watcher reading
@@ -499,5 +501,147 @@ describe("a credential's approval and a revocation (T142)", () => {
     );
     expect(ended).toMatchObject({ value: { after: { holderName: 'عمر بن فاروق' } } });
     expect(await subjectsOf(userId)).toBe(0);
+  });
+});
+
+type Ended<T> = { readonly value: T } | { readonly thrown: string };
+
+/** A settled transaction: its value, or the message of what it threw. */
+function settled<T>(transaction: Promise<T>): Promise<Ended<T>> {
+  return transaction.then(
+    (value) => ({ value }),
+    (thrown: unknown) => ({ thrown: thrown instanceof Error ? thrown.message : String(thrown) }),
+  );
+}
+
+/**
+ * `tx` as a move sees it, except that granting subjects (`teacherSubject.createMany`, whose foreign
+ * key to `users` takes a key-share lock on the teacher's row) first says it was reached and waits
+ * for `resumed`, so the move pauses holding every lock it took before the grant.
+ */
+function pausedBeforeGrant(tx: Transaction, reached: () => void, resumed: Promise<void>) {
+  const bound = (target: object, key: string | symbol): unknown => {
+    const value: unknown = Reflect.get(target, key);
+    return typeof value === 'function'
+      ? (value as (...args: unknown[]) => unknown).bind(target)
+      : value;
+  };
+  return new Proxy(tx, {
+    get: (target, key) => {
+      if (key !== 'teacherSubject') return bound(target, key);
+      const subjects = target.teacherSubject;
+      return new Proxy(subjects, {
+        get: (inner, name) =>
+          name === 'createMany'
+            ? async (...args: unknown[]): Promise<unknown> => {
+                reached();
+                await resumed;
+                return (inner.createMany as (...given: unknown[]) => Promise<unknown>)(...args);
+              }
+            : bound(inner, name),
+      });
+    },
+  });
+}
+
+/**
+ * A runs `first` up to its grant of subjects and pauses there; B runs `second` and is seen waiting;
+ * A resumes. Answers how each ended: without the account's lock first, A's grant then waits on B's
+ * account lock while B waits on A's application lock, and PostgreSQL aborts one (40P01).
+ */
+async function raceAtGrant<T>(
+  first: (tx: Transaction) => Promise<unknown>,
+  second: (tx: Transaction) => Promise<T>,
+): Promise<{ readonly first: Ended<unknown>; readonly second: Ended<T> }> {
+  let resume = (): void => undefined;
+  const resumed = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  let reach = (): void => undefined;
+  const reached = new Promise<void>((resolve) => {
+    reach = resolve;
+  });
+  const a = settled(
+    database.$transaction((tx) => first(pausedBeforeGrant(tx, reach, resumed)), OPTIONS),
+  );
+  await Promise.race([reached, a]);
+  let pidOfB = (_pid: number): void => undefined;
+  const bStarted = new Promise<number>((resolve) => {
+    pidOfB = resolve;
+  });
+  const b = settled(
+    database.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      pidOfB(row?.pid ?? 0);
+      return second(tx);
+    }, OPTIONS),
+  );
+  try {
+    await seenWaiting(await bStarted);
+  } finally {
+    resume();
+  }
+  return { first: await a, second: await b };
+}
+
+describe('an approval and a ban of the same teacher, the account locked first (T164, T142)', () => {
+  it('applications.approve and teachers.ban: the ban waits, then bans the teacher approved', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'in_review' });
+    const adminId = await makeAdmin(db);
+    const { subjectId } = await applicationCredential(userId, adminId);
+    await db.query(
+      `UPDATE teacher_profiles SET verification_call_completed_on = '2026-10-22',
+              verification_call_outcome = 'suitable' WHERE user_id = $1`,
+      [userId],
+    );
+    const ended = await raceAtGrant(
+      (tx) => review.applications.approve(tx, adminId, { teacherUserId: userId }),
+      (tx) => standing.ban(tx, adminId, userId),
+    );
+    expect(ended).toEqual({
+      first: {
+        value: {
+          before: { status: 'in_review' },
+          after: { status: 'approved' },
+          subjectIds: [subjectId],
+        },
+      },
+      second: {
+        value: {
+          before: { accountStatus: 'active' },
+          after: { accountStatus: 'banned' },
+          applicationStatus: 'approved',
+        },
+      },
+    });
+    expect(await accountStatusOf(userId)).toBe('banned');
+  });
+
+  it('credentials.approve and teachers.ban: the ban waits, then bans the teacher the subject went to', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'approved' });
+    const adminId = await makeAdmin(db);
+    const { credentialId } = await applicationCredential(userId);
+    const ended = await raceAtGrant(
+      (tx) =>
+        credentials.approve(tx, adminId, {
+          credentialId,
+          holderName: 'عمر بن فاروق',
+          riwaya: 'حفص عن عاصم',
+          chain: [{ names: ['رسول الله ﷺ'] }, { names: ['جبريل'] }],
+        }),
+      (tx) => standing.ban(tx, adminId, userId),
+    );
+    expect(ended).toMatchObject({
+      first: { value: { after: { holderName: 'عمر بن فاروق' } } },
+      second: {
+        value: {
+          before: { accountStatus: 'active' },
+          after: { accountStatus: 'banned' },
+          applicationStatus: 'approved',
+        },
+      },
+    });
+    expect(await accountStatusOf(userId)).toBe('banned');
+    expect(await subjectsOf(userId)).toBe(1);
   });
 });

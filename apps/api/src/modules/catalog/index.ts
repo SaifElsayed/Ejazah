@@ -16,7 +16,12 @@ import {
   CredentialReviewService,
   type CredentialReviewStore,
 } from './credential-review.service.js';
-import { decideApplication, isApprovedTeacher, lockApplication } from '../identity/index.js';
+import {
+  decideApplication,
+  isApprovedTeacher,
+  lockAccount,
+  lockApplication,
+} from '../identity/index.js';
 import { SubjectsRepository } from './subjects.repository.js';
 import { type SubjectsReader, SubjectsService } from './subjects.service.js';
 
@@ -26,7 +31,8 @@ export type { CredentialReviewService };
 
 /**
  * The credential review's store: this module's rows, the teacher's standing read, the application
- * set waiting on the applicant (T155) and its row's lock (T161) through identity's entry (R-121).
+ * set waiting on the applicant (T155), its row's lock (T161) and the account's (T142) through
+ * identity's entry (R-121).
  * Exported for the probe of its queries (`tests/db-integrity/credential-review.spec.ts`).
  */
 export const credentialReviewStore: CredentialReviewStore = {
@@ -37,6 +43,7 @@ export const credentialReviewStore: CredentialReviewStore = {
   approve: approveCredential,
   decide: decideCredential,
   correct: correctCredential,
+  lockAccount,
   lockApplication,
   isApprovedTeacher,
   requestApplicationDocument: (tx, userId, request) =>

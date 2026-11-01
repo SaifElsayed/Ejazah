@@ -159,12 +159,14 @@ describe('approve', () => {
     expect(store.granted).toEqual([]);
   });
 
-  it("locks the teacher's application before the credential moves and the teacher's approval is read (T142)", async () => {
+  it("locks the teacher's account, then the application, before the credential moves and the teacher's approval is read (T142)", async () => {
+    // The account first (the owner's decision of 2026-11-01), as a ban takes them.
     const store = new MemoryReviewStore();
     store.approveTeacher(TEACHER);
     const credentialId = store.plant({ submittedWithApplication: false });
     await serviceOver(store).approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION });
     expect(store.journal).toEqual([
+      `lock-account:${TEACHER}`,
       `lock:${TEACHER}`,
       `approve:${credentialId}`,
       `approved-teacher:${TEACHER}`,
