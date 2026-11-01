@@ -6,7 +6,7 @@
 
 | Operation | Called by | When |
 |---|---|---|
-| `createCheckout(enrollmentId, gross_piasters, currency, latestExpiry)` → `{ gatewayOrderId, checkoutUrl }` | `checkout.pay`, `checkout.retry` | Outside any transaction; `latestExpiry` = the hold's expiry minus the grace (FR-355) |
+| `createCheckout(enrollmentId, gross_piasters, currency, latestExpiry)` → `{ gatewayOrderId, checkoutUrl, expiresAt }` | `checkout.pay`, `checkout.retry` | Outside any transaction; `latestExpiry` = the hold's expiry minus the grace (FR-355) |
 | `cancelCheckout(gatewayOrderId)` → `'cancelled' \| 'paid' \| 'in_progress' \| 'unsupported'` | `checkout.hold` over an unexpired hold with a payable order (FR-BOOK-12 (b)); `checkout.pay` when the hold was lost meanwhile | Outside any transaction |
 | `verifyAndParseEvent(rawBody, headers)` → `GatewayEvent` | the webhook | Before any handler (R-MONEY-9) |
 

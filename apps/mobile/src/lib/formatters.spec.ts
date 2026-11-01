@@ -1,13 +1,16 @@
 // T031: the one formatting layer (R-MOBILE-9, FR-203, NFR-USE-3). Numbers, dates and times reach
 // the screen through these functions only, with the locale's words and the digits the boards draw.
 import { describe, expect, it } from '@jest/globals';
+import { piasters } from '@ijazah/money';
 
+import { isolate } from '../i18n';
 import {
   formatCalendarDate,
   formatDate,
   formatFullDate,
   formatMonth,
   formatNumber,
+  formatPounds,
   formatTime,
   formatWeekdayDate,
   formatYear,
@@ -65,5 +68,24 @@ describe('formatters', () => {
 
   it('refuses an instant that does not parse, never printing "Invalid Date"', () => {
     expect(() => formatDate('not a date', cairo, 'ar')).toThrow(RangeError);
+  });
+});
+
+describe('formatPounds (T009, R-212)', () => {
+  it('prints a whole amount of pounds with no decimals, in the price template', () => {
+    expect(formatPounds(piasters(15_000), 'ar')).toBe(`${isolate('150')} ج.م`);
+    expect(formatPounds(piasters(15_000), 'en')).toBe(`EGP ${isolate('150')}`);
+    expect(formatPounds(piasters(0), 'ar')).toBe(`${isolate('0')} ج.م`);
+  });
+
+  it('prints an amount with piasters to two decimals', () => {
+    expect(formatPounds(piasters(15_050), 'ar')).toBe(`${isolate('150.50')} ج.م`);
+    expect(formatPounds(piasters(15_005), 'en')).toBe(`EGP ${isolate('150.05')}`);
+    expect(formatPounds(piasters(1), 'en')).toBe(`EGP ${isolate('0.01')}`);
+  });
+
+  it('groups thousands with the Western digits the boards draw', () => {
+    expect(formatPounds(piasters(123_456_700), 'ar')).toBe(`${isolate('1,234,567')} ج.م`);
+    expect(formatPounds(piasters(123_456_789), 'en')).toBe(`EGP ${isolate('1,234,567.89')}`);
   });
 });

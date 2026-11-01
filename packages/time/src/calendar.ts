@@ -2,7 +2,8 @@
 // the phone, which shows and returns a day in the device's own zone. Built here, where datetimes are
 // built (R-TIME-1), and its own export (`@ijazah/time/calendar`) so the phone takes it without
 // Temporal. B14d: a calendar date a number of days earlier (the admin's audit). T109: the days of a
-// month, for the phone's own date-of-birth picker.
+// month, for the phone's own date-of-birth picker. T007: whether two weekly slots overlap on the
+// week (R-206), and the seconds a checkout has left (R-217).
 
 const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -65,4 +66,79 @@ export function daysInMonth(year: number, month: number): number {
 function isLeapYear(year: number): boolean {
   const divides = (divisor: number) => year % divisor === 0;
   return divides(4) && (!divides(100) || divides(400));
+}
+
+/** A weekly slot as the week sees it: a day (0 = Sunday, Postgres DOW), a local start, a length. */
+export interface WeeklyInterval {
+  readonly dayOfWeek: number;
+  readonly startTimeLocal: string;
+  readonly durationMinutes: number;
+}
+
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 1_440;
+const MINUTES_PER_WEEK = 10_080;
+const DAYS_PER_WEEK = 7;
+const WHOLE_MINUTE_TIME = /^([01]\d|2[0-3]):([0-5]\d):00$/;
+
+/** Where `interval` starts on the week, in minutes from Sunday 00:00, and how long it lasts. */
+function weekMinutesOf(interval: WeeklyInterval): { start: number; length: number } {
+  const { dayOfWeek, startTimeLocal, durationMinutes } = interval;
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek >= DAYS_PER_WEEK) {
+    throw new RangeError(`calendar: ${String(dayOfWeek)} is not a day of the week (0–6)`);
+  }
+  const time = WHOLE_MINUTE_TIME.exec(startTimeLocal);
+  if (time === null) {
+    throw new RangeError(`calendar: "${startTimeLocal}" is not a whole minute of the day`);
+  }
+  if (
+    !Number.isSafeInteger(durationMinutes) ||
+    durationMinutes < 1 ||
+    durationMinutes > MINUTES_PER_WEEK
+  ) {
+    throw new RangeError(`calendar: ${String(durationMinutes)} is not a length within a week`);
+  }
+  const [, hours, minutes] = time.map(Number);
+  return {
+    start: dayOfWeek * MINUTES_PER_DAY + (hours ?? 0) * MINUTES_PER_HOUR + (minutes ?? 0),
+    length: durationMinutes,
+  };
+}
+
+/**
+ * Whether two weekly slots of one zone share a minute of the week (T007, R-206, FR-317). The week
+ * is a circle of 10 080 minutes: a slot is `[start, start + length)` taken modulo 10 080, so one
+ * that crosses midnight reaches into the next day and Saturday's end reaches Sunday. Two arcs meet
+ * exactly when one's start lies inside the other. The zone is the caller's: both slots are read in
+ * the same one.
+ */
+export function weeklyIntervalsOverlap(a: WeeklyInterval, b: WeeklyInterval): boolean {
+  const first = weekMinutesOf(a);
+  const second = weekMinutesOf(b);
+  const startsInside = (outer: typeof first, inner: typeof first) =>
+    (((inner.start - outer.start) % MINUTES_PER_WEEK) + MINUTES_PER_WEEK) % MINUTES_PER_WEEK <
+    outer.length;
+  return startsInside(first, second) || startsInside(second, first);
+}
+
+const UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+const MILLISECONDS_PER_SECOND = 1_000;
+const WHOLE_SECONDS = 'YYYY-MM-DDTHH:MM:SS'.length;
+
+/**
+ * The whole seconds from `now` until `instant`, a part of a second counted as a second, so zero
+ * means the instant has come, and never below zero (T007, R-217: the checkout countdown, the
+ * order's expiry from the server against the phone's own clock, which keeps counting offline).
+ */
+export function secondsUntil(instant: string, now: Date): number {
+  const at = UTC_INSTANT.test(instant) ? Date.parse(instant) : Number.NaN;
+  if (
+    Number.isNaN(at) ||
+    new Date(at).toISOString().slice(0, WHOLE_SECONDS) !== instant.slice(0, WHOLE_SECONDS)
+  ) {
+    throw new RangeError(`calendar: "${instant}" is not a UTC instant`);
+  }
+  const from = now.getTime();
+  if (Number.isNaN(from)) throw new RangeError('calendar: now is not an instant');
+  return Math.max(0, Math.ceil((at - from) / MILLISECONDS_PER_SECOND));
 }

@@ -3,7 +3,15 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { MoneyError, isPiasters, piasters, toPlainNumber, type Piasters } from './index.js';
+import {
+  MoneyError,
+  isPiasters,
+  lowest,
+  perSession,
+  piasters,
+  toPlainNumber,
+  type Piasters,
+} from './index.js';
 
 // `..` then `src` on purpose, so this resolves the same whether the spec runs from `src/` (root
 // Vitest) or from the compiled copy in `dist/` (the package's own Vitest config).
@@ -101,6 +109,86 @@ describe('isPiasters (T030)', () => {
       const price_piasters: Piasters = candidate;
       expect(toPlainNumber(price_piasters)).toBe(4_200);
     }
+  });
+});
+
+describe('perSession (T009, FR-337, R-212)', () => {
+  it('divides a package price evenly over its sessions', () => {
+    expect(toPlainNumber(perSession(piasters(120_000), 8))).toBe(15_000);
+    expect(toPlainNumber(perSession(piasters(150_000), 1))).toBe(150_000);
+    expect(toPlainNumber(perSession(piasters(0), 4))).toBe(0);
+  });
+
+  it('rounds a remainder below half a piaster down', () => {
+    // 100 / 3 = 33.33…, 149 / 100 = 1.49.
+    expect(toPlainNumber(perSession(piasters(100), 3))).toBe(33);
+    expect(toPlainNumber(perSession(piasters(149), 100))).toBe(1);
+  });
+
+  it('rounds exactly half a piaster up', () => {
+    // 1 / 2 = 0.5, 3 / 2 = 1.5, 150 / 100 = 1.5, 250 / 4 = 62.5: each is the tie R-212 names.
+    expect(toPlainNumber(perSession(piasters(1), 2))).toBe(1);
+    expect(toPlainNumber(perSession(piasters(3), 2))).toBe(2);
+    expect(toPlainNumber(perSession(piasters(150), 100))).toBe(2);
+    expect(toPlainNumber(perSession(piasters(250), 4))).toBe(63);
+  });
+
+  it('rounds a remainder above half a piaster up', () => {
+    // 200 / 3 = 66.67, 151 / 100 = 1.51.
+    expect(toPlainNumber(perSession(piasters(200), 3))).toBe(67);
+    expect(toPlainNumber(perSession(piasters(151), 100))).toBe(2);
+  });
+
+  it('stays exact at the top of the safe range, where a floating division would not', () => {
+    const total = Number.MAX_SAFE_INTEGER;
+    for (const count of [2, 3, 7, 1_000_003]) {
+      const quotient = BigInt(total) / BigInt(count);
+      const remainder = BigInt(total) % BigInt(count);
+      const expected = remainder * 2n >= BigInt(count) ? quotient + 1n : quotient;
+      expect(BigInt(toPlainNumber(perSession(piasters(total), count)))).toBe(expected);
+    }
+  });
+
+  it('returns an amount of its own brand, so it reaches a money position without a cast', () => {
+    const per_session_piasters: Piasters = perSession(piasters(9_999), 4);
+
+    expect(isPiasters(per_session_piasters)).toBe(true);
+    expect(toPlainNumber(per_session_piasters)).toBe(2_500);
+  });
+
+  it('refuses a session count that is not a whole number of at least one (ERD §15 rule 36)', () => {
+    for (const count of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(() => perSession(piasters(100), count)).toThrow(RangeError);
+      expect(() => perSession(piasters(100), count)).toThrow(/perSession/);
+    }
+  });
+});
+
+describe('lowest (T009, FR-335, R-212)', () => {
+  it('picks the lowest of the amounts, whatever their order', () => {
+    expect(toPlainNumber(lowest([piasters(300), piasters(100), piasters(200)]))).toBe(100);
+    expect(toPlainNumber(lowest([piasters(100), piasters(300)]))).toBe(100);
+    expect(toPlainNumber(lowest([piasters(300), piasters(0)]))).toBe(0);
+    expect(toPlainNumber(lowest([piasters(250), piasters(250)]))).toBe(250);
+  });
+
+  it('returns the one amount of a list of one', () => {
+    expect(toPlainNumber(lowest([piasters(15_000)]))).toBe(15_000);
+  });
+
+  it('refuses an empty list, which has no lowest amount, at compile time and at run time', () => {
+    // @ts-expect-error T009: an empty list is not a non-empty list of amounts.
+    expect(() => lowest([])).toThrow(RangeError);
+
+    const none: Piasters[] = [];
+    expect(() => lowest(none as unknown as [Piasters])).toThrow(/lowest/);
   });
 });
 

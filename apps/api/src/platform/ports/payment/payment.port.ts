@@ -18,6 +18,8 @@ import type { Piasters } from '@ijazah/money';
 export interface Checkout {
   readonly gatewayOrderId: string;
   readonly checkoutUrl: string;
+  /** The order's expiry as the gateway created it, never after `latestExpiry` (T012, FR-355). */
+  readonly expiresAt: Date;
 }
 
 /**

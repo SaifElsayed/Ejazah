@@ -116,7 +116,7 @@ export interface PaymentPort {
     amount: Piasters,
     currency: string,
     latestExpiry: Date,
-  ): Promise<CheckoutRef>; // order id + hosted checkout URL; the order expires no later than latestExpiry (ADR 0010 D4)
+  ): Promise<CheckoutRef>; // order id + hosted checkout URL + the order's expiry, no later than latestExpiry (ADR 0010 D4)
   cancelCheckout(
     gatewayOrderId: string,
   ): Promise<'cancelled' | 'paid' | 'in_progress' | 'unsupported'>; // cancels an unpaid order, moves no money; an order already cancelled or expired answers 'cancelled' (ADR 0010 D6)

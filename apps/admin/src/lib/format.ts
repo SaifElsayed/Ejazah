@@ -2,10 +2,12 @@
 // neighbour), in the page's language through `formattingTag`: Latin digits, the Gregorian calendar.
 // An instant is printed as its day in the zone given; a calendar day (`YYYY-MM-DD`) as itself.
 // The English boards print the day first with a short month («14 Oct 2026»), as British English
-// does, so English dates are formatted in `en-GB` (AdminApplicationsEn).
+// does, so English dates are formatted in `en-GB` (AdminApplicationsEn). T009: an amount of
+// piasters, in pounds.
+import { type Piasters, toPlainNumber } from '@ijazah/money';
 import { cityOf } from '@ijazah/time/cities';
 
-import { formattingTag, type Locale } from '../i18n';
+import { formattingTag, type Locale, translate } from '../i18n';
 
 const ENGLISH_DATES = 'en-GB-u-ca-gregory-nu-latn';
 const ENGLISH_TIMES = 'en-US-u-ca-gregory-nu-latn';
@@ -63,4 +65,19 @@ export function timeOfDay(value: string, locale: Locale, zone: string): string {
     hour12: true,
     timeZone: zone,
   }).format(new Date(value));
+}
+
+const PIASTERS_PER_POUND = 100;
+
+/**
+ * «150.00 ج.م», "EGP 150.50": an amount in pounds, always to two decimals, in the panel's price
+ * template `admin.common.amount`, the phone's `common.format.price` (T009, R-212). The amount
+ * leaves the brand through `toPlainNumber` for display only.
+ */
+export function formatPounds(amount_piasters: Piasters, locale: Locale): string {
+  const amount = new Intl.NumberFormat(formattingTag(locale), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(toPlainNumber(amount_piasters) / PIASTERS_PER_POUND);
+  return translate(locale, 'admin.common.amount', { amount });
 }

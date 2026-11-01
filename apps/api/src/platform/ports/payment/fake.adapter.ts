@@ -9,6 +9,17 @@
 // fails one when told, before anything changes; a signed body it cannot read is a rejection with
 // `MalformedEventError`, never a synchronous throw, and quotes nothing of the body (review of
 // PR #45, m1; R-SEC-2).
+//
+// T012: a gateway at the boundary (R-213, FR-372, FR-374). An order has a hosted page on the API's
+// public origin (`API_PUBLIC_ORIGIN`), `/stand-in/checkout/<order>`, which `platform/web/
+// stand-in-checkout.ts` serves while this stand-in is the port, and an expiry, `latestExpiry` as
+// given, since the stand-in lets it be set (ADR 0010 D4). What the page's buttons do is `submit`: it
+// signs `paid` (a transaction id, the gross, a fee of 0 and the whole gross as net, as reported),
+// `failed`, or `failed` for a cancellation, under the same secret `verifyAndParseEvent` checks, and
+// POSTs it over HTTP to `/webhooks/payment` on the same origin, so it passes the webhook's raw-body
+// check and persistence as a real gateway's event would. An order acted on, cancelled or past its
+// expiry is no longer payable, so the page cannot send a second event for it. `onCancel` sets what
+// `cancelCheckout` answers for one order, so FR-BOOK-12's branches are reachable.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { piasters, type Piasters } from '@ijazah/money';
 import { z } from 'zod';
@@ -26,7 +37,55 @@ import {
 
 const SIGNATURE_HEADER = 'x-fake-signature';
 
+/** Where the hosted page of an order lives, under the API's public origin (contracts/gateway.md). */
+export const STAND_IN_CHECKOUT_PATH = '/stand-in/checkout';
+
+// The payments module's `PAYMENT_WEBHOOK_PATH` (T077), written out: the kernel imports no module.
+const WEBHOOK_PATH = '/webhooks/payment';
+
+/** How long the page waits for the webhook's answer before it gives up. */
+const DELIVERY_TIMEOUT_MS = 10_000;
+
 type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded';
+
+/** The hosted page's three buttons: «ادفع», «فشل الدفع», «إلغاء». */
+export const STAND_IN_ACTIONS = ['pay', 'fail', 'cancel'] as const;
+
+export type StandInAction = (typeof STAND_IN_ACTIONS)[number];
+
+/** The event each button sends; a cancellation is reported as a failed payment (R-213). */
+const EVENT_OF: Readonly<Record<StandInAction, OrderEventType>> = {
+  pay: 'paid',
+  fail: 'failed',
+  cancel: 'failed',
+};
+
+/** What the hosted page shows of an order it can still take payment for. */
+export interface PayableOrder {
+  readonly gatewayOrderId: string;
+  readonly amount_piasters: Piasters;
+  readonly currency: string;
+  readonly expiresAt: Date;
+}
+
+/** The hosted page's view of the stand-in: an order's state, and its buttons. */
+export interface StandInCheckout {
+  /** The order while it is created and before its expiry; nothing otherwise. */
+  payableOrder(gatewayOrderId: string): PayableOrder | undefined;
+  /**
+   * Sends the action's signed event to the webhook. `not_payable`, sending nothing, unless the order
+   * is payable; rejects with `StandInDeliveryError` when the webhook does not answer 2xx.
+   */
+  submit(gatewayOrderId: string, action: StandInAction): Promise<'delivered' | 'not_payable'>;
+}
+
+/** The webhook did not take the event. Carries the status alone, never the event (R-SEC-2). */
+export class StandInDeliveryError extends Error {
+  constructor(status: number | 'unreachable', options?: ErrorOptions) {
+    super(`The stand-in's event was not taken by the webhook: ${status}.`, options);
+    this.name = 'StandInDeliveryError';
+  }
+}
 type RecipientEventType = 'recipient_verified' | 'recipient_rejected';
 
 /** An inbound event as it arrives: the raw body and the headers that carry its signature. */
@@ -54,7 +113,10 @@ export interface PaidEventOptions extends EventOptions {
 interface Order {
   readonly gross_piasters: Piasters;
   readonly currency: string;
+  readonly expiresAt: Date;
   status: 'created' | 'cancelled' | OrderEventType;
+  /** What `cancelCheckout` answers for this order, when a test set it (`onCancel`). */
+  cancelOutcome?: CancelOutcome;
 }
 
 const amount = z.number().transform((value) => piasters(value));
@@ -90,14 +152,31 @@ const eventBody = z.discriminatedUnion('type', [
 
 type EventBody = z.input<typeof eventBody>;
 
-export class FakePaymentAdapter extends StandIn<PaymentPort> implements PaymentPort {
+export interface FakePaymentOptions {
+  readonly webhookSecret: string;
+  /**
+   * `API_PUBLIC_ORIGIN`: where the hosted page lives and where its events are sent. Absent, an
+   * order's page is an address nobody serves and the page sends nothing.
+   */
+  readonly origin?: string;
+  readonly now?: () => Date;
+}
+
+export class FakePaymentAdapter
+  extends StandIn<PaymentPort>
+  implements PaymentPort, StandInCheckout
+{
   readonly #webhookSecret: string;
+  readonly #origin: string | undefined;
+  readonly #now: () => Date;
   readonly #orders = new Map<string, Order>();
   readonly #recipients = new Map<string, RecipientStatus>();
 
-  constructor(options: { readonly webhookSecret: string }) {
+  constructor(options: FakePaymentOptions) {
     super();
     this.#webhookSecret = options.webhookSecret;
+    this.#origin = options.origin;
+    this.#now = options.now ?? (() => new Date());
   }
 
   createCheckout(
@@ -117,11 +196,17 @@ export class FakePaymentAdapter extends StandIn<PaymentPort> implements PaymentP
       return Promise.reject(new RangeError('A currency is three capital letters (ISO 4217).'));
     }
     const gatewayOrderId = `fake_ord_${randomUUID()}`;
-    this.#orders.set(gatewayOrderId, { gross_piasters, currency, status: 'created' });
-    return Promise.resolve({
-      gatewayOrderId,
-      checkoutUrl: `https://checkout.fake.invalid/${gatewayOrderId}`,
+    this.#orders.set(gatewayOrderId, {
+      gross_piasters,
+      currency,
+      expiresAt: latestExpiry,
+      status: 'created',
     });
+    const checkoutUrl =
+      this.#origin === undefined
+        ? `https://checkout.fake.invalid/${gatewayOrderId}`
+        : new URL(`${STAND_IN_CHECKOUT_PATH}/${gatewayOrderId}`, this.#origin).toString();
+    return Promise.resolve({ gatewayOrderId, checkoutUrl, expiresAt: latestExpiry });
   }
 
   cancelCheckout(gatewayOrderId: string): Promise<CancelOutcome> {
@@ -130,9 +215,56 @@ export class FakePaymentAdapter extends StandIn<PaymentPort> implements PaymentP
     const order = this.#orders.get(gatewayOrderId);
     if (order === undefined)
       return Promise.reject(new Error('unknown order: the stand-in did not create it.'));
-    if (order.status === 'paid' || order.status === 'refunded') return Promise.resolve('paid');
-    order.status = order.status === 'created' ? 'cancelled' : order.status;
-    return Promise.resolve('cancelled');
+    const outcome =
+      order.cancelOutcome ??
+      (order.status === 'paid' || order.status === 'refunded' ? 'paid' : 'cancelled');
+    if (outcome === 'cancelled' && order.status === 'created') order.status = 'cancelled';
+    return Promise.resolve(outcome);
+  }
+
+  /** What `cancelCheckout` answers for this order from now on (R-213, FR-BOOK-12). */
+  onCancel(gatewayOrderId: string, outcome: CancelOutcome): void {
+    const order = this.#orders.get(gatewayOrderId);
+    if (order === undefined) throw new Error('unknown order: the stand-in did not create it.');
+    order.cancelOutcome = outcome;
+  }
+
+  payableOrder(gatewayOrderId: string): PayableOrder | undefined {
+    const order = this.#orders.get(gatewayOrderId);
+    if (order?.status !== 'created' || this.#now() >= order.expiresAt) return undefined;
+    return {
+      gatewayOrderId,
+      amount_piasters: order.gross_piasters,
+      currency: order.currency,
+      expiresAt: order.expiresAt,
+    };
+  }
+
+  async submit(
+    gatewayOrderId: string,
+    action: StandInAction,
+  ): Promise<'delivered' | 'not_payable'> {
+    if (this.#origin === undefined) {
+      throw new Error('The stand-in was given no origin (API_PUBLIC_ORIGIN) to send its event to.');
+    }
+    if (this.payableOrder(gatewayOrderId) === undefined) return 'not_payable';
+    // Signed before the first await, so a second press of a button finds the order acted on.
+    const { rawBody, headers } = this.orderEvent(gatewayOrderId, EVENT_OF[action]);
+    let response: Response;
+    try {
+      response = await fetch(new URL(WEBHOOK_PATH, this.#origin), {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: rawBody,
+        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+      });
+    } catch (error: unknown) {
+      throw new StandInDeliveryError('unreachable', { cause: error });
+    }
+    // The answer's body is the webhook's; nothing of it is needed.
+    await response.body?.cancel();
+    if (!response.ok) throw new StandInDeliveryError(response.status);
+    return 'delivered';
   }
 
   verifyAndParseEvent(

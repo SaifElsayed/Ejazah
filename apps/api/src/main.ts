@@ -39,6 +39,7 @@ const [
   { DELIVER_ADMIN_INVITE },
   { filesRoutes },
   payments,
+  { standInCheckoutRoutes },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -64,6 +65,7 @@ const [
   import('./jobs/deliver-admin-invite.js'),
   import('./platform/ports/storage/files.route.js'),
   import('./modules/payments/index.js'),
+  import('./platform/web/stand-in-checkout.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -213,6 +215,14 @@ const routes = {
     payment: ports.payment,
     log,
     maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
+  }),
+  // The stand-in's hosted page (T012, R-213): a route only while the payment port is the stand-in
+  // (`PAYMENT_GATEWAY=fake`); it posts its signed events to the webhook above over HTTP.
+  ...standInCheckoutRoutes({
+    payment: ports.payment,
+    rateLimiter,
+    log,
+    ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
   }),
 };
 
