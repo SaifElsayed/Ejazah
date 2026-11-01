@@ -674,6 +674,8 @@ describe('the multipart body expo/fetch sends (T100)', () => {
 // never comes fails as an unreachable server's does (no API code), and a refresh that hangs fails
 // too, so the calls waiting on the runtime's one refresh (T156) are freed and the next call starts
 // a fresh one. The clock is Jest's; a hung transport answers only to its signal, as fetch does.
+// The timeout lasts until the answer's body is read, not until its headers come (PR #112's review,
+// round 1, Minor 4): a stalled answer has headers and a body that never comes.
 describe('the timeouts (T146)', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -682,8 +684,27 @@ describe('the timeouts (T146)', () => {
     jest.useRealTimers();
   });
 
-  type Answer = { status: number; body: unknown } | 'hang';
+  type Answer = { status: number; body: unknown } | Stuck;
+  /** Where a request sticks: before its headers (`hang`), or after them, in its body (`stall`). */
+  type Stuck = 'hang' | 'stall';
+  const stuck: Stuck[] = ['hang', 'stall'];
   type Settled = 'pending' | 'resolved' | 'rejected';
+
+  /** An answer whose headers came and whose body never does. */
+  function stalledAnswer(): Response {
+    const never = () => new Promise<never>(() => undefined);
+    const answer = {
+      status: 200,
+      ok: true,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: never,
+      text: never,
+      arrayBuffer: never,
+      clone: () => answer,
+    };
+    return answer as unknown as Response;
+  }
 
   /** A transport that answers by `answer`, or hangs until its signal aborts, as fetch does. */
   function transport(answer: (target: string) => Answer) {
@@ -700,6 +721,7 @@ describe('the timeouts (T146)', () => {
           signal?.addEventListener('abort', () => reject(signal.reason));
         });
       }
+      if (answered === 'stall') return stalledAnswer();
       return new Response(JSON.stringify(answered.body), {
         status: answered.status,
         headers: { 'content-type': 'application/json' },
@@ -732,84 +754,95 @@ describe('the timeouts (T146)', () => {
     });
   }
 
-  it('fails a call whose answer never comes once its timeout passes, as an offline call fails', async () => {
-    const hung = transport(() => 'hang');
-    const client = clientOver(hung.fetch, memorySessions(null).store);
-    const call = client.api.catalog.subjects.list.query();
-    const caught = call.catch((error: unknown) => error);
+  it.each(stuck)(
+    'fails a call that sticks (%s) once its timeout passes, as an offline call fails',
+    async (mode) => {
+      const hung = transport(() => mode);
+      const client = clientOver(hung.fetch, memorySessions(null).store);
+      const call = client.api.catalog.subjects.list.query();
+      const caught = call.catch((error: unknown) => error);
 
-    await jest.advanceTimersByTimeAsync(CALL_TIMEOUT_MS - 1);
-    expect(await stateOf(call)).toBe('pending');
-    await jest.advanceTimersByTimeAsync(1);
-    expect(await stateOf(call)).toBe('rejected');
-    expect(errorCodeOf(await caught)).toBeUndefined();
-    expect(hung.signals[0]?.aborted).toBe(true);
-  });
+      await jest.advanceTimersByTimeAsync(CALL_TIMEOUT_MS - 1);
+      expect(await stateOf(call)).toBe('pending');
+      await jest.advanceTimersByTimeAsync(1);
+      expect(await stateOf(call)).toBe('rejected');
+      expect(errorCodeOf(await caught)).toBeUndefined();
+      expect(hung.signals[0]?.aborted).toBe(true);
+    },
+  );
 
-  it.each([
+  const uploads: [string, (client: Client) => Promise<string>][] = [
     [
       'document',
-      (client: Client) =>
+      (client) =>
         client.uploadDocument('identity', { uri: 'file:///cache/id.pdf', name: 'id.pdf' }),
     ],
     [
       'photo',
-      (client: Client) =>
+      (client) =>
         client.uploadPhoto({ uri: 'file:///cache/p.png', name: 'p.png', mimeType: 'image/png' }),
     ],
-  ])('fails a %s upload whose answer never comes once its timeout passes', async (_kind, send) => {
-    const hung = transport(() => 'hang');
-    const client = clientOver(
-      hung.fetch,
-      memorySessions({ accessToken: 'a1', refreshToken: 'r1' }).store,
-    );
-    const upload = send(client);
-    const caught = upload.catch((error: unknown) => error);
+  ];
 
-    await jest.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS - 1);
-    expect(await stateOf(upload)).toBe('pending');
-    await jest.advanceTimersByTimeAsync(1);
-    expect(await stateOf(upload)).toBe('rejected');
-    expect(errorCodeOf(await caught)).toBeUndefined();
-    expect(hung.signals[0]?.aborted).toBe(true);
-  });
+  it.each(stuck.flatMap((mode) => uploads.map(([kind, send]) => [mode, kind, send] as const)))(
+    'fails an upload that sticks (%s, %s) once its timeout passes',
+    async (mode, _kind, send) => {
+      const hung = transport(() => mode);
+      const client = clientOver(
+        hung.fetch,
+        memorySessions({ accessToken: 'a1', refreshToken: 'r1' }).store,
+      );
+      const upload = send(client);
+      const caught = upload.catch((error: unknown) => error);
 
-  it('fails a hung refresh, frees the calls waiting on it, and the next call refreshes afresh', async () => {
-    let refreshes = 0;
-    const hung = transport((target) => {
-      if (target.endsWith('/auth.refresh')) {
-        refreshes += 1;
-        return refreshes === 1 ? 'hang' : ok({ accessToken: 'a146b', refreshToken: 'r146b' });
-      }
-      return refused('UNAUTHENTICATED');
-    });
-    // Tokens of this test alone: the runtime's refreshes are keyed by the token presented (T156).
-    const sessions = memorySessions({ accessToken: 'a146', refreshToken: 'r146' });
-    const onSignedOut = jest.fn();
-    // Two screen trees' clients over one store share the runtime's one refresh (T156).
-    const clients = [0, 1].map(() => clientOver(hung.fetch, sessions.store, onSignedOut));
-    const waiting = clients.map((client) => client.api.catalog.subjects.list.query());
-    const outcomes = waiting.map((call) => call.catch((error: unknown) => error));
+      await jest.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS - 1);
+      expect(await stateOf(upload)).toBe('pending');
+      await jest.advanceTimersByTimeAsync(1);
+      expect(await stateOf(upload)).toBe('rejected');
+      expect(errorCodeOf(await caught)).toBeUndefined();
+      expect(hung.signals[0]?.aborted).toBe(true);
+    },
+  );
 
-    await jest.advanceTimersByTimeAsync(0);
-    expect(hung.paths.filter((path) => path === 'auth.refresh')).toHaveLength(1);
-    await jest.advanceTimersByTimeAsync(CALL_TIMEOUT_MS);
-    expect(await Promise.all(waiting.map((call) => stateOf(call)))).toEqual([
-      'rejected',
-      'rejected',
-    ]);
-    await Promise.all(outcomes);
-    // A refresh that never answered is no refusal: the session stays (review of B6, finding 1).
-    expect(sessions.current()).toEqual({ accessToken: 'a146', refreshToken: 'r146' });
-    expect(onSignedOut).not.toHaveBeenCalled();
+  it.each(stuck)(
+    'fails a refresh that sticks (%s), frees the calls waiting on it, and the next call refreshes afresh',
+    async (mode) => {
+      let refreshes = 0;
+      const hung = transport((target) => {
+        if (target.endsWith('/auth.refresh')) {
+          refreshes += 1;
+          return refreshes === 1 ? mode : ok({ accessToken: 'a146b', refreshToken: 'r146b' });
+        }
+        return refused('UNAUTHENTICATED');
+      });
+      // Tokens of this test alone: the runtime's refreshes are keyed by the token presented (T156).
+      const sessions = memorySessions({ accessToken: 'a146', refreshToken: `r146-${mode}` });
+      const onSignedOut = jest.fn();
+      // Two screen trees' clients over one store share the runtime's one refresh (T156).
+      const clients = [0, 1].map(() => clientOver(hung.fetch, sessions.store, onSignedOut));
+      const waiting = clients.map((client) => client.api.catalog.subjects.list.query());
+      const outcomes = waiting.map((call) => call.catch((error: unknown) => error));
 
-    // The next call is not held by the hung refresh: it starts its own, which answers.
-    const next = clients[0]?.api.catalog.subjects.list.query().catch(() => undefined);
-    await jest.advanceTimersByTimeAsync(0);
-    await next;
-    expect(refreshes).toBe(2);
-    expect(sessions.current()).toEqual({ accessToken: 'a146b', refreshToken: 'r146b' });
-  });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(hung.paths.filter((path) => path === 'auth.refresh')).toHaveLength(1);
+      await jest.advanceTimersByTimeAsync(CALL_TIMEOUT_MS);
+      expect(await Promise.all(waiting.map((call) => stateOf(call)))).toEqual([
+        'rejected',
+        'rejected',
+      ]);
+      await Promise.all(outcomes);
+      // A refresh that never answered is no refusal: the session stays (review of B6, finding 1).
+      expect(sessions.current()).toEqual({ accessToken: 'a146', refreshToken: `r146-${mode}` });
+      expect(onSignedOut).not.toHaveBeenCalled();
+
+      // The next call is not held by the hung refresh: it starts its own, which answers.
+      const next = clients[0]?.api.catalog.subjects.list.query().catch(() => undefined);
+      await jest.advanceTimersByTimeAsync(0);
+      await next;
+      expect(refreshes).toBe(2);
+      expect(sessions.current()).toEqual({ accessToken: 'a146b', refreshToken: 'r146b' });
+    },
+  );
 
   it("passes the caller's own cancellation through to the transport", async () => {
     const hung = transport(() => 'hang');
