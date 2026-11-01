@@ -1236,6 +1236,10 @@
         "duration": "Length",
         "durationOption": "{minutes} min",
         "enable": "Enable the slot",
+        "error": {
+          "inUse": "The day, the time and the length do not change while the slot is booked. Disable it and add a new slot.",
+          "overlap": "This slot overlaps another of your slots."
+        },
         "newTitle": "New slot",
         "save": "Save slot",
         "starts": "Starts",
