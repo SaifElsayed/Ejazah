@@ -134,6 +134,9 @@ export class ApplicationService {
     if (hasDuplicate(documents)) throw invalid('documents', 'duplicate');
 
     await this.#stores.run(async (tx) => {
+      // The application's lock first (T161): a request for a credential's document meanwhile
+      // commits before the credentials are read, so one it set waiting is seen still waiting.
+      await this.#stores.lockApplication(tx, userId);
       const application = await this.#stores.readApplication(tx, userId);
       moving(application, 'needs_document');
       await this.#ownedOrRefused(tx, userId, documents);

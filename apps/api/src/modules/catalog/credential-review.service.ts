@@ -133,6 +133,8 @@ export interface CredentialReviewStore {
   decide(tx: Transaction, decision: Decision): Promise<boolean>;
   /** Writes the correction while the credential is approved; whether it wrote. */
   correct(tx: Transaction, correction: Correction): Promise<boolean>;
+  /** Locks the teacher's application, identity's `teacher_profiles` row, until the transaction ends (T161). */
+  lockApplication(tx: Transaction, userId: string): Promise<void>;
   /** Whether the teacher is approved (identity's `teacher_profiles`). */
   isApprovedTeacher(tx: Transaction, userId: string): Promise<boolean>;
   /**
@@ -271,6 +273,10 @@ export class CredentialReviewService {
     input: DecisionInput,
   ): Promise<DocumentRequestMove> {
     const record = await this.#readOrRefuse(tx, input.credentialId);
+    // The application's lock before the credential moves (T161), so a resubmission meanwhile
+    // commits first, or waits and then reads the credential waiting. A credential's teacher never
+    // changes, so reading it before the lock reads nothing the lock guards.
+    await this.#store.lockApplication(tx, record.teacher.userId);
     const at = this.#now();
     await this.#decide(tx, adminId, input, ['pending'], 'needs_document', at);
     if (!record.submittedWithApplication) return {};

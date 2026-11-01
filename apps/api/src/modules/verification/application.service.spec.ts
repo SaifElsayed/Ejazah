@@ -249,6 +249,19 @@ describe('resubmit (FR-152)', () => {
       service.resubmit(APPLICANT, { identityDocumentId: stores.upload(APPLICANT) }),
     ).rejects.toEqual(refused('CONFLICT'));
   });
+
+  it("locks the application's row before it reads the application and its credentials (T161)", async () => {
+    const { credentialId } = await waitingOnDocument();
+    stores.journal.length = 0;
+    await service.resubmit(APPLICANT, {
+      credentials: [{ credentialId, documentId: stores.upload(APPLICANT) }],
+    });
+    expect(stores.journal).toEqual([
+      `lock:${APPLICANT}`,
+      `read:${APPLICANT}`,
+      `credentials:${APPLICANT}`,
+    ]);
+  });
 });
 
 describe('reapply (FR-155)', () => {

@@ -5,7 +5,8 @@
 // application's `teacher_profiles` row for recording the call and `reject`. T164 adds `approve`,
 // `requestInfo` and `applications.ban` (the account's row first, then the application's), and the
 // identity document's `accept` and `requestAnother` (the account's row). Wherever one transaction
-// takes both, the account's row comes first (the owner's decision of 2026-11-01).
+// takes both, the account's row comes first (the owner's decision of 2026-11-01). T161 adds the
+// resubmission and a credential's document request, both on the application's row.
 //
 // HOW A RACE IS STAGED, as `booking-concurrency.spec.ts` stages it. Transaction A runs its move and
 // stays open; transaction B starts its move and is seen waiting on a lock by a watcher reading
@@ -17,7 +18,10 @@
 // role: PostgreSQL hides the wait of another role's session from a non-superuser.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { revokeSubjects } from '../../apps/api/src/modules/catalog/index.js';
+import {
+  createCredentialReviewService,
+  revokeSubjects,
+} from '../../apps/api/src/modules/catalog/index.js';
 import {
   AccountConsequences,
   lockAccount,
@@ -27,6 +31,7 @@ import {
 import {
   createIdentityRequestStore,
   createVerificationAdminServices,
+  createVerificationServices,
   openRequestOf,
 } from '../../apps/api/src/modules/verification/index.js';
 import {
@@ -49,6 +54,7 @@ let watcher: Db;
 let database: Database;
 let standing: StandingService;
 let review: ReturnType<typeof createVerificationAdminServices>;
+let credentials: ReturnType<typeof createCredentialReviewService>;
 
 const unused = async (): Promise<never> => {
   throw new Error('not used by these probes');
@@ -74,6 +80,7 @@ beforeAll(async () => {
     settings: { read: unused },
     standing,
   });
+  credentials = createCredentialReviewService({ settings: { read: unused } });
 });
 
 afterAll(async () => {
@@ -84,7 +91,7 @@ afterAll(async () => {
 /** A committed person with a submitted application in the given states; the user's id. */
 async function teacher(values: {
   accountStatus: 'active' | 'suspended';
-  applicationStatus: 'in_review' | 'approved';
+  applicationStatus: 'in_review' | 'needs_document' | 'approved';
 }): Promise<string> {
   const userId = await makeUser(db, { account_status: values.accountStatus });
   const documentId = await insertRow(db, 'verification_documents', {
@@ -302,26 +309,36 @@ describe("the audit's before, read under the application's lock (T126)", () => {
   });
 });
 
-/** A committed approved credential sent with the teacher's application; its subject's id. */
-async function approvedCredential(userId: string, adminId: string): Promise<string> {
+/**
+ * A committed credential sent with the teacher's application, approved by `adminId` when one is
+ * given, else pending; its id and its subject's.
+ */
+async function applicationCredential(
+  userId: string,
+  approvedBy?: string,
+): Promise<{ readonly credentialId: string; readonly subjectId: string }> {
   const subjectId = await makeSubject(db);
   const documentId = await insertRow(db, 'verification_documents', {
     user_id: userId,
     document_type: 'credential',
     storage_key_encrypted: Buffer.from('probe'),
   });
-  await insertRow(db, 'teacher_credentials', {
+  const credentialId = await insertRow(db, 'teacher_credentials', {
     teacher_user_id: userId,
     subject_id: subjectId,
     document_id: documentId,
-    status: 'approved',
     submitted_with_application: true,
-    reviewed_by_admin_id: adminId,
-    reviewed_at: '2026-10-18T09:00:00Z',
     // The application's credentials share its submission's instant (`teacher()` above).
     created_at: '2026-10-18T09:00:00Z',
+    ...(approvedBy === undefined
+      ? { status: 'pending' }
+      : {
+          status: 'approved',
+          reviewed_by_admin_id: approvedBy,
+          reviewed_at: '2026-10-18T09:00:00Z',
+        }),
   });
-  return subjectId;
+  return { credentialId, subjectId };
 }
 
 /** A committed open identity request holding a document the person uploaded; its id. */
@@ -370,7 +387,7 @@ describe("the application's other decisions, under its lock (T164)", () => {
   it('approve waits for the call being recorded, then approves on it', async () => {
     const userId = await teacher({ accountStatus: 'active', applicationStatus: 'in_review' });
     const adminId = await makeAdmin(db);
-    const subjectId = await approvedCredential(userId, adminId);
+    const { subjectId } = await applicationCredential(userId, adminId);
     const ended = await race(
       (tx) =>
         review.applications.recordCall(tx, adminId, {
@@ -406,5 +423,52 @@ describe("the identity document's decisions, under the account's lock (T164)", (
     });
     expect(await accountStatusOf(userId)).toBe('active');
     expect(await openRequestsOf(userId)).toBe(0);
+  });
+});
+
+async function applicationStatusOf(userId: string): Promise<string | undefined> {
+  const { rows } = await db.query<{ application_status: string }>(
+    'SELECT application_status FROM teacher_profiles WHERE user_id = $1',
+    [userId],
+  );
+  return rows[0]?.application_status;
+}
+
+/**
+ * The applicant's application service with `tx` as its own transaction, so the race's B is the
+ * resubmission as the phone calls it: it opens its transaction through the client's `$transaction`.
+ */
+function applicationIn(tx: Transaction) {
+  const inside = new Proxy(database, {
+    get: (target, key) =>
+      key === '$transaction'
+        ? <T>(work: (held: Transaction) => Promise<T>): Promise<T> => work(tx)
+        : Reflect.get(target, key),
+  });
+  return createVerificationServices({
+    database: inside,
+    storage: { temporaryLink: unused },
+    cipher: { decrypt: () => unused() as never },
+    settings: { read: unused },
+    idempotency: { run: unused },
+  }).application;
+}
+
+describe("a resubmission and a credential's document request (T161)", () => {
+  it('a resubmission waits for a document request, then is refused while the credential waits', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'needs_document' });
+    const adminId = await makeAdmin(db);
+    const { credentialId } = await applicationCredential(userId);
+    const identityDocumentId = await insertRow(db, 'verification_documents', {
+      user_id: userId,
+      document_type: 'national_id',
+      storage_key_encrypted: Buffer.from('probe'),
+    });
+    const ended = await race(
+      (tx) => credentials.requestDocument(tx, adminId, { credentialId, reason: 'الختم غير واضح' }),
+      (tx) => applicationIn(tx).resubmit(userId, { identityDocumentId }),
+    );
+    expect(ended).toMatchObject({ thrown: { code: 'APPLICATION_INCOMPLETE' } });
+    expect(await applicationStatusOf(userId)).toBe('needs_document');
   });
 });

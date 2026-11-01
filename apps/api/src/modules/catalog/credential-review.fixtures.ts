@@ -70,6 +70,8 @@ export class MemoryReviewStore implements CredentialReviewStore {
   readonly #approvedTeachers = new Set<string>();
   readonly granted: { teacherUserId: string; subjectIds: readonly string[] }[] = [];
   readonly administrators = new Map<string, string>([[ADMIN, 'هالة سعيد']]);
+  /** Each lock of a teacher's application and each move of a credential, in order (T161). */
+  readonly journal: string[] = [];
   /** The teachers' applications, by teacher; a teacher with none planted has none to move (T155). */
   readonly applications = new Map<string, HeldApplication>();
 
@@ -199,7 +201,12 @@ export class MemoryReviewStore implements CredentialReviewStore {
     return 'approved';
   }
 
+  async lockApplication(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock:${userId}`);
+  }
+
   async decide(_tx: Transaction, decision: Decision): Promise<boolean> {
+    this.journal.push(`decide:${decision.credentialId}`);
     const row = this.#held.get(decision.credentialId);
     if (row === undefined || !decision.from.includes(row.status)) return false;
     Object.assign(row, {

@@ -292,6 +292,14 @@ describe("requestDocument and the teacher's application (T155)", () => {
     ).toBe('CONFLICT');
     expect(store.applications.get(TEACHER)?.status).toBe('in_review');
   });
+
+  it("locks the teacher's application before it moves the credential (T161)", async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    store.applyingAs(TEACHER, 'in_review');
+    await serviceOver(store).requestDocument(TX, ADMIN, { credentialId, reason: 'سبب' });
+    expect(store.journal).toEqual([`lock:${TEACHER}`, `decide:${credentialId}`]);
+  });
 });
 
 describe('correct', () => {
