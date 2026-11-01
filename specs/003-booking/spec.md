@@ -315,7 +315,7 @@ adds only what this phase decides about it.
 
 **Carried from Phase 1**
 
-- **FR-301**: Phase 2's first three batches (B20 to B22) MUST land T123, T126, T129, T133 to T140, T160 and T162 of `specs/002-identity/tasks.md` before any other batch of this phase starts (PLAN.md, Phase 2, the owner's decision of 2026-10-29); T141 lands in B31, before T054 (amended 2026-11-01, the owner's decision of 2026-11-01: T124 needs B22's place).
+- **FR-301**: Phase 2's first three batches (B20 to B22) MUST land T123, T126, T129, T133 to T140, T160 and T162 of `specs/002-identity/tasks.md` before any other batch of this phase starts (PLAN.md, Phase 2, the owner's decision of 2026-10-29); T141 lands in B31, before T054 (amended 2026-11-01, the owner's decision of 2026-11-01: T124 needs B22's place); T123's device check lands in B26, the first batch with a screen that renders one of its keys (the owner's decision of 2026-11-01).
 - **FR-302**: T142 MUST land before any procedure of this phase reads `teacher_subjects`; T161 before any procedure of this phase reads the application's states.
 - **FR-303**: The visibility predicate MUST include the account's standing as SRS §3.7.1 states it since 2026-10-31: discovery leaves out a suspended or banned teacher; holds, checkout and any token issuance require the teacher's account to be active (T143).
 - **FR-304**: A teacher's photo MUST reach a student only after its metadata is stripped (T145).

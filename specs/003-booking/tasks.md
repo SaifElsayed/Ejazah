@@ -30,7 +30,7 @@ The three applications of Phase 0 (plan.md, "Source Code"): `apps/mobile/src/` (
 
 | Task | What | Timing (its own line) | Batch | What here waits for it |
 |---|---|---|---|---|
-| 002:T123 | Arabic templates made only of values read right to left on Android | Phase 2's first batch, before any Phase 2 screen | B20 | every screen task; FR-414 |
+| 002:T123 | Arabic templates made only of values read right to left on Android | Phase 2's first batch, before any Phase 2 screen | B20; its device check in B26 (the owner's decision of 2026-11-01: no screen renders one of its keys before then) | every screen task; FR-414 |
 | 002:T126 | An identity request and a reinstatement never cross; the row lock | Phase 2's first batch; before booking relies on `verification_required` | B20 | T005, T033, T036 |
 | 002:T129 | The input guard's refusal carries no cause | Phase 2's first batch; before Phase 2 code logs a cause | B20 | every API task |
 | 002:T133 | One flood never locks the other surface's sign-in | Phase 2's first batch | B20 | — |
@@ -54,7 +54,7 @@ The three applications of Phase 0 (plan.md, "Source Code"): `apps/mobile/src/` (
 | 002:T158 | A teacher can change the display name | with Phase 2's teacher profile screens | B26, beside T023 | — |
 | 002:T144 | Every suspension and ban goes through `StandingService` | before the first Phase 2 code that suspends or bans | none in this phase | No code of this phase suspends or bans (R-222); plan.md names it; it stays open for Phase 3's plan |
 
-The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; T160 and T162 two), split over B20, B21 and B22 with T123, T126 and T129 in the first. T141 then moved to B31 and T145 to B27, so that T164 and T124 take their places in B22 (the owner's decision of 2026-11-01); the first three batches land thirteen of the fourteen.
+The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; T160 and T162 two), split over B20, B21 and B22 with T123, T126 and T129 in the first. T141 then moved to B31 and T145 to B27, so that T164 and T124 take their places in B22 (the owner's decision of 2026-11-01); the first three batches land thirteen of the fourteen, T123's device check waiting for B26's first screen that renders one of its keys (the owner's decision of 2026-11-01).
 
 ---
 
@@ -222,19 +222,19 @@ At most six tasks each, in this order; one pull request each, reviewed by Saif's
 | Day | Batch | Tasks | What |
 |---|---|---|---|
 | D12 Sun 11/1 | B20 | 002:T123, 002:T126, 002:T129, 002:T133, 002:T134, 002:T135 | First wave: the marks, the locks, the cause, the sign-in budgets, key rotation, append-only keys |
-| D12 Sun 11/1 | B21 | 002:T136, 002:T137, 002:T138, 002:T140, 002:T160, 002:T162 | First wave: the phone's follow-ups and the column checks; `002:T123`'s device check with the phone's tasks |
+| D12 Sun 11/1 | B21 | 002:T136, 002:T137, 002:T138, 002:T140, 002:T160, 002:T162 | First wave: the phone's follow-ups and the column checks; `002:T123`'s device check moved to B26 (the owner's decision of 2026-11-01) |
 | D13 Mon 11/2 | B22 | 002:T164, 002:T124, 002:T139, 002:T161, 002:T142, 002:T146 | The first wave's documents; the database guard for specs; the four that must precede this phase's code |
 | D13 Mon 11/2 | B23 | T001, T002, T003, T004, T010, T011 | Setup, the schema pass, the predicate (`002:T143`), the adversarial harness |
 | D14 Tue 11/3 | B24 | T005, T006, T007, T008, T009, T012 | Locks, database refusals, time, money, the stand-in's page |
 | D14 Tue 11/3 | B25 | T020, T013, T016, T017, T018, T019 | US1's port first (T018 and T019 call it, analysis L2); the harness; US1's API |
-| D15 Wed 11/4 | B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing (T014 and T015 before the screens); US1's screens; `002:T123`'s device check on the first of them that renders one of its 37 keys, and in the Arabic device run the offline banner in Arabic too (`002:T138`, held by its spec alone) (the owner's decisions of 2026-11-01) |
+| D15 Wed 11/4 | B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing (T014 and T015 before the screens); US1's screens; `002:T123`'s device check on the first of them that renders one of its 37 keys, and in the Arabic device run the offline banner in Arabic too (`002:T138`, held by its spec alone) and, with an email account, `002:T160`'s Arabic email and Apple labels on the deletion sheet (the owner's decisions of 2026-11-01) |
 | D16 Thu 11/5 | B27 | 002:T145, T024, T025, T026, T027, T028 | The photo's metadata first (T027 shows the photo); US2's API and its adversarial cases |
 | D16 Thu 11/5 | B28 | T029, T030, T031, T032, T034, T035 | US2's screens; US3's contracts, booking sheet read, generation, the case |
 | D17 Sun 11/8 | B29 | T033, T036, T037, T038, T039, T040 | US3's core: holds, checkout, the address, order events, confirmation, expiry |
 | D18 Mon 11/9 | B30 | T041, T042, T043, T044, T045, T046 | US3's terminations, proofs and screens |
 | D18 Mon 11/9 | B31 | T047, T048, T049, T050, T051, 002:T141 | US4; `modules/payments` joins the coverage floor, with tests here if it falls short |
 | D19 Tue 11/10 | B32 | T052, T053, T054, T055, T056, T057 | US5, the gates, the documents, the gateway (if answered), the close; the same day, the phone run, the phase's close and Phase 3's Spec Kit cycle (specify, clarify, plan, tasks, analyze), which reviews the row below for Phase 3 |
-| — | Not scheduled | 002:T117, T118, T119, T120, T125, T127, T130, T131, T153, T154, T157, T159, T165; T058, T060 | Reviewed at Phase 3's Spec Kit cycle on D19. Timed elsewhere: `002:T144` Phase 3; `002:T147` to `002:T152` Phase 6; T059 Phase 3's first batch; T056 in B32 if the gateway answers |
+| — | Not scheduled | 002:T117, T118, T119, T120, T125, T127, T130, T131, T153, T154, T157, T159, T165, T166, T167, T168, T169; T058, T060 | Reviewed at Phase 3's Spec Kit cycle on D19. Timed elsewhere: `002:T144` Phase 3; `002:T147` to `002:T152` Phase 6; T059 Phase 3's first batch; T056 in B32 if the gateway answers |
 
 ## Implementation Strategy
 
