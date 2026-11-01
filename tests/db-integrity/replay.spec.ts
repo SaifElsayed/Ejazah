@@ -47,6 +47,7 @@ function paymentValues(enrollmentId: string, gatewayOrderId: string): Record<str
     gateway_order_id: gatewayOrderId,
     currency: 'EGP',
     status: 'created',
+    expires_at: '2026-10-04T07:10:00Z',
   };
 }
 

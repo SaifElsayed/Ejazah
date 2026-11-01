@@ -1,5 +1,5 @@
 // booking domain (T057, ERD section 5). Owned by apps/api/src/modules/booking.
-// slot_holds, enrollments. enrollments: deleted_at, status (pending_payment · confirmed · completed · terminated_no_show · cancelled), confirmed_at (one write path, FR-PAYG-5), cancellation_reason. Sessions tables live in sessions.prisma (ADR 0005 D2); payment records in payments.prisma (ADR 0007).
+// slot_holds, enrollments, enrollment_events (T004, append-only, ERD section 15.39). enrollments: deleted_at, status (pending_payment · confirmed · completed · terminated_no_show · cancelled), confirmed_at (one write path, FR-PAYG-5), cancellation_reason. Sessions tables live in sessions.prisma (ADR 0005 D2); payment records in payments.prisma (ADR 0007).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
 //
 // What the schema language cannot say lives in the migrations: the student-is-not-teacher check
@@ -36,32 +36,35 @@ model SlotHold {
 // One student's purchase of one package. Snapshots everything a mutable parent could change
 // (FR-PROFILE-3); `sessions_remaining` is derived, never stored (R-DB-4).
 model Enrollment {
-  id                      String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  studentUserId           String              @map("student_user_id") @db.Uuid
+  id                          String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  studentUserId               String              @map("student_user_id") @db.Uuid
   // Denormalised for query sanity; never the student (T064, FR-BOOK-11).
-  teacherUserId           String              @map("teacher_user_id") @db.Uuid
-  packageId               String              @map("package_id") @db.Uuid
-  slotId                  String              @map("slot_id") @db.Uuid
-  snapshotPricePiasters   BigInt              @map("snapshot_price_piasters")
-  snapshotSessionCount    Int                 @map("snapshot_session_count")
-  snapshotDurationMinutes Int                 @map("snapshot_duration_minutes")
-  snapshotSubjectId       String              @map("snapshot_subject_id") @db.Uuid
+  teacherUserId               String              @map("teacher_user_id") @db.Uuid
+  packageId                   String              @map("package_id") @db.Uuid
+  slotId                      String              @map("slot_id") @db.Uuid
+  snapshotPricePiasters       BigInt              @map("snapshot_price_piasters")
+  snapshotSessionCount        Int                 @map("snapshot_session_count")
+  snapshotDurationMinutes     Int                 @map("snapshot_duration_minutes")
+  snapshotSubjectId           String              @map("snapshot_subject_id") @db.Uuid
   // The zone frozen at purchase; DST arithmetic uses this.
-  snapshotSlotTimezone    String              @map("snapshot_slot_timezone")
+  snapshotSlotTimezone        String              @map("snapshot_slot_timezone")
   // The package's track at purchase (ADR 0018 D1, DEC-24; Phase 1, T012). The default is the
   // migration's, as `packages.track`'s is; the booking service always copies the package's.
-  snapshotTrack           PackageTrack        @default(recitation) @map("snapshot_track")
+  snapshotTrack               PackageTrack        @default(recitation) @map("snapshot_track")
   // `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5).
-  status                  EnrollmentStatus
+  status                      EnrollmentStatus
   // Set once, by the confirm-enrollment job. There is no other write path (R-HONEST-1).
-  confirmedAt             DateTime?           @map("confirmed_at") @db.Timestamptz(6)
+  confirmedAt                 DateTime?           @map("confirmed_at") @db.Timestamptz(6)
   // Why a `cancelled` enrollment was cancelled (ADR 0010 D7).
-  cancellationReason      CancellationReason? @map("cancellation_reason")
+  cancellationReason          CancellationReason? @map("cancellation_reason")
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
-  deletedAt               DateTime?           @map("deleted_at") @db.Timestamptz(6)
-  purchasedAt             DateTime            @map("purchased_at") @db.Timestamptz(6)
-  createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt               DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                   DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  purchasedAt                 DateTime            @map("purchased_at") @db.Timestamptz(6)
+  // The first session's local date the checkout showed, computed at Pay; compared with session 1
+  // to say the first session moved (T004, data-model §2.3, R-209, FR-368, FR-386).
+  quotedFirstSessionLocalDate DateTime            @map("quoted_first_session_local_date") @db.Date
+  createdAt                   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   student         User             @relation("EnrollmentStudent", fields: [studentUserId], references: [id])
   teacher         User             @relation("EnrollmentTeacher", fields: [teacherUserId], references: [id])
@@ -76,6 +79,7 @@ model Enrollment {
   ijazahs      Ijazah[]
   review       Review?
   disputes     Dispute[]
+  events       EnrollmentEvent[]
 
   @@index([studentUserId])
   @@index([teacherUserId])
@@ -83,4 +87,30 @@ model Enrollment {
   @@index([slotId])
   @@index([snapshotSubjectId])
   @@map("enrollments")
+}
+
+// T004 (data-model §2.5, R-216): the append-only record of each outcome a later notification needs
+// (FR-385). The two kind checks and the revoked UPDATE, DELETE and TRUNCATE are SQL in the
+// migration (ERD section 15.39). RESTRICT on update as on delete: a cascade would rewrite the row
+// past the revoked UPDATE (002:T135).
+model EnrollmentEvent {
+  id                 String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId       String              @map("enrollment_id") @db.Uuid
+  kind               EnrollmentEventKind
+  // Set exactly when `kind` is `cancelled`.
+  cancellationReason CancellationReason? @map("cancellation_reason")
+  // The order that failed (`order_failed`) or that confirmed the enrollment (`confirmed`), so a
+  // later paid order is told apart from a replay (FR-375). A reference only: booking never reads a
+  // `payments` row (R-API-6).
+  paymentId          String?             @map("payment_id") @db.Uuid
+  // The instant of the transaction that recorded the outcome.
+  occurredAt         DateTime            @map("occurred_at") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payment    Payment?   @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([enrollmentId])
+  @@index([paymentId])
+  @@map("enrollment_events")
 }

@@ -2,8 +2,9 @@
 // repositories of the modules that own their tables (R-API-6), against Postgres as the application
 // role (FR-031, R-DB-8, R-SEC-10).
 //
-// Four of the five: identity's three (the third, `auth_identities.provider_refresh_token_encrypted`,
-// since Phase 1's T013) and verification's one. The fifth, `admin_users.mfa_secret_encrypted`, is
+// Five of the six: identity's three (the third, `auth_identities.provider_refresh_token_encrypted`,
+// since Phase 1's T013), verification's one and payments' one (`payments.checkout_url_encrypted`,
+// Phase 2's T004, `002:T134`). The sixth, `admin_users.mfa_secret_encrypted`, is
 // not reached from here: R-API-4 lets only the three composition files import the admin module
 // (T143), and this file is not one of them. Its repository, `modules/admin/admin-users.repository.ts`,
 // issues the same two queries on its table.
@@ -20,6 +21,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createEncryptedColumns as identityColumns } from '../../apps/api/src/modules/identity/index.js';
+import { createEncryptedColumns as paymentsColumns } from '../../apps/api/src/modules/payments/index.js';
 import { createEncryptedColumns as verificationColumns } from '../../apps/api/src/modules/verification/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import {
@@ -153,11 +155,79 @@ async function plant(tx: Transaction): Promise<Map<string, { id: string; value: 
     id: document.id,
     value: storageKey,
   });
+
+  const orderId = randomUUID();
+  const checkoutUrl = value('payments.checkout_url_encrypted', orderId);
+  await newOrder(tx, teacher.id, orderId, checkoutUrl);
+  planted.set('payments.checkout_url_encrypted', { id: orderId, value: checkoutUrl });
   return planted;
 }
 
+/**
+ * A student's enrollment with the teacher, and one gateway order on it holding `checkoutUrl`, or
+ * none once the order has left `created` (data-model §2.4). The order is written in SQL so that no
+ * name here carries a gateway amount (R-MONEY-6): the amount column takes 0, as the harness's does.
+ */
+async function newOrder(
+  tx: Transaction,
+  teacherId: string,
+  orderId: string,
+  checkoutUrl: Uint8Array | null,
+): Promise<void> {
+  const student = await newUser(tx);
+  const subject = await tx.subject.create({
+    data: { nameAr: 'مادة', nameEn: 'Subject', isActive: true },
+    select: { id: true },
+  });
+  const offer = await tx.package.create({
+    data: {
+      teacherUserId: teacherId,
+      subjectId: subject.id,
+      sessionCount: 4,
+      sessionDurationMinutes: 60,
+      pricePiasters: 100_000n,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const slot = await tx.availabilitySlot.create({
+    data: {
+      teacherUserId: teacherId,
+      dayOfWeek: 0,
+      startTimeLocal: '1970-01-01T09:00:00Z',
+      durationMinutes: 60,
+      timezone: 'Africa/Cairo',
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const enrollment = await tx.enrollment.create({
+    data: {
+      studentUserId: student.id,
+      teacherUserId: teacherId,
+      packageId: offer.id,
+      slotId: slot.id,
+      snapshotPricePiasters: 100_000n,
+      snapshotSessionCount: 4,
+      snapshotDurationMinutes: 60,
+      snapshotSubjectId: subject.id,
+      snapshotSlotTimezone: 'Africa/Cairo',
+      status: 'pending_payment',
+      purchasedAt: '2026-10-04T07:00:00Z',
+      quotedFirstSessionLocalDate: '2026-10-11T00:00:00Z',
+    },
+    select: { id: true },
+  });
+  const url = checkoutUrl === null ? null : Buffer.from(checkoutUrl);
+  await tx.$executeRaw`
+    INSERT INTO payments (id, enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                          status, expires_at, checkout_url_encrypted, updated_at)
+    VALUES (${orderId}::uuid, ${enrollment.id}::uuid, 'fake', ${`probe-order-${orderId}`}, 0,
+            'EGP', 'created', '2026-10-04T07:10:00Z', ${url}, now())`;
+}
+
 function columnsOver(tx: Transaction) {
-  return [...identityColumns(tx), ...verificationColumns(tx)];
+  return [...identityColumns(tx), ...verificationColumns(tx), ...paymentsColumns(tx)];
 }
 
 /** Every row of a column, page by page, as the sweep reads it. */
@@ -173,13 +243,14 @@ async function readAll(
 }
 
 describe('the encrypted columns, through their owning modules (T155)', () => {
-  it('are the four columns of ERD §0 that identity and verification own', async () => {
+  it('are the five columns of ERD §0 that identity, verification and payments own', async () => {
     await inClientRollback(async (tx) => {
       expect(columnsOver(tx).map(({ column }) => column)).toEqual([
         'teacher_profiles.payout_account_ref_encrypted',
         'device_push_tokens.token_encrypted',
         'auth_identities.provider_refresh_token_encrypted',
         'verification_documents.storage_key_encrypted',
+        'payments.checkout_url_encrypted',
       ]);
     });
   });
@@ -232,6 +303,20 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
       );
       const rows = payout === undefined ? [] : await readAll(payout);
       expect(rows.map(({ id }) => id)).not.toContain(unset.id);
+    });
+  });
+
+  // T004: the address is set to NULL once the order leaves `created` (data-model §2.4).
+  it('pass over an order whose checkout address is cleared', async () => {
+    await inClientRollback(async (tx) => {
+      const teacher = await newUser(tx);
+      const cleared = randomUUID();
+      await newOrder(tx, teacher.id, cleared, null);
+      const addresses = columnsOver(tx).find(
+        ({ column }) => column === 'payments.checkout_url_encrypted',
+      );
+      const rows = addresses === undefined ? [] : await readAll(addresses);
+      expect(rows.map(({ id }) => id)).not.toContain(cleared);
     });
   });
 

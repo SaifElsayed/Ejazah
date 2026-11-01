@@ -2,7 +2,7 @@
 
 ## Owns
 
-`slot_holds, enrollments`
+`slot_holds, enrollments, enrollment_events`
 
 Listed in `packages/config/module-tables.json`. Reaching a table outside this list fails the build citing R-API-6.
 

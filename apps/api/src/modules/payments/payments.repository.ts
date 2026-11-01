@@ -7,7 +7,9 @@
 // usable: the caller learns "replay" from a count of zero (FR-PAYG-4, R-MONEY-8). A delivery racing
 // the same event waits on the unique index until the first transaction ends, then counts zero if it
 // committed. The table is append-only (`20261007000500_append_only_tables`), so nothing here updates
-// or deletes a row.
+// or deletes a row of it. Since T004 the module's `_encrypted` column is reached here too, for the
+// `reencrypt-columns` job.
+import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encryption.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 type Client = Pick<Transaction, 'paymentEvent'>;
@@ -39,4 +41,38 @@ export class PaymentsRepository {
     });
     return count === 1;
   }
+}
+
+/**
+ * `payments.checkout_url_encrypted`: the hosted checkout's address, kept while the order is
+ * `created` (T004, data-model §2.4, R-DB-8), for the `reencrypt-columns` job (002:T134). An order
+ * whose address is cleared is not a row to rewrite. A value is written only where the row still
+ * holds the one read, so an address the application cleared meanwhile stays cleared.
+ */
+export function checkoutAddresses(database: Pick<Transaction, 'payment'>): EncryptedColumn {
+  const orders = database.payment;
+  return {
+    column: 'payments.checkout_url_encrypted',
+    page: async (after, limit) => {
+      const rows = await orders.findMany({
+        where: {
+          checkoutUrlEncrypted: { not: null },
+          ...(after === undefined ? {} : { id: { gt: after } }),
+        },
+        orderBy: { id: 'asc' },
+        take: limit,
+        select: { id: true, checkoutUrlEncrypted: true },
+      });
+      return rows.flatMap(({ id, checkoutUrlEncrypted: value }): EncryptedValue[] =>
+        value === null ? [] : [{ id, value }],
+      );
+    },
+    replace: async (id, stored, next) => {
+      const { count } = await orders.updateMany({
+        where: { id, checkoutUrlEncrypted: { equals: Uint8Array.from(stored) } },
+        data: { checkoutUrlEncrypted: Uint8Array.from(next) },
+      });
+      return count === 1;
+    },
+  };
 }

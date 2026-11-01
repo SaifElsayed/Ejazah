@@ -73,6 +73,7 @@ const appendOnly: ReadonlyArray<{
         gateway_order_id: 'probe-order-1',
         currency: 'EGP',
         status: 'created',
+        expires_at: '2026-10-04T07:10:00Z',
       });
       return insertRow(db, 'payment_events', {
         payment_id: paymentId,

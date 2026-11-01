@@ -27,12 +27,20 @@ model Payment {
   currency             String         @db.Char(3)
   // `refunded` is learned from the gateway's signed event; the platform never initiates one (FR-PAYG-10).
   status               PaymentStatus
+  // The order's expiry as created: no later than the hold's expiry minus the grace (T004,
+  // data-model §2.4, FR-355). Read by Retry and by FR-BOOK-12's "still payable".
+  expiresAt            DateTime       @map("expires_at") @db.Timestamptz(6)
+  // The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), so FR-BOOK-12
+  // (c) can offer "continue the previous payment"; NULL once the order leaves `created`. Read back
+  // only by `checkout.continue` (data-model §2.4.1); reached by the `reencrypt-columns` job (002:T134).
+  checkoutUrlEncrypted Bytes?         @map("checkout_url_encrypted")
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
 
-  events PaymentEvent[]
+  events           PaymentEvent[]
+  enrollmentEvents EnrollmentEvent[]
 
   @@index([enrollmentId])
   @@map("payments")
