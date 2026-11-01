@@ -21,7 +21,12 @@ as it stands on `develop` f2389ff (read on 2026-10-31); where it names existing 
 - `visibleTeacherPage(tx, requester, { candidateIds, namePrefix?, minRating?, after?, limit })` → the same rows for one
   page of discovery, in R-204's order (the owner's decisions of 2026-11-01, analysis C2): the order's keys are identity's columns, so identity orders
   and pages them; catalog passes only the ids its own tables allow;
-- `isVisibleTeacher(tx, requester, teacherId, purpose)` → the same row or `null`.
+- `isVisibleTeacher(tx, requester, teacherId, purpose)` → the same row or `null`;
+- `isBookablePair(tx, studentUserId, teacherUserId)` → a boolean, for a caller with no request (the confirm job): it
+  reads the student's gender and `account_status = 'active'` inside its query and applies the same `'book'` clause as
+  the methods above, built by one clause function in the same file; it returns no teacher row, so no `RequesterGender`
+  is minted outside the request context (Phase 0 `contracts/kernel.md`, `contracts/lint-rules.md` "Callers with no
+  requester gender"; PR #109's review round 3).
 
 `purpose: 'discover'` applies the five conjuncts; `'book'` adds `account_status = 'active'` (T143). Both are exported
 from `identity/index.ts`. `catalog` (discovery, the profile) and `booking` (the hold, the slots) call them and then
@@ -262,17 +267,18 @@ is unchanged.
 
 **Decision.** Three jobs (`apps/api/src/jobs/`), each with a `runOnceAndTwice` spec:
 
-- `confirm-enrollment({ paymentId })`: ARCHITECTURE §8.1 verbatim. It locks the enrollment row (`lockRows`), returns
-  if it is confirmed by this order or a compensation case exists for it; if its `confirmed` event names another order (the
-  student paid twice) it opens a `duplicate_payment` case and leaves the enrollment as it is (FR-375); if R-219 cancelled
-  it, it takes the refusal branch at once (`party_restricted`, FR-362); before a late branch it checks the parties with
-  no new rule, the teacher by R-201's predicate with `purpose: 'book'` and the student by `account_status = 'active'`,
-  and takes the refusal branch (`party_restricted`) if either fails; otherwise it then tries one transaction (hold conversion by conditional
+- `confirm-enrollment({ paymentId })`: ARCHITECTURE §8.1 verbatim. It locks the enrollment row (`lockRows`). If its
+  `confirmed` event names another order (the student paid twice) it opens a `duplicate_payment` case through T035, which
+  joins an open one and opens a new one after a resolved one, and leaves the enrollment as it is (FR-375); otherwise it
+  returns if the enrollment is confirmed by this order or a compensation case exists for it; if R-219 cancelled it, it
+  takes the refusal branch at once (`party_restricted`, FR-362); before a late branch it checks the parties with no new
+  rule, through identity's `isBookablePair` (R-201: the teacher by the predicate's `'book'` clause, the student by
+  `account_status = 'active'`), and takes the refusal branch (`party_restricted`) if it answers false; otherwise it tries one transaction (hold conversion by conditional
   update, or the late branch's release-and-re-hold; `booking.confirmEnrollment`; `sessions.generateForEnrollment`); on a
   database refusal (unique violation on `slot_holds`, exclusion violation on `sessions`) it rolls back and runs the
   refusal transaction (release, `slot_unavailable`, `moderation.openCompensationCase`, a `cancelled` outcome).
 - `expire-pending-payments` (every minute): ARCHITECTURE §8.1's enrollment-keyed release, never for an enrollment with a
-  `paid` order. It also recovers a lost enqueue by the order, not by the enrollment's status: every `paid` order older than `checkout_confirmation_timeout_seconds` whose enrollment is not `confirmed` and has no compensation case is handed to `confirm-enrollment` (job id `paymentId`, through `payments`' entry), whatever the enrollment's status. A new
+  `paid` order. It also recovers a lost enqueue by the order, not by the enrollment's status: every `paid` order older than `checkout_confirmation_timeout_seconds` whose enrollment is `pending_payment` or `cancelled` and has no compensation case is handed to `confirm-enrollment` (job id `paymentId`, through `payments`' entry), whatever the enrollment's status. A new
   checkout (FR-BOOK-12) or another student's hold (FR-351) may have cancelled that enrollment meanwhile; the job then
   confirms it by the late branch or opens one compensation case by the refusal branch, so a paid enrollment never stays
   cancelled without one (PR #109's review, M2 and round 2 N1).
