@@ -8,9 +8,11 @@
 //
 // The type check is enforced by `pnpm typecheck` (CI stage 1), not by vitest.
 import { createHmac } from 'node:crypto';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { piasters } from '@ijazah/money';
-import { describe, expect, expectTypeOf, it } from 'vitest';
-import { FakePaymentAdapter } from './fake.adapter.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { FakePaymentAdapter, StandInDeliveryError } from './fake.adapter.js';
 import { StandInFailure } from '../stand-in.js';
 import {
   EventSignatureError,
@@ -369,4 +371,239 @@ describe('the payment stand-in: a signed body it cannot read (T122, review of PR
       await expect(refusal).rejects.not.toThrow(/01000000000|4111/);
     },
   );
+});
+
+// T012: the stand-in as a gateway at the boundary (R-213, FR-372, FR-374). Its hosted page lives on
+// the API's public origin; what the page sends over HTTP is `platform/web/stand-in-checkout.spec.ts`'s.
+describe('the payment stand-in: its hosted page and configured cancel (T012, R-213)', () => {
+  const ORIGIN = 'http://192.168.1.20:3000';
+  let clock = new Date('2026-10-07T10:00:00Z');
+  const hosted = () =>
+    new FakePaymentAdapter({ webhookSecret: SECRET, origin: ORIGIN, now: () => clock });
+
+  it("answers the hosted page on the API's public origin and the order's expiry", async () => {
+    const checkout = await hosted().createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY);
+
+    expect(checkout.checkoutUrl).toBe(`${ORIGIN}/stand-in/checkout/${checkout.gatewayOrderId}`);
+    expect(checkout.expiresAt).toEqual(PAY_BY);
+  });
+
+  it('shows a created order before its expiry as payable, with its amount and currency', async () => {
+    clock = new Date('2026-10-07T10:00:00Z');
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout(
+      'enr-1',
+      piasters(25_000),
+      'EGP',
+      PAY_BY,
+    );
+
+    expect(payments.payableOrder(gatewayOrderId)).toEqual({
+      gatewayOrderId,
+      amount_piasters: 25_000,
+      currency: 'EGP',
+      expiresAt: PAY_BY,
+    });
+  });
+
+  it('shows no payable order once it expired, was cancelled or paid, or was never created', async () => {
+    clock = new Date('2026-10-07T10:00:00Z');
+    const payments = hosted();
+    const create = () => payments.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY);
+    const expiring = await create();
+    const cancelled = await create();
+    const paid = await create();
+    await payments.cancelCheckout(cancelled.gatewayOrderId);
+    payments.orderEvent(paid.gatewayOrderId, 'paid');
+    clock = PAY_BY;
+
+    expect(payments.payableOrder(expiring.gatewayOrderId)).toBeUndefined();
+    clock = new Date('2026-10-07T10:00:00Z');
+    expect(payments.payableOrder(expiring.gatewayOrderId)).toBeDefined();
+    expect(payments.payableOrder(cancelled.gatewayOrderId)).toBeUndefined();
+    expect(payments.payableOrder(paid.gatewayOrderId)).toBeUndefined();
+    expect(payments.payableOrder('fake_ord_unknown')).toBeUndefined();
+  });
+
+  it.each(['cancelled', 'paid', 'in_progress', 'unsupported'] as const)(
+    'answers cancelCheckout with %s for the order it was configured on, and only that one',
+    async (outcome) => {
+      const payments = hosted();
+      const configured = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+      const other = await payments.createCheckout('enr-2', piasters(1), 'EGP', PAY_BY);
+      payments.onCancel(configured.gatewayOrderId, outcome);
+
+      expect(await payments.cancelCheckout(configured.gatewayOrderId)).toBe(outcome);
+      expect(await payments.cancelCheckout(configured.gatewayOrderId)).toBe(outcome);
+      expect(await payments.cancelCheckout(other.gatewayOrderId)).toBe('cancelled');
+    },
+  );
+
+  it('an order configured to refuse its cancellation stays payable', async () => {
+    clock = new Date('2026-10-07T10:00:00Z');
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+    payments.onCancel(gatewayOrderId, 'in_progress');
+
+    await payments.cancelCheckout(gatewayOrderId);
+    expect(payments.payableOrder(gatewayOrderId)).toBeDefined();
+  });
+
+  it('refuses to configure an order it never created', () => {
+    expect(() => hosted().onCancel('fake_ord_unknown', 'paid')).toThrow(/unknown order/);
+  });
+
+  it('refuses to send an event when it was given no origin to send it to', async () => {
+    clock = new Date('2026-10-07T10:00:00Z');
+    const payments = new FakePaymentAdapter({ webhookSecret: SECRET, now: () => clock });
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+
+    await expect(payments.submit(gatewayOrderId, 'pay')).rejects.toThrow(/origin/);
+    expect(payments.payableOrder(gatewayOrderId)).toBeDefined();
+  });
+});
+
+// T012: what `submit` sends, over HTTP to a receiver that stands where the webhook does and verifies
+// as it does, through `verifyAndParseEvent` under the same secret (FR-372, FR-374).
+describe("the payment stand-in: its hosted page's events over HTTP (T012, FR-372, FR-374)", () => {
+  interface Received {
+    readonly method: string | undefined;
+    readonly path: string | undefined;
+    readonly contentType: string | undefined;
+    readonly event: GatewayEvent;
+  }
+  const received: Received[] = [];
+  let answer = 200;
+  let server: Server;
+  let origin: string;
+  const verifier = gateway();
+
+  beforeAll(async () => {
+    server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk: Buffer) => chunks.push(chunk));
+      request.on('end', () => {
+        const headers: Record<string, string> = {};
+        for (const [name, value] of Object.entries(request.headers)) {
+          if (typeof value === 'string') headers[name] = value;
+        }
+        verifier
+          .verifyAndParseEvent(Buffer.concat(chunks), headers)
+          .then((event) => {
+            received.push({
+              method: request.method,
+              path: request.url,
+              contentType: request.headers['content-type'],
+              event,
+            });
+            response.statusCode = answer;
+          })
+          .catch(() => {
+            response.statusCode = 401;
+          })
+          .finally(() => response.end());
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  beforeEach(() => {
+    received.length = 0;
+    answer = 200;
+  });
+
+  const clock = new Date('2026-10-07T10:00:00Z');
+  const hosted = (at = origin) =>
+    new FakePaymentAdapter({ webhookSecret: SECRET, origin: at, now: () => clock });
+
+  it('pays: POSTs a signed paid event, with its transaction, gross, fee and net, to the webhook', async () => {
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout(
+      'enr-1',
+      piasters(25_000),
+      'EGP',
+      PAY_BY,
+    );
+
+    expect(await payments.submit(gatewayOrderId, 'pay')).toBe('delivered');
+    expect(received).toEqual([
+      {
+        method: 'POST',
+        path: '/webhooks/payment',
+        contentType: 'application/json',
+        event: {
+          type: 'paid',
+          providerEventId: expect.stringMatching(/^fake_evt_/),
+          gatewayOrderId,
+          gatewayTransactionId: expect.stringMatching(/^fake_txn_/),
+          gross_piasters: 25_000,
+          gateway_fee_piasters: 0,
+          net_piasters: 25_000,
+          currency: 'EGP',
+        },
+      },
+    ]);
+    expect(payments.payableOrder(gatewayOrderId)).toBeUndefined();
+  });
+
+  it.each(['fail', 'cancel'] as const)('%s: POSTs a signed failed event', async (action) => {
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+
+    expect(await payments.submit(gatewayOrderId, action)).toBe('delivered');
+    expect(received.map(({ event }) => event)).toEqual([
+      { type: 'failed', providerEventId: expect.stringMatching(/^fake_evt_/), gatewayOrderId },
+    ]);
+  });
+
+  it('sends nothing for an order that is not payable', async () => {
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+    await payments.cancelCheckout(gatewayOrderId);
+
+    expect(await payments.submit(gatewayOrderId, 'pay')).toBe('not_payable');
+    expect(await payments.submit('fake_ord_unknown', 'pay')).toBe('not_payable');
+    expect(received).toHaveLength(0);
+  });
+
+  it('a second press finds the order acted on, even while the first is in flight', async () => {
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+
+    const outcomes = await Promise.all([
+      payments.submit(gatewayOrderId, 'pay'),
+      payments.submit(gatewayOrderId, 'fail'),
+    ]);
+
+    expect(outcomes).toEqual(['delivered', 'not_payable']);
+    expect(received).toHaveLength(1);
+  });
+
+  it('rejects with the status alone when the webhook does not take the event', async () => {
+    const payments = hosted();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+    answer = 500;
+
+    const refusal = payments.submit(gatewayOrderId, 'pay');
+
+    await expect(refusal).rejects.toThrow(StandInDeliveryError);
+    await expect(refusal).rejects.toThrow(/500/);
+    await expect(refusal).rejects.not.toThrow(/fake_evt_|fake_txn_|fake_ord_/);
+  });
+
+  it('rejects as unreachable when nothing listens at the origin', async () => {
+    const closed = createServer();
+    await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
+    const port = (closed.address() as AddressInfo).port;
+    await new Promise((resolve) => closed.close(resolve));
+    const payments = hosted(`http://127.0.0.1:${port}`);
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+
+    await expect(payments.submit(gatewayOrderId, 'pay')).rejects.toThrow(/unreachable/);
+  });
 });
