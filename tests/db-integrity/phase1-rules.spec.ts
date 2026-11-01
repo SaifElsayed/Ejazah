@@ -12,6 +12,7 @@
 // forbidden one, expecting the SQLSTATE of the constraint kind: 23505 for a unique, 23514 for a
 // check. Every probe runs as the application role in a transaction that is rolled back. Observed
 // red before the migrations of T009 to T012: every table and column below was missing.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {

@@ -13,6 +13,7 @@
 // administrator sign-in sets a real credential. A second run leaves the credential alone, as it
 // leaves every row it finds, so a seed never rewrites a setting an administrator has changed
 // (R-PROC-11).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

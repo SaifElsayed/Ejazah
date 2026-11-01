@@ -9,6 +9,7 @@
 // value, expecting 23514. The catalogue probes hold the constraints by name, and the index on
 // `user_sessions.previous_refresh_token_hash` that the grace-window lookup reads (T047, T094).
 // Every probe runs as the application role in a transaction that is rolled back.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SQLSTATE,

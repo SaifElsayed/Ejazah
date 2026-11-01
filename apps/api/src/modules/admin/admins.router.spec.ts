@@ -4,6 +4,7 @@
 // A destructive action carries its mandatory reason into the entry (screens.md §24); the list is a
 // read, audited under `admins.read` with the reader as its target, which no audit list shows
 // (owner's decision 2026-10-21). What the actions do is `admins.service.spec.ts`'s.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase } from '../../platform/db/prisma.repository.js';

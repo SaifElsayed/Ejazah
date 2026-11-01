@@ -6,11 +6,11 @@
 // spec collects it and settles it before reading what it did.
 import { randomUUID } from 'node:crypto';
 
-import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 
 import { ColumnCipher } from '../../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../../platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../../platform/db/spec-database.fixtures.js';
 import { IdempotencyRepository } from '../../../platform/idempotency/idempotency.repository.js';
 import {
   IdempotencyService,
@@ -196,13 +196,8 @@ export function identityId(): string {
 }
 
 function databaseUrl(): string {
-  const fromDotenv: Record<string, string> = {};
-  readDotenv({ processEnv: fromDotenv, quiet: true });
-  const url = process.env['DATABASE_URL'] ?? fromDotenv['DATABASE_URL'];
-  if (url === undefined || url === '') {
-    throw new Error('deletion specs: DATABASE_URL is not set (quickstart §1)');
-  }
-  return url;
+  // T124: from the environment only, refused naming the variable when it is missing.
+  return specDatabaseUrl('DATABASE_URL');
 }
 
 async function withClient<T>(work: (db: pg.Client) => Promise<T>): Promise<T> {

@@ -8,6 +8,7 @@
 // are `tests/db-integrity/admin-home-queues.spec.ts`; here they are stand-ins, so this spec proves
 // what the home makes of them. The latest actions are over the real database, written at instants
 // no other spec's rows reach and rolled back.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { addMinutes } from '@ijazah/time';

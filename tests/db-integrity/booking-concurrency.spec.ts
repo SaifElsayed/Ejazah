@@ -17,6 +17,7 @@
 //
 // The exclusion constraints are DEFERRABLE INITIALLY IMMEDIATE (T141): an ordinary write is checked
 // as it happens, and only `SET CONSTRAINTS ... DEFERRED` moves the check to the commit.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {

@@ -2,13 +2,14 @@
 // probe run as the owner tests a role nobody uses, and the owner may do everything the probes
 // prove impossible (research R-5, FR-025).
 //
-// HOW IT KNOWS THE ROLE. The connection string is `DATABASE_URL` from the environment or the
-// repository's `.env` (quickstart §1), the same value the API uses. After connecting, the harness
-// refuses to go on unless the session role is not a superuser, owns no relation in the `public`
-// schema, and is neither the role `DATABASE_URL_OWNER` names nor a member of it (a member inherits
-// the owner's rights). A misconfigured `.env` that points the probes at the owner therefore fails
-// every probe instead of passing them all for the wrong reason. Without `DATABASE_URL_OWNER` the
-// last two checks cannot run, so the harness says so once on stderr.
+// HOW IT KNOWS THE ROLE. The connection string is `DATABASE_URL` from the environment, never from
+// `.env` (T124, the owner's decision of 2026-11-01), and only once IJAZAH_DB_SPECS=1; without it
+// every probe file is skipped by its `database` tag and nothing connects. After connecting, the
+// harness refuses to go on unless the session role is not a superuser, owns no relation in the
+// `public` schema, and is neither the role `DATABASE_URL_OWNER` names nor a member of it (a member
+// inherits the owner's rights). A misconfigured environment that points the probes at the owner
+// therefore fails every probe instead of passing them all for the wrong reason. Without
+// `DATABASE_URL_OWNER` the last two checks cannot run, so the harness says so once on stderr.
 //
 // HOW A PROBE LEAVES NO TRACE. Every probe runs inside one transaction that is always rolled back
 // (`inRollback`), and a statement expected to fail runs under a savepoint (`attempt`), so the
@@ -26,20 +27,10 @@
 // needs; tables a later schema task models (T057–T061) are written from the ERD and meet the real
 // columns once those tasks land — until then, and until the migrations of T064–T066 exist, every
 // probe is red by design (batch plan: red from S3a until S4).
-import { config as readDotenv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
-// `.env` is read into a scratch object, and only the two database URLs are taken from it, each only
-// when the environment does not already carry it. Loading the whole file into `process.env` would
-// bring back a provider key the test setup removed (tests/support/no-provider-keys.setup.ts; T114,
-// PR #49 review m1, SC-005).
-const fromDotenv: Record<string, string> = {};
-readDotenv({ processEnv: fromDotenv, quiet: true });
-for (const key of ['DATABASE_URL', 'DATABASE_URL_OWNER'] as const) {
-  const value = fromDotenv[key];
-  if (process.env[key] === undefined && value !== undefined) process.env[key] = value;
-}
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
 
 export type Db = pg.Client;
 
@@ -53,16 +44,6 @@ export const SQLSTATE = {
   restrictViolation: '23001',
 } as const;
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (value === undefined || value === '') {
-    throw new Error(
-      `${name} is not set: the probes need it in the environment or in .env (quickstart §1)`,
-    );
-  }
-  return value;
-}
-
 function roleOf(url: string): string {
   return decodeURIComponent(new URL(url).username);
 }
@@ -73,7 +54,7 @@ let warnedOwnerUnset = false;
 export async function connectAsApplication(): Promise<Db> {
   // A database that is not there fails the suite in seconds rather than at the test timeout.
   const db = new pg.Client({
-    connectionString: required('DATABASE_URL'),
+    connectionString: specDatabaseUrl('DATABASE_URL'),
     connectionTimeoutMillis: 5_000,
   });
   await db.connect();

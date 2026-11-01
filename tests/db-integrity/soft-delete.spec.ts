@@ -16,6 +16,7 @@
 // NOTHING IS LEFT BEHIND. The `pg` probe runs in the harness's rolled-back transaction. The client
 // probes write inside one Prisma interactive transaction that always ends by throwing `ROLLBACK`,
 // so Prisma rolls it back; the delete refusal writes nothing.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {

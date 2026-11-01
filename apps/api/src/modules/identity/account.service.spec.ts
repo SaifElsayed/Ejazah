@@ -7,6 +7,7 @@
 // display name are the person's to change; the time zone is the device's until the person chooses
 // one by hand, and a chosen zone is kept: the device's report on a later launch leaves it
 // (FR-AUTH-10; `users.timezone_overridden_at`, owner's decision 2026-10-20).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeDatabase } from '../../platform/db/prisma.repository.js';

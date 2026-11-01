@@ -4,6 +4,7 @@
 // limit, both read from settings; `resolveAdminSession` yields `mfaVerified` and the session's id;
 // sign-out ends the one session and `revokeAll` every session of the administrator. Over the real
 // database and a clock of the spec's own.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHash } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';

@@ -14,6 +14,7 @@
 //   other (R-104), so nothing tells another person of the ban.
 // - An ordinary person, and a suspended one, deletes and signs up again with the same address and
 //   the same provider subject (SC-111).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHmac, hkdfSync, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';

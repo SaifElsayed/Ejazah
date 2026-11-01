@@ -14,6 +14,7 @@
 // more counter (`failed_sign_in_count`); each is on its declared list, so the first case holds.
 // The violation case gains a lookalike on neither list, so the lists admit what they name and
 // nothing more.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkSchema, type Violation } from '../../scripts/schema-check';

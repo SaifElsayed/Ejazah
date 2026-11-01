@@ -6,6 +6,7 @@
 // administrator, a document, a subject) are committed first, as every probe here writes them; each
 // probe then runs the queries on one transaction it rolls back. The queue is a whole table other
 // probes fill while this one runs, so each probe names its applicant with a token of its own.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

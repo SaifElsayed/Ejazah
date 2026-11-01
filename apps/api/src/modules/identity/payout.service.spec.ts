@@ -12,6 +12,7 @@
 // the four states. No raw account number reaches a column, a log line or an answer (FR-190): a
 // sweep over every account the port was handed. The standing a replacement leaves is read through
 // the real session resolution (T076, owner's decision 4 at B15's check).
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { PAYOUT_REJECTED_REASON_MAX_LENGTH } from '@ijazah/contracts';
 import { z } from 'zod';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
