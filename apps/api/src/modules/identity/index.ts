@@ -206,6 +206,22 @@ export {
 /** The account's row lock, taken first by verification's identity request (T126). */
 export { lockAccount, readStanding } from './standing.repository.js';
 
+/**
+ * The visibility predicate (T010, `002:T143`, SRS §3.7.1, R-201): the only way any module learns
+ * which teachers a student may see, each on the caller's transaction. `visibleTeachers` and
+ * `visibleTeacherPage` take the requester's gender; `isBookablePair` serves the confirm job, which
+ * has no request, and answers a boolean.
+ */
+export {
+  isBookablePair,
+  type TeacherPageCursor,
+  type TeacherPageQuery,
+  type VisibilityPurpose,
+  type VisibleTeacher,
+  visibleTeacherPage,
+  visibleTeachers,
+} from './visible-teachers.repository.js';
+
 /** The administrator surface's `teachers` namespace (T068), mounted by `admin.router.ts`. */
 export { teachersRouter } from './teachers.router.js';
 
