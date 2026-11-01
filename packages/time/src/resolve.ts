@@ -1,10 +1,13 @@
 // T033: per-occurrence recurrence resolution. Each occurrence is resolved from its own local date and
 // the slot's local time in the teacher's zone, never by adding intervals (FR-018, R-TIME-2).
 // Nonexistent local time shifts forward; ambiguous local time takes the first (FR-019, R-TIME-7).
+// T007: each occurrence also carries what was asked for, and `firstOccurrenceAfter` finds the
+// first occurrence at least a lead after an instant (R-209, FR-368).
 import { Temporal } from '@js-temporal/polyfill';
 
 import {
   assertLocalDate,
+  localDateIn,
   resolveLocalDateTime,
   TimeError,
   type DayOfWeek,
@@ -87,15 +90,61 @@ export function resolveOccurrences(
 
   const occurrences: Occurrence[] = [];
   for (let week = 0; week < count; week += 1) {
+    const requestedLocalDate = anchor.add({ weeks: week }).toString();
     const resolved = resolveLocalDateTime({
-      localDate: anchor.add({ weeks: week }).toString(),
+      localDate: requestedLocalDate,
       localTime: slot.startTimeLocal,
       timezone: slot.timezone,
     });
     occurrences.push({
       ...resolved,
       endsAt: addElapsedMinutes(resolved.startsAt, durationMinutes),
+      requestedLocalDate,
+      requestedStartTimeLocal: slot.startTimeLocal,
     });
   }
   return occurrences;
+}
+
+/** A lead is a whole number of hours, zero included (the setting `first_session_lead_hours`). */
+function assertLeadHours(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TimeError('leadHours', String(value), 'expected a whole number of hours ≥ 0');
+  }
+  return value;
+}
+
+/**
+ * The first occurrence of `slot` whose resolved start is at least `leadHours` after `instant`
+ * (T007, R-209, FR-368: the first session after a confirmation, and the date a student is shown
+ * before paying).
+ *
+ * The lead is elapsed time, so it is added to the instant; the slot's weeks are not. The candidates
+ * are the slot's day on or after the local date the lead ends on, and the week after it, each
+ * resolved from its own local date by `resolveOccurrences`; the first whose resolved instant is not
+ * before the lead's end is the answer. Comparing instants, never wall clocks, is what makes a Friday
+ * 00:30 that a gap moves to 01:30, or a Thursday 23:30 that happens twice, count as the instant it
+ * resolves to (R-TIME-7). The second candidate always qualifies: it starts six days or more after
+ * the lead's end.
+ */
+export function firstOccurrenceAfter(
+  slot: RecurringSlot,
+  instant: Date,
+  leadHours: number,
+): Occurrence {
+  const epochMilliseconds = instant.getTime();
+  if (Number.isNaN(epochMilliseconds)) {
+    throw new TimeError('instant', String(instant), 'not an instant');
+  }
+  const notBefore = Temporal.Instant.fromEpochMilliseconds(epochMilliseconds).add({
+    hours: assertLeadHours(leadHours),
+  });
+  const fromLocalDate = localDateIn(new Date(notBefore.epochMilliseconds), slot.timezone);
+  const [candidate, weekAfter] = resolveOccurrences(slot, { fromLocalDate, count: 2 });
+  if (candidate === undefined || weekAfter === undefined) {
+    throw new Error('resolveOccurrences returned fewer occurrences than asked for');
+  }
+  return Temporal.Instant.compare(Temporal.Instant.from(candidate.startsAt), notBefore) >= 0
+    ? candidate
+    : weekAfter;
 }

@@ -71,6 +71,8 @@ describe('T029 weekly recurrence across a Cairo DST transition (FR-018, R-TIME-2
         endsAt: '2025-04-18T08:00:00Z',
         utcOffsetMinutes: EET,
         disambiguation: 'exact',
+        requestedLocalDate: '2025-04-18',
+        requestedStartTimeLocal: '09:00:00',
       },
       {
         localDate: '2025-04-25',
@@ -80,6 +82,8 @@ describe('T029 weekly recurrence across a Cairo DST transition (FR-018, R-TIME-2
         endsAt: '2025-04-25T07:00:00Z',
         utcOffsetMinutes: EEST,
         disambiguation: 'exact',
+        requestedLocalDate: '2025-04-25',
+        requestedStartTimeLocal: '09:00:00',
       },
       {
         localDate: '2025-05-02',
@@ -89,6 +93,8 @@ describe('T029 weekly recurrence across a Cairo DST transition (FR-018, R-TIME-2
         endsAt: '2025-05-02T07:00:00Z',
         utcOffsetMinutes: EEST,
         disambiguation: 'exact',
+        requestedLocalDate: '2025-05-02',
+        requestedStartTimeLocal: '09:00:00',
       },
     ]);
 
@@ -125,6 +131,8 @@ describe('T029 weekly recurrence across a Cairo DST transition (FR-018, R-TIME-2
         endsAt: '2025-10-24T07:00:00Z',
         utcOffsetMinutes: EEST,
         disambiguation: 'exact',
+        requestedLocalDate: '2025-10-24',
+        requestedStartTimeLocal: '09:00:00',
       },
       {
         localDate: '2025-10-31',
@@ -134,6 +142,8 @@ describe('T029 weekly recurrence across a Cairo DST transition (FR-018, R-TIME-2
         endsAt: '2025-10-31T08:00:00Z',
         utcOffsetMinutes: EET,
         disambiguation: 'exact',
+        requestedLocalDate: '2025-10-31',
+        requestedStartTimeLocal: '09:00:00',
       },
       {
         localDate: '2025-11-07',
@@ -143,6 +153,8 @@ describe('T029 weekly recurrence across a Cairo DST transition (FR-018, R-TIME-2
         endsAt: '2025-11-07T08:00:00Z',
         utcOffsetMinutes: EET,
         disambiguation: 'exact',
+        requestedLocalDate: '2025-11-07',
+        requestedStartTimeLocal: '09:00:00',
       },
     ]);
 
