@@ -12,6 +12,9 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // (`net = gross − fee`, "as reported, never computed here" — ERD §7). Share splitting and the
 // rounding remainder that needed it are retired (FR-015, DEC-14). An operation added before a task
 // names the requirement that needs it is an invitation for feature code to do money maths.
+// T009: FR-337 names the first, `perSession`, the price per session a card and a profile show
+// (research R-212). It is for display only: nothing stores or charges it, the gateway charges the
+// package price. `lowest` picks one of the amounts it is given and computes none.
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -79,6 +82,46 @@ export function piasters(value: number): Piasters {
  */
 export function toPlainNumber(amount_piasters: Piasters): number {
   return amount_piasters;
+}
+
+/**
+ * A package's price per session, rounded half up to the piaster (T009, FR-337, R-212): 100 over 3
+ * is 33, 3 over 2 is 2.
+ *
+ * Integers only, so no quotient is ever a float (R-MONEY-1). `%` of two safe integers is exact,
+ * the remainder taken off leaves a multiple of the count, and the division of that multiple is
+ * exact too; a rounded `total / count` is not, at the top of the safe range. Half up is the
+ * remainder's comparison with the half: twice the remainder at least the count.
+ *
+ * A count below one or not whole is refused: `packages.session_count >= 1` (ERD §15 rule 36), so
+ * such a count is a programming error, not a price.
+ */
+export function perSession(total_piasters: Piasters, sessionCount: number): Piasters {
+  if (!Number.isSafeInteger(sessionCount) || sessionCount < 1) {
+    throw new RangeError(
+      `perSession: the session count must be a whole number of at least one — received ${String(sessionCount)}`,
+    );
+  }
+  const remainder = total_piasters % sessionCount;
+  const whole = (total_piasters - remainder) / sessionCount;
+  return piasters(remainder * 2 >= sessionCount ? whole + 1 : whole);
+}
+
+/**
+ * The lowest of `amounts_piasters` (T009, FR-335: a card's lowest price per session). The list is
+ * non-empty by type, since an empty one has no lowest amount; one that reaches here empty anyway
+ * is refused rather than answered with a made-up amount.
+ */
+export function lowest(amounts_piasters: readonly [Piasters, ...Piasters[]]): Piasters {
+  if (amounts_piasters.length === 0) {
+    throw new RangeError('lowest: an empty list has no lowest amount');
+  }
+  const [first_piasters, ...rest] = amounts_piasters;
+  let lowest_piasters = first_piasters;
+  for (const amount_piasters of rest) {
+    if (amount_piasters < lowest_piasters) lowest_piasters = amount_piasters;
+  }
+  return lowest_piasters;
 }
 
 function refusalReason(value: number): string {

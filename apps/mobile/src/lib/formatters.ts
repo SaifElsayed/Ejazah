@@ -3,14 +3,32 @@
 // calendar and the Western digits the boards draw (`formattingTag`, i18n/index.ts). An instant is
 // an ISO 8601 string from the server; the zone is the IANA name it is shown in. Nothing here
 // constructs or moves a datetime (R-TIME-1): parsing one string is all it does. T109: a month's name
-// and a year, for the phone's own date-of-birth picker.
+// and a year, for the phone's own date-of-birth picker. T009: an amount of piasters, in pounds.
+import { type Piasters, toPlainNumber } from '@ijazah/money';
 import { useMemo } from 'react';
 
-import { formattingTag, type Locale, useLocale } from '../i18n';
+import { formattingTag, type Locale, translate, useLocale } from '../i18n';
 
 /** A number with the locale's grouping and decimal marks. */
 export function formatNumber(value: number, locale: Locale): string {
   return new Intl.NumberFormat(formattingTag(locale)).format(value);
+}
+
+const PIASTERS_PER_POUND = 100;
+
+/**
+ * An amount in pounds, in `common.format.price` (T009, R-212): «150 ج.م», "EGP 150.50". Whole
+ * pounds print with no decimals and any piasters with two. The amount leaves the brand through
+ * `toPlainNumber` for display only; whether it is whole is read on the integer, which is exact.
+ */
+export function formatPounds(amount_piasters: Piasters, locale: Locale): string {
+  const piasterCount = toPlainNumber(amount_piasters);
+  const decimals = piasterCount % PIASTERS_PER_POUND === 0 ? 0 : 2;
+  const amount = new Intl.NumberFormat(formattingTag(locale), {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(piasterCount / PIASTERS_PER_POUND);
+  return translate(locale, 'common.format.price', { amount });
 }
 
 /** The day and month of `instant` in `timeZone`: «15 أكتوبر», "October 15". */

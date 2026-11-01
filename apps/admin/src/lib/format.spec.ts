@@ -2,9 +2,10 @@
 // the Gregorian calendar (`formattingTag`): a day with its month («14 أكتوبر»), the same with its
 // year in a detail («14 أكتوبر 2026»; the English boards print «14 Oct 2026», day first), and a zone as its city («القاهرة»), the raw zone when the
 // list holds no city for it.
+import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
-import { cityName, dayMonth, dayMonthYear, timeOfDay, weekdayDate } from './format';
+import { cityName, dayMonth, dayMonthYear, formatPounds, timeOfDay, weekdayDate } from './format';
 
 const at = '2026-10-14T09:00:00.000Z';
 
@@ -39,5 +40,20 @@ describe('the home and the audit (B14d)', () => {
     );
     expect(timeOfDay('2026-10-15T08:20:00.000Z', 'ar', 'Africa/Cairo')).toBe('11:20 ص');
     expect(timeOfDay('2026-10-15T14:40:00.000Z', 'en', 'Africa/Cairo')).toBe('5:40 PM');
+  });
+});
+
+describe('formatPounds (T009, R-212)', () => {
+  it('prints every amount to two decimals, whole pounds included', () => {
+    expect(formatPounds(piasters(15_000), 'ar')).toBe('150.00 ج.م');
+    expect(formatPounds(piasters(15_000), 'en')).toBe('EGP 150.00');
+    expect(formatPounds(piasters(15_050), 'ar')).toBe('150.50 ج.م');
+    expect(formatPounds(piasters(1), 'en')).toBe('EGP 0.01');
+    expect(formatPounds(piasters(0), 'ar')).toBe('0.00 ج.م');
+  });
+
+  it('groups thousands with Latin digits', () => {
+    expect(formatPounds(piasters(123_456_789), 'ar')).toBe('1,234,567.89 ج.م');
+    expect(formatPounds(piasters(123_456_700), 'en')).toBe('EGP 1,234,567.00');
   });
 });
