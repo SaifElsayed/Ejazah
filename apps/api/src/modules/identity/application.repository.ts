@@ -10,6 +10,7 @@
 import { Prisma } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 const UNIQUE_VIOLATION = 'P2002';
 
@@ -174,6 +175,17 @@ export async function isApprovedTeacher(tx: Client, userId: string): Promise<boo
     select: { verificationStatus: true },
   });
   return profile?.verificationStatus === 'approved';
+}
+
+/**
+ * Locks the application's `teacher_profiles` row until the transaction ends (T126), so a decision's
+ * read of the state it moves from is the state it then moves. A person with no profile has nothing
+ * to lock; the move then refuses on its own read.
+ */
+export async function lockApplication(tx: Transaction, userId: string): Promise<void> {
+  // The profile's id never changes, so reading it before the lock reads nothing the lock guards.
+  const profile = await tx.teacherProfile.findUnique({ where: { userId }, select: { id: true } });
+  if (profile !== null) await lockRows(tx, 'teacher_profiles', [profile.id]);
 }
 
 /** The verification call as the reviewer records it (FR-161): its day, its outcome, the notes. */

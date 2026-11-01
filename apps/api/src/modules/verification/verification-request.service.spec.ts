@@ -111,6 +111,16 @@ describe('requireIdentity', () => {
       (await refusal(service.requireIdentity(TX, ADMIN, { userId: ADMIN, reason: 'x' }))).code,
     ).toBe('NOT_FOUND');
   });
+
+  it("locks the account's row before it reads the account or its open request (T126)", async () => {
+    const userId = store.person();
+    await service.requireIdentity(TX, ADMIN, { userId, reason: 'بلاغ' });
+    expect(store.journal.slice(0, 3)).toEqual([
+      `lock:${userId}`,
+      `account:${userId}`,
+      `request:${userId}`,
+    ]);
+  });
 });
 
 describe("the user's side", () => {

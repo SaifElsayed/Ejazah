@@ -3,6 +3,7 @@
 // decided by the database, so two administrators racing on one person cannot both move it; a write
 // answers whether it landed. Each runs on the administrator kind's transaction it is handed.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 type Client = Pick<Transaction, 'user' | 'teacherProfile'>;
 
@@ -37,6 +38,15 @@ export async function readStanding(tx: Client, userId: string): Promise<Standing
   });
   if (user === null) return null;
   return { accountStatus: user.accountStatus, teacher: user.teacherProfile };
+}
+
+/**
+ * Locks the account's `users` row until the transaction ends (T126): a move that reads the standing
+ * before it writes takes it first, so a concurrent move on the account waits, then reads what this
+ * one left.
+ */
+export async function lockAccount(tx: Transaction, userId: string): Promise<void> {
+  await lockRows(tx, 'users', [userId]);
 }
 
 /** Moves the live account from one of `from` to `to`; whether it did. */

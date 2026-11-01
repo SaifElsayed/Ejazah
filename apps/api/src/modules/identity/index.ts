@@ -184,6 +184,7 @@ export {
 export {
   type CallRecord,
   decideApplication,
+  lockApplication,
   recordApplicationCall,
 } from './application.repository.js';
 
@@ -202,7 +203,8 @@ export {
   type StandingStore,
   standingStoreOver,
 } from './standing.service.js';
-export { readStanding } from './standing.repository.js';
+/** The account's row lock, taken first by verification's identity request (T126). */
+export { lockAccount, readStanding } from './standing.repository.js';
 
 /** The administrator surface's `teachers` namespace (T068), mounted by `admin.router.ts`. */
 export { teachersRouter } from './teachers.router.js';
