@@ -6,7 +6,7 @@ Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through
 except `subjects` (seeded), `teacher_subjects` (granted by approval) and the recipient events of `payment_events`.
 This phase writes them for the first time. The pass below is what it adds: one table, three columns, one function,
 no index, the column checks T140 carries, and five settings rows. The ERD is amended in the same batch as each
-migration (ERD changelog v1.10 → v1.11), as Phase 1 did.
+migration (ERD changelog v1.10 → v1.11 for T140's checks, v1.11 → v1.12 for the Phase 2 pass of T004, 42 tables), as Phase 1 did.
 
 ## 1. Who writes what
 

@@ -694,11 +694,11 @@ Both mobile experiences share one codebase; an account sees its one role's navig
 
 ## 6. Data Model
 
-Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.11 — 41 tables.
+Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.12 — 42 tables.
 
 ### 6.1 Entities
 
-User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdentifier, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, VerificationDocument, VerificationRequest, Subject, TeacherSubject, TeacherCredential, Package, AvailabilitySlot, IsnadEntry, TeacherSignature, SlotHold, Enrollment, Payment, PaymentEvent, Session, SessionRemedy, SessionParticipantEvent, CancellationRequest, ChatMessage, IjazahRequest, Ijazah, IjazahBar, Review, Dispute, GenderFlag, UserReport, Notification, AdminUser, AdminSession, AdminRecoveryCode, AuditLog, Setting, IdempotencyKey (platform kernel, ADR 0008). *(v1.3 removed Wallet, LedgerEntry, PayoutDestination, WithdrawalRequest; v1.4 adds Payment and PaymentEvent as gateway records, not balances.)*
+User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdentifier, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, VerificationDocument, VerificationRequest, Subject, TeacherSubject, TeacherCredential, Package, AvailabilitySlot, IsnadEntry, TeacherSignature, SlotHold, Enrollment, EnrollmentEvent, Payment, PaymentEvent, Session, SessionRemedy, SessionParticipantEvent, CancellationRequest, ChatMessage, IjazahRequest, Ijazah, IjazahBar, Review, Dispute, GenderFlag, UserReport, Notification, AdminUser, AdminSession, AdminRecoveryCode, AuditLog, Setting, IdempotencyKey (platform kernel, ADR 0008). *(v1.3 removed Wallet, LedgerEntry, PayoutDestination, WithdrawalRequest; v1.4 adds Payment and PaymentEvent as gateway records, not balances.)*
 
 ### 6.2 Key Entity Detail
 

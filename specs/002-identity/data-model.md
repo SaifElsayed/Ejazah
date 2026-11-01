@@ -15,7 +15,7 @@ says it as the model.
 Everything below lands by forward migrations after `20261014000000`, immutable
 once merged (R-DB-1), each applied clean from an empty database (SC-113). The
 count rises from thirty-three tables to thirty-nine, to forty with
-`user_session_retired_tokens` (T094), and to forty-one with `banned_identifiers` (T097).
+`user_session_retired_tokens` (T094), and to forty-one with `banned_identifiers` (T097); forty-two since ERD v1.12, with `enrollment_events` (Phase 2's T004).
 
 ---
 

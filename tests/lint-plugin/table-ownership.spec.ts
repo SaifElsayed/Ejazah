@@ -115,20 +115,22 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   admin_recovery_codes: 'adminRecoveryCode',
   // T097 (FR-155).
   banned_identifiers: 'bannedIdentifier',
+  // Phase 2's T004 (specs/003-booking/data-model.md §2.5).
+  enrollment_events: 'enrollmentEvent',
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 41 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097)', () => {
+  it('holds the ERD’s 42 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(41);
-    expect(new Set(tables).size).toBe(41);
+    expect(tables).toHaveLength(42);
+    expect(new Set(tables).size).toBe(42);
   });
 
-  it('gives 41 distinct delegates, one per table', () => {
+  it('gives 42 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(41);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(42);
   });
 });
 

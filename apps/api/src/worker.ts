@@ -29,6 +29,7 @@ const [
   admin,
   identity,
   verification,
+  payments,
   { createColumnCipher },
   { IdempotencyService },
   { IdempotencyRepository },
@@ -53,6 +54,7 @@ const [
   import('./modules/admin/index.js'),
   import('./modules/identity/index.js'),
   import('./modules/verification/index.js'),
+  import('./modules/payments/index.js'),
   import('./platform/crypto/encryption.js'),
   import('./platform/idempotency/idempotency.service.js'),
   import('./platform/idempotency/idempotency.repository.js'),
@@ -99,6 +101,7 @@ const encryptedColumns = [
   ...admin.createEncryptedColumns(database),
   ...identity.createEncryptedColumns(database),
   ...verification.createEncryptedColumns(database),
+  ...payments.createEncryptedColumns(database),
 ];
 
 // The three purge sweeps (T025, FR-107) read their windows through the settings reader and delete

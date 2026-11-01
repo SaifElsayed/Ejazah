@@ -172,6 +172,7 @@ async function newEnrollments(
         snapshotSlotTimezone: 'Africa/Cairo',
         status: 'pending_payment',
         purchasedAt: '2026-10-04T07:00:00Z',
+        quotedFirstSessionLocalDate: '2026-10-11T00:00:00Z',
       },
       select: { id: true },
     });

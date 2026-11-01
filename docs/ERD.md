@@ -1,12 +1,12 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.11 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.2 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog*
+*Version 1.12 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog*
 
 ## 0. How to read this
 
-This is the complete data model for the MVP — 41 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
+This is the complete data model for the MVP — 42 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
-> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
+> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. v1.12 adds `enrollment_events` (Phase 2's T004) and defines **42**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
 Conventions, binding on every table:
 
@@ -32,7 +32,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` · `banned_identifiers` |
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
 | CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
-| BOOKING | `booking` | `slot_holds` · `enrollments` |
+| BOOKING | `booking` | `slot_holds` · `enrollments` · `enrollment_events` |
 | PAYMENTS | `payments` | `payments` · `payment_events` |
 | SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` |
 | CHAT | `chat` | `chat_messages` |
@@ -43,7 +43,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` · `admin_sessions` · `admin_recovery_codes` |
 | PLATFORM | `platform` (kernel, not a module) | `idempotency_keys` |
 
-Forty-one tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`), and `banned_identifiers` of T097 (migration `20261026000100`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
+Forty-two tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`), `banned_identifiers` of T097 (migration `20261026000100`), and `enrollment_events` of Phase 2's T004 (migration `20261101120000`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
 
 ## 2. Identity
 
@@ -68,6 +68,8 @@ The root identity. One row per human, with exactly one role (ADR 0016).
 | account_status | enum active · suspended · verification_required · banned | |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10). Account deletion (FR-AUTH-14, ADR 0015) sets it and erases `display_name`, `email`, `phone`, `password_hash` and `date_of_birth` in the same transaction; history rows that point to the user stay |
 | created_at / updated_at | timestamptz | |
+
+The name search folds `display_name` and the typed text through one function, `ijazah_fold(text)` (IMMUTABLE, declared by migration `20261101120000`): lower case; أ, إ and آ to ا; ى and ئ to ي; ؤ to و; ة to ه; diacritics (U+064B–U+065F, U+0670) and tatweel (U+0640) removed (FR-333, `specs/003-booking/` R-203). It runs inside the kernel's query; no column holds a fold and no index is built on it (R-DB-4, R-DB-9; v1.12).
 
 `is_minor` is derived from `date_of_birth` and computed on read, never stored — it would be a cached value beyond the six the constitution permits (R-DB-4). The same applies to the former `ijazah_barred` flag: current bar state is `exists(ijazah_bars where user_id = … and lifted_at is null)`.
 
@@ -339,7 +341,7 @@ Required before Mode A granting (FR-IJAZAH-12).
 
 ## 5. Booking and sessions
 
-Two modules share this section. `booking` owns `slot_holds` and `enrollments`; `sessions` owns `sessions`, `session_participant_events` and `cancellation_requests` (ADR 0005 D2).
+Two modules share this section. `booking` owns `slot_holds`, `enrollments` and `enrollment_events`; `sessions` owns `sessions`, `session_participant_events` and `cancellation_requests` (ADR 0005 D2).
 
 ### `slot_holds`
 
@@ -376,10 +378,27 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | purchased_at | timestamptz | |
+| quoted_first_session_local_date | date | The first session's local date the checkout showed, computed at Pay; compared with session 1 to say the first session moved (FR-368, FR-386; `specs/003-booking/` R-209, v1.12). A local calendar date in the zone the row already holds, `snapshot_slot_timezone` |
 
 `sessions_remaining` is derived: `snapshot_session_count − count(sessions where status is terminal-delivered)`. Never stored.
 
 The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived — `count(sessions where status = 'teacher_no_show')` — not a stored counter. The only cached values in this model are `teacher_profiles.average_rating` and `review_count`, `sessions.scheduled_start_at` and `scheduled_end_at` (ADR 0009), and `sessions.teacher_user_id` and `student_user_id` (ADR 0010); nothing about no-shows is among them (R-DB-4).
+
+### `enrollment_events`
+
+Append-only record of each outcome a later notification needs: an enrollment confirmed, a gateway order failed, an enrollment cancelled (FR-385; `specs/003-booking/` R-216). Owned by `booking`; `payments` appends `order_failed` through booking's public entry. Added by migration `20261101120000` (v1.12).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| enrollment_id | FK → enrollments | Plain index (§14) |
+| kind | enum confirmed · order_failed · cancelled | |
+| cancellation_reason | enum `cancellation_reason`, nullable | Set exactly when `kind = 'cancelled'` (§15 rule 39) |
+| payment_id | FK → payments, nullable | The order that failed (`order_failed`) or that confirmed the enrollment (`confirmed`), so a later paid order is told apart from a replay (FR-375); set exactly for those two kinds (§15 rule 39). A reference only: `booking` never reads a `payments` row (R-API-6) |
+| occurred_at | timestamptz | The instant of the transaction that recorded the outcome |
+| created_at | timestamptz | |
+
+A row never changes, so it carries no `updated_at`; the application role may not UPDATE, DELETE or TRUNCATE it, and its foreign keys are `ON UPDATE RESTRICT` as rule 21's are (§15 rule 39).
 
 ### `sessions`
 
@@ -485,6 +504,8 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | net_piasters | bigint, nullable | Settled to the teacher; `gross − fee`, as reported, never computed here (R-MONEY-5) |
 | currency | char(3) | |
 | status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10) |
+| expires_at | timestamptz | The order's expiry as created: no later than the hold's expiry minus the grace (FR-355). Read by Retry and by FR-BOOK-12's "still payable" (v1.12) |
+| checkout_url_encrypted | bytea, nullable | The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), kept so FR-BOOK-12 (c) can offer "continue the previous payment"; NULL once the order leaves `created`. Decrypted only by `checkout.continue`, for the student who owns the order's enrollment, while the order is `created` and `expires_at` is in the future; never logged (`specs/003-booking/data-model.md` §2.4.1). Reached by the `reencrypt-columns` job through the payments repository (v1.12) |
 | created_at / updated_at | timestamptz | |
 
 ### `payment_events`
@@ -755,6 +776,7 @@ erDiagram
     packages ||--o{ enrollments : "purchased as"
     availability_slots ||--o{ enrollments : "booked on"
     enrollments ||--o{ sessions : "generates"
+    enrollments ||--o{ enrollment_events : "records outcomes"
     sessions ||--o{ session_participant_events : "evidenced by"
     sessions ||--o{ cancellation_requests : "may have"
     users ||--o{ cancellation_requests : "requests"
@@ -768,6 +790,7 @@ erDiagram
 erDiagram
     enrollments ||--o{ payments : "gateway orders"
     payments |o--o{ payment_events : "signed events"
+    payments |o--o{ enrollment_events : "confirmed or failed by"
     users ||--o| teacher_profiles : "payout readiness on"
 ```
 
@@ -865,11 +888,13 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 38. `sessions.sequence_number >= 1` — check constraint `sessions_sequence_number_positive_check` (T140).
 
+39. `enrollment_events`: `(kind = 'cancelled') = (cancellation_reason IS NOT NULL)` and `(kind IN ('order_failed', 'confirmed')) = (payment_id IS NOT NULL)` — check constraints `enrollment_events_cancellation_reason_check` and `enrollment_events_payment_check`; and no UPDATE, no DELETE and no TRUNCATE for the application role, rule 21's pattern, with its foreign keys `ON UPDATE RESTRICT` (FR-375, FR-385; Phase 2's T004, migration `20261101120000`).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 41 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 42 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -973,7 +998,7 @@ The decision is the owner's on the review of PR #84 (observation 9): research R-
 | # | Change | Migration |
 |---|---|---|
 | 1 | §2 `user_session_retired_tokens`; `user_sessions.previous_refresh_token_hash` reads for the grace window only | `20261020000000_user_session_retired_tokens` |
-| 2 | §1 counts forty tables (forty-one since v1.10, `banned_identifiers`); §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
+| 2 | §1 counts forty tables (forty-one since v1.10, `banned_identifiers`; forty-two since v1.12, `enrollment_events`); §14 lists the two new indexes; §15 rule 33 | this document pass (T094) |
 
 ## Changelog — v1.5 → v1.6 (the manual time zone kept, 2026-10-20)
 
@@ -1018,7 +1043,7 @@ A deletion freed the email and deleted the provider identities (ADR 0015 D3), so
 
 | # | Change | Migration |
 |---|---|---|
-| 1 | §2 `banned_identifiers` (`id`, `kind`, `identifier_hmac`, `created_at`), with the new enum `banned_identifier_kind` (`email · provider`); §1 lists it under identity, 41 tables | `20261026000100_banned_identifiers` |
+| 1 | §2 `banned_identifiers` (`id`, `kind`, `identifier_hmac`, `created_at`), with the new enum `banned_identifier_kind` (`email · provider`); §1 lists it under identity, 41 tables (42 since v1.12, `enrollment_events`) | `20261026000100_banned_identifiers` |
 | 2 | §15 rule 35: `identifier_hmac` unique | the same |
 
 ## Changelog — v1.10 → v1.11 (the column checks, 2026-11-01)
@@ -1031,3 +1056,16 @@ The ERD noted column limits the database did not hold, and a random refresh toke
 | 2 | §15 rule 28 gains `isnad_entries.position >= 1` | the same |
 | 3 | §15 rule 29 becomes “not empty” as well, and the database refuses an empty `audit_logs.target_label` | the same |
 | 4 | §14 `user_sessions (previous_refresh_token_hash)` | the same |
+
+## Changelog — v1.11 → v1.12 (the Phase 2 pass, 2026-11-01)
+
+Phase 2 writes the booking and payment tables for the first time, and three things it needs had no column or table: what the checkout told the student about the first session, an order's expiry and its hosted page, and the outcomes a later notification reads (`specs/003-booking/data-model.md` §2.2 to §2.5 and §6 item 2; research R-203, R-209, R-216). The name search's fold is a function, not a column: a stored fold would be a derived value R-DB-4 does not list (PR #109's review, M5; the owner's decision of 2026-11-01), and no index is built on it until a measured slow query asks for one (analysis C1, R-DB-9). The task is T004 of `specs/003-booking/tasks.md`; the count of tables rises to 42.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §5 `enrollment_events` (`id`, `enrollment_id`, `kind`, `cancellation_reason`, `payment_id`, `occurred_at`, `created_at`) with the new enum `enrollment_event_kind` (`confirmed · order_failed · cancelled`), owned by `booking`; its foreign keys `ON UPDATE RESTRICT` (T135's rule); §1 lists it under booking, 42 tables | `20261101120000_booking_pass` |
+| 2 | §15 rule 39: the two kind checks, and UPDATE, DELETE and TRUNCATE revoked from the application role | the same |
+| 3 | §5 `enrollments.quoted_first_session_local_date date NOT NULL` (R-209) | the same |
+| 4 | §7 `payments.expires_at timestamptz NOT NULL` and `payments.checkout_url_encrypted bytea`, nullable, which joins the `reencrypt-columns` job's list (`002:T134`) | the same |
+| 5 | §2 `ijazah_fold(text)`, IMMUTABLE and PARALLEL SAFE, the one fold of FR-333 on both sides of the name search; no column, no index | the same |
+| 6 | §13.2 and §13.3 draw `enrollment_events` | this document pass (T004) |

@@ -4,11 +4,13 @@
 //
 // Phase 1 (T077): the webhook route alone, which records a signed payout-recipient event and hands
 // its verdict to the identity module's entries (payments imports identity, never the reverse; R-121).
+import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import { markPayoutRejected, markPayoutVerified, payoutRefHash } from '../identity/index.js';
+import { checkoutAddresses } from './payments.repository.js';
 import { RecipientEventsService } from './recipient-events.service.js';
 import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.js';
 
@@ -37,4 +39,11 @@ export function createPaymentWebhookRoute({
     log,
     maxBodyBytes,
   });
+}
+
+/** The payments module's `_encrypted` column, for the `reencrypt-columns` job (T004, 002:T134, R-API-6). */
+export function createEncryptedColumns(
+  database: Pick<Database, 'payment'>,
+): readonly EncryptedColumn[] {
+  return [checkoutAddresses(database)];
 }

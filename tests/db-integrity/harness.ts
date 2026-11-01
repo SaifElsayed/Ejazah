@@ -340,6 +340,8 @@ export function enrollmentValues(
     snapshot_slot_timezone: 'Africa/Cairo',
     status: 'pending_payment',
     purchased_at: '2026-10-04T07:00:00Z',
+    // T004 (data-model §2.3): the first session's local date the checkout showed.
+    quoted_first_session_local_date: '2026-10-11',
   };
 }
 
