@@ -365,11 +365,13 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   short-lived values: codes already sent stop verifying, and links and
   stand-in events already signed are refused. The banned-identifier key is
   different: its hashes are stored and cannot be carried over (step 1). The
-  four `*_encrypted` columns are kept by steps 2 to 5 (T155):
+  six `*_encrypted` columns, every one in `prisma/schema`, are kept by steps 2 to 5 (T155):
   `admin_users.mfa_secret_encrypted`,
   `teacher_profiles.payout_account_ref_encrypted`,
-  `device_push_tokens.token_encrypted` and
-  `verification_documents.storage_key_encrypted`.
+  `device_push_tokens.token_encrypted`,
+  `auth_identities.provider_refresh_token_encrypted`,
+  `verification_documents.storage_key_encrypted` and
+  `payments.checkout_url_encrypted` (Phase 2's T004).
   1. **Decide about the banned identifiers before anything else (T097,
      FR-155).** `banned_identifiers` holds a banned person's email and
      provider accounts, kept after they deleted their account, as HMACs under a
