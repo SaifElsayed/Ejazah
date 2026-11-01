@@ -350,7 +350,16 @@ describe('the API client', () => {
   });
 
   it('reads the public configuration once and caches it', async () => {
-    const config = { supportEmail: 'support@ijazah.app', termsVersion: '2026-10-01' };
+    const config = {
+      supportEmail: 'support@ijazah.app',
+      termsVersion: '2026-10-01',
+      checkout: {
+        confirmationTimeoutSeconds: 15,
+        processingPollSeconds: 2,
+        confirmingPollSeconds: 30,
+        confirmingPollWindowMinutes: 10,
+      },
+    };
     const server = fakeServer(() => ok(config));
     const client = createApiClient({
       url,
@@ -365,7 +374,16 @@ describe('the API client', () => {
 
   it('does not cache a failed read of the public configuration', async () => {
     let first = true;
-    const config = { supportEmail: 'support@ijazah.app', termsVersion: '2026-10-01' };
+    const config = {
+      supportEmail: 'support@ijazah.app',
+      termsVersion: '2026-10-01',
+      checkout: {
+        confirmationTimeoutSeconds: 15,
+        processingPollSeconds: 2,
+        confirmingPollSeconds: 30,
+        confirmingPollWindowMinutes: 10,
+      },
+    };
     const server = fakeServer(() => {
       if (first) {
         first = false;
