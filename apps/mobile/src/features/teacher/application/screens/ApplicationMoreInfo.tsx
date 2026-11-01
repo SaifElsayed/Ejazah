@@ -2,7 +2,8 @@
 // its date, then what may be replaced: a new PDF for each ijazah waiting on one (all of them before
 // the resubmission), and the identity document, if the note asks for it. «إعادة إرسال الطلب» sends
 // what was replaced (`teacher.application.resubmit`), which returns the application to the queue,
-// and opens its status. T098: «حذف الحساب» at the foot, as on the status.
+// and opens its status. T098: «حذف الحساب» at the foot, as on the status. T162: the application
+// keeps its first note (T155), so each asked ijazah's own reason sits under its field.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -121,21 +122,23 @@ export function ApplicationMoreInfo() {
           <Section title={t('teacher.application.moreInfo.uploadTitle')}>
             <View style={{ gap: tokens.space['3'] }}>
               {asked.map((credential) => (
-                <PdfField
-                  key={credential.credentialId}
-                  kind="credential"
-                  file={replaced[credential.credentialId]}
-                  label={t('teacher.application.ijazahs.upload', {
-                    subject: nameOf(credential.subject),
-                  })}
-                  hint={t('common.file.pdfOnly')}
-                  replaceOnly
-                  onChange={(file) => {
-                    if (file !== undefined) {
-                      setReplaced((current) => ({ ...current, [credential.credentialId]: file }));
-                    }
-                  }}
-                />
+                <View key={credential.credentialId} style={{ gap: tokens.space['2'] }}>
+                  <PdfField
+                    kind="credential"
+                    file={replaced[credential.credentialId]}
+                    label={t('teacher.application.ijazahs.upload', {
+                      subject: nameOf(credential.subject),
+                    })}
+                    hint={t('common.file.pdfOnly')}
+                    replaceOnly
+                    onChange={(file) => {
+                      if (file !== undefined) {
+                        setReplaced((current) => ({ ...current, [credential.credentialId]: file }));
+                      }
+                    }}
+                  />
+                  {credential.note === undefined ? null : <Text>{credential.note}</Text>}
+                </View>
               ))}
               <PdfField
                 kind="identity"
