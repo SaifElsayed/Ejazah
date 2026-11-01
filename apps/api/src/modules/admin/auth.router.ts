@@ -4,12 +4,15 @@
 // `auth` by `admin.router.ts`.
 //
 // The six sign-in procedures are the surface's only anonymous ones. Each counts the subject the
-// contract names under `rate_limit_authentication`: the address in lower case after the budget for
-// a password, the SHA-256 of the session token for the second factor, of the invite token for the
-// password-set link. The throttle runs before the handler, so a refused attempt never reaches the
-// password and never counts toward the lockout (FR-172). `signOut` and `me` are the administrator
-// kind's, audited like any call: the sign-out under `admin.sign_out`, `me` as a read (`auth.read`)
-// naming the reader, which no audit list shows (owner's decision 2026-10-21).
+// contract names under `rate_limit_admin_authentication`: the address in lower case after the
+// surface's own budget for a password, the SHA-256 of the session token for the second factor, of
+// the invite token for the password-set link. Both keys are the surface's own, never the app's
+// (T133): a flood of the app's sign-in, spread over many addresses or aimed at an administrator's,
+// spends nothing an administrator's sign-in counts. The throttle runs before the handler, so a
+// refused attempt never reaches the password and never counts toward the lockout (FR-172).
+// `signOut` and `me` are the administrator kind's, audited like any call: the sign-out under
+// `admin.sign_out`, `me` as a read (`auth.read`) naming the reader, which no audit list shows
+// (owner's decision 2026-10-21).
 import {
   adminEmptyInput,
   adminMeOutput,
@@ -27,7 +30,7 @@ import {
 import { z } from 'zod';
 
 import { hashLookupToken } from '../../platform/crypto/hashing.js';
-import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
+import type { RateLimitKey } from '../../platform/guards/rate-limit.guard.js';
 import {
   adminProcedure,
   adminPublicProcedure,
@@ -35,7 +38,13 @@ import {
 } from '../../surfaces/procedures.js';
 import { normalizeAdminEmail } from './admin-auth.service.js';
 
-const { authentication, authenticationBudget } = defaultRateLimits;
+/** The surface's own per-subject limit for its six sign-in procedures (T133), a seeded setting. */
+export const ADMIN_AUTHENTICATION_RATE_LIMIT =
+  'rate_limit_admin_authentication' satisfies RateLimitKey;
+
+/** `auth.signIn`'s platform-wide budget, the surface's own (T133), a seeded setting. */
+export const ADMIN_AUTHENTICATION_BUDGET =
+  'rate_limit_admin_authentication_budget' satisfies RateLimitKey;
 
 /** The subject of the second factor's limit: the session token's hash, never the token. */
 const bySessionToken = ({ input }: { readonly input: { readonly sessionToken: string } }) =>
@@ -45,13 +54,13 @@ const setup = createAdminRouter({
   begin: adminPublicProcedure({
     input: adminMfaSetupBeginInput,
     output: adminMfaSetupBeginOutput,
-    rateLimit: { key: authentication, subjectOf: bySessionToken },
+    rateLimit: { key: ADMIN_AUTHENTICATION_RATE_LIMIT, subjectOf: bySessionToken },
   }).mutation(({ ctx, input }) => ctx.services.auth.beginSetup(input.sessionToken)),
 
   confirm: adminPublicProcedure({
     input: adminMfaSetupConfirmInput,
     output: adminRecoveryCodesOutput,
-    rateLimit: { key: authentication, subjectOf: bySessionToken },
+    rateLimit: { key: ADMIN_AUTHENTICATION_RATE_LIMIT, subjectOf: bySessionToken },
   }).mutation(({ ctx, input }) => ctx.services.auth.confirmSetup(input.sessionToken, input.code)),
 });
 
@@ -59,7 +68,7 @@ const mfa = createAdminRouter({
   verify: adminPublicProcedure({
     input: adminMfaVerifyInput,
     output: z.void(),
-    rateLimit: { key: authentication, subjectOf: bySessionToken },
+    rateLimit: { key: ADMIN_AUTHENTICATION_RATE_LIMIT, subjectOf: bySessionToken },
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.auth.verifyMfa(input.sessionToken, input.code);
   }),
@@ -67,7 +76,7 @@ const mfa = createAdminRouter({
   recover: adminPublicProcedure({
     input: adminMfaRecoverInput,
     output: adminMfaRecoverOutput,
-    rateLimit: { key: authentication, subjectOf: bySessionToken },
+    rateLimit: { key: ADMIN_AUTHENTICATION_RATE_LIMIT, subjectOf: bySessionToken },
   }).mutation(({ ctx, input }) =>
     ctx.services.auth.recover(input.sessionToken, input.recoveryCode),
   ),
@@ -80,8 +89,8 @@ export const authRouter = createAdminRouter({
     input: adminSignInInput,
     output: adminSignInOutput,
     rateLimit: {
-      key: authentication,
-      budget: authenticationBudget,
+      key: ADMIN_AUTHENTICATION_RATE_LIMIT,
+      budget: ADMIN_AUTHENTICATION_BUDGET,
       subjectOf: ({ input }) => normalizeAdminEmail(input.email),
     },
   }).mutation(({ ctx, input }) => ctx.services.auth.signIn(input.email, input.password)),
@@ -92,7 +101,7 @@ export const authRouter = createAdminRouter({
     input: adminSetPasswordInput,
     output: z.void(),
     rateLimit: {
-      key: authentication,
+      key: ADMIN_AUTHENTICATION_RATE_LIMIT,
       subjectOf: ({ input }) => hashLookupToken(input.inviteToken),
     },
   }).mutation(async ({ ctx, input }) => {

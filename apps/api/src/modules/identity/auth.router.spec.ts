@@ -53,11 +53,11 @@ describe('the namespace', () => {
 });
 
 describe('auth.providerNonce', () => {
-  it('counts the authentication budget, then the client address, and mints a nonce', async () => {
+  it('counts its own budget (T133), then the client address, and mints a nonce', async () => {
     const answer = await surface.anonymous().auth.providerNonce({});
     expect(answer).toEqual({ nonce: expect.any(String), expiresAt: '2026-10-20T08:10:00Z' });
     expect(surface.counts()).toEqual([
-      ['rate_limit_authentication_budget', '*'],
+      ['rate_limit_provider_nonce_budget', '*'],
       ['rate_limit_provider_nonce', SPEC_CLIENT],
     ]);
   });

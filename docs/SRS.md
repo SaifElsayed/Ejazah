@@ -565,6 +565,9 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | Search rate limit (per subject, per window) *(2026-10-10, T103)* | 60 per 60 s | NFR-SEC-10 |
 | Payment initiation rate limit (per subject, per window) *(2026-10-10, T103)* | 10 per 600 s | NFR-SEC-10 |
 | Authentication budget (platform-wide, per window) *(T170)* | 1000 per 900 s | NFR-SEC-10, ADR 0011 D3 |
+| Admin authentication rate limit (per subject, per window) *(T133)* | 10 per 900 s | NFR-SEC-10, FR-ADMIN-1 |
+| Admin authentication budget (platform-wide, per window) *(T133)* | 1000 per 900 s | NFR-SEC-10, FR-ADMIN-1 |
+| Provider nonce budget (platform-wide, per window) *(T133)* | 1000 per 900 s | NFR-SEC-10, FR-AUTH-1 |
 | One-time code budget (platform-wide, per window) *(T170)* | 300 per 3600 s | NFR-SEC-10, ADR 0011 D3 |
 | One-time code validity (minutes) *(Phase 1)* | 10 | FR-AUTH-1, FR-AUTH-6 |
 | One-time code attempts before it is void (count) *(Phase 1)* | 5 | FR-AUTH-1, FR-AUTH-6 |

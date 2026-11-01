@@ -3,7 +3,8 @@
 // An empty database of this file's own is migrated and seeded as the application role. The seed
 // plants five subjects in both languages, the settings of SRS §3.14 with their defaults plus the
 // four rate-limit rows (owner's decision 2026-10-10, shared with T103) and the two budget rows
-// (T170), the twenty-six Phase 1 rows of specs/002-identity/data-model.md §4 (T002), and one
+// (T170), the twenty-six Phase 1 rows of specs/002-identity/data-model.md §4 (T002), the three rows
+// that give the administrator's sign-in and the provider nonce limits of their own (T133), and one
 // administrator, each with a fixed identifier and a fixed instant; every other table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
@@ -86,6 +87,11 @@ const SETTINGS: Record<string, unknown> = {
   // T093: how long an upload waits for its submission, and how many unsubmitted ones a person holds.
   document_unreferenced_purge_after_hours: 72,
   document_unreferenced_max_per_user: 30,
+  // T133: the administrator's sign-in and the provider nonce stop sharing the app's sign-in limits,
+  // each at the value the shared key holds.
+  rate_limit_admin_authentication: { limit: 10, window_seconds: 900 },
+  rate_limit_admin_authentication_budget: { limit: 1000, window_seconds: 900 },
+  rate_limit_provider_nonce_budget: { limit: 1000, window_seconds: 900 },
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -212,6 +218,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '47', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '50', admins: '1' }]);
   });
 });
