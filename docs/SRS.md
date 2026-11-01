@@ -591,9 +591,14 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | Upload rate limit (requests per window) *(Phase 1)* | 20 per 600 s | NFR-SEC-10 |
 | Token refresh rate limit (per token, per window) *(Phase 1)* | 30 per 60 s | NFR-SEC-10 |
 | Provider nonce rate limit (per client address, per window) *(Phase 1)* | 20 per 60 s | NFR-SEC-10 |
+| First session lead after confirmation (hours) *(Phase 2)* | 24 | FR-BOOK-4; FR-368, FR-386 (003-booking) |
+| Checkout Processing status read interval (seconds) *(Phase 2)* | 2 | FR-PAYG-18; FR-383 (003-booking) |
+| Checkout Confirming status read interval (seconds) *(Phase 2)* | 30 | FR-PAYG-18; FR-383 (003-booking) |
+| Checkout Confirming read window from release (minutes) *(Phase 2)* | 10 | FR-PAYG-18; FR-383, FR-384 (003-booking) |
+| Discovery page size (teachers) *(Phase 2)* | 20 | FR-DISC-1, FR-DISC-2; FR-332 to FR-335 (003-booking) |
 | Currency                                    | EGP             | §2.5                           |
 
-Operational settings *(Phase 1)*, seeded with the table above and adjustable the same way, but read by the sweeps and the session service rather than by a person's decision: one-time code purge after 24 hours; expired session purge after 30 days; refresh-token reuse grace of 30 seconds; stale push token purge after 90 days. Every key is seeded by `prisma/seed.ts` at its default (`specs/002-identity/data-model.md` §4).
+Operational settings *(Phase 1)*, seeded with the table above and adjustable the same way, but read by the sweeps and the session service rather than by a person's decision: one-time code purge after 24 hours; expired session purge after 30 days; refresh-token reuse grace of 30 seconds; stale push token purge after 90 days. Every key is seeded by `prisma/seed.ts` at its default (`specs/002-identity/data-model.md` §4; `specs/003-booking/data-model.md` §4 for the *(Phase 2)* rows).
 
 Rule/action settings (not numeric): teacher application decision; teacher status override; dispute resolution override; gender declaration correction; review moderation; ijazah revocation and barring; ID-verification requirement *(v1.3)*.
 
@@ -694,11 +699,11 @@ Both mobile experiences share one codebase; an account sees its one role's navig
 
 ## 6. Data Model
 
-Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.11 — 41 tables.
+Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.12 — 42 tables.
 
 ### 6.1 Entities
 
-User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdentifier, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, VerificationDocument, VerificationRequest, Subject, TeacherSubject, TeacherCredential, Package, AvailabilitySlot, IsnadEntry, TeacherSignature, SlotHold, Enrollment, Payment, PaymentEvent, Session, SessionRemedy, SessionParticipantEvent, CancellationRequest, ChatMessage, IjazahRequest, Ijazah, IjazahBar, Review, Dispute, GenderFlag, UserReport, Notification, AdminUser, AdminSession, AdminRecoveryCode, AuditLog, Setting, IdempotencyKey (platform kernel, ADR 0008). *(v1.3 removed Wallet, LedgerEntry, PayoutDestination, WithdrawalRequest; v1.4 adds Payment and PaymentEvent as gateway records, not balances.)*
+User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdentifier, TeacherProfile, OtpCode, DevicePushToken, TermsAcceptance, VerificationDocument, VerificationRequest, Subject, TeacherSubject, TeacherCredential, Package, AvailabilitySlot, IsnadEntry, TeacherSignature, SlotHold, Enrollment, EnrollmentEvent, Payment, PaymentEvent, Session, SessionRemedy, SessionParticipantEvent, CancellationRequest, ChatMessage, IjazahRequest, Ijazah, IjazahBar, Review, Dispute, GenderFlag, UserReport, Notification, AdminUser, AdminSession, AdminRecoveryCode, AuditLog, Setting, IdempotencyKey (platform kernel, ADR 0008). *(v1.3 removed Wallet, LedgerEntry, PayoutDestination, WithdrawalRequest; v1.4 adds Payment and PaymentEvent as gateway records, not balances.)*
 
 ### 6.2 Key Entity Detail
 
@@ -714,13 +719,13 @@ User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdenti
 
 **SlotHold** — id, slot_id, student_user_id, enrollment_id (nullable, set when the Enrollment is created), expires_at, released_at. Enforces FR-BOOK-9 and FR-BOOK-12 *(ADR 0010)*.
 
-**Enrollment** — id, student_user_id, teacher_user_id, package_id, slot_id, snapshot fields: snapshot_price_piasters, snapshot_session_count, snapshot_duration_minutes, snapshot_subject_id, snapshot_track (ADR 0018); status (Pending-Payment / Confirmed / Completed / Terminated-No-Show / Cancelled), confirmed_at (set by the confirm-enrollment step on the gateway's paid event, FR-PAYG-5), cancellation_reason, purchased_at *(v1.4)*. `sessions_remaining` and the teacher no-show count are derived, never stored *(v1.3)*.
+**Enrollment** — id, student_user_id, teacher_user_id, package_id, slot_id, snapshot fields: snapshot_price_piasters, snapshot_session_count, snapshot_duration_minutes, snapshot_subject_id, snapshot_track (ADR 0018); status (Pending-Payment / Confirmed / Completed / Terminated-No-Show / Cancelled), confirmed_at (set by the confirm-enrollment step on the gateway's paid event, FR-PAYG-5), cancellation_reason, purchased_at *(v1.4)*, quoted_first_session_local_date (the first session's local date quoted at checkout) *(Phase 2)*. `sessions_remaining` and the teacher no-show count are derived, never stored *(v1.3)*.
 
 **Session** — id, enrollment_id, teacher_user_id and student_user_id (cached from the Enrollment, ADR 0010), sequence_number, makeup_for_session_id (nullable, ADR 0018), scheduled_date_local, scheduled_start_time_local, timezone (the schedule, ADR 0009), scheduled_start_at and scheduled_end_at (cached, derived from the schedule), simultaneous_connected_seconds, status (Scheduled / Done / Student-No-Show / Teacher-No-Show / Both-No-Show / Under-Threshold / Provider-Outage / Cancelled-By-Agreement / Cancelled-By-Admin / Disputed), evaluated_at *(v1.3)*. There is deliberately no Cancelled-By-Student status: a Student cannot cancel unilaterally (§3.8.1, FR-CANCEL-1 and FR-CANCEL-3), and a Student who abandons a session resolves as Student-No-Show under FR-NOSHOW-1. There is likewise no persisted camera rule, because camera is optional for both parties in every permitted pairing (§3.7.2). This status set is the one enumerated by the `sessions.status` enum in ERD.md.
 
 **SessionParticipantEvent** — id, session_id, user_id, event_type (joined / left), occurred_at, provider_event_id (unique — idempotency). This is the raw evidence for §3.7.5 and every dispute.
 
-**Payment** — id, enrollment_id, gateway, gateway_order_id (unique), gateway_transaction_id (unique, nullable), gross_piasters, gateway_fee_piasters, net_piasters, currency, status (Created / Paid / Failed / Expired / Refunded), created_at, updated_at. One row per gateway order; a record of what the gateway did, never a balance (FR-PAYG-7).
+**Payment** — id, enrollment_id, gateway, gateway_order_id (unique), gateway_transaction_id (unique, nullable), gross_piasters, gateway_fee_piasters, net_piasters, currency, status (Created / Paid / Failed / Expired / Refunded), expires_at (the gateway order's expiry) *(Phase 2)*, checkout_url_encrypted (the hosted checkout's address, encrypted) *(Phase 2)*, created_at, updated_at. One row per gateway order; a record of what the gateway did, never a balance (FR-PAYG-7).
 
 **PaymentEvent** — id, payment_id, provider_event_id (unique — replay safety, FR-PAYG-4), event_type, signature_verified_at, payload_hash, received_at. Append-only record of every signed gateway event.
 

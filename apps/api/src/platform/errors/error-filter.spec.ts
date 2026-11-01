@@ -179,6 +179,28 @@ describe('the Phase 1 codes (T018; specs/002-identity/contracts/README.md "Error
   });
 });
 
+describe('the Phase 2 codes (T003; specs/003-booking/contracts/README.md "Errors")', () => {
+  it.each([
+    ['NOT_BOOKABLE', 409],
+    ['ACCOUNT_NOT_ACTIVE', 403],
+    ['SLOT_TAKEN', 409],
+    ['PREVIOUS_CHECKOUT', 409],
+    ['HOLD_EXPIRED', 409],
+    ['ORDER_NOT_PAYABLE', 409],
+    ['SUBJECT_NOT_APPROVED', 403],
+    ['SLOT_OVERLAP', 409],
+    ['SLOT_IN_USE', 409],
+    ['PACKAGE_FROZEN', 409],
+  ] as const)('%s is a stable code with one message, answered %i', (code, status) => {
+    const mapped = mapError(new DomainError(code));
+    expect(mapped.status).toBe(status);
+    expect(mapped.body).toEqual({ code, message: errorCodes[code].message });
+    expect(mapped.unexpected).toBe(false);
+    expectOneShape(mapped.body);
+    expectNoInternals(mapped.body);
+  });
+});
+
 describe('a forbidden profile is indistinguishable from an absent one (T094, R-GENDER-2)', () => {
   it('answers 404 with the very body an absent profile gets, never 403', () => {
     const forbidden = mapError(new ForbiddenProfileError());

@@ -4,8 +4,9 @@
 // plants five subjects in both languages, the settings of SRS §3.14 with their defaults plus the
 // four rate-limit rows (owner's decision 2026-10-10, shared with T103) and the two budget rows
 // (T170), the twenty-six Phase 1 rows of specs/002-identity/data-model.md §4 (T002), the three rows
-// that give the administrator's sign-in and the provider nonce limits of their own (T133), and one
-// administrator, each with a fixed identifier and a fixed instant; every other table stays empty.
+// that give the administrator's sign-in and the provider nonce limits of their own (T133), the five
+// Phase 2 rows of specs/003-booking/data-model.md §4 (T002), and one administrator, each with a
+// fixed identifier and a fixed instant; every other table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
 // it stores the Argon2id hash of a random one it discards at once (T069) and a random MFA secret
@@ -93,6 +94,12 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_admin_authentication: { limit: 10, window_seconds: 900 },
   rate_limit_admin_authentication_budget: { limit: 1000, window_seconds: 900 },
   rate_limit_provider_nonce_budget: { limit: 1000, window_seconds: 900 },
+  // Phase 2 (T002): data-model.md §4 of specs/003-booking, in its order.
+  first_session_lead_hours: 24,
+  checkout_processing_poll_seconds: 2,
+  checkout_confirming_poll_seconds: 30,
+  checkout_confirming_poll_window_minutes: 10,
+  discovery_page_size: 20,
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -191,8 +198,8 @@ describe('the seed (T074)', () => {
           AND table_name <> '_prisma_migrations'`,
     );
     const others = rows.map((row) => row.table_name).filter((name) => !SEEDED_TABLES.has(name));
-    // 41 tables (T003, T094, T097) less the three seeded ones.
-    expect(others).toHaveLength(38);
+    // 42 tables (T003, T094, T097, Phase 2's T004) less the three seeded ones.
+    expect(others).toHaveLength(39);
     for (const table of others) {
       const { rows: present } = await db.query(
         `SELECT 1 FROM ${pg.escapeIdentifier(table)} LIMIT 1`,
@@ -219,6 +226,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '50', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '55', admins: '1' }]);
   });
 });

@@ -238,6 +238,16 @@ enum CancellationReason {
   @@map("cancellation_reason")
 }
 
+// Phase 2 (T004, specs/003-booking/data-model.md §2.5, R-216): the outcome an `enrollment_events`
+// row records for a later notification (FR-385).
+enum EnrollmentEventKind {
+  confirmed
+  order_failed
+  cancelled
+
+  @@map("enrollment_event_kind")
+}
+
 // Phase 1 (T012, ADR 0018 D1): every package has a track, and the enrollment keeps it in its
 // snapshot (DEC-24). An ijazah can be requested only from the ijazah track (FR-IJAZAH-1).
 enum PackageTrack {
