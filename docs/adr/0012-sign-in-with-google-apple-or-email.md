@@ -118,11 +118,15 @@ decision when a sender ID is registered and its cost is accepted.
 - **ERD.** `auth_identities (user_id, provider google·apple, provider_subject,
   created_at)`, unique on (provider, provider_subject), joins the ERD amendments
   that open the Phase 1 cycle (PLAN.md), with a forward migration. No Phase 0
-  migration changes; the `users` columns stay NOT NULL because the row is written
-  when onboarding completes (D4). `otp_codes.destination` holds an email address in MVP; the
+  migration changes; `users.gender` and `users.timezone` stay NOT NULL because
+  the row is written when onboarding completes (D4), while `display_name` and
+  `date_of_birth` became nullable in the Phase 1 ERD pass so that account
+  deletion can erase them, ERD §15 rule 32 holding them and `email` on every
+  live row. `otp_codes.destination` holds an email address in MVP; the
   `login` purpose is unused, because email accounts sign in with their password.
 - **Architecture.** An email port (`email.port.ts`, a provider adapter, a
-  stand-in) is built in Phase 1; the ports become six. The transactional sender
+  stand-in) is built in Phase 1; the ports become six, and seven with the
+  sign-in port of the Phase 1 ports contract (ARCHITECTURE §3.4). The transactional sender
   is chosen at launch, with the sending domain authenticated (SPF, DKIM, DMARC).
 - **Mobile.** The Auth frames change: welcome with the three sign-in buttons,
   email sign-in, email sign-up, email code, password reset, then the two
