@@ -46,7 +46,10 @@ export class MemoryStores implements VerificationStores {
   readonly documents = new Map<string, { userId: string; sizeBytes: number | null }>();
   /** Every write a call made, by kind, so a refusal can be shown to have written nothing. */
   readonly writes: string[] = [];
-  /** Each lock, each read of the application and each of its credentials, in order (T161). */
+  /**
+   * Each lock (`lock-account:<id>` the account's, T142; `lock:<id>` the application's, T161), each
+   * read of the application and each of its credentials, in order.
+   */
   readonly journal: string[] = [];
 
   run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
@@ -114,6 +117,10 @@ export class MemoryStores implements VerificationStores {
     const profile = this.profiles.get(userId);
     if (profile === undefined) throw new Error(`no profile for ${userId}`);
     return profile;
+  }
+
+  async lockAccount(_tx: Transaction, userId: string): Promise<void> {
+    this.journal.push(`lock-account:${userId}`);
   }
 
   async lockApplication(_tx: Transaction, userId: string): Promise<void> {
