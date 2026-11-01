@@ -46,6 +46,8 @@ module.exports = {
   moduleNameMapper: {
     '^lucide-react-native$': require.resolve('lucide-react-native', { paths: [__dirname] }),
   },
+  // T138: the native modules every spec needs mocked (NetInfo).
+  setupFiles: ['<rootDir>/jest.setup.js'],
   testMatch: ['<rootDir>/src/**/*.spec.ts?(x)'],
   transformIgnorePatterns: [
     `node_modules/(?!(?:\\.pnpm/[^/]+/node_modules/)?(${transpiled.join('|')}))`,

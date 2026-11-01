@@ -17,9 +17,9 @@
       },
       "sheet": {
         "cancel": "Cancel",
-        "confirmApple": "Confirm with Apple and delete the account",
-        "confirmEmail": "Confirm with your password and delete the account",
-        "confirmGoogle": "Confirm with Google and delete the account",
+        "confirmApple": "Delete with Apple",
+        "confirmEmail": "Delete with password",
+        "confirmGoogle": "Delete with Google",
         "text": "Your upcoming sessions are cancelled, and the account cannot be restored.",
         "title": "Delete your account permanently?",
         "passwordFailed": "The password is incorrect.",
@@ -1339,9 +1339,9 @@
       "keptRecords": "Payment and session records without your personal data",
       "keptTitle": "What stays",
       "sheet": {
-        "confirmApple": "Confirm with Apple and delete the account",
-        "confirmEmail": "Confirm with your password and delete the account",
-        "confirmGoogle": "Confirm with Google and delete the account",
+        "confirmApple": "Delete with Apple",
+        "confirmEmail": "Delete with password",
+        "confirmGoogle": "Delete with Google",
         "text": "Your students' upcoming sessions are cancelled, and the account cannot be restored.",
         "title": "Delete your account permanently?"
       },

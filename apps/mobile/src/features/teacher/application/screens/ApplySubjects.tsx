@@ -17,8 +17,8 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useSubjectName, useSubjects } from '../../../../lib/subjects';
-import { AccountFailed } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
+import { NotLoaded } from '../../../shared/states';
 import { StepsHeader } from '../components/StepsHeader';
 import { updateApplication, useApplicationDraft } from '../draft';
 
@@ -61,11 +61,11 @@ export function ApplySubjects() {
         hint={t('teacher.application.subjects.subjectsHint')}
       >
         {subjects.data === undefined ? (
-          subjects.isError ? (
-            <AccountFailed onRetry={() => void subjects.refetch()} />
-          ) : (
-            <Skeleton shape="block" />
-          )
+          <NotLoaded
+            failed={subjects.isError}
+            onRetry={() => void subjects.refetch()}
+            loading={<Skeleton shape="block" />}
+          />
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.space['2'] }}>
             {subjects.data.map((subject) => (

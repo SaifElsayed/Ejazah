@@ -26,14 +26,9 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
-import {
-  AccountFailed,
-  AccountLoading,
-  AccountSettings,
-  initialsOf,
-  SignOutSheet,
-} from '../../../shared/account';
+import { AccountLoading, AccountSettings, initialsOf, SignOutSheet } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
+import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useCredentials } from '../../credentials';
 import { PAYOUT_ROUTE, usePayout } from '../../payout';
 import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../navigation';
@@ -90,13 +85,19 @@ export function TeacherAccount() {
       }
     >
       {account === undefined ? (
-        me.isError ? (
-          <AccountFailed onRetry={() => void me.refetch()} />
-        ) : (
-          <AccountLoading />
-        )
+        <NotLoaded
+          failed={me.isError}
+          onRetry={() => void me.refetch()}
+          loading={<AccountLoading />}
+        />
       ) : (
         <>
+          <OfflineNotice
+            onRetry={() => {
+              void me.refetch();
+              void credentials.refetch();
+            }}
+          />
           <Card variant="row">
             <Avatar
               initials={initialsOf(account.displayName)}

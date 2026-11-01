@@ -951,7 +951,11 @@
       },
       "auth.email.requestSignUpCode": {
         "caller": "public",
-        "input": { "$": { "type": "object" }, "$.email": { "required": true, "type": "string" } },
+        "input": {
+          "$": { "type": "object" },
+          "$.email": { "required": true, "type": "string" },
+          "$.password": { "type": "string" }
+        },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },

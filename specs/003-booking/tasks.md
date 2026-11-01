@@ -30,7 +30,7 @@ The three applications of Phase 0 (plan.md, "Source Code"): `apps/mobile/src/` (
 
 | Task | What | Timing (its own line) | Batch | What here waits for it |
 |---|---|---|---|---|
-| 002:T123 | Arabic templates made only of values read right to left on Android | Phase 2's first batch, before any Phase 2 screen | B20 | every screen task; FR-414 |
+| 002:T123 | Arabic templates made only of values read right to left on Android | Phase 2's first batch, before any Phase 2 screen | B20; its device check in B26 (the owner's decision of 2026-11-01: no screen renders one of its keys before then) | every screen task; FR-414 |
 | 002:T126 | An identity request and a reinstatement never cross; the row lock | Phase 2's first batch; before booking relies on `verification_required` | B20 | T005, T033, T036 |
 | 002:T129 | The input guard's refusal carries no cause | Phase 2's first batch; before Phase 2 code logs a cause | B20 | every API task |
 | 002:T133 | One flood never locks the other surface's sign-in | Phase 2's first batch | B20 | — |
@@ -42,17 +42,19 @@ The three applications of Phase 0 (plan.md, "Source Code"): `apps/mobile/src/` (
 | 002:T140 | The database refuses what the ERD forbids (as amended 2026-10-31: price > 0, lengths 30/45/60) | Phase 2's first batch | B21 | T004 (rules 36–38 are its own), T018, T019 |
 | 002:T160 | The deletion sheet's confirm button reads whole in English | Phase 2's first batch | B21 | — |
 | 002:T162 | The applicant reads each asked credential's reason | Phase 2's first batch | B21 | — |
+| 002:T164 | The application's other decisions lock first | before B25 | B22 | T018 (the application's states) |
+| 002:T124 | No spec writes to a database unless a variable says so | B22 (the owner's decision of 2026-11-01) | B22 | every spec that writes to a database; until it lands, specs run only on `ijazah_integrity` |
 | 002:T139 | The documents match the schema and the modules | Phase 2's first batch | B22 | T055 (Phase 2's own document pass builds on it) |
-| 002:T141 | `modules/payments` joins the coverage floor | Phase 2's first batch | B22 | T054 |
 | 002:T161 | A resubmission and a credential's document request never cross | before Phase 2 relies on the application's states | B22 | T018 (`teacherProcedure({ admits: 'approved' })`) |
 | 002:T142 | A credential's approval never crosses a revocation; a banned teacher cannot reapply | before discovery reads `teacher_subjects` | B22 | T018, T025 |
-| 002:T145 | A profile photo loses its metadata before others see it | before a teacher's photo is shown to students | B22 | T027, T030 |
 | 002:T146 | The phone's calls time out | before checkout relies on the phone's calls | B22 | T045, T046 |
+| 002:T145 | A profile photo loses its metadata before others see it | before a teacher's photo is shown to students | B27, first (the owner's decision of 2026-11-01) | T027, T030 |
+| 002:T141 | `modules/payments` joins the coverage floor | B31 (the owner's decision of 2026-11-01: T124 needs B22's place) | B31, after T047 to T051; tests added there if the floor is not met | T054 |
 | 002:T143 | The visibility predicate leaves out a restricted teacher | before the code that reads the predicate | B23, as T010 | T025 to T028, T032, T033 |
 | 002:T158 | A teacher can change the display name | with Phase 2's teacher profile screens | B26, beside T023 | — |
 | 002:T144 | Every suspension and ban goes through `StandingService` | before the first Phase 2 code that suspends or bans | none in this phase | No code of this phase suspends or bans (R-222); plan.md names it; it stays open for Phase 3's plan |
 
-The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; T160 and T162 two), split over B20, B21 and B22 with T123, T126 and T129 in the first.
+The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; T160 and T162 two), split over B20, B21 and B22 with T123, T126 and T129 in the first. T141 then moved to B31 and T145 to B27, so that T164 and T124 take their places in B22 (the owner's decision of 2026-11-01); the first three batches land thirteen of the fourteen, T123's device check waiting for B26's first screen that renders one of its keys (the owner's decision of 2026-11-01).
 
 ---
 
@@ -72,6 +74,7 @@ The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; 
 
 - [ ] T004 The Phase 2 pass migration (data-model.md §2.2 to §2.5, §6 item 2), forward-only, after `002:T140`'s: `ijazah_fold(text)` IMMUTABLE PARALLEL SAFE, no new column on `users` (the fold runs inside the kernel query, PR #109's review M5; no index, analysis C1), `enrollments.quoted_first_session_local_date date NOT NULL`, `payments.expires_at` and `payments.checkout_url_encrypted bytea`, enum `enrollment_event_kind` and table `enrollment_events` with its two checks and UPDATE, DELETE and TRUNCATE revoked from the application role (rule 39), its foreign keys as `002:T135` sets append-only ones; in `prisma/schema.prisma`, `prisma/migrations/`; `enrollment_events` → booking in `packages/config/module-tables.json` with `tests/lint-plugin/table-ownership.spec.ts`, `tests/seed/seed.spec.ts` and `tests/seed/migrate-from-empty.spec.ts` counted in the same task; `checkout_url_encrypted` joins `reencrypt-columns`' list (`002:T134`); probes in `tests/db-integrity/` for rule 39 and for every fold equivalence of FR-333 (SC-314's data); `docs/ERD.md` v1.11 changelog and §15 rule 39
 - [ ] T005 [P] Kernel locks in `apps/api/src/platform/db/row-lock.ts`: widen `lockRows`' closed table union (created by `002:T126`) to `enrollments` and `availability_slots`, and add `lockKey(tx, scope, id)` over `pg_advisory_xact_lock(hashtext(scope), hashtext(id))` with the closed scope `'teacher-slots'`; specs that two callers serialise and that the lock ends at commit and rollback (contracts/kernel.md, R-206)
+  > **Note under T005 (PR #110's review, follow-up 2, 2026-11-01).** `lockRows` takes `FOR UPDATE` (`002:T126`), which also makes a concurrent insert of a row that references a locked one wait (its foreign-key check takes `FOR KEY SHARE`); whether the lock, widened here to `enrollments` and `availability_slots`, takes `FOR NO KEY UPDATE` instead is decided when B24 runs (the owner's decision of 2026-11-01).
 - [ ] T006 [P] `apps/api/src/platform/db/deferred-constraints.ts` (`withDeferredSessionConstraints(tx)`) and `apps/api/src/platform/db/db-errors.ts` (`isUniqueViolation(error, constraint)`, `isExclusionViolation(error, constraint)`), with database specs that each names exactly `slot_holds_slot_id_active_key`, `slot_holds_student_user_id_active_key` and the two session exclusions and rethrows anything else (contracts/kernel.md, R-210, R-215)
 - [ ] T007 [P] `packages/time`: `firstOccurrenceAfter(slot, instant, leadHours)`, the requested local date and start on `Occurrence`, `weeklyIntervalsOverlap(a, b)` on the 10 080-minute week circle (a slot may cross midnight; Saturday wraps to Sunday), and `secondsUntil(instant, now)` in `packages/time/src/calendar.ts`; example specs with Cairo's 2026 and 2027 changes and the Friday 00:30 gap (R-209, R-206, R-217, R-TIME-1)
 - [ ] T008 [P] `packages/time` properties with `fast-check` over every zone the city list offers: generation equals `resolveOccurrences`' declared resolution, local fields keep what was asked, instants strictly increase, and `weeklyIntervalsOverlap` is symmetric and agrees with a minute-by-minute check (R-211, SC-303)
@@ -174,6 +177,7 @@ The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; 
 **Independent Test**: After US3's purchases, every order with its reported figures, the `slot_unavailable` order's link, no control that writes (spec.md, US5; quickstart.md §5).
 
 - [ ] T052 [US5] The monitor's procedures: contracts in `packages/contracts/src/admin/payments.ts`; `payments.list` (status filter, search by order reference or student name, newest first, keyset pages of `admin_list_page_size`) and `payments.get` (amounts as reported, references, the enrollment's package and progress through booking's entry, events as a timeline) in `apps/api/src/modules/payments/payments-admin.router.ts` on the admin router; each call writes its `payments.listed` or `payments.viewed` audit entry and nothing else; `AdminSurfaceServices` gains `payments`; a spec that no monitor procedure writes beyond its audit entry (R-220, FR-400 to FR-402)
+  > **Note under T052 (2026-11-01).** If the payments screen (T053) puts values inside sentences, `002:T153` (the admin `t()` isolates every value it places in a sentence) is done with it (the owner's decision of 2026-11-01).
 - [ ] T053 [P] [US5] `/payments` in the panel: `apps/admin/src/pages/payments/` (`DataTable`, `Toolbar`, `FilterChips`, `Pager`, `Split`, `Timeline`, a dash where not paid), the `AdminNav` entry, behind the second factor as every admin page; specs (FR-400, FR-402, `AdminPayments`)
 
 **Checkpoint**: the monitor shows every order; nothing on it writes.
@@ -199,7 +203,7 @@ The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; 
 
 ## Dependencies and Execution Order
 
-- **Carried from Phase 1** (B20 to B22) before anything else of this phase; `002:T143` is written as T010 in B23.
+- **Carried from Phase 1** (B20 to B22) before anything else of this phase; `002:T143` is written as T010 in B23, `002:T145` first in B27 and `002:T141` in B31 (the owner's decision of 2026-11-01).
 - **Setup** (T001 to T003) and **Foundational** (T004 to T015) before the stories; T004 after `002:T140`, T005 after `002:T126`.
 - **US1** before **US2** on data (discovery needs packages and slots), though US2's API can be specified on seeded rows; **US3** needs US2's offerable slots (T026) and US1's port (T020); **US4** needs US3's confirmation; **US5** needs US3's orders.
 - Within a story: contracts, then the API with its specs, then the screens.
@@ -213,23 +217,24 @@ Independent tasks of one batch run as parallel lanes, the shared files (`main.ts
 
 ## Batches
 
-At most six tasks each, in this order; one pull request each, reviewed by Saif's review session.
+At most six tasks each, in this order; one pull request each, reviewed by Saif's review session. The days are the phase's working days 12 to 19 (the owner's decision of 2026-11-01); inside a batch the tasks run in the order listed where one needs another.
 
-| Batch | Tasks | What |
-|---|---|---|
-| B20 | 002:T123, 002:T126, 002:T129, 002:T133, 002:T134, 002:T135 | First wave: the marks, the locks, the cause, the sign-in budgets, key rotation, append-only keys |
-| B21 | 002:T136, 002:T137, 002:T138, 002:T140, 002:T160, 002:T162 | First wave: the phone's follow-ups and the column checks |
-| B22 | 002:T139, 002:T141, 002:T161, 002:T142, 002:T145, 002:T146 | The first wave's last two, and the four that must precede this phase's code |
-| B23 | T001, T002, T003, T004, T010, T011 | Setup, the schema pass, the predicate (`002:T143`), the adversarial harness |
-| B24 | T005, T006, T007, T008, T009, T012 | Locks, database refusals, time, money, the stand-in's page |
-| B25 | T013, T016, T017, T020, T018, T019 | The harness; US1's API (T020's port first: T018 and T019 call it, analysis L2) |
-| B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing; US1's screens |
-| B27 | T024, T025, T026, T027, T028 | US2's API and its adversarial cases |
-| B28 | T029, T030, T031, T032, T034, T035 | US2's screens; US3's contracts, booking sheet read, generation, the case |
-| B29 | T033, T036, T037, T038, T039, T040 | US3's core: holds, checkout, the address, order events, confirmation, expiry |
-| B30 | T041, T042, T043, T044, T045, T046 | US3's terminations, proofs and screens |
-| B31 | T047, T048, T049, T050, T051 | US4 |
-| B32 | T052, T053, T054, T055, T056, T057 | US5, the gates, the documents, the gateway (if answered), the close |
+| Day | Batch | Tasks | What |
+|---|---|---|---|
+| D12 Sun 11/1 | B20 | 002:T123, 002:T126, 002:T129, 002:T133, 002:T134, 002:T135 | First wave: the marks, the locks, the cause, the sign-in budgets, key rotation, append-only keys |
+| D12 Sun 11/1 | B21 | 002:T136, 002:T137, 002:T138, 002:T140, 002:T160, 002:T162 | First wave: the phone's follow-ups and the column checks; `002:T123`'s device check moved to B26 (the owner's decision of 2026-11-01) |
+| D13 Mon 11/2 | B22 | 002:T164, 002:T124, 002:T139, 002:T161, 002:T142, 002:T146 | The first wave's documents; the database guard for specs; the four that must precede this phase's code |
+| D13 Mon 11/2 | B23 | T001, T002, T003, T004, T010, T011 | Setup, the schema pass, the predicate (`002:T143`), the adversarial harness |
+| D14 Tue 11/3 | B24 | T005, T006, T007, T008, T009, T012 | Locks, database refusals, time, money, the stand-in's page |
+| D14 Tue 11/3 | B25 | T020, T013, T016, T017, T018, T019 | US1's port first (T018 and T019 call it, analysis L2); the harness; US1's API |
+| D15 Wed 11/4 | B26 | T014, T015, T021, T022, T023, 002:T158 | The phone's primitives and plumbing (T014 and T015 before the screens); US1's screens; `002:T123`'s device check on the first of them that renders one of its 37 keys, and in the Arabic device run the offline banner in Arabic too (`002:T138`, held by its spec alone) and, with an email account, `002:T160`'s Arabic email and Apple labels on the deletion sheet (the owner's decisions of 2026-11-01) |
+| D16 Thu 11/5 | B27 | 002:T145, T024, T025, T026, T027, T028 | The photo's metadata first (T027 shows the photo); US2's API and its adversarial cases |
+| D16 Thu 11/5 | B28 | T029, T030, T031, T032, T034, T035 | US2's screens; US3's contracts, booking sheet read, generation, the case |
+| D17 Sun 11/8 | B29 | T033, T036, T037, T038, T039, T040 | US3's core: holds, checkout, the address, order events, confirmation, expiry |
+| D18 Mon 11/9 | B30 | T041, T042, T043, T044, T045, T046 | US3's terminations, proofs and screens |
+| D18 Mon 11/9 | B31 | T047, T048, T049, T050, T051, 002:T141 | US4; `modules/payments` joins the coverage floor, with tests here if it falls short |
+| D19 Tue 11/10 | B32 | T052, T053, T054, T055, T056, T057 | US5, the gates, the documents, the gateway (if answered), the close; the same day, the phone run, the phase's close and Phase 3's Spec Kit cycle (specify, clarify, plan, tasks, analyze), which reviews the row below for Phase 3 |
+| — | Not scheduled | 002:T117, T118, T119, T120, T125, T127, T130, T131, T153, T154, T157, T159, T165, T166, T167, T168, T169; T058, T060 | Reviewed at Phase 3's Spec Kit cycle on D19. Timed elsewhere: `002:T144` Phase 3; `002:T147` to `002:T152` Phase 6; T059 Phase 3's first batch; T056 in B32 if the gateway answers |
 
 ## Implementation Strategy
 

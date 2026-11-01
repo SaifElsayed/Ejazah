@@ -23,9 +23,9 @@ import { useT } from '../../../../i18n';
 import { useApi } from '../../../../lib/api';
 import { pickPdf } from '../../../../lib/files';
 import { useSubjectName } from '../../../../lib/subjects';
-import { AccountFailed } from '../../../shared/account';
 import { useFileSize } from '../../../shared/documents';
 import { StackScreen } from '../../../shared/screen';
+import { NotLoaded } from '../../../shared/states';
 import { useCredentialActions, useCredentials } from '../api';
 import { useCredentialDate } from './TeacherCredentials';
 
@@ -83,11 +83,11 @@ export function CredentialNeedsDocument() {
       }
     >
       {credential === undefined ? (
-        credentials.isError ? (
-          <AccountFailed onRetry={() => void credentials.refetch()} />
-        ) : (
-          <Skeleton shape="block" />
-        )
+        <NotLoaded
+          failed={credentials.isError}
+          onRetry={() => void credentials.refetch()}
+          loading={<Skeleton shape="block" />}
+        />
       ) : (
         <View style={{ gap: tokens.space['5'] }}>
           <Card variant="warning">

@@ -33,7 +33,7 @@ export class MoneyError extends Error {
  * Whether a plain number is a piaster amount: a non-negative safe integer.
  *
  * Non-negative because the only money the model holds is a price, its snapshot, and the gateway's
- * gross, fee and net — none of which is ever a debt (ERD §7: `price_piasters` ≥ 0). There is no
+ * gross, fee and net — none of which is ever a debt (ERD §15 rule 36: `price_piasters` > 0). There is no
  * balance to go negative, by construction (ADR 0007).
  *
  * `Number.isSafeInteger` is the whole integer test in one call: it refuses NaN, both infinities,

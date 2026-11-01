@@ -21,8 +21,9 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useMe } from '../../../../lib/account';
-import { AccountFailed, AccountLoading } from '../../account';
+import { AccountLoading } from '../../account';
 import { StackScreen } from '../../screen';
+import { NotLoaded } from '../../states';
 import { confirmationOf, type DeletionConfirmation } from '../api';
 
 export interface DeletionCopy {
@@ -76,11 +77,11 @@ export function DeletionScreen({
       }
     >
       {account === undefined ? (
-        me.isError ? (
-          <AccountFailed onRetry={() => void me.refetch()} />
-        ) : (
-          <AccountLoading />
-        )
+        <NotLoaded
+          failed={me.isError}
+          onRetry={() => void me.refetch()}
+          loading={<AccountLoading />}
+        />
       ) : (
         <>
           <Banner icon={{ name: 'triangle-alert' }} tone="warning">

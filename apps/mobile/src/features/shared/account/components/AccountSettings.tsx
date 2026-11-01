@@ -1,7 +1,8 @@
 // T052 (FR-AUTH-5, FR-LOC-3, FR-AUTH-10, FR-GENDER-5, FR-AUTH-11): the settings both account tabs
 // draw alike (StudentAccount and TeacherAccount, lists 1 and 2): the language, switched in place;
 // the zone as its city, «من الجهاز» while it is the device's own; the sign-in method; the gender,
-// read only; the Terms. Also the two states of a tab that reads `account.me`: loading and failed.
+// read only; the Terms. Also the loading shapes of a tab that reads `account.me` (T138: its failed
+// and offline states are the shared ones, `features/shared/states`).
 // T084: a role may lead the first list with its own row (the student's «الملف الشخصي»).
 import type { MeOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
@@ -9,15 +10,7 @@ import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
-import {
-  Banner,
-  Button,
-  Icon,
-  List,
-  ListRow,
-  Segmented,
-  Skeleton,
-} from '../../../../design/primitives';
+import { Icon, List, ListRow, Segmented, Skeleton } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { type Locale, type MessageKey, useLocale, useT } from '../../../../i18n';
 import { deviceTimeZone } from '../../../../lib/time-zone';
@@ -94,19 +87,6 @@ export function AccountLoading() {
       <Skeleton shape="title" width="1/2" />
       <Skeleton shape="block" />
       <Skeleton shape="block" />
-    </View>
-  );
-}
-
-/** The tab when `account.me` failed: the generic danger banner and a retry. */
-export function AccountFailed({ onRetry }: { readonly onRetry: () => void }) {
-  const t = useT();
-  return (
-    <View style={{ gap: tokens.space['3'] }}>
-      <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('common.state.loadError')}
-      </Banner>
-      <Button label={t('common.action.retry')} variant="secondary" onPress={onRetry} />
     </View>
   );
 }

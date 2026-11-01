@@ -37,7 +37,8 @@ import { type MessageKey, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useApi } from '../../../../lib/api';
 import { StackScreen } from '../../screen';
-import { AccountFailed, AccountLoading } from './AccountSettings';
+import { NotLoaded } from '../../states';
+import { AccountLoading } from './AccountSettings';
 import { SignOutSheet } from './SignOutSheet';
 
 interface RestrictedText {
@@ -91,7 +92,13 @@ const TEACHER: RestrictedText = {
 export function Restricted() {
   const me = useMe();
   if (me.data === undefined) {
-    return me.isError ? <AccountFailed onRetry={() => void me.refetch()} /> : <AccountLoading />;
+    return (
+      <NotLoaded
+        failed={me.isError}
+        onRetry={() => void me.refetch()}
+        loading={<AccountLoading />}
+      />
+    );
   }
   return me.data.role === 'teacher' ? (
     <TeacherRestricted account={me.data} />

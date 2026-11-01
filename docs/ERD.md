@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.10 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog*
+*Version 1.11 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog*
 
 ## 0. How to read this
 
@@ -110,7 +110,7 @@ A device's session: its refresh token as a hash, rotation, revocation (FR-AUTH-7
 | id | uuid | PK |
 | user_id | FK → users | Plain index, as every foreign key (§14); it serves "revoke every session of the user" |
 | refresh_token_hash | text, unique | SHA-256 lookup hash of the current refresh token (R-DB-7; §15 rule 25) |
-| previous_refresh_token_hash | text, nullable | The hash the last rotation retired, read for the grace window; every retired hash is also kept in `user_session_retired_tokens` (reuse detection) |
+| previous_refresh_token_hash | text, nullable | The hash the last rotation retired, read for the grace window; every retired hash is also kept in `user_session_retired_tokens` (reuse detection). Plain index (§14, T140) |
 | device_label | text, nullable | What the device reported of itself; shown nowhere in Phase 1 |
 | issued_at | timestamptz | |
 | refreshed_at | timestamptz, nullable | The last rotation |
@@ -273,9 +273,9 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | id | uuid | PK |
 | teacher_user_id | FK → users | |
 | subject_id | FK → subjects | FK, not enum |
-| session_count | int | > 0 |
-| session_duration_minutes | int | Must equal slot duration at booking (FR-PROFILE-8) |
-| price_piasters | bigint | ≥ 0. Charged in full through the gateway at checkout; the gateway settles the net to the teacher (FR-PAYG-1) |
+| session_count | int | ≥ 1 (§15 rule 36) |
+| session_duration_minutes | int | 30, 45 or 60 (FR-PROFILE-2, §15 rule 36). Must equal slot duration at booking (FR-PROFILE-8) |
+| price_piasters | bigint | > 0 (§15 rule 36). Charged in full through the gateway at checkout; the gateway settles the net to the teacher (FR-PAYG-1) |
 | currency | char(3), default 'EGP' | |
 | is_active | boolean | Deactivation never touches existing enrollments (FR-PROFILE-3) |
 | track | enum recitation · ijazah_track | The teacher's choice at creation (ADR 0018 D1; Phase 1 pass, migration `20261018000300`, default `recitation` since no row existed). An ijazah can be requested only from the ijazah track (FR-IJAZAH-1) |
@@ -290,9 +290,9 @@ Recurring weekly, local wall-clock + zone (Architecture §9).
 |---|---|---|
 | id | uuid | PK |
 | teacher_user_id | FK → users | |
-| day_of_week | smallint | 0–6, 0 = Sunday (Postgres `EXTRACT(DOW)`) |
+| day_of_week | smallint | 0–6, 0 = Sunday (Postgres `EXTRACT(DOW)`; §15 rule 37) |
 | start_time_local | time | Local concept — never store UTC here |
-| duration_minutes | int | |
+| duration_minutes | int | 30, 45 or 60 (FR-PROFILE-4, §15 rule 37) |
 | timezone | text (IANA) | The teacher's zone at creation |
 | is_active | boolean | Deactivation never affects generated sessions (FR-PROFILE-9) |
 
@@ -324,7 +324,7 @@ Chain of transmission — one generation per row under a credential (FR-ISNAD-1�
 |---|---|---|
 | id | uuid | PK |
 | credential_id | FK → teacher_credentials | |
-| position | int ≥ 1 | Origin first, counting toward the teacher; unique (credential_id, position) — §15 rule 7, as re-keyed |
+| position | int ≥ 1 | Origin first, counting toward the teacher; unique (credential_id, position) — §15 rule 7, as re-keyed; ≥ 1 by check (§15 rule 28) |
 | names | text[] | One generation holding one or more names (ADR 0004 D3), Arabic as typed; never empty (check constraint) |
 | created_by_admin_id | FK → admin_users | |
 | created_at / updated_at | timestamptz | |
@@ -391,7 +391,7 @@ One scheduled occurrence. Its local date, local start time and zone are the sche
 | enrollment_id | FK → enrollments | |
 | teacher_user_id | FK → users | Cached exception #3 (ADR 0010 D2, R-DB-4): copied from the enrollment at generation, never changed. Lets §15.19 refuse overlapping sessions for one teacher |
 | student_user_id | FK → users | Cached with it: copied from the enrollment at generation, never changed. Lets §15.19 refuse overlapping sessions for one student |
-| sequence_number | int ≥ 1 | unique (enrollment_id, sequence_number) |
+| sequence_number | int ≥ 1 | unique (enrollment_id, sequence_number); ≥ 1 by check (§15 rule 38) |
 | scheduled_date_local | date | The calendar date the occurrence was requested for. With the next two columns, the session's schedule and the source of truth; stores what was asked for, never where a DST gap moved it (ADR 0009 D1) |
 | scheduled_start_time_local | time | The start time the teacher chose, as requested (the slot's `start_time_local`) |
 | timezone | text (IANA) | Zone of the local fields (the enrollment's `snapshot_slot_timezone`) |
@@ -686,7 +686,7 @@ Every admin action (FR-ADMIN-17). Append-only.
 | admin_id | FK → admin_users | |
 | action | text | Stable machine string |
 | target_type / target_id | text / text | Polymorphic reference: a row's uuid, or a settings key, since settings are keyed by text and every settings change is audited (FR-ADMIN-17, ADR 0011 D5) |
-| target_label | text | Non-personal label of the target at write time: kind word and identifier or public number, at most 200 characters, never a name (ADR 0021 D2, forward migration) |
+| target_label | text | Non-personal label of the target at write time: kind word and identifier or public number, never empty and at most 200 characters, never a name (ADR 0021 D2, forward migration; §15 rule 29) |
 | reason | text, nullable | Mandatory for destructive actions |
 | before / after | jsonb, nullable | State snapshot |
 | occurred_at | timestamptz | Never edited, never deleted. Strictly append-only — no `deleted_at`, no removal path at all (§15.10) |
@@ -804,6 +804,7 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | `sessions` GiST exclusion `(student_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions for one student (§15.19); the reservation check against the student's sessions |
 | `notifications (user_id, read_at)` | Notification centre badge |
 | `user_sessions (refresh_token_hash)` unique | Session resolution on every authenticated request (§15.25; Phase 1 pass) |
+| `user_sessions (previous_refresh_token_hash)` | The grace window’s lookup by the hash the last rotation retired; without it a presented token that matches no current hash scans the table (T140, T047’s and T094’s notes) |
 | `user_sessions (user_id)` | The foreign key's plain index; "revoke every session of the user" (Phase 1 pass; the partial index on live rows was not kept, R-DB-9) |
 | `user_session_retired_tokens (token_hash)` unique | A retired refresh token presented again names its session (§15.33; Phase 1, T094) |
 | `user_session_retired_tokens (session_id)` | The foreign key's plain index; the cascade from a purged session (Phase 1, T094) |
@@ -839,15 +840,15 @@ Rules that must hold even if application code is buggy — so they live in the s
 18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time; a new checkout ends the student's own unexpired hold first, at once when no order on it is still payable (`created`) and otherwise only once the gateway has cancelled that order (FR-BOOK-12, ADR 0010 D6).
 19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a system termination (FR-NOSHOW-4, FR-SESS-16, FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run with `SET CONSTRAINTS … DEFERRED` (raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another session of the same teacher or the same student that these constraints count, restores them to their previous instants and reports them to error tracking (FR-051) for an operator, so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010).
 20. `payment_events`: `payment_id IS NULL` exactly when `event_type` is `recipient_verified` or `recipient_rejected` — check constraint. An order event always names its gateway order; a payout-recipient event never does (FR-PAYG-4, FR-PAYG-15, PR #39).
-21. `audit_logs`, `payment_events`, `session_participant_events`: no UPDATE, no DELETE and no TRUNCATE, revoked at the Postgres role level. Each row records something that happened: an administrator's action, a gateway's signed event, a provider's attendance evidence. It is written once and never rewritten, which restores for these tables the guarantee retired rule 6 gave the ledger. Rule 10 already revokes DELETE on `audit_logs`; this rule adds UPDATE and TRUNCATE there, and all three on the two event tables (PR #39).
+21. `audit_logs`, `payment_events`, `session_participant_events`: no UPDATE, no DELETE and no TRUNCATE, revoked at the Postgres role level. Each row records something that happened: an administrator's action, a gateway's signed event, a provider's attendance evidence. It is written once and never rewritten, which restores for these tables the guarantee retired rule 6 gave the ledger. Rule 10 already revokes DELETE on `audit_logs`; this rule adds UPDATE and TRUNCATE there, and all three on the two event tables (PR #39). Their foreign keys are `ON UPDATE RESTRICT`, so an update of a referenced key is refused rather than cascaded into these rows (T135, migration `20261101050220_append_only_foreign_keys_restrict`, 2026-11-01).
 22. `auth_identities (provider, provider_subject)` unique — one provider account is one platform account (ADR 0012 D2; Phase 1 pass).
 23. `teacher_credentials (teacher_user_id, subject_id)` unique `WHERE status = 'approved'` — one approved credential per teacher and subject; a rejected one stays as history (ADR 0017 D5; Phase 1 pass).
 24. `user_roles (user_id)` unique — one role row per user in the MVP (ADR 0016 D3; Phase 1 pass).
 25. `user_sessions.refresh_token_hash` and `admin_sessions.token_hash` unique — a presented token names one session (Phase 1 pass).
 26. `idempotency_keys (scope, actor_id, key)` unique with `actor_id` NOT NULL — replaces rule 16's `(scope, key)`; lands with the kernel batch of Phase 1 (B4), beside the service that writes the actor.
 27. `teacher_profiles.payout_account_ref_hash` unique where present — one recipient reference routes to one teacher (Phase 1 pass).
-28. `isnad_entries (credential_id, position)` unique — rule 7 as re-keyed by ADR 0017; and `names` is never null or empty (Phase 1 pass).
-29. `audit_logs.target_label` NOT NULL and at most 200 characters — lands with the kernel batch of Phase 1 (B4), beside the writer that renders the label (ADR 0021 D2).
+28. `isnad_entries (credential_id, position)` unique — rule 7 as re-keyed by ADR 0017; and `names` is never null or empty (Phase 1 pass); and `position >= 1` — check constraint `isnad_entries_position_positive_check`, the origin first (T140).
+29. `audit_logs.target_label` NOT NULL, not empty and at most 200 characters — NOT NULL and the bound landed with the kernel batch of Phase 1 (B4), beside the writer that renders the label (ADR 0021 D2); not empty is check constraint `audit_logs_target_label_not_empty_check` (T140), so the database refuses an empty label the writer already refuses.
 30. `admin_users`: `locked_until_at IS NULL OR failed_sign_in_count > 0` — check constraint, so a lock never exists without the count that caused it (ADR 0019 D3; Phase 1 pass).
 31. `admin_users`: `is_active = (disabled_at IS NULL)` — check constraint, so the flag cannot drift from its source (Phase 1 pass).
 32. `users`: `deleted_at IS NOT NULL OR (display_name IS NOT NULL AND date_of_birth IS NOT NULL AND email IS NOT NULL)` — check constraint: a live row keeps its NOT NULL columns, a deleted row may have them erased (FR-141; Phase 1 pass). The five credential tables (`auth_identities`, `user_sessions`, `admin_sessions`, `admin_recovery_codes`, `otp_codes`) keep DELETE for the application role: each is a credential or a key, not a record of something that happened. `teacher_credentials` and `session_remedies` keep it too by the default privileges, as every table without `deleted_at` that is not append-only does (`isnad_entries` is the precedent).
@@ -857,6 +858,12 @@ Rules that must hold even if application code is buggy — so they live in the s
 34. `verification_documents`: `storage_key_encrypted IS NOT NULL OR erased_at IS NOT NULL` — check constraint `verification_documents_erased_key_check`: a document loses its key only once it is erased, so a stored identity document never goes missing unseen (ADR 0015 D3; B16, T082).
 
 35. `banned_identifiers.identifier_hmac` unique — a kept identifier is one row, so a deletion written twice keeps one (FR-155; T097).
+
+36. `packages`: `session_count >= 1`, `price_piasters > 0` and `session_duration_minutes IN (30, 45, 60)` — check constraints `packages_session_count_positive_check`, `packages_price_positive_check` and `packages_session_duration_allowed_check` (FR-PROFILE-2 as amended 2026-10-31; T140).
+
+37. `availability_slots`: `day_of_week BETWEEN 0 AND 6` and `duration_minutes IN (30, 45, 60)` — check constraints `availability_slots_day_of_week_range_check` and `availability_slots_duration_allowed_check` (FR-PROFILE-4 as amended 2026-10-31; T140).
+
+38. `sessions.sequence_number >= 1` — check constraint `sessions_sequence_number_positive_check` (T140).
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
@@ -1013,3 +1020,14 @@ A deletion freed the email and deleted the provider identities (ADR 0015 D3), so
 |---|---|---|
 | 1 | §2 `banned_identifiers` (`id`, `kind`, `identifier_hmac`, `created_at`), with the new enum `banned_identifier_kind` (`email · provider`); §1 lists it under identity, 41 tables | `20261026000100_banned_identifiers` |
 | 2 | §15 rule 35: `identifier_hmac` unique | the same |
+
+## Changelog — v1.10 → v1.11 (the column checks, 2026-11-01)
+
+The ERD noted column limits the database did not hold, and a random refresh token presented for the grace window scanned `user_sessions` (the full review of 2026-10-24 on ecb0388, W15 and W16; T047’s and T094’s notes). The owner decided on 2026-10-29 that the checks land in Phase 2’s first batch, since Phase 2 writes those tables first, and on 2026-10-31 that a package’s price is above zero and a package’s or a slot’s length is 30, 45 or 60 minutes (SRS FR-PROFILE-2 and FR-PROFILE-4 as amended; `specs/003-booking/data-model.md` §2.1 and §5). The task is T140 of `specs/002-identity/tasks.md`; the count of tables is unchanged.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §15 rules 36 to 38: the checks on `packages`, `availability_slots` and `sessions.sequence_number`; §4 and §5 cite them | `20261101083800_column_checks` |
+| 2 | §15 rule 28 gains `isnad_entries.position >= 1` | the same |
+| 3 | §15 rule 29 becomes “not empty” as well, and the database refuses an empty `audit_logs.target_label` | the same |
+| 4 | §14 `user_sessions (previous_refresh_token_hash)` | the same |

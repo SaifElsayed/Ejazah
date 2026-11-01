@@ -13,14 +13,9 @@ import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
-import {
-  AccountFailed,
-  AccountLoading,
-  AccountSettings,
-  initialsOf,
-  SignOutSheet,
-} from '../../../shared/account';
+import { AccountLoading, AccountSettings, initialsOf, SignOutSheet } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
+import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { DELETE_ACCOUNT_ROUTE, PROFILE_EDITOR_ROUTE } from '../navigation';
 
 export function StudentAccount() {
@@ -32,13 +27,14 @@ export function StudentAccount() {
   return (
     <TabScreen header={<AppHeader title={t('account.title')} />}>
       {account === undefined ? (
-        me.isError ? (
-          <AccountFailed onRetry={() => void me.refetch()} />
-        ) : (
-          <AccountLoading />
-        )
+        <NotLoaded
+          failed={me.isError}
+          onRetry={() => void me.refetch()}
+          loading={<AccountLoading />}
+        />
       ) : (
         <>
+          <OfflineNotice onRetry={() => void me.refetch()} />
           <Card variant="row">
             <Avatar
               initials={initialsOf(account.displayName)}

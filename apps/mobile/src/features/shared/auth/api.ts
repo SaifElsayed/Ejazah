@@ -34,6 +34,15 @@ const METHODS: ReadonlySet<string> = new Set<SignInMethod>(['google', 'apple', '
 /** The signed-out banned state (T097). */
 export const BANNED_ROUTE = '/(auth)/banned';
 
+/** What EmailSignUp is told when the onboarding leads a breached password back to it (T137). */
+export const PASSWORD_WEAK_PROBLEM = 'password_weak';
+
+/** The way back to the sign-up password field from the onboarding's last step (T137). */
+export const PASSWORD_WEAK_ROUTE = {
+  pathname: '/(auth)/email-sign-up',
+  params: { problem: PASSWORD_WEAK_PROBLEM },
+} as const;
+
 /** True when a sign-up was refused as a banned person's (T097); the refusal carries no detail. */
 export function isBannedRefusal(error: unknown): boolean {
   return errorCodeOf(error) === 'ACCOUNT_RESTRICTED';
@@ -103,8 +112,11 @@ export function useAuthApi() {
         await beginSession(sessions, await api.auth.email.signIn.mutate({ email, password }));
       },
 
-      async requestSignUpCode(email: string): Promise<void> {
-        await api.auth.email.requestSignUpCode.mutate({ email });
+      /** With the chosen password, the server refuses a breached one before any code (T137). */
+      async requestSignUpCode(email: string, password?: string): Promise<void> {
+        await api.auth.email.requestSignUpCode.mutate(
+          password === undefined ? { email } : { email, password },
+        );
       },
 
       /** The code proves the address; the account is created at the end of the onboarding. */

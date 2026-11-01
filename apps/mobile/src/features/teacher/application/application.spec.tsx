@@ -14,7 +14,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 
-import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
+import {
+  inBothDirections,
+  nodesOf,
+  renderIn,
+  unmarked,
+} from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
 import { formatFullDate, formatNumber } from '../../../lib/formatters';
@@ -103,6 +108,12 @@ const withQueries = (ui: () => ReactElement) => () => (
 );
 
 const pdf = (name: string, sizeBytes = 2_516_582) => ({ uri: `file:///${name}`, name, sizeBytes });
+
+/** The rendered text, unmarked, in the order it is drawn (T162: a reason sits with its field). */
+const textsOf = (rendered: Parameters<typeof nodesOf>[0]) =>
+  nodesOf(rendered).flatMap(({ children }) =>
+    (children ?? []).flatMap((child) => (typeof child === 'string' ? [unmarked(child)] : [])),
+  );
 
 beforeEach(() => {
   mockApi = fakeApi();
@@ -598,6 +609,44 @@ describe('ApplicationMoreInfo (FR-152)', () => {
       }),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/application/status'));
+  });
+
+  // T162: the application keeps its first note (T155), so each asked ijazah carries its own reason.
+  it('shows each asked credential’s reason with its field, and keeps it once replaced', async () => {
+    const hifz = { ...waiting, note: 'الصفحة الثانية ناقصة' };
+    const tajweed = {
+      ...waiting,
+      credentialId: '0193a6f0-0000-7000-8000-0000000000c3',
+      subject: TAJWEED,
+      note: 'الختم غير ظاهر',
+    };
+    mockApi.api.teacher.credentials.list.query.mockResolvedValue([hifz, tajweed]);
+    const label = (direction: 'rtl' | 'ltr', subject: typeof QURAN) =>
+      unmarked(
+        said(direction, 'teacher.application.ijazahs.upload', {
+          subject: direction === 'rtl' ? subject.nameAr : subject.nameEn,
+        }),
+      );
+    await inBothDirections(
+      withQueries(() => <ApplicationMoreInfo />),
+      async (rendered, direction) => {
+        await screen.findByText('نحتاج نسخة أوضح من إجازة الحفظ');
+        const texts = textsOf(rendered);
+        const at = (text: string) => texts.indexOf(text);
+        expect(at(label(direction, QURAN))).toBeGreaterThan(-1);
+        expect(at(hifz.note)).toBeGreaterThan(at(label(direction, QURAN)));
+        expect(at(label(direction, TAJWEED))).toBeGreaterThan(at(hifz.note));
+        expect(at(tajweed.note)).toBeGreaterThan(at(label(direction, TAJWEED)));
+      },
+    );
+    mockPick.mockResolvedValue(pdf('hifz-clear.pdf'));
+    await renderIn('rtl', withQueries(() => <ApplicationMoreInfo />)());
+    await fireEvent.press(
+      await screen.findByText(ar('teacher.application.ijazahs.upload', { subject: QURAN.nameAr })),
+    );
+    await screen.findByText('hifz-clear.pdf');
+    expect(screen.getByText(hifz.note)).toBeTruthy();
+    expect(screen.getByText(tajweed.note)).toBeTruthy();
   });
 });
 

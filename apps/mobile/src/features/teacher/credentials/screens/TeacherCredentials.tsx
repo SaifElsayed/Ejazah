@@ -9,8 +9,8 @@ import { Banner, Button, NavHeader, Skeleton } from '../../../../design/primitiv
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
-import { AccountFailed } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
+import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useCredentialActions, useCredentials } from '../api';
 import { CredentialCard } from '../components/CredentialCard';
 
@@ -48,13 +48,14 @@ export function TeacherCredentials() {
       }
     >
       {credentials.data === undefined ? (
-        credentials.isError ? (
-          <AccountFailed onRetry={() => void credentials.refetch()} />
-        ) : (
-          <Skeleton shape="block" />
-        )
+        <NotLoaded
+          failed={credentials.isError}
+          onRetry={() => void credentials.refetch()}
+          loading={<Skeleton shape="block" />}
+        />
       ) : (
         <>
+          <OfflineNotice onRetry={() => void credentials.refetch()} />
           {credentials.data.map((credential) => (
             <CredentialCard
               key={credential.credentialId}

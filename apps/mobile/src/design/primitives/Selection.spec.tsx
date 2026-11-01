@@ -185,7 +185,38 @@ describe('Picker', () => {
     );
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  // T137: past the list's height the options scroll, so none is reached only through the search.
+  it('scrolls the options below the search, and a tap with the keyboard open still chooses', async () => {
+    const subjects = Array.from({ length: 8 }, (_, index) => ({
+      value: `subject-${index + 1}`,
+      label: `مادة ${index + 1}`,
+    }));
+    const onChange = jest.fn();
+    await inBothDirections(
+      () => <Picker options={subjects} onChange={onChange} searchPlaceholder="ابحث" />,
+      async () => {
+        const scroller = scrollerOf(screen.getByRole('radio', { name: /مادة 8/ }));
+        expect(scroller).not.toBeNull();
+        expect(styleOf(scroller ?? { props: {} })['maxHeight']).toBe(tokens.size['media-preview']);
+        expect(scroller?.props['keyboardShouldPersistTaps']).toBe('handled');
+        expect(scrollerOf(screen.getByPlaceholderText('ابحث'))).toBeNull();
+        await fireEvent.press(screen.getByRole('radio', { name: /مادة 8/ }));
+      },
+    );
+    expect(onChange).toHaveBeenCalledWith('subject-8');
+  });
 });
+
+type Instance = ReturnType<typeof screen.getByText>;
+
+/** The nearest scroll view holding `node`, or null when none does. */
+function scrollerOf(node: Instance): Instance | null {
+  for (let at: Instance | null = node; at !== null; at = at.parent) {
+    if (at.type === 'RCTScrollView') return at;
+  }
+  return null;
+}
 
 describe('Select', () => {
   it('shows the value, or the placeholder in the subtle colour, and opens on press', async () => {

@@ -38,6 +38,7 @@ jest.mock('expo-router', () => ({
     push: (route: unknown) => mockNavigate(route),
     replace: (route: unknown) => mockNavigate(route),
     back: () => mockNavigate('back'),
+    dismissTo: (route: unknown) => mockNavigate(route),
   },
   Redirect: ({ href }: { href: string }) => {
     mockNavigate(href);
@@ -368,6 +369,31 @@ describe('OnboardProfile', () => {
     expect(getSession()).toEqual({ kind: 'signed-out' });
     expect(mockApi.sessions.current()).toBeNull();
     // The token and the password go with the draft.
+    expect(getDraft()).toBeNull();
+  });
+
+  // T137 (the owner's decision of 2026-11-01): the sign-up step checks the password, so this guard
+  // should never refuse; if it does, the person goes back to the field that can act on it.
+  it('leads a password refused as breached back to the sign-up field, forgetting the draft', async () => {
+    startAs('email');
+    updateDraft({ role: 'student' });
+    mockApi.api.onboarding.complete.mutate.mockRejectedValue(apiError('PASSWORD_WEAK'));
+    await renderIn('rtl', <OnboardProfile />);
+    await fillProfile();
+    await fireEvent.press(screen.getByRole('checkbox'));
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    await waitFor(() =>
+      expect(mockNavigate.mock.calls[0]).toEqual([
+        { pathname: '/(auth)/email-sign-up', params: { problem: 'password_weak' } },
+      ]),
+    );
+    expect(screen.queryByText(ar('auth.password.weak'))).toBeNull();
+    expect(getSession()).toEqual({ kind: 'signed-out' });
+    expect(mockApi.sessions.current()).toBeNull();
+    // The token and the refused password go with the draft.
     expect(getDraft()).toBeNull();
   });
 

@@ -6,7 +6,8 @@
 // «متابعة» opens the confirmation sheet, whose confirm creates the account. T097 (FR-155): a creation
 // refused as a banned person's (`ACCOUNT_RESTRICTED`) forgets the draft and lands on the signed-out
 // banned state. T109: the date of birth is picked in the app's own sheet (`BirthDateSheet`), since
-// Android's picker takes no locale.
+// Android's picker takes no locale. T137: the sign-up step checks the password first; a creation
+// still refused as `PASSWORD_WEAK` forgets the draft and leads back to that step's password field.
 import { displayName as displayNameSchema, emailAddress, type Gender } from '@ijazah/contracts';
 import { calendarDateOfPicked } from '@ijazah/time/calendar';
 import { cityOf } from '@ijazah/time/cities';
@@ -35,7 +36,12 @@ import { isolate, useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
 import { useFormatters } from '../../../../lib/formatters';
 import { deviceTimeZone } from '../../../../lib/time-zone';
-import { BANNED_ROUTE, conflictMethodOf, isBannedRefusal } from '../../auth/api';
+import {
+  BANNED_ROUTE,
+  conflictMethodOf,
+  isBannedRefusal,
+  PASSWORD_WEAK_ROUTE,
+} from '../../auth/api';
 import {
   type SignInConflict,
   SignInConflictSheet,
@@ -119,8 +125,12 @@ export function OnboardProfile() {
         // The token lapsed or was spent: the sign-in starts again.
         clearDraft();
         router.replace('/(auth)/welcome');
+      } else if (code === 'PASSWORD_WEAK') {
+        // This screen has no password field; the sign-up step's does. Away first, as for a ban.
+        router.dismissTo(PASSWORD_WEAK_ROUTE);
+        clearDraft();
       } else {
-        setError(t(code === 'PASSWORD_WEAK' ? 'auth.password.weak' : 'common.state.actionError'));
+        setError(t('common.state.actionError'));
       }
     } finally {
       setBusy(false);

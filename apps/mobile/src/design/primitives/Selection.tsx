@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { useTheme } from '../theme';
 import { InputGroup } from './Forms';
@@ -353,7 +353,13 @@ export function Picker<Value extends string = string>({
           surface
         />
       )}
-      <View style={{ gap: space['2'], maxHeight: size['media-preview'] }}>
+      {/* T137: the options scroll past the list's height; a tap with the search's keyboard open
+          chooses rather than only closing the keyboard. */}
+      <ScrollView
+        style={{ maxHeight: size['media-preview'] }}
+        contentContainerStyle={{ gap: space['2'] }}
+        keyboardShouldPersistTaps="handled"
+      >
         {shown.map((option) => (
           <ChoiceRow
             key={option.value}
@@ -372,7 +378,7 @@ export function Picker<Value extends string = string>({
             }
           />
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
