@@ -44,7 +44,7 @@ with its cause (PLAN.md, "Extending a phase", "When a phase slips anyway").
 
 **Carried from Phase 1.** `specs/002-identity/tasks.md` holds follow-ups whose
 time is this phase (PLAN.md, Phase 2, the owner's decisions of 2026-10-29):
-T123, T126, T129, T133 to T140, T160 and T162 land in Phase 2's first three batches (B20 to B22, the owner's decision of 2026-11-01), and T141 in B31 (the owner's decision of 2026-11-01: T124 needs B22's place);
+T123, T126, T129, T133 to T140, T160 and T162 land in Phase 2's first three batches (B20 to B22, the owner's decision of 2026-11-01), and T141 in B31 (the owner's decision of 2026-11-01: T124 needs B22's place), and T123's device check in B26, the first batch with a screen that renders one of its keys (the owner's decision of 2026-11-01);
 T142 before discovery reads `teacher_subjects`; T143 before the code that reads
 the visibility predicate; T145 before a teacher's photo is shown to a student;
 T146 before checkout relies on the phone's calls; T161 before this phase relies
