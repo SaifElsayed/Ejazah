@@ -34,7 +34,10 @@ export class MemoryRequestStore implements IdentityRequestStore {
   readonly accounts = new Map<string, AccountStatus>();
   readonly #requests: Held[] = [];
   readonly #documents = new Map<string, string>();
-  /** Each lock and each read of the account and its open request, in order (T126). */
+  /**
+   * Each lock and each read of the account and its open request, in order (T126); each read of a
+   * request by its id and each close of one (T164).
+   */
   readonly journal: string[] = [];
 
   /** A live person; the id. */
@@ -95,6 +98,7 @@ export class MemoryRequestStore implements IdentityRequestStore {
   }
 
   async readRequest(_tx: Transaction, requestId: string): Promise<IdentityRequestRecord | null> {
+    this.journal.push(`read-request:${requestId}`);
     const held = this.#requests.find((request) => request.id === requestId);
     return held === undefined ? null : recordOf(held);
   }
@@ -132,6 +136,7 @@ export class MemoryRequestStore implements IdentityRequestStore {
   }
 
   async resolve(_tx: Transaction, requestId: string, at: Date): Promise<boolean> {
+    this.journal.push(`resolve:${requestId}`);
     const held = this.#requests.find((request) => request.id === requestId);
     if (held?.status !== 'open' || held.documentId === null) return false;
     Object.assign(held, { status: 'satisfied', resolvedAt: at });
@@ -142,6 +147,7 @@ export class MemoryRequestStore implements IdentityRequestStore {
     tx: Transaction,
     replacement: { requestId: string; adminId: string; note: string; at: Date },
   ): Promise<string | null> {
+    this.journal.push(`replace:${replacement.requestId}`);
     const held = this.#requests.find((request) => request.id === replacement.requestId);
     if (held?.status !== 'open' || held.documentId === null) return null;
     Object.assign(held, { status: 'replaced', resolvedAt: replacement.at });

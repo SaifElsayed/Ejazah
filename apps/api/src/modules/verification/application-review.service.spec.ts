@@ -352,6 +352,21 @@ describe("the application's lock (T126)", () => {
     await service.reject(TX, ADMIN, { teacherUserId: userId, reasonChoice: 'other', note: 'x' });
     expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
   });
+
+  it("approve locks the application's row before it reads the state it decides from (T164)", async () => {
+    const userId = store.plant();
+    await refusal(service.approve(TX, ADMIN, { teacherUserId: userId }));
+    expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
+  });
+
+  it("requestInfo locks the application's row before its decision (T164)", async () => {
+    // A refused decision reads the status it names, so the read shows the lock came first.
+    const userId = store.plant({ status: 'rejected' });
+    await refusal(
+      service.requestInfo(TX, ADMIN, { teacherUserId: userId, needed: ['other'], note: 'x' }),
+    );
+    expect(store.journal.slice(0, 2)).toEqual([`lock:${userId}`, `read:${userId}`]);
+  });
 });
 
 describe('reject, requestInfo and ban', () => {

@@ -147,6 +147,7 @@ export class VerificationRequestService {
     _adminId: string,
     input: { readonly requestId: string },
   ): Promise<{ readonly userId: string }> {
+    await this.#lockAccountOf(tx, input.requestId);
     const request = await this.#reviewable(tx, input.requestId);
     if (!(await this.#store.resolve(tx, request.requestId, this.#now()))) {
       await this.#refuseMoved(tx, request.requestId);
@@ -164,6 +165,7 @@ export class VerificationRequestService {
     adminId: string,
     input: { readonly requestId: string; readonly note: string },
   ): Promise<{ readonly userId: string; readonly requestId: string; readonly documentId: string }> {
+    await this.#lockAccountOf(tx, input.requestId);
     const request = await this.#reviewable(tx, input.requestId);
     const next = await this.#store.replace(tx, {
       requestId: request.requestId,
@@ -191,6 +193,17 @@ export class VerificationRequestService {
       adminId,
     });
     return { url, expiresAt };
+  }
+
+  /**
+   * The account's lock, taken first by `accept` and `requestAnother` (T164) as by `requireIdentity`,
+   * so a reinstatement or a suspension meanwhile waits and then reads what the decision left. A
+   * request's person never changes, so reading it before the lock reads nothing the lock guards; no
+   * request locks nothing, and the decision then refuses on its own read.
+   */
+  async #lockAccountOf(tx: Transaction, requestId: string): Promise<void> {
+    const request = await this.#store.readRequest(tx, requestId);
+    if (request !== null) await this.#store.lockAccount(tx, request.userId);
   }
 
   /** The request, open and with a document to review, or the refusal naming why not. */

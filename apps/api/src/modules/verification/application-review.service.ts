@@ -245,6 +245,8 @@ export class ApplicationReviewService {
     adminId: string,
     input: z.output<typeof applicationsApproveInput>,
   ): Promise<DecisionMove & { readonly subjectIds: string[] }> {
+    // Under the application's lock (T164), the call and the status read are the ones approved.
+    await this.#store.lockApplication(tx, input.teacherUserId);
     const applicant = await this.#readOrRefuse(tx, input.teacherUserId);
     if (applicant.status !== 'in_review') throw conflict(applicant.status);
     const credentials = ofApplication(
@@ -322,13 +324,15 @@ export class ApplicationReviewService {
     adminId: string,
     input: z.output<typeof applicationsRequestInfoInput>,
   ): Promise<DecisionMove> {
+    await this.#store.lockApplication(tx, input.teacherUserId);
     await this.#decide(tx, adminId, input.teacherUserId, 'request_info', input.note);
     return { before: { status: 'in_review' }, after: { status: 'needs_document' } };
   }
 
   /**
    * `applications.ban`: the standing's one ban, the note written to the application; the status it
-   * moved from is the one the standing read (T116).
+   * moved from is the one the standing read (T116) under the account's lock and then the
+   * application's (T164).
    */
   async ban(
     tx: Transaction,

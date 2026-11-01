@@ -2,7 +2,10 @@
 // `before` of suspend, ban, recordCall and reject is read under a lock of the row it describes. Each
 // move takes the kernel's row lock (`platform/db/row-lock.ts`) at the start of its transaction: the
 // account's `users` row for opening an identity request, `reinstate`, `suspend` and `ban`, the
-// application's `teacher_profiles` row for recording the call and `reject`.
+// application's `teacher_profiles` row for recording the call and `reject`. T164 adds `approve`,
+// `requestInfo` and `applications.ban` (the account's row first, then the application's), and the
+// identity document's `accept` and `requestAnother` (the account's row). Wherever one transaction
+// takes both, the account's row comes first (the owner's decision of 2026-11-01).
 //
 // HOW A RACE IS STAGED, as `booking-concurrency.spec.ts` stages it. Transaction A runs its move and
 // stays open; transaction B starts its move and is seen waiting on a lock by a watcher reading
@@ -32,7 +35,14 @@ import {
   openDatabase,
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
-import { connectAsApplication, type Db, insertRow, makeAdmin, makeUser } from './harness';
+import {
+  connectAsApplication,
+  type Db,
+  insertRow,
+  makeAdmin,
+  makeSubject,
+  makeUser,
+} from './harness';
 
 let db: Db;
 let watcher: Db;
@@ -289,5 +299,112 @@ describe("the audit's before, read under the application's lock (T126)", () => {
     expect(ended).toEqual({
       value: { before: { status: 'needs_document' }, after: { status: 'rejected' } },
     });
+  });
+});
+
+/** A committed approved credential sent with the teacher's application; its subject's id. */
+async function approvedCredential(userId: string, adminId: string): Promise<string> {
+  const subjectId = await makeSubject(db);
+  const documentId = await insertRow(db, 'verification_documents', {
+    user_id: userId,
+    document_type: 'credential',
+    storage_key_encrypted: Buffer.from('probe'),
+  });
+  await insertRow(db, 'teacher_credentials', {
+    teacher_user_id: userId,
+    subject_id: subjectId,
+    document_id: documentId,
+    status: 'approved',
+    submitted_with_application: true,
+    reviewed_by_admin_id: adminId,
+    reviewed_at: '2026-10-18T09:00:00Z',
+    // The application's credentials share its submission's instant (`teacher()` above).
+    created_at: '2026-10-18T09:00:00Z',
+  });
+  return subjectId;
+}
+
+/** A committed open identity request holding a document the person uploaded; its id. */
+async function requestWithDocument(userId: string, adminId: string): Promise<string> {
+  const documentId = await insertRow(db, 'verification_documents', {
+    user_id: userId,
+    document_type: 'passport',
+    storage_key_encrypted: Buffer.from('probe'),
+  });
+  const requests = createIdentityRequestStore(database);
+  return database.$transaction(async (tx) => {
+    const requestId = await requests.openRequest(tx, {
+      userId,
+      adminId,
+      reason: 'بلاغ',
+      at: new Date(),
+    });
+    await requests.attachDocument(tx, { requestId, documentId, documentType: 'passport' });
+    return requestId;
+  });
+}
+
+describe("the application's other decisions, under its lock (T164)", () => {
+  it('ban waits for a request for information and answers needs_document as its before', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'in_review' });
+    const adminId = await makeAdmin(db);
+    const ended = await race(
+      (tx) =>
+        review.applications.requestInfo(tx, adminId, {
+          teacherUserId: userId,
+          needed: ['other'],
+          note: 'صورة أوضح',
+        }),
+      (tx) =>
+        review.applications.ban(tx, adminId, {
+          teacherUserId: userId,
+          reasonChoice: 'other',
+          note: 'وثائق مزورة',
+        }),
+    );
+    expect(ended).toEqual({
+      value: { before: { status: 'needs_document' }, after: { status: 'banned' } },
+    });
+  });
+
+  it('approve waits for the call being recorded, then approves on it', async () => {
+    const userId = await teacher({ accountStatus: 'active', applicationStatus: 'in_review' });
+    const adminId = await makeAdmin(db);
+    const subjectId = await approvedCredential(userId, adminId);
+    const ended = await race(
+      (tx) =>
+        review.applications.recordCall(tx, adminId, {
+          teacherUserId: userId,
+          completedOn: '2026-10-22',
+          timeZone: 'Africa/Cairo',
+          outcome: 'suitable',
+          notes: 'أجاب عن الأسئلة',
+        }),
+      (tx) => review.applications.approve(tx, adminId, { teacherUserId: userId }),
+    );
+    expect(ended).toEqual({
+      value: {
+        before: { status: 'in_review' },
+        after: { status: 'approved' },
+        subjectIds: [subjectId],
+      },
+    });
+  });
+});
+
+describe("the identity document's decisions, under the account's lock (T164)", () => {
+  it('a reinstatement waits for an acceptance, then lands active with no request open', async () => {
+    const userId = await teacher({ accountStatus: 'suspended', applicationStatus: 'approved' });
+    const adminId = await makeAdmin(db);
+    const requestId = await requestWithDocument(userId, adminId);
+    const ended = await race(
+      (tx) => review.documents.accept(tx, adminId, { requestId }),
+      (tx) => standing.reinstate(tx, adminId, userId),
+    );
+    expect(ended).toEqual({
+      value: { before: { accountStatus: 'suspended' }, after: { accountStatus: 'active' } },
+    });
+    expect(await accountStatusOf(userId)).toBe('active');
+    expect(await openRequestsOf(userId)).toBe(0);
   });
 });
