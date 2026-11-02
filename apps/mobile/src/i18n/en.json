@@ -1130,7 +1130,7 @@
       "language": "Language",
       "payout": "Payout account",
       "profile": "Public profile",
-      "profileHint": "Name, photo, bio, subjects",
+      "profileHint": "Name, photo, bio, qualification",
       "ratingLine": "{rating} · {count, plural, one {# review} other {# reviews}}",
       "signInMethod": "Sign-in method",
       "signature": "Signature image",
@@ -1470,7 +1470,8 @@
         "confirm": "Pause the package",
         "contextLine": "EGP {amount} · {count, plural, one {# ongoing enrollment} other {# ongoing enrollments}}",
         "text": "It disappears from your profile so no new student can buy it. The {count} ongoing enrollments continue as they are, and you can activate it whenever you wish.",
-        "title": "Pause the package “{package}”?"
+        "title": "Pause the package “{package}”?",
+        "textNoEnrollments": "It disappears from your profile so no new student can buy it, and you can activate it whenever you wish."
       },
       "editor": {
         "activeHint": "Visible to students",

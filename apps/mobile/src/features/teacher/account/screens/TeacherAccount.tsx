@@ -119,6 +119,7 @@ export function TeacherAccount() {
           <List header={t('teacher.account.teaching')}>
             <ListRow
               label={t('teacher.account.profile')}
+              value={t('teacher.account.profileHint')}
               onPress={() => router.push(PROFILE_ROUTE)}
             />
             <ListRow

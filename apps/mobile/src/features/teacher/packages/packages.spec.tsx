@@ -312,6 +312,37 @@ describe('Packages', () => {
     );
   });
 
+  // The owner's decision of 2026-11-02 (B26): with no ongoing enrollment, the sheet says nothing of
+  // enrollments.
+  it('leaves the enrollments line out of the sheet when none is ongoing', async () => {
+    await inBothDirections(
+      withQueries(() => <Packages />),
+      async (_rendered, direction) => {
+        await fireEvent.press(
+          (
+            await screen.findAllByRole('button', {
+              name: said(direction, 'teacher.packages.deactivate'),
+            })
+          )[1]!,
+        );
+        expect(
+          await screen.findByText(
+            said(direction, 'teacher.packages.deactivateSheet.textNoEnrollments'),
+          ),
+        ).toBeTruthy();
+        expect(
+          screen.queryByText(
+            said(direction, 'teacher.packages.deactivateSheet.text', { count: 0 }),
+          ),
+        ).toBeNull();
+        await fireEvent.press(
+          screen.getByRole('button', { name: said(direction, 'common.action.cancel') }),
+        );
+      },
+    );
+    expect(mockApi.api.teacher.packages.update.mutate).not.toHaveBeenCalled();
+  });
+
   it('says so and offers a retry when the list cannot be read', async () => {
     mockApi.api.teacher.packages.list.query.mockRejectedValue(apiError('INTERNAL'));
     await renderIn('rtl', withQueries(() => <Packages />)());

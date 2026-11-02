@@ -1,6 +1,7 @@
 // T021 (FR-311, FR-314): pausing a package asks first (screens.md §13, PackageDeactivateSheet). The
 // title names the package by its short form «{subject} · {sessions}»; the text says it leaves the
-// profile while its ongoing enrollments continue, and that it can be activated again. «إيقاف الباقة»
+// profile while its ongoing enrollments continue (with none, that line is left out: the owner's
+// decision of 2026-11-02, B26), and that it can be activated again. «إيقاف الباقة»
 // sends `isActive: false`; a failure says so in the sheet and keeps it open.
 import type { TeacherPackage } from '@ijazah/contracts';
 import { useState } from 'react';
@@ -63,7 +64,9 @@ export function PackageDeactivateSheet({
         <>
           <IconTile icon={{ name: 'layers' }} size="lg" tone="warning" />
           <Text tone="muted">
-            {t('teacher.packages.deactivateSheet.text', { count: item.activeEnrollmentCount })}
+            {item.activeEnrollmentCount === 0
+              ? t('teacher.packages.deactivateSheet.textNoEnrollments')
+              : t('teacher.packages.deactivateSheet.text', { count: item.activeEnrollmentCount })}
           </Text>
           {failed ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">

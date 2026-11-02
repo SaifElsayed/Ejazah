@@ -85,8 +85,9 @@ describe('TeacherAccount', () => {
   it('leads the teaching list with «الملف العام», and opens the profile (T158)', async () => {
     await inBothDirections(withAccount(), (_rendered, direction) => {
       expect(screen.getByText(said(direction, 'teacher.account.profile'))).toBeTruthy();
-      // The board's hint names the subjects, which the profile does not edit (R-HONEST).
-      expect(screen.queryByText(said(direction, 'teacher.account.profileHint'))).toBeNull();
+      // The hint names only what the profile edits, not the subjects (the owner's decision of
+      // 2026-11-02, B26).
+      expect(screen.getByText(said(direction, 'teacher.account.profileHint'))).toBeTruthy();
     });
     await renderIn('rtl', withAccount()());
     await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.profile')));
