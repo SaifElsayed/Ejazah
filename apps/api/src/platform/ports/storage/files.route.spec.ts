@@ -15,6 +15,7 @@ import { RateLimiter } from '../../guards/rate-limit.guard.js';
 import { createLogger } from '../../logging/logger.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -64,6 +65,7 @@ beforeAll(async () => {
       subjects: { listActive: async () => [] },
       identity: unusedIdentityServices,
       verification: unusedVerificationServices,
+      catalog: unusedCatalogServices,
     },
     adminServices: unusedAdminServices,
     routes: filesRoutes(storage),

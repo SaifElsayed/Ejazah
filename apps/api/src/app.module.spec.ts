@@ -33,6 +33,7 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
 };
 
 import { createLogger } from './platform/logging/logger.js';
@@ -46,6 +47,7 @@ import {
 } from './surfaces/procedures.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from './surfaces/services.fixtures.js';

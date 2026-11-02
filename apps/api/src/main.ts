@@ -26,6 +26,7 @@ const [
   { requireAuditWriter },
   { createAdminServices, createAuditWriter, createSettingsReader, resolveAdminSession },
   catalog,
+  booking,
   identity,
   verification,
   { createColumnCipher },
@@ -52,6 +53,7 @@ const [
   import('./platform/audit/audit-writer.js'),
   import('./modules/admin/index.js'),
   import('./modules/catalog/index.js'),
+  import('./modules/booking/index.js'),
   import('./modules/identity/index.js'),
   import('./modules/verification/index.js'),
   import('./platform/crypto/encryption.js'),
@@ -134,7 +136,9 @@ const cipher = createColumnCipher(config);
 // identity module's services behind `auth`, `onboarding` and `account` (T048, T049), and the
 // verification module's behind `teacher.application` and `teacher.credentials` (T056, T057), the
 // application's submission and the payout registration keyed through the kernel's idempotency
-// (FR-106), the payout registration over the payment port (T077).
+// (FR-106), the payout registration over the payment port (T077), and the catalog module's behind
+// `teacher.packages` and `teacher.slots`, whose `CatalogUse` port is bound to booking's entry
+// (T020, R-207): catalog asks whether a slot or a package is in use without importing booking.
 // The one registry of an account's end (FR-142): the admin module's standing actions and the
 // identity module's deletion call it, and the modules that keep what an account had subscribe to it
 // (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
@@ -173,6 +177,12 @@ const services = {
     cipher,
     settings,
     idempotency,
+  }),
+  catalog: catalog.createCatalogServices({
+    use: {
+      slotInUse: booking.slotInUse,
+      packageHasEnrollment: booking.packageHasEnrollment,
+    },
   }),
 };
 

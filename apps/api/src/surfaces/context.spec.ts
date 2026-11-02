@@ -27,6 +27,7 @@ import {
 } from './context.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
@@ -50,6 +51,7 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
 };
 
 const appSource = { session: null, log, rateLimiter, clientAddress, services };

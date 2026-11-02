@@ -10,6 +10,7 @@ import { createLogger, type Logger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -113,6 +114,7 @@ export function appContextFor(
     subjects: { listActive: async () => [] },
     identity,
     verification: unusedVerificationServices,
+    catalog: unusedCatalogServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }
