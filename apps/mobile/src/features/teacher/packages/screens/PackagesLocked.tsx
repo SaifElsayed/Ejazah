@@ -1,34 +1,27 @@
-// T034 (FR-202, FR-PROFILE-10): the packages tab before the payout account is verified
-// (`PackagesLocked`): the locked banner over the empty list. Since B15 (T078) the banner leads to
-// the payout, which draws the screen of its state (pending or rejected alike); a tappable warning
-// is a warning card, as the application's request for a document is (R-MOBILE-6). The package
-// editor behind «باقة جديدة» arrives in Phase 2.
-import { router } from 'expo-router';
-import { View } from 'react-native';
+// T034 (FR-202, FR-PROFILE-10), T021 (FR-315): the packages tab while the teacher is not published
+// (the payout account not verified yet, or replaced and waiting; a suspended teacher alike): the
+// warning to the payout over the list, «غير منشورة» on each active package, which shows one line
+// with its price and no tiles. Drafting goes on as before; nothing of it reaches a student.
+import type { TeacherPackage } from '@ijazah/contracts';
 
-import { AppHeader, Card, EmptyState, Icon, Text } from '../../../../design/primitives';
-import { tokens } from '../../../../design/tokens';
-import { useT } from '../../../../i18n';
-import { TabScreen } from '../../../shared/screen';
-import { PAYOUT_ROUTE } from '../../payout';
+import { PackageGroups } from '../components/PackageGroups';
+import { PackagesFrame } from '../components/PackagesFrame';
+import { PackagesEmptyState } from './PackagesEmpty';
 
-export function PackagesLocked() {
-  const t = useT();
+export function PackagesLocked({
+  packages = [],
+  onRetry,
+}: {
+  readonly packages?: readonly TeacherPackage[];
+  readonly onRetry?: () => void;
+}) {
   return (
-    <TabScreen header={<AppHeader title={t('teacher.packages.title')} />}>
-      <Card variant="warning" onPress={() => router.push(PAYOUT_ROUTE)}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: tokens.space['3'] }}>
-          <Icon name="lock" size="sm" tone="warning" />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text variant="caption">{t('teacher.packages.lockedBanner')}</Text>
-          </View>
-        </View>
-      </Card>
-      <EmptyState
-        icon={{ name: 'layers' }}
-        title={t('teacher.packages.empty.title')}
-        text={t('teacher.packages.empty.text')}
-      />
-    </TabScreen>
+    <PackagesFrame published={false} {...(onRetry === undefined ? {} : { onRetry })}>
+      {packages.length === 0 ? (
+        <PackagesEmptyState />
+      ) : (
+        <PackageGroups packages={packages} published={false} />
+      )}
+    </PackagesFrame>
   );
 }

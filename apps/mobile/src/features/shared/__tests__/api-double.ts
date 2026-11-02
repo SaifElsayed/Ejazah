@@ -62,6 +62,12 @@ export function fakeProcedures() {
         get: { query: procedure() },
         register: { mutate: procedure() },
       },
+      // B26 (T021): the teacher's packages.
+      packages: {
+        list: { query: procedure() },
+        create: { mutate: procedure() },
+        update: { mutate: procedure() },
+      },
     },
   };
 }

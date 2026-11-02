@@ -1477,6 +1477,12 @@
         "duration": "Session length",
         "durationOption": "{minutes} min",
         "editNote": "The change applies to new enrollments only.",
+        "error": {
+          "frozen": "A student has enrolled in this package, so its track and length can no longer change. You can still change the price and the number of sessions.",
+          "price": "Enter a price in pounds above zero, with at most two decimal places.",
+          "sessionCount": "Enter a number of sessions from {min} to {max}.",
+          "subjectNotApproved": "This subject is not one of your approved subjects. Choose an approved subject or add one."
+        },
         "frozenHint": "The track and the length do not change after the first enrollment; the price applies to new enrollments.",
         "newTitle": "New package",
         "perSessionHint": "EGP {amount} per session",
@@ -1488,6 +1494,7 @@
           "addAnother": "To add another subject",
           "title": "Package subject"
         },
+        "subjectPlaceholder": "Choose the subject",
         "title": "Edit package",
         "totalPrice": "Total price",
         "track": "Track",
