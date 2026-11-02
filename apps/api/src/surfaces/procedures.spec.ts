@@ -54,6 +54,7 @@ import {
 } from './procedures.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
@@ -148,6 +149,7 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
 };
 
 /** The user surface's context for a fixture session, as the HTTP application builds one. */
