@@ -2,9 +2,11 @@
 // the slot's local time in the teacher's zone, never by adding intervals (FR-018, R-TIME-2).
 // Nonexistent local time shifts forward; ambiguous local time takes the first (FR-019, R-TIME-7).
 // T007: each occurrence also carries what was asked for, and `firstOccurrenceAfter` finds the
-// first occurrence at least a lead after an instant (R-209, FR-368).
+// first occurrence at least a lead after an instant (R-209, FR-368). T019: `weeklyIntervalIn`, a
+// slot as another zone reads it in the week of a save (R-206).
 import { Temporal } from '@js-temporal/polyfill';
 
+import type { WeeklyInterval } from './calendar.js';
 import {
   assertLocalDate,
   localDateIn,
@@ -14,6 +16,7 @@ import {
   type LocalDate,
   type Occurrence,
   type RecurringSlot,
+  type TimeZoneId,
   type UtcInstant,
 } from './index.js';
 
@@ -147,4 +150,36 @@ export function firstOccurrenceAfter(
   return Temporal.Instant.compare(Temporal.Instant.from(candidate.startsAt), notBefore) >= 0
     ? candidate
     : weekAfter;
+}
+
+/**
+ * `slot` as `timezone` reads it in the week `weekOf` falls in there (T019, R-206, FR-317): the
+ * teacher's slots of two zones are compared in the newer slot's zone for the week of the save, so
+ * `weeklyIntervalsOverlap` (`./calendar.ts`) reads both in one zone. The week runs Sunday to
+ * Saturday in `timezone`; the slot's occurrence that week is resolved in its own zone from that
+ * week's local date (`resolveOccurrences`), and the instant is read on `timezone`'s clock. A slot of
+ * `timezone` itself is answered as it is: one zone compares wall clocks, whatever a gap does to one
+ * week's occurrence.
+ */
+export function weeklyIntervalIn(
+  slot: WeeklyInterval & { readonly timezone: TimeZoneId },
+  timezone: TimeZoneId,
+  weekOf: Date,
+): WeeklyInterval {
+  const dayOfWeek = assertDayOfWeek(slot.dayOfWeek);
+  const { startTimeLocal, durationMinutes } = slot;
+  const today = Temporal.PlainDate.from(localDateIn(weekOf, timezone));
+  if (slot.timezone === timezone) return { dayOfWeek, startTimeLocal, durationMinutes };
+  const sunday = today.subtract({ days: today.dayOfWeek % DAYS_IN_WEEK });
+  const [occurrence] = resolveOccurrences(
+    { dayOfWeek, startTimeLocal, durationMinutes, timezone: slot.timezone },
+    { fromLocalDate: sunday.toString(), count: 1 },
+  );
+  if (occurrence === undefined) throw new Error('resolveOccurrences returned no occurrence');
+  const there = Temporal.Instant.from(occurrence.startsAt).toZonedDateTimeISO(timezone);
+  return {
+    dayOfWeek: there.dayOfWeek % DAYS_IN_WEEK,
+    startTimeLocal: there.toPlainTime().toString({ smallestUnit: 'second' }),
+    durationMinutes,
+  };
 }

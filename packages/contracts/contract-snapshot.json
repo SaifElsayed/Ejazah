@@ -1318,6 +1318,83 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.slots.create": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "required": true, "type": "integer" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.startTimeLocal": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "required": true, "type": "integer" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.startTimeLocal": { "required": true, "type": "string" },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["booked", "disabled", "free"]
+          },
+          "$.timezone": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.slots.list": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.slots": { "required": true, "type": "array" },
+          "$.slots[]": { "type": "object" },
+          "$.slots[].dayOfWeek": { "required": true, "type": "integer" },
+          "$.slots[].durationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.slots[].id": { "required": true, "type": "string" },
+          "$.slots[].isActive": { "required": true, "type": "boolean" },
+          "$.slots[].startTimeLocal": { "required": true, "type": "string" },
+          "$.slots[].state": {
+            "required": true,
+            "type": "string",
+            "values": ["booked", "disabled", "free"]
+          },
+          "$.slots[].timezone": { "required": true, "type": "string" },
+          "$.timezone": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.slots.update": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "type": "integer" },
+          "$.durationMinutes": { "type": "number", "values": ["30", "45", "60"] },
+          "$.isActive": { "type": "boolean" },
+          "$.slotId": { "required": true, "type": "string" },
+          "$.startTimeLocal": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "required": true, "type": "integer" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.startTimeLocal": { "required": true, "type": "string" },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["booked", "disabled", "free"]
+          },
+          "$.timezone": { "required": true, "type": "string" }
+        }
       }
     }
   }
