@@ -76,7 +76,11 @@ describe('the contract snapshot (T084)', () => {
     );
   });
 
-  it('passes this repository’s committed snapshot', async () => {
+  // It loads both routers, so the whole API's module graph, before it compares (no work repeated;
+  // @sentry/node is about 0.5 s of it). Measured on the owner's machine (T067, 2026-11-02): 1.5 to
+  // 1.8 s alone, 1.9 to 2.2 s under coverage, 3.7 s in a full run, and past the default five seconds
+  // in three full runs on `ijazah_integrity` (B26, B27, B28). The room is the lockfile cases' below.
+  it('passes this repository’s committed snapshot', { timeout: 15_000 }, async () => {
     expect(await checkContractSnapshot(root)).toBeUndefined();
   });
 });
