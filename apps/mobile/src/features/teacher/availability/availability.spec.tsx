@@ -4,7 +4,9 @@
 // minutes, keyed on create; `SLOT_OVERLAP` and `SLOT_IN_USE` said in place; a free slot disabled
 // at once and a disabled one enabled again; a booked slot opens the editor with its day, start and
 // length fixed (FR-318) and is disabled through `SlotDisableSheet` (FR-PROFILE-9; the owner's
-// decision of 2026-11-02, B26).
+// decision of 2026-11-02, B26). While the teacher is not published (the payout account not verified,
+// or the account suspended), the warning leads to the payout and each day with an active slot
+// carries «غير منشورة», over the week and over the empty state alike (T069, FR-315).
 import type { TeacherSlot } from '@ijazah/contracts';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -21,6 +23,11 @@ import { Availability } from './index';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
+
+const mockNavigate = jest.fn();
+jest.mock('expo-router', () => ({
+  router: { push: (route: unknown) => mockNavigate(route) },
+}));
 
 let mockKey = 0;
 jest.mock('expo-crypto', () => ({ randomUUID: () => `slot-key-${++mockKey}` }));
@@ -81,13 +88,14 @@ const withQueries = (ui: () => ReactElement) => () => (
   <QueryClientProvider client={queries}>{ui()}</QueryClientProvider>
 );
 
-function listed(slots: readonly TeacherSlot[]) {
-  mockApi.api.teacher.slots.list.query.mockResolvedValue({ timezone: ZONE, slots });
+function listed(slots: readonly TeacherSlot[], published = true) {
+  mockApi.api.teacher.slots.list.query.mockResolvedValue({ published, timezone: ZONE, slots });
 }
 
 beforeEach(() => {
   mockApi = fakeApi();
   mockKey = 0;
+  mockNavigate.mockReset();
   onlineManager.setOnline(true);
   queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
@@ -140,8 +148,37 @@ describe('Availability', () => {
         expect(
           screen.getByRole('button', { name: said(direction, 'teacher.availability.addSlot') }),
         ).toBeTruthy();
+        // Published: no warning and no «غير منشورة».
+        expect(screen.queryByText(said(direction, 'teacher.availability.lockedBanner'))).toBeNull();
+        expect(screen.queryByText(said(direction, 'teacher.availability.unpublished'))).toBeNull();
       },
     );
+  });
+
+  it('marks each day with an active slot «غير منشورة» and leads from the warning to the payout while unpublished (FR-315)', async () => {
+    listed(SLOTS, false);
+    await inBothDirections(
+      withQueries(() => <Availability />),
+      async (_rendered, direction) => {
+        // The loaded week, not the header the loading state draws too (PR #117's lesson).
+        expect(
+          await screen.findByText(said(direction, 'teacher.availability.lockedBanner')),
+        ).toBeTruthy();
+        expect(slotButton(direction, SAT_FREE)).toBeTruthy();
+        // Saturday and Sunday hold an active slot; Tuesday's only slot is disabled.
+        expect(
+          screen.getAllByText(said(direction, 'teacher.availability.unpublished')),
+        ).toHaveLength(2);
+        // Drafting goes on: «موعد» and every slot are still offered.
+        expect(
+          screen.getByRole('button', { name: said(direction, 'teacher.availability.addSlot') }),
+        ).toBeTruthy();
+        expect(slotButton(direction, TUE_DISABLED)).toBeTruthy();
+      },
+    );
+    await renderIn('rtl', withQueries(() => <Availability />)());
+    await fireEvent.press(await screen.findByText(ar('teacher.availability.lockedBanner')));
+    expect(mockNavigate).toHaveBeenCalledWith('/(teacher)/payout');
   });
 
   it('opens a booked slot in the editor with its fields fixed, and disables it through the sheet', async () => {
@@ -221,8 +258,32 @@ describe('Availability', () => {
           screen.getByRole('button', { name: said(direction, 'teacher.availability.addSlot') }),
         ).toBeTruthy();
         expect(screen.queryByText(said(direction, 'teacher.availability.legend.free'))).toBeNull();
+        expect(screen.queryByText(said(direction, 'teacher.availability.lockedBanner'))).toBeNull();
       },
     );
+  });
+
+  it('draws the warning over the empty state while unpublished, in both languages', async () => {
+    listed([], false);
+    await inBothDirections(
+      withQueries(() => <Availability />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(said(direction, 'teacher.availability.empty.title')),
+        ).toBeTruthy();
+        expect(screen.getByText(said(direction, 'teacher.availability.lockedBanner'))).toBeTruthy();
+        expect(
+          screen.getByRole('button', { name: said(direction, 'teacher.availability.addSlot') }),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('draws no warning while the slots are being read', async () => {
+    mockApi.api.teacher.slots.list.query.mockReturnValue(new Promise(() => undefined));
+    await renderIn('rtl', withQueries(() => <Availability />)());
+    expect(await screen.findByText(ar('teacher.availability.title'))).toBeTruthy();
+    expect(screen.queryByText(ar('teacher.availability.lockedBanner'))).toBeNull();
   });
 
   it('says a failed read with its retry', async () => {

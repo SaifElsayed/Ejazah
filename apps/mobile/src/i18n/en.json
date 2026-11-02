@@ -1269,10 +1269,12 @@
         "disabled": "Disabled",
         "free": "Free"
       },
+      "lockedBanner": "Your slots will not be visible to students until the payout account is verified",
       "noSlotsOn": "{days}: no slots",
       "slot": "{time} · {minutes} min",
       "subtitle": "Your time zone: {city} · repeats every week",
-      "title": "Slots"
+      "title": "Slots",
+      "unpublished": "Not published"
     },
     "cancel": {
       "picker": {

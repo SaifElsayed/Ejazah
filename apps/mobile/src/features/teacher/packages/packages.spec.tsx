@@ -548,19 +548,51 @@ describe('PackageEditor and PackageSubjectPicker', () => {
     expect(new Set(keys).size).toBe(1);
   });
 
-  it('says plainly that an enrollment has frozen the package, and reads it again', async () => {
+  it('says plainly that an enrollment has frozen the package, reads it again, and draws the package’s own track and length, not the unsent choice', async () => {
     mockParams = { id: ijazahTrack.id };
-    mockApi.api.teacher.packages.update.mutate.mockRejectedValueOnce(apiError('PACKAGE_FROZEN'));
-    await renderIn('rtl', withQueries(() => <PackageEditor />)());
-    await screen.findByDisplayValue('2160');
-    await fireEvent.press(
-      screen.getByRole('radio', {
-        name: ar('teacher.packages.editor.durationOption', { minutes: 30 }),
-      }),
-    );
-    await fireEvent.press(save());
-    expect(await screen.findByText(ar('teacher.packages.editor.error.frozen'))).toBeTruthy();
-    expect(mockNavigate).not.toHaveBeenCalledWith('back');
-    await waitFor(() => expect(mockApi.api.teacher.packages.list.query).toHaveBeenCalledTimes(2));
+    for (const direction of ['rtl', 'ltr'] as const) {
+      queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      mockApi.api.teacher.packages.list.query.mockClear();
+      mockApi.api.teacher.packages.list.query.mockResolvedValueOnce({
+        published: true,
+        packages: [recitation, ijazahTrack, paused],
+      });
+      // The re-read answers the package frozen: an enrollment came in meanwhile (FR-312).
+      mockApi.api.teacher.packages.list.query.mockResolvedValueOnce({
+        published: true,
+        packages: [recitation, { ...ijazahTrack, frozen: true, activeEnrollmentCount: 1 }, paused],
+      });
+      mockApi.api.teacher.packages.update.mutate.mockRejectedValueOnce(apiError('PACKAGE_FROZEN'));
+      await renderIn(direction, withQueries(() => <PackageEditor />)());
+      await screen.findByDisplayValue('2160');
+      // The unsent choice: the other track and 30 minutes, where the package is the ijazah track of
+      // 60 minutes.
+      await fireEvent.press(
+        screen.getByRole('radio', { name: said(direction, 'common.track.recitation') }),
+      );
+      await fireEvent.press(
+        screen.getByRole('radio', {
+          name: said(direction, 'teacher.packages.editor.durationOption', { minutes: 30 }),
+        }),
+      );
+      await fireEvent.press(save(direction));
+      expect(
+        await screen.findByText(said(direction, 'teacher.packages.editor.error.frozen')),
+      ).toBeTruthy();
+      expect(mockNavigate).not.toHaveBeenCalledWith('back');
+      await waitFor(() => expect(mockApi.api.teacher.packages.list.query).toHaveBeenCalledTimes(2));
+      expect(
+        await screen.findByText(said(direction, 'teacher.packages.editor.frozenHint')),
+      ).toBeTruthy();
+      expect(screen.getByText(said(direction, 'common.track.ijazahTrack'))).toBeTruthy();
+      expect(
+        screen.getByText(said(direction, 'common.format.duration', { minutes: 60 })),
+      ).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'common.track.recitation'))).toBeNull();
+      expect(
+        screen.queryByText(said(direction, 'common.format.duration', { minutes: 30 })),
+      ).toBeNull();
+      expect(screen.queryByRole('radio')).toBeNull();
+    }
   });
 });

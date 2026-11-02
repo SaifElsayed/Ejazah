@@ -3,8 +3,9 @@
 // (drafting before payout verification, FR-315): an anonymous caller is UNAUTHENTICATED, a student
 // and an applicant FORBIDDEN, a suspended or banned teacher ACCOUNT_RESTRICTED, and none of them
 // reaches the service; an input outside the contract is VALIDATION_FAILED before it does. The
-// authorization gate (T028, R-MOBILE-13) reads these cases by path. What the service answers is
-// slots.service.spec.ts's.
+// authorization gate (T028, R-MOBILE-13) reads these cases by path. The list is handed the session's
+// gender, with which the service asks the predicate whether the teacher is published (T069, FR-315).
+// What the service answers is slots.service.spec.ts's.
 import { vi } from 'vitest';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -88,7 +89,7 @@ beforeEach(() => {
   slots = {
     list: async (...args) => {
       calls.push(['list', ...args]);
-      return { timezone: 'Africa/Cairo', slots: [answered] };
+      return { published: false, timezone: 'Africa/Cairo', slots: [answered] };
     },
     create: async (...args) => {
       calls.push(['create', ...args]);
@@ -188,6 +189,7 @@ describe('an approved teacher, payout verified or not (FR-315)', () => {
   it("hands 'teacher.slots.list', 'teacher.slots.create' and 'teacher.slots.update' the caller's id and the input", async () => {
     const caller = as(sessionOf('approved'));
     await expect(caller.teacher.slots.list()).resolves.toEqual({
+      published: false,
       timezone: 'Africa/Cairo',
       slots: [answered],
     });
@@ -205,13 +207,22 @@ describe('an approved teacher, payout verified or not (FR-315)', () => {
       state: 'disabled',
     });
     expect(calls).toEqual([
-      ['list', CALLER],
+      ['list', CALLER, 'female'],
       [
         'create',
         CALLER,
         { dayOfWeek: 0, startTimeLocal: '23:30', durationMinutes: 60, idempotencyKey: KEY },
       ],
       ['update', CALLER, { slotId: SLOT, isActive: false }],
+    ]);
+  });
+
+  it("lists with the session's gender, whichever it is: 'teacher.slots.list'", async () => {
+    await as(sessionOf('approved')).teacher.slots.list();
+    await as({ ...sessionOf('approved'), gender: 'male' }).teacher.slots.list();
+    expect(calls).toEqual([
+      ['list', CALLER, 'female'],
+      ['list', CALLER, 'male'],
     ]);
   });
 
