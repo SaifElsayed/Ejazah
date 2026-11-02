@@ -838,10 +838,12 @@
     "discovery": {
       "all": "الكل",
       "card": {
+        "bio": "«{bio}»",
         "from": "من {price}",
         "meta": "{subjects} · {riwaya} · {years}",
         "nearestSlot": "أقرب موعد {slot}",
-        "ratingCount": "{rating} · {count}",
+        "ratingCount": "{rating, number, ::.0} · {count, number}",
+        "subjectsSeparator": "، ",
         "years": "{count, plural, one {سنة واحدة} two {سنتان} few {# سنوات} many {# سنة} other {# سنة}}"
       },
       "empty": {
@@ -859,11 +861,13 @@
           "removeTrack": "إزالة فلتر المسار",
           "section": "القسم"
         },
+        "apply": "عرض النتائج",
         "rating": "التقييم",
         "resultCount": "{count, plural, zero {لا معلمين} one {معلم واحد} two {معلمان} few {# معلمين} many {# معلمًا} other {# معلم}}",
         "riwaya": "الرواية · داخل {subject}",
         "show": "{count, plural, zero {لا معلمين} one {عرض معلم واحد} two {عرض معلمَين} few {عرض # معلمين} many {عرض # معلمًا} other {عرض # معلم}}",
         "starsAndUp": "{count, plural, zero {# نجمة فأعلى} one {نجمة واحدة فأعلى} two {نجمتان فأعلى} few {# نجوم فأعلى} many {# نجمة فأعلى} other {# نجمة فأعلى}}",
+        "title": "الفلاتر",
         "track": "المسار"
       },
       "noTeachers": {
