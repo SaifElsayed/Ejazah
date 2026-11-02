@@ -1,8 +1,9 @@
 // T079 — `scripts/dev/emit-recipient-event.ts`, the stand-in's signed recipient verdict for one
 // teacher (quickstart §6). It refuses anywhere but a local development or test machine, before it
-// reads anything (the owner's condition 3 at B15's check); it signs under the secret the API
-// verifies with, through the payment port's entry, never the adapter (R-API-4); and its event id is
-// decided by the reference, the verdict and the reason, so repeating a command is a replay.
+// reads anything (the owner's condition 3 at B15's check); its event is built, signed under the
+// secret the API verifies with and sent by the gateway stand-in's harness
+// (`tests/support/gateway-stand-in.ts`, T013), never by hand; and its event id is decided by the
+// reference, the verdict and the reason, so repeating a command is a replay.
 //
 // THE END-TO-END CASE is real HTTP to the real route (`createPaymentWebhookRoute`, mounted under its
 // path as the application mounts it, the path taken off the request's URL as Express's `use` does;
@@ -27,14 +28,16 @@ import {
   PAYMENT_WEBHOOK_PATH,
 } from '../../apps/api/src/modules/payments/index';
 import {
+  type Connection,
+  eventIdOf,
   parseArguments,
-  recipientEventBody,
   refusalOf,
   run,
   type RunDependencies,
-  signedEvent,
+  verdictEvent,
 } from '../../scripts/dev/emit-recipient-event';
 import { connect, createEmptyDatabase, type FreshDatabase, migrate } from '../seed/fresh-database';
+import { gatewayStandIn, type StandInEvent } from '../support/gateway-stand-in';
 
 const LOCAL = {
   NODE_ENV: 'development',
@@ -157,26 +160,32 @@ describe('the command line (quickstart §6)', () => {
   });
 });
 
-describe('the event', () => {
+describe('the event (T013: built and sent by the gateway stand-in harness)', () => {
   const recipientRef = 'fake_rcp_0193d1b0-7a4e-7c55-9d2f-3b1e8a6c4f21';
+  const KEY = randomBytes(32).toString('base64');
+  const harness = gatewayStandIn({ origin: API, config: { ENCRYPTION_KEY: KEY } });
+  const bodyOf = (event: StandInEvent): unknown => JSON.parse(event.rawBody.toString('utf8'));
 
   it('is the stand-in’s body, its id decided by the reference, the verdict and the reason', () => {
-    const rejected = recipientEventBody(recipientRef, 'rejected', 'name mismatch');
+    const rejected = verdictEvent(harness, recipientRef, 'rejected', 'name mismatch');
 
-    expect(rejected).toEqual({
+    expect(bodyOf(rejected)).toEqual({
       id: expect.stringMatching(/^fake_evt_[0-9a-f]{32}$/),
       type: 'recipient_rejected',
       recipient: recipientRef,
       reason: 'name mismatch',
     });
-    expect(recipientEventBody(recipientRef, 'rejected', 'name mismatch').id).toBe(rejected.id);
-    expect(recipientEventBody(recipientRef, 'rejected', 'closed').id).not.toBe(rejected.id);
-    expect(recipientEventBody(recipientRef, 'verified').id).not.toBe(rejected.id);
-    expect(recipientEventBody('fake_rcp_other', 'rejected', 'name mismatch').id).not.toBe(
-      rejected.id,
+    expect(rejected.providerEventId).toBe(eventIdOf(recipientRef, 'rejected', 'name mismatch'));
+    expect(verdictEvent(harness, recipientRef, 'rejected', 'name mismatch').providerEventId).toBe(
+      rejected.providerEventId,
     );
-    expect(recipientEventBody(recipientRef, 'verified')).toEqual({
-      id: expect.any(String),
+    expect(eventIdOf(recipientRef, 'rejected', 'closed')).not.toBe(rejected.providerEventId);
+    expect(eventIdOf(recipientRef, 'verified')).not.toBe(rejected.providerEventId);
+    expect(eventIdOf('fake_rcp_other', 'rejected', 'name mismatch')).not.toBe(
+      rejected.providerEventId,
+    );
+    expect(bodyOf(verdictEvent(harness, recipientRef, 'verified'))).toEqual({
+      id: eventIdOf(recipientRef, 'verified'),
       type: 'recipient_verified',
       recipient: recipientRef,
     });
@@ -187,9 +196,11 @@ describe('the event', () => {
     ['the secret derived from ENCRYPTION_KEY', {}],
   ])('is signed so the API’s payment port verifies it, under %s', async (_case, secret) => {
     const config = { ENCRYPTION_KEY: randomBytes(32).toString('base64'), ...secret };
-    const { rawBody, headers } = signedEvent(
-      recipientEventBody(recipientRef, 'rejected', 'name mismatch'),
-      config,
+    const { rawBody, headers } = verdictEvent(
+      gatewayStandIn({ origin: API, config }),
+      recipientRef,
+      'rejected',
+      'name mismatch',
     );
 
     await expect(
@@ -203,6 +214,61 @@ describe('the event', () => {
       recipientRef,
       reason: 'name mismatch',
     });
+  });
+
+  it('reaches the payments module’s webhook path, and the same command sends the same event', async () => {
+    const teacher = randomUUID();
+    const profileId = randomUUID();
+    const encrypted = new ColumnCipher(KEY).encrypt(
+      recipientRef,
+      'teacher_profiles.payout_account_ref_encrypted',
+      profileId,
+    );
+    const sent: { url: string; body: Buffer; headers: Record<string, string> }[] = [];
+    const printed: string[] = [];
+    const profileRow: Connection = {
+      query: <Row extends pg.QueryResultRow>() =>
+        Promise.resolve({
+          rows: [{ id: profileId, ref: encrypted }],
+        } as unknown as pg.QueryResult<Row>),
+      end: () => Promise.resolve(),
+    };
+    const dependencies: RunDependencies = {
+      connect: () => Promise.resolve(profileRow),
+      fetch: (input, init) => {
+        sent.push({
+          url: String(input),
+          body: Buffer.from(init?.body as Uint8Array),
+          headers: init?.headers as Record<string, string>,
+        });
+        return Promise.resolve(new Response(null, { status: 200 }));
+      },
+      out: (line) => void printed.push(line),
+      err: (line) => void printed.push(line),
+    };
+    const argv = ['--teacher', teacher, '--verdict', 'verified'];
+    const env = { ...LOCAL, ENCRYPTION_KEY: KEY };
+
+    expect(await run(argv, env, dependencies)).toBe(0);
+    expect(await run(argv, env, dependencies)).toBe(0);
+
+    expect(sent.map((request) => request.url)).toEqual([
+      `${API}${PAYMENT_WEBHOOK_PATH}`,
+      `${API}${PAYMENT_WEBHOOK_PATH}`,
+    ]);
+    expect(sent[1]?.body.equals(sent[0]?.body ?? Buffer.alloc(0))).toBe(true);
+    await expect(
+      createPaymentPort({ PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY: KEY }).verifyAndParseEvent(
+        sent[0]?.body ?? Buffer.alloc(0),
+        sent[0]?.headers ?? {},
+      ),
+    ).resolves.toEqual({
+      type: 'recipient_verified',
+      providerEventId: eventIdOf(recipientRef, 'verified'),
+      recipientRef,
+    });
+    const line = `emit-recipient-event: recipient_verified event ${eventIdOf(recipientRef, 'verified')} for teacher ${teacher}: HTTP 200`;
+    expect(printed).toEqual([line, line]);
   });
 });
 
