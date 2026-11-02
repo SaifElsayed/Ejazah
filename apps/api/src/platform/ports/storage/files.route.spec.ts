@@ -15,6 +15,7 @@ import { RateLimiter } from '../../guards/rate-limit.guard.js';
 import { createLogger } from '../../logging/logger.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -70,6 +71,7 @@ beforeAll(async () => {
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
       discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
     },
     adminServices: unusedAdminServices,
     routes: filesRoutes(storage),

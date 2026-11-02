@@ -5,7 +5,8 @@
 // `document_link_ttl_seconds` (never the key), the subjects and the active packages the store
 // gives, each with its price per session from `packages/money`. The rows themselves (only active
 // packages, approved subjects, every excluded state in both directions) are probed over the
-// database in `tests/db-integrity/discovery-teacher.spec.ts`.
+// database in `tests/db-integrity/discovery-teacher.spec.ts`. `discovery.browse`'s cards carry no
+// photo, even for a teacher who has one (FR-335; the owner's decision of 2026-11-02).
 import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
@@ -23,6 +24,7 @@ const PACKAGE = '0199d0a0-0000-7000-8000-0000000000e2';
 const SUBJECT = { id: '0199d0a0-0000-7000-8000-0000000000e3', nameAr: 'القرآن', nameEn: 'Quran' };
 const PHOTO_KEY = 'photos/0199d0a0-0000-7000-8000-0000000000e1/secret-key.webp';
 const TTL_SECONDS = 600;
+const PAGE_SIZE = 20;
 
 function visible(values: Partial<VisibleTeacher> = {}): VisibleTeacher {
   return {
@@ -38,7 +40,7 @@ function visible(values: Partial<VisibleTeacher> = {}): VisibleTeacher {
   };
 }
 
-function world(teachers: VisibleTeacher[]) {
+function world(teachers: VisibleTeacher[], overrides: Partial<DiscoveryStore> = {}) {
   const calls: unknown[][] = [];
   const unreached = (name: string) => async () => {
     calls.push([name]);
@@ -72,11 +74,13 @@ function world(teachers: VisibleTeacher[]) {
         },
       ];
     },
+    ...overrides,
   };
   const service = new DiscoveryService({
     settings: {
       async read(key, schema) {
         calls.push(['settings', key]);
+        if (key === 'discovery_page_size') return schema.parse(PAGE_SIZE);
         if (key !== 'document_link_ttl_seconds') throw new SettingError(key, 'missing');
         return schema.parse(TTL_SECONDS);
       },
@@ -149,5 +153,29 @@ describe('DiscoveryService.teacher (FR-336)', () => {
     expect(calls).toEqual([
       ['visibleTeachers', TX, MALE, { purpose: 'discover', teacherIds: [TEACHER] }],
     ]);
+  });
+});
+
+describe('DiscoveryService.browse (FR-335)', () => {
+  it('sends no photo on a card, even for a teacher who has one, and reads no link', async () => {
+    const { calls, service } = world([visible()], {
+      offerings: async () => [
+        { teacherUserId: TEACHER, subjectId: SUBJECT.id, track: 'recitation' },
+      ],
+      activeSubjects: async () => [],
+      visibleTeacherPage: async () => [visible()],
+      packagesOf: async () => [
+        {
+          teacherUserId: TEACHER,
+          track: 'recitation',
+          sessionCount: 4,
+          price_piasters: piasters(80_000),
+        },
+      ],
+    });
+    const { cards } = await service.browse(TX, MALE, {});
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).not.toHaveProperty('photoUrl');
+    expect(calls.filter(([name]) => name === 'temporaryLink')).toEqual([]);
   });
 });

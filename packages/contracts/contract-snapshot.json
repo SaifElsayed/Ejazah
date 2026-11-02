@@ -6,11 +6,29 @@
       "authProvider": ["apple", "google"],
       "credentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "deletionConfirmation": ["DELETE", "حذف"],
+      "enrollmentCancellationReason": [
+        "account_deleted",
+        "admin",
+        "checkout_abandoned",
+        "gender_correction",
+        "payment_expired",
+        "payment_failed",
+        "slot_unavailable",
+        "teacher_suspended"
+      ],
+      "enrollmentStatus": [
+        "cancelled",
+        "completed",
+        "confirmed",
+        "pending_payment",
+        "terminated_no_show"
+      ],
       "gender": ["female", "male"],
       "identityDocumentType": ["national_id", "passport"],
       "landing": ["restricted", "student_home", "teacher_application", "teacher_home"],
       "language": ["ar", "en"],
       "packageTrack": ["ijazah_track", "recitation"],
+      "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
       "sessionLengthMinutes": ["30", "45", "60"],
@@ -1070,6 +1088,34 @@
         "input": { "$": { "type": "object" } },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "booking.slots": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.packageId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.slots": { "required": true, "type": "array" },
+          "$.slots[]": { "type": "object" },
+          "$.slots[].dayOfWeek": { "required": true, "type": "integer" },
+          "$.slots[].durationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.slots[].firstSession": { "required": true, "type": "object" },
+          "$.slots[].firstSession.localDate": { "required": true, "type": "string" },
+          "$.slots[].firstSession.startsAt": { "required": true, "type": "string" },
+          "$.slots[].lastSession": { "required": true, "type": "object" },
+          "$.slots[].lastSession.localDate": { "required": true, "type": "string" },
+          "$.slots[].lastSession.startsAt": { "required": true, "type": "string" },
+          "$.slots[].slotId": { "required": true, "type": "string" },
+          "$.slots[].startTimeLocal": { "required": true, "type": "string" },
+          "$.teacherTimezone": { "required": true, "type": "string" }
+        }
       },
       "catalog.subjects.list": {
         "caller": "public",

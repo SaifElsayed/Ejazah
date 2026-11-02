@@ -32,7 +32,7 @@ visibility predicate first (research R-201, R-202).
 
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
-| `discovery.browse` | student, `rate_limit_search` (the cursor is opaque and carries the last card's rating, count, name and id, R-204) | `{ subjectId?, query?, track?, minRating?: 1..5, riwaya?, cursor? }` | `{ tabs?: [{ subjectId: string \| null, nameAr, nameEn, count }], cards: [{ teacherId, displayName, match?: { length }, photoUrl?, subjects, tracks, bioExcerpt, rating?, reviewCount, nearestSlot?: { startsAt, timezone }, lowestPerSession_piasters }], nextCursor? }` | `tabs` on the first page only, counted after the predicate (R-GENDER-3); `query` folded (R-203); `match.length` marks the matched prefix |
+| `discovery.browse` | student, `rate_limit_search` (the cursor is opaque and carries the last card's rating, count, name and id, R-204) | `{ subjectId?, query?, track?, minRating?: 1..5, riwaya?, cursor? }` | `{ tabs?: [{ subjectId: string \| null, nameAr, nameEn, count }], cards: [{ teacherId, displayName, match?: { length }, photoUrl?, subjects, tracks, bioExcerpt, rating?, reviewCount, nearestSlot?: { startsAt, timezone }, lowestPerSession_piasters }], nextCursor? }` | `tabs` on the first page only, counted after the predicate (R-GENDER-3); `query` folded (R-203); `match.length` marks the matched prefix; a card's `photoUrl` is deprecated and never sent: a card carries no photo (FR-335), the photo is on the teacher's page only (FR-336), by the owner's decision of 2026-11-02, and it stays published until the contract gate removes a deprecated field (R-API-9, T075) |
 | `discovery.filters` | student, `rate_limit_search` | `{ subjectId }` | `{ riwayas: string[] }` | Of approved credentials of visible teachers in the subject; empty hides the filter |
 | `discovery.teacher` | student, `rate_limit_search` | `{ teacherId }` | `{ teacherId, displayName, gender, photoUrl?, bio, qualificationSummary, subjects, rating?, reviewCount, packages: [{ packageId, subject, track, sessionCount, sessionDurationMinutes, price_piasters, perSession_piasters }] }` | `NOT_FOUND` for an excluded teacher (R-GENDER-2); no riwaya, tariq or chain (FR-336) |
 
@@ -51,7 +51,16 @@ visibility predicate first (research R-201, R-202).
 | `checkout.retry` | student, idempotent, `rate_limit_payment_initiation` | `{ enrollmentId, idempotencyKey }` | `{ checkoutUrl, orderExpiresAt }` | A new order on the same hold; `ORDER_NOT_PAYABLE` past the hold's expiry minus the grace (FR-356); only the caller's own enrollment: `NOT_FOUND` otherwise, nothing written (M3) |
 | `checkout.current` | student | `{}` | `{ hold?: { holdId, expiresAt, enrollmentId?, summary, lastOrder?: { status, expiresAt, canContinue } } }` | What `CheckoutPrevious` shows; `canContinue` when the last order is still payable |
 | `checkout.continue` | student | `{ enrollmentId }` | `{ checkoutUrl, orderExpiresAt }` | Reopens the payable order's hosted page (FR-BOOK-12 (c)): `NOT_FOUND` unless the enrollment is the caller's; `ORDER_NOT_PAYABLE`, with nothing decrypted, unless the order is `created` and its `expires_at` is after now; the address is never logged (data-model §2.4.1) |
-| `checkout.status` | student | `{ enrollmentId }` | `{ status, cancellationReason?, lastOrder: { status, reference, gross_piasters }, summary, sessions?: [{ sequenceNumber, localDate, startTimeLocal, timezone, startsAt, endsAt }], firstSessionMoved?: { quoted, actual } }` | Read by Processing, the Confirming badge and the success screen (FR-380 to FR-386); `confirmed` only from the server's row (R-HONEST-1); only the caller's own enrollment: `NOT_FOUND` otherwise (M3) |
+| `checkout.status` | student | `{ enrollmentId }` | `{ status, cancellationReason?, lastOrder: { status, reference }, summary, sessions?: [{ sequenceNumber, localDate, startTimeLocal, timezone, startsAt, endsAt }], firstSessionMoved?: { quoted, actual } }` | Read by Processing, the Confirming badge and the success screen (FR-380 to FR-386); `confirmed` only from the server's row (R-HONEST-1); only the caller's own enrollment: `NOT_FOUND` otherwise (M3) |
+
+`summary` is FR-358's payment summary, in its order: `{ teacher: { teacherId, displayName }, subject, track,
+sessionCount, sessionDurationMinutes, price_piasters }`, the package's on `hold` and `current` and the enrollment's
+snapshot on `status` (T031: the rows above named it without its fields). `firstSession` and `lastSession` are
+`booking.slots`' previews, `{ localDate, startsAt }`. `status` and `cancellationReason` are the database's
+`enrollment_status` and `cancellation_reason`; an order's `status` is `payment_status`. `status`' last order carries
+no `gross_piasters` (T031): `no-money-vocabulary` (R-MONEY-6, ADR 0007) refuses a gateway amount outside
+`modules/payments` and the payment port, `packages/contracts` included, and the price charged is the snapshot's,
+`summary.price_piasters` (ERD `payments.gross_piasters`); a field added later is additive.
 
 ## `enrollments` and the teacher's lists — booking (FR-390 to FR-395)
 

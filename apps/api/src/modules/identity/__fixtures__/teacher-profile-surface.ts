@@ -14,6 +14,7 @@ import {
   toErrorShape,
 } from '../../../surfaces/procedures.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -114,6 +115,7 @@ export function profileSurfaceOf(teacherProfile: TeacherProfileServices) {
     catalog: unusedCatalogServices,
     teacherProfile,
     discovery: unusedDiscoveryServices,
+    booking: unusedBookingServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

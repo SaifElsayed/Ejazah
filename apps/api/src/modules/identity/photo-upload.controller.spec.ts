@@ -21,6 +21,7 @@ import { multipart, pdfBytes, storageStub } from '../../surfaces/upload-fixtures
 import { PHOTOS_UPLOAD_PATH, photoUploadRoute } from './photo-upload.controller.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -74,6 +75,7 @@ const services = {
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
+  booking: unusedBookingServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const storage = storageStub();

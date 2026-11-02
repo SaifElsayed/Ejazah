@@ -29,6 +29,9 @@
 // commit teachers to this database at the same time, so every exact answer is read inside the
 // world's own subjects; an answer across all subjects is checked for leaks only, and the tab of all
 // subjects against the predicate counted in SQL from the SRS text (`allTabCount`).
+// T032: every teacher, in every state, also has one active slot of the packages' length (Thursday
+// 09:00 in Cairo), and its package and slot ids are kept, so `booking.slots` is attacked in the same
+// world (`booking.attacks.ts`).
 //
 // NOTHING STAYS VISIBLE. At the end of the file every account the world created is soft-deleted and
 // every subject deactivated, so a later run, or another spec, never meets these teachers.
@@ -44,7 +47,10 @@ import type { AddressInfo } from 'node:net';
 
 import { afterAll } from 'vitest';
 
-import { createDiscoveryServices } from '../../apps/api/src/modules/booking/index.js';
+import {
+  createBookingServices,
+  createDiscoveryServices,
+} from '../../apps/api/src/modules/booking/index.js';
 import { createDiscoveryCatalog } from '../../apps/api/src/modules/catalog/index.js';
 import {
   AccountConsequences,
@@ -88,6 +94,8 @@ import {
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
 import type {
+  BookingSlotsInput,
+  BookingSlotsOutput,
   DiscoveryBrowseInput,
   DiscoveryBrowseOutput,
   DiscoveryFiltersInput,
@@ -132,6 +140,10 @@ export const COMMON_RIWAYA = 'حفص عن عاصم';
 /** The riwaya of `otherName`'s shared-subject credential, a second visible value. */
 export const OTHER_RIWAYA = 'ورش عن نافع';
 
+/** Every teacher's slot (T032): Thursday 09:00, the `time` column written whole as text. */
+const SLOT_DAY = 4;
+const SLOT_START = new Date('1970-01-01T09:00:00Z');
+
 /** Every teacher's rating and review count, so a cursor can be written at any of them. */
 export const WORLD_RATING = '4.50';
 export const WORLD_REVIEW_COUNT = 3;
@@ -151,6 +163,10 @@ export interface SeededTeacher {
   readonly sharedRiwaya: string;
   /** A subject only this teacher teaches. */
   readonly privateSubject: SubjectRow;
+  /** The teacher's three active packages (T032). */
+  readonly packageIds: readonly string[];
+  /** The teacher's one active slot, Thursday 09:00 for 60 minutes in Cairo (T032). */
+  readonly slotId: string;
 }
 
 export interface World {
@@ -219,12 +235,15 @@ const POOL_MAX = 4;
 
 const callerFactory = createAppCallerFactory(appRouter);
 
-/** The `discovery` namespace of the user surface as one bearer reaches it. */
+/** The `discovery` and `booking` namespaces of the user surface as one bearer reaches them. */
 export interface AppCaller {
   readonly discovery: {
     browse(input: DiscoveryBrowseInput): Promise<DiscoveryBrowseOutput>;
     filters(input: DiscoveryFiltersInput): Promise<DiscoveryFiltersOutput>;
     teacher(input: DiscoveryTeacherInput): Promise<DiscoveryTeacherOutput>;
+  };
+  readonly booking: {
+    slots(input: BookingSlotsInput): Promise<BookingSlotsOutput>;
   };
 }
 
@@ -371,6 +390,8 @@ async function build(): Promise<Built> {
       database,
       settings,
     }),
+    // As `main.ts` binds it (T032): the booking sheet's slots over the owners' entries.
+    booking: createBookingServices({ database, settings }),
   };
   const rateLimiter = new RateLimiter({
     settings,
@@ -615,7 +636,8 @@ class Seeder {
         subjectId: subject.id,
       })),
     });
-    await this.#database.package.createMany({
+    const packages = await this.#database.package.createManyAndReturn({
+      select: { id: true },
       data: [
         { subjectId: shared.id, track: 'recitation' as const },
         { subjectId: shared.id, track: 'ijazah_track' as const },
@@ -630,9 +652,30 @@ class Seeder {
         isActive: true,
       })),
     });
+    // T032: one slot of the packages' length, whatever the teacher's state, for `booking.slots`.
+    const { id: slotId } = await this.#database.availabilitySlot.create({
+      data: {
+        teacherUserId: id,
+        dayOfWeek: SLOT_DAY,
+        startTimeLocal: SLOT_START,
+        durationMinutes: 60,
+        timezone: 'Africa/Cairo',
+        isActive: true,
+      },
+      select: { id: true },
+    });
     await this.#credential(id, shared, riwaya, admin);
     await this.#credential(id, privateSubject, COMMON_RIWAYA, admin);
-    return { id, gender, state, displayName, sharedRiwaya: riwaya, privateSubject };
+    return {
+      id,
+      gender,
+      state,
+      displayName,
+      sharedRiwaya: riwaya,
+      privateSubject,
+      packageIds: packages.map((row) => row.id),
+      slotId,
+    };
   }
 
   async #credential(

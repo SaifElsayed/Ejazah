@@ -9,7 +9,9 @@ export * from './account.js';
 export { AUDIT_LABEL_MAX_LENGTH } from './audit-label.js';
 export * from './auth.js';
 export { type AuthorityAllowList, authorityAllowList } from './authority-allow-list.js';
+export * from './booking.js';
 export * from './catalog.js';
+export * from './checkout.js';
 export * from './discovery.js';
 export * from './empty-input.js';
 export {

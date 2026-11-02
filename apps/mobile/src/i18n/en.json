@@ -838,14 +838,18 @@
     "discovery": {
       "all": "All",
       "card": {
+        "bio": "“{bio}”",
         "from": "from {price}",
         "meta": "{subjects} · {riwaya} · {years}",
         "nearestSlot": "Nearest slot {slot}",
-        "ratingCount": "{rating} · {count}",
+        "ratingCount": "{rating, number, ::.0} · {count, number}",
+        "subjectsSeparator": ", ",
         "years": "{count, plural, one {# year} other {# years}}"
       },
       "empty": {
         "clearFilters": "Clear filters",
+        "sectionText": "Try another section.",
+        "sectionTitle": "No teacher in this section yet",
         "text": "Try removing a filter or choosing another section.",
         "title": "No teacher matches these filters"
       },
@@ -859,11 +863,13 @@
           "removeTrack": "Remove the track filter",
           "section": "Section"
         },
+        "apply": "Show results",
         "rating": "Rating",
         "resultCount": "{count, plural, =0 {No teachers} one {# teacher} other {# teachers}}",
         "riwaya": "Riwaya · within {subject}",
         "show": "{count, plural, =0 {No teachers} one {Show # teacher} other {Show # teachers}}",
         "starsAndUp": "{count, plural, one {# star and up} other {# stars and up}}",
+        "title": "Filters",
         "track": "Track"
       },
       "noTeachers": {
@@ -877,14 +883,14 @@
         },
         "empty": {
           "clear": "Clear search",
-          "text": "Try another name, or search by subject.",
+          "text": "Try another name.",
           "title": "No teacher by that name"
         },
         "hintText": "for example: Tajweed, Qira'at",
         "hintTitle": "Try searching by subject name",
         "resultCount": "{count, plural, =0 {No results} one {# result} other {# results}} for “{query}” · in all sections"
       },
-      "searchPlaceholder": "Search by sheikh name or subject",
+      "searchPlaceholder": "Search by sheikh name",
       "title": "Explore"
     },
     "dispute": {
@@ -1094,18 +1100,24 @@
       "minutesPerSession": "{minutes} minutes per session",
       "noReviews": "No reviews yet",
       "noSlots": "No slots available at the moment",
+      "notFound": {
+        "text": "Go back to Explore to choose another teacher.",
+        "title": "We could not find this teacher"
+      },
       "packages": "Packages",
       "pricePerSession": "{price} per session",
+      "qualification": "Qualification",
       "ratingOf": "{rating} from {count, plural, one {# review} other {# reviews}}",
       "remedy": {
-        "ijazahTrack": "The teacher requests your ijazah after completion · make-up by a session",
+        "ijazahTrack": "If the teacher is absent, you get a make-up session, with no refund",
         "recitation": "If the teacher is absent, you choose a make-up session or a refund of its price"
       },
       "report": "Report",
       "reviewLine": "{rating} · {date}",
       "reviews": "Reviews",
       "reviewsCount": "{rating} · {count, plural, one {# review} other {# reviews}}",
-      "showFullChain": "Show the full chain"
+      "showFullChain": "Show the full chain",
+      "subjectsSeparator": ", "
     },
     "teacherReviews": {
       "a11y": {

@@ -44,6 +44,12 @@ export function fakeProcedures() {
       },
     },
     catalog: { subjects: { list: { query: procedure() } } },
+    // B28 (T029, T030): the student's discovery.
+    discovery: {
+      browse: { query: procedure() },
+      filters: { query: procedure() },
+      teacher: { query: procedure() },
+    },
     teacher: {
       application: {
         get: { query: procedure() },

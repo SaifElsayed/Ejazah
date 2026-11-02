@@ -18,8 +18,11 @@ Write the `sessions` table; session generation is requested through the sessions
 
 `slot-occupancy.service.ts` and `slot-occupancy.repository.ts` (T026) are a slot's occupancy (R-205): taken by an active hold or an enrollment `pending_payment`; held by a `confirmed` enrollment on every local date before its release, the week after its final session (read through the sessions module's entry) plus `slot_release_buffer_weeks`. `nearest-slot.service.ts` is the discovery card's nearest free slot per teacher of a page, by `firstOccurrenceAfter` with `first_session_lead_hours`, over catalog's offered slots and identity's predicate with `purpose: 'book'`. `discovery.service.ts` composes catalog's discovery service (the `DiscoveryCatalog` seam) with it, and `discovery.router.ts` serves `discovery.browse` and `discovery.filters` to a student under `rate_limit_search`. Read-only: no lock.
 
+`booking-slots.service.ts` (T032) is the booking sheet's slots of one package: the package read through catalog's entry for its teacher alone, identity's predicate with `purpose: 'book'` asked of that teacher before anything else (NOT_FOUND otherwise), catalog's offered slots of exactly the package's length, free by the occupancy above on their first session's date, less those whose first session overlaps the student's own sessions (read through the sessions module's entry); each with its first session by `firstOccurrenceAfter` and its last by `resolveOccurrences`, the calls generation makes. `booking.router.ts` serves `booking.slots` to a student under `rate_limit_search`. Read-only: no lock, nothing written.
+
 ## Requirement ids
 
 - FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`, `slot-occupancy.service.ts`.
 - FR-394, FR-BOOK-10 (a slot offered again from the week after its final session plus the buffer; R-205): `slot-occupancy.service.ts`.
 - FR-335 (the card's nearest free slot; R-205): `nearest-slot.service.ts`, `discovery.service.ts`, `discovery.router.ts`.
+- FR-350, FR-386 (the booking sheet's slots and their first and last sessions; R-205, R-209): `booking-slots.service.ts`, `booking.router.ts`.
