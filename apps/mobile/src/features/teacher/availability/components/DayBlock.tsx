@@ -1,7 +1,7 @@
 // T022 (FR-313; components.md DayBlock): a weekday with its slots, today's on the surface colour,
 // and the legend's three swatches. A slot reads «{time} · {minutes} د» in its own zone, labelled
-// for a screen reader with its day, its time and its state; which slot opens the editor is
-// `pressOf`'s (week.ts).
+// for a screen reader with its day, its time and its state; every slot opens the editor, a booked
+// one to be disabled (the owner's decision of 2026-11-02, B26).
 import type { SlotState, TeacherSlot } from '@ijazah/contracts';
 import { View } from 'react-native';
 
@@ -10,7 +10,6 @@ import { useTheme } from '../../../../design/theme';
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
-import { pressOf } from '../week';
 
 /** The Slot primitive's look of each state the server derives. */
 const SLOT_LOOK = {
@@ -60,14 +59,13 @@ export function DayBlock({
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.space['2'] }}>
         {slots.map((slot) => {
           const time = format.wallClock(slot.startTimeLocal);
-          const press = pressOf(slot.state, () => onOpen(slot));
           return (
             <Slot
               key={slot.id}
               label={t('teacher.availability.slot', { time, minutes: slot.durationMinutes })}
               state={SLOT_LOOK[slot.state]}
               accessibilityLabel={t(SLOT_A11Y[slot.state], { day, time })}
-              {...(press === undefined ? {} : { onPress: press })}
+              onPress={() => onOpen(slot)}
             />
           );
         })}

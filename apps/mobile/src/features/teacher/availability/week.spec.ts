@@ -3,7 +3,7 @@
 import type { TeacherSlot } from '@ijazah/contracts';
 import { describe, expect, it, jest } from '@jest/globals';
 
-import { changeOf, pressOf, startTimes, WEEK, weekOf } from './week';
+import { changeOf, startTimes, WEEK, weekOf } from './week';
 
 const ZONE = 'Africa/Cairo';
 
@@ -85,14 +85,5 @@ describe('an edit sends only what changed (FR-318)', () => {
     expect(
       changeOf(saturday, { dayOfWeek: 0, startTimeLocal: '09:30', durationMinutes: 45 }),
     ).toEqual({ dayOfWeek: 0, startTimeLocal: '09:30' });
-  });
-});
-
-describe('which slot opens the editor (the open question, T022)', () => {
-  it('opens a free and a disabled slot, and leaves a booked one inert as the Slot contract says', () => {
-    const open = jest.fn();
-    expect(pressOf('free', open)).toBe(open);
-    expect(pressOf('disabled', open)).toBe(open);
-    expect(pressOf('booked', open)).toBeUndefined();
   });
 });

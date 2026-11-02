@@ -286,20 +286,27 @@ describe('Slot', () => {
     );
   });
 
-  it('carries the dot when booked and is not pressable', async () => {
+  // The owner's decision of 2026-11-02 (B26): a booked slot opens the teacher's editor when given a
+  // press, so it can be disabled (FR-318); the student's booking sheet gives none.
+  it('carries the dot when booked; it opens only when given a press', async () => {
     const onPress = jest.fn();
     await inBothDirections(
       () => (
-        <Slot
-          label="5:00 م"
-          state="booked"
-          accessibilityLabel="موعد الأحد 5:00 م، محجوز"
-          onPress={onPress}
-        />
+        <>
+          <Slot
+            label="5:00 م"
+            state="booked"
+            accessibilityLabel="موعد الأحد 5:00 م، محجوز"
+            onPress={onPress}
+          />
+          <Slot label="6:00 م" state="booked" accessibilityLabel="موعد الأحد 6:00 م، محجوز" />
+        </>
       ),
       async (rendered) => {
         const slot = screen.getByLabelText('موعد الأحد 5:00 م، محجوز');
-        expect(slot.props['accessibilityState']).toMatchObject({ disabled: true });
+        expect(slot.props['accessibilityState']).toMatchObject({ disabled: false });
+        const fixed = screen.getByLabelText('موعد الأحد 6:00 م، محجوز');
+        expect(fixed.props['accessibilityState']).toMatchObject({ disabled: true });
         expect(styleOf(slot)).toMatchObject({
           backgroundColor: colour('light', 'primary-subtle'),
           borderColor: colour('light', 'primary-subtle'),
@@ -312,12 +319,13 @@ describe('Slot', () => {
             styleOf(node)['width'] === tokens.size.dot &&
             styleOf(node)['backgroundColor'] === colour('light', 'primary'),
         );
-        expect(dots).toHaveLength(1);
+        expect(dots).toHaveLength(2);
         expect(styleOf(dots[0]!)['borderRadius']).toBe(tokens.radius.full);
         await fireEvent.press(slot);
+        await fireEvent.press(fixed);
       },
     );
-    expect(onPress).not.toHaveBeenCalled();
+    expect(onPress).toHaveBeenCalledTimes(2);
   });
 
   it('is dashed and muted when disabled; it opens only when given a press', async () => {

@@ -40,8 +40,9 @@ export interface ChipProps extends Accessible {
 }
 
 /**
- * Slot: a time the student can pick or the teacher has published. `booked` carries the dot and is
- * not pressable; `disabled` is dashed. Design: `.slot`, `.slot--selected|booked|disabled`.
+ * Slot: a time the student can pick or the teacher has published. `booked` carries the dot,
+ * `disabled` is dashed; either presses only when given `onPress`. Design: `.slot`,
+ * `.slot--selected|booked|disabled`.
  */
 export interface SlotProps extends Accessible {
   readonly label: string;
@@ -245,9 +246,10 @@ export function Slot({ label, state = 'available', accessibilityLabel, onPress }
   const { color } = useTheme();
   const paint = slotPaint[state];
   const selected = state === 'selected';
-  // T014: a booked time is not pressable (components.md); a disabled one opens only when the
-  // screen gives it a press (the teacher edits it, the student cannot pick it).
-  const inert = state === 'booked' || onPress === undefined;
+  // T014: a slot presses only when the screen gives it a press (components.md). A booked or a
+  // disabled one opens the teacher's editor; the student's booking sheet gives neither a press, so
+  // a booked time cannot be picked (the owner's decision of 2026-11-02, B26).
+  const inert = onPress === undefined;
   return (
     <Pressable
       accessibilityRole="button"

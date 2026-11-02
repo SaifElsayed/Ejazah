@@ -4,7 +4,9 @@
 // for a new slot, the slot's own for one already made. A new slot is created keyed, one key per
 // opening of the editor (FR-106); an edit sends only what changed. `SLOT_OVERLAP` and
 // `SLOT_IN_USE` are said in place and the editor stays open. A free slot is disabled at once; a
-// booked one through `SlotDisableSheet`; a disabled one is enabled again with «تفعيل الموعد».
+// disabled one is enabled again with «تفعيل الموعد». A booked slot opens here too, its day, start
+// and length shown fixed with the reason (FR-318) and nothing to save, and is disabled through
+// `SlotDisableSheet` (FR-PROFILE-9; the owner's decision of 2026-11-02, B26).
 import type { TeacherSlot } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import * as Crypto from 'expo-crypto';
@@ -60,6 +62,7 @@ export function SlotEditor({
   const [problem, setProblem] = useState<MessageKey | null>(null);
   const zone = slot?.timezone ?? timezone;
   const city = cityOf(zone, locale) ?? zone;
+  const booked = slot?.state === 'booked' ? slot : undefined;
 
   if (step === 'disable' && slot !== undefined) {
     return <SlotDisableSheet slot={slot} onCancel={() => setStep('form')} onDone={onClose} />;
@@ -132,48 +135,78 @@ export function SlotEditor({
           {t(problem)}
         </Banner>
       )}
-      <Field label={t('teacher.availability.editor.day')}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.space['2'] }}>
-          {WEEK.map((day) => (
-            <Chip
-              key={day}
-              label={format.weekday(day)}
-              selected={day === dayOfWeek}
-              onPress={() => setDayOfWeek(day)}
+      {booked !== undefined ? (
+        <>
+          <Field label={t('teacher.availability.editor.day')}>
+            <Text variant="body-lg">{format.weekday(booked.dayOfWeek)}</Text>
+          </Field>
+          <Field label={t('teacher.availability.editor.starts')}>
+            <Text variant="body-lg">{format.wallClock(booked.startTimeLocal)}</Text>
+          </Field>
+          <Field
+            label={t('teacher.availability.editor.duration')}
+            hint={t('teacher.availability.editor.timeZoneHint', { city })}
+          >
+            <Text variant="body-lg">
+              {t('teacher.availability.editor.durationOption', { minutes: booked.durationMinutes })}
+            </Text>
+          </Field>
+          <Text variant="caption" tone="muted">
+            {t('teacher.availability.editor.error.inUse')}
+          </Text>
+        </>
+      ) : (
+        <>
+          <Field label={t('teacher.availability.editor.day')}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.space['2'] }}>
+              {WEEK.map((day) => (
+                <Chip
+                  key={day}
+                  label={format.weekday(day)}
+                  selected={day === dayOfWeek}
+                  onPress={() => setDayOfWeek(day)}
+                />
+              ))}
+            </View>
+          </Field>
+          <Field label={t('teacher.availability.editor.starts')}>
+            <Select
+              label={t('teacher.availability.editor.starts')}
+              {...(start === undefined ? {} : { value: format.wallClock(start) })}
+              size="md"
+              onPress={() => setStep('start')}
             />
-          ))}
-        </View>
-      </Field>
-      <Field label={t('teacher.availability.editor.starts')}>
-        <Select
-          label={t('teacher.availability.editor.starts')}
-          {...(start === undefined ? {} : { value: format.wallClock(start) })}
-          size="md"
-          onPress={() => setStep('start')}
-        />
-      </Field>
-      <Field
-        label={t('teacher.availability.editor.duration')}
-        hint={t('teacher.availability.editor.timeZoneHint', { city })}
-      >
-        <Segmented
-          accessibilityLabel={t('teacher.availability.editor.duration')}
-          options={SLOT_LENGTHS.map((minutes) => ({
-            value: String(minutes),
-            label: t('teacher.availability.editor.durationOption', { minutes }),
-          }))}
-          value={length === undefined ? '' : String(length)}
-          onChange={(value) => setLength(SLOT_LENGTHS.find((minutes) => String(minutes) === value))}
-        />
-      </Field>
+          </Field>
+          <Field
+            label={t('teacher.availability.editor.duration')}
+            hint={t('teacher.availability.editor.timeZoneHint', { city })}
+          >
+            <Segmented
+              accessibilityLabel={t('teacher.availability.editor.duration')}
+              options={SLOT_LENGTHS.map((minutes) => ({
+                value: String(minutes),
+                label: t('teacher.availability.editor.durationOption', { minutes }),
+              }))}
+              value={length === undefined ? '' : String(length)}
+              onChange={(value) =>
+                setLength(SLOT_LENGTHS.find((minutes) => String(minutes) === value))
+              }
+            />
+          </Field>
+        </>
+      )}
       <View style={{ gap: tokens.space['2'] }}>
-        <Button
-          label={t('teacher.availability.editor.save')}
-          layout="block"
-          loading={busy}
-          disabled={busy || dayOfWeek === undefined || start === undefined || length === undefined}
-          onPress={save}
-        />
+        {booked !== undefined ? null : (
+          <Button
+            label={t('teacher.availability.editor.save')}
+            layout="block"
+            loading={busy}
+            disabled={
+              busy || dayOfWeek === undefined || start === undefined || length === undefined
+            }
+            onPress={save}
+          />
+        )}
         {slot === undefined ? null : slot.isActive ? (
           <>
             <Button

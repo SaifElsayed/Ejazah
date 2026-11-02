@@ -2,8 +2,9 @@
 // both languages. The slots by weekday, Saturday first, in their three states with the legend and
 // the days without slots; the empty state; the editor creating and editing a slot of 30, 45 or 60
 // minutes, keyed on create; `SLOT_OVERLAP` and `SLOT_IN_USE` said in place; a free slot disabled
-// at once and a disabled one enabled again; a booked slot disabled through `SlotDisableSheet`. A
-// booked slot is drawn inert (the Slot contract), waiting for the owner's answer on opening it.
+// at once and a disabled one enabled again; a booked slot opens the editor with its day, start and
+// length fixed (FR-318) and is disabled through `SlotDisableSheet` (FR-PROFILE-9; the owner's
+// decision of 2026-11-02, B26).
 import type { TeacherSlot } from '@ijazah/contracts';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -143,15 +144,68 @@ describe('Availability', () => {
     );
   });
 
-  it('draws a booked slot inert, as the Slot contract says: no editor opens', async () => {
-    listed(SLOTS);
-    await renderIn('rtl', withQueries(() => <Availability />)());
-    await screen.findByText(ar('teacher.availability.title'));
-    await waitFor(() => expect(slotButton('rtl', SAT_BOOKED)).toBeTruthy());
-    const booked = slotButton('rtl', SAT_BOOKED);
-    expect(booked.props['accessibilityState']).toMatchObject({ disabled: true });
-    await fireEvent.press(booked);
-    expect(screen.queryByText(ar('teacher.availability.editor.title'))).toBeNull();
+  it('opens a booked slot in the editor with its fields fixed, and disables it through the sheet', async () => {
+    for (const direction of ['rtl', 'ltr'] as const) {
+      mockApi.api.teacher.slots.update.mutate.mockClear();
+      mockApi.api.teacher.slots.update.mutate.mockResolvedValue({
+        ...SAT_BOOKED,
+        isActive: false,
+        state: 'disabled',
+      });
+      listed(SLOTS);
+      await renderIn(direction, withQueries(() => <Availability />)());
+      await screen.findByText(said(direction, 'teacher.availability.title'));
+      await waitFor(() => expect(slotButton(direction, SAT_BOOKED)).toBeTruthy());
+      const booked = slotButton(direction, SAT_BOOKED);
+      expect(booked.props['accessibilityState']).toMatchObject({ disabled: false });
+      await fireEvent.press(booked);
+      expect(
+        await screen.findByText(said(direction, 'teacher.availability.editor.title')),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(said(direction, 'teacher.availability.editor.error.inUse')),
+      ).toBeTruthy();
+      // The day, the start and the length are shown, not offered: no day chip, no start picker.
+      expect(
+        screen.getByText(
+          said(direction, 'teacher.availability.editor.durationOption', {
+            minutes: SAT_BOOKED.durationMinutes,
+          }),
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: day(direction, 6) })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: said(direction, 'teacher.availability.editor.save') }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', {
+          name: said(direction, 'teacher.availability.editor.starts'),
+        }),
+      ).toBeNull();
+      await fireEvent.press(
+        screen.getByRole('button', {
+          name: said(direction, 'teacher.availability.editor.disable'),
+        }),
+      );
+      await screen.findByText(
+        said(direction, 'teacher.availability.disableSheet.title', {
+          day: day(direction, 6),
+          time: time(direction, '10:00'),
+        }),
+      );
+      await fireEvent.press(
+        screen.getByRole('button', {
+          name: said(direction, 'teacher.availability.disableSheet.confirm'),
+        }),
+      );
+      await waitFor(() =>
+        expect(mockApi.api.teacher.slots.update.mutate).toHaveBeenCalledWith({
+          slotId: SAT_BOOKED.id,
+          isActive: false,
+        }),
+      );
+      expect(mockApi.api.teacher.slots.update.mutate).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('draws the empty state with the add button when there is no slot', async () => {

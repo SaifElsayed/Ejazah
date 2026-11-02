@@ -2,7 +2,7 @@
 // a day of the week (0 = Sunday), a wall-clock start `HH:MM` read in its own zone and a length;
 // nothing here makes it an instant (R-TIME-3). The week runs Saturday to Friday, as the boards draw
 // it in both languages.
-import type { SlotState, SlotsUpdateInput, TeacherSlot } from '@ijazah/contracts';
+import type { SlotsUpdateInput, TeacherSlot } from '@ijazah/contracts';
 
 /** The days of the week in the boards' order, Saturday first. */
 export const WEEK = [6, 0, 1, 2, 3, 4, 5] as const;
@@ -71,14 +71,4 @@ export function changeOf(
       ? {}
       : { durationMinutes: draft.durationMinutes }),
   };
-}
-
-/**
- * Which slot opens the editor: the one seam of an open question (T022). The Availability board
- * lets a booked slot open the editor, to disable it; the Slot contract (components.md) says a
- * booked slot is not pressable. Until the owner decides, a booked slot stays inert, as the
- * contract says; opening it is this line and the contract's.
- */
-export function pressOf<Press>(state: SlotState, open: Press): Press | undefined {
-  return state === 'booked' ? undefined : open;
 }

@@ -1,8 +1,8 @@
 // T022 (FR-313, FR-317, FR-318; screens.md §13 Availability): the teacher's weekly slots, one block
 // per day from Saturday, today's on the surface colour, each slot in its state (free, booked with
 // the dot, disabled), the days without slots on one line and the legend. The header names the
-// teacher's city and «موعد» opens the editor for a new slot; a free or disabled slot opens it for
-// that slot (`pressOf`, week.ts). With no slot at all, `AvailabilityEmpty`. While nothing is read,
+// teacher's city and «موعد» opens the editor for a new slot; any slot opens it for that slot, a
+// booked one with its fields fixed (FR-318). With no slot at all, `AvailabilityEmpty`. While nothing is read,
 // the shared states; over the cached week, the offline notice (the `MainOffline` pattern).
 import type { TeacherSlot } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
