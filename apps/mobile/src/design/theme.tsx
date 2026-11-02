@@ -3,6 +3,10 @@
 // dark follows the system unless a surface is drawn on one scheme (the live session). The
 // direction follows the active locale (lib/direction.ts). The provider also sets the scheme's CSS
 // variables, so a NativeWind colour class follows the same scheme (`colorVariables`).
+//
+// T078: the navigators take their colours from the same tokens (`navigationTheme`, given at the
+// root layout); without it every stack draws react-navigation's light default behind its screens.
+import { DefaultTheme, type Theme as NavigationTheme } from 'expo-router';
 import { createContext, type ReactNode, useContext, useEffect, useMemo } from 'react';
 import { StyleSheet, useColorScheme, View } from 'react-native';
 import { vars } from 'nativewind';
@@ -39,6 +43,32 @@ export function colorVariables(
 }
 
 const variablesOf = { light: vars(colorVariables('light')), dark: vars(colorVariables('dark')) };
+
+const navigationThemeOf = (scheme: ColorScheme): NavigationTheme => {
+  const color = tokens.color[scheme];
+  return {
+    dark: scheme === 'dark',
+    colors: {
+      primary: color.primary,
+      // A native stack draws each screen's card and its own container in `background`, the
+      // system bars' insets included; the headers, hidden here, would draw in `card`.
+      background: color.bg,
+      card: color.bg,
+      text: color.text,
+      border: color.border,
+      notification: color.danger,
+    },
+    fonts: DefaultTheme.fonts,
+  };
+};
+
+// Built on first use: a spec that mocks expo-router whole still loads this module.
+const navigationThemes: Partial<Record<ColorScheme, NavigationTheme>> = {};
+
+/** The navigators' theme for `scheme`, one object per scheme. */
+export function navigationTheme(scheme: ColorScheme): NavigationTheme {
+  return (navigationThemes[scheme] ??= navigationThemeOf(scheme));
+}
 
 /** The system's scheme, or `scheme` when the surface is drawn on one. */
 export function ThemeProvider({
