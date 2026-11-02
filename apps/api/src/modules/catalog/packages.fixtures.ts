@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import type { NewPackageRow, PackageChange, PackageRow } from './packages.repository.js';
 import type { PackagesStore } from './packages.service.js';
@@ -35,6 +36,12 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
   readonly #rows = new Map<string, Held>();
   readonly #subjects = new Set<string>();
   readonly #enrollments = new Map<string, PackageEnrollmentCounts>();
+  readonly #published = new Set<string>();
+
+  /** Makes the predicate show the teacher to a student of `gender`. */
+  publish(teacherUserId: string, gender: 'male' | 'female'): void {
+    this.#published.add(`${teacherUserId}:${gender}`);
+  }
 
   /** Makes `subject` one of the teacher's `teacher_subjects`. */
   grant(teacherUserId: string, subject: { readonly id: string }): void {
@@ -71,6 +78,15 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
 
   async lockApplication(_tx: Transaction, userId: string): Promise<void> {
     this.log.push(`lockApplication:${userId}`);
+  }
+
+  async isPublished(
+    _tx: Transaction,
+    requester: RequesterGender,
+    teacherUserId: string,
+  ): Promise<boolean> {
+    this.log.push(`isPublished:${requester}`);
+    return this.#published.has(`${teacherUserId}:${requester}`);
   }
 
   async holdsSubject(_tx: Transaction, teacherUserId: string, subjectId: string): Promise<boolean> {

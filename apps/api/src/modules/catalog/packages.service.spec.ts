@@ -7,7 +7,8 @@
 // (`PACKAGE_FROZEN`, asked through T020's port) while its count, price and state still change, a
 // new price reaching later purchases only since an enrollment keeps its snapshot; another
 // teacher's package id answers NOT_FOUND and writes nothing. The list carries `published` as the
-// caller's payout state gives it, and each package its price per session from `packages/money`,
+// visibility predicate answers it through identity's entry, asked with the session's gender (the
+// owner's decision of 2026-11-02), and each package its price per session from `packages/money`,
 // its confirmed enrollments and whether it is frozen. Every move locks the teacher's rows before
 // it reads what it decides on (T005's rule 1). Over a store held in memory; the queries and the
 // locks against Postgres are `tests/db-integrity/packages.spec.ts`'s.
@@ -15,6 +16,7 @@ import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import {
   MemoryPackages,
   OTHER_SUBJECT,
@@ -26,6 +28,8 @@ import {
 import { PackagesService } from './packages.service.js';
 
 const KEY = 'spec-packages-key-0001';
+// The session's gender, the teacher's own.
+const REQUESTER = 'female' as RequesterGender;
 
 function serviceOver(memory: MemoryPackages) {
   const keyed: unknown[] = [];
@@ -77,7 +81,7 @@ describe('list', () => {
     memory.plant(OTHER_TEACHER, RECITATION);
     memory.enrol(sold, { total: 3, active: 2 });
 
-    const answer = await serviceOver(memory).service.list(TEACHER, false);
+    const answer = await serviceOver(memory).service.list(TEACHER, REQUESTER);
 
     expect(answer).toEqual({
       published: false,
@@ -112,12 +116,20 @@ describe('list', () => {
     });
   });
 
-  it('carries `published` as given, the caller’s payout state (FR-315)', async () => {
+  it('answers `published` as the predicate answers it for the teacher, asked with the session’s gender (FR-315)', async () => {
     const memory = new MemoryPackages();
     memory.plant(TEACHER, RECITATION);
     const { service } = serviceOver(memory);
-    await expect(service.list(TEACHER, true)).resolves.toMatchObject({ published: true });
-    await expect(service.list(TEACHER, false)).resolves.toMatchObject({ published: false });
+    await expect(service.list(TEACHER, REQUESTER)).resolves.toMatchObject({ published: false });
+    memory.publish(TEACHER, 'male');
+    await expect(service.list(TEACHER, REQUESTER)).resolves.toMatchObject({ published: false });
+    memory.publish(TEACHER, 'female');
+    await expect(service.list(TEACHER, REQUESTER)).resolves.toMatchObject({ published: true });
+    expect(memory.log.filter((entry) => entry.startsWith('isPublished'))).toEqual([
+      'isPublished:female',
+      'isPublished:female',
+      'isPublished:female',
+    ]);
   });
 
   it('asks the port once for every package, not once per package', async () => {
@@ -125,7 +137,7 @@ describe('list', () => {
     memory.plant(TEACHER, RECITATION);
     memory.plant(TEACHER, RECITATION);
     memory.plant(TEACHER, RECITATION);
-    await serviceOver(memory).service.list(TEACHER, true);
+    await serviceOver(memory).service.list(TEACHER, REQUESTER);
     expect(memory.log.filter((entry) => entry.startsWith('package'))).toEqual([
       'packagesOf',
       'packageEnrollmentCounts',
@@ -135,7 +147,8 @@ describe('list', () => {
   it('answers an empty list for a teacher with no package', async () => {
     const memory = new MemoryPackages();
     memory.plant(OTHER_TEACHER, RECITATION);
-    await expect(serviceOver(memory).service.list(TEACHER, true)).resolves.toEqual({
+    memory.publish(TEACHER, 'female');
+    await expect(serviceOver(memory).service.list(TEACHER, REQUESTER)).resolves.toEqual({
       published: true,
       packages: [],
     });

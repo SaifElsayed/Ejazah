@@ -3,8 +3,8 @@
 // account verified or not (R-106, FR-315), so an applicant, a student or an anonymous caller is
 // refused before the service is reached and a suspended or banned account is `ACCOUNT_RESTRICTED`;
 // the input validated, one service call on the caller's own packages, the output parsed by its
-// schema (R-API-1). `published` is the payout state of the session identity resolved on this
-// request. Mounted under `teacher.packages` by `app.router.ts`.
+// schema (R-API-1). `published` is the visibility predicate's answer, asked with the session's
+// gender (the owner's decision of 2026-11-02). Mounted under `teacher.packages` by `app.router.ts`.
 import {
   packagesCreateInput,
   packagesListOutput,
@@ -20,12 +20,7 @@ export const packagesRouter = createAppRouter({
     admits: 'approved',
     input: z.void(),
     output: packagesListOutput,
-  }).query(({ ctx }) =>
-    ctx.services.catalog.packages.list(
-      ctx.caller.userId,
-      ctx.caller.teacher?.payoutVerified === true,
-    ),
-  ),
+  }).query(({ ctx }) => ctx.services.catalog.packages.list(ctx.caller.userId, ctx.caller.gender)),
 
   create: teacherProcedure({
     admits: 'approved',

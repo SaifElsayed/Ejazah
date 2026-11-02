@@ -1,7 +1,9 @@
 // T018 (FR-311, FR-312, FR-314, FR-315, R-218; app-surface.md "`teacher.packages` — catalog"): the
 // teacher's packages. The procedures admit an approved teacher, payout account verified or not,
-// since drafting comes before publishing; `published` is the caller's payout state as the session
-// identity resolved on this request carries it (FR-315).
+// since drafting comes before publishing; `published` is the visibility predicate's answer for the
+// teacher as a student of the session's gender would get it, asked through identity's entry
+// (`isPublishedTeacher`), the same question `teacher.profile.get` asks, so the two never differ
+// (FR-315, spec.md "drafting needs no published flag"; the owner's decision of 2026-11-02).
 //
 // - `create` writes a package on a subject that is one of the teacher's `teacher_subjects`
 //   (`SUBJECT_NOT_APPROVED` otherwise, FR-311, FR-PROFILE-11 as amended), keyed through the kernel's
@@ -39,6 +41,7 @@ import { perSession, piasters, toPlainNumber } from '@ijazah/money';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import type { NewPackageRow, PackageChange, PackageRow } from './packages.repository.js';
@@ -49,6 +52,8 @@ export interface PackagesStore {
   lockAccount(tx: Transaction, userId: string): Promise<void>;
   /** Locks the application's `teacher_profiles` row until the transaction ends, identity's (T126). */
   lockApplication(tx: Transaction, userId: string): Promise<void>;
+  /** Whether discovery shows the teacher to a student of `requester`'s gender, identity's (FR-315). */
+  isPublished(tx: Transaction, requester: RequesterGender, teacherUserId: string): Promise<boolean>;
   /** Whether the subject is one of the teacher's `teacher_subjects`. */
   holdsSubject(tx: Transaction, teacherUserId: string, subjectId: string): Promise<boolean>;
   /** The teacher's packages, oldest first. */
@@ -118,9 +123,13 @@ export class PackagesService {
     this.#idempotency = idempotency;
   }
 
-  /** `teacher.packages.list`: the teacher's packages and whether they are published (FR-315). */
-  list(teacherUserId: string, published: boolean): Promise<PackagesListOutput> {
+  /**
+   * `teacher.packages.list`: the teacher's packages and whether they are published (FR-315);
+   * `requester` is the session's gender, the teacher's own.
+   */
+  list(teacherUserId: string, requester: RequesterGender): Promise<PackagesListOutput> {
     return this.#transactions.run(async (tx) => {
+      const published = await this.#store.isPublished(tx, requester, teacherUserId);
       const rows = await this.#store.packagesOf(tx, teacherUserId);
       const counts = await this.#use.packageEnrollmentCounts(
         tx,
