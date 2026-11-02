@@ -24,11 +24,11 @@
 //   subjects, so a create either commits first or waits and then reads the subjects gone; the same
 //   two locks, in the same order, as a credential's approval (T142, T164).
 // - `update` locks the teacher's account before it reads the package and asks whether it is
-//   enrolled. An enrollment, the package's first included, is inserted only by `checkout.pay`
-//   (T036), which locks the student's and the teacher's accounts in one call before it reads the
-//   package (the note under T036; the hold, T033, inserts none), so an edit and a first enrollment
-//   never cross: either the edit commits first and the payment reads the new terms, or the edit
-//   reads the enrollment and refuses. Packages need no lock of their own (`LockedTable` has none).
+//   enrolled. An enrollment, the package's first included, is inserted only by the hold, which
+//   locks the student's and the teacher's accounts before it reads the package (T033's note), so an
+//   edit and a first enrollment never cross: either the edit commits first and the hold reads the
+//   new terms, or the edit reads the enrollment and refuses. Packages need no lock of their own
+//   (`LockedTable` has none).
 // - `list` decides nothing and takes no lock.
 import type {
   PackagesCreateInput,
