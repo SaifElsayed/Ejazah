@@ -22,14 +22,23 @@
 //
 // T015 (R-217, FR-383): AppState drives the query cache's focus (lib/focus.ts), once per process
 // beside NetInfo, so stale queries read again when the app comes back to the foreground.
+//
+// T078: the stacks, this one and the role groups', take the scheme's navigation theme, so a pushed
+// screen's card, the system bars' insets included, is the scheme's background and not
+// react-navigation's light default.
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { Redirect, Stack, useSegments } from 'expo-router';
+import {
+  ThemeProvider as NavigationThemeProvider,
+  Redirect,
+  Stack,
+  useSegments,
+} from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Banner, Button } from '../design/primitives';
-import { DirectionProvider, ThemeProvider, useTheme } from '../design/theme';
+import { DirectionProvider, navigationTheme, ThemeProvider, useTheme } from '../design/theme';
 import { tokens } from '../design/tokens';
 import { clearPendingEmail } from '../features/shared/auth/pending';
 import { clearDraft as clearOnboardingDraft } from '../features/shared/onboarding/draft';
@@ -97,7 +106,7 @@ function SessionGuard({ queries }: { readonly queries: QueryClient }) {
 /** The stack of every route; the modals and the sign-in screens take the device's insets. */
 function Routes() {
   const insets = useSafeAreaInsets();
-  const { color } = useTheme();
+  const { scheme, color } = useTheme();
   const framed = {
     contentStyle: {
       paddingTop: insets.top,
@@ -114,13 +123,15 @@ function Routes() {
     },
   };
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={framed} />
-      <Stack.Screen name="restricted" options={framed} />
-      <Stack.Screen name="verify-identity" options={framed} />
-      <Stack.Screen name="time-zone" options={modal} />
-      <Stack.Screen name="terms" options={modal} />
-    </Stack>
+    <NavigationThemeProvider value={navigationTheme(scheme)}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" options={framed} />
+        <Stack.Screen name="restricted" options={framed} />
+        <Stack.Screen name="verify-identity" options={framed} />
+        <Stack.Screen name="time-zone" options={modal} />
+        <Stack.Screen name="terms" options={modal} />
+      </Stack>
+    </NavigationThemeProvider>
   );
 }
 
