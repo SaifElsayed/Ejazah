@@ -2,6 +2,13 @@
 // recipient event is recorded once in `payment_events` and hands its verdict to the identity
 // module's two entries, on the same transaction, by the hash of the reference it carries.
 //
+// T013 (R-213, SC-302): every event comes from the gateway stand-in's harness
+// (`platform/ports/payment/gateway-stand-in.fixtures.ts`, the test tree's
+// `tests/support/gateway-stand-in.ts`) and reaches the service through the real webhook route over
+// HTTP, mounted under `PAYMENT_WEBHOOK_PATH`, its signature checked on the raw body; no case hands
+// the service an event. What the service answered is the route's 200 (or 500 on a failure), so each
+// case reads its effect: the rows, identity's calls, the report and the log.
+//
 // Over the real database (the pipeline's migrated Postgres, as the identity specs run) and with the
 // identity entries injected as recorders, so this spec proves what the payments module does and
 // nothing of what identity does with the verdict (lane A of B15 holds those specs). Each event id
@@ -9,39 +16,72 @@
 // reporting recorded, so "nothing of the raw body is logged" is a sweep over both.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHash, randomUUID } from 'node:crypto';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
+import { piasters } from '@ijazah/money';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { closeDatabase, openDatabase, type Database } from '../../platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../platform/db/spec-database.fixtures.js';
 import { createLogger } from '../../platform/logging/logger.js';
-import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js';
+import {
+  createGatewayStandIn,
+  type GatewayStandIn,
+} from '../../platform/ports/payment/gateway-stand-in.fixtures.js';
+import { createPaymentPort, type PaymentConfig } from '../../platform/ports/payment/index.js';
+import type { NodeHandler } from '../../platform/web/route.js';
 import { payoutRefHash } from '../identity/index.js';
 import { EventRows } from './__fixtures__/event-rows.repository.js';
-import {
-  type Receipt,
-  RecipientEventsService,
-  type RecipientVerdicts,
-} from './recipient-events.service.js';
+import { RecipientEventsService, type RecipientVerdicts } from './recipient-events.service.js';
+import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.js';
 
-function databaseUrl(): string {
-  const url = process.env['DATABASE_URL'];
-  if (url === undefined || url === '') {
-    throw new Error('payments specs: DATABASE_URL is not set (quickstart §1)');
-  }
-  return url;
-}
+const CONFIG: PaymentConfig = {
+  PAYMENT_GATEWAY: 'fake',
+  ENCRYPTION_KEY: Buffer.alloc(32, 5).toString('base64'),
+};
+const PAY_BY = new Date('2099-01-01T00:00:00Z');
 
 let database: Database;
+let server: Server;
+/** The route of the case running now, over its own recorders. */
+let route: NodeHandler | undefined;
+const payment = createPaymentPort(CONFIG);
+let stand: GatewayStandIn;
 
-beforeAll(() => {
-  database = openDatabase(databaseUrl(), {
+beforeAll(async () => {
+  database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
     poolMax: 4,
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 30_000,
   });
+  server = createServer((request, response) => {
+    const url = request.url ?? '/';
+    if (route === undefined || !url.startsWith(PAYMENT_WEBHOOK_PATH)) {
+      response.statusCode = 404;
+      response.end();
+      return;
+    }
+    // Mounted under its path, as Express's `use` hands it on.
+    request.url = url.slice(PAYMENT_WEBHOOK_PATH.length) || '/';
+    route(request, response);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  stand = createGatewayStandIn({
+    origin,
+    webhookPath: PAYMENT_WEBHOOK_PATH,
+    config: CONFIG,
+    payment,
+  });
 });
 
-afterAll(() => closeDatabase(database));
+afterAll(async () => {
+  await new Promise((resolve) =>
+    server === undefined ? resolve(undefined) : server.close(resolve),
+  );
+  await closeDatabase(database);
+});
 
 /** One call identity's entries received, with whether it came on a transaction. */
 interface VerdictCall {
@@ -71,6 +111,16 @@ function recordingIdentity(matches = true, failure?: Error) {
   return { identity, calls };
 }
 
+const RECEIVED_AT = new Date('2026-10-26T09:00:00.000Z');
+const VERIFIED_AT = new Date('2026-10-26T09:00:00.250Z');
+
+/** The route's clock: each request reads the instant it arrived, then the instant it was verified. */
+function clock(): () => Date {
+  let reads = 0;
+  return () => (reads++ % 2 === 0 ? RECEIVED_AT : VERIFIED_AT);
+}
+
+/** The webhook route over the real service and these recorders, mounted for the case. */
 function harness(identity: RecipientVerdicts) {
   const lines: string[] = [];
   const reported: Error[] = [];
@@ -84,42 +134,17 @@ function harness(identity: RecipientVerdicts) {
     log,
     report: (error) => void reported.push(error),
   });
-  return { service, lines, reported };
+  route = paymentWebhookRoute({
+    verify: (rawBody, headers) => payment.verifyAndParseEvent(rawBody, headers),
+    events: service,
+    log,
+    maxBodyBytes: 1_048_576,
+    now: clock(),
+  });
+  return { lines, reported };
 }
 
-const RECEIVED_AT = new Date('2026-10-26T09:00:00.000Z');
-const VERIFIED_AT = new Date('2026-10-26T09:00:00.250Z');
-
-/** A recipient event as the port parsed it, and the raw body it came in (the stand-in's form). */
-function recipientEvent(
-  type: 'recipient_verified' | 'recipient_rejected',
-  options: { readonly reason?: string; readonly recipientRef?: string } = {},
-): { readonly event: GatewayEvent; readonly receipt: Receipt; readonly recipientRef: string } {
-  const providerEventId = `fake_evt_${randomUUID()}`;
-  const recipientRef = options.recipientRef ?? `fake_rcp_${randomUUID()}`;
-  const body =
-    options.reason === undefined
-      ? { id: providerEventId, type, recipient: recipientRef }
-      : { id: providerEventId, type, recipient: recipientRef, reason: options.reason };
-  const event: GatewayEvent =
-    type === 'recipient_verified'
-      ? { type, providerEventId, recipientRef }
-      : {
-          type,
-          providerEventId,
-          recipientRef,
-          ...(options.reason === undefined ? {} : { reason: options.reason }),
-        };
-  return {
-    event,
-    recipientRef,
-    receipt: {
-      rawBody: Buffer.from(JSON.stringify(body)),
-      receivedAt: RECEIVED_AT,
-      signatureVerifiedAt: VERIFIED_AT,
-    },
-  };
-}
+const freshRef = (): string => `fake_rcp_${randomUUID()}`;
 
 function rowsOf(providerEventId: string) {
   return new EventRows(database).of(providerEventId);
@@ -130,10 +155,11 @@ const sha256 = (bytes: Buffer | string): string => createHash('sha256').update(b
 describe('a signed recipient event (T075, FR-191, R-114)', () => {
   it('is recorded once, with the hash of its raw body and no payment, and marks the teacher verified', async () => {
     const { identity, calls } = recordingIdentity();
-    const { service } = harness(identity);
-    const { event, receipt, recipientRef } = recipientEvent('recipient_verified');
+    harness(identity);
+    const recipientRef = freshRef();
+    const event = stand.recipientVerified(recipientRef);
 
-    await expect(service.record(event, receipt)).resolves.toBe('applied');
+    expect(await stand.deliver(event)).toBe(200);
 
     expect(await rowsOf(event.providerEventId)).toEqual([
       {
@@ -141,7 +167,7 @@ describe('a signed recipient event (T075, FR-191, R-114)', () => {
         providerEventId: event.providerEventId,
         eventType: 'recipient_verified',
         signatureVerifiedAt: VERIFIED_AT,
-        payloadHash: sha256(receipt.rawBody),
+        payloadHash: sha256(event.rawBody),
         receivedAt: RECEIVED_AT,
       },
     ]);
@@ -157,12 +183,11 @@ describe('a signed recipient event (T075, FR-191, R-114)', () => {
 
   it("hands a rejection to identity with the gateway's reason", async () => {
     const { identity, calls } = recordingIdentity();
-    const { service } = harness(identity);
-    const { event, receipt, recipientRef } = recipientEvent('recipient_rejected', {
-      reason: 'name mismatch',
-    });
+    harness(identity);
+    const recipientRef = freshRef();
+    const event = stand.recipientRejected(recipientRef, 'name mismatch');
 
-    await expect(service.record(event, receipt)).resolves.toBe('applied');
+    expect(await stand.deliver(event)).toBe(200);
 
     expect(await rowsOf(event.providerEventId)).toMatchObject([
       { eventType: 'recipient_rejected', paymentId: null },
@@ -179,10 +204,9 @@ describe('a signed recipient event (T075, FR-191, R-114)', () => {
 
   it('hands a rejection without a reason to identity as no reason', async () => {
     const { identity, calls } = recordingIdentity();
-    const { service } = harness(identity);
-    const { event, receipt } = recipientEvent('recipient_rejected');
+    harness(identity);
 
-    await service.record(event, receipt);
+    await stand.deliver(stand.recipientRejected(freshRef()));
 
     expect(calls).toMatchObject([{ entry: 'markPayoutRejected', reason: undefined }]);
   });
@@ -191,13 +215,10 @@ describe('a signed recipient event (T075, FR-191, R-114)', () => {
 describe('a replayed provider event id (FR-PAYG-4, R-MONEY-8)', () => {
   it('changes nothing: no second row, no second verdict', async () => {
     const { identity, calls } = recordingIdentity();
-    const { service } = harness(identity);
-    const { event, receipt } = recipientEvent('recipient_verified');
+    harness(identity);
+    const event = stand.recipientVerified(freshRef());
 
-    await expect(service.record(event, receipt)).resolves.toBe('applied');
-    await expect(
-      service.record(event, { ...receipt, receivedAt: new Date('2026-10-26T10:00:00Z') }),
-    ).resolves.toBe('replayed');
+    expect(await stand.deliverTwice(event)).toEqual([200, 200]);
 
     expect(await rowsOf(event.providerEventId)).toHaveLength(1);
     expect(calls).toHaveLength(1);
@@ -205,15 +226,12 @@ describe('a replayed provider event id (FR-PAYG-4, R-MONEY-8)', () => {
 
   it('changes nothing when the two deliveries race', async () => {
     const { identity, calls } = recordingIdentity();
-    const { service } = harness(identity);
-    const { event, receipt } = recipientEvent('recipient_rejected', { reason: 'closed account' });
+    harness(identity);
+    const event = stand.recipientRejected(freshRef(), 'closed account');
 
-    const outcomes = await Promise.all([
-      service.record(event, receipt),
-      service.record(event, receipt),
-    ]);
+    const statuses = await Promise.all([stand.deliver(event), stand.deliver(event)]);
 
-    expect(outcomes.sort()).toEqual(['applied', 'replayed']);
+    expect(statuses).toEqual([200, 200]);
     expect(await rowsOf(event.providerEventId)).toHaveLength(1);
     expect(calls).toHaveLength(1);
   });
@@ -222,10 +240,10 @@ describe('a replayed provider event id (FR-PAYG-4, R-MONEY-8)', () => {
 describe('a reference no teacher holds (R-114)', () => {
   it('is recorded, reported and logged without the body, and changes no row', async () => {
     const { identity, calls } = recordingIdentity(false);
-    const { service, lines, reported } = harness(identity);
-    const { event, receipt } = recipientEvent('recipient_verified');
+    const { lines, reported } = harness(identity);
+    const event = stand.recipientVerified(freshRef());
 
-    await expect(service.record(event, receipt)).resolves.toBe('unmatched');
+    expect(await stand.deliver(event)).toBe(200);
 
     expect(await rowsOf(event.providerEventId)).toHaveLength(1);
     expect(calls).toHaveLength(1);
@@ -240,32 +258,30 @@ describe('a reference no teacher holds (R-114)', () => {
   });
 });
 
+// The harness names `paid`, `failed` and `expired` (T013); `refunded` has no call of its own, and
+// Phase 2's order branch (T038) replaces this one.
 describe('an order event, which no order of this phase can produce (owner, B15 check)', () => {
-  it.each(['paid', 'failed', 'expired', 'refunded'] as const)(
+  it.each(['paid', 'failed', 'expired'] as const)(
     'a %s event is reported and acknowledged, writing nothing and calling nobody',
     async (type) => {
       const { identity, calls } = recordingIdentity();
-      const { service, lines, reported } = harness(identity);
-      const providerEventId = `fake_evt_${randomUUID()}`;
-      const event = { type, providerEventId, gatewayOrderId: 'fake_ord_1' } as GatewayEvent;
-      const rawBody = Buffer.from(
-        JSON.stringify({ id: providerEventId, type, order: 'fake_ord_1' }),
+      const { lines, reported } = harness(identity);
+      const { gatewayOrderId } = await payment.createCheckout(
+        randomUUID(),
+        piasters(100),
+        'EGP',
+        PAY_BY,
       );
+      const event = stand[type](gatewayOrderId);
 
-      await expect(
-        service.record(event, {
-          rawBody,
-          receivedAt: RECEIVED_AT,
-          signatureVerifiedAt: VERIFIED_AT,
-        }),
-      ).resolves.toBe('unexpected_order_event');
+      expect(await stand.deliver(event)).toBe(200);
 
-      expect(await rowsOf(providerEventId)).toEqual([]);
+      expect(await rowsOf(event.providerEventId)).toEqual([]);
       expect(calls).toEqual([]);
       expect(reported).toHaveLength(1);
       expect(JSON.parse(lines[0] ?? '{}')).toMatchObject({
         level: 'warn',
-        providerEventId,
+        providerEventId: event.providerEventId,
         eventType: type,
       });
     },
@@ -275,10 +291,10 @@ describe('an order event, which no order of this phase can produce (owner, B15 c
 describe('one transaction (R-MONEY-8: the event is persisted before any action)', () => {
   it('keeps no row when identity fails, so the gateway retries the event whole', async () => {
     const { identity } = recordingIdentity(true, new Error('identity is unavailable'));
-    const { service } = harness(identity);
-    const { event, receipt } = recipientEvent('recipient_verified');
+    harness(identity);
+    const event = stand.recipientVerified(freshRef());
 
-    await expect(service.record(event, receipt)).rejects.toThrow('identity is unavailable');
+    expect(await stand.deliver(event)).toBe(500);
 
     expect(await rowsOf(event.providerEventId)).toEqual([]);
   });
@@ -287,19 +303,21 @@ describe('one transaction (R-MONEY-8: the event is persisted before any action)'
 describe('nothing of the raw body leaves (R-SEC-2)', () => {
   it('neither the reference, nor the reason, nor the body reaches a log line or a report', async () => {
     const { identity } = recordingIdentity(false);
-    const { service, lines, reported } = harness(identity);
-    const { event, receipt, recipientRef } = recipientEvent('recipient_rejected', {
-      reason: 'IBAN EG380019000500000000263180002 closed',
-    });
+    const { lines, reported } = harness(identity);
+    const recipientRef = freshRef();
+    const event = stand.recipientRejected(
+      recipientRef,
+      'IBAN EG380019000500000000263180002 closed',
+    );
 
-    await service.record(event, receipt);
+    await stand.deliver(event);
 
     const leaked = [...lines, ...reported.map((error) => `${error.message}\n${error.stack ?? ''}`)];
     expect(leaked.length).toBeGreaterThan(0);
     for (const text of leaked) {
       expect(text).not.toContain(recipientRef);
       expect(text).not.toContain('EG380019000500000000263180002');
-      expect(text).not.toContain(receipt.rawBody.toString('utf8'));
+      expect(text).not.toContain(event.rawBody.toString('utf8'));
       expect(text).not.toContain(sha256(recipientRef));
     }
   });
