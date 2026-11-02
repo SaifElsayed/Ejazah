@@ -10,6 +10,7 @@ export { AUDIT_LABEL_MAX_LENGTH } from './audit-label.js';
 export * from './auth.js';
 export { type AuthorityAllowList, authorityAllowList } from './authority-allow-list.js';
 export * from './catalog.js';
+export * from './discovery.js';
 export * from './empty-input.js';
 export {
   type IdempotentProcedure,
