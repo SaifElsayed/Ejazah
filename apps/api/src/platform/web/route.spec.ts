@@ -22,6 +22,7 @@ import {
 } from './route.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -72,6 +73,7 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
 };
 
 const records: string[] = [];

@@ -18,6 +18,7 @@ import { PUBLIC_PAGE_CSP } from '../route.js';
 import { TERMS_PATH, termsRoute } from './terms.controller.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -52,6 +53,7 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
 };
 
 let application: INestApplication;

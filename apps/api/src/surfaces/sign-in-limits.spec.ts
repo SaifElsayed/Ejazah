@@ -24,6 +24,7 @@ import { type AdminSurfaceServices, createAdminContext, createAppContext } from 
 import { createAdminCallerFactory, createAppCallerFactory, toErrorShape } from './procedures.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
@@ -109,6 +110,7 @@ function surfaces({ subject, budget }: { readonly subject: number; readonly budg
     subjects: { listActive: async () => [] },
     identity,
     verification: unusedVerificationServices,
+    catalog: unusedCatalogServices,
   };
   const administration = {
     transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },

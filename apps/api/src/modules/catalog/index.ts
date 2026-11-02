@@ -1,6 +1,7 @@
 // PUBLIC ENTRY of the catalog module (T017). Other modules import this file and nothing below it (R-API-3).
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import type { CatalogUse } from './catalog-use.port.js';
 import { grantSubjects } from './credentials.repository.js';
 import { CredentialsRepository } from './credentials.repository.js';
 import {
@@ -57,6 +58,26 @@ export function createCredentialReviewService(dependencies: {
   readonly now?: () => Date;
 }): CredentialReviewService {
   return new CredentialReviewService({ ...dependencies, store: credentialReviewStore });
+}
+
+/** What catalog asks booking about a slot or a package in use, bound by `main.ts` (T020, R-207). */
+export type { CatalogUse };
+
+/**
+ * The catalog module's services on the user surface (T020; contracts/kernel.md "The composition
+ * root"). No member yet: packages (T018) and slots (T019) join here, each built over `use`.
+ */
+export interface CatalogServices {}
+
+/** What the catalog module's user-surface services are built over, bound once by `main.ts` (T020). */
+export interface CatalogServiceDependencies {
+  /** Booking's answers to whether a slot or a package is in use (R-207). */
+  readonly use: CatalogUse;
+}
+
+/** The catalog module's user-surface services (T020); T018 and T019 build theirs over `use`. */
+export function createCatalogServices(_dependencies: CatalogServiceDependencies): CatalogServices {
+  return {};
 }
 
 /** The subjects list's router, mounted under `catalog.subjects` by `app.router.ts` (T038). */

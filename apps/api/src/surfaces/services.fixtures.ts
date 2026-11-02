@@ -1,7 +1,8 @@
 // T048: the user surface's services for a spec that reaches only some of them. A member a spec does
 // not hand in answers every call by throwing, so a procedure reaching a service its spec did not
 // expect fails loudly instead of answering from a stand-in nobody wrote. T056 adds the
-// verification module's, T067 the administrator surface's.
+// verification module's, T067 the administrator surface's, T020 the catalog module's.
+import type { CatalogServices } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 import type { AdminSurfaceServices } from './context.js';
@@ -25,6 +26,9 @@ function unused(module: string): ProxyHandler<object> {
 
 /** The identity module's services, none of which the spec calls. */
 export const unusedIdentityServices = new Proxy({}, unused('identity')) as IdentityServices;
+
+/** The catalog module's services, none of which the spec calls (T020). */
+export const unusedCatalogServices = new Proxy({}, unused('catalog')) as CatalogServices;
 
 /** The verification module's services, none of which the spec calls. */
 export const unusedVerificationServices = new Proxy(

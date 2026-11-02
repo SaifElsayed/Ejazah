@@ -14,6 +14,7 @@ import { multipart, pdfBytes, storageStub } from '../../surfaces/upload-fixtures
 import { PHOTOS_UPLOAD_PATH, photoUploadRoute } from './photo-upload.controller.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -61,6 +62,7 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const storage = storageStub();
