@@ -4,6 +4,8 @@
 // an ISO 8601 string from the server; the zone is the IANA name it is shown in. Nothing here
 // constructs or moves a datetime (R-TIME-1): parsing one string is all it does. T109: a month's name
 // and a year, for the phone's own date-of-birth picker. T009: an amount of piasters, in pounds.
+// T022: a weekday's name and a slot's wall-clock start, which belong to no zone, and the weekday
+// an instant falls on in a zone.
 import { type Piasters, toPlainNumber } from '@ijazah/money';
 import { useMemo } from 'react';
 
@@ -98,6 +100,45 @@ export function formatYear(year: number, locale: Locale): string {
   return new Intl.NumberFormat(formattingTag(locale), { useGrouping: false }).format(year);
 }
 
+/** 2000-01-02 was a Sunday: the day of the week `n` (0 = Sunday) is read on 2000-01-0{2 + n}. */
+const A_SUNDAY = 2;
+const DAYS_PER_WEEK = 7;
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/**
+ * The name of a day of the week, 0 = Sunday as the slots count it (T022): «السبت», "Saturday".
+ * Read in UTC from a calendar date, so no zone moves it; a day that is not one throws.
+ */
+export function formatWeekday(dayOfWeek: number, locale: Locale): string {
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek >= DAYS_PER_WEEK) {
+    throw new RangeError(`formatters: ${String(dayOfWeek)} is not a day of the week (0–6)`);
+  }
+  const dd = String(A_SUNDAY + dayOfWeek).padStart('DD'.length, '0');
+  return dateTime(locale, 'UTC', { weekday: 'long' }).format(
+    parseCalendarDate(`${SOME_YEAR}-01-${dd}`),
+  );
+}
+
+/**
+ * A wall-clock time `HH:MM` that belongs to no zone, a slot's local start (T022), with the
+ * locale's day period: «8:15 م», "8:15 PM". Read in UTC on one day, so no zone moves it.
+ */
+export function formatWallClock(time: string, locale: Locale): string {
+  const read = parse(`${SOME_YEAR}-01-01T${time}:00Z`);
+  if (read.toISOString().slice('2000-01-01T'.length, '2000-01-01THH:MM'.length) !== time) {
+    throw new RangeError(`formatters: "${time}" is not a time of day`);
+  }
+  return dateTime(locale, 'UTC', { hour: 'numeric', minute: '2-digit' }).format(read);
+}
+
+/** The day of the week (0 = Sunday) `instant` falls on in `timeZone` (T022, today's block). */
+export function weekdayIn(instant: string, timeZone: string): number {
+  const name = dateTime('en', timeZone, { weekday: 'short' }).format(parse(instant));
+  const day = WEEKDAYS.indexOf(name as (typeof WEEKDAYS)[number]);
+  if (day < 0) throw new RangeError(`formatters: "${name}" is not a day of the week`);
+  return day;
+}
+
 /** The time with the locale's day period: «10:02 ص», "10:02 AM". */
 export function formatTime(instant: string, timeZone: string, locale: Locale): string {
   return dateTime(locale, timeZone, { hour: 'numeric', minute: '2-digit' }).format(parse(instant));
@@ -142,6 +183,8 @@ export function useFormatters() {
       weekdayDate: (instant: string, timeZone: string) =>
         formatWeekdayDate(instant, timeZone, locale),
       time: (instant: string, timeZone: string) => formatTime(instant, timeZone, locale),
+      weekday: (dayOfWeek: number) => formatWeekday(dayOfWeek, locale),
+      wallClock: (time: string) => formatWallClock(time, locale),
     }),
     [locale],
   );
