@@ -1107,7 +1107,7 @@
       "qualification": "Qualification",
       "ratingOf": "{rating} from {count, plural, one {# review} other {# reviews}}",
       "remedy": {
-        "ijazahTrack": "The teacher requests your ijazah after completion · make-up by a session",
+        "ijazahTrack": "If the teacher is absent, you get a make-up session, with no refund",
         "recitation": "If the teacher is absent, you choose a make-up session or a refund of its price"
       },
       "report": "Report",

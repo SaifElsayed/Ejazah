@@ -221,6 +221,8 @@ describe('TeacherProfile', () => {
     await inBothDirections(profile, async (_rendered, direction) => {
       expect(await screen.findByText(said(direction, key))).toBeTruthy();
       expect(screen.queryByText(said(direction, other))).toBeNull();
+      // No promise of an ijazah on completion (FR-IJAZAH-1; the owner's decision of 2026-11-02).
+      expect(screen.queryByText(/الإجازة بعد الإتمام|ijazah after completion/)).toBeNull();
     });
   });
 
