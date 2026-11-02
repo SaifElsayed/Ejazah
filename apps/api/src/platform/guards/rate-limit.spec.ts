@@ -43,6 +43,7 @@ import {
   RedisRateLimitCounter,
 } from './rate-limit.guard.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -185,6 +186,7 @@ function fixture(
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
     discovery: unusedDiscoveryServices,
+    booking: unusedBookingServices,
   };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>

@@ -2,7 +2,9 @@
 // packages read and write them, and whether a subject is one of the teacher's `teacher_subjects`.
 // Queries only, each on the caller's transaction; the service takes its locks first (T005's rule
 // 1). Every read and write of a package names its teacher beside its id, so another teacher's
-// package id reads nothing and writes nothing (PR #109's review, M3).
+// package id reads nothing and writes nothing (PR #109's review, M3). The one exception is T032's
+// `bookablePackageOf`, the booking sheet's read by the id a student names, reached through the
+// entry; read-only, no lock.
 //
 // The price column is `bigint`; it enters and leaves this file as `Piasters` through
 // `packages/money` (R-MONEY-1), and the length as the contract's `30 | 45 | 60`, which the database
@@ -119,6 +121,33 @@ export async function packageOf(
 ): Promise<PackageRow | null> {
   const [row] = await readPackages(tx, teacherUserId, packageId);
   return row ?? null;
+}
+
+/** An active package's teacher and terms, as the booking sheet reads them (T032). */
+export interface BookablePackage {
+  readonly id: string;
+  readonly teacherUserId: string;
+  readonly sessionCount: number;
+  readonly sessionDurationMinutes: SessionLengthMinutes;
+}
+
+/**
+ * The active package `packageId` with its teacher, or null for an unknown or inactive one (T032,
+ * FR-350). The one read of a package by its id alone: a student names a package, never its
+ * teacher, so booking asks identity's predicate of the teacher this answers before it reads, or
+ * answers, anything else (R-GENDER-2, R-201).
+ */
+export async function bookablePackageOf(
+  tx: Client,
+  packageId: string,
+): Promise<BookablePackage | null> {
+  const row = await tx.package.findFirst({
+    where: { id: packageId, isActive: true },
+    select: { id: true, teacherUserId: true, sessionCount: true, sessionDurationMinutes: true },
+  });
+  return row === null
+    ? null
+    : { ...row, sessionDurationMinutes: sessionLengthMinutes.parse(row.sessionDurationMinutes) };
 }
 
 /** Writes the package and answers it as read back. */

@@ -186,6 +186,8 @@ export { slotsRouter } from './slots.router.js';
  * what booking's discovery read decides is free (T026, R-205).
  */
 export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
+/** An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350). */
+export { type BookablePackage, bookablePackageOf } from './packages.repository.js';
 export type { TeacherSlots };
 
 /** The subjects list's router, mounted under `catalog.subjects` by `app.router.ts` (T038). */

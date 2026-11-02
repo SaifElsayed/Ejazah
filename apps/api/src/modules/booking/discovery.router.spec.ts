@@ -20,6 +20,7 @@ import {
   toErrorShape,
 } from '../../surfaces/procedures.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
@@ -107,6 +108,7 @@ function callerAs(session: UserSession | null): Caller {
     teacherProfile: unusedTeacherProfileServices,
     catalog: unusedCatalogServices,
     discovery,
+    booking: unusedBookingServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

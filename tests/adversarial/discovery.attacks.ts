@@ -102,7 +102,7 @@ async function refusalOf(call: () => Promise<unknown>): Promise<MappedError> {
 }
 
 /** Refused before any service: 401, `UNAUTHENTICATED`, no field. */
-async function expectUnauthenticated(call: () => Promise<unknown>): Promise<void> {
+export async function expectUnauthenticated(call: () => Promise<unknown>): Promise<void> {
   const refusal = await refusalOf(call);
   expect(refusal.status).toBe(401);
   expect(refusal.body.code).toBe('UNAUTHENTICATED');
@@ -115,7 +115,7 @@ function forgedCursor(keys: readonly [string | null, number, string, string]) {
 }
 
 /** The uuid one above `id`: a guess at a neighbour of a real row. */
-function neighbourOf(id: string): string {
+export function neighbourOf(id: string): string {
   const hex = (BigInt(`0x${id.replaceAll('-', '')}`) + 1n).toString(16).padStart(32, '0');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
@@ -125,7 +125,7 @@ function neighbourOf(id: string): string {
  * session in place of its own, and with the other gender appended as a claim: the server's token
  * names a session and never a gender, so each is refused by the resolver.
  */
-function tamperedTokens(direction: Direction, own: string, otherSession: string): string[] {
+export function tamperedTokens(direction: Direction, own: string, otherSession: string): string[] {
   const last = own.at(-1) === 'A' ? 'B' : 'A';
   return [
     `${own.slice(0, -1)}${last}`,
@@ -134,7 +134,7 @@ function tamperedTokens(direction: Direction, own: string, otherSession: string)
   ];
 }
 
-async function surfaceFor(direction: Direction) {
+export async function surfaceFor(direction: Direction) {
   const surface = await discoverySurface();
   const { world } = surface;
   return {

@@ -54,6 +54,7 @@ import {
   toErrorShape,
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -143,6 +144,7 @@ function surfaceCaller(teacherId: string) {
         verification: unusedVerificationServices,
         teacherProfile: unusedTeacherProfileServices,
         discovery: unusedDiscoveryServices,
+        booking: unusedBookingServices,
         catalog,
       },
     }),
@@ -194,6 +196,7 @@ function publishedCaller(teacherId: string, gender: 'male' | 'female') {
           get: (target, name) => (name === 'packages' ? service() : Reflect.get(target, name)),
         }),
         discovery: unusedDiscoveryServices,
+        booking: unusedBookingServices,
       },
     }),
   );
