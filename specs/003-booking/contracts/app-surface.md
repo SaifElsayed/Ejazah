@@ -47,7 +47,7 @@ visibility predicate first (research R-201, R-202).
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
 | `checkout.hold` | student, idempotent, `rate_limit_payment_initiation` | `{ packageId, slotId, idempotencyKey }` | `{ holdId, expiresAt, summary, firstSession, lastSession }` | FR-351/352/353; `SLOT_TAKEN`; `NOT_BOOKABLE`; `ACCOUNT_NOT_ACTIVE`; `PREVIOUS_CHECKOUT` (FR-BOOK-12 (b)/(c)); the slot must be an active slot of the package's teacher; otherwise `NOT_FOUND`, nothing written (FR-353, round 2 N2) |
-| `checkout.pay` | student, idempotent, `rate_limit_payment_initiation` | `{ holdId, idempotencyKey }` | `{ enrollmentId, checkoutUrl, orderExpiresAt }` | ARCHITECTURE §8.1: order created outside the transaction, recorded and handed over only if the hold is still active (FR-354); `HOLD_EXPIRED` otherwise; only the caller's own hold: another student's id answers `NOT_FOUND`, no order is created and nothing is written (M3) |
+| `checkout.pay` | student, idempotent, `rate_limit_payment_initiation` | `{ holdId, quotedPricePiasters, idempotencyKey }` | `{ enrollmentId, checkoutUrl, orderExpiresAt }` | ARCHITECTURE §8.1: order created outside the transaction, recorded and handed over only if the hold is still active (FR-354); `HOLD_EXPIRED` otherwise; `PRICE_CHANGED`, before any order and with nothing written, when `quotedPricePiasters` (the price the student saw) is not the package's (the owner's decision of 2026-11-03); only the caller's own hold: another student's id answers `NOT_FOUND`, no order is created and nothing is written (M3) |
 | `checkout.retry` | student, idempotent, `rate_limit_payment_initiation` | `{ enrollmentId, idempotencyKey }` | `{ checkoutUrl, orderExpiresAt }` | A new order on the same hold; `ORDER_NOT_PAYABLE` past the hold's expiry minus the grace (FR-356); only the caller's own enrollment: `NOT_FOUND` otherwise, nothing written (M3) |
 | `checkout.current` | student | `{}` | `{ hold?: { holdId, expiresAt, enrollmentId?, summary, lastOrder?: { status, expiresAt, canContinue } } }` | What `CheckoutPrevious` shows; `canContinue` when the last order is still payable |
 | `checkout.continue` | student | `{ enrollmentId }` | `{ checkoutUrl, orderExpiresAt }` | Reopens the payable order's hosted page (FR-BOOK-12 (c)): `NOT_FOUND` unless the enrollment is the caller's; `ORDER_NOT_PAYABLE`, with nothing decrypted, unless the order is `created` and its `expires_at` is after now; the address is never logged (data-model §2.4.1) |
@@ -85,4 +85,7 @@ confirmingPollSeconds, confirmingPollWindowMinutes }`, read from settings.
 `packages/contracts/src/idempotent-procedures.ts` gains `teacher.packages.create`, `teacher.slots.create`,
 `checkout.hold`, `checkout.pay` and `checkout.retry` (additive). The keyed effect never calls the gateway: `pay` and
 `retry` create the order before `idempotency.run` and record it inside, as Phase 1's payout registration does
-(`identity/payout.service.ts` lines 99–126).
+(`identity/payout.service.ts` lines 99–126). They read the key first, outside a transaction: a completed key answers its
+stored outcome and calls no gateway; when a duplicate commits first, `run` answers its outcome and the extra order is
+cancelled at the gateway. The stored outcome holds no address, which a repeat reads again from
+`payments.checkout_url_encrypted` (the owner's decision of 2026-11-03, the note under T036).

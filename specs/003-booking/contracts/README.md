@@ -26,7 +26,8 @@ its input and output schema, and, where public, its rate limit; every output is 
   is not active, T143), `ACCOUNT_NOT_ACTIVE` (the student's own account is `verification_required`, FR-VERIFY-10),
   `SLOT_TAKEN` (the hold was refused: held, occupied or overlapping), `PREVIOUS_CHECKOUT` (FR-BOOK-12's refusal, with
   `enrollmentId`, `state: 'processing' | 'payable'` and `expiresAt` in details), `HOLD_EXPIRED`, `ORDER_NOT_PAYABLE`
-  (Retry past the last moment an order may be created), `SUBJECT_NOT_APPROVED`, `SLOT_OVERLAP` (with the other slot's
+  (Retry past the last moment an order may be created), `PRICE_CHANGED` (Pay with a price other than the package's,
+  nothing written; the owner's decision of 2026-11-03), `SUBJECT_NOT_APPROVED`, `SLOT_OVERLAP` (with the other slot's
   id in details), `SLOT_IN_USE`, `PACKAGE_FROZEN` (track or length after the first enrollment).
 - **Money.** `_piasters` integers on the wire (R-MONEY-1/2); formatting is the client's (R-212).
 - **Time.** Instants as ISO-8601 UTC strings; a slot's start as `HH:MM` local with its zone; a session as its local
