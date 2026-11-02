@@ -22,6 +22,7 @@ import {
 import { DOCUMENT_STORAGE_KEY_COLUMN } from './verification.repository.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -72,6 +73,7 @@ const services = {
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
+  booking: unusedBookingServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const cipher = new ColumnCipher(Buffer.alloc(32, 9).toString('base64'));

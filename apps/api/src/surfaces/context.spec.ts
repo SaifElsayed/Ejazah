@@ -27,6 +27,7 @@ import {
 } from './context.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -56,6 +57,7 @@ const services = {
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
+  booking: unusedBookingServices,
 };
 
 const appSource = { session: null, log, rateLimiter, clientAddress, services };
@@ -148,7 +150,11 @@ describe('what the contexts read of a session (T016, FR-108, data-model §6)', (
       ...adminSource,
       session: { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: false },
     });
-    expect(context.administrator).toEqual({ adminId: 'admin-1', sessionId: 'session-1', mfaVerified: false });
+    expect(context.administrator).toEqual({
+      adminId: 'admin-1',
+      sessionId: 'session-1',
+      mfaVerified: false,
+    });
     expect(context.rateLimiter).toBe(rateLimiter);
     expect(context.clientAddress).toBe(clientAddress);
   });

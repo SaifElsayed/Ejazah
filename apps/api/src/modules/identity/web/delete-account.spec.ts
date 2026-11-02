@@ -30,6 +30,7 @@ import { copyOf } from '../../../platform/web/copy.js';
 import { PUBLIC_FORM_MAX_BYTES, PUBLIC_PAGE_CSP } from '../../../platform/web/route.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -66,6 +67,7 @@ const services = {
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
+  booking: unusedBookingServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

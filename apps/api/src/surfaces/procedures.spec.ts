@@ -54,6 +54,7 @@ import {
 } from './procedures.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -162,6 +163,7 @@ const services = {
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
+  booking: unusedBookingServices,
 };
 
 /** The user surface's context for a fixture session, as the HTTP application builds one. */

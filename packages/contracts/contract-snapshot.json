@@ -1089,6 +1089,34 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "booking.slots": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.packageId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.slots": { "required": true, "type": "array" },
+          "$.slots[]": { "type": "object" },
+          "$.slots[].dayOfWeek": { "required": true, "type": "integer" },
+          "$.slots[].durationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.slots[].firstSession": { "required": true, "type": "object" },
+          "$.slots[].firstSession.localDate": { "required": true, "type": "string" },
+          "$.slots[].firstSession.startsAt": { "required": true, "type": "string" },
+          "$.slots[].lastSession": { "required": true, "type": "object" },
+          "$.slots[].lastSession.localDate": { "required": true, "type": "string" },
+          "$.slots[].lastSession.startsAt": { "required": true, "type": "string" },
+          "$.slots[].slotId": { "required": true, "type": "string" },
+          "$.slots[].startTimeLocal": { "required": true, "type": "string" },
+          "$.teacherTimezone": { "required": true, "type": "string" }
+        }
+      },
       "catalog.subjects.list": {
         "caller": "public",
         "input": { "$": { "type": "unknown" } },

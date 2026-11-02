@@ -9,6 +9,7 @@ import { createLogger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -129,6 +130,7 @@ export function surfaceOf(verification: VerificationServices): VerificationSurfa
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
     discovery: unusedDiscoveryServices,
+    booking: unusedBookingServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

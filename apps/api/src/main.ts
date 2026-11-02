@@ -139,7 +139,8 @@ const cipher = createColumnCipher(config);
 // (FR-106), the payout registration over the payment port (T077), and the catalog module's behind
 // `teacher.packages` and `teacher.slots`, whose `CatalogUse` port is bound to booking's entry
 // (T020, R-207): catalog asks whether a slot or a package is in use without importing booking;
-// and booking's `discovery` over catalog's discovery service (T026, R-205).
+// and booking's `discovery` over catalog's discovery service (T026, R-205) and its `booking`
+// namespace, the booking sheet's slots (T032).
 // The one registry of an account's end (FR-142): the admin module's standing actions and the
 // identity module's deletion call it, and the modules that keep what an account had subscribe to it
 // (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
@@ -208,6 +209,8 @@ const services = {
     database,
     settings,
   }),
+  // `booking` (T032): the booking sheet's slots, over catalog's, identity's and sessions' entries.
+  booking: booking.createBookingServices({ database, settings }),
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload

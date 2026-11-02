@@ -2,7 +2,8 @@
 // module's entry, so booking never reads the `sessions` table (R-API-6). The reads run on the
 // caller's transaction and take no lock. A soft-deleted session is left out by the client's extension
 // (T148). T034: generation's one write, an enrollment's sessions in one statement, on the
-// confirmation's transaction, whose caller holds the locks (`generation.service.ts`).
+// confirmation's transaction, whose caller holds the locks (`generation.service.ts`). T032: the
+// times of a student's sessions in a window, for the booking sheet; read-only, no lock.
 import { calendarDateOf, type LocalDate } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -29,6 +30,42 @@ export async function lastSessionDateOf(
     }
   }
   return dates;
+}
+
+/** A session's time, as the student's own sessions are read for the booking sheet (T032). */
+export interface SessionTime {
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
+/** The statuses that free a session's time, as the overlap constraints read them (ERD §15 rule 19). */
+const TIME_FREEING_STATUSES = ['cancelled_by_agreement', 'cancelled_by_admin'] as const;
+
+/**
+ * The times of the student's sessions that hold time in `[from, to)` (T032, R-205, FR-350): every
+ * status but the two cancellations, a soft-deleted one left out by the client's extension, so the
+ * sheet leaves out what `sessions_student_no_overlap` would refuse. Over `student_user_id`'s index;
+ * bounded by the window, since that constraint keeps one student's sessions from overlapping.
+ */
+export async function studentSessionsBetween(
+  tx: Pick<Transaction, 'session'>,
+  studentUserId: string,
+  window: { readonly from: Date; readonly to: Date },
+): Promise<readonly SessionTime[]> {
+  const rows = await tx.session.findMany({
+    where: {
+      studentUserId,
+      status: { notIn: [...TIME_FREEING_STATUSES] },
+      scheduledStartAt: { lt: window.to },
+      scheduledEndAt: { gt: window.from },
+    },
+    orderBy: { scheduledStartAt: 'asc' },
+    select: { scheduledStartAt: true, scheduledEndAt: true },
+  });
+  return rows.map(({ scheduledStartAt, scheduledEndAt }) => ({
+    startsAt: scheduledStartAt,
+    endsAt: scheduledEndAt,
+  }));
 }
 
 /** One `sessions` row as generation writes it (T034, ADR 0009 D1–D2). */

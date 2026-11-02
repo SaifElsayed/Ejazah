@@ -24,6 +24,7 @@ import type { GatewayEvent, PaymentPort } from '../ports/payment/payment.port.js
 import { SettingError, type SettingsReader } from '../settings/settings-reader.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -76,6 +77,7 @@ async function applicationWith(
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
       discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
     },
     adminServices: unusedAdminServices,
     routes,

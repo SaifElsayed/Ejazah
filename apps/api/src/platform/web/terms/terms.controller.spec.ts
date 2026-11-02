@@ -18,6 +18,7 @@ import { PUBLIC_PAGE_CSP } from '../route.js';
 import { TERMS_PATH, termsRoute } from './terms.controller.js';
 import {
   unusedAdminServices,
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -58,6 +59,7 @@ const services = {
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
+  booking: unusedBookingServices,
 };
 
 let application: INestApplication;

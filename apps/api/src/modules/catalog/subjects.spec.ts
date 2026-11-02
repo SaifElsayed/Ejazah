@@ -16,6 +16,7 @@ import { createAppCallerFactory, createAppRouter } from '../../surfaces/procedur
 import { createSubjectsService, subjectsRouter, type SubjectsReader } from './index.js';
 import { SubjectsRepository } from './subjects.repository.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -71,6 +72,7 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
       discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
     };
     const router = createAppRouter({ catalog: createAppRouter({ subjects: subjectsRouter }) });
     const caller = createAppCallerFactory(router)(

@@ -10,6 +10,7 @@ import { createLogger, type Logger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
+  unusedBookingServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -119,6 +120,7 @@ export function appContextFor(
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
     discovery: unusedDiscoveryServices,
+    booking: unusedBookingServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }

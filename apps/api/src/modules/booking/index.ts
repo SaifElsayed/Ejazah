@@ -54,6 +54,21 @@ export function createCatalogUse({
  */
 export { type NearestSlot, nearestFreeSlots } from './nearest-slot.service.js';
 
+/** The `booking` namespace, mounted by `app.router.ts` (T032). */
+export { bookingRouter } from './booking.router.js';
+/**
+ * `booking.slots`' services over the process's client (T032), and its read on the caller's
+ * transaction over the owners' entries, exported for the probe of its queries
+ * (`tests/db-integrity/booking-slots.spec.ts`).
+ */
+export {
+  type BookingServices,
+  type BookingStudent,
+  bookingSlotsOf,
+  bookingSlotsStore,
+  createBookingServices,
+} from './booking-slots.service.js';
+
 /** The `discovery` namespace, mounted by `app.router.ts` (T026). */
 export { discoveryRouter } from './discovery.router.js';
 export type {
