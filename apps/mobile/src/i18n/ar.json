@@ -842,7 +842,7 @@
         "from": "من {price}",
         "meta": "{subjects} · {riwaya} · {years}",
         "nearestSlot": "أقرب موعد {slot}",
-        "ratingCount": "{rating, number, ::.0} · {count, number}",
+        "ratingCount": "{rating} · {count, number}",
         "subjectsSeparator": "، ",
         "years": "{count, plural, one {سنة واحدة} two {سنتان} few {# سنوات} many {# سنة} other {# سنة}}"
       },
@@ -883,14 +883,14 @@
         },
         "empty": {
           "clear": "مسح البحث",
-          "text": "جرّب اسمًا آخر.",
+          "text": "جرّب اسمًا آخر، أو ابحث باسم المادة.",
           "title": "لم نجد معلمًا بهذا الاسم"
         },
         "hintText": "مثل: التجويد، القراءات",
         "hintTitle": "جرّب البحث باسم المادة",
         "resultCount": "{count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}} لـ «{query}» · في كل الأقسام"
       },
-      "searchPlaceholder": "ابحث باسم الشيخ",
+      "searchPlaceholder": "ابحث باسم الشيخ أو المادة",
       "title": "استكشف"
     },
     "dispute": {
@@ -1269,10 +1269,12 @@
         "disabled": "معطّل",
         "free": "متاح"
       },
+      "lockedBanner": "‏لن تظهر مواعيدك للطلاب حتى يتم التحقق من حساب الاستلام",
       "noSlotsOn": "{days}: لا مواعيد",
       "slot": "{time} · {minutes} د",
       "subtitle": "بتوقيتك: {city} · تتكرر كل أسبوع",
-      "title": "المواعيد"
+      "title": "المواعيد",
+      "unpublished": "‏غير منشورة"
     },
     "cancel": {
       "picker": {

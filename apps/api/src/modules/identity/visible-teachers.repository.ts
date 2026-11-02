@@ -19,7 +19,8 @@
 // `display_name ASC`, then the teacher's id `ASC`, and cut by a keyset over the same four values
 // whose NULL branch is written out: a teacher with no review has a NULL rating, which comes after
 // every rated one (R-204, the owner's decisions of 2026-11-01). The name prefix is matched by the
-// kernel's folded query, on the candidates only, so the match never widens the page.
+// kernel's folded query, on the candidates only, so the match never widens the page; a search also
+// keeps the candidates catalog matched by a subject's name (T070), the predicate applied to them all.
 import type { Prisma } from '@prisma/client';
 
 import { idsWithFoldedNamePrefix } from '../../platform/db/folded-name.js';
@@ -55,6 +56,12 @@ export interface TeacherPageQuery {
   readonly candidateIds: readonly string[];
   /** What the student typed; matched as a prefix of the folded name, never as a pattern. */
   readonly namePrefix?: string;
+  /**
+   * With `namePrefix`: the candidates the query matched by what catalog holds, a subject's name
+   * (T070, FR-333), kept whether or not the name has the prefix. An id outside `candidateIds` is
+   * ignored, and every id still passes the predicate. Without `namePrefix` it is ignored.
+   */
+  readonly alsoMatched?: readonly string[];
   /** The rating filter: at least this; a teacher with no review is left out. */
   readonly minRating?: number;
   readonly after?: TeacherPageCursor;
@@ -176,6 +183,21 @@ export async function visibleTeachers(
 }
 
 /**
+ * The candidates a search keeps (FR-333): those whose folded name has the prefix, and those the
+ * query matched otherwise among the candidates (T070); every candidate when nothing was typed.
+ */
+async function matchingCandidates(
+  tx: Pick<Transaction, '$queryRaw'>,
+  query: TeacherPageQuery,
+): Promise<readonly string[]> {
+  if (query.namePrefix === undefined) return query.candidateIds;
+  const byName = await idsWithFoldedNamePrefix(tx, query.candidateIds, query.namePrefix);
+  const candidates = new Set(query.candidateIds);
+  const otherwise = (query.alsoMatched ?? []).filter((id) => candidates.has(id));
+  return [...new Set([...byName, ...otherwise])];
+}
+
+/**
  * One page of the teachers among `candidateIds` visible to the requester for discovery, in R-204's
  * order, after `after` when it is given; at most `limit` rows.
  */
@@ -184,10 +206,7 @@ export async function visibleTeacherPage(
   requester: RequesterGender,
   query: TeacherPageQuery,
 ): Promise<VisibleTeacher[]> {
-  const ids =
-    query.namePrefix === undefined
-      ? query.candidateIds
-      : await idsWithFoldedNamePrefix(tx, query.candidateIds, query.namePrefix);
+  const ids = await matchingCandidates(tx, query);
   if (ids.length === 0) return [];
   const filters: Prisma.UserWhereInput[] = [teacherClause(requester, 'discover')];
   if (query.minRating !== undefined) {

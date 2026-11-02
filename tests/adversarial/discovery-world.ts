@@ -29,6 +29,9 @@
 // commit teachers to this database at the same time, so every exact answer is read inside the
 // world's own subjects; an answer across all subjects is checked for leaks only, and the tab of all
 // subjects against the predicate counted in SQL from the SRS text (`allTabCount`).
+// T070: the shared subject's Arabic name is written with every variant FR-333 folds, then a tag of
+// its own, so a search by a subject's name is attacked in both directions, and a search typed with
+// its whole name and tag is an exact answer across all subjects.
 // T032: every teacher, in every state, also has one active slot of the packages' length (Thursday
 // 09:00 in Cairo), and its package and slot ids are kept, so `booking.slots` is attacked in the same
 // world (`booking.attacks.ts`).
@@ -134,6 +137,22 @@ export const VARIANT_NAME = 'أُسامـة إِبراهيم آل مصطفى ه�
 export const PLAIN_NAME = 'اسامه ابراهيم ال مصطفي هاني لوي yusuf';
 /** A visible name that holds the prefix but does not begin with it: a prefix search skips it. */
 export const OTHER_NAME = 'عبدالله اسامه ابراهيم';
+
+/**
+ * The shared subject's Arabic name before its tag, written with every variant FR-333 folds (T070:
+ * a search by a subject's name, R-203). It begins with no letter a name search above begins with, so
+ * those searches meet no subject.
+ */
+export const SUBJECT_VARIANT = 'مَتْن أُصول إِقراء آل الهُدى قارئ مُؤدّى قراءة التجويـد';
+/** The same name as `ijazah_fold` answers it, as a student may type it. */
+export const SUBJECT_PLAIN = 'متن اصول اقراء ال الهدي قاري مودي قراءه التجويد';
+/** The shared subject's English name before its tag. */
+export const SUBJECT_ENGLISH = 'Matn Tajweed';
+
+/** What a student types to find the shared subject: `spelling` of its name, then its own tag. */
+export function sharedSubjectQuery(world: World, spelling: string): string {
+  return `${spelling} ${world.shared.nameAr.slice(SUBJECT_VARIANT.length + 1)}`;
+}
 
 /** The riwaya a visible teacher's shared-subject credential and every private one carry. */
 export const COMMON_RIWAYA = 'حفص عن عاصم';
@@ -411,7 +430,13 @@ async function build(): Promise<Built> {
     );
 
   const seeder = new Seeder(database, created);
-  const [admin, shared] = await Promise.all([seeder.admin(), seeder.subject()]);
+  const [admin, shared] = await Promise.all([
+    seeder.admin(),
+    seeder.subject({
+      nameAr: SUBJECT_VARIANT,
+      nameEn: SUBJECT_ENGLISH,
+    }),
+  ]);
   const teachers: SeededTeacher[] = [];
   for (const gender of GENDERS) {
     for (const role of VISIBLE_ROLES) {
@@ -549,10 +574,11 @@ class Seeder {
     return id;
   }
 
-  async subject(): Promise<SubjectRow> {
+  /** An active subject, its names `names` (by default «مادة», "Subject") then a tag of its own. */
+  async subject(names = { nameAr: 'مادة', nameEn: 'Subject' }): Promise<SubjectRow> {
     const tag = randomUUID().slice(0, 8);
     const row = await this.#database.subject.create({
-      data: { nameAr: `مادة ${tag}`, nameEn: `Subject ${tag}`, isActive: true },
+      data: { nameAr: `${names.nameAr} ${tag}`, nameEn: `${names.nameEn} ${tag}`, isActive: true },
       select: { id: true, nameAr: true, nameEn: true },
     });
     this.#created.subjects.push(row.id);

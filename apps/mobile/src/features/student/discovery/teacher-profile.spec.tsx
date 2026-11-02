@@ -19,7 +19,7 @@ import {
   unmarked,
 } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, type MessageValues, translate } from '../../../i18n';
-import { formatNumber, formatPounds } from '../../../lib/formatters';
+import { formatPounds, formatRating } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../../shared/__tests__/api-double';
 import { TeacherProfile } from './index';
 
@@ -84,7 +84,8 @@ const full: DiscoveryTeacherOutput = {
   bio: 'أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا.',
   qualificationSummary: 'إجازة في القراءات، واثنا عشر عامًا من التدريس',
   subjects: [QURAN, TAJWEED],
-  rating: 4.9,
+  // Drawn «5.0», to one decimal as the card draws it (T070; PR #118's review, nit 5).
+  rating: 4.96,
   reviewCount: 86,
   packages: [recitation, ijazahTrack],
 };
@@ -153,14 +154,12 @@ describe('TeacherProfile', () => {
           ),
         ),
       ).toBeTruthy();
-      expect(
-        screen.getByText(
-          said(direction, 'student.teacherProfile.ratingOf', {
-            rating: formatNumber(4.9, localeOf(direction)),
-            count: 86,
-          }),
-        ),
-      ).toBeTruthy();
+      const ratingLine = said(direction, 'student.teacherProfile.ratingOf', {
+        rating: formatRating(4.96, localeOf(direction)),
+        count: 86,
+      });
+      expect(ratingLine).toContain('5.0');
+      expect(screen.getByText(ratingLine)).toBeTruthy();
       expect(screen.queryByText(said(direction, 'student.teacherProfile.noReviews'))).toBeNull();
       expect(screen.getByText(full.bio)).toBeTruthy();
       expect(screen.getByText(said(direction, 'student.teacherProfile.qualification'))).toBeTruthy();

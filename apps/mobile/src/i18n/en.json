@@ -842,7 +842,7 @@
         "from": "from {price}",
         "meta": "{subjects} · {riwaya} · {years}",
         "nearestSlot": "Nearest slot {slot}",
-        "ratingCount": "{rating, number, ::.0} · {count, number}",
+        "ratingCount": "{rating} · {count, number}",
         "subjectsSeparator": ", ",
         "years": "{count, plural, one {# year} other {# years}}"
       },
@@ -883,14 +883,14 @@
         },
         "empty": {
           "clear": "Clear search",
-          "text": "Try another name.",
+          "text": "Try another name, or search by subject.",
           "title": "No teacher by that name"
         },
         "hintText": "for example: Tajweed, Qira'at",
         "hintTitle": "Try searching by subject name",
         "resultCount": "{count, plural, =0 {No results} one {# result} other {# results}} for “{query}” · in all sections"
       },
-      "searchPlaceholder": "Search by sheikh name",
+      "searchPlaceholder": "Search by sheikh name or subject",
       "title": "Explore"
     },
     "dispute": {
@@ -1269,10 +1269,12 @@
         "disabled": "Disabled",
         "free": "Free"
       },
+      "lockedBanner": "Your slots will not be visible to students until the payout account is verified",
       "noSlotsOn": "{days}: no slots",
       "slot": "{time} · {minutes} min",
       "subtitle": "Your time zone: {city} · repeats every week",
-      "title": "Slots"
+      "title": "Slots",
+      "unpublished": "Not published"
     },
     "cancel": {
       "picker": {

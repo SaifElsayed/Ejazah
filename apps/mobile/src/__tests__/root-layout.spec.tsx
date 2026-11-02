@@ -10,14 +10,17 @@
 // T136: signing out or deleting the account leaves no draft behind on the phone: the teacher's
 // application (its `reapply` mode with it), the onboarding's, and the pending address and password.
 // T138: a launch with no connection says it cannot load instead of waiting on a blank screen.
+// T078: every navigator draws its screens' cards and its container in the scheme's background.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { onlineManager, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { DefaultTheme, router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
-import { BackHandler, Text, View } from 'react-native';
+import { BackHandler, StyleSheet, Text, View } from 'react-native';
+import type { TestInstance } from 'test-renderer';
 
 import { Button } from '../design/primitives';
+import { tokens } from '../design/tokens';
 import { fakeProcedures } from '../features/shared/__tests__/api-double';
 import {
   clearPendingEmail,
@@ -55,6 +58,13 @@ jest.mock('../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
 
 // The account tabs lead to the deletion, whose proof loads the providers' native modules (T084).
 jest.mock('../features/shared/auth/providers', () => ({ nativeIdentity: jest.fn() }));
+
+// The system's scheme, as React Native's hook reads it from the Appearance module (T078).
+const mockSystemScheme = jest.fn<() => 'light' | 'dark' | null>(() => 'light');
+jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
+  __esModule: true,
+  default: () => mockSystemScheme(),
+}));
 
 const account = (landing: string, extra: Record<string, unknown> = {}) => ({
   userId: '0193a6f0-0000-7000-8000-000000000001',
@@ -127,6 +137,8 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env['EXPO_PUBLIC_API_URL'];
   onlineManager.setOnline(true);
+  mockSystemScheme.mockReset();
+  mockSystemScheme.mockReturnValue('light');
 });
 
 describe('the root layout', () => {
@@ -304,6 +316,59 @@ describe('the root layout', () => {
     await fireEvent.press(screen.getByRole('tab', { name: 'طلابي' }));
     expect(await screen.findByText('لا طلاب بعد')).toBeTruthy();
   });
+});
+
+/**
+ * The colours the navigators draw around a screen, from its text outwards: each stack's card (the
+ * view whose padding holds the system bars' insets) and each stack's own container.
+ */
+function backgroundsAround(node: TestInstance): unknown[] {
+  const drawn: unknown[] = [];
+  for (let at: TestInstance | null = node; at !== null; at = at.parent) {
+    if (at.type === 'RNSScreenContentWrapper') {
+      drawn.push(StyleSheet.flatten(at.props['style'])?.backgroundColor);
+    }
+    if (at.type === 'RNSScreenStack') drawn.push(at.props['nativeContainerBackgroundColor']);
+  }
+  return drawn;
+}
+
+// T078 (B28's device run): a screen pushed above the tabs showed react-navigation's default light
+// grey behind the status bar and the navigation bar, in the dark scheme; the root and the role
+// group's stacks now draw the scheme's background there.
+describe('the background behind the system bars (T078)', () => {
+  const pushed = [
+    {
+      role: 'student',
+      landing: 'student_home',
+      tabs: '/(student)/(tabs)',
+      href: '/(student)/account/delete',
+      text: 'student deletion',
+    },
+    {
+      role: 'teacher',
+      landing: 'teacher_home',
+      tabs: '/(teacher)/(tabs)',
+      href: '/(teacher)/account/delete',
+      text: 'teacher deletion',
+    },
+  ] as const;
+
+  for (const scheme of ['dark', 'light'] as const) {
+    for (const { role, landing, tabs, href, text } of pushed) {
+      it(`draws the ${scheme} background around a screen the ${role} pushes above the tabs`, async () => {
+        mockSystemScheme.mockReturnValue(scheme);
+        setSession({ kind: 'signed-in', landing });
+        await renderRouter(routes, { initialUrl: tabs });
+        await act(async () => router.push(href as never));
+        const drawn = backgroundsAround(await screen.findByText(text));
+        // Two stacks, the root's and the role group's, each with its container and the card.
+        expect(drawn).toHaveLength(4);
+        expect(drawn).not.toContain(DefaultTheme.colors.background);
+        expect(new Set(drawn)).toEqual(new Set([tokens.color[scheme].bg]));
+      });
+    }
+  }
 });
 
 /** The navigator's tree as `getRouterState()` returns it, by route name. */

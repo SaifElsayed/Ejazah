@@ -6,7 +6,13 @@ import type { ReactNode } from 'react';
 
 import { setLocale } from '../i18n';
 import { useDirection } from '../lib/direction';
-import { DirectionProvider, ThemeProvider, colorVariables, useTheme } from './theme';
+import {
+  DirectionProvider,
+  ThemeProvider,
+  colorVariables,
+  navigationTheme,
+  useTheme,
+} from './theme';
 import { tokens } from './tokens';
 
 // The system's scheme, as React Native's hook reads it from the Appearance module.
@@ -58,6 +64,29 @@ describe('colorVariables', () => {
       expect(variables['--color-primary']).toBe(tokens.color[scheme].primary);
       expect(variables['--color-on-primary-muted']).toBe(tokens.color[scheme]['on-primary-muted']);
     }
+  });
+});
+
+// T078: the navigators draw each screen's card and their own container in the navigation theme's
+// `background`; react-navigation's default is a light grey, which showed behind the system bars of
+// every pushed screen in the dark scheme.
+describe('navigationTheme', () => {
+  it("gives the navigators each scheme's background, never react-navigation's default", () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const theme = navigationTheme(scheme);
+      expect(theme.dark).toBe(scheme === 'dark');
+      expect(theme.colors.background).toBe(tokens.color[scheme].bg);
+      expect(theme.colors.card).toBe(tokens.color[scheme].bg);
+      expect(theme.colors.text).toBe(tokens.color[scheme].text);
+      expect(theme.colors.border).toBe(tokens.color[scheme].border);
+      expect(theme.colors.primary).toBe(tokens.color[scheme].primary);
+      expect(theme.colors.notification).toBe(tokens.color[scheme].danger);
+    }
+  });
+
+  it('keeps one theme object per scheme, so the navigators do not redraw on every render', () => {
+    expect(navigationTheme('dark')).toBe(navigationTheme('dark'));
+    expect(navigationTheme('light')).not.toBe(navigationTheme('dark'));
   });
 });
 

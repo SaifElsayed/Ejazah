@@ -1,18 +1,15 @@
 // T021 (FR-311, FR-315): what every state of the packages tab shares (screens.md §13): the header
 // with «باقة جديدة», its one primary action; over cached data the offline banner (002:T138); and
-// while the teacher is not published the warning to the payout. Since B15 (T078) the warning leads
-// to the payout, which draws the screen of its state (pending or rejected alike); a tappable warning
-// is a warning card, as the application's request for a document is (R-MOBILE-6).
+// while the teacher is not published the warning to the payout (`UnpublishedBanner`, which the
+// availability tab draws too since T069).
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
 
-import { AppHeader, Button, Card, Icon, Text } from '../../../../design/primitives';
-import { tokens } from '../../../../design/tokens';
+import { AppHeader, Button } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
 import { TabScreen } from '../../../shared/screen';
 import { OfflineNotice } from '../../../shared/states';
-import { PAYOUT_ROUTE } from '../../payout';
+import { UnpublishedBanner } from './Unpublished';
 
 /** The editor of package `id`, or of a new one (`new`). */
 export function openPackageEditor(id: string): void {
@@ -48,16 +45,7 @@ export function PackagesFrame({
       }
     >
       {onRetry === undefined ? null : <OfflineNotice onRetry={onRetry} />}
-      {published ? null : (
-        <Card variant="warning" onPress={() => router.push(PAYOUT_ROUTE)}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: tokens.space['3'] }}>
-            <Icon name="lock" size="sm" tone="warning" />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text variant="caption">{t('teacher.packages.lockedBanner')}</Text>
-            </View>
-          </View>
-        </Card>
-      )}
+      {published ? null : <UnpublishedBanner text={t('teacher.packages.lockedBanner')} />}
       {children}
     </TabScreen>
   );

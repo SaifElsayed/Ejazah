@@ -73,7 +73,9 @@ asks for a measured slow query first, and T057 measures (analysis C1). One kerne
 restricts its page to the ids it returns. The
 highlight is computed on the server as the length of the matched prefix in the original name's characters, returned
 with the result; the phone marks it. Subject search uses the same function over `subjects.name_ar`/`name_en`, no index
-(a few dozen rows).
+(a few dozen rows), and matches a prefix after the article «ال» is dropped from the start of the folded subject name and
+of the folded query, so «تجويد» and «تج» find «التجويد» as a student types them, while «ل» or «ال» alone matches no
+subject (the owner's decision of 2026-11-02, T070).
 
 **Rationale.** One fold, in one place, applied identically to both sides, is the only way FR-333's "same normalisation
 on the stored name and the typed text" holds; the fold runs in the query, so it cannot drift
@@ -123,7 +125,7 @@ its length equals the package's, it has no active hold, and it is not *occupied*
 enrollment on it is `pending_payment`, or is `confirmed` and the week after its last session plus
 `slot_release_buffer_weeks` has not begun (FR-BOOK-10). The last session's date is read from `sessions` through
 `sessions/index.ts` (`lastSessionDateOf(tx, enrollmentIds)`), so booking never reads that table. The booking sheet
-(`booking.slots`) also removes the slots whose first occurrence overlaps one of the student's own scheduled sessions,
+(`booking.slots`) also removes the slots any of whose sessions (the package's count of consecutive weeks from the first, R-209) overlaps one of the student's own sessions, by the one check the hold applies too (FR-BOOK-5: at generation and at reservation; the owner's decision of 2026-11-02, T033),
 and returns each slot's preview: first and last session dates by R-209's rule from now. The discovery card's nearest
 free slot is the minimum preview first-session instant over the teacher's offerable slots of the lengths of their
 active packages, computed by booking for the page's teachers (at most a page). Catalog must not depend on booking, which depends on

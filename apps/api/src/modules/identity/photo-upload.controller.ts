@@ -16,11 +16,20 @@
 // refused before a pixel is decoded; the decoder carries the same bound. A file `sharp` cannot
 // read is refused as the kinds guard refuses a type, `VALIDATION_FAILED`. Either refusal comes
 // before `storage.put`, so nothing is stored and the previous photo stays.
+//
+// T073 (PR #117's review; the owner's decision of 2026-11-02): one photo at the bound holds up to
+// about 551 MB while it is processed, so the route processes `PHOTOS_PROCESSED_AT_ONCE` (one)
+// at a time through `PhotoTurns`, from reading the header to the re-encoded bytes; a request
+// waiting longer than `PHOTO_TURN_WAIT_MS` for its turn is refused with `RATE_LIMITED`, before
+// anything is stored. `sharp`'s operation cache is off for the process, set here, the one place
+// that uses `sharp`: a photo is processed once, so a cached one only holds memory.
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import {
   PHOTO_MAX_INPUT_PIXELS,
+  PHOTO_TURN_WAIT_MS,
+  PHOTOS_PROCESSED_AT_ONCE,
   type SniffedType,
 } from '../../platform/guards/upload.middleware.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
@@ -28,6 +37,9 @@ import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/setti
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import { uploadRoute, type UploadRouteDependencies } from '../../surfaces/upload-route.js';
+import { PhotoTurns } from './photo-turns.js';
+
+sharp.cache(false);
 
 /** Where the photos route is served (public-pages.md). */
 export const PHOTOS_UPLOAD_PATH = '/uploads/photos';
@@ -42,6 +54,8 @@ export interface PhotoUploadDependencies extends UploadRouteDependencies {
   readonly storage: Pick<StoragePort, 'put' | 'remove' | 'temporaryLink'>;
   readonly settings: SettingsReader;
   readonly users: PhotoWriter;
+  /** The turns the photos are processed in; the route builds its own, one at a time, by default. */
+  readonly turns?: PhotoTurns;
 }
 
 function unreadable(cause: unknown): DomainError {
@@ -70,13 +84,14 @@ export function photoUploadRoute({
   storage,
   settings,
   users,
+  turns = new PhotoTurns({ atOnce: PHOTOS_PROCESSED_AT_ONCE, waitMs: PHOTO_TURN_WAIT_MS }),
   ...dependencies
 }: PhotoUploadDependencies): NodeHandler {
   return uploadRoute(dependencies, {
     kindOf: () => 'photo' as const,
     refuses: ['suspended', 'banned'],
     handle: async ({ uploader, type, bytes }) => {
-      const stored = await withoutMetadata(type, bytes);
+      const stored = await turns.take(() => withoutMetadata(type, bytes));
       const extension = type === 'image/png' ? 'png' : 'jpg';
       const key = `photos/${uploader.userId}/${randomUUID()}.${extension}`;
       await storage.put(key, stored, type);

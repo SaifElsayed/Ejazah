@@ -24,7 +24,7 @@ import {
 } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, type MessageValues, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
-import { formatPounds, formatTime, formatWeekdayDate } from '../../../lib/formatters';
+import { formatPounds, formatRating, formatTime, formatWeekdayDate } from '../../../lib/formatters';
 import { fakeApi } from '../../shared/__tests__/api-double';
 import { browseQueryKey } from './api';
 import { Discovery } from './index';
@@ -70,7 +70,8 @@ const ahmed: DiscoveryCard = {
   subjects: [QURAN, TAJWEED],
   tracks: ['recitation', 'ijazah_track'],
   bioExcerpt: 'أدرّس الحفظ والمراجعة للكبار منذ اثني عشر عامًا',
-  rating: 4.86,
+  // Rounds up to «5.0»: the card and the teacher's page draw it through one formatter (T070).
+  rating: 4.96,
   reviewCount: 86,
   nearestSlot: { startsAt: '2026-11-08T17:30:00.000Z', timezone: 'Africa/Cairo' },
   lowestPerSession_piasters: 15_000,
@@ -189,11 +190,12 @@ describe('Discovery (FR-332, FR-335)', () => {
         said(direction, 'student.discovery.card.bio', { bio: ahmed.bioExcerpt }),
       );
       expect(bio.props.numberOfLines).toBe(2);
-      expect(
-        screen.getByText(
-          said(direction, 'student.discovery.card.ratingCount', { rating: 4.86, count: 86 }),
-        ),
-      ).toBeTruthy();
+      const ratingLine = said(direction, 'student.discovery.card.ratingCount', {
+        rating: formatRating(4.96, localeOf(direction)),
+        count: 86,
+      });
+      expect(ratingLine).toContain('5.0');
+      expect(screen.getByText(ratingLine)).toBeTruthy();
       expect(screen.getByText(nearestLine(direction, ahmed.nearestSlot!.startsAt))).toBeTruthy();
       expect(screen.getByText(priceLine(direction, 15_000))).toBeTruthy();
 
@@ -294,9 +296,10 @@ describe('DiscoverySearch and DiscoverySearchEmpty (FR-333)', () => {
         ),
       ).toBeTruthy();
       expect(screen.getByText(said(direction, 'student.discovery.search.empty.text'))).toBeTruthy();
-      // No promise of a search by subject until T070 builds it (the owner's decision of 2026-11-02).
-      expect(screen.queryByText(/المادة|subject/i)).toBeNull();
-      expect(screen.queryByPlaceholderText(/المادة|subject/i)).toBeNull();
+      // The search by subject is built (T070): the field and the no-result line both offer it.
+      const subjectWord = direction === 'rtl' ? /المادة/ : /subject/i;
+      expect(screen.getByText(subjectWord)).toBeTruthy();
+      expect(screen.getByPlaceholderText(subjectWord)).toBeTruthy();
       await fireEvent.press(
         screen.getByRole('button', {
           name: said(direction, 'student.discovery.search.empty.clear'),

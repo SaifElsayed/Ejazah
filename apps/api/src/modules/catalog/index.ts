@@ -124,8 +124,8 @@ export interface CatalogServiceDependencies {
 }
 
 /**
- * The slots' store: this module's rows and locks, and the account's lock and zone through
- * identity's entry (T019, R-121).
+ * The slots' store: this module's rows and locks, and the account's lock and zone and whether the
+ * teacher is published through identity's entry (T019, T069, R-121).
  */
 function slotsStoreOver(database: Database): SlotsStore {
   return {
@@ -133,6 +133,7 @@ function slotsStoreOver(database: Database): SlotsStore {
     lockAccount,
     lockTeacherSlots,
     lockSlot,
+    isPublished: isPublishedTeacher,
     accountTimezone,
     ownsSlot,
     readSlot,

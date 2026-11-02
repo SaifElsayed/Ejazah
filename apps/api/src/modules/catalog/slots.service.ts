@@ -14,6 +14,10 @@
 // - A slot's day, start and length stay while it is in use (`SLOT_IN_USE`, booking's answer through
 //   the `CatalogUse` port, R-207); deactivation is always allowed (FR-314). Another teacher's slot,
 //   or one nobody has, is `NOT_FOUND`, refused before its row is locked or anything is written (M3).
+// - `list` answers `published`: the visibility predicate's answer for the teacher as a student of the
+//   session's gender would get it, asked through identity's entry (`isPublishedTeacher`), the same
+//   question `teacher.packages.list` and `teacher.profile.get` ask, so the three never differ (T069,
+//   FR-315; the owner's decision of 2026-11-02). It decides nothing and takes no lock.
 //
 // LOCKS (T005's rules, the note under T019: the owner's decision of 2026-11-01). Lock, then read,
 // in one order. `create` (keyed: the kernel's idempotency transaction) locks the teacher's account
@@ -35,6 +39,7 @@ import { weeklyIntervalsOverlap } from '@ijazah/time/calendar';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { CatalogUse } from './catalog-use.port.js';
 
@@ -74,6 +79,8 @@ export interface SlotsStore {
   lockTeacherSlots(tx: Transaction, teacherUserId: string): Promise<void>;
   /** Locks the slot's row (R-207). */
   lockSlot(tx: Transaction, slotId: string): Promise<void>;
+  /** Whether discovery shows the teacher to a student of `requester`'s gender, identity's (FR-315). */
+  isPublished(tx: Transaction, requester: RequesterGender, teacherUserId: string): Promise<boolean>;
   /** The account's zone, identity's; null for a person not there. */
   accountTimezone(tx: Transaction, userId: string): Promise<string | null>;
   ownsSlot(tx: Transaction, slotId: string, teacherUserId: string): Promise<boolean>;
@@ -86,7 +93,8 @@ export interface SlotsStore {
 
 /** `teacher.slots.*`, each on the caller's own slots. */
 export interface TeacherSlots {
-  list(teacherUserId: string): Promise<SlotsListOutput>;
+  /** `requester` is the session's gender, the teacher's own. */
+  list(teacherUserId: string, requester: RequesterGender): Promise<SlotsListOutput>;
   create(teacherUserId: string, input: SlotsCreateInput): Promise<TeacherSlot>;
   update(teacherUserId: string, input: SlotsUpdateInput): Promise<TeacherSlot>;
 }
@@ -138,14 +146,18 @@ export class SlotsService implements TeacherSlots {
     this.#now = now;
   }
 
-  /** `teacher.slots.list`: the teacher's zone and every slot, its state derived (R-207). */
-  list(teacherUserId: string): Promise<SlotsListOutput> {
+  /**
+   * `teacher.slots.list`: whether the slots are published (FR-315), the teacher's zone and every
+   * slot, its state derived (R-207); `requester` is the session's gender, the teacher's own.
+   */
+  list(teacherUserId: string, requester: RequesterGender): Promise<SlotsListOutput> {
     return this.#store.run(async (tx) => {
+      const published = await this.#store.isPublished(tx, requester, teacherUserId);
       const timezone = await this.#zoneOf(tx, teacherUserId);
       const rows = await this.#store.slotsOf(tx, teacherUserId);
       const slots: TeacherSlot[] = [];
       for (const row of rows) slots.push(slotOf(row, await this.#stateOf(tx, row)));
-      return { timezone, slots };
+      return { published, timezone, slots };
     });
   }
 

@@ -5,7 +5,8 @@
 // with the price per session under it (R-212). Once the package has an enrollment (`frozen`) its
 // track and length are shown as fixed and never sent. A new package is sent under one key for the
 // whole draft, so a retry is the same request; `SUBJECT_NOT_APPROVED` and `PACKAGE_FROZEN` are said
-// plainly, the second reading the package again. Not drawn on the board and left out: the weekly
+// plainly, the second reading the package again, after which the fixed track and length drawn are
+// the package's own, never the choice the editor did not send (T069; PR #116's review). Not drawn on the board and left out: the weekly
 // slots hint and the «الباقة فعّالة» check (a new package is active; pausing is the list's).
 import type {
   PackageTrack,
@@ -88,7 +89,10 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | undefined>(undefined);
 
-  const frozen = item?.frozen === true;
+  // The package as read once it is frozen: what the fixed fields draw, read again after
+  // `PACKAGE_FROZEN`, so an unsent track or length never shows as the package's.
+  const fixed = item?.frozen === true ? item : undefined;
+  const frozen = fixed !== undefined;
   const sessionCount = sessionCountOf(countText);
   const price_piasters = piastersOfPounds(priceText);
   const countWrong = countText.trim() !== '' && sessionCount === null;
@@ -176,9 +180,9 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
         )}
       </Field>
 
-      {frozen ? (
+      {fixed !== undefined ? (
         <Field label={t('teacher.packages.editor.track')}>
-          <Text variant="body-lg">{t(TRACK_LABEL[track])}</Text>
+          <Text variant="body-lg">{t(TRACK_LABEL[fixed.track])}</Text>
         </Field>
       ) : (
         <Field
@@ -208,9 +212,11 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
         <Input value={countText} onChangeText={setCountText} keyboard="numeric" />
       </Field>
 
-      {frozen ? (
+      {fixed !== undefined ? (
         <Field label={t('teacher.packages.editor.duration')}>
-          <Text variant="body-lg">{t('common.format.duration', { minutes })}</Text>
+          <Text variant="body-lg">
+            {t('common.format.duration', { minutes: fixed.sessionDurationMinutes })}
+          </Text>
         </Field>
       ) : (
         <Field label={t('teacher.packages.editor.duration')}>

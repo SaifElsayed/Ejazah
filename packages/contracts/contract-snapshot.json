@@ -1640,6 +1640,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.published": { "required": true, "type": "boolean" },
           "$.slots": { "required": true, "type": "array" },
           "$.slots[]": { "type": "object" },
           "$.slots[].dayOfWeek": { "required": true, "type": "integer" },

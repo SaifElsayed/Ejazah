@@ -32,8 +32,13 @@ export const teacherSlot = z.object({
   state: slotState,
 });
 
-/** `teacher.slots.list`'s answer: the teacher's zone and the slots. */
+/**
+ * `teacher.slots.list`'s answer: whether students see the teacher's slots (the visibility
+ * predicate's answer, as `teacher.packages.list`'s `published`; T069, FR-315), the teacher's zone and
+ * the slots.
+ */
 export const slotsListOutput = z.object({
+  published: z.boolean(),
   timezone: timeZone,
   slots: z.array(teacherSlot),
 });

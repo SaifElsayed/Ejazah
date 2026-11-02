@@ -25,6 +25,7 @@ import {
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { lockKey } from '../../apps/api/src/platform/db/row-lock.js';
+import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import { connectAsApplication, type Db, insertRow, makeOffer, makeUser } from './harness';
 
@@ -255,7 +256,9 @@ describe('a save stores wall-clock time in the teacher’s zone (FR-313, R-TIME-
         timezone: 'Asia/Riyadh',
       }),
     ]);
-    await expect(slotsOn().list(teacherId)).resolves.toEqual({
+    // An account with no teacher profile: the predicate never shows it (T069, FR-315).
+    await expect(slotsOn().list(teacherId, 'male' as RequesterGender)).resolves.toEqual({
+      published: false,
       timezone: 'Asia/Riyadh',
       slots: [slot],
     });
