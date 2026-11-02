@@ -1,5 +1,8 @@
 // PUBLIC ENTRY of the catalog module (T017). Other modules import this file and nothing below it (R-API-3).
 import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { transactionsOver } from '../../platform/db/transaction.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse } from './catalog-use.port.js';
 import { grantSubjects } from './credentials.repository.js';
@@ -18,11 +21,23 @@ import {
   type CredentialReviewStore,
 } from './credential-review.service.js';
 import {
+  accountTimezone,
   decideApplication,
   isApprovedTeacher,
   lockAccount,
   lockApplication,
 } from '../identity/index.js';
+import {
+  activeSlotsOf,
+  insertSlot,
+  lockSlot,
+  lockTeacherSlots,
+  ownsSlot,
+  readSlot,
+  slotsOf,
+  updateSlot,
+} from './slots.repository.js';
+import { SlotsService, type SlotsStore, type TeacherSlots } from './slots.service.js';
 import { SubjectsRepository } from './subjects.repository.js';
 import { type SubjectsReader, SubjectsService } from './subjects.service.js';
 
@@ -65,20 +80,54 @@ export type { CatalogUse };
 
 /**
  * The catalog module's services on the user surface (T020; contracts/kernel.md "The composition
- * root"). No member yet: packages (T018) and slots (T019) join here, each built over `use`.
+ * root"). Packages (T018) and slots (T019) join here, each built over `use`.
  */
-export interface CatalogServices {}
+export interface CatalogServices {
+  /** `teacher.slots.*` (T019). */
+  readonly slots: TeacherSlots;
+}
 
 /** What the catalog module's user-surface services are built over, bound once by `main.ts` (T020). */
 export interface CatalogServiceDependencies {
   /** Booking's answers to whether a slot or a package is in use (R-207). */
   readonly use: CatalogUse;
+  /** The process's client, which the slots read and write through (T019). */
+  readonly database: Database;
+  /** The kernel's idempotency, keying `teacher.slots.create` (T019). */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+}
+
+/**
+ * The slots' store: this module's rows and locks, and the account's lock and zone through
+ * identity's entry (T019, R-121).
+ */
+function slotsStoreOver(database: Database): SlotsStore {
+  return {
+    run: transactionsOver(database).run,
+    lockAccount,
+    lockTeacherSlots,
+    lockSlot,
+    accountTimezone,
+    ownsSlot,
+    readSlot,
+    slotsOf,
+    activeSlotsOf,
+    insertSlot,
+    updateSlot,
+  };
 }
 
 /** The catalog module's user-surface services (T020); T018 and T019 build theirs over `use`. */
-export function createCatalogServices(_dependencies: CatalogServiceDependencies): CatalogServices {
-  return {};
+export function createCatalogServices(dependencies: CatalogServiceDependencies): CatalogServices {
+  const { use, database, idempotency } = dependencies;
+  return {
+    slots: new SlotsService({ store: slotsStoreOver(database), use, idempotency }),
+  };
 }
+
+/** The `teacher.slots` namespace, mounted by `app.router.ts` (T019). */
+export { slotsRouter } from './slots.router.js';
+export type { TeacherSlots };
 
 /** The subjects list's router, mounted under `catalog.subjects` by `app.router.ts` (T038). */
 export { subjectsRouter } from './subjects.router.js';

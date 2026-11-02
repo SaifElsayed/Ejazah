@@ -432,3 +432,28 @@ export function dateColumnOf(localDate: LocalDate): Date {
   const day = Temporal.PlainDate.from(localDate);
   return new Date(day.toZonedDateTime({ timeZone: 'UTC' }).epochMilliseconds);
 }
+
+/**
+ * A local time as a `time` column is written: that time on the epoch's day in UTC, which
+ * `localTimeOf` reads back as the same time (T019: `availability_slots.start_time_local`). A
+ * wall-clock time, never an instant (R-TIME-3); the day and the zone of the `Date` mean nothing.
+ */
+export function timeColumnOf(localTime: LocalTime): Date {
+  const plainTime = Temporal.PlainTime.from(assertLocalTime('localTime', localTime));
+  return new Date(
+    Temporal.PlainDate.from('1970-01-01').toZonedDateTime({ timeZone: 'UTC', plainTime })
+      .epochMilliseconds,
+  );
+}
+
+/** The local time a `time` column holds, `HH:MM:SS`, as `timeColumnOf` wrote it (T019). */
+export function localTimeOf(column: Date): LocalTime {
+  const epochMilliseconds = column.getTime();
+  if (Number.isNaN(epochMilliseconds)) {
+    throw new TimeError('column', String(column), 'not a time column');
+  }
+  return Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
+    .toZonedDateTimeISO('UTC')
+    .toPlainTime()
+    .toString({ smallestUnit: 'second' });
+}

@@ -179,6 +179,8 @@ const services = {
     idempotency,
   }),
   catalog: catalog.createCatalogServices({
+    database,
+    idempotency,
     use: {
       slotInUse: booking.slotInUse,
       packageHasEnrollment: booking.packageHasEnrollment,

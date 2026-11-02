@@ -205,6 +205,8 @@ export {
 } from './standing.service.js';
 /** The account's row lock, taken first by verification's identity request (T126). */
 export { lockAccount, readStanding } from './standing.repository.js';
+/** The account's zone on the caller's transaction, a teacher's new slot's (T019, FR-313). */
+export { accountTimezone } from './users.repository.js';
 
 /**
  * The visibility predicate (T010, `002:T143`, SRS §3.7.1, R-201): the only way any module learns

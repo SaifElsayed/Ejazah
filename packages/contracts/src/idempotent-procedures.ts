@@ -14,6 +14,7 @@ export const idempotentProcedures = [
   'teacher.application.submit',
   'account.delete',
   'teacher.payout.register',
+  'teacher.slots.create',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */
