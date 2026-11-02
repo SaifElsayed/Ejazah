@@ -12,8 +12,11 @@ import {
   formatNumber,
   formatPounds,
   formatTime,
+  formatWallClock,
+  formatWeekday,
   formatWeekdayDate,
   formatYear,
+  weekdayIn,
 } from './formatters';
 
 const instant = '2026-10-15T07:02:00Z';
@@ -64,6 +67,29 @@ describe('formatters', () => {
   it('writes a year whole, with no grouping mark (T109)', () => {
     expect(formatYear(2004, 'ar')).toBe('2004');
     expect(formatYear(1900, 'en')).toBe('1900');
+  });
+
+  it('names a day of the week, 0 = Sunday as the slots count them (T022)', () => {
+    expect(formatWeekday(0, 'ar')).toBe('الأحد');
+    expect(formatWeekday(6, 'ar')).toBe('السبت');
+    expect(formatWeekday(1, 'en')).toBe('Monday');
+    expect(formatWeekday(5, 'en')).toBe('Friday');
+    expect(() => formatWeekday(7, 'ar')).toThrow(RangeError);
+  });
+
+  it('formats a wall-clock time of no zone as the boards draw it (T022)', () => {
+    expect(formatWallClock('10:00', 'ar')).toBe('10:00 ص');
+    expect(formatWallClock('20:15', 'ar')).toBe('8:15 م');
+    expect(formatWallClock('00:00', 'en')).toBe('12:00 AM');
+    expect(formatWallClock('23:45', 'en')).toBe('11:45 PM');
+    expect(() => formatWallClock('24:00', 'en')).toThrow(RangeError);
+  });
+
+  it('reads the day of the week an instant falls on in a zone (T022)', () => {
+    // A Thursday in Cairo, and already Friday in Riyadh at 22:30 UTC.
+    expect(weekdayIn(instant, cairo)).toBe(4);
+    expect(weekdayIn('2026-10-15T22:30:00Z', 'Asia/Riyadh')).toBe(5);
+    expect(weekdayIn('2026-10-18T09:00:00Z', cairo)).toBe(0);
   });
 
   it('refuses an instant that does not parse, never printing "Invalid Date"', () => {

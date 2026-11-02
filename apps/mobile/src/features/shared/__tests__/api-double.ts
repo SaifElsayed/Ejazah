@@ -62,6 +62,12 @@ export function fakeProcedures() {
         get: { query: procedure() },
         register: { mutate: procedure() },
       },
+      // T022 (B26): the teacher's availability.
+      slots: {
+        list: { query: procedure() },
+        create: { mutate: procedure() },
+        update: { mutate: procedure() },
+      },
     },
   };
 }

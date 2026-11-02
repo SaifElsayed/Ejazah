@@ -1221,11 +1221,13 @@
         "editSlotDisabled": "Edit the {day} {time} slot, disabled"
       },
       "addSlot": "Slot",
+      "daysSeparator": ", ",
       "disableSheet": {
         "bookedLine": "Booked: {student} · {subject} · until {date}",
         "confirm": "Disable slot",
         "contextLine": "{day} · {time} · {minutes} minutes · your time zone: {city}",
         "text": "It is no longer offered for new bookings. Sessions booked on it keep their times until {student}'s enrollment ends on {date}, and you can enable it whenever you wish.",
+        "textBooked": "It is no longer offered for new bookings. Sessions booked on it keep their times, and you can enable it whenever you wish.",
         "textMany": "It is no longer offered for new bookings. Sessions already booked on it keep their times until the last enrollment ends on {date}, and you can enable it whenever you like.",
         "title": "Disable the {day} {time} slot?"
       },
