@@ -16,7 +16,11 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { packageHasEnrollment, slotInUse } from '../../apps/api/src/modules/booking/index.js';
+import {
+  packageEnrollmentCounts,
+  packageHasEnrollment,
+  slotInUse,
+} from '../../apps/api/src/modules/booking/index.js';
 import { createCatalogServices } from '../../apps/api/src/modules/catalog/index.js';
 import {
   closeDatabase,
@@ -45,7 +49,7 @@ afterAll(async () => {
   await closeDatabase(database);
 });
 
-const use = { slotInUse, packageHasEnrollment };
+const use = { slotInUse, packageHasEnrollment, packageEnrollmentCounts };
 
 /**
  * The slots service as `main.ts` builds it. With `tx`, every transaction it opens is `tx` (its

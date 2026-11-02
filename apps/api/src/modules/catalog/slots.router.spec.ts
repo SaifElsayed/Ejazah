@@ -23,6 +23,16 @@ import {
 import type { TeacherSlots } from './slots.service.js';
 import { slotsRouter } from './slots.router.js';
 
+// T018's packages, which no slot procedure reaches (merged beside T019 in B25).
+const unusedPackages = new Proxy(
+  {},
+  {
+    get: () => {
+      throw new Error('catalog.packages is not used by the slots router');
+    },
+  },
+) as AppServices['catalog']['packages'];
+
 const CALLER = '0199d0a0-0000-7000-8000-0000000000b1';
 const SLOT = '0199d0a0-0000-7000-8000-0000000000d1';
 const KEY = 'spec-slot-key-00000001';
@@ -95,7 +105,7 @@ function as(session: UserSession | null) {
     subjects: { listActive: async () => [] },
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
-    catalog: { slots },
+    catalog: { slots, packages: unusedPackages },
   };
   return callerFor(
     createAppContext({

@@ -10,9 +10,9 @@
 // `catalog.subjects.list` (the catalog module's) since T038; the identity module's `auth`,
 // `onboarding` and `account` since T048 and T049; the verification module's `teacher.application`
 // and `teacher.credentials` since T056 and T057, and its `account.identityVerification`, merged into
-// identity's `account`, since T068 (R-121); the identity module's `teacher.payout` since T077;
-// the catalog module's `teacher.slots` since T019.
-import { slotsRouter, subjectsRouter } from '../modules/catalog/index.js';
+// identity's `account`, since T068 (R-121); the identity module's `teacher.payout` since T077; the
+// catalog module's `teacher.packages` since T018 and `teacher.slots` since T019.
+import { packagesRouter, slotsRouter, subjectsRouter } from '../modules/catalog/index.js';
 import {
   accountRouter,
   authRouter,
@@ -40,6 +40,7 @@ export const appRouter = createAppRouter({
     application: applicationRouter,
     credentials: credentialsRouter,
     payout: payoutRouter,
+    packages: packagesRouter,
     slots: slotsRouter,
   }),
 });

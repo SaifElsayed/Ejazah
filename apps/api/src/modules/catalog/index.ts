@@ -1,10 +1,9 @@
 // PUBLIC ENTRY of the catalog module (T017). Other modules import this file and nothing below it (R-API-3).
-import type { Database } from '../../platform/db/prisma.repository.js';
-import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
-import type { CatalogUse } from './catalog-use.port.js';
+import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import { grantSubjects } from './credentials.repository.js';
 import { CredentialsRepository } from './credentials.repository.js';
 import {
@@ -38,6 +37,14 @@ import {
   updateSlot,
 } from './slots.repository.js';
 import { SlotsService, type SlotsStore, type TeacherSlots } from './slots.service.js';
+import {
+  changePackage,
+  holdsSubject,
+  insertPackage,
+  packageOf,
+  packagesOf,
+} from './packages.repository.js';
+import { PackagesService, type PackagesStore } from './packages.service.js';
 import { SubjectsRepository } from './subjects.repository.js';
 import { type SubjectsReader, SubjectsService } from './subjects.service.js';
 
@@ -76,13 +83,15 @@ export function createCredentialReviewService(dependencies: {
 }
 
 /** What catalog asks booking about a slot or a package in use, bound by `main.ts` (T020, R-207). */
-export type { CatalogUse };
+export type { CatalogUse, PackageEnrollmentCounts };
 
 /**
  * The catalog module's services on the user surface (T020; contracts/kernel.md "The composition
  * root"). Packages (T018) and slots (T019) join here, each built over `use`.
  */
 export interface CatalogServices {
+  /** `teacher.packages.*` (T018). */
+  readonly packages: Pick<PackagesService, 'list' | 'create' | 'update'>;
   /** `teacher.slots.*` (T019). */
   readonly slots: TeacherSlots;
 }
@@ -91,9 +100,9 @@ export interface CatalogServices {
 export interface CatalogServiceDependencies {
   /** Booking's answers to whether a slot or a package is in use (R-207). */
   readonly use: CatalogUse;
-  /** The process's client, which the slots read and write through (T019). */
+  /** The process's client, which the packages and the slots read and write through (T018, T019). */
   readonly database: Database;
-  /** The kernel's idempotency, keying `teacher.slots.create` (T019). */
+  /** The kernel's idempotency, keying `teacher.packages.create` and `teacher.slots.create`. */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
 }
 
@@ -118,13 +127,40 @@ function slotsStoreOver(database: Database): SlotsStore {
 }
 
 /** The catalog module's user-surface services (T020); T018 and T019 build theirs over `use`. */
-export function createCatalogServices(dependencies: CatalogServiceDependencies): CatalogServices {
-  const { use, database, idempotency } = dependencies;
+export function createCatalogServices({
+  use,
+  database,
+  idempotency,
+}: CatalogServiceDependencies): CatalogServices {
   return {
+    packages: new PackagesService({
+      transactions: transactionsOver(database),
+      store: packagesStore,
+      use,
+      idempotency,
+    }),
     slots: new SlotsService({ store: slotsStoreOver(database), use, idempotency }),
   };
 }
 
+/**
+ * The packages' store (T018): this module's rows, and the account's and the application's locks
+ * through identity's entry (T005's rule 2, R-121). Exported with the service for the probe of its
+ * queries and locks (`tests/db-integrity/packages.spec.ts`).
+ */
+export const packagesStore: PackagesStore = {
+  lockAccount,
+  lockApplication,
+  holdsSubject,
+  packagesOf,
+  packageOf,
+  insert: insertPackage,
+  change: changePackage,
+};
+export { PackagesService };
+
+/** The `teacher.packages` router, mounted under `teacher.packages` by `app.router.ts` (T018). */
+export { packagesRouter } from './packages.router.js';
 /** The `teacher.slots` namespace, mounted by `app.router.ts` (T019). */
 export { slotsRouter } from './slots.router.js';
 export type { TeacherSlots };

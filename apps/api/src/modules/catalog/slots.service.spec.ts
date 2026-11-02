@@ -110,6 +110,9 @@ function world(
     packageHasEnrollment: async () => {
       throw new Error('not asked by slots');
     },
+    packageEnrollmentCounts: async () => {
+      throw new Error('not asked by slots');
+    },
   };
   const service = new SlotsService({
     store,
