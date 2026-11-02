@@ -25,6 +25,7 @@ import { createAdminCallerFactory, createAppCallerFactory, toErrorShape } from '
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -113,6 +114,7 @@ function surfaces({ subject, budget }: { readonly subject: number; readonly budg
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
+    discovery: unusedDiscoveryServices,
   };
   const administration = {
     transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },

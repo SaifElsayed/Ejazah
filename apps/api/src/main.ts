@@ -138,7 +138,8 @@ const cipher = createColumnCipher(config);
 // application's submission and the payout registration keyed through the kernel's idempotency
 // (FR-106), the payout registration over the payment port (T077), and the catalog module's behind
 // `teacher.packages` and `teacher.slots`, whose `CatalogUse` port is bound to booking's entry
-// (T020, R-207): catalog asks whether a slot or a package is in use without importing booking.
+// (T020, R-207): catalog asks whether a slot or a package is in use without importing booking;
+// and booking's `discovery` over catalog's discovery service (T026, R-205).
 // The one registry of an account's end (FR-142): the admin module's standing actions and the
 // identity module's deletion call it, and the modules that keep what an account had subscribe to it
 // (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
@@ -181,17 +182,24 @@ const services = {
   catalog: catalog.createCatalogServices({
     database,
     idempotency,
-    use: {
-      slotInUse: booking.slotInUse,
-      packageHasEnrollment: booking.packageHasEnrollment,
-      packageEnrollmentCounts: booking.packageEnrollmentCounts,
-    },
+    // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
+    use: booking.createCatalogUse({ settings }),
   }),
   // `teacher.profile` (T017): the identity module's, the photo answered as the storage port's link.
   teacherProfile: identity.createTeacherProfileService({
     database,
     settings,
     storage: ports.storage,
+  }),
+  // `discovery` (T026): catalog's discovery service (T025) composed with booking's nearest slots.
+  discovery: booking.createDiscoveryServices({
+    // B27 integration: T025's catalog discovery service binds here through catalog's entry.
+    catalog: {
+      browse: () => Promise.reject(new Error('T025: catalog discovery is not bound yet')),
+      filters: () => Promise.reject(new Error('T025: catalog discovery is not bound yet')),
+    },
+    database,
+    settings,
   }),
 };
 

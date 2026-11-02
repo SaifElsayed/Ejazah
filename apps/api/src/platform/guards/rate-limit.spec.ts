@@ -44,6 +44,7 @@ import {
 } from './rate-limit.guard.js';
 import {
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -183,6 +184,7 @@ function fixture(
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
+    discovery: unusedDiscoveryServices,
   };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>

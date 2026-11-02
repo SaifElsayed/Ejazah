@@ -25,6 +25,7 @@ import { SettingError, type SettingsReader } from '../settings/settings-reader.j
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -74,6 +75,7 @@ async function applicationWith(
       verification: unusedVerificationServices,
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
+      discovery: unusedDiscoveryServices,
     },
     adminServices: unusedAdminServices,
     routes,

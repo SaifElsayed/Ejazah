@@ -16,6 +16,7 @@ import { createLogger } from '../../logging/logger.js';
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -68,6 +69,7 @@ beforeAll(async () => {
       verification: unusedVerificationServices,
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
+      discovery: unusedDiscoveryServices,
     },
     adminServices: unusedAdminServices,
     routes: filesRoutes(storage),

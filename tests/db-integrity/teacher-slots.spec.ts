@@ -16,11 +16,7 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import {
-  packageEnrollmentCounts,
-  packageHasEnrollment,
-  slotInUse,
-} from '../../apps/api/src/modules/booking/index.js';
+import { createCatalogUse } from '../../apps/api/src/modules/booking/index.js';
 import { createCatalogServices } from '../../apps/api/src/modules/catalog/index.js';
 import {
   closeDatabase,
@@ -50,7 +46,8 @@ afterAll(async () => {
   await closeDatabase(database);
 });
 
-const use = { slotInUse, packageHasEnrollment, packageEnrollmentCounts };
+/** Booking's port as `main.ts` binds it (T026), the release buffer at its default of 0 weeks. */
+const use = createCatalogUse({ settings: { read: async (_key, schema) => schema.parse(0) } });
 
 /**
  * The slots service as `main.ts` builds it. With `tx`, every transaction it opens is `tx` (its

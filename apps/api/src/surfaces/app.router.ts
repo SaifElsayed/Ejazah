@@ -11,7 +11,9 @@
 // `onboarding` and `account` since T048 and T049; the verification module's `teacher.application`
 // and `teacher.credentials` since T056 and T057, and its `account.identityVerification`, merged into
 // identity's `account`, since T068 (R-121); the identity module's `teacher.payout` since T077; the
-// catalog module's `teacher.packages` since T018 and `teacher.slots` since T019.
+// catalog module's `teacher.packages` since T018 and `teacher.slots` since T019; the booking module's
+// `discovery` since T026.
+import { discoveryRouter } from '../modules/booking/index.js';
 import { packagesRouter, slotsRouter, subjectsRouter } from '../modules/catalog/index.js';
 import {
   accountRouter,
@@ -45,6 +47,7 @@ export const appRouter = createAppRouter({
     profile: teacherProfileRouter,
     slots: slotsRouter,
   }),
+  discovery: discoveryRouter,
 });
 
 /** The user surface's type, the only one the mobile application may see. */
