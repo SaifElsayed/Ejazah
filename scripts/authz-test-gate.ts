@@ -105,18 +105,20 @@ function testsOf(text: string): string[] {
 export function missingRefusals(
   path: string,
   caller: string | undefined,
-  specs: readonly ModuleSpec[],
+  tests: readonly string[],
 ): string[] {
   const required = REQUIRED_REFUSALS[caller ?? ''] ?? ALL_REFUSALS;
-  const naming = specs.flatMap((spec) => testsOf(spec.text)).filter((test) => names(test, path));
+  const naming = tests.filter((test) => names(test, path));
   return required.filter((code) => !naming.some((test) => test.includes(code)));
 }
 
 /** The user-surface procedures that are not public and lack a refusal their kind must prove. */
 export function findUntested(snapshot: SnapshotProcedures, specs: readonly ModuleSpec[]): string[] {
+  // Each spec is parsed once, not once per procedure (T065).
+  const tests = specs.flatMap((spec) => testsOf(spec.text));
   return Object.entries(snapshot.app)
     .filter(([, procedure]) => procedure.caller !== 'public')
-    .filter(([path, procedure]) => missingRefusals(path, procedure.caller, specs).length > 0)
+    .filter(([path, procedure]) => missingRefusals(path, procedure.caller, tests).length > 0)
     .map(([path]) => path)
     .sort();
 }
