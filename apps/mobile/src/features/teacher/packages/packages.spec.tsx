@@ -370,7 +370,7 @@ describe('PackageEditor and PackageSubjectPicker', () => {
         expect(
           await screen.findByText(said(direction, 'teacher.packages.editor.subjectPicker.title')),
         ).toBeTruthy();
-        expect(screen.getByText(named(direction, QURAN))).toBeTruthy();
+        expect(await screen.findByText(named(direction, QURAN))).toBeTruthy();
         expect(screen.queryByText(named(direction, TAJWEED))).toBeNull();
         expect(screen.queryByText(named(direction, QIRAAT))).toBeNull();
         expect(
@@ -461,7 +461,9 @@ describe('PackageEditor and PackageSubjectPicker', () => {
         expect(
           await screen.findByText(said(direction, 'teacher.packages.editor.title')),
         ).toBeTruthy();
-        expect(screen.getByText(said(direction, 'teacher.packages.editor.editNote'))).toBeTruthy();
+        expect(
+          await screen.findByText(said(direction, 'teacher.packages.editor.editNote')),
+        ).toBeTruthy();
         expect(screen.getByDisplayValue('12')).toBeTruthy();
         expect(screen.getByDisplayValue('2160')).toBeTruthy();
         expect(
