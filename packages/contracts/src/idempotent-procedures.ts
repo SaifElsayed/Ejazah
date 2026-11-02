@@ -17,6 +17,9 @@ export const idempotentProcedures = [
   // Phase 2 (specs/003-booking/contracts/app-surface.md "Idempotent procedures").
   'teacher.packages.create',
   'teacher.slots.create',
+  'checkout.hold',
+  'checkout.pay',
+  'checkout.retry',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

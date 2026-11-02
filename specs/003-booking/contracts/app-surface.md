@@ -51,7 +51,16 @@ visibility predicate first (research R-201, R-202).
 | `checkout.retry` | student, idempotent, `rate_limit_payment_initiation` | `{ enrollmentId, idempotencyKey }` | `{ checkoutUrl, orderExpiresAt }` | A new order on the same hold; `ORDER_NOT_PAYABLE` past the hold's expiry minus the grace (FR-356); only the caller's own enrollment: `NOT_FOUND` otherwise, nothing written (M3) |
 | `checkout.current` | student | `{}` | `{ hold?: { holdId, expiresAt, enrollmentId?, summary, lastOrder?: { status, expiresAt, canContinue } } }` | What `CheckoutPrevious` shows; `canContinue` when the last order is still payable |
 | `checkout.continue` | student | `{ enrollmentId }` | `{ checkoutUrl, orderExpiresAt }` | Reopens the payable order's hosted page (FR-BOOK-12 (c)): `NOT_FOUND` unless the enrollment is the caller's; `ORDER_NOT_PAYABLE`, with nothing decrypted, unless the order is `created` and its `expires_at` is after now; the address is never logged (data-model §2.4.1) |
-| `checkout.status` | student | `{ enrollmentId }` | `{ status, cancellationReason?, lastOrder: { status, reference, gross_piasters }, summary, sessions?: [{ sequenceNumber, localDate, startTimeLocal, timezone, startsAt, endsAt }], firstSessionMoved?: { quoted, actual } }` | Read by Processing, the Confirming badge and the success screen (FR-380 to FR-386); `confirmed` only from the server's row (R-HONEST-1); only the caller's own enrollment: `NOT_FOUND` otherwise (M3) |
+| `checkout.status` | student | `{ enrollmentId }` | `{ status, cancellationReason?, lastOrder: { status, reference }, summary, sessions?: [{ sequenceNumber, localDate, startTimeLocal, timezone, startsAt, endsAt }], firstSessionMoved?: { quoted, actual } }` | Read by Processing, the Confirming badge and the success screen (FR-380 to FR-386); `confirmed` only from the server's row (R-HONEST-1); only the caller's own enrollment: `NOT_FOUND` otherwise (M3) |
+
+`summary` is FR-358's payment summary, in its order: `{ teacher: { teacherId, displayName }, subject, track,
+sessionCount, sessionDurationMinutes, price_piasters }`, the package's on `hold` and `current` and the enrollment's
+snapshot on `status` (T031: the rows above named it without its fields). `firstSession` and `lastSession` are
+`booking.slots`' previews, `{ localDate, startsAt }`. `status` and `cancellationReason` are the database's
+`enrollment_status` and `cancellation_reason`; an order's `status` is `payment_status`. `status`' last order carries
+no `gross_piasters` (T031): `no-money-vocabulary` (R-MONEY-6, ADR 0007) refuses a gateway amount outside
+`modules/payments` and the payment port, `packages/contracts` included, and the price charged is the snapshot's,
+`summary.price_piasters` (ERD `payments.gross_piasters`); a field added later is additive.
 
 ## `enrollments` and the teacher's lists — booking (FR-390 to FR-395)
 
