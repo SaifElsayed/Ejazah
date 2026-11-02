@@ -19,6 +19,9 @@
 // T138 (FR-205): NetInfo drives the query cache's connection (lib/online.ts), once per process as
 // TanStack's React Native guide does; with no connection `account.me` waits, so the launch says it
 // cannot load rather than waiting on a blank screen.
+//
+// T015 (R-217, FR-383): AppState drives the query cache's focus (lib/focus.ts), once per process
+// beside NetInfo, so stale queries read again when the app comes back to the foreground.
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Redirect, Stack, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -34,6 +37,7 @@ import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
 import { ApiProvider, useApi } from '../lib/api';
+import { followAppState } from '../lib/focus';
 import { followNetInfo } from '../lib/online';
 import {
   allows,
@@ -47,6 +51,7 @@ import {
 import { deviceTimeZone } from '../lib/time-zone';
 
 followNetInfo();
+followAppState();
 
 export default function RootLayout() {
   const [queries] = useState(() => new QueryClient());

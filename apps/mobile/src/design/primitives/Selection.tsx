@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { useFormatters } from '../../lib/formatters';
 import { useTheme } from '../theme';
+import type { ColorToken } from '../tokens';
 import { InputGroup } from './Forms';
 import { Glyph } from './Icon';
-import { border, opacity, pressed, radius, shadow, size, space } from './style';
+import { border, layout, opacity, pressed, radius, shadow, size, space } from './style';
 import { Words } from './Text';
 import type { Accessible, Content, IconSpec, Press } from './types';
 
@@ -38,8 +40,9 @@ export interface ChipProps extends Accessible {
 }
 
 /**
- * Slot: a time the student can pick or the teacher has published. `booked` carries the dot and is
- * not pressable; `disabled` is dashed. Design: `.slot`, `.slot--selected|booked|disabled`.
+ * Slot: a time the student can pick or the teacher has published. `booked` carries the dot,
+ * `disabled` is dashed; either presses only when given `onPress`. Design: `.slot`,
+ * `.slot--selected|booked|disabled`.
  */
 export interface SlotProps extends Accessible {
   readonly label: string;
@@ -110,8 +113,7 @@ export interface CategoryTabsProps extends Required<Accessible> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// T032: the implementations. Slot and CategoryTabs are contracts of later phases' screens and are
-// implemented with them.
+// T032: the implementations. T014: Slot and CategoryTabs, for the booking phase's screens.
 
 export function Segmented({
   options,
@@ -225,6 +227,133 @@ export function Chip({
       )}
       {removable ? <Glyph name="x" size="sm" color="text-muted" /> : null}
     </Pressable>
+  );
+}
+
+type SlotState = NonNullable<SlotProps['state']>;
+
+/** `.slot--*`: the surface, the border and the label of each state. */
+const slotPaint: Readonly<
+  Record<SlotState, { background: ColorToken; border: ColorToken; label: ColorToken }>
+> = {
+  available: { background: 'bg', border: 'border-strong', label: 'text' },
+  selected: { background: 'primary-subtle', border: 'primary', label: 'primary-strong' },
+  booked: { background: 'primary-subtle', border: 'primary-subtle', label: 'primary-strong' },
+  disabled: { background: 'bg', border: 'border-strong', label: 'text-muted' },
+};
+
+export function Slot({ label, state = 'available', accessibilityLabel, onPress }: SlotProps) {
+  const { color } = useTheme();
+  const paint = slotPaint[state];
+  const selected = state === 'selected';
+  // T014: a slot presses only when the screen gives it a press (components.md). A booked or a
+  // disabled one opens the teacher's editor; the student's booking sheet gives neither a press, so
+  // a booked time cannot be picked (the owner's decision of 2026-11-02, B26).
+  const inert = onPress === undefined;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ selected, disabled: inert }}
+      disabled={inert}
+      {...(inert ? {} : { onPress })}
+      cssInterop={false}
+      style={({ pressed: down }) => [
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          alignSelf: 'flex-start',
+          gap: space['2'],
+          height: size.touch,
+          paddingHorizontal: space['4'],
+          borderWidth: selected ? border.selected : border.hairline,
+          borderStyle: state === 'disabled' ? 'dashed' : 'solid',
+          borderColor: color[paint.border],
+          borderRadius: radius.md,
+          backgroundColor: color[paint.background],
+        },
+        down && !inert ? pressed : null,
+      ]}
+    >
+      <Words weight={selected ? 'bold' : 'regular'} color={paint.label} numberOfLines={1}>
+        {label}
+      </Words>
+      {state === 'booked' ? (
+        <View
+          style={{
+            width: size.dot,
+            height: size.dot,
+            borderRadius: radius.full,
+            backgroundColor: color.primary,
+          }}
+        />
+      ) : null}
+    </Pressable>
+  );
+}
+
+export function CategoryTabs({ tabs, value, onChange, accessibilityLabel }: CategoryTabsProps) {
+  const { color } = useTheme();
+  const format = useFormatters();
+  return (
+    // The tabs run to the screen's edges and scroll sideways (`.category-tabs`).
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{
+        flexGrow: 0,
+        marginHorizontal: -layout.gutter,
+        borderBottomWidth: border.hairline,
+        borderBottomColor: color.border,
+      }}
+      contentContainerStyle={{ paddingHorizontal: layout.gutter }}
+    >
+      <View
+        accessibilityRole="tablist"
+        accessibilityLabel={accessibilityLabel}
+        style={{ flexDirection: 'row', gap: space['5'] }}
+      >
+        {tabs.map((tab) => {
+          const selected = tab.value === value;
+          return (
+            <Pressable
+              key={tab.value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => onChange(tab.value)}
+              cssInterop={false}
+              style={({ pressed: down }) => [
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: space['1'],
+                  minWidth: size.touch,
+                  height: size.touch,
+                  marginBottom: -border.hairline,
+                  borderBottomWidth: border.selected,
+                  borderBottomColor: selected ? color.primary : 'transparent',
+                },
+                down ? pressed : null,
+              ]}
+            >
+              <Words
+                weight={selected ? 'bold' : 'regular'}
+                color={selected ? 'text' : 'text-muted'}
+                numberOfLines={1}
+              >
+                {tab.label}
+              </Words>
+              {tab.count === undefined ? null : (
+                <Words variant="micro" color="text-subtle">
+                  {format.number(tab.count)}
+                </Words>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </ScrollView>
   );
 }
 

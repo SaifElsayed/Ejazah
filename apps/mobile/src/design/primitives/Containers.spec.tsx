@@ -1,11 +1,11 @@
 // T032: the containers (R-MOBILE-4/5/6): Card, Section, List and ListRow, Summary, Avatar and
-// IconTile, in both directions.
+// IconTile, in both directions. T014: Stats.
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import { tokens } from '../tokens';
 import { colour, inBothDirections, nodesOf, styleOf } from './__tests__/harness';
-import { Avatar, Card, IconTile, List, ListRow, Section, Summary, Text } from './index';
+import { Avatar, Card, IconTile, List, ListRow, Section, Stats, Summary, Text } from './index';
 
 describe('Card', () => {
   it('is a bordered container with no margin of its own; each variant from its tokens', async () => {
@@ -138,6 +138,62 @@ describe('Summary', () => {
             (node) => styleOf(node)['backgroundColor'] === colour('light', 'surface-strong'),
           ),
         ).toBe(true);
+      },
+    );
+  });
+});
+
+describe('Stats', () => {
+  const items = [
+    { value: '4.9', label: 'التقييم' },
+    { value: 12, label: 'جلسة' },
+    { value: <Text>٣</Text>, label: 'باقات' },
+  ];
+
+  it('sets the numbers side by side, each value bold over its muted label', async () => {
+    await inBothDirections(
+      () => <Stats items={items} />,
+      (rendered) => {
+        const value = styleOf(screen.getByText('4.9'));
+        expect(value['fontSize']).toBe(tokens.text['title-3'].size);
+        expect(value['fontWeight']).toBe(tokens.font.weight.bold);
+        expect(screen.getByText('12')).toBeTruthy();
+        expect(screen.getByText('٣')).toBeTruthy();
+        const label = styleOf(screen.getByText('التقييم'));
+        expect(label['fontSize']).toBe(tokens.text.caption.size);
+        expect(label['color']).toBe(colour('light', 'text-muted'));
+        expect(
+          nodesOf(rendered).some(
+            (node) =>
+              styleOf(node)['flexDirection'] === 'row' &&
+              styleOf(node)['gap'] === tokens.space['2'],
+          ),
+        ).toBe(true);
+        expect(
+          nodesOf(rendered).some(
+            (node) => styleOf(node)['backgroundColor'] === colour('light', 'surface'),
+          ),
+        ).toBe(false);
+      },
+    );
+  });
+
+  it('draws each on the surface at the body size as tiles', async () => {
+    await inBothDirections(
+      () => <Stats items={items} tile />,
+      (rendered) => {
+        expect(styleOf(screen.getByText('4.9'))['fontSize']).toBe(tokens.text.body.size);
+        const tiles = nodesOf(rendered).filter(
+          (node) =>
+            styleOf(node)['backgroundColor'] === colour('light', 'surface') &&
+            styleOf(node)['borderRadius'] === tokens.radius.sm,
+        );
+        expect(tiles).toHaveLength(3);
+        expect(styleOf(tiles[0]!)).toMatchObject({
+          paddingVertical: tokens.space['2'],
+          paddingHorizontal: tokens.space['3'],
+          flex: 1,
+        });
       },
     );
   });

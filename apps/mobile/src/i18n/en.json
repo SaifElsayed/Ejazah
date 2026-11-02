@@ -1130,7 +1130,7 @@
       "language": "Language",
       "payout": "Payout account",
       "profile": "Public profile",
-      "profileHint": "Name, photo, bio, subjects",
+      "profileHint": "Name, photo, bio, qualification",
       "ratingLine": "{rating} · {count, plural, one {# review} other {# reviews}}",
       "signInMethod": "Sign-in method",
       "signature": "Signature image",
@@ -1221,11 +1221,13 @@
         "editSlotDisabled": "Edit the {day} {time} slot, disabled"
       },
       "addSlot": "Slot",
+      "daysSeparator": ", ",
       "disableSheet": {
         "bookedLine": "Booked: {student} · {subject} · until {date}",
         "confirm": "Disable slot",
         "contextLine": "{day} · {time} · {minutes} minutes · your time zone: {city}",
         "text": "It is no longer offered for new bookings. Sessions booked on it keep their times until {student}'s enrollment ends on {date}, and you can enable it whenever you wish.",
+        "textBooked": "It is no longer offered for new bookings. Sessions booked on it keep their times, and you can enable it whenever you wish.",
         "textMany": "It is no longer offered for new bookings. Sessions already booked on it keep their times until the last enrollment ends on {date}, and you can enable it whenever you like.",
         "title": "Disable the {day} {time} slot?"
       },
@@ -1468,7 +1470,8 @@
         "confirm": "Pause the package",
         "contextLine": "EGP {amount} · {count, plural, one {# ongoing enrollment} other {# ongoing enrollments}}",
         "text": "It disappears from your profile so no new student can buy it. The {count} ongoing enrollments continue as they are, and you can activate it whenever you wish.",
-        "title": "Pause the package “{package}”?"
+        "title": "Pause the package “{package}”?",
+        "textNoEnrollments": "It disappears from your profile so no new student can buy it, and you can activate it whenever you wish."
       },
       "editor": {
         "activeHint": "Visible to students",
@@ -1477,6 +1480,12 @@
         "duration": "Session length",
         "durationOption": "{minutes} min",
         "editNote": "The change applies to new enrollments only.",
+        "error": {
+          "frozen": "A student has enrolled in this package, so its track and length can no longer change. You can still change the price and the number of sessions.",
+          "price": "Enter a price in pounds above zero, with at most two decimal places.",
+          "sessionCount": "Enter a number of sessions from {min} to {max}.",
+          "subjectNotApproved": "This subject is not one of your approved subjects. Choose an approved subject or add one."
+        },
         "frozenHint": "The track and the length do not change after the first enrollment; the price applies to new enrollments.",
         "newTitle": "New package",
         "perSessionHint": "EGP {amount} per session",
@@ -1488,6 +1497,7 @@
           "addAnother": "To add another subject",
           "title": "Package subject"
         },
+        "subjectPlaceholder": "Choose the subject",
         "title": "Edit package",
         "totalPrice": "Total price",
         "track": "Track",
@@ -1553,6 +1563,7 @@
     },
     "profile": {
       "bio": "Bio",
+      "bioTooLong": "The bio is at most {max} characters.",
       "changePhoto": "Change photo",
       "displayName": "Display name",
       "gender": "Gender",

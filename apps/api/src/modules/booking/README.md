@@ -14,6 +14,8 @@ Write the `sessions` table; session generation is requested through the sessions
 
 `booking.service.ts` holds every rule. `booking.repository.ts` holds every query. `booking.router.ts` is thin: validate, call one service method, return. `index.ts` is the only import path. Arrives with the phase that first needs it (see PLAN.md).
 
+`catalog-use.repository.ts` (T020) answers catalog's `CatalogUse` port, bound in `main.ts`: whether a slot is in use (an active hold, or an enrollment `pending_payment` or `confirmed`), whether a package has an enrollment, and the enrollment count of each package. Queries only, on the caller's transaction and with no lock: the caller holds its locks before it asks (T005's rule 1).
+
 ## Requirement ids
 
-_Filled as SRS requirements land in this module._
+- FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`.

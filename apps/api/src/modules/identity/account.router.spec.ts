@@ -102,6 +102,29 @@ describe('account.updateProfile', () => {
       restricted.caller.account.updateProfile({ displayName: 'Amina' }),
     ).rejects.toMatchObject(refused('ACCOUNT_RESTRICTED'));
   });
+
+  // 002:T158 (B26): the teacher's profile screen renames through this procedure, so the teacher's
+  // own name changes and a suspended teacher is refused, as a student is (R-MOBILE-13).
+  it("changes a teacher's own display name, and refuses a suspended teacher", async () => {
+    const { userId } = await createAccount(database, { role: 'teacher' });
+    const other = await createAccount(database, { role: 'teacher' });
+    const { accessToken } = await identity.sessions.issue(userId);
+    const caller = await surface.bearing(accessToken);
+    await caller.account.updateProfile({ displayName: '  Yusuf  ' });
+    expect((await rowsOf(database).user(userId))?.displayName).toBe('Yusuf');
+    expect((await rowsOf(database).user(other.userId))?.displayName).not.toBe('Yusuf');
+    const suspended = await createAccount(database, {
+      role: 'teacher',
+      accountStatus: 'suspended',
+    });
+    const restricted = await surface.bearing(
+      (await identity.sessions.issue(suspended.userId)).accessToken,
+    );
+    await expect(restricted.account.updateProfile({ displayName: 'Yusuf' })).rejects.toMatchObject(
+      refused('ACCOUNT_RESTRICTED'),
+    );
+    expect((await rowsOf(database).user(suspended.userId))?.displayName).not.toBe('Yusuf');
+  });
 });
 
 describe('account.setLanguage', () => {

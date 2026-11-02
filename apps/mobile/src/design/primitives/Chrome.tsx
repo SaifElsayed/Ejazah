@@ -4,10 +4,11 @@ import { Pressable, View } from 'react-native';
 import { useT } from '../../i18n';
 import { useFormatters } from '../../lib/formatters';
 import { useTheme } from '../theme';
-import { PressableIcon } from './Button';
+import { PressableIcon, TextLink } from './Button';
 import { InputGroup } from './Forms';
 import { Glyph } from './Icon';
 import { Steps } from './Progress';
+import { Chip } from './Selection';
 import { border, layout, media, pressed, radius, size, space } from './style';
 import { Words } from './Text';
 import type { Content, IconSpec, Press } from './types';
@@ -93,10 +94,9 @@ export interface FilterChipsProps {
 }
 
 // ---------------------------------------------------------------------------------------------
-// T032: the implementations. FilterChips is a contract of the discovery screens (Phase 2) and is
-// implemented with them. The top and bottom insets of the device are the screen's (a safe area
-// view at the route), so the headers start at the bar and the bottom bars reserve the home
-// indicator's token.
+// T032: the implementations; T014: FilterChips, for the booking phase's screens. The top and bottom
+// insets of the device are the screen's (a safe area view at the route), so the headers start at
+// the bar and the bottom bars reserve the home indicator's token.
 
 export function AppHeader({ title, subtitle, brand = false, actions }: AppHeaderProps) {
   return (
@@ -379,6 +379,24 @@ export function SearchRow({ value, onChangeText, placeholder, filters }: SearchR
           ) : null}
         </Pressable>
       )}
+    </View>
+  );
+}
+
+export function FilterChips({ chips, onClearAll }: FilterChipsProps) {
+  const t = useT();
+  // Nothing applied, nothing to remove or clear.
+  if (chips.length === 0) return null;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space['2'] }}>
+      {chips.map((chip) =>
+        typeof chip.content === 'string' ? (
+          <Chip key={chip.key} label={chip.content} selected removable onPress={chip.onRemove} />
+        ) : (
+          <Chip key={chip.key} content={chip.content} selected removable onPress={chip.onRemove} />
+        ),
+      )}
+      <TextLink label={t('common.action.clearAll')} onPress={onClearAll} />
     </View>
   );
 }

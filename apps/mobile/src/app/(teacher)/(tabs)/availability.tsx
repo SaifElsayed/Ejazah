@@ -1,4 +1,5 @@
-// T034 (FR-202): the availability draws its empty state until slots land in Phase 2.
-import { AvailabilityEmpty } from '../../../features/teacher/availability';
+// T034 (FR-202): the availability tab. T022 (FR-313, FR-317, FR-318): the teacher's weekly slots,
+// their editor and the empty state before the first.
+import { Availability } from '../../../features/teacher/availability';
 
-export default AvailabilityEmpty;
+export default Availability;

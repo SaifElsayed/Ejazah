@@ -1,11 +1,11 @@
 // T032: the selection primitives (R-MOBILE-4/5/6): Segmented, Chip, CheckRow, Choice, Picker and
-// Select, each announcing its state, in both directions.
+// Select, each announcing its state, in both directions. T014: Slot and CategoryTabs.
 import { describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import { tokens } from '../tokens';
-import { colour, inBothDirections, styleOf } from './__tests__/harness';
-import { CheckRow, Chip, Choice, Picker, Segmented, Select } from './index';
+import { colour, inBothDirections, nodesOf, styleOf } from './__tests__/harness';
+import { CategoryTabs, CheckRow, Chip, Choice, Picker, Segmented, Select, Slot } from './index';
 
 describe('Segmented', () => {
   const options = [
@@ -241,5 +241,173 @@ describe('Select', () => {
       },
     );
     expect(onPress).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Slot', () => {
+  it('is a time at the touch height with the md radius; a press picks it', async () => {
+    const onPress = jest.fn();
+    await inBothDirections(
+      () => <Slot label="10:00 ص" onPress={onPress} />,
+      async () => {
+        const slot = screen.getByRole('button', { name: '10:00 ص' });
+        expect(styleOf(slot)).toMatchObject({
+          height: tokens.size.touch,
+          borderRadius: tokens.radius.md,
+          borderColor: colour('light', 'border-strong'),
+          backgroundColor: colour('light', 'bg'),
+        });
+        expect(slot.props['accessibilityState']).toMatchObject({
+          selected: false,
+          disabled: false,
+        });
+        expect(styleOf(screen.getByText('10:00 ص'))['color']).toBe(colour('light', 'text'));
+        await fireEvent.press(slot);
+      },
+    );
+    expect(onPress).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks the selected time in the primary colours, bold', async () => {
+    await inBothDirections(
+      () => <Slot label="11:00 ص" state="selected" onPress={() => undefined} />,
+      () => {
+        const slot = screen.getByRole('button', { name: '11:00 ص' });
+        expect(slot.props['accessibilityState']).toMatchObject({ selected: true });
+        expect(styleOf(slot)).toMatchObject({
+          backgroundColor: colour('light', 'primary-subtle'),
+          borderColor: colour('light', 'primary'),
+          borderWidth: tokens.borderWidth.selected,
+        });
+        const label = styleOf(screen.getByText('11:00 ص'));
+        expect(label['color']).toBe(colour('light', 'primary-strong'));
+        expect(label['fontWeight']).toBe(tokens.font.weight.bold);
+      },
+    );
+  });
+
+  // The owner's decision of 2026-11-02 (B26): a booked slot opens the teacher's editor when given a
+  // press, so it can be disabled (FR-318); the student's booking sheet gives none.
+  it('carries the dot when booked; it opens only when given a press', async () => {
+    const onPress = jest.fn();
+    await inBothDirections(
+      () => (
+        <>
+          <Slot
+            label="5:00 م"
+            state="booked"
+            accessibilityLabel="موعد الأحد 5:00 م، محجوز"
+            onPress={onPress}
+          />
+          <Slot label="6:00 م" state="booked" accessibilityLabel="موعد الأحد 6:00 م، محجوز" />
+        </>
+      ),
+      async (rendered) => {
+        const slot = screen.getByLabelText('موعد الأحد 5:00 م، محجوز');
+        expect(slot.props['accessibilityState']).toMatchObject({ disabled: false });
+        const fixed = screen.getByLabelText('موعد الأحد 6:00 م، محجوز');
+        expect(fixed.props['accessibilityState']).toMatchObject({ disabled: true });
+        expect(styleOf(slot)).toMatchObject({
+          backgroundColor: colour('light', 'primary-subtle'),
+          borderColor: colour('light', 'primary-subtle'),
+        });
+        expect(styleOf(screen.getByText('5:00 م'))['color']).toBe(
+          colour('light', 'primary-strong'),
+        );
+        const dots = nodesOf(rendered).filter(
+          (node) =>
+            styleOf(node)['width'] === tokens.size.dot &&
+            styleOf(node)['backgroundColor'] === colour('light', 'primary'),
+        );
+        expect(dots).toHaveLength(2);
+        expect(styleOf(dots[0]!)['borderRadius']).toBe(tokens.radius.full);
+        await fireEvent.press(slot);
+        await fireEvent.press(fixed);
+      },
+    );
+    expect(onPress).toHaveBeenCalledTimes(2);
+  });
+
+  it('is dashed and muted when disabled; it opens only when given a press', async () => {
+    const onPress = jest.fn();
+    await inBothDirections(
+      () => (
+        <>
+          <Slot label="9:00 م" state="disabled" onPress={onPress} />
+          <Slot label="9:30 م" state="disabled" />
+        </>
+      ),
+      async () => {
+        const editable = screen.getByRole('button', { name: '9:00 م' });
+        expect(styleOf(editable)['borderStyle']).toBe('dashed');
+        expect(styleOf(screen.getByText('9:00 م'))['color']).toBe(colour('light', 'text-muted'));
+        const fixed = screen.getByRole('button', { name: '9:30 م' });
+        expect(fixed.props['accessibilityState']).toMatchObject({ disabled: true });
+        await fireEvent.press(editable);
+        await fireEvent.press(fixed);
+      },
+    );
+    expect(onPress).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CategoryTabs', () => {
+  const tabs = [
+    { value: 'all', label: 'الكل', count: 12 },
+    { value: 'tajweed', label: 'تجويد', count: 3 },
+    { value: 'hifz', label: 'حفظ' },
+  ];
+
+  it('scrolls sideways; the selected tab is bold and underlined in the primary colour', async () => {
+    const onChange = jest.fn();
+    await inBothDirections(
+      () => (
+        <CategoryTabs tabs={tabs} value="all" onChange={onChange} accessibilityLabel="المواد" />
+      ),
+      async () => {
+        const list = screen.getByLabelText('المواد');
+        expect(list.props['accessibilityRole']).toBe('tablist');
+        expect(scrollerOf(list)?.props['horizontal']).toBe(true);
+        const selected = screen.getByRole('tab', { name: /الكل/ });
+        expect(selected.props['accessibilityState']).toMatchObject({ selected: true });
+        expect(styleOf(selected)).toMatchObject({
+          height: tokens.size.touch,
+          minWidth: tokens.size.touch,
+          borderBottomWidth: tokens.borderWidth.selected,
+          borderBottomColor: colour('light', 'primary'),
+        });
+        expect(styleOf(screen.getByText('الكل'))).toMatchObject({
+          color: colour('light', 'text'),
+          fontWeight: tokens.font.weight.bold,
+        });
+        const other = screen.getByRole('tab', { name: /تجويد/ });
+        expect(other.props['accessibilityState']).toMatchObject({ selected: false });
+        expect(styleOf(other)['borderBottomColor']).toBe('transparent');
+        expect(styleOf(screen.getByText('تجويد'))['color']).toBe(colour('light', 'text-muted'));
+        await fireEvent.press(other);
+      },
+    );
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenCalledWith('tajweed');
+  });
+
+  it('shows each count small and subtle, and none when a tab has no count', async () => {
+    await inBothDirections(
+      () => (
+        <CategoryTabs
+          tabs={tabs}
+          value="all"
+          onChange={() => undefined}
+          accessibilityLabel="المواد"
+        />
+      ),
+      () => {
+        const count = styleOf(screen.getByText('12'));
+        expect(count['color']).toBe(colour('light', 'text-subtle'));
+        expect(count['fontSize']).toBe(tokens.text.micro.size);
+        expect(screen.getByText('3')).toBeTruthy();
+        expect(screen.getByRole('tab', { name: 'حفظ' })).toBeTruthy();
+      },
+    );
   });
 });

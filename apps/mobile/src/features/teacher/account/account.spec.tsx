@@ -5,6 +5,9 @@
 // phases. The danger row «حذف الحساب» opens the deletion since B16 (T084).
 //
 // T115 (a): the payout row's badge is each state of `teacher.payout.get`, as PayoutSetup reads it.
+//
+// T158: «الملف العام» leads the teaching list to the public profile, where the display name is
+// edited.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -75,9 +78,20 @@ describe('TeacherAccount', () => {
       expect(screen.getByText(said(direction, 'account.providers.apple'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.genders.male'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'teacher.account.deleteAccount'))).toBeTruthy();
-      expect(screen.queryByText(said(direction, 'teacher.account.profile'))).toBeNull();
       expect(screen.queryByText(said(direction, 'teacher.account.signature'))).toBeNull();
     });
+  });
+
+  it('leads the teaching list with «الملف العام», and opens the profile (T158)', async () => {
+    await inBothDirections(withAccount(), (_rendered, direction) => {
+      expect(screen.getByText(said(direction, 'teacher.account.profile'))).toBeTruthy();
+      // The hint names only what the profile edits, not the subjects (the owner's decision of
+      // 2026-11-02, B26).
+      expect(screen.getByText(said(direction, 'teacher.account.profileHint'))).toBeTruthy();
+    });
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.profile')));
+    expect(mockPush).toHaveBeenCalledWith('/(teacher)/profile');
   });
 
   it('lists «إجازاتي» under teaching with the count waiting for review, and opens it', async () => {

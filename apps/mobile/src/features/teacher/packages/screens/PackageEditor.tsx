@@ -1,0 +1,283 @@
+// T021 (FR-311, FR-312): a new package or one of the list, at `(teacher)/packages/[id]` (`new` for a
+// new one; screens.md §13, PackageEditor). The subject is one of the teacher's approved subjects,
+// chosen in `PackageSubjectPicker`, and never changes once the package exists; the track; the count,
+// one to 52; the length, 30, 45 or 60 minutes; the total price typed in pounds and sent in piasters,
+// with the price per session under it (R-212). Once the package has an enrollment (`frozen`) its
+// track and length are shown as fixed and never sent. A new package is sent under one key for the
+// whole draft, so a retry is the same request; `SUBJECT_NOT_APPROVED` and `PACKAGE_FROZEN` are said
+// plainly, the second reading the package again. Not drawn on the board and left out: the weekly
+// slots hint and the «الباقة فعّالة» check (a new package is active; pausing is the list's).
+import type {
+  PackageTrack,
+  SessionLengthMinutes,
+  SubjectSummary,
+  TeacherPackage,
+} from '@ijazah/contracts';
+import { MAX_SESSION_COUNT, SESSION_LENGTHS_MINUTES } from '@ijazah/contracts';
+import { perSession, piasters } from '@ijazah/money';
+import * as Crypto from 'expo-crypto';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
+import { View } from 'react-native';
+
+import {
+  ActionBar,
+  Banner,
+  Button,
+  Field,
+  Input,
+  NavHeader,
+  Segmented,
+  Select,
+  Text,
+} from '../../../../design/primitives';
+import { tokens } from '../../../../design/tokens';
+import { useLocale, useT } from '../../../../i18n';
+import { errorCodeOf } from '../../../../lib/client';
+import { formatPoundAmount } from '../../../../lib/formatters';
+import { useSubjectName } from '../../../../lib/subjects';
+import { StackScreen } from '../../../shared/screen';
+import { NotLoaded } from '../../../shared/states';
+import { usePackageActions, usePackages } from '../api';
+import { TRACK_LABEL } from '../components/PackageCard';
+import { PackageSubjectPicker } from '../components/PackageSubjectPicker';
+import { piastersOfPounds, poundsOf, sessionCountOf } from '../price';
+
+const NEW = 'new';
+const TRACKS: readonly PackageTrack[] = ['recitation', 'ijazah_track'];
+
+type Refusal = 'subject' | 'frozen' | 'other';
+
+export function PackageEditor() {
+  const t = useT();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const list = usePackages();
+  if (id === NEW) return <PackageForm />;
+  const item = list.data?.packages.find((candidate) => candidate.id === id);
+  if (item !== undefined) return <PackageForm key={item.id} item={item} />;
+  return (
+    <StackScreen header={<EditorHeader title={t('teacher.packages.editor.title')} />}>
+      <NotLoaded
+        failed={list.isError || list.data !== undefined}
+        onRetry={() => void list.refetch()}
+      />
+    </StackScreen>
+  );
+}
+
+function EditorHeader({ title }: { readonly title: string }) {
+  return <NavHeader title={title} back={{ kind: 'back', onPress: () => router.back() }} />;
+}
+
+function PackageForm({ item }: { readonly item?: TeacherPackage }) {
+  const t = useT();
+  const locale = useLocale();
+  const nameOf = useSubjectName();
+  const actions = usePackageActions();
+  const [idempotencyKey] = useState(() => Crypto.randomUUID());
+  const [subject, setSubject] = useState<SubjectSummary | undefined>(item?.subject);
+  const [track, setTrack] = useState<PackageTrack>(item?.track ?? 'recitation');
+  const [minutes, setMinutes] = useState<SessionLengthMinutes>(
+    item?.sessionDurationMinutes ?? SESSION_LENGTHS_MINUTES[0],
+  );
+  const [countText, setCountText] = useState(item === undefined ? '' : String(item.sessionCount));
+  const [priceText, setPriceText] = useState(
+    item === undefined ? '' : poundsOf(piasters(item.price_piasters)),
+  );
+  const [picking, setPicking] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [refusal, setRefusal] = useState<Refusal | undefined>(undefined);
+
+  const frozen = item?.frozen === true;
+  const sessionCount = sessionCountOf(countText);
+  const price_piasters = piastersOfPounds(priceText);
+  const countWrong = countText.trim() !== '' && sessionCount === null;
+  const priceWrong = priceText.trim() !== '' && price_piasters === null;
+  const ready =
+    subject !== undefined && sessionCount !== null && price_piasters !== null && !sending;
+
+  async function save(): Promise<void> {
+    if (subject === undefined || sessionCount === null || price_piasters === null) return;
+    setSending(true);
+    setRefusal(undefined);
+    try {
+      if (item === undefined) {
+        await actions.create({
+          subjectId: subject.id,
+          track,
+          sessionCount,
+          sessionDurationMinutes: minutes,
+          price_piasters,
+          isActive: true,
+          idempotencyKey,
+        });
+      } else {
+        await actions.update({
+          packageId: item.id,
+          sessionCount,
+          ...(frozen ? {} : { track, sessionDurationMinutes: minutes }),
+          price_piasters,
+        });
+      }
+      router.back();
+    } catch (caught) {
+      const code = errorCodeOf(caught);
+      if (code === 'PACKAGE_FROZEN') void actions.refreshed();
+      setRefusal(
+        code === 'SUBJECT_NOT_APPROVED'
+          ? 'subject'
+          : code === 'PACKAGE_FROZEN'
+            ? 'frozen'
+            : 'other',
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <StackScreen
+      header={
+        <EditorHeader
+          title={t(
+            item === undefined
+              ? 'teacher.packages.editor.newTitle'
+              : 'teacher.packages.editor.title',
+          )}
+        />
+      }
+      footer={
+        <ActionBar>
+          <Button
+            label={t('teacher.packages.editor.save')}
+            layout="block"
+            loading={sending}
+            disabled={!ready}
+            onPress={() => void save()}
+          />
+        </ActionBar>
+      }
+    >
+      <Field
+        label={t('teacher.packages.editor.subject')}
+        {...(refusal === 'subject'
+          ? { error: t('teacher.packages.editor.error.subjectNotApproved') }
+          : {})}
+      >
+        {item === undefined ? (
+          <Select
+            label={t('teacher.packages.editor.subject')}
+            placeholder={t('teacher.packages.editor.subjectPlaceholder')}
+            {...(subject === undefined ? {} : { value: nameOf(subject) })}
+            onPress={() => setPicking(true)}
+          />
+        ) : (
+          <Text variant="body-lg">{nameOf(item.subject)}</Text>
+        )}
+      </Field>
+
+      {frozen ? (
+        <Field label={t('teacher.packages.editor.track')}>
+          <Text variant="body-lg">{t(TRACK_LABEL[track])}</Text>
+        </Field>
+      ) : (
+        <Field
+          label={t('teacher.packages.editor.track')}
+          hint={t('teacher.packages.editor.trackHint')}
+        >
+          <Segmented
+            accessibilityLabel={t('teacher.packages.editor.track')}
+            options={TRACKS.map((value) => ({ value, label: t(TRACK_LABEL[value]) }))}
+            value={track}
+            onChange={(value) => setTrack(value as PackageTrack)}
+          />
+        </Field>
+      )}
+
+      <Field
+        label={t('teacher.packages.editor.sessionCount')}
+        {...(countWrong
+          ? {
+              error: t('teacher.packages.editor.error.sessionCount', {
+                min: 1,
+                max: MAX_SESSION_COUNT,
+              }),
+            }
+          : {})}
+      >
+        <Input value={countText} onChangeText={setCountText} keyboard="numeric" />
+      </Field>
+
+      {frozen ? (
+        <Field label={t('teacher.packages.editor.duration')}>
+          <Text variant="body-lg">{t('common.format.duration', { minutes })}</Text>
+        </Field>
+      ) : (
+        <Field label={t('teacher.packages.editor.duration')}>
+          <Segmented
+            accessibilityLabel={t('teacher.packages.editor.duration')}
+            options={SESSION_LENGTHS_MINUTES.map((value) => ({
+              value: String(value),
+              label: t('teacher.packages.editor.durationOption', { minutes: value }),
+            }))}
+            value={String(minutes)}
+            onChange={(value) => setMinutes(Number(value) as SessionLengthMinutes)}
+          />
+        </Field>
+      )}
+
+      {frozen ? (
+        <Banner icon={{ name: 'lock' }} tone="neutral">
+          {t('teacher.packages.editor.frozenHint')}
+        </Banner>
+      ) : null}
+
+      <Field
+        label={t('teacher.packages.editor.totalPrice')}
+        {...(priceWrong ? { error: t('teacher.packages.editor.error.price') } : {})}
+        {...(price_piasters !== null && sessionCount !== null
+          ? {
+              hint: t('teacher.packages.editor.perSessionHint', {
+                amount: formatPoundAmount(perSession(price_piasters, sessionCount), locale),
+              }),
+            }
+          : {})}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['3'] }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Input value={priceText} onChangeText={setPriceText} keyboard="numeric" />
+          </View>
+          <Text tone="muted">{t('teacher.packages.editor.currency')}</Text>
+        </View>
+      </Field>
+
+      {item === undefined ? null : (
+        <Banner icon={{ name: 'info' }} tone="info">
+          {t('teacher.packages.editor.editNote')}
+        </Banner>
+      )}
+
+      {refusal === 'frozen' || refusal === 'other' ? (
+        <Banner icon={{ name: 'alert-circle' }} tone="danger">
+          {t(
+            refusal === 'frozen'
+              ? 'teacher.packages.editor.error.frozen'
+              : 'common.state.actionError',
+          )}
+        </Banner>
+      ) : null}
+
+      {item === undefined ? (
+        <PackageSubjectPicker
+          open={picking}
+          {...(subject === undefined ? {} : { value: subject })}
+          onChange={(chosen) => {
+            setSubject(chosen);
+            if (refusal === 'subject') setRefusal(undefined);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
+    </StackScreen>
+  );
+}
