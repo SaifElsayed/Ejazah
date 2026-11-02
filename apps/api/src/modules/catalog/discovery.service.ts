@@ -22,6 +22,15 @@
 // fold equals the fold of the query, so the marks after the last matched letter are marked with it;
 // counted in UTF-16 units, as the phone slices the name, and never splitting a code point. Both
 // folds are the kernel's `foldedTexts`: no second fold is written here.
+//
+// THE PROFILE (T027, FR-331, FR-336, R-GENDER-2). `discovery.teacher` asks identity's predicate for
+// the one teacher, for `discover` with the requester's gender, before anything else is read: a
+// teacher it does not answer, excluded or unknown, is NOT_FOUND with no field, so the two cannot be
+// told apart. A visible one is answered with the photo as the storage port's signed link that lapses
+// after `document_link_ttl_seconds` (never `users.photo_key`), the subjects of its
+// `teacher_subjects` (an approved credential's), and its active packages, each with the price per
+// session `packages/money` computes (FR-337). No riwaya, tariq or chain is read (Phase 4,
+// FR-ISNAD-5); the remedy line is the phone's fixed copy per track (ADR 0018 D2, T024).
 import {
   type DiscoveryBrowseInput,
   type DiscoveryBrowseOutput,
@@ -29,6 +38,8 @@ import {
   type DiscoveryFiltersInput,
   type DiscoveryFiltersOutput,
   type DiscoveryTab,
+  type DiscoveryTeacherInput,
+  type DiscoveryTeacherOutput,
   type PackageTrack,
   packageTrack,
   type SubjectSummary,
@@ -37,11 +48,20 @@ import { lowest, perSession, type Piasters, toPlainNumber } from '@ijazah/money'
 import { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
+import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
+import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { TeacherPageQuery, VisibilityPurpose, VisibleTeacher } from '../identity/index.js';
 import { readCursor, writeCursor } from './discovery-cursor.js';
-import type { CardPackage, CardSubject, Offering, RiwayaRow } from './discovery.repository.js';
+import type {
+  CardPackage,
+  CardSubject,
+  Offering,
+  ProfilePackage,
+  RiwayaRow,
+} from './discovery.repository.js';
 import type { SubjectRow } from './subjects.repository.js';
 
 export const DISCOVERY_PAGE_SIZE_SETTING = 'discovery_page_size';
@@ -57,6 +77,8 @@ export interface DiscoveryStore {
   riwayas(tx: Transaction, subjectId?: string): Promise<RiwayaRow[]>;
   subjectsOf(tx: Transaction, teacherIds: readonly string[]): Promise<CardSubject[]>;
   packagesOf(tx: Transaction, teacherIds: readonly string[]): Promise<CardPackage[]>;
+  /** The teacher's active packages, for the profile (T027). */
+  profilePackagesOf(tx: Transaction, teacherId: string): Promise<ProfilePackage[]>;
   activeSubjects(tx: Transaction): Promise<SubjectRow[]>;
   /** The kernel's `ijazah_fold` of each text, in order (R-203). */
   fold(tx: Transaction, texts: readonly string[]): Promise<string[]>;
@@ -74,7 +96,10 @@ export interface DiscoveryStore {
   ): Promise<VisibleTeacher[]>;
 }
 
-/** `discovery.browse` and `discovery.filters` as booking's router calls them (T026). */
+/**
+ * `discovery.browse`, `discovery.filters` and `discovery.teacher` as booking's router calls them
+ * (T026, T027).
+ */
 export interface DiscoveryCatalog {
   /**
    * The cards of one page, and on the first page the subject tabs; `requester` is the session's
@@ -91,10 +116,18 @@ export interface DiscoveryCatalog {
     requester: RequesterGender,
     input: DiscoveryFiltersInput,
   ): Promise<DiscoveryFiltersOutput>;
+  /** The teacher's profile (T027, FR-336); NOT_FOUND, with no field, for an excluded or unknown one. */
+  teacher(
+    tx: Transaction,
+    requester: RequesterGender,
+    input: DiscoveryTeacherInput,
+  ): Promise<DiscoveryTeacherOutput>;
 }
 
 export interface DiscoveryServiceDependencies {
   readonly settings: SettingsReader;
+  /** The profile photo's signed link (T027). */
+  readonly storage: Pick<StoragePort, 'temporaryLink'>;
   readonly store: DiscoveryStore;
 }
 
@@ -136,10 +169,12 @@ function candidatesOf(
 
 export class DiscoveryService implements DiscoveryCatalog {
   readonly #settings: SettingsReader;
+  readonly #storage: Pick<StoragePort, 'temporaryLink'>;
   readonly #store: DiscoveryStore;
 
-  constructor({ settings, store }: DiscoveryServiceDependencies) {
+  constructor({ settings, storage, store }: DiscoveryServiceDependencies) {
     this.#settings = settings;
+    this.#storage = storage;
     this.#store = store;
   }
 
@@ -203,6 +238,50 @@ export class DiscoveryService implements DiscoveryCatalog {
       (group) => group.map(({ riwaya }) => riwaya).sort(riwayaOrder)[0] ?? '',
     );
     return { riwayas: riwayas.sort(riwayaOrder) };
+  }
+
+  async teacher(
+    tx: Transaction,
+    requester: RequesterGender,
+    { teacherId }: DiscoveryTeacherInput,
+  ): Promise<DiscoveryTeacherOutput> {
+    const [profile] = await this.#store.visibleTeachers(tx, requester, {
+      purpose: 'discover',
+      teacherIds: [teacherId],
+    });
+    if (profile === undefined) throw new DomainError('NOT_FOUND');
+    const [subjects, packages, photoUrl] = await Promise.all([
+      this.#store.subjectsOf(tx, [teacherId]),
+      this.#store.profilePackagesOf(tx, teacherId),
+      this.#photoUrl(profile.photoKey),
+    ]);
+    return {
+      teacherId: profile.id,
+      displayName: profile.displayName,
+      gender: profile.gender,
+      ...(photoUrl === undefined ? {} : { photoUrl }),
+      bio: profile.bio,
+      qualificationSummary: profile.qualificationSummary,
+      subjects: subjects.map(({ subject }) => subject),
+      ...(profile.averageRating === null ? {} : { rating: Number(profile.averageRating) }),
+      reviewCount: profile.reviewCount,
+      packages: packages.map(({ id, price_piasters, ...offered }) => ({
+        packageId: id,
+        subject: offered.subject,
+        track: offered.track,
+        sessionCount: offered.sessionCount,
+        sessionDurationMinutes: offered.sessionDurationMinutes,
+        price_piasters: toPlainNumber(price_piasters),
+        perSession_piasters: toPlainNumber(perSession(price_piasters, offered.sessionCount)),
+      })),
+    };
+  }
+
+  /** The photo as a signed link that lapses after `document_link_ttl_seconds`; never the key. */
+  async #photoUrl(photoKey: string | null): Promise<string | undefined> {
+    if (photoKey === null) return undefined;
+    const seconds = await this.#settings.read(DOCUMENT_LINK_TTL_SETTING, documentLinkTtl);
+    return this.#storage.temporaryLink(photoKey, seconds);
   }
 
   /** Of `candidates`, those with an approved credential whose riwaya folds as `riwaya` does. */

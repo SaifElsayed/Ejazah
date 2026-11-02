@@ -7,8 +7,14 @@
 // The candidate reads are bounded by the teachers with an active package, one indexed read at the
 // launch cohort's size, as the visible set is (R-201); they answer ids and catalog values only, so
 // nothing here returns a teacher's data, and every id is filtered by identity's predicate before
-// anything of it is answered (R-GENDER-5).
-import type { PackageTrack, SubjectSummary } from '@ijazah/contracts';
+// anything of it is answered (R-GENDER-5). The profile's packages (T027) are read only for a teacher
+// the predicate has already answered.
+import {
+  type PackageTrack,
+  type SessionLengthMinutes,
+  sessionLengthMinutes,
+  type SubjectSummary,
+} from '@ijazah/contracts';
 import { piasters, type Piasters } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -107,5 +113,43 @@ export async function cardPackages(
     track,
     sessionCount,
     price_piasters: piasters(Number(pricePiasters)),
+  }));
+}
+
+/** One of a profile's active packages (T027, FR-336): what the profile shows of it. */
+export interface ProfilePackage {
+  readonly id: string;
+  readonly subject: SubjectSummary;
+  readonly track: PackageTrack;
+  readonly sessionCount: number;
+  readonly sessionDurationMinutes: SessionLengthMinutes;
+  readonly price_piasters: Piasters;
+}
+
+/** The teacher's active packages, oldest first (the id is a UUID v7), as the teacher's own list. */
+export async function profilePackages(
+  tx: Pick<Transaction, 'package'>,
+  teacherId: string,
+): Promise<ProfilePackage[]> {
+  const rows = await tx.package.findMany({
+    where: { teacherUserId: teacherId, isActive: true },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      // Subjects are never deleted: the table has no `deleted_at`.
+      subject: { select: { id: true, nameAr: true, nameEn: true } },
+      track: true,
+      sessionCount: true,
+      sessionDurationMinutes: true,
+      pricePiasters: true,
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    subject: row.subject,
+    track: row.track,
+    sessionCount: row.sessionCount,
+    sessionDurationMinutes: sessionLengthMinutes.parse(row.sessionDurationMinutes),
+    price_piasters: piasters(Number(row.pricePiasters)),
   }));
 }

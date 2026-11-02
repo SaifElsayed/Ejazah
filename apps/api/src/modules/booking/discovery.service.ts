@@ -5,11 +5,15 @@
 // slot for the teachers of that page and no other (`nearest-slot.service.ts`). Both are asked with
 // the requester's gender the procedure took from the session (R-GENDER-4, R-GENDER-5), so the slots
 // are computed under the same visible set as the cards, and a card is never added, only completed.
+// The profile (T027, FR-336) is catalog's answer as it is, asked with the same gender: catalog asks
+// the predicate first and answers NOT_FOUND, with no field, for an excluded or unknown teacher.
 import type {
   DiscoveryBrowseInput,
   discoveryBrowseOutput,
   DiscoveryFiltersInput,
   discoveryFiltersOutput,
+  DiscoveryTeacherInput,
+  discoveryTeacherOutput,
 } from '@ijazah/contracts';
 import type { z } from 'zod';
 
@@ -38,6 +42,11 @@ export interface DiscoveryCatalog {
     requester: RequesterGender,
     input: DiscoveryFiltersInput,
   ): Promise<z.input<typeof discoveryFiltersOutput>>;
+  /** The teacher's profile (T027); NOT_FOUND, with no field, for an excluded or unknown teacher. */
+  teacher(
+    requester: RequesterGender,
+    input: DiscoveryTeacherInput,
+  ): Promise<z.input<typeof discoveryTeacherOutput>>;
 }
 
 export class DiscoveryService {
@@ -72,7 +81,15 @@ export class DiscoveryService {
   ): Promise<z.input<typeof discoveryFiltersOutput>> {
     return this.#catalog.filters(requester, input);
   }
+
+  /** `discovery.teacher`: the profile, catalog's answer as it is (T027, FR-331, FR-336). */
+  teacher(
+    requester: RequesterGender,
+    input: DiscoveryTeacherInput,
+  ): Promise<z.input<typeof discoveryTeacherOutput>> {
+    return this.#catalog.teacher(requester, input);
+  }
 }
 
-/** The `discovery` procedures' services on the user surface (T026; T027 adds `teacher`). */
-export type DiscoveryServices = Pick<DiscoveryService, 'browse' | 'filters'>;
+/** The `discovery` procedures' services on the user surface (T026, T027). */
+export type DiscoveryServices = Pick<DiscoveryService, 'browse' | 'filters' | 'teacher'>;

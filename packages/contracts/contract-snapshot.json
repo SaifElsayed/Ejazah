@@ -1140,6 +1140,50 @@
           "$.riwayas[]": { "type": "string" }
         }
       },
+      "discovery.teacher": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.teacherId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.packages": { "required": true, "type": "array" },
+          "$.packages[]": { "type": "object" },
+          "$.packages[].packageId": { "required": true, "type": "string" },
+          "$.packages[].perSession_piasters": { "required": true, "type": "integer" },
+          "$.packages[].price_piasters": { "required": true, "type": "integer" },
+          "$.packages[].sessionCount": { "required": true, "type": "integer" },
+          "$.packages[].sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.packages[].subject": { "required": true, "type": "object" },
+          "$.packages[].subject.id": { "required": true, "type": "string" },
+          "$.packages[].subject.nameAr": { "required": true, "type": "string" },
+          "$.packages[].subject.nameEn": { "required": true, "type": "string" },
+          "$.packages[].track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.photoUrl": { "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" },
+          "$.rating": { "type": "number" },
+          "$.reviewCount": { "required": true, "type": "integer" },
+          "$.subjects": { "required": true, "type": "array" },
+          "$.subjects[]": { "type": "object" },
+          "$.subjects[].id": { "required": true, "type": "string" },
+          "$.subjects[].nameAr": { "required": true, "type": "string" },
+          "$.subjects[].nameEn": { "required": true, "type": "string" },
+          "$.teacherId": { "required": true, "type": "string" }
+        }
+      },
       "onboarding.complete": {
         "caller": "public",
         "input": {
