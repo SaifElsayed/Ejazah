@@ -14,8 +14,12 @@ Write the `sessions` table; session generation is requested through the sessions
 
 `booking.service.ts` holds every rule. `booking.repository.ts` holds every query. `booking.router.ts` is thin: validate, call one service method, return. `index.ts` is the only import path. Arrives with the phase that first needs it (see PLAN.md).
 
-`catalog-use.repository.ts` (T020) answers catalog's `CatalogUse` port, bound in `main.ts`: whether a slot is in use (an active hold, or an enrollment `pending_payment` or `confirmed`), whether a package has an enrollment, and the enrollment count of each package. Queries only, on the caller's transaction and with no lock: the caller holds its locks before it asks (T005's rule 1).
+`catalog-use.repository.ts` (T020) answers catalog's `CatalogUse` port, bound in `main.ts` through `createCatalogUse`: whether a package has an enrollment, and the enrollment count of each package; whether a slot is in use is `slot-occupancy.service.ts`'s since T026. Queries only, on the caller's transaction and with no lock: the caller holds its locks before it asks (T005's rule 1).
+
+`slot-occupancy.service.ts` and `slot-occupancy.repository.ts` (T026) are a slot's occupancy (R-205): taken by an active hold or an enrollment `pending_payment`; held by a `confirmed` enrollment on every local date before its release, the week after its final session (read through the sessions module's entry) plus `slot_release_buffer_weeks`. `nearest-slot.service.ts` is the discovery card's nearest free slot per teacher of a page, by `firstOccurrenceAfter` with `first_session_lead_hours`, over catalog's offered slots and identity's predicate with `purpose: 'book'`. `discovery.service.ts` composes catalog's discovery service (the `DiscoveryCatalog` seam) with it, and `discovery.router.ts` serves `discovery.browse` and `discovery.filters` to a student under `rate_limit_search`. Read-only: no lock.
 
 ## Requirement ids
 
-- FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`.
+- FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`, `slot-occupancy.service.ts`.
+- FR-394, FR-BOOK-10 (a slot offered again from the week after its final session plus the buffer; R-205): `slot-occupancy.service.ts`.
+- FR-335 (the card's nearest free slot; R-205): `nearest-slot.service.ts`, `discovery.service.ts`, `discovery.router.ts`.

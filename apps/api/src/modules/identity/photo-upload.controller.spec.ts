@@ -3,10 +3,17 @@
 // is written through the identity module's own repository (R-API-6), the previous photo is removed
 // from storage, and the answer is a signed link. Over real HTTP with the in-memory storage stand-in
 // and a recorded users writer.
+//
+// T145: the photo is stored without its metadata. The fixtures are built here with `sharp` (EXIF
+// is written onto the INPUT only) or by hand (a PNG's text chunks, a forged header), never
+// committed as binary files.
+import { crc32, deflateSync } from 'node:zlib';
 import type { INestApplication } from '@nestjs/common';
+import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApplication } from '../../app.module.js';
 import { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import { PHOTO_MAX_INPUT_PIXELS } from '../../platform/guards/upload.middleware.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { UserSession } from '../../surfaces/context.js';
@@ -15,6 +22,7 @@ import { PHOTOS_UPLOAD_PATH, photoUploadRoute } from './photo-upload.controller.
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -65,6 +73,7 @@ const services = {
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
+  discovery: unusedDiscoveryServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const storage = storageStub();
@@ -115,15 +124,114 @@ beforeEach(() => {
   photoKeys.clear();
 });
 
-const jpeg = () => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(256, 1)]);
-const png = () =>
-  Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    Buffer.alloc(256, 2),
-  ]);
+const WIDTH = 40;
+const HEIGHT = 20;
+const RED = [220, 20, 20] as const;
+const BLUE = [20, 20, 220] as const;
 
-function upload(bytes: Buffer, bearer = 't-a'): Promise<Response> {
-  const payload = multipart([{ name: 'file', filename: 'me.jpg', type: 'image/jpeg', bytes }]);
+/** A 40×20 picture whose left half is red and right half blue, as raw RGB. */
+function halves(): Buffer {
+  const raw = Buffer.alloc(WIDTH * HEIGHT * 3);
+  for (let y = 0; y < HEIGHT; y += 1) {
+    for (let x = 0; x < WIDTH; x += 1) raw.set(x < WIDTH / 2 ? RED : BLUE, (y * WIDTH + x) * 3);
+  }
+  return raw;
+}
+const picture = () => sharp(halves(), { raw: { width: WIDTH, height: HEIGHT, channels: 3 } });
+
+const jpeg = () => picture().jpeg().toBuffer();
+const png = () => picture().png().toBuffer();
+
+/** A JPEG carrying the camera's make and model and a GPS position. */
+const jpegWithExif = () =>
+  picture()
+    .jpeg()
+    .withExif({
+      IFD0: { Make: 'SecretCam', Model: 'SecretModel' },
+      IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '30/1 2/1 0/1', GPSMapDatum: 'SecretDatum' },
+    })
+    .toBuffer();
+
+/** A JPEG stored sideways whose EXIF says to turn it a quarter clockwise (Orientation 6). */
+const jpegTurned = () => picture().jpeg().withMetadata({ orientation: 6 }).toBuffer();
+
+/** One PNG chunk: length, type, data, and the CRC of type and data. */
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typed = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.byteLength);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(typed));
+  return Buffer.concat([length, typed, crc]);
+}
+
+const TEXT_CHUNKS = ['tEXt', 'iTXt', 'zTXt', 'eXIf'];
+
+/** A PNG with a tEXt, an iTXt, a zTXt and an eXIf chunk before its IEND. */
+async function pngWithText(): Promise<Buffer> {
+  const plain = await png();
+  const { exif } = await sharp(await jpegWithExif()).metadata();
+  return Buffer.concat([
+    plain.subarray(0, plain.byteLength - 12),
+    pngChunk('tEXt', Buffer.from('Author\0SecretAuthor', 'latin1')),
+    pngChunk('iTXt', Buffer.from('Comment\0\0\0\0\0SecretComment', 'utf8')),
+    pngChunk(
+      'zTXt',
+      Buffer.concat([Buffer.from('Location\0\0', 'latin1'), deflateSync('SecretPlace')]),
+    ),
+    // The eXIf chunk holds the TIFF structure without the JPEG APP1 segment's `Exif\0\0`.
+    pngChunk('eXIf', (exif ?? Buffer.alloc(0)).subarray(6)),
+    plain.subarray(plain.byteLength - 12),
+  ]);
+}
+
+/** The chunk types of a PNG, in order. */
+function pngChunkTypes(bytes: Uint8Array): string[] {
+  const buffer = Buffer.from(bytes);
+  const types: string[] = [];
+  for (let offset = 8; offset + 8 <= buffer.byteLength;) {
+    const length = buffer.readUInt32BE(offset);
+    types.push(buffer.toString('latin1', offset + 4, offset + 8));
+    offset += 12 + length;
+  }
+  return types;
+}
+
+/** A real PNG whose header claims one row more than the bound allows: a decompression bomb's shape. */
+async function pngOverTheBound(): Promise<Buffer> {
+  const forged = Buffer.from(await png());
+  const width = 8192;
+  const height = Math.floor(PHOTO_MAX_INPUT_PIXELS / width) + 1;
+  forged.writeUInt32BE(width, 16);
+  forged.writeUInt32BE(height, 20);
+  forged.writeUInt32BE(crc32(forged.subarray(12, 29)), 29);
+  return forged;
+}
+
+/** The pixel at (x, y) of an image, as RGB. */
+async function pixelAt(bytes: Uint8Array, x: number, y: number): Promise<number[]> {
+  const { data, info } = await sharp(bytes).raw().toBuffer({ resolveWithObject: true });
+  const at = (y * info.width + x) * info.channels;
+  return [...data.subarray(at, at + 3)];
+}
+
+/** Within a JPEG's loss of `expected`. */
+function near(actual: readonly number[], expected: readonly number[]): boolean {
+  return actual.every((value, index) => Math.abs(value - (expected[index] ?? 0)) <= 40);
+}
+
+const ACTIVE = '0199d0a0-0000-7000-8000-00000000000a';
+
+/** What the stub holds under the user's current photo key. */
+function storedPhoto(): { key: string; body: Uint8Array; contentType: string } {
+  const key = photoKeys.get(ACTIVE) ?? '';
+  const stored = storage.stored(key);
+  if (stored === undefined) throw new Error(`nothing is stored under "${key}"`);
+  return { key, ...stored };
+}
+
+function upload(bytes: Buffer, bearer = 't-a', filename = 'me.jpg'): Promise<Response> {
+  const payload = multipart([{ name: 'file', filename, type: 'image/jpeg', bytes }]);
   return fetch(`${origin}${PHOTOS_UPLOAD_PATH}`, {
     method: 'POST',
     headers: { authorization: `Bearer ${bearer}`, 'content-type': payload.contentType },
@@ -133,7 +241,7 @@ function upload(bytes: Buffer, bearer = 't-a'): Promise<Response> {
 
 describe('POST /uploads/photos (T024)', () => {
   it('stores the image, writes users.photo_key through identity, and answers a signed link', async () => {
-    const response = await upload(jpeg());
+    const response = await upload(await jpeg());
     expect(response.status).toBe(201);
     const { photoUrl } = (await response.json()) as { photoUrl: string };
     const key = photoKeys.get('0199d0a0-0000-7000-8000-00000000000a');
@@ -143,9 +251,9 @@ describe('POST /uploads/photos (T024)', () => {
   });
 
   it('replaces the previous photo, removing it from storage, and names a PNG as one', async () => {
-    await upload(jpeg());
+    await upload(await jpeg());
     const first = photoKeys.get('0199d0a0-0000-7000-8000-00000000000a') ?? '';
-    await upload(png());
+    await upload(await png());
     const second = photoKeys.get('0199d0a0-0000-7000-8000-00000000000a') ?? '';
     expect(second).toMatch(/\.png$/);
     expect(storage.stored(first)).toBeUndefined();
@@ -159,8 +267,107 @@ describe('POST /uploads/photos (T024)', () => {
   });
 
   it('refuses a suspended account, as the profile editor does (FR-137)', async () => {
-    const response = await upload(jpeg(), 't-s');
+    const response = await upload(await jpeg(), 't-s');
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'ACCOUNT_RESTRICTED' } });
+  });
+});
+
+describe('POST /uploads/photos stores the photo without its metadata (T145)', () => {
+  it('stores a JPEG carrying GPS and the camera with no EXIF at all', async () => {
+    const sent = await jpegWithExif();
+    // The fixture does carry what the store must not.
+    expect((await sharp(sent).metadata()).exif).toBeDefined();
+    expect(sent.includes('SecretCam') && sent.includes('SecretDatum')).toBe(true);
+
+    expect((await upload(sent)).status).toBe(201);
+    const { body, contentType } = storedPhoto();
+    const stored = Buffer.from(body);
+    const metadata = await sharp(stored).metadata();
+    expect(contentType).toBe('image/jpeg');
+    expect(metadata.format).toBe('jpeg');
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
+    expect(metadata.iptc).toBeUndefined();
+    for (const marker of ['Exif\0\0', 'SecretCam', 'SecretModel', 'SecretDatum']) {
+      expect(stored.includes(marker)).toBe(false);
+    }
+  });
+
+  it('stores a JPEG with Orientation 6 turned upright, with no Orientation left', async () => {
+    const sent = await jpegTurned();
+    expect(await sharp(sent).metadata()).toMatchObject({
+      width: WIDTH,
+      height: HEIGHT,
+      orientation: 6,
+    });
+
+    expect((await upload(sent)).status).toBe(201);
+    const { body } = storedPhoto();
+    const metadata = await sharp(body).metadata();
+    expect(metadata).toMatchObject({ width: HEIGHT, height: WIDTH });
+    expect(metadata.orientation).toBeUndefined();
+    expect(metadata.exif).toBeUndefined();
+    // Turned a quarter clockwise: the left half (red) is now the top, the right (blue) the bottom.
+    expect(near(await pixelAt(body, HEIGHT / 2, 2), RED)).toBe(true);
+    expect(near(await pixelAt(body, HEIGHT / 2, WIDTH - 3), BLUE)).toBe(true);
+  });
+
+  it('stores a PNG without its text chunks and its EXIF chunk, still a PNG', async () => {
+    const sent = await pngWithText();
+    expect(pngChunkTypes(sent)).toEqual(expect.arrayContaining(TEXT_CHUNKS));
+
+    const response = await upload(sent, 't-a', 'me.png');
+    expect(response.status).toBe(201);
+    const { key, body, contentType } = storedPhoto();
+    expect(key).toMatch(/\.png$/);
+    expect(contentType).toBe('image/png');
+    expect((await sharp(body).metadata()).format).toBe('png');
+    expect(pngChunkTypes(body).filter((type) => TEXT_CHUNKS.includes(type))).toEqual([]);
+    const stored = Buffer.from(body);
+    for (const marker of ['SecretAuthor', 'SecretComment', 'SecretCam']) {
+      expect(stored.includes(marker)).toBe(false);
+    }
+    expect(near(await pixelAt(body, 2, 2), RED)).toBe(true);
+  });
+
+  it('refuses a file named .jpg that is not an image, storing nothing and keeping the photo', async () => {
+    await upload(await jpeg());
+    const previous = storedPhoto().key;
+    const puts = () => storage.calls.filter(({ operation }) => operation === 'put').length;
+    const before = puts();
+
+    const text = await upload(Buffer.from('not an image, only a name ending in .jpg'));
+    expect(text.status).toBe(400);
+    await expect(text.json()).resolves.toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+
+    // A JPEG's leading bytes pass the sniffing; what follows them is not a JPEG.
+    const pretender = await upload(
+      Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(256, 1)]),
+    );
+    expect(pretender.status).toBe(400);
+    await expect(pretender.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION_FAILED', message: 'The image cannot be read.' },
+    });
+
+    expect(puts()).toBe(before);
+    expect(photoKeys.get(ACTIVE)).toBe(previous);
+    expect(storage.stored(previous)).toBeDefined();
+  });
+
+  it('refuses an image with more pixels than the bound, storing nothing', async () => {
+    const puts = () => storage.calls.filter(({ operation }) => operation === 'put').length;
+    const before = puts();
+    const forged = await pngOverTheBound();
+    const { width = 0, height = 0 } = await sharp(forged).metadata();
+    expect(width * height).toBeGreaterThan(PHOTO_MAX_INPUT_PIXELS);
+
+    const response = await upload(forged, 't-a', 'me.png');
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION_FAILED', message: 'The image has more pixels than allowed.' },
+    });
+    expect(puts()).toBe(before);
+    expect(photoKeys.size).toBe(0);
   });
 });

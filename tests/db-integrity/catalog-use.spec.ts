@@ -175,11 +175,17 @@ async function hold(tx: Transaction, slotId: string, released: boolean): Promise
   });
 }
 
+/**
+ * R-205's release as T026 brings it: these probes write no session, so a confirmed enrollment keeps
+ * its slot whatever the clock (`discovery-slots.spec.ts` has the release week).
+ */
+const RELEASE = { now: () => new Date('2026-10-04T08:00:00Z'), bufferWeeks: async () => 0 };
+
 describe('slotInUse (T020, R-207, FR-318)', () => {
   it('answers false for a slot no hold and no enrollment uses', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
-      expect(await slotInUse(tx, on.slotId)).toBe(false);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(false);
     });
   });
 
@@ -187,9 +193,9 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
       await hold(tx, on.slotId, true);
-      expect(await slotInUse(tx, on.slotId)).toBe(false);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(false);
       await hold(tx, on.slotId, false);
-      expect(await slotInUse(tx, on.slotId)).toBe(true);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(true);
     });
   });
 
@@ -197,7 +203,7 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
       await enrollment(tx, on, { status: 'pending_payment' });
-      expect(await slotInUse(tx, on.slotId)).toBe(true);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(true);
     });
   });
 
@@ -205,7 +211,7 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
       await enrollment(tx, on, { status: 'confirmed' });
-      expect(await slotInUse(tx, on.slotId)).toBe(true);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(true);
     });
   });
 
@@ -214,7 +220,7 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
       const on = await offer(tx);
       await enrollment(tx, on, { status: 'cancelled' });
       await enrollment(tx, on, { status: 'completed' });
-      expect(await slotInUse(tx, on.slotId)).toBe(false);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(false);
     });
   });
 
@@ -222,7 +228,7 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
       await enrollment(tx, on, { status: 'confirmed' }, { deleted: true });
-      expect(await slotInUse(tx, on.slotId)).toBe(false);
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(false);
     });
   });
 
@@ -231,7 +237,7 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
       const on = await offer(tx);
       await hold(tx, on.slotId, false);
       await enrollment(tx, on, { status: 'confirmed' });
-      expect(await slotInUse(tx, on.otherSlotId)).toBe(false);
+      expect(await slotInUse(tx, on.otherSlotId, RELEASE)).toBe(false);
     });
   });
 });

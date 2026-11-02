@@ -24,7 +24,7 @@ The credential review locks the teacher's rows before the credential moves, thro
 
 ## Discovery (Phase 2)
 
-Discovery is not a module and not built yet. The visibility predicate (same gender, verification approved, not soft-deleted, payout verified; SRS §3.7.1, ADR 0006, ADR 0007) reads only `users` and `teacher_profiles`, so it is identity's repository filter, which also orders and pages the visible teachers. This module filters its own tables by the ids identity returns and builds the cards; the discovery router is booking's (ARCHITECTURE §4, amended 2026-11-01).
+Discovery is not a module. Its catalog half is `discovery.service.ts` with `discovery.repository.ts` and `discovery-cursor.ts` (T025, T027): the cards, the subject tabs, the riwaya values and the teacher profile. The visibility predicate (same gender, verification approved, not soft-deleted, payout verified; SRS §3.7.1, ADR 0006, ADR 0007) reads only `users` and `teacher_profiles`, so it is identity's repository filter, which also orders and pages the visible teachers. This module filters its own tables by the ids identity returns and builds the cards; the discovery router is booking's (ARCHITECTURE §4, amended 2026-11-01).
 
 ## Shape
 
@@ -35,5 +35,6 @@ The rules live in the services: `credential-review.service.ts` (the administrato
 - FR-153 (a subject becomes an approved teacher's on its credential's approval): `credential-review.service.ts`, `credentials.repository.ts`.
 - FR-163, FR-164 (the credential review and the chain's correction): `credential-review.service.ts`.
 - FR-182 (the subjects list, both names): `subjects.service.ts`, `subjects.router.ts`.
+- FR-331 to FR-336, FR-338 (discovery's cards, tabs, filters and the teacher profile): `discovery.service.ts`, `discovery.repository.ts`, `discovery-cursor.ts`.
 - FR-311, FR-312, FR-314, FR-315 (the teacher's packages): `packages.service.ts`, `packages.repository.ts`, `packages.router.ts`.
 - FR-313, FR-317, FR-318 (the teacher's weekly slots: no overlap on the week, a slot in use keeps its day, start and length): `slots.service.ts`, `slots.repository.ts`, `slots.router.ts`.

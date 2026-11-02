@@ -138,7 +138,8 @@ const cipher = createColumnCipher(config);
 // application's submission and the payout registration keyed through the kernel's idempotency
 // (FR-106), the payout registration over the payment port (T077), and the catalog module's behind
 // `teacher.packages` and `teacher.slots`, whose `CatalogUse` port is bound to booking's entry
-// (T020, R-207): catalog asks whether a slot or a package is in use without importing booking.
+// (T020, R-207): catalog asks whether a slot or a package is in use without importing booking;
+// and booking's `discovery` over catalog's discovery service (T026, R-205).
 // The one registry of an account's end (FR-142): the admin module's standing actions and the
 // identity module's deletion call it, and the modules that keep what an account had subscribe to it
 // (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
@@ -181,17 +182,31 @@ const services = {
   catalog: catalog.createCatalogServices({
     database,
     idempotency,
-    use: {
-      slotInUse: booking.slotInUse,
-      packageHasEnrollment: booking.packageHasEnrollment,
-      packageEnrollmentCounts: booking.packageEnrollmentCounts,
-    },
+    // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
+    use: booking.createCatalogUse({ settings }),
   }),
   // `teacher.profile` (T017): the identity module's, the photo answered as the storage port's link.
   teacherProfile: identity.createTeacherProfileService({
     database,
     settings,
     storage: ports.storage,
+  }),
+  // `discovery` (T026, T027): catalog's discovery service (T025) composed with booking's nearest
+  // slots; the profile's photo is the storage port's signed link (T027).
+  discovery: booking.createDiscoveryServices({
+    // T025's catalog discovery through catalog's entry, each call in a transaction of its own (B27
+    // integration): the seam takes none, and catalog's reads run on the one they are given.
+    catalog: (() => {
+      const discovery = catalog.createDiscoveryCatalog(settings, ports.storage);
+      const reads = transactionsOver(database);
+      return {
+        browse: (requester, input) => reads.run((tx) => discovery.browse(tx, requester, input)),
+        filters: (requester, input) => reads.run((tx) => discovery.filters(tx, requester, input)),
+        teacher: (requester, input) => reads.run((tx) => discovery.teacher(tx, requester, input)),
+      };
+    })(),
+    database,
+    settings,
   }),
 };
 

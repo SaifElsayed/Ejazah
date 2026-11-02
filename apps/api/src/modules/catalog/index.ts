@@ -2,6 +2,7 @@
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import { grantSubjects } from './credentials.repository.js';
@@ -19,6 +20,7 @@ import {
   CredentialReviewService,
   type CredentialReviewStore,
 } from './credential-review.service.js';
+import { foldedTexts } from '../../platform/db/folded-name.js';
 import {
   accountTimezone,
   decideApplication,
@@ -26,7 +28,21 @@ import {
   isPublishedTeacher,
   lockAccount,
   lockApplication,
+  visibleTeacherPage,
+  visibleTeachers,
 } from '../identity/index.js';
+import {
+  activeOfferings,
+  approvedRiwayas,
+  cardPackages,
+  cardSubjects,
+  profilePackages,
+} from './discovery.repository.js';
+import {
+  type DiscoveryCatalog,
+  DiscoveryService,
+  type DiscoveryStore,
+} from './discovery.service.js';
 import {
   activeSlotsOf,
   insertSlot,
@@ -165,6 +181,11 @@ export { PackagesService };
 export { packagesRouter } from './packages.router.js';
 /** The `teacher.slots` namespace, mounted by `app.router.ts` (T019). */
 export { slotsRouter } from './slots.router.js';
+/**
+ * The active slots of the lengths of each teacher's active packages, on the caller's transaction:
+ * what booking's discovery read decides is free (T026, R-205).
+ */
+export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
 export type { TeacherSlots };
 
 /** The subjects list's router, mounted under `catalog.subjects` by `app.router.ts` (T038). */
@@ -208,3 +229,33 @@ export function createDocumentReferences(database: Pick<Database, 'teacherCreden
   const credentials = new CredentialsRepository(database);
   return { referencedAmong: (documentIds) => credentials.documentsAmong(documentIds) };
 }
+
+/**
+ * Discovery's store (T025, T027): this module's rows, the kernel's fold and identity's predicate and
+ * page through its entry (R-201, R-204). Every read is on the caller's transaction and takes no lock.
+ */
+export const discoveryStore: DiscoveryStore = {
+  offerings: activeOfferings,
+  riwayas: approvedRiwayas,
+  subjectsOf: cardSubjects,
+  packagesOf: cardPackages,
+  profilePackagesOf: profilePackages,
+  activeSubjects: (tx) => new SubjectsRepository(tx).listActive(),
+  fold: foldedTexts,
+  visibleTeachers,
+  visibleTeacherPage,
+};
+
+/**
+ * Discovery's cards, subject tabs and riwaya values (T025, FR-332 to FR-335), and the teacher's
+ * profile with its photo as the storage port's signed link (T027, FR-336), for booking's
+ * `discovery` router (T026), which adds each card's nearest free slot and the search rate limit.
+ * Each call takes the caller's transaction and the session's gender (R-GENDER-4, R-GENDER-5).
+ */
+export function createDiscoveryCatalog(
+  settings: SettingsReader,
+  storage: Pick<StoragePort, 'temporaryLink'>,
+): DiscoveryCatalog {
+  return new DiscoveryService({ settings, storage, store: discoveryStore });
+}
+export type { DiscoveryCatalog };

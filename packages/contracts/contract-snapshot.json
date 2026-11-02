@@ -1083,6 +1083,107 @@
           "$[].nameEn": { "required": true, "type": "string" }
         }
       },
+      "discovery.browse": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.minRating": { "type": "integer" },
+          "$.query": { "type": "string" },
+          "$.riwaya": { "type": "string" },
+          "$.subjectId": { "type": "string" },
+          "$.track": { "type": "string", "values": ["ijazah_track", "recitation"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.cards": { "required": true, "type": "array" },
+          "$.cards[]": { "type": "object" },
+          "$.cards[].bioExcerpt": { "required": true, "type": "string" },
+          "$.cards[].displayName": { "required": true, "type": "string" },
+          "$.cards[].lowestPerSession_piasters": { "required": true, "type": "integer" },
+          "$.cards[].match": { "type": "object" },
+          "$.cards[].match.length": { "required": true, "type": "integer" },
+          "$.cards[].nearestSlot": { "type": "object" },
+          "$.cards[].nearestSlot.startsAt": { "required": true, "type": "string" },
+          "$.cards[].nearestSlot.timezone": { "required": true, "type": "string" },
+          "$.cards[].photoUrl": { "type": "string" },
+          "$.cards[].rating": { "type": "number" },
+          "$.cards[].reviewCount": { "required": true, "type": "integer" },
+          "$.cards[].subjects": { "required": true, "type": "array" },
+          "$.cards[].subjects[]": { "type": "object" },
+          "$.cards[].subjects[].id": { "required": true, "type": "string" },
+          "$.cards[].subjects[].nameAr": { "required": true, "type": "string" },
+          "$.cards[].subjects[].nameEn": { "required": true, "type": "string" },
+          "$.cards[].teacherId": { "required": true, "type": "string" },
+          "$.cards[].tracks": { "required": true, "type": "array" },
+          "$.cards[].tracks[]": { "type": "string", "values": ["ijazah_track", "recitation"] },
+          "$.nextCursor": { "type": "string" },
+          "$.tabs": { "type": "array" },
+          "$.tabs[]": { "type": "object" },
+          "$.tabs[].count": { "required": true, "type": "integer" },
+          "$.tabs[].nameAr": { "required": true, "type": "string" },
+          "$.tabs[].nameEn": { "required": true, "type": "string" },
+          "$.tabs[].subjectId": { "required": true, "type": "null|string" }
+        }
+      },
+      "discovery.filters": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.subjectId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.riwayas": { "required": true, "type": "array" },
+          "$.riwayas[]": { "type": "string" }
+        }
+      },
+      "discovery.teacher": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.teacherId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.packages": { "required": true, "type": "array" },
+          "$.packages[]": { "type": "object" },
+          "$.packages[].packageId": { "required": true, "type": "string" },
+          "$.packages[].perSession_piasters": { "required": true, "type": "integer" },
+          "$.packages[].price_piasters": { "required": true, "type": "integer" },
+          "$.packages[].sessionCount": { "required": true, "type": "integer" },
+          "$.packages[].sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.packages[].subject": { "required": true, "type": "object" },
+          "$.packages[].subject.id": { "required": true, "type": "string" },
+          "$.packages[].subject.nameAr": { "required": true, "type": "string" },
+          "$.packages[].subject.nameEn": { "required": true, "type": "string" },
+          "$.packages[].track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.photoUrl": { "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" },
+          "$.rating": { "type": "number" },
+          "$.reviewCount": { "required": true, "type": "integer" },
+          "$.subjects": { "required": true, "type": "array" },
+          "$.subjects[]": { "type": "object" },
+          "$.subjects[].id": { "required": true, "type": "string" },
+          "$.subjects[].nameAr": { "required": true, "type": "string" },
+          "$.subjects[].nameEn": { "required": true, "type": "string" },
+          "$.teacherId": { "required": true, "type": "string" }
+        }
+      },
       "onboarding.complete": {
         "caller": "public",
         "input": {

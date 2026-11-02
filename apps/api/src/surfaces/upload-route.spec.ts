@@ -19,6 +19,7 @@ import { kindField, uploadRoute } from './upload-route.js';
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -85,6 +86,7 @@ const services = {
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
+  discovery: unusedDiscoveryServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

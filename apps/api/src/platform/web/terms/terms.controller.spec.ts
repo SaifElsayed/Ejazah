@@ -19,6 +19,7 @@ import { TERMS_PATH, termsRoute } from './terms.controller.js';
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -56,6 +57,7 @@ const services = {
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
+  discovery: unusedDiscoveryServices,
 };
 
 let application: INestApplication;

@@ -17,6 +17,7 @@ import { createSubjectsService, subjectsRouter, type SubjectsReader } from './in
 import { SubjectsRepository } from './subjects.repository.js';
 import {
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -69,6 +70,7 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
       verification: unusedVerificationServices,
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
+      discovery: unusedDiscoveryServices,
     };
     const router = createAppRouter({ catalog: createAppRouter({ subjects: subjectsRouter }) });
     const caller = createAppCallerFactory(router)(

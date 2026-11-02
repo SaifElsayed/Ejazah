@@ -17,6 +17,7 @@ import {
   toErrorShape,
 } from '../../surfaces/procedures.js';
 import {
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -107,6 +108,7 @@ function as(session: UserSession | null) {
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
     teacherProfile: unusedTeacherProfileServices,
+    discovery: unusedDiscoveryServices,
     catalog: { slots, packages: unusedPackages },
   };
   return callerFor(

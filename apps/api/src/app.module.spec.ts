@@ -35,6 +35,7 @@ const services = {
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
   teacherProfile: unusedTeacherProfileServices,
+  discovery: unusedDiscoveryServices,
 };
 
 import { createLogger } from './platform/logging/logger.js';
@@ -49,6 +50,7 @@ import {
 import {
   unusedAdminServices,
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
