@@ -10,9 +10,12 @@
       "identityDocumentType": ["national_id", "passport"],
       "landing": ["restricted", "student_home", "teacher_application", "teacher_home"],
       "language": ["ar", "en"],
+      "packageTrack": ["ijazah_track", "recitation"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
+      "sessionLengthMinutes": ["30", "45", "60"],
       "signInMethod": ["apple", "email", "google"],
+      "slotState": ["booked", "disabled", "free"],
       "teacherApplicationStatus": [
         "approved",
         "banned",
