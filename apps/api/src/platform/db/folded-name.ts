@@ -25,3 +25,20 @@ export async function idsWithFoldedNamePrefix(
   >`SELECT id FROM users WHERE id = ANY(${candidateIds}::uuid[]) AND ijazah_fold(display_name) LIKE ijazah_fold(${likeLiteral(typed)}) || '%' ESCAPE '\\'`;
   return rows.map(({ id }) => id);
 }
+
+/**
+ * Each of `texts` folded by the same `ijazah_fold`, in order (T025). Discovery compares folds of
+ * what it already holds (a riwaya as transcribed, the prefixes of a name it was answered) with a
+ * fold of what the student sent, so the riwaya filter and the matched length of a name use the one
+ * fold and no second one is written in TypeScript (R-203). It reads no table.
+ */
+export async function foldedTexts(
+  tx: Pick<Transaction, '$queryRaw'>,
+  texts: readonly string[],
+): Promise<string[]> {
+  if (texts.length === 0) return [];
+  const rows = await tx.$queryRaw<
+    { folded: string }[]
+  >`SELECT ijazah_fold(t.text) AS folded FROM unnest(${texts}::text[]) WITH ORDINALITY AS t(text, position) ORDER BY t.position`;
+  return rows.map(({ folded }) => folded);
+}
