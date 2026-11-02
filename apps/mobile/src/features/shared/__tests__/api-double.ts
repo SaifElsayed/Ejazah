@@ -62,6 +62,11 @@ export function fakeProcedures() {
         get: { query: procedure() },
         register: { mutate: procedure() },
       },
+      // B26 (T023): the public profile.
+      profile: {
+        get: { query: procedure() },
+        update: { mutate: procedure() },
+      },
     },
   };
 }
