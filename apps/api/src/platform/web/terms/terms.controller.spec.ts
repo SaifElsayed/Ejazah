@@ -20,6 +20,7 @@ import {
   unusedAdminServices,
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 
@@ -54,6 +55,7 @@ const services = {
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
+  teacherProfile: unusedTeacherProfileServices,
 };
 
 let application: INestApplication;

@@ -184,6 +184,12 @@ const services = {
       packageHasEnrollment: booking.packageHasEnrollment,
     },
   }),
+  // `teacher.profile` (T017): the identity module's, the photo answered as the storage port's link.
+  teacherProfile: identity.createTeacherProfileService({
+    database,
+    settings,
+    storage: ports.storage,
+  }),
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload

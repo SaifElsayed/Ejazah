@@ -17,6 +17,7 @@ import {
   authRouter,
   onboardingRouter,
   payoutRouter,
+  teacherProfileRouter,
 } from '../modules/identity/index.js';
 import {
   applicationRouter,
@@ -39,6 +40,7 @@ export const appRouter = createAppRouter({
     application: applicationRouter,
     credentials: credentialsRouter,
     payout: payoutRouter,
+    profile: teacherProfileRouter,
   }),
 });
 

@@ -36,6 +36,7 @@ import { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { html } from '../platform/web/html.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
+import { unusedTeacherProfileServices } from './services.fixtures.js';
 import {
   adminPublicProcedure,
   createAdminRouter,
@@ -131,6 +132,7 @@ const services = {
   identity,
   verification,
   catalog,
+  teacherProfile: unusedTeacherProfileServices,
 };
 
 const sessions = {

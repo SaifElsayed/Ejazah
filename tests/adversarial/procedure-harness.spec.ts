@@ -40,6 +40,7 @@ import {
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
 import {
@@ -369,6 +370,7 @@ const caller = createAppCallerFactory(
       identity: unusedIdentityServices,
       verification: unusedVerificationServices,
       catalog: unusedCatalogServices,
+      teacherProfile: unusedTeacherProfileServices,
     },
   }),
 );

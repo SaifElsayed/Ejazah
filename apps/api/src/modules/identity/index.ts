@@ -23,6 +23,10 @@ import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
 import {
+  type TeacherProfileDependencies,
+  TeacherProfileService,
+} from './teacher-profile.service.js';
+import {
   PHOTOS_UPLOAD_PATH,
   type PhotoUploadDependencies,
   photoUploadRoute,
@@ -49,6 +53,20 @@ export {
 } from './web/delete-account.controller.js';
 /** `teacher.payout` (T077), mounted under `teacher` by `app.router.ts`. */
 export { payoutRouter } from './payout.router.js';
+/** `teacher.profile` (T017), mounted under `teacher` by `app.router.ts`. */
+export { teacherProfileRouter } from './teacher-profile.router.js';
+
+/**
+ * `teacher.profile.*`'s service, carried by every request in `AppServices.teacherProfile` (T017,
+ * FR-310): built once by `main.ts` over the database, the settings and the storage port's links.
+ */
+export type TeacherProfileServices = Pick<TeacherProfileService, 'get' | 'update'>;
+
+export function createTeacherProfileService(
+  dependencies: TeacherProfileDependencies,
+): TeacherProfileServices {
+  return new TeacherProfileService(dependencies);
+}
 
 /**
  * The payments module's two entries for a signed recipient event, on its transaction, and the hash
