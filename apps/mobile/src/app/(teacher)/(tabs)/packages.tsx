@@ -1,4 +1,4 @@
-// T034 (FR-202): the packages draw their locked state until packages land in Phase 2.
-import { PackagesLocked } from '../../../features/teacher/packages';
+// T021: the `(teacher)/(tabs)/packages` route, the packages tab in the state its list answers.
+import { Packages } from '../../../features/teacher/packages';
 
-export default PackagesLocked;
+export default Packages;

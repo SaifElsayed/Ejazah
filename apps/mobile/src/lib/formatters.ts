@@ -22,13 +22,22 @@ const PIASTERS_PER_POUND = 100;
  * `toPlainNumber` for display only; whether it is whole is read on the integer, which is exact.
  */
 export function formatPounds(amount_piasters: Piasters, locale: Locale): string {
+  return translate(locale, 'common.format.price', {
+    amount: formatPoundAmount(amount_piasters, locale),
+  });
+}
+
+/**
+ * The amount alone, as `formatPounds` prints it, for a template that writes the currency itself
+ * («{amount} ج.م للجلسة», T021).
+ */
+export function formatPoundAmount(amount_piasters: Piasters, locale: Locale): string {
   const piasterCount = toPlainNumber(amount_piasters);
   const decimals = piasterCount % PIASTERS_PER_POUND === 0 ? 0 : 2;
-  const amount = new Intl.NumberFormat(formattingTag(locale), {
+  return new Intl.NumberFormat(formattingTag(locale), {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(piasterCount / PIASTERS_PER_POUND);
-  return translate(locale, 'common.format.price', { amount });
 }
 
 /** The day and month of `instant` in `timeZone`: «15 أكتوبر», "October 15". */

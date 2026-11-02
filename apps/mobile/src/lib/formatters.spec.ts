@@ -10,6 +10,7 @@ import {
   formatFullDate,
   formatMonth,
   formatNumber,
+  formatPoundAmount,
   formatPounds,
   formatTime,
   formatWeekdayDate,
@@ -87,5 +88,12 @@ describe('formatPounds (T009, R-212)', () => {
   it('groups thousands with the Western digits the boards draw', () => {
     expect(formatPounds(piasters(123_456_700), 'ar')).toBe(`${isolate('1,234,567')} ج.م`);
     expect(formatPounds(piasters(123_456_789), 'en')).toBe(`EGP ${isolate('1,234,567.89')}`);
+  });
+});
+
+describe('formatPoundAmount (T021)', () => {
+  it('prints the amount alone, for a template that writes the currency itself', () => {
+    expect(formatPoundAmount(piasters(120_000), 'ar')).toBe('1,200');
+    expect(formatPoundAmount(piasters(15_006), 'en')).toBe('150.06');
   });
 });
