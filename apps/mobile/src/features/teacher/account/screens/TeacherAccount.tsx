@@ -5,8 +5,10 @@
 // count waiting for review from `teacher.credentials.list`; «حساب الاستلام» since B15 (T078), for an
 // approved teacher, to the payout's state, its badge each state of `teacher.payout.get` as
 // PayoutSetup reads it (T115: `account.me` reads a rejection with no reason as pending); the danger row «حذف الحساب» since B16 (T084), after the settings, to
-// the deletion; the public profile, the signature and the rating with their phases; the
-// notifications with theirs.
+// the deletion; the signature and the rating with their phases; the notifications with theirs.
+// T158: «الملف العام» leads the teaching list to the public profile, where the display name is
+// edited; the board's hint names the subjects, which the profile does not edit, so it is left out
+// (R-HONEST; the key stays in the catalogue).
 import type { PayoutState } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -31,6 +33,7 @@ import { TabScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useCredentials } from '../../credentials';
 import { PAYOUT_ROUTE, usePayout } from '../../payout';
+import { PROFILE_ROUTE } from '../../profile';
 import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../navigation';
 
 /** The payout row's badge for each state; none while no account is configured (T115). */
@@ -114,6 +117,10 @@ export function TeacherAccount() {
             </View>
           </Card>
           <List header={t('teacher.account.teaching')}>
+            <ListRow
+              label={t('teacher.account.profile')}
+              onPress={() => router.push(PROFILE_ROUTE)}
+            />
             <ListRow
               label={t('teacher.account.credentials')}
               {...(waiting === 0
