@@ -7,18 +7,30 @@
 // T145: the photo is stored without its metadata. The fixtures are built here with `sharp` (EXIF
 // is written onto the INPUT only) or by hand (a PNG's text chunks, a forged header), never
 // committed as binary files.
+//
+// T073: at most one photo is processed at a time, and `sharp`'s cache is off. `sharp` is wrapped
+// here so the spec reads, apart from the route, how many of the route's decodes run together: the
+// route's decode is the one pipeline built with `limitInputPixels`, and its `toBuffer` is counted
+// while it runs, after a pause the spec sets so that uploads sent together would overlap without
+// the turns. The order and the release on each path are `photo-turns.spec.ts`'s.
+import { setTimeout as sleep } from 'node:timers/promises';
 import { crc32, deflateSync } from 'node:zlib';
 import type { INestApplication } from '@nestjs/common';
 import sharp from 'sharp';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApplication } from '../../app.module.js';
 import { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
-import { PHOTO_MAX_INPUT_PIXELS } from '../../platform/guards/upload.middleware.js';
+import {
+  PHOTO_MAX_INPUT_PIXELS,
+  PHOTO_TURN_WAIT_MS,
+  PHOTOS_PROCESSED_AT_ONCE,
+} from '../../platform/guards/upload.middleware.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { UserSession } from '../../surfaces/context.js';
 import { multipart, pdfBytes, storageStub } from '../../surfaces/upload-fixtures.js';
 import { PHOTOS_UPLOAD_PATH, photoUploadRoute } from './photo-upload.controller.js';
+import { PhotoTurns } from './photo-turns.js';
 import {
   unusedAdminServices,
   unusedBookingServices,
@@ -28,6 +40,35 @@ import {
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
+
+/** The route's decodes: how many run now, the most that ran together, and how many ever began. */
+const decodes = vi.hoisted(() => ({ running: 0, most: 0, began: 0, pauseMs: 0 }));
+
+vi.mock('sharp', async (importOriginal) => {
+  const real = (await importOriginal<typeof import('sharp')>()).default;
+  const counted = (...args: Parameters<typeof real>) => {
+    const instance = real(...args);
+    const [, options] = args;
+    if (typeof options === 'object' && options !== null && 'limitInputPixels' in options) {
+      const toBuffer = instance.toBuffer.bind(instance) as () => Promise<Buffer>;
+      Object.assign(instance, {
+        toBuffer: async () => {
+          decodes.running += 1;
+          decodes.began += 1;
+          decodes.most = Math.max(decodes.most, decodes.running);
+          try {
+            await new Promise((resolve) => setTimeout(resolve, decodes.pauseMs));
+            return await toBuffer();
+          } finally {
+            decodes.running -= 1;
+          }
+        },
+      });
+    }
+    return instance;
+  };
+  return { default: Object.assign(counted, real) };
+});
 
 const settings: SettingsReader = {
   read: async (key, schema) => {
@@ -92,8 +133,11 @@ const users = {
 let application: INestApplication;
 let origin: string;
 
-beforeAll(async () => {
-  application = await createApplication({
+/** The application with the photos route over `turns`, or over the route's own when none is given. */
+async function start(
+  turns?: PhotoTurns,
+): Promise<{ application: INestApplication; origin: string }> {
+  const started = await createApplication({
     log,
     readiness: { databaseReachable: async () => {} },
     securityHeaders: { allowedOrigins: [], mode: 'test' },
@@ -111,11 +155,19 @@ beforeAll(async () => {
         storage,
         settings,
         users,
+        ...(turns === undefined ? {} : { turns }),
       }),
     },
   });
-  await application.listen(0, '127.0.0.1');
-  origin = (await application.getUrl()).replace('[::1]', '127.0.0.1');
+  await started.listen(0, '127.0.0.1');
+  return {
+    application: started,
+    origin: (await started.getUrl()).replace('[::1]', '127.0.0.1'),
+  };
+}
+
+beforeAll(async () => {
+  ({ application, origin } = await start());
 });
 
 afterAll(async () => {
@@ -232,9 +284,14 @@ function storedPhoto(): { key: string; body: Uint8Array; contentType: string } {
   return { key, ...stored };
 }
 
-function upload(bytes: Buffer, bearer = 't-a', filename = 'me.jpg'): Promise<Response> {
+function upload(
+  bytes: Buffer,
+  bearer = 't-a',
+  filename = 'me.jpg',
+  at = origin,
+): Promise<Response> {
   const payload = multipart([{ name: 'file', filename, type: 'image/jpeg', bytes }]);
-  return fetch(`${origin}${PHOTOS_UPLOAD_PATH}`, {
+  return fetch(`${at}${PHOTOS_UPLOAD_PATH}`, {
     method: 'POST',
     headers: { authorization: `Bearer ${bearer}`, 'content-type': payload.contentType },
     body: new Uint8Array(payload.body),
@@ -371,5 +428,81 @@ describe('POST /uploads/photos stores the photo without its metadata (T145)', ()
     });
     expect(puts()).toBe(before);
     expect(photoKeys.size).toBe(0);
+  });
+});
+
+describe('POST /uploads/photos processes one photo at a time (T073)', () => {
+  const PAUSE_MS = 250;
+  const SHORT_WAIT_MS = 40;
+  let timed: { application: INestApplication; origin: string };
+
+  beforeAll(async () => {
+    // Turns whose wait is far shorter than one decode, so the second of two uploads times out.
+    timed = await start(
+      new PhotoTurns({ atOnce: PHOTOS_PROCESSED_AT_ONCE, waitMs: SHORT_WAIT_MS }),
+    );
+  });
+
+  afterAll(async () => {
+    decodes.pauseMs = 0;
+    await timed.application.close();
+  });
+
+  beforeEach(() => {
+    Object.assign(decodes, { running: 0, most: 0, began: 0, pauseMs: PAUSE_MS });
+  });
+
+  it("is one at once in a process, with a set wait (the owner's decision of 2026-11-02)", () => {
+    expect(PHOTOS_PROCESSED_AT_ONCE).toBe(1);
+    expect(PHOTO_TURN_WAIT_MS).toBeGreaterThan(0);
+  });
+
+  it("turns off sharp's cache", () => {
+    expect(sharp.cache()).toMatchObject({
+      memory: { max: 0 },
+      files: { max: 0 },
+      items: { max: 0 },
+    });
+  });
+
+  it('never decodes more than one photo together when several are uploaded at once', async () => {
+    const photos = await Promise.all([jpeg(), png(), jpegTurned(), jpeg(), png()]);
+    const responses = await Promise.all(
+      photos.map((photo, index) => upload(photo, 't-a', index % 2 === 1 ? 'me.png' : 'me.jpg')),
+    );
+    expect(responses.map(({ status }) => status)).toEqual([201, 201, 201, 201, 201]);
+    expect(decodes.began).toBe(photos.length);
+    expect(decodes.most).toBe(1);
+  });
+
+  it('refuses one that waits past the set time with RATE_LIMITED, storing nothing, and never decodes it', async () => {
+    const puts = () => storage.calls.filter(({ operation }) => operation === 'put').length;
+    const before = puts();
+    const [first, second] = await Promise.all([jpeg(), jpeg()]);
+    const responses = await Promise.all([
+      upload(first, 't-a', 'me.jpg', timed.origin),
+      upload(second, 't-a', 'me.jpg', timed.origin),
+    ]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([201, 429]);
+    const refused = responses.find(({ status }) => status === 429);
+    await expect(refused?.json()).resolves.toMatchObject({ error: { code: 'RATE_LIMITED' } });
+    expect(puts()).toBe(before + 1);
+
+    // The refused one never takes the turn later.
+    await sleep(PAUSE_MS * 2);
+    expect(decodes.began).toBe(1);
+  });
+
+  it('gives the turn back after a refusal and an unreadable file, so the next is not kept waiting', async () => {
+    const refused = await upload(await pngOverTheBound(), 't-a', 'me.png', timed.origin);
+    expect(refused.status).toBe(400);
+    const unreadable = await upload(
+      Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(256, 1)]),
+      't-a',
+      'me.jpg',
+      timed.origin,
+    );
+    expect(unreadable.status).toBe(400);
+    expect((await upload(await jpeg(), 't-a', 'me.jpg', timed.origin)).status).toBe(201);
   });
 });
