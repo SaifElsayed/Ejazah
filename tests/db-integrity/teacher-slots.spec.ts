@@ -28,6 +28,7 @@ import {
   openDatabase,
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
+import { lockKey } from '../../apps/api/src/platform/db/row-lock.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import { connectAsApplication, type Db, insertRow, makeOffer, makeUser } from './harness';
 
@@ -189,6 +190,58 @@ describe('two overlapping saves at the same moment leave one (R-206, FR-317)', (
     );
     expect(ended).toEqual({ thrown: 'SLOT_OVERLAP' });
     expect((await slotsOf(teacherId)).map((slot) => slot.is_active)).toEqual([false, true]);
+  });
+});
+
+/** An active Cairo slot of the teacher, written committed; its id. */
+function activeSlot(teacherId: string, dayOfWeek: number, startTimeLocal: string): Promise<string> {
+  return insertRow(db, 'availability_slots', {
+    teacher_user_id: teacherId,
+    day_of_week: dayOfWeek,
+    start_time_local: startTimeLocal,
+    duration_minutes: 60,
+    timezone: 'Africa/Cairo',
+    is_active: true,
+  });
+}
+
+describe('two overlapping edits of one teacher’s slots leave one (the owner’s decision of 2026-11-02)', () => {
+  it('two slots moved onto each other’s new time: the second waits, then is refused SLOT_OVERLAP', async () => {
+    const teacherId = await makeUser(db);
+    const monday = await activeSlot(teacherId, 1, '09:00:00');
+    const wednesday = await activeSlot(teacherId, 3, '09:00:00');
+    // Tuesday 10:00 for 60 and Tuesday 10:30 for 60 share half an hour; neither meets the other
+    // where it stands now, so only a lock that makes the second read the first's move refuses it.
+    const ended = await race(
+      (tx) =>
+        slotsOn(tx).update(teacherId, { slotId: monday, dayOfWeek: 2, startTimeLocal: '10:00' }),
+      (tx) =>
+        slotsOn(tx).update(teacherId, { slotId: wednesday, dayOfWeek: 2, startTimeLocal: '10:30' }),
+    );
+    expect(ended).toEqual({ thrown: 'SLOT_OVERLAP' });
+    expect(await slotsOf(teacherId)).toEqual([
+      expect.objectContaining({ day_of_week: 2, start_time_local: '10:00:00', is_active: true }),
+      expect.objectContaining({ day_of_week: 3, start_time_local: '09:00:00', is_active: true }),
+    ]);
+  });
+
+  it('every update, a deactivation and a reactivation included, waits on the teacher-slots key', async () => {
+    // The key alone, as `checkout.hold` takes it before it inserts a hold (R-207): an update that
+    // did not take it would not wait here, whatever the account's lock does.
+    const teacherId = await makeUser(db);
+    const slotId = await activeSlot(teacherId, 4, '09:00:00');
+    for (const isActive of [false, true]) {
+      const ended = await race(
+        (tx) => lockKey(tx, 'teacher-slots', teacherId),
+        (tx) => slotsOn(tx).update(teacherId, { slotId, isActive }),
+      );
+      expect(ended).toEqual({ value: expect.objectContaining({ isActive }) });
+    }
+    const moved = await race(
+      (tx) => lockKey(tx, 'teacher-slots', teacherId),
+      (tx) => slotsOn(tx).update(teacherId, { slotId, startTimeLocal: '11:00' }),
+    );
+    expect(moved).toEqual({ value: expect.objectContaining({ startTimeLocal: '11:00' }) });
   });
 });
 
