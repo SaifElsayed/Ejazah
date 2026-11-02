@@ -11,11 +11,7 @@ import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useLocale, useT } from '../../../../i18n';
 import { formatPounds } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
-
-const TRACK_LABEL: Readonly<Record<PackageTrack, MessageKey>> = {
-  recitation: 'common.track.recitation',
-  ijazah_track: 'common.track.ijazahTrack',
-};
+import { TRACK_LABEL } from '../tracks';
 
 /** What a session that is not consumed becomes, by track (ADR 0018 D2). */
 const REMEDY_LINE: Readonly<Record<PackageTrack, MessageKey>> = {

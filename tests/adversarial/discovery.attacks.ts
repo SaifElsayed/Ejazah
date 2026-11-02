@@ -13,11 +13,13 @@
 // answer, so no attack passes on an empty one.
 //
 //   directCall            the procedure as the phone calls it: browse's tabs, counts, track,
-//                         minimum-rating and riwaya filters and search; the filter's riwayas; every
+//                         minimum-rating and riwaya filters and search, by a name and by a subject's
+//                         name (T070); the filter's riwayas; every
 //                         teacher's profile; and a teacher whose payout account was replaced is absent
 //                         until the gateway's signed `recipient_verified` arrives (FR-315).
 //   forgedId              ids and values lifted from excluded teachers: their own ids, their private
-//                         subjects, their riwayas, and a cursor written at an excluded teacher's keys.
+//                         subjects (as a tab and, T070, their names as a search), their riwayas, and a
+//                         cursor written at an excluded teacher's keys.
 //   guessedId             ids never handed out: random ones, an excluded id's neighbour and its
 //                         upper-case spelling.
 //   tamperedToken         the requester's genuine bearer token with its signature or its session
@@ -45,6 +47,8 @@ import {
   OTHER_RIWAYA,
   PLAIN_NAME,
   type SeededTeacher,
+  sharedSubjectQuery,
+  SUBJECT_PLAIN,
   tabCount,
   visibleTo,
   WORLD_RATING,
@@ -256,6 +260,18 @@ const browse: ProcedureAttacks = {
       );
       expectNothingOf(searched, excluded);
       expectNothingOf(await caller.discovery.browse({ query: PLAIN_NAME }), excluded);
+
+      // T070: a search by the shared subject's name finds every visible teacher of it, none marked
+      // (no name matched), across all subjects and inside its tab by a short prefix.
+      for (const input of [
+        { query: sharedSubjectQuery(world, SUBJECT_PLAIN) },
+        { subjectId: world.shared.id, query: SUBJECT_PLAIN.split(' ')[0] ?? '' },
+      ]) {
+        const bySubject = await caller.discovery.browse(input);
+        expect(cardIds(bySubject), JSON.stringify(input)).toEqual(ids(visible));
+        expect(bySubject.cards.filter(({ match }) => match !== undefined)).toEqual([]);
+        expectNothingOf(bySubject, excluded);
+      }
     },
 
     async forgedId(direction) {
@@ -265,6 +281,13 @@ const browse: ProcedureAttacks = {
         expect(cardIds(own), `${teacher.gender} ${teacher.state}: its private subject`).toEqual([]);
         expect(tabCount(own, teacher.privateSubject.id)).toBe(0);
         expectNothingOf(own, excluded);
+
+        // T070: its private subject's names, typed as a search, find no one.
+        for (const query of [teacher.privateSubject.nameAr, teacher.privateSubject.nameEn]) {
+          const bySubject = await caller.discovery.browse({ query });
+          expect(cardIds(bySubject), `${teacher.gender} ${teacher.state}: ${query}`).toEqual([]);
+          expectNothingOf(bySubject, excluded);
+        }
 
         const ownRiwaya = await caller.discovery.browse({
           subjectId: world.shared.id,

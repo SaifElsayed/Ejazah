@@ -12,6 +12,7 @@ import {
   formatNumber,
   formatPoundAmount,
   formatPounds,
+  formatRating,
   formatTime,
   formatWallClock,
   formatWeekday,
@@ -121,5 +122,17 @@ describe('formatPoundAmount (T021)', () => {
   it('prints the amount alone, for a template that writes the currency itself', () => {
     expect(formatPoundAmount(piasters(120_000), 'ar')).toBe('1,200');
     expect(formatPoundAmount(piasters(15_006), 'en')).toBe('150.06');
+  });
+});
+
+describe('formatRating (T070; PR #118’s review, nit 5)', () => {
+  it('prints a rating to one decimal, rounded, the same on the card and the teacher’s page', () => {
+    for (const locale of ['ar', 'en'] as const) {
+      expect(formatRating(4.96, locale)).toBe('5.0');
+      expect(formatRating(4.86, locale)).toBe('4.9');
+      expect(formatRating(4.5, locale)).toBe('4.5');
+      expect(formatRating(5, locale)).toBe('5.0');
+      expect(formatRating(1, locale)).toBe('1.0');
+    }
   });
 });

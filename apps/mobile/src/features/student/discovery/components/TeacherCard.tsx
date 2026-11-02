@@ -3,7 +3,8 @@
 // two lines on the phone (the note under T029); the rating and its count, or «لا تقييمات بعد»; the
 // first session the student would get on the nearest free slot, in the student's own zone; the
 // lowest price per session. No photo and no avatar in its place (the owner's decision of 2026-11-02):
-// the card never reads `photoUrl`, and the profile shows the photo (FR-336).
+// the card never reads `photoUrl`, and the profile shows the photo (FR-336). The rating is drawn by
+// the one rating formatter the teacher's page uses, to one decimal (T070; PR #118's review, nit 5).
 import type { DiscoveryCard } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { View } from 'react-native';
@@ -84,7 +85,7 @@ export function TeacherCard({
             {card.rating === undefined
               ? t('student.teacherProfile.noReviews')
               : t('student.discovery.card.ratingCount', {
-                  rating: card.rating,
+                  rating: format.rating(card.rating),
                   count: card.reviewCount,
                 })}
           </Text>

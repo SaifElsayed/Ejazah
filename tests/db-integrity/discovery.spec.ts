@@ -161,6 +161,14 @@ async function subject(tx: Transaction, isActive = true): Promise<SubjectRow> {
   });
 }
 
+/** An active subject of the given names (T070's search by a subject's name). */
+async function namedSubject(tx: Transaction, nameAr: string, nameEn: string): Promise<SubjectRow> {
+  return tx.subject.create({
+    data: { nameAr, nameEn, isActive: true },
+    select: { id: true, nameAr: true, nameEn: true },
+  });
+}
+
 /** Makes `subjects` the teacher's `teacher_subjects`, as a credential's approval does. */
 async function grant(tx: Transaction, teacherId: string, subjects: readonly SubjectRow[]) {
   await tx.teacherSubject.createMany({
@@ -591,6 +599,152 @@ describe('discovery.browse: the name search (T025, FR-333, R-203)', () => {
       expect(cards[0]?.match).toBeUndefined();
     });
   });
+});
+
+// T070: FR-333's "match by subject". A subject matches when its Arabic or its English name, folded
+// by the same `ijazah_fold`, begins with the folded query; a teacher matches by a name with the
+// prefix or by an active package in a matched subject, and only then through the predicate. Every
+// name carries a tag of its own, so what other specs commit never answers these searches.
+describe('discovery.browse: the search by subject (T070, FR-333, R-203)', () => {
+  const tagged = () => randomUUID().slice(0, 8);
+  const pick = (page: DiscoveryBrowseOutput) =>
+    page.cards.map(({ teacherId, match }) => ({ teacherId, match }));
+
+  it('finds the teachers of a subject whose folded name begins with the query, in Arabic or in English, and marks no name', async () => {
+    await inRollback(async (tx) => {
+      const tag = tagged();
+      const rules = await namedSubject(tx, `أَحكامُ التجويـد ${tag}`, `Tajweed rules ${tag}`);
+      const elsewhere = await subject(tx);
+      const salem = await teacher(tx, { gender: 'male', displayName: 'سالم', reviewCount: 2 });
+      const yusuf = await teacher(tx, { gender: 'male', displayName: 'يوسف', reviewCount: 1 });
+      const zaid = await teacher(tx, { gender: 'male', displayName: 'زيد' });
+      await offer(tx, salem, rules);
+      await offer(tx, yusuf, rules, { track: 'ijazah_track' });
+      await offer(tx, zaid, elsewhere);
+      const search = (input: DiscoveryBrowseInput) =>
+        catalog.browse(tx, requesterOf('male'), input);
+      const both = [
+        { teacherId: salem, match: undefined },
+        { teacherId: yusuf, match: undefined },
+      ];
+
+      for (const query of [
+        `احكام التجويد ${tag}`,
+        `أحكام التجويد ${tag}`,
+        `اَحْكامُ التجويـد ${tag}`,
+        `TAJWEED RULES ${tag}`,
+        `tajweed rules ${tag}`,
+      ]) {
+        expect(pick(await search({ query })), query).toEqual(both);
+      }
+      // A short prefix inside the subject's own tab; a part of the name that does not begin it
+      // matches nothing (a prefix, as the name's).
+      expect(pick(await search({ subjectId: rules.id, query: 'احكام' }))).toEqual(both);
+      expect(pick(await search({ subjectId: rules.id, query: 'التجويد' }))).toEqual([]);
+      // The track narrows the subject's teachers as it narrows any browse.
+      expect(pick(await search({ query: `tajweed rules ${tag}`, track: 'ijazah_track' }))).toEqual([
+        { teacherId: yusuf, match: undefined },
+      ]);
+    });
+  });
+
+  it('a mixed search: a teacher whose name has the prefix or who teaches a subject that begins with it, the name marked', async () => {
+    await inRollback(async (tx) => {
+      const tag = `zq${tagged()}`;
+      const named = await subject(tx);
+      const studies = await namedSubject(tx, `مادة ${tag}`, `${tag} studies`);
+      const byName = await teacher(tx, {
+        gender: 'female',
+        displayName: `${tag.toUpperCase()} Maryam`,
+        reviewCount: 2,
+      });
+      const bySubject = await teacher(tx, { gender: 'female', displayName: 'هدى', reviewCount: 1 });
+      const neither = await teacher(tx, { gender: 'female', displayName: `Maryam ${tag}` });
+      await offer(tx, byName, named);
+      await offer(tx, bySubject, studies);
+      await offer(tx, neither, named);
+
+      const { cards } = await catalog.browse(tx, requesterOf('female'), { query: tag });
+      expect(cards.map(({ teacherId, match }) => ({ teacherId, match }))).toEqual([
+        { teacherId: byName, match: { length: tag.length } },
+        { teacherId: bySubject, match: undefined },
+      ]);
+    });
+  });
+
+  it('pages a search by subject through the cursor at every page size, each card once, in R-204’s order', async () => {
+    await inRollback(async (tx) => {
+      const tag = `zq${tagged()}`;
+      const studies = await namedSubject(tx, `مادة ${tag}`, `${tag} studies`);
+      const named = await subject(tx);
+      const rows = [
+        { name: 'ب', rating: '4.00', count: 2 },
+        { name: 'ب', rating: '4.00', count: 2 },
+        { name: 'ا', rating: '5.00', count: 1 },
+        { name: 'ج', rating: null, count: 0 },
+        { name: `${tag} ي`, rating: '4.00', count: 2 },
+        { name: `${tag} ا`, rating: null, count: 0 },
+      ];
+      for (const row of rows) {
+        const id = await teacher(tx, {
+          gender: 'male',
+          displayName: row.name,
+          averageRating: row.rating,
+          reviewCount: row.count,
+        });
+        await offer(tx, id, row.name.startsWith(tag) ? named : studies);
+      }
+      const whole = await catalogWithPageSize(rows.length + 1).browse(tx, requesterOf('male'), {
+        query: tag,
+      });
+      expect(whole.cards).toHaveLength(rows.length);
+      for (let size = 1; size <= rows.length; size += 1) {
+        const pages = await allPages(tx, catalogWithPageSize(size), requesterOf('male'), {
+          query: tag,
+        });
+        expect(pages.flatMap(idsOf), `page size ${size}`).toEqual(idsOf(whole));
+        expect(pages.at(-1)?.nextCursor, `page size ${size}`).toBeUndefined();
+      }
+    });
+  });
+
+  for (const { name, own } of DIRECTIONS) {
+    it(`never answers a hidden teacher of a matched subject, for ${name}`, async () => {
+      await inRollback(async (tx) => {
+        const tag = tagged();
+        const rules = await namedSubject(tx, `أحكام ${tag}`, `Rules ${tag}`);
+        const shown = await teacher(tx, { gender: own, displayName: 'أنس' });
+        await offer(tx, shown, rules);
+        const hidden: string[] = [];
+        for (const values of [
+          { gender: otherOf(own) },
+          { gender: own, verificationStatus: 'pending' as const },
+          { gender: own, verificationStatus: 'rejected' as const },
+          { gender: own, payoutVerified: false },
+          { gender: own, deleted: true },
+          { gender: own, accountStatus: 'suspended' as const },
+          { gender: own, accountStatus: 'banned' as const },
+        ]) {
+          const id = await teacher(tx, { ...values, displayName: 'بلال' });
+          await offer(tx, id, rules);
+          hidden.push(id);
+        }
+
+        const answers = await Promise.all(
+          [`احكام ${tag}`, `RULES ${tag}`].map((query) =>
+            allPages(tx, catalog, requesterOf(own), { query }),
+          ),
+        );
+        for (const pages of answers) {
+          expect(pages.flatMap(idsOf)).toEqual([shown]);
+          const serialized = JSON.stringify(pages);
+          for (const id of hidden) expect(serialized).not.toContain(id);
+        }
+        const tab = await catalog.browse(tx, requesterOf(own), {});
+        expect(tab.tabs?.find(({ subjectId }) => subjectId === rules.id)?.count).toBe(1);
+      });
+    });
+  }
 });
 
 describe("discovery.browse: paging (T025, R-204, T010's three paging cases)", () => {
