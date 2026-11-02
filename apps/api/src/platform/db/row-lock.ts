@@ -14,7 +14,9 @@
 // (`specs/003-booking/contracts/kernel.md`). The rows are locked in id order, so two callers
 // locking the same set take the locks in the same order and cannot deadlock on each other. T005
 // adds `lockKey`, the transaction-scoped advisory lock of a scope and an id, for a decision over
-// rows that may not exist yet, such as a teacher's slots before a new one is saved (R-206).
+// rows that may not exist yet, such as a teacher's slots before a new one is saved (R-206). T033 adds
+// `slot_holds` and `payments`, so a path that releases holds or moves a payment locks their rows in
+// rule 2's place (B29's conflict check, the owner's decision of 2026-11-03).
 //
 // THE TWO RULES OF PHASE 2 (the owner's decision of 2026-11-01, the note under T005). The lock stays
 // FOR UPDATE.
@@ -38,7 +40,13 @@
 import type { Transaction } from './prisma.repository.js';
 
 /** The tables a move locks rows of, listed in the one lock order (rule 2 above). */
-export type LockedTable = 'users' | 'teacher_profiles' | 'availability_slots' | 'enrollments';
+export type LockedTable =
+  | 'users'
+  | 'teacher_profiles'
+  | 'availability_slots'
+  | 'slot_holds'
+  | 'enrollments'
+  | 'payments';
 
 /** Locks the rows of `table` whose id is in `ids`, FOR UPDATE, until the transaction ends. */
 export async function lockRows(
@@ -57,8 +65,14 @@ export async function lockRows(
     case 'availability_slots':
       await tx.$queryRaw`SELECT 1 FROM availability_slots WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
       return;
+    case 'slot_holds':
+      await tx.$queryRaw`SELECT 1 FROM slot_holds WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
     case 'enrollments':
       await tx.$queryRaw`SELECT 1 FROM enrollments WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'payments':
+      await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
       return;
   }
 }
