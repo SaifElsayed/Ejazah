@@ -1,5 +1,5 @@
 // T032: the screen chrome (R-MOBILE-4/5/6): AppHeader, NavHeader, PageIntro, Brand, ActionBar,
-// TabBar and SearchRow, in both directions.
+// TabBar and SearchRow, in both directions. T014: FilterChips.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, screen } from '@testing-library/react-native';
 
@@ -10,6 +10,8 @@ import {
   AppHeader,
   Brand,
   Button,
+  FilterChips,
+  Icon,
   IconButton,
   NavHeader,
   PageIntro,
@@ -202,5 +204,60 @@ describe('SearchRow', () => {
     );
     expect(onChangeText).toHaveBeenCalledWith('أحمد');
     expect(onPress).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('FilterChips', () => {
+  it('shows each applied filter as a removable chip, then clears them all', async () => {
+    const onRemove = jest.fn();
+    const onRating = jest.fn();
+    const onClearAll = jest.fn();
+    await inBothDirections(
+      () => (
+        <FilterChips
+          chips={[
+            { key: 'riwayah', content: 'حفص عن عاصم', onRemove },
+            {
+              key: 'rating',
+              content: <Icon name="star" size="xs" fill="filled" tone="primary" />,
+              onRemove: onRating,
+            },
+          ]}
+          onClearAll={onClearAll}
+        />
+      ),
+      async (rendered, direction) => {
+        const chip = screen.getByRole('button', { name: 'حفص عن عاصم' });
+        expect(chip.props['accessibilityState']).toMatchObject({ selected: true });
+        expect(styleOf(chip)).toMatchObject({
+          backgroundColor: colour('light', 'primary-subtle'),
+          paddingEnd: tokens.space['2'],
+        });
+        expect(screen.getAllByRole('button')).toHaveLength(2);
+        expect(
+          nodesOf(rendered).some(
+            (node) =>
+              styleOf(node)['flexWrap'] === 'wrap' && styleOf(node)['gap'] === tokens.space['2'],
+          ),
+        ).toBe(true);
+        await fireEvent.press(chip);
+        await fireEvent.press(screen.getAllByRole('button')[1]!);
+        const clear = direction === 'rtl' ? 'مسح الكل' : 'Clear all';
+        await fireEvent.press(screen.getByRole('link', { name: clear }));
+      },
+    );
+    expect(onRemove).toHaveBeenCalledTimes(2);
+    expect(onRating).toHaveBeenCalledTimes(2);
+    expect(onClearAll).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows nothing when no filter is applied', async () => {
+    await inBothDirections(
+      () => <FilterChips chips={[]} onClearAll={() => undefined} />,
+      () => {
+        expect(screen.queryAllByRole('button')).toHaveLength(0);
+        expect(screen.queryAllByRole('link')).toHaveLength(0);
+      },
+    );
   });
 });
