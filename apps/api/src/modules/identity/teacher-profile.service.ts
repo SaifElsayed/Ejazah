@@ -6,8 +6,9 @@
 //   `document_link_ttl_seconds` (never the storage key, `users.photo_key`, which only
 //   `POST /uploads/photos` writes), the bio, the qualification summary, the gender of the account,
 //   and `published`: the visibility predicate's answer for this teacher as a same-gender student
-//   would get it (FR-315), asked of the predicate itself with the session's gender, so it holds
-//   exactly when discovery would show the teacher.
+//   would get it (FR-315), asked of the predicate itself with the session's gender
+//   (`isPublishedTeacher`, which `teacher.packages.list` asks too), so it holds exactly when
+//   discovery would show the teacher.
 // - `update` writes the bio and the qualification summary and nothing else: the display name stays
 //   `account.updateProfile`'s (T158), the photo the upload route's, and no input names the gender
 //   (R-GENDER-6). One conditional statement on the approved profile, no lock: no read decides it
@@ -25,7 +26,7 @@ import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { TeacherProfileRepository } from './teacher-profile.repository.js';
-import { visibleTeachers } from './visible-teachers.repository.js';
+import { isPublishedTeacher } from './visible-teachers.repository.js';
 
 /** What the profile is built over. */
 export interface TeacherProfileDependencies {
@@ -45,12 +46,9 @@ export class TeacherProfileService {
 
   /** The teacher's own profile; `requester` is the session's gender, the teacher's own. */
   async get(teacherUserId: string, requester: RequesterGender): Promise<TeacherProfileGetOutput> {
-    const [row, visible] = await Promise.all([
+    const [row, published] = await Promise.all([
       this.#profiles.readOwn(teacherUserId),
-      visibleTeachers(this.#dependencies.database, requester, {
-        purpose: 'discover',
-        teacherIds: [teacherUserId],
-      }),
+      isPublishedTeacher(this.#dependencies.database, requester, teacherUserId),
     ]);
     if (row === null) throw new DomainError('FORBIDDEN');
     const photoUrl = await this.#photoUrl(row.photoKey);
@@ -60,7 +58,7 @@ export class TeacherProfileService {
       bio: row.bio,
       qualificationSummary: row.qualificationSummary,
       gender: row.gender,
-      published: visible.length === 1,
+      published,
     };
   }
 

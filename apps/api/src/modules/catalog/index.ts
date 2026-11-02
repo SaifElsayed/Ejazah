@@ -23,6 +23,7 @@ import {
   accountTimezone,
   decideApplication,
   isApprovedTeacher,
+  isPublishedTeacher,
   lockAccount,
   lockApplication,
 } from '../identity/index.js';
@@ -151,6 +152,7 @@ export function createCatalogServices({
 export const packagesStore: PackagesStore = {
   lockAccount,
   lockApplication,
+  isPublished: isPublishedTeacher,
   holdsSubject,
   packagesOf,
   packageOf,

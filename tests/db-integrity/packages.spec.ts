@@ -33,7 +33,11 @@ import {
   packagesStore,
   revokeSubjects,
 } from '../../apps/api/src/modules/catalog/index.js';
-import { lockAccount } from '../../apps/api/src/modules/identity/index.js';
+import {
+  createTeacherProfileService,
+  lockAccount,
+  teacherProfileRouter,
+} from '../../apps/api/src/modules/identity/index.js';
 import {
   closeDatabase,
   type Database,
@@ -42,6 +46,7 @@ import {
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error.js';
+import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender.js';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository.js';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
 import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
@@ -145,9 +150,68 @@ function surfaceCaller(teacherId: string) {
   );
 }
 
-/** A committed approved teacher holding `subjectId` by an approved credential's grant. */
-async function approvedTeacher(subjectId: string, gender: 'male' | 'female'): Promise<string> {
-  const userId = await makeUser(db, { gender });
+const publishedCallerFor = createAppCallerFactory(
+  createAppRouter({
+    teacher: createAppRouter({ profile: teacherProfileRouter, packages: packagesRouter }),
+  }),
+);
+
+/**
+ * `teacher.profile` and `teacher.packages` over their real services, called with the session an
+ * active, approved teacher with a verified payout account had when it was read: a suspension that
+ * commits after the session was read reaches the services, not the caller kind.
+ */
+function publishedCaller(teacherId: string, gender: 'male' | 'female') {
+  return publishedCallerFor(
+    createAppContext({
+      session: {
+        userId: teacherId,
+        sessionId: '0199d0a0-0000-7000-8000-0000000000fa',
+        gender,
+        preferredLanguage: 'ar',
+        role: 'teacher',
+        accountStatus: 'active',
+        teacher: {
+          verificationStatus: 'approved',
+          payoutVerified: true,
+          applicationStatus: 'approved',
+        },
+      },
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
+      clientAddress: '203.0.113.9',
+      services: {
+        settings: { read: async () => Promise.reject(new Error('no setting in this probe')) },
+        publicConfig: { supportEmail: 'support@ijazah.invalid' },
+        subjects: { listActive: async () => [] },
+        identity: unusedIdentityServices,
+        verification: unusedVerificationServices,
+        teacherProfile: createTeacherProfileService({
+          database,
+          settings: { read: async () => Promise.reject(new Error('no photo in this probe')) },
+          storage: { temporaryLink: async () => Promise.reject(new Error('no photo')) },
+        }),
+        catalog: new Proxy(unusedCatalogServices, {
+          get: (target, name) => (name === 'packages' ? service() : Reflect.get(target, name)),
+        }),
+      },
+    }),
+  );
+}
+
+/**
+ * A committed approved teacher holding `subjectId` by an approved credential's grant; `values` adds
+ * columns of the account and of the profile.
+ */
+async function approvedTeacher(
+  subjectId: string,
+  gender: 'male' | 'female',
+  values: {
+    readonly user?: Readonly<Record<string, unknown>>;
+    readonly profile?: Readonly<Record<string, unknown>>;
+  } = {},
+): Promise<string> {
+  const userId = await makeUser(db, { gender, ...values.user });
   const documentId = await insertRow(db, 'verification_documents', {
     user_id: userId,
     document_type: 'national_id',
@@ -162,6 +226,7 @@ async function approvedTeacher(subjectId: string, gender: 'male' | 'female'): Pr
     application_submitted_at: '2026-10-18T09:00:00Z',
     identity_document_id: documentId,
     identity_document_type: 'national_id',
+    ...values.profile,
   });
   await insertRow(db, 'teacher_subjects', { teacher_user_id: userId, subject_id: subjectId });
   return userId;
@@ -329,7 +394,7 @@ describe('create and list (T018, FR-311)', () => {
       price_piasters: '100000',
       is_active: true,
     });
-    await expect(service().list(teacherId, false)).resolves.toEqual({
+    await expect(service().list(teacherId, 'female' as RequesterGender)).resolves.toEqual({
       published: false,
       packages: [
         {
@@ -370,6 +435,36 @@ describe('create and list (T018, FR-311)', () => {
       'SUBJECT_NOT_APPROVED',
     );
     expect(await packagesOfTeacher(teacherId)).toBe(0);
+  });
+});
+
+describe('published, the visibility predicate’s answer (the owner’s decision of 2026-11-02)', () => {
+  const VERIFIED = {
+    payout_configured_at: '2026-10-20T09:00:00Z',
+    payout_verified_at: '2026-10-21T09:00:00Z',
+  };
+
+  it('an active, approved teacher with a verified payout account is published in the profile and in the packages', async () => {
+    for (const gender of ['female', 'male'] as const) {
+      const subjectId = await makeSubject(db);
+      const teacherId = await approvedTeacher(subjectId, gender, { profile: VERIFIED });
+      const caller = publishedCaller(teacherId, gender);
+      await expect(caller.teacher.profile.get()).resolves.toMatchObject({ published: true });
+      await expect(caller.teacher.packages.list()).resolves.toMatchObject({ published: true });
+    }
+  });
+
+  it('a suspended teacher is published in neither, though the payout account is verified', async () => {
+    for (const gender of ['female', 'male'] as const) {
+      const subjectId = await makeSubject(db);
+      const teacherId = await approvedTeacher(subjectId, gender, {
+        user: { account_status: 'suspended' },
+        profile: VERIFIED,
+      });
+      const caller = publishedCaller(teacherId, gender);
+      await expect(caller.teacher.profile.get()).resolves.toMatchObject({ published: false });
+      await expect(caller.teacher.packages.list()).resolves.toMatchObject({ published: false });
+    }
   });
 });
 

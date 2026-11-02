@@ -230,10 +230,12 @@ export { accountTimezone } from './users.repository.js';
  * The visibility predicate (T010, `002:T143`, SRS §3.7.1, R-201): the only way any module learns
  * which teachers a student may see, each on the caller's transaction. `visibleTeachers` and
  * `visibleTeacherPage` take the requester's gender; `isBookablePair` serves the confirm job, which
- * has no request, and answers a boolean.
+ * has no request, and answers a boolean. `isPublishedTeacher` is a teacher's own `published`, the
+ * profile's and the packages' (T017, T018).
  */
 export {
   isBookablePair,
+  isPublishedTeacher,
   type TeacherPageCursor,
   type TeacherPageQuery,
   type VisibilityPurpose,

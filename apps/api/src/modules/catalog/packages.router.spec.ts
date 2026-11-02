@@ -5,7 +5,8 @@
 // be unverified, since drafting comes before publishing (FR-315): an anonymous caller is
 // UNAUTHENTICATED, a student and an applicant FORBIDDEN, a suspended or banned teacher
 // ACCOUNT_RESTRICTED, and none of them reaches the service. The admitted call passes the caller's
-// own id, never one from the input, and the list passes the caller's payout state as `published`.
+// own id, never one from the input, and the list passes the session's gender, with which the
+// service asks the predicate whether the teacher is published (the owner's decision of 2026-11-02).
 // The authorization gate (T028, R-MOBILE-13) reads these cases by path. What the service answers is
 // packages.service.spec.ts's.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -98,7 +99,7 @@ beforeEach(() => {
   packages = {
     list: async (...args) => {
       calls.push(['list', ...args]);
-      return { published: args[1], packages: [ANSWER] };
+      return { published: false, packages: [ANSWER] };
     },
     create: async (...args) => {
       calls.push(['create', ...args]);
@@ -169,7 +170,7 @@ describe('the namespace', () => {
     expect(calls).toEqual([]);
   });
 
-  it('admits an approved teacher whose payout account is not verified, and lists with `published` false (FR-315)', async () => {
+  it('admits an approved teacher whose payout account is not verified (FR-315)', async () => {
     const caller = callerAs(sessionOf('approved'));
     await expect(caller.teacher.packages.list()).resolves.toEqual({
       published: false,
@@ -180,17 +181,19 @@ describe('the namespace', () => {
       caller.teacher.packages.update({ packageId: PACKAGE, price_piasters: 120_000 }),
     ).resolves.toEqual(ANSWER);
     expect(calls).toEqual([
-      ['list', CALLER, false],
+      ['list', CALLER, 'female'],
       ['create', CALLER, CREATE],
       ['update', CALLER, { packageId: PACKAGE, price_piasters: 120_000 }],
     ]);
   });
 
-  it('lists a verified payout account’s packages with `published` true', async () => {
-    await expect(callerAs(sessionOf('publishable')).teacher.packages.list()).resolves.toMatchObject(
-      { published: true },
-    );
-    expect(calls).toEqual([['list', CALLER, true]]);
+  it('lists with the session’s gender, never the payout state, whatever the payout account', async () => {
+    await callerAs(sessionOf('publishable')).teacher.packages.list();
+    await callerAs(sessionOf('approved')).teacher.packages.list();
+    expect(calls).toEqual([
+      ['list', CALLER, 'female'],
+      ['list', CALLER, 'female'],
+    ]);
   });
 
   it('refuses a length outside 30, 45 and 60, a price of zero and more than 52 sessions VALIDATION_FAILED before the service', async () => {
