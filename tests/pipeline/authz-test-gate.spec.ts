@@ -165,7 +165,8 @@ describe('the authorization-test gate (T028)', () => {
   });
 
   // It reads the whole repository; under the pipeline's coverage and parallel database specs it
-  // has taken over five seconds (PR #91), so it is given room the default does not leave.
+  // has taken over five seconds (PR #91), so it is given room the default does not leave. It once
+  // ran past 15 seconds when each procedure parsed every spec again (T065, PR #115).
   it('passes this repository today, exit 0', { timeout: 15_000 }, () => {
     const output: string[] = [];
     const code = main([], { out: (text) => output.push(text), err: (text) => output.push(text) });
