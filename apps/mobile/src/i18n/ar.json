@@ -1269,10 +1269,12 @@
         "disabled": "معطّل",
         "free": "متاح"
       },
+      "lockedBanner": "‏لن تظهر مواعيدك للطلاب حتى يتم التحقق من حساب الاستلام",
       "noSlotsOn": "{days}: لا مواعيد",
       "slot": "{time} · {minutes} د",
       "subtitle": "بتوقيتك: {city} · تتكرر كل أسبوع",
-      "title": "المواعيد"
+      "title": "المواعيد",
+      "unpublished": "‏غير منشورة"
     },
     "cancel": {
       "picker": {

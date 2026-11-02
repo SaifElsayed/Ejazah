@@ -3,11 +3,14 @@
 // the service takes them, so the lock order of T005 and the note under T019 is asserted here: create
 // locks the account, then `lockKey('teacher-slots', teacherId)`, then reads; update locks the
 // account, then the key, then the slot's row, then asks whether the slot is in use and reads the
-// others. What the locks do on Postgres is `tests/db-integrity/teacher-slots.spec.ts`'s.
+// others. What the locks do on Postgres is `tests/db-integrity/teacher-slots.spec.ts`'s. The list
+// carries `published` as the visibility predicate answers it through identity's entry, asked with
+// the session's gender, as `teacher.packages.list` does (T069, FR-315).
 import type { SlotsUpdateInput } from '@ijazah/contracts';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { CatalogUse } from './catalog-use.port.js';
 import { type NewSlot, type SlotRow, SlotsService, type SlotsStore } from './slots.service.js';
 
@@ -15,6 +18,8 @@ const TEACHER = '0199d0a0-0000-7000-8000-0000000000a1';
 const OTHER_TEACHER = '0199d0a0-0000-7000-8000-0000000000a2';
 const KEY = 'spec-slot-key-00000001';
 const TX = {} as Transaction;
+// The session's gender, the teacher's own.
+const REQUESTER = 'female' as RequesterGender;
 
 /** A Saturday in Cairo's winter, and a Tuesday in its summer (weekly-zone.spec.ts in packages/time). */
 const WINTER = new Date('2026-11-07T10:00:00Z');
@@ -44,12 +49,15 @@ function world(
     readonly zones?: Readonly<Record<string, string>>;
     readonly inUse?: readonly string[];
     readonly now?: Date;
+    /** `teacherId:gender` of each teacher the predicate shows to a student of that gender. */
+    readonly published?: readonly string[];
   } = {},
 ) {
   const events: string[] = [];
   const slots = new Map((options.slots ?? []).map((slot) => [slot.id, { ...slot }]));
   const zones = options.zones ?? { [TEACHER]: 'Africa/Cairo', [OTHER_TEACHER]: 'Africa/Cairo' };
   const inUse = new Set(options.inUse ?? []);
+  const published = new Set(options.published ?? []);
   const keyed: unknown[] = [];
   const rowOf = ({ teacherUserId: _owner, ...row }: Stored): SlotRow => row;
 
@@ -63,6 +71,10 @@ function world(
     },
     lockSlot: async (_tx, slotId) => {
       events.push(`lock slot ${slotId}`);
+    },
+    isPublished: async (_tx, requester, teacherUserId) => {
+      events.push(`is published? ${requester}`);
+      return published.has(`${teacherUserId}:${requester}`);
     },
     accountTimezone: async (_tx, userId) => {
       events.push('read zone');
@@ -406,7 +418,8 @@ describe('teacher.slots.list (FR-313, R-207)', () => {
       zones: { [TEACHER]: 'Asia/Riyadh' },
       inUse: [booked.id, disabled.id],
     });
-    expect(await service.list(TEACHER)).toEqual({
+    expect(await service.list(TEACHER, REQUESTER)).toEqual({
+      published: false,
       timezone: 'Asia/Riyadh',
       slots: [
         expect.objectContaining({ id: free.id, startTimeLocal: '09:00', state: 'free' }),
@@ -415,5 +428,40 @@ describe('teacher.slots.list (FR-313, R-207)', () => {
       ],
     });
     expect(events).not.toContain(`in use? ${disabled.id}`);
+  });
+
+  it('answers `published` as the predicate answers it for the teacher, asked with the session’s gender (FR-315)', async () => {
+    const free = stored({ dayOfWeek: 1, startTimeLocal: '09:00:00' });
+    const unpublished = world({ slots: [free] });
+    expect(await unpublished.service.list(TEACHER, REQUESTER)).toMatchObject({ published: false });
+    const otherGender = world({ slots: [free], published: [`${TEACHER}:male`] });
+    expect(await otherGender.service.list(TEACHER, REQUESTER)).toMatchObject({ published: false });
+    const visible = world({ slots: [free], published: [`${TEACHER}:female`] });
+    expect(await visible.service.list(TEACHER, REQUESTER)).toEqual({
+      published: true,
+      timezone: 'Africa/Cairo',
+      slots: [expect.objectContaining({ id: free.id, state: 'free' })],
+    });
+    for (const { events } of [unpublished, otherGender, visible]) {
+      expect(events.filter((event) => event.startsWith('is published?'))).toEqual([
+        'is published? female',
+      ]);
+    }
+  });
+
+  it('answers `published` with no slot at all, so the empty week shows it too', async () => {
+    const { service } = world({ published: [`${TEACHER}:female`] });
+    expect(await service.list(TEACHER, REQUESTER)).toEqual({
+      published: true,
+      timezone: 'Africa/Cairo',
+      slots: [],
+    });
+  });
+
+  it('takes no lock: the list decides nothing', async () => {
+    const free = stored({ dayOfWeek: 1, startTimeLocal: '09:00:00' });
+    const { service, events } = world({ slots: [free] });
+    await service.list(TEACHER, REQUESTER);
+    expect(events.filter((event) => event.startsWith('lock'))).toEqual([]);
   });
 });

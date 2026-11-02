@@ -119,10 +119,13 @@ describe('the outputs', () => {
     expect(teacherSlot.safeParse({ ...slot, state: 'held' }).success).toBe(false);
   });
 
-  it("the list carries the teacher's zone beside the slots", () => {
-    const list = { timezone: 'Africa/Cairo', slots: [slot] };
+  it("the list carries the teacher's zone and `published` beside the slots (FR-315)", () => {
+    const list = { published: false, timezone: 'Africa/Cairo', slots: [slot] };
     expect(slotsListOutput.parse(list)).toEqual(list);
-    expect(slotsListOutput.safeParse({ slots: [slot] }).success).toBe(false);
+    expect(slotsListOutput.safeParse({ published: true, slots: [slot] }).success).toBe(false);
+    expect(slotsListOutput.safeParse({ timezone: 'Africa/Cairo', slots: [slot] }).success).toBe(
+      false,
+    );
   });
 
   it('strip a field the schema does not name (R-HONEST-4)', () => {

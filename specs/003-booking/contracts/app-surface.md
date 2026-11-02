@@ -24,7 +24,7 @@ visibility predicate first (research R-201, R-202).
 
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
-| `teacher.slots.list` | teacher(approved) | `{}` | `{ timezone, slots: [{ id, dayOfWeek, startTimeLocal, durationMinutes, timezone, isActive, state: 'free' \| 'booked' \| 'disabled' }] }` | `booked` = in use (R-207), derived; each slot carries the zone it was saved in, which may differ from the teacher's current one (T016, zone on output; the owner's decision of 2026-11-02) |
+| `teacher.slots.list` | teacher(approved) | `{}` | `{ published, timezone, slots: [{ id, dayOfWeek, startTimeLocal, durationMinutes, timezone, isActive, state: 'free' \| 'booked' \| 'disabled' }] }` | `booked` = in use (R-207), derived; each slot carries the zone it was saved in, which may differ from the teacher's current one (T016, zone on output; the owner's decision of 2026-11-02); `published` is the predicate's answer for this teacher as a same-gender student would get it, as `teacher.packages.list`'s (T069, FR-315) |
 | `teacher.slots.create` | teacher(approved), idempotent | `{ dayOfWeek, startTimeLocal, durationMinutes: 30 \| 45 \| 60, idempotencyKey }` | the slot | Zone = the teacher's at creation; `SLOT_OVERLAP` on the week (R-206) |
 | `teacher.slots.update` | teacher(approved) | `{ slotId, dayOfWeek?, startTimeLocal?, durationMinutes?, isActive? }` | the slot | `SLOT_IN_USE` for day, time or length while a hold or a pending or confirmed enrollment uses it; deactivation always allowed; reactivation re-checks overlap; only the caller's own slot: another teacher's id answers `NOT_FOUND` and writes nothing (M3) |
 

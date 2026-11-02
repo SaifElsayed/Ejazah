@@ -1,7 +1,9 @@
 // T022 (FR-313; components.md DayBlock): a weekday with its slots, today's on the surface colour,
 // and the legend's three swatches. A slot reads «{time} · {minutes} د» in its own zone, labelled
 // for a screen reader with its day, its time and its state; every slot opens the editor, a booked
-// one to be disabled (the owner's decision of 2026-11-02, B26).
+// one to be disabled (the owner's decision of 2026-11-02, B26). While the teacher is not published, a
+// day with an active slot carries «غير منشورة» beside its name, as an active package does (T069,
+// FR-315).
 import type { SlotState, TeacherSlot } from '@ijazah/contracts';
 import { View } from 'react-native';
 
@@ -10,6 +12,7 @@ import { useTheme } from '../../../../design/theme';
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
+import { UnpublishedBadge } from '../../packages';
 
 /** The Slot primitive's look of each state the server derives. */
 const SLOT_LOOK = {
@@ -29,11 +32,14 @@ export function DayBlock({
   dayOfWeek,
   slots,
   today,
+  unpublished = false,
   onOpen,
 }: {
   readonly dayOfWeek: number;
   readonly slots: readonly TeacherSlot[];
   readonly today: boolean;
+  /** «غير منشورة» beside the day's name (FR-315). */
+  readonly unpublished?: boolean;
   readonly onOpen: (slot: TeacherSlot) => void;
 }) {
   const t = useT();
@@ -53,9 +59,19 @@ export function DayBlock({
         ...(today ? { backgroundColor: color.surface } : {}),
       }}
     >
-      <Text variant="callout" weight="bold">
-        {day}
-      </Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: tokens.space['2'],
+        }}
+      >
+        <Text variant="callout" weight="bold">
+          {day}
+        </Text>
+        {unpublished ? <UnpublishedBadge label={t('teacher.availability.unpublished')} /> : null}
+      </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: tokens.space['2'] }}>
         {slots.map((slot) => {
           const time = format.wallClock(slot.startTimeLocal);

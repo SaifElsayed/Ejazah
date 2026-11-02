@@ -3,7 +3,10 @@
 // the dot, disabled), the days without slots on one line and the legend. The header names the
 // teacher's city and «موعد» opens the editor for a new slot; any slot opens it for that slot, a
 // booked one with its fields fixed (FR-318). With no slot at all, `AvailabilityEmpty`. While nothing is read,
-// the shared states; over the cached week, the offline notice (the `MainOffline` pattern).
+// the shared states; over the cached week, the offline notice (the `MainOffline` pattern). While the
+// teacher is not published (`published` false: the payout account not verified, or the account
+// suspended), the packages tab's warning to the payout over the week or the empty state, and
+// «غير منشورة» on each day with an active slot (T069, FR-315); drafting goes on as before.
 import type { TeacherSlot } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { useState } from 'react';
@@ -14,6 +17,7 @@ import { useLocale, useT } from '../../../../i18n';
 import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { TabScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
+import { UnpublishedBanner } from '../../packages';
 import { useSlots } from '../api';
 import { AvailabilityHeader } from '../components/AvailabilityHeader';
 import { DayBlock, SlotLegend } from '../components/DayBlock';
@@ -42,6 +46,9 @@ export function Availability() {
   }
 
   const city = cityOf(answer.timezone, locale) ?? answer.timezone;
+  const banner = answer.published ? null : (
+    <UnpublishedBanner text={t('teacher.availability.lockedBanner')} />
+  );
   const editor =
     editing === null ? null : (
       <SlotEditor
@@ -57,7 +64,12 @@ export function Availability() {
         <AvailabilityEmpty
           city={city}
           onAdd={() => setEditing({})}
-          notice={<OfflineNotice onRetry={retry} />}
+          notice={
+            <>
+              <OfflineNotice onRetry={retry} />
+              {banner}
+            </>
+          }
         />
         {editor}
       </>
@@ -69,6 +81,7 @@ export function Availability() {
   return (
     <TabScreen header={<AvailabilityHeader city={city} onAdd={() => setEditing({})} />}>
       <OfflineNotice onRetry={retry} />
+      {banner}
       <View>
         {week.days.map(({ dayOfWeek, slots: ofDay }) => (
           <DayBlock
@@ -76,6 +89,7 @@ export function Availability() {
             dayOfWeek={dayOfWeek}
             slots={ofDay}
             today={dayOfWeek === today}
+            unpublished={!answer.published && ofDay.some(({ isActive }) => isActive)}
             onOpen={(slot) => setEditing({ slot })}
           />
         ))}

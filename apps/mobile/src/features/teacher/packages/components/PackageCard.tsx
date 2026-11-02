@@ -12,6 +12,7 @@ import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useLocale, useT } from '../../../../i18n';
 import { formatPoundAmount, formatPounds, useFormatters } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
+import { UnpublishedBadge } from './Unpublished';
 
 export const TRACK_LABEL: Readonly<Record<PackageTrack, MessageKey>> = {
   recitation: 'common.track.recitation',
@@ -73,11 +74,7 @@ export function PackageCard({
         <View style={{ alignItems: 'flex-end', gap: tokens.space['1'] }}>
           <TrackBadge track={item.track} />
           {item.isActive && !published ? (
-            <Badge
-              label={t('status.package.unpublished')}
-              tone="neutral"
-              icon={{ name: 'eye-off', size: 'xs' }}
-            />
+            <UnpublishedBadge label={t('status.package.unpublished')} />
           ) : null}
         </View>
       </View>

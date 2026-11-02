@@ -3,6 +3,8 @@
 export { PACKAGES_QUERY_KEY, usePackages } from './api';
 export { PackageDeactivateSheet } from './components/PackageDeactivateSheet';
 export { PackageSubjectPicker } from './components/PackageSubjectPicker';
+/** The warning to the payout and «غير منشورة», which the availability tab draws too (T069, FR-315). */
+export { UnpublishedBadge, UnpublishedBanner } from './components/Unpublished';
 export { PackageEditor } from './screens/PackageEditor';
 export { Packages } from './screens/Packages';
 export { PackagesEmpty } from './screens/PackagesEmpty';
