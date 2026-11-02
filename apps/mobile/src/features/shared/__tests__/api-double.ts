@@ -44,6 +44,10 @@ export function fakeProcedures() {
       },
     },
     catalog: { subjects: { list: { query: procedure() } } },
+    // B28 (T030): the teacher's profile a student opens.
+    discovery: {
+      teacher: { query: procedure() },
+    },
     teacher: {
       application: {
         get: { query: procedure() },

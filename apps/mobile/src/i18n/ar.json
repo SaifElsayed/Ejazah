@@ -1094,8 +1094,13 @@
       "minutesPerSession": "{minutes} دقيقة للجلسة",
       "noReviews": "لا تقييمات بعد",
       "noSlots": "لا مواعيد متاحة حاليًا",
+      "notFound": {
+        "text": "عُد إلى الاستكشاف لتختار معلمًا آخر.",
+        "title": "لم نجد هذا المعلم"
+      },
       "packages": "الباقات",
       "pricePerSession": "{price} للجلسة",
+      "qualification": "المؤهل",
       "ratingOf": "{rating} من {count, plural, one {تقييم واحد} two {تقييمين} few {# تقييمات} many {# تقييمًا} other {# تقييم}}",
       "remedy": {
         "ijazahTrack": "يطلب لك المعلم الإجازة بعد الإتمام · التعويض بجلسة",
@@ -1105,7 +1110,8 @@
       "reviewLine": "{rating} · {date}",
       "reviews": "التقييمات",
       "reviewsCount": "{rating} · {count, plural, one {تقييم واحد} two {تقييمان} few {# تقييمات} many {# تقييمًا} other {# تقييم}}",
-      "showFullChain": "عرض السند كاملًا"
+      "showFullChain": "عرض السند كاملًا",
+      "subjectsSeparator": "، "
     },
     "teacherReviews": {
       "a11y": {

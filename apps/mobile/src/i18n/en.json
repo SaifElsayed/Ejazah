@@ -1094,8 +1094,13 @@
       "minutesPerSession": "{minutes} minutes per session",
       "noReviews": "No reviews yet",
       "noSlots": "No slots available at the moment",
+      "notFound": {
+        "text": "Go back to Explore to choose another teacher.",
+        "title": "We could not find this teacher"
+      },
       "packages": "Packages",
       "pricePerSession": "{price} per session",
+      "qualification": "Qualification",
       "ratingOf": "{rating} from {count, plural, one {# review} other {# reviews}}",
       "remedy": {
         "ijazahTrack": "The teacher requests your ijazah after completion · make-up by a session",
@@ -1105,7 +1110,8 @@
       "reviewLine": "{rating} · {date}",
       "reviews": "Reviews",
       "reviewsCount": "{rating} · {count, plural, one {# review} other {# reviews}}",
-      "showFullChain": "Show the full chain"
+      "showFullChain": "Show the full chain",
+      "subjectsSeparator": ", "
     },
     "teacherReviews": {
       "a11y": {
