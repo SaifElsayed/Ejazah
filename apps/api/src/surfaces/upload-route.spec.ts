@@ -20,6 +20,7 @@ import {
   unusedAdminServices,
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
 
@@ -83,6 +84,7 @@ const services = {
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
+  teacherProfile: unusedTeacherProfileServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

@@ -11,6 +11,7 @@ import { createAppCallerFactory, createAppRouter } from '../../../surfaces/proce
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
 } from '../../../surfaces/services.fixtures.js';
 import { applicationRouter } from '../application.router.js';
 import { credentialsRouter } from '../credentials.router.js';
@@ -125,6 +126,7 @@ export function surfaceOf(verification: VerificationServices): VerificationSurfa
     identity: unusedIdentityServices,
     verification,
     catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

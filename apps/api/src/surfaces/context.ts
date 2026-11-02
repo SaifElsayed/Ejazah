@@ -93,6 +93,7 @@ import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
+import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 
 // The request's language and the client's address are the kernel's (`platform/http/`, PR #79
@@ -199,6 +200,8 @@ export interface AppServices {
    * `CatalogUse` port `main.ts` binds to booking's entry (R-207); T018 and T019 fill it.
    */
   readonly catalog: CatalogServices;
+  /** `teacher.profile.*`: the identity module's profile service (T017, FR-310). */
+  readonly teacherProfile: TeacherProfileServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */

@@ -45,6 +45,7 @@ import {
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
 
@@ -181,6 +182,7 @@ function fixture(
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>

@@ -12,6 +12,7 @@ import { createAppCallerFactory, createAppRouter } from '../../../surfaces/proce
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import type { IdentityServices } from '../index.js';
@@ -115,6 +116,7 @@ export function appContextFor(
     identity,
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }

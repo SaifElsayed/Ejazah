@@ -1434,6 +1434,34 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "teacher.profile.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.photoUrl": { "type": "string" },
+          "$.published": { "required": true, "type": "boolean" },
+          "$.qualificationSummary": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.profile.update": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" }
+        }
+      },
       "teacher.slots.create": {
         "caller": "teacher",
         "input": {

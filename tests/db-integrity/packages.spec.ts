@@ -55,6 +55,7 @@ import {
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
 import { connectAsApplication, type Db, insertRow, makeSubject, makeUser } from './harness';
@@ -137,6 +138,7 @@ function surfaceCaller(teacherId: string) {
         subjects: { listActive: async () => [] },
         identity: unusedIdentityServices,
         verification: unusedVerificationServices,
+        teacherProfile: unusedTeacherProfileServices,
         catalog,
       },
     }),

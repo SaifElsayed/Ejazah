@@ -17,6 +17,7 @@ import { platformRouter } from './public-config.router.js';
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
 
@@ -65,6 +66,7 @@ function fixture(changes: Readonly<Record<string, unknown>> = {}) {
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const router = createAppRouter({ platform: platformRouter });
   const caller = createAppCallerFactory(router)(

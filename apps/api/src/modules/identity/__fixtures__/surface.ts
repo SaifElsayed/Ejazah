@@ -13,6 +13,7 @@ import { createAppCallerFactory, createAppRouter } from '../../../surfaces/proce
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import { accountRouter } from '../account.router.js';
@@ -72,6 +73,7 @@ export function surfaceOf(
     },
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

@@ -29,6 +29,7 @@ import {
   unusedAdminServices,
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
 
@@ -52,6 +53,7 @@ const services = {
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
+  teacherProfile: unusedTeacherProfileServices,
 };
 
 const appSource = { session: null, log, rateLimiter, clientAddress, services };

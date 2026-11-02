@@ -18,6 +18,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
 import type { TeacherSlots } from './slots.service.js';
@@ -105,6 +106,7 @@ function as(session: UserSession | null) {
     subjects: { listActive: async () => [] },
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
+    teacherProfile: unusedTeacherProfileServices,
     catalog: { slots, packages: unusedPackages },
   };
   return callerFor(

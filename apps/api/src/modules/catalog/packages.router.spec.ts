@@ -21,6 +21,7 @@ import {
 import {
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
 import type { CatalogServices } from './index.js';
@@ -120,6 +121,7 @@ function callerAs(session: UserSession | null): Caller {
     subjects: { listActive: async () => [] },
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
+    teacherProfile: unusedTeacherProfileServices,
     catalog,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });

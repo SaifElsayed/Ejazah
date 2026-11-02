@@ -17,6 +17,7 @@ import {
   unusedAdminServices,
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import { FILES_PATH, filesRoutes } from './files.route.js';
@@ -66,6 +67,7 @@ beforeAll(async () => {
       identity: unusedIdentityServices,
       verification: unusedVerificationServices,
       catalog: unusedCatalogServices,
+      teacherProfile: unusedTeacherProfileServices,
     },
     adminServices: unusedAdminServices,
     routes: filesRoutes(storage),

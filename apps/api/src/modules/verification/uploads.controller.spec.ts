@@ -24,6 +24,7 @@ import {
   unusedAdminServices,
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
 
@@ -68,6 +69,7 @@ const services = {
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
+  teacherProfile: unusedTeacherProfileServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const cipher = new ColumnCipher(Buffer.alloc(32, 9).toString('base64'));

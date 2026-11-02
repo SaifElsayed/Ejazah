@@ -56,6 +56,7 @@ import {
   unusedAdminServices,
   unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
 
@@ -104,8 +105,16 @@ const verificationRequired: UserSession = {
   accountStatus: 'verification_required',
 };
 
-const verifiedAdmin: AdminSession = { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: true };
-const unverifiedAdmin: AdminSession = { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: false };
+const verifiedAdmin: AdminSession = {
+  adminId: 'admin-1',
+  sessionId: 'session-1',
+  mfaVerified: true,
+};
+const unverifiedAdmin: AdminSession = {
+  adminId: 'admin-1',
+  sessionId: 'session-1',
+  mfaVerified: false,
+};
 
 const secret = 'date-of-birth-1990-01-01';
 
@@ -150,6 +159,7 @@ const services = {
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
   catalog: unusedCatalogServices,
+  teacherProfile: unusedTeacherProfileServices,
 };
 
 /** The user surface's context for a fixture session, as the HTTP application builds one. */
