@@ -17,7 +17,7 @@ visibility predicate first (research R-201, R-202).
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
 | `teacher.packages.list` | teacher(approved) | `{}` | `{ published, packages: [{ id, subject, track, sessionCount, sessionDurationMinutes, price_piasters, perSession_piasters, isActive, activeEnrollmentCount, frozen }] }` | `frozen` true once an enrollment exists (FR-312); `perSession_piasters` by `packages/money` (R-212) |
-| `teacher.packages.create` | teacher(approved), idempotent | `{ subjectId, track, sessionCount, sessionDurationMinutes: 30 \| 45 \| 60, price_piasters, isActive, idempotencyKey }` | the package | `SUBJECT_NOT_APPROVED` unless the subject is in the teacher's `teacher_subjects` (FR-311); `price_piasters` > 0 |
+| `teacher.packages.create` | teacher(approved), idempotent | `{ subjectId, track, sessionCount, sessionDurationMinutes: 30 \| 45 \| 60, price_piasters, isActive, idempotencyKey }` | the package | `sessionCount` 1 to 52 on create and update (FR-311, the owner's decision of 2026-11-02); `SUBJECT_NOT_APPROVED` unless the subject is in the teacher's `teacher_subjects` (FR-311); `price_piasters` > 0 |
 | `teacher.packages.update` | teacher(approved) | `{ packageId, sessionCount?, track?, sessionDurationMinutes?, price_piasters?, isActive? }` | the package | `PACKAGE_FROZEN` for track or length once an enrollment exists; a price change applies to later purchases (FR-312); only the caller's own package: another teacher's id answers `NOT_FOUND` and writes nothing (PR #109's review, M3) |
 
 ## `teacher.slots` — catalog (FR-313, FR-314, FR-317, FR-318)
