@@ -1,0 +1,243 @@
+// T035 — moderation's `openCompensationCase` over the real tables (FR-362, FR-375, FR-DISPUTE-5; the
+// owner's decisions of 2026-11-01, PR #109's review round 2).
+//
+// A case is a `disputes` row of `kind = compensation_case`, opened by the system: no session, no
+// raiser, `status = open`, its reason one of the closed list written to `disputes.reason`. One open
+// case per enrollment and reason: a call while it is open joins it, a call after it was resolved or
+// dismissed opens a new one, and another reason on the same enrollment is a case of its own.
+//
+// The race: `disputes` has no unique index that keeps one open case per enrollment and reason, so
+// the function locks the enrollment's row (T005's `lockRows`) and only then reads the open case.
+// HOW THE RACE IS STAGED, as `teacher-slots.spec.ts` stages it: transaction A opens the case and
+// stays open; transaction B calls for the same enrollment and reason and is seen waiting on a lock
+// by a watcher reading `pg_stat_activity`, so the order is the database's, not the timing's; then A
+// commits and B ends, joining A's case. Without the lock B would not wait and both would insert.
+//
+// The rows are committed, each probe writing an enrollment of its own; all three connections are
+// the application role.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import {
+  COMPENSATION_REASONS,
+  openCompensationCase,
+} from '../../apps/api/src/modules/moderation/index.js';
+import {
+  closeDatabase,
+  type Database,
+  openDatabase,
+  type Transaction,
+} from '../../apps/api/src/platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
+import { connectAsApplication, type Db, makeAdmin, makeEnrollment } from './harness';
+
+let db: Db;
+let watcher: Db;
+let database: Database;
+
+beforeAll(async () => {
+  [db, watcher] = await Promise.all([connectAsApplication(), connectAsApplication()]);
+  database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
+    poolMax: 4,
+    statementTimeoutMs: 30_000,
+    idleInTransactionTimeoutMs: 60_000,
+  });
+});
+
+afterAll(async () => {
+  await Promise.all([db?.end(), watcher?.end()]);
+  await closeDatabase(database);
+});
+
+const OPTIONS = { maxWait: 5_000, timeout: 15_000 };
+
+interface CaseColumns {
+  id: string;
+  enrollment_id: string;
+  session_id: string | null;
+  kind: string;
+  raised_by_user_id: string | null;
+  reason: string;
+  status: string;
+}
+
+async function casesOf(enrollmentId: string): Promise<CaseColumns[]> {
+  const { rows } = await db.query<CaseColumns>(
+    `SELECT id, enrollment_id, session_id, kind::text AS kind, raised_by_user_id, reason,
+            status::text AS status
+       FROM disputes WHERE enrollment_id = $1 ORDER BY id`,
+    [enrollmentId],
+  );
+  return rows;
+}
+
+/** One call in a transaction of its own, committed. */
+function open(enrollmentId: string, reason: (typeof COMPENSATION_REASONS)[number]) {
+  return database.$transaction((tx) => openCompensationCase(tx, enrollmentId, reason), OPTIONS);
+}
+
+/** Closes the case as an administrator's decision would, `resolved` or `dismissed`. */
+async function close(caseId: string, status: 'resolved' | 'dismissed'): Promise<void> {
+  const adminId = await makeAdmin(db);
+  await db.query(
+    `UPDATE disputes
+        SET status = $2::dispute_status,
+            resolution = CASE WHEN $2 = 'resolved' THEN 'compensation_ordered'::dispute_resolution END,
+            resolution_notes = 'Probe decision', resolved_by_admin_id = $3, resolved_at = now(),
+            updated_at = now()
+      WHERE id = $1`,
+    [caseId, status, adminId],
+  );
+}
+
+describe('openCompensationCase opens one system case per reason (T035, FR-DISPUTE-5)', () => {
+  it('has exactly the three reasons of the closed list', () => {
+    expect([...COMPENSATION_REASONS]).toEqual([
+      'slot_unavailable',
+      'party_restricted',
+      'duplicate_payment',
+    ]);
+  });
+
+  for (const reason of COMPENSATION_REASONS) {
+    it(`opens an open compensation case for ${reason}, raised by no one, on no session`, async () => {
+      const { enrollmentId } = await makeEnrollment(db);
+      const opened = await open(enrollmentId, reason);
+      const cases = await casesOf(enrollmentId);
+      expect(cases).toEqual([
+        {
+          id: opened.caseId,
+          enrollment_id: enrollmentId,
+          session_id: null,
+          kind: 'compensation_case',
+          raised_by_user_id: null,
+          reason,
+          status: 'open',
+        },
+      ]);
+      expect(opened).toEqual({ caseId: cases[0]?.id, opened: true });
+    });
+  }
+});
+
+describe('one open case per enrollment and reason (the owner’s decisions of 2026-11-01)', () => {
+  it('a repeated call while the case is open joins it and opens no second', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const first = await open(enrollmentId, 'duplicate_payment');
+    const second = await open(enrollmentId, 'duplicate_payment');
+    expect(second).toEqual({ caseId: first.caseId, opened: false });
+    expect((await casesOf(enrollmentId)).map((row) => row.id)).toEqual([first.caseId]);
+  });
+
+  it('two reasons on one enrollment are two cases, each joined by its own reason', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const restricted = await open(enrollmentId, 'party_restricted');
+    const duplicate = await open(enrollmentId, 'duplicate_payment');
+    expect(duplicate.opened).toBe(true);
+    expect(duplicate.caseId).not.toBe(restricted.caseId);
+    expect(await open(enrollmentId, 'party_restricted')).toEqual({
+      caseId: restricted.caseId,
+      opened: false,
+    });
+    expect((await casesOf(enrollmentId)).map(({ reason, status }) => ({ reason, status }))).toEqual(
+      [
+        { reason: 'party_restricted', status: 'open' },
+        { reason: 'duplicate_payment', status: 'open' },
+      ],
+    );
+  });
+
+  it('a call after the case was resolved, or dismissed, opens a new one', async () => {
+    for (const status of ['resolved', 'dismissed'] as const) {
+      const { enrollmentId } = await makeEnrollment(db);
+      const first = await open(enrollmentId, 'duplicate_payment');
+      await close(first.caseId, status);
+      const next = await open(enrollmentId, 'duplicate_payment');
+      expect(next.opened).toBe(true);
+      expect(next.caseId).not.toBe(first.caseId);
+      expect(
+        (await casesOf(enrollmentId)).map(({ id, status: state }) => ({ id, status: state })),
+      ).toEqual([
+        { id: first.caseId, status },
+        { id: next.caseId, status: 'open' },
+      ]);
+    }
+  });
+
+  it('a case of another enrollment is never joined', async () => {
+    const one = await makeEnrollment(db);
+    const other = await makeEnrollment(db);
+    const first = await open(one.enrollmentId, 'slot_unavailable');
+    const second = await open(other.enrollmentId, 'slot_unavailable');
+    expect(second.opened).toBe(true);
+    expect(second.caseId).not.toBe(first.caseId);
+  });
+});
+
+/** Resolves once backend `pid` waits on a lock; fails after about two seconds. */
+async function seenWaiting(pid: number): Promise<void> {
+  for (let look = 0; look < 100; look += 1) {
+    const { rows } = await watcher.query<{ waiting: boolean }>(
+      `SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = $1`,
+      [pid],
+    );
+    if (rows[0]?.waiting === true) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`backend ${String(pid)} never waited on a lock`);
+}
+
+/**
+ * A runs `first` and stays open; B runs `second` and is seen waiting; A commits. Answers what each
+ * returned.
+ */
+async function race<T>(
+  first: (tx: Transaction) => Promise<T>,
+  second: (tx: Transaction) => Promise<T>,
+): Promise<{ readonly a: T; readonly b: T }> {
+  let release = (): void => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let ran = (): void => undefined;
+  const firstRan = new Promise<void>((resolve) => {
+    ran = resolve;
+  });
+  const a = database.$transaction(async (tx) => {
+    const value = await first(tx);
+    ran();
+    await released;
+    return value;
+  }, OPTIONS);
+  await Promise.race([firstRan, a]);
+  let pidOfB = (_pid: number): void => undefined;
+  const bStarted = new Promise<number>((resolve) => {
+    pidOfB = resolve;
+  });
+  const b = database.$transaction(async (tx) => {
+    const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+    pidOfB(row?.pid ?? 0);
+    return second(tx);
+  }, OPTIONS);
+  try {
+    await seenWaiting(await bStarted);
+  } finally {
+    release();
+  }
+  return { a: await a, b: await b };
+}
+
+describe('two concurrent calls for one enrollment and reason leave one open case (T005)', () => {
+  it('the second waits on the enrollment’s lock, then joins the first’s case', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const { a, b } = await race(
+      (tx) => openCompensationCase(tx, enrollmentId, 'slot_unavailable'),
+      (tx) => openCompensationCase(tx, enrollmentId, 'slot_unavailable'),
+    );
+    expect(a.opened).toBe(true);
+    expect(b).toEqual({ caseId: a.caseId, opened: false });
+    expect(
+      (await casesOf(enrollmentId)).map(({ id, reason, status }) => ({ id, reason, status })),
+    ).toEqual([{ id: a.caseId, reason: 'slot_unavailable', status: 'open' }]);
+  });
+});
