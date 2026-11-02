@@ -148,6 +148,21 @@ export const uploadKinds: Readonly<Record<UploadKind, readonly SniffedType[]>> =
   photo: ['image/jpeg', 'image/png'],
 };
 
+/**
+ * The most pixels (width × height) a profile photo may declare before it is decoded (T145; the
+ * owner's decision of 2026-11-02). The photos route turns and re-encodes the photo to drop its
+ * metadata, and turning it a quarter holds the whole image decoded: 3 bytes a pixel for a JPEG,
+ * 4 for a PNG with alpha, 8 at 16 bits. `upload_max_bytes` (10 MiB) does not bound that, since a
+ * small file can declare any size (a one-colour PNG compresses a thousandfold), and `sharp`'s own
+ * default (0x3FFF², 268 million pixels) would let one upload hold 0.75 to 2 GiB. 8192 × 6144 is
+ * the largest 4:3 frame of the 50 MP sensors phones ship and admits every default output (12 MP,
+ * 24 MP on recent iPhones) and the full-resolution modes (48 MP iPhone, 50 MP Android); it costs
+ * at most 144 MiB for a JPEG, 192 MiB for a PNG, 384 MiB at 16 bits. A 108 or 200 MP original
+ * is refused, and its JPEG is usually over 10 MiB already at a camera's quality. Here, in the kernel, as
+ * the kinds are: a constant in module code is refused by the magic-number gate (FR-034).
+ */
+export const PHOTO_MAX_INPUT_PIXELS = 8192 * 6144;
+
 /** The settings key of the largest file accepted (SRS §3.14, NFR-SEC-9). */
 export const UPLOAD_MAX_BYTES_SETTING = 'upload_max_bytes';
 

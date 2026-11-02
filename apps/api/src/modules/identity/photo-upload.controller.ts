@@ -7,7 +7,22 @@
 // same link `account.me` answers as `photoUrl`. The key is plain in its column: a photo is not an
 // identity document (R-DB-8 names the document key), and the column is served only through a
 // signed link (R-SEC-3).
+//
+// T145 (the owner's decision of 2026-11-02): the photo is stored without its metadata, since its
+// EXIF can carry where it was taken and the device. `sharp` turns it upright by its EXIF
+// orientation first (`rotate()` with no angle), then re-encodes it in its own type, JPEG as JPEG
+// and PNG as PNG; asked for no metadata, it writes none (no EXIF, XMP, IPTC, ICC, nor a PNG's text
+// chunks). Its header is read first, and a photo declaring more than `PHOTO_MAX_INPUT_PIXELS` is
+// refused before a pixel is decoded; the decoder carries the same bound. A file `sharp` cannot
+// read is refused as the kinds guard refuses a type, `VALIDATION_FAILED`. Either refusal comes
+// before `storage.put`, so nothing is stored and the previous photo stays.
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
+import { DomainError } from '../../platform/errors/domain-error.js';
+import {
+  PHOTO_MAX_INPUT_PIXELS,
+  type SniffedType,
+} from '../../platform/guards/upload.middleware.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
@@ -29,6 +44,28 @@ export interface PhotoUploadDependencies extends UploadRouteDependencies {
   readonly users: PhotoWriter;
 }
 
+function unreadable(cause: unknown): DomainError {
+  return new DomainError('VALIDATION_FAILED', 'The image cannot be read.', { cause });
+}
+
+/** The photo upright, re-encoded in its own type, with no metadata (T145). */
+async function withoutMetadata(type: SniffedType, bytes: Buffer): Promise<Buffer> {
+  const { width, height } = await sharp(bytes)
+    .metadata()
+    .catch((error: unknown) => {
+      throw unreadable(error);
+    });
+  if (width * height > PHOTO_MAX_INPUT_PIXELS) {
+    throw new DomainError('VALIDATION_FAILED', 'The image has more pixels than allowed.');
+  }
+  const upright = sharp(bytes, { limitInputPixels: PHOTO_MAX_INPUT_PIXELS }).rotate();
+  return (type === 'image/png' ? upright.png() : upright.jpeg())
+    .toBuffer()
+    .catch((error: unknown) => {
+      throw unreadable(error);
+    });
+}
+
 export function photoUploadRoute({
   storage,
   settings,
@@ -39,9 +76,10 @@ export function photoUploadRoute({
     kindOf: () => 'photo' as const,
     refuses: ['suspended', 'banned'],
     handle: async ({ uploader, type, bytes }) => {
+      const stored = await withoutMetadata(type, bytes);
       const extension = type === 'image/png' ? 'png' : 'jpg';
       const key = `photos/${uploader.userId}/${randomUUID()}.${extension}`;
-      await storage.put(key, bytes, type);
+      await storage.put(key, stored, type);
       const previous = await users.replacePhotoKey(uploader.userId, key);
       if (previous !== null && previous !== key)
         await storage.remove(previous).catch(() => undefined);
