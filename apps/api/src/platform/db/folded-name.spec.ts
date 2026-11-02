@@ -6,7 +6,7 @@
 // module's rows the match needs (R-API-6, `api/table-ownership`), as `row-lock.spec.ts` says.
 import { describe, expect, it } from 'vitest';
 
-import { idsWithFoldedNamePrefix } from './folded-name.js';
+import { foldedTexts, idsWithFoldedNamePrefix } from './folded-name.js';
 import type { Transaction } from './prisma.repository.js';
 
 interface Sent {
@@ -57,6 +57,40 @@ describe('idsWithFoldedNamePrefix (T010, R-203)', () => {
   it('sends no statement for no candidates', async () => {
     const { tx, sent } = recordingTransaction();
     expect(await idsWithFoldedNamePrefix(tx, [], 'م')).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+});
+
+describe('foldedTexts (T025, R-203)', () => {
+  /** A transaction that records each tagged raw query and answers each text's fold. */
+  function foldingTransaction(): {
+    readonly tx: Pick<Transaction, '$queryRaw'>;
+    readonly sent: Sent[];
+  } {
+    const sent: Sent[] = [];
+    const tx = {
+      $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        sent.push({ text: strings.join('$'), values });
+        return (values[0] as string[]).map((text) => ({ folded: `folded:${text}` }));
+      },
+    } as unknown as Pick<Transaction, '$queryRaw'>;
+    return { tx, sent };
+  }
+
+  it('folds every text with ijazah_fold in one statement, bound as one text array, in order', async () => {
+    const { tx, sent } = foldingTransaction();
+    expect(await foldedTexts(tx, ['حَفص', 'ورش'])).toEqual(['folded:حَفص', 'folded:ورش']);
+    expect(sent).toEqual([
+      {
+        text: 'SELECT ijazah_fold(t.text) AS folded FROM unnest($::text[]) WITH ORDINALITY AS t(text, position) ORDER BY t.position',
+        values: [['حَفص', 'ورش']],
+      },
+    ]);
+  });
+
+  it('sends no statement for no text', async () => {
+    const { tx, sent } = foldingTransaction();
+    expect(await foldedTexts(tx, [])).toEqual([]);
     expect(sent).toEqual([]);
   });
 });

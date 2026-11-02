@@ -19,6 +19,7 @@ import {
   CredentialReviewService,
   type CredentialReviewStore,
 } from './credential-review.service.js';
+import { foldedTexts } from '../../platform/db/folded-name.js';
 import {
   accountTimezone,
   decideApplication,
@@ -26,7 +27,20 @@ import {
   isPublishedTeacher,
   lockAccount,
   lockApplication,
+  visibleTeacherPage,
+  visibleTeachers,
 } from '../identity/index.js';
+import {
+  activeOfferings,
+  approvedRiwayas,
+  cardPackages,
+  cardSubjects,
+} from './discovery.repository.js';
+import {
+  type DiscoveryCatalog,
+  DiscoveryService,
+  type DiscoveryStore,
+} from './discovery.service.js';
 import {
   activeSlotsOf,
   insertSlot,
@@ -208,3 +222,28 @@ export function createDocumentReferences(database: Pick<Database, 'teacherCreden
   const credentials = new CredentialsRepository(database);
   return { referencedAmong: (documentIds) => credentials.documentsAmong(documentIds) };
 }
+
+/**
+ * Discovery's store (T025): this module's rows, the kernel's fold and identity's predicate and
+ * page through its entry (R-201, R-204). Every read is on the caller's transaction and takes no lock.
+ */
+export const discoveryStore: DiscoveryStore = {
+  offerings: activeOfferings,
+  riwayas: approvedRiwayas,
+  subjectsOf: cardSubjects,
+  packagesOf: cardPackages,
+  activeSubjects: (tx) => new SubjectsRepository(tx).listActive(),
+  fold: foldedTexts,
+  visibleTeachers,
+  visibleTeacherPage,
+};
+
+/**
+ * Discovery's cards, subject tabs and riwaya values (T025, FR-332 to FR-335), for booking's
+ * `discovery` router (T026), which adds each card's nearest free slot and the search rate limit.
+ * Each call takes the caller's transaction and the session's gender (R-GENDER-4, R-GENDER-5).
+ */
+export function createDiscoveryCatalog(settings: SettingsReader): DiscoveryCatalog {
+  return new DiscoveryService({ settings, store: discoveryStore });
+}
+export type { DiscoveryCatalog };
