@@ -2,6 +2,7 @@
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import { grantSubjects } from './credentials.repository.js';
@@ -35,6 +36,7 @@ import {
   approvedRiwayas,
   cardPackages,
   cardSubjects,
+  profilePackages,
 } from './discovery.repository.js';
 import {
   type DiscoveryCatalog,
@@ -229,7 +231,7 @@ export function createDocumentReferences(database: Pick<Database, 'teacherCreden
 }
 
 /**
- * Discovery's store (T025): this module's rows, the kernel's fold and identity's predicate and
+ * Discovery's store (T025, T027): this module's rows, the kernel's fold and identity's predicate and
  * page through its entry (R-201, R-204). Every read is on the caller's transaction and takes no lock.
  */
 export const discoveryStore: DiscoveryStore = {
@@ -237,6 +239,7 @@ export const discoveryStore: DiscoveryStore = {
   riwayas: approvedRiwayas,
   subjectsOf: cardSubjects,
   packagesOf: cardPackages,
+  profilePackagesOf: profilePackages,
   activeSubjects: (tx) => new SubjectsRepository(tx).listActive(),
   fold: foldedTexts,
   visibleTeachers,
@@ -244,11 +247,15 @@ export const discoveryStore: DiscoveryStore = {
 };
 
 /**
- * Discovery's cards, subject tabs and riwaya values (T025, FR-332 to FR-335), for booking's
+ * Discovery's cards, subject tabs and riwaya values (T025, FR-332 to FR-335), and the teacher's
+ * profile with its photo as the storage port's signed link (T027, FR-336), for booking's
  * `discovery` router (T026), which adds each card's nearest free slot and the search rate limit.
  * Each call takes the caller's transaction and the session's gender (R-GENDER-4, R-GENDER-5).
  */
-export function createDiscoveryCatalog(settings: SettingsReader): DiscoveryCatalog {
-  return new DiscoveryService({ settings, store: discoveryStore });
+export function createDiscoveryCatalog(
+  settings: SettingsReader,
+  storage: Pick<StoragePort, 'temporaryLink'>,
+): DiscoveryCatalog {
+  return new DiscoveryService({ settings, storage, store: discoveryStore });
 }
 export type { DiscoveryCatalog };

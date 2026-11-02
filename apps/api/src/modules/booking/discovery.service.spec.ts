@@ -1,7 +1,8 @@
 // T026 — discovery composed in booking (R-205): catalog's cards for the page (its discovery service,
 // reached through the `DiscoveryCatalog` seam), then booking's nearest free slot for the teachers of
 // that page and no other, both asked with the requester's gender the procedure handed in; a card
-// whose teacher has no free slot keeps no `nearestSlot`. `filters` is catalog's answer as it is.
+// whose teacher has no free slot keeps no `nearestSlot`. `filters` and `teacher` (T027) are catalog's
+// answers as they are.
 import type { DiscoveryBrowseInput } from '@ijazah/contracts';
 import { describe, expect, it } from 'vitest';
 
@@ -17,6 +18,16 @@ const FEMALE = 'female' as RequesterGender;
 const FIRST = '0199d0a0-0000-7000-8000-0000000000d1';
 const SECOND = '0199d0a0-0000-7000-8000-0000000000d2';
 const SUBJECT = { id: '0199d0a0-0000-7000-8000-0000000000d3', nameAr: 'القرآن', nameEn: 'Quran' };
+const PROFILE = {
+  teacherId: FIRST,
+  displayName: 'Teacher',
+  gender: 'female' as const,
+  bio: 'Bio',
+  qualificationSummary: 'Ijazah',
+  subjects: [SUBJECT],
+  reviewCount: 0,
+  packages: [],
+};
 
 function card(teacherId: string): CatalogDiscoveryCard {
   return {
@@ -44,6 +55,10 @@ function world() {
     filters: async (...args) => {
       calls.push(['catalog.filters', ...args]);
       return { riwayas: ['حفص عن عاصم'] };
+    },
+    teacher: async (...args) => {
+      calls.push(['catalog.teacher', ...args]);
+      return PROFILE;
     },
   };
   const nearest: NearestSlots = {
@@ -84,5 +99,13 @@ describe('DiscoveryService.filters (FR-334)', () => {
       riwayas: ['حفص عن عاصم'],
     });
     expect(calls).toEqual([['catalog.filters', FEMALE, { subjectId: SUBJECT.id }]]);
+  });
+});
+
+describe('DiscoveryService.teacher (T027, FR-336)', () => {
+  it("answers catalog's profile, asked with the requester's gender, and reads no slot", async () => {
+    const { calls, service } = world();
+    await expect(service.teacher(FEMALE, { teacherId: FIRST })).resolves.toEqual(PROFILE);
+    expect(calls).toEqual([['catalog.teacher', FEMALE, { teacherId: FIRST }]]);
   });
 });

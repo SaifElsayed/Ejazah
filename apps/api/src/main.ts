@@ -191,16 +191,18 @@ const services = {
     settings,
     storage: ports.storage,
   }),
-  // `discovery` (T026): catalog's discovery service (T025) composed with booking's nearest slots.
+  // `discovery` (T026, T027): catalog's discovery service (T025) composed with booking's nearest
+  // slots; the profile's photo is the storage port's signed link (T027).
   discovery: booking.createDiscoveryServices({
     // T025's catalog discovery through catalog's entry, each call in a transaction of its own (B27
     // integration): the seam takes none, and catalog's reads run on the one they are given.
     catalog: (() => {
-      const discovery = catalog.createDiscoveryCatalog(settings);
+      const discovery = catalog.createDiscoveryCatalog(settings, ports.storage);
       const reads = transactionsOver(database);
       return {
         browse: (requester, input) => reads.run((tx) => discovery.browse(tx, requester, input)),
         filters: (requester, input) => reads.run((tx) => discovery.filters(tx, requester, input)),
+        teacher: (requester, input) => reads.run((tx) => discovery.teacher(tx, requester, input)),
       };
     })(),
     database,

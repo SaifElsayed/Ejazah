@@ -86,14 +86,20 @@ const DIRECTIONS: readonly { readonly name: string; readonly own: Gender }[] = [
   { name: 'a female requester', own: 'female' },
 ];
 
-/** The discovery service over a settings reader holding `discovery_page_size` only. */
+/**
+ * The discovery service over a settings reader holding `discovery_page_size` only, and a storage
+ * port no card reaches: the profile's photo is `discovery-teacher.spec.ts`'s (T027).
+ */
 function catalogWithPageSize(size: number): DiscoveryCatalog {
-  return createDiscoveryCatalog({
-    async read(key, schema) {
-      if (key !== 'discovery_page_size') throw new SettingError(key, 'missing');
-      return schema.parse(size);
+  return createDiscoveryCatalog(
+    {
+      async read(key, schema) {
+        if (key !== 'discovery_page_size') throw new SettingError(key, 'missing');
+        return schema.parse(size);
+      },
     },
-  });
+    { temporaryLink: async () => Promise.reject(new Error('no photo link in these cases')) },
+  );
 }
 
 const catalog = catalogWithPageSize(20);
