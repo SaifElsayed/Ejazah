@@ -3,3 +3,13 @@
 
 /** Each enrollment's final session's local date, for a slot's release (T026, R-205, FR-394). */
 export { lastSessionDateOf } from './sessions.repository.js';
+
+/**
+ * T034 (R-209, FR-368, FR-369): an enrollment's sessions, written on the confirmation's
+ * transaction by the confirm job (T039), which holds the locks `generation.service.ts` names.
+ */
+export {
+  type EnrollmentToSchedule,
+  generateForEnrollment,
+  type ScheduledSession,
+} from './generation.service.js';
