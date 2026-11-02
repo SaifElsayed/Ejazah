@@ -227,11 +227,29 @@ function email(): string {
   return `probe-${randomUUID()}@example.invalid`;
 }
 
+/** How many stand-in phones `makeUser` draws before it gives up (T076). */
+const PHONE_ATTEMPTS = 5;
+
+/** `users_phone_key` is partial (`20261007000200_partial_unique_indexes`): the predicate is required. */
+const SKIP_HELD_PHONE = 'ON CONFLICT (phone) WHERE deleted_at IS NULL DO NOTHING';
+
+const RETURNING_ID = ' RETURNING id';
+
 // T009 (Phase 1, rule 32): a live user keeps an email, so every probe's user carries one, unique
-// per row as the phone is (`users.email` carries the partial unique index of T066).
-export function makeUser(db: Db, values: Readonly<Record<string, unknown>> = {}): Promise<string> {
-  return insertRow(db, 'users', {
-    phone: phone(),
+// per row as the phone is (`users.email` carries the partial unique index of T066). The email is a
+// whole random UUID, so it is never retried.
+//
+// T076: a drawn phone a committed live user holds (the probes that commit leave theirs behind) is
+// skipped and another drawn, at most PHONE_ATTEMPTS times; the database's own index decides, across
+// the workers and earlier runs, inside a transaction or outside one. A phone the caller chose is
+// inserted as given, so its collision stays the database's refusal. `drawPhone` lets a spec decide
+// the numbers drawn.
+export async function makeUser(
+  db: Db,
+  values: Readonly<Record<string, unknown>> = {},
+  options: { readonly drawPhone?: () => string } = {},
+): Promise<string> {
+  const row = {
     email: email(),
     gender: 'male',
     date_of_birth: '1990-01-01',
@@ -240,7 +258,20 @@ export function makeUser(db: Db, values: Readonly<Record<string, unknown>> = {})
     timezone: 'Africa/Cairo',
     account_status: 'active',
     ...values,
-  });
+  };
+  if ('phone' in values) return insertRow(db, 'users', row);
+  const drawPhone = options.drawPhone ?? phone;
+  for (let attempt = 0; attempt < PHONE_ATTEMPTS; attempt += 1) {
+    const { sql, params } = await insertStatement(db, 'users', { phone: drawPhone(), ...row });
+    if (!sql.endsWith(RETURNING_ID)) throw new Error('the users insert has no RETURNING id');
+    const skipping = `${sql.slice(0, -RETURNING_ID.length)} ${SKIP_HELD_PHONE}${RETURNING_ID}`;
+    const { rows } = await db.query<{ id: string }>(skipping, params);
+    const [inserted] = rows;
+    if (inserted !== undefined) return inserted.id;
+  }
+  throw new Error(
+    `makeUser: the stand-in phone collided with a live user's ${String(PHONE_ATTEMPTS)} times in a row (users_phone_key); no row was inserted`,
+  );
 }
 
 export function makeAdmin(db: Db): Promise<string> {
