@@ -134,7 +134,7 @@ function RatingLine({ teacher }: { readonly teacher: DiscoveryTeacherOutput }) {
       <Icon name="star" size="sm" fill="filled" />
       <Text variant="callout">
         {t('student.teacherProfile.ratingOf', {
-          rating: format.number(teacher.rating),
+          rating: format.rating(teacher.rating),
           count: teacher.reviewCount,
         })}
       </Text>

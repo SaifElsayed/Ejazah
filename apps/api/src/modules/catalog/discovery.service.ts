@@ -23,6 +23,13 @@
 // counted in UTF-16 units, as the phone slices the name, and never splitting a code point. Both
 // folds are the kernel's `foldedTexts`: no second fold is written here.
 //
+// THE SEARCH BY SUBJECT (T070, FR-333, R-203). A query matches a subject when the subject is active
+// and its Arabic or its English name, folded, begins with the folded query: a prefix, as the name's.
+// Its teachers are the candidates with an active package in a matched subject (of the tab and the
+// track when named, in one package, as any candidate), and identity keeps them beside the names
+// with the prefix, under the same predicate, order and cursor. A card the subject alone matched
+// carries no `match`: no part of its name matched.
+//
 // THE PROFILE (T027, FR-331, FR-336, R-GENDER-2). `discovery.teacher` asks identity's predicate for
 // the one teacher, for `discover` with the requester's gender, before anything else is read: a
 // teacher it does not answer, excluded or unknown, is NOT_FOUND with no field, so the two cannot be
@@ -190,9 +197,16 @@ export class DiscoveryService implements DiscoveryCatalog {
     if (input.riwaya !== undefined) {
       candidates = await this.#withRiwaya(tx, candidates, input.subjectId, input.riwaya);
     }
+    const search =
+      input.query === undefined
+        ? {}
+        : {
+            namePrefix: input.query,
+            alsoMatched: await this.#bySubjectName(tx, offerings, input, candidates, input.query),
+          };
     const rows = await this.#store.visibleTeacherPage(tx, requester, {
       candidateIds: [...candidates],
-      ...(input.query === undefined ? {} : { namePrefix: input.query }),
+      ...search,
       ...(input.minRating === undefined ? {} : { minRating: input.minRating }),
       ...(after === undefined ? {} : { after }),
       limit: size + 1,
@@ -282,6 +296,39 @@ export class DiscoveryService implements DiscoveryCatalog {
     if (photoKey === null) return undefined;
     const seconds = await this.#settings.read(DOCUMENT_LINK_TTL_SETTING, documentLinkTtl);
     return this.#storage.temporaryLink(photoKey, seconds);
+  }
+
+  /**
+   * Of `candidates`, those with an active package in an active subject whose Arabic or English
+   * name, folded, begins with `query`, folded (T070), of the tab and the track when named.
+   */
+  async #bySubjectName(
+    tx: Transaction,
+    offerings: readonly Offering[],
+    input: Pick<DiscoveryBrowseInput, 'subjectId' | 'track'>,
+    candidates: ReadonlySet<string>,
+    query: string,
+  ): Promise<string[]> {
+    const subjects = await this.#store.activeSubjects(tx);
+    const [wanted = '', ...folded] = await this.#store.fold(tx, [
+      query,
+      ...subjects.map(({ nameAr }) => nameAr),
+      ...subjects.map(({ nameEn }) => nameEn),
+    ]);
+    const arabic = folded.slice(0, subjects.length);
+    const english = folded.slice(subjects.length);
+    const matched = new Set(
+      subjects
+        .filter((_, index) =>
+          [arabic[index], english[index]].some((name) => name?.startsWith(wanted) === true),
+        )
+        .map(({ id }) => id),
+    );
+    const offered = candidatesOf(
+      offerings.filter(({ subjectId }) => matched.has(subjectId)),
+      input,
+    );
+    return [...offered].filter((id) => candidates.has(id));
   }
 
   /** Of `candidates`, those with an approved credential whose riwaya folds as `riwaya` does. */

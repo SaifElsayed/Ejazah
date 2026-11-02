@@ -209,7 +209,11 @@ async function allPages(
   own: SpecGender,
   candidateIds: readonly string[],
   limit: number,
-  options: { readonly namePrefix?: string; readonly minRating?: number } = {},
+  options: {
+    readonly namePrefix?: string;
+    readonly alsoMatched?: readonly string[];
+    readonly minRating?: number;
+  } = {},
 ): Promise<VisibleTeacher[][]> {
   const pages: VisibleTeacher[][] = [];
   let after: TeacherPageCursor | undefined;
@@ -354,6 +358,34 @@ describe.each(DIRECTIONS)('visibleTeacherPage, $name (T010, R-204)', ({ own }) =
         fatima,
       ]);
       expect(ids(await allPages(tx, own, candidates, 10, { namePrefix: 'محمد' }))).toEqual([]);
+    });
+  });
+
+  it('keeps a candidate the query matched otherwise whatever its name, never one outside the candidates nor a hidden one (T070)', async () => {
+    await inRollback(async (tx) => {
+      const ahmad = await createTeacher(tx, { gender: own, displayName: 'أحمد', reviewCount: 2 });
+      const bySubject = await createTeacher(tx, {
+        gender: own,
+        displayName: 'سالم',
+        reviewCount: 1,
+      });
+      const neither = await createTeacher(tx, { gender: own, displayName: 'يوسف' });
+      const outside = await createTeacher(tx, { gender: own, displayName: 'خالد' });
+      const otherGender = await createTeacher(tx, { gender: otherOf(own), displayName: 'نور' });
+      const banned = await createTeacher(tx, {
+        gender: own,
+        displayName: 'بلال',
+        accountStatus: 'banned',
+      });
+      const candidates = [ahmad, bySubject, neither, otherGender, banned];
+      const alsoMatched = [bySubject, outside, otherGender, banned];
+      const search = { namePrefix: 'احمد', alsoMatched };
+      expect(ids(await allPages(tx, own, candidates, 10, search))).toEqual([ahmad, bySubject]);
+      // One row a page: the cursor walks the union as it walks any page.
+      expect(ids(await allPages(tx, own, candidates, 1, search))).toEqual([ahmad, bySubject]);
+      expect(
+        ids(await allPages(tx, own, candidates, 10, { namePrefix: 'محمد', alsoMatched: [] })),
+      ).toEqual([]);
     });
   });
 

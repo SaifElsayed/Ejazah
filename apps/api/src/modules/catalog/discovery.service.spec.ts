@@ -179,3 +179,91 @@ describe('DiscoveryService.browse (FR-335)', () => {
     expect(calls.filter(([name]) => name === 'temporaryLink')).toEqual([]);
   });
 });
+
+// T070 (FR-333, R-203): the search matches a subject's name too. The fold here stands in for the
+// kernel's `ijazah_fold` (lower case and أ to ا are enough for these cases); the database specs
+// run the real one (`tests/db-integrity/discovery.spec.ts`).
+describe('DiscoveryService.browse: a search by subject (T070, FR-333)', () => {
+  const OTHER = '0199d0a0-0000-7000-8000-0000000000e4';
+  const THIRD = '0199d0a0-0000-7000-8000-0000000000e5';
+  const TAJWEED = {
+    id: '0199d0a0-0000-7000-8000-0000000000e6',
+    nameAr: 'أحكام التجويد',
+    nameEn: 'Tajweed',
+  };
+  const fold = (text: string) => text.toLowerCase().replaceAll('أ', 'ا');
+
+  function searching(page: VisibleTeacher[] = [visible()]) {
+    const asked: unknown[] = [];
+    const { calls, service } = world([], {
+      offerings: async () => [
+        { teacherUserId: TEACHER, subjectId: SUBJECT.id, track: 'recitation' },
+        { teacherUserId: OTHER, subjectId: TAJWEED.id, track: 'recitation' },
+        { teacherUserId: THIRD, subjectId: TAJWEED.id, track: 'ijazah_track' },
+      ],
+      activeSubjects: async () => [SUBJECT, TAJWEED],
+      fold: async (_tx, texts) => texts.map(fold),
+      visibleTeachers: async () => [],
+      visibleTeacherPage: async (_tx, _requester, query) => {
+        asked.push(query);
+        return page;
+      },
+      packagesOf: async (_tx, ids) =>
+        ids.map((teacherUserId) => ({
+          teacherUserId,
+          track: 'recitation' as const,
+          sessionCount: 4,
+          price_piasters: piasters(80_000),
+        })),
+      subjectsOf: async () => [],
+    });
+    return { asked, calls, service };
+  }
+
+  it('hands identity the teachers of a subject whose folded Arabic name begins with the query, beside the name prefix', async () => {
+    const { asked, service } = searching();
+    await service.browse(TX, MALE, { query: 'احكام' });
+    expect(asked).toEqual([
+      expect.objectContaining({ namePrefix: 'احكام', alsoMatched: [OTHER, THIRD] }),
+    ]);
+  });
+
+  it('matches the English name without case, and a subject holding the query past its start not at all', async () => {
+    const { asked, service } = searching();
+    await service.browse(TX, MALE, { query: 'TAJ' });
+    await service.browse(TX, MALE, { query: 'التجويد' });
+    await service.browse(TX, MALE, { query: 'weed' });
+    expect(asked.map((query) => (query as { alsoMatched?: string[] }).alsoMatched)).toEqual([
+      [OTHER, THIRD],
+      [],
+      [],
+    ]);
+  });
+
+  it('keeps the subject match inside the tab and the track the student chose', async () => {
+    const { asked, service } = searching();
+    await service.browse(TX, MALE, { query: 'tajweed', track: 'ijazah_track' });
+    await service.browse(TX, MALE, { query: 'tajweed', subjectId: SUBJECT.id });
+    expect(asked.map((query) => (query as { alsoMatched?: string[] }).alsoMatched)).toEqual([
+      [THIRD],
+      [],
+    ]);
+  });
+
+  it('marks no match on a card the subject alone matched, and the name prefix on one the name matched', async () => {
+    const { service } = searching([visible({ id: OTHER, displayName: 'محمود' }), visible()]);
+    const { cards } = await service.browse(TX, MALE, { query: 'احم' });
+    expect(cards.map(({ teacherId, match }) => ({ teacherId, match }))).toEqual([
+      { teacherId: OTHER, match: undefined },
+      { teacherId: TEACHER, match: { length: 3 } },
+    ]);
+  });
+
+  it('asks no subject match of identity on a browse with no query', async () => {
+    const { asked, service } = searching();
+    await service.browse(TX, MALE, {});
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).not.toHaveProperty('alsoMatched');
+    expect(asked[0]).not.toHaveProperty('namePrefix');
+  });
+});

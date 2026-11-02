@@ -5,7 +5,7 @@
 // constructs or moves a datetime (R-TIME-1): parsing one string is all it does. T109: a month's name
 // and a year, for the phone's own date-of-birth picker. T009: an amount of piasters, in pounds.
 // T022: a weekday's name and a slot's wall-clock start, which belong to no zone, and the weekday
-// an instant falls on in a zone.
+// an instant falls on in a zone. T070: a teacher's rating, to one decimal.
 import { type Piasters, toPlainNumber } from '@ijazah/money';
 import { useMemo } from 'react';
 
@@ -14,6 +14,20 @@ import { formattingTag, type Locale, translate, useLocale } from '../i18n';
 /** A number with the locale's grouping and decimal marks. */
 export function formatNumber(value: number, locale: Locale): string {
   return new Intl.NumberFormat(formattingTag(locale)).format(value);
+}
+
+/** The digits a rating keeps after the decimal mark: one, as the boards draw it («4.9»). */
+const RATING_DECIMALS = 1;
+
+/**
+ * A teacher's aggregate rating, 1 to 5, to one decimal, rounded (T070; PR #118's review, nit 5):
+ * «4.9» for 4.86, «5.0» for 4.96 and for 5. The card and the teacher's page both draw it so.
+ */
+export function formatRating(value: number, locale: Locale): string {
+  return new Intl.NumberFormat(formattingTag(locale), {
+    minimumFractionDigits: RATING_DECIMALS,
+    maximumFractionDigits: RATING_DECIMALS,
+  }).format(value);
 }
 
 const PIASTERS_PER_POUND = 100;
@@ -175,6 +189,7 @@ export function useFormatters() {
   return useMemo(
     () => ({
       number: (value: number) => formatNumber(value, locale),
+      rating: (value: number) => formatRating(value, locale),
       date: (instant: string, timeZone: string) => formatDate(instant, timeZone, locale),
       fullDate: (instant: string, timeZone: string) => formatFullDate(instant, timeZone, locale),
       calendarDate: (date: string) => formatCalendarDate(date, locale),
