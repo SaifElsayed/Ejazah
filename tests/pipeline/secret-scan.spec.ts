@@ -126,7 +126,11 @@ describe('the two checks are separate nets (SC-010)', () => {
 });
 
 describe('the local check (.husky/pre-commit, T082)', () => {
-  it('passes a clean staged change', () => {
+  // It starts nine processes, git eight times and Gitleaks once (about 0.4 s of its own), with no
+  // work repeated. Measured on the owner's machine (T067, 2026-11-02): 0.7 s alone, 0.7 to 0.9 s
+  // under coverage, 2.7 s in a full run, and past the default five seconds in a full run on
+  // `ijazah_integrity` (B26). The room is the generated-file check's lockfile cases'.
+  it('passes a clean staged change', { timeout: 15_000 }, () => {
     const dir = repository();
     write(dir, 'src/config.ts', "export const region = 'eu';\n");
     git(dir, 'add', '--all');
