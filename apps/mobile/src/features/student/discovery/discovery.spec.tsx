@@ -294,6 +294,9 @@ describe('DiscoverySearch and DiscoverySearchEmpty (FR-333)', () => {
         ),
       ).toBeTruthy();
       expect(screen.getByText(said(direction, 'student.discovery.search.empty.text'))).toBeTruthy();
+      // No promise of a search by subject until T070 builds it (the owner's decision of 2026-11-02).
+      expect(screen.queryByText(/المادة|subject/i)).toBeNull();
+      expect(screen.queryByPlaceholderText(/المادة|subject/i)).toBeNull();
       await fireEvent.press(
         screen.getByRole('button', {
           name: said(direction, 'student.discovery.search.empty.clear'),
@@ -410,6 +413,27 @@ describe('DiscoveryFilter, DiscoveryFiltered and DiscoveryEmpty (FR-334)', () =>
         }),
       );
       expect(await screen.findByText(ahmed.displayName)).toBeTruthy();
+    });
+  });
+
+  it('says a section with no filter in force is empty, naming no filter and clearing none', async () => {
+    mockApi.api.discovery.browse.query.mockImplementation(async (raw) => {
+      const input = (raw ?? {}) as DiscoveryBrowseInput;
+      return input.subjectId === undefined ? answer(raw) : { cards: [] };
+    });
+    await inBothDirections(discovery, async (_rendered, direction) => {
+      expect(await screen.findByText(ahmed.displayName)).toBeTruthy();
+      await fireEvent.press(screen.getAllByRole('tab')[1]!);
+      expect(
+        await screen.findByText(said(direction, 'student.discovery.empty.sectionTitle')),
+      ).toBeTruthy();
+      expect(screen.getByText(said(direction, 'student.discovery.empty.sectionText'))).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'student.discovery.empty.title'))).toBeNull();
+      expect(
+        screen.queryByRole('button', {
+          name: said(direction, 'student.discovery.empty.clearFilters'),
+        }),
+      ).toBeNull();
     });
   });
 });

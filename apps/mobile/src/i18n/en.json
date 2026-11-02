@@ -848,6 +848,8 @@
       },
       "empty": {
         "clearFilters": "Clear filters",
+        "sectionText": "Try another section.",
+        "sectionTitle": "No teacher in this section yet",
         "text": "Try removing a filter or choosing another section.",
         "title": "No teacher matches these filters"
       },
@@ -881,14 +883,14 @@
         },
         "empty": {
           "clear": "Clear search",
-          "text": "Try another name, or search by subject.",
+          "text": "Try another name.",
           "title": "No teacher by that name"
         },
         "hintText": "for example: Tajweed, Qira'at",
         "hintTitle": "Try searching by subject name",
         "resultCount": "{count, plural, =0 {No results} one {# result} other {# results}} for “{query}” · in all sections"
       },
-      "searchPlaceholder": "Search by sheikh name or subject",
+      "searchPlaceholder": "Search by sheikh name",
       "title": "Explore"
     },
     "dispute": {
