@@ -97,8 +97,7 @@ export interface IconTileProps {
 }
 
 // ---------------------------------------------------------------------------------------------
-// T032: the implementations. Stats is a contract of a later phase's screens and is implemented
-// with them.
+// T032: the implementations. T014: Stats, for the booking phase's screens.
 
 type CardVariant = NonNullable<CardProps['variant']>;
 
@@ -399,6 +398,43 @@ export function Summary({ rows }: SummaryProps) {
           </View>
         );
       })}
+    </View>
+  );
+}
+
+export function Stats({ items, tile = false }: StatsProps) {
+  const { color } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', gap: space['2'] }}>
+      {items.map((item) => (
+        // One stop for a screen reader: the number with what it counts (`.stat`).
+        <View
+          key={item.label}
+          accessible
+          style={[
+            { flex: 1, minWidth: 0 },
+            tile
+              ? {
+                  paddingVertical: space['2'],
+                  paddingHorizontal: space['3'],
+                  borderRadius: radius.sm,
+                  backgroundColor: color.surface,
+                }
+              : null,
+          ]}
+        >
+          {typeof item.value === 'string' || typeof item.value === 'number' ? (
+            <Words variant={tile ? 'body' : 'title-3'} weight="bold" color="text">
+              {item.value}
+            </Words>
+          ) : (
+            item.value
+          )}
+          <Words variant="caption" color="text-muted">
+            {item.label}
+          </Words>
+        </View>
+      ))}
     </View>
   );
 }
