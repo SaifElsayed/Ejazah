@@ -30,7 +30,9 @@ import { copyOf } from '../../../platform/web/copy.js';
 import { PUBLIC_FORM_MAX_BYTES, PUBLIC_PAGE_CSP } from '../../../platform/web/route.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import {
@@ -60,6 +62,8 @@ const services = {
   subjects: { listActive: async () => [] },
   identity: unusedIdentityServices,
   verification: unusedVerificationServices,
+  catalog: unusedCatalogServices,
+  teacherProfile: unusedTeacherProfileServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

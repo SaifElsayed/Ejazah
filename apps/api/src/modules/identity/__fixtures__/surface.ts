@@ -11,7 +11,9 @@ import { createLogger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
+  unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import { accountRouter } from '../account.router.js';
@@ -70,6 +72,8 @@ export function surfaceOf(
       deletion: overrides.deletion ?? unusedIdentityServices.deletion,
     },
     verification: unusedVerificationServices,
+    catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

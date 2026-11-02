@@ -15,11 +15,13 @@ import { createTRPCUntypedClient, httpLink } from '@trpc/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApplication, surfacePaths } from '../app.module.js';
+import type { CatalogServices } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 import { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
+import { unusedTeacherProfileServices } from './services.fixtures.js';
 
 const NONCE = { nonce: 'n-0199d0a0', expiresAt: '2026-10-27T10:00:00.000Z' };
 
@@ -90,6 +92,7 @@ const verification = only<VerificationServices>('verification', {
     },
   },
 });
+const catalog = only<CatalogServices>('catalog', {});
 const adminServices = only<AdminSurfaceServices>('admin', {
   sessions: {
     signOut: async (sessionId: string) => {
@@ -151,6 +154,8 @@ beforeAll(async () => {
       subjects: { listActive: async () => [] },
       identity,
       verification,
+      catalog,
+      teacherProfile: unusedTeacherProfileServices,
     },
     adminServices,
   });

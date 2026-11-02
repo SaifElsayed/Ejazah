@@ -10,9 +10,12 @@
       "identityDocumentType": ["national_id", "passport"],
       "landing": ["restricted", "student_home", "teacher_application", "teacher_home"],
       "language": ["ar", "en"],
+      "packageTrack": ["ijazah_track", "recitation"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
+      "sessionLengthMinutes": ["30", "45", "60"],
       "signInMethod": ["apple", "email", "google"],
+      "slotState": ["booked", "disabled", "free"],
       "teacherApplicationStatus": [
         "approved",
         "banned",
@@ -1283,6 +1286,121 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "teacher.packages.create": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.price_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "required": true, "type": "integer" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.subjectId": { "required": true, "type": "string" },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.activeEnrollmentCount": { "required": true, "type": "integer" },
+          "$.frozen": { "required": true, "type": "boolean" },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.perSession_piasters": { "required": true, "type": "integer" },
+          "$.price_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "required": true, "type": "integer" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        }
+      },
+      "teacher.packages.list": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.packages": { "required": true, "type": "array" },
+          "$.packages[]": { "type": "object" },
+          "$.packages[].activeEnrollmentCount": { "required": true, "type": "integer" },
+          "$.packages[].frozen": { "required": true, "type": "boolean" },
+          "$.packages[].id": { "required": true, "type": "string" },
+          "$.packages[].isActive": { "required": true, "type": "boolean" },
+          "$.packages[].perSession_piasters": { "required": true, "type": "integer" },
+          "$.packages[].price_piasters": { "required": true, "type": "integer" },
+          "$.packages[].sessionCount": { "required": true, "type": "integer" },
+          "$.packages[].sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.packages[].subject": { "required": true, "type": "object" },
+          "$.packages[].subject.id": { "required": true, "type": "string" },
+          "$.packages[].subject.nameAr": { "required": true, "type": "string" },
+          "$.packages[].subject.nameEn": { "required": true, "type": "string" },
+          "$.packages[].track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.published": { "required": true, "type": "boolean" }
+        }
+      },
+      "teacher.packages.update": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.isActive": { "type": "boolean" },
+          "$.packageId": { "required": true, "type": "string" },
+          "$.price_piasters": { "type": "integer" },
+          "$.sessionCount": { "type": "integer" },
+          "$.sessionDurationMinutes": { "type": "number", "values": ["30", "45", "60"] },
+          "$.track": { "type": "string", "values": ["ijazah_track", "recitation"] }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.activeEnrollmentCount": { "required": true, "type": "integer" },
+          "$.frozen": { "required": true, "type": "boolean" },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.perSession_piasters": { "required": true, "type": "integer" },
+          "$.price_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "required": true, "type": "integer" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        }
+      },
       "teacher.payout.get": {
         "caller": "teacher",
         "input": { "$": { "type": "unknown" } },
@@ -1315,6 +1433,111 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.profile.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.displayName": { "required": true, "type": "string" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.photoUrl": { "type": "string" },
+          "$.published": { "required": true, "type": "boolean" },
+          "$.qualificationSummary": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.profile.update": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.bio": { "required": true, "type": "string" },
+          "$.qualificationSummary": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.slots.create": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "required": true, "type": "integer" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.startTimeLocal": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "required": true, "type": "integer" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.startTimeLocal": { "required": true, "type": "string" },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["booked", "disabled", "free"]
+          },
+          "$.timezone": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.slots.list": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.slots": { "required": true, "type": "array" },
+          "$.slots[]": { "type": "object" },
+          "$.slots[].dayOfWeek": { "required": true, "type": "integer" },
+          "$.slots[].durationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.slots[].id": { "required": true, "type": "string" },
+          "$.slots[].isActive": { "required": true, "type": "boolean" },
+          "$.slots[].startTimeLocal": { "required": true, "type": "string" },
+          "$.slots[].state": {
+            "required": true,
+            "type": "string",
+            "values": ["booked", "disabled", "free"]
+          },
+          "$.slots[].timezone": { "required": true, "type": "string" },
+          "$.timezone": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.slots.update": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "type": "integer" },
+          "$.durationMinutes": { "type": "number", "values": ["30", "45", "60"] },
+          "$.isActive": { "type": "boolean" },
+          "$.slotId": { "required": true, "type": "string" },
+          "$.startTimeLocal": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.dayOfWeek": { "required": true, "type": "integer" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.startTimeLocal": { "required": true, "type": "string" },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["booked", "disabled", "free"]
+          },
+          "$.timezone": { "required": true, "type": "string" }
+        }
       }
     }
   }

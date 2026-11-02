@@ -142,6 +142,24 @@ async function readVisible(
   );
 }
 
+/**
+ * Whether the teacher is published: the predicate's answer for this teacher as a student of the
+ * requester's gender would get it for discovery (FR-315). A teacher asks it of themselves with the
+ * session's gender; `teacher.profile.get` and `teacher.packages.list` both answer `published` from
+ * it, so the two cannot drift (T017, T018; the owner's decision of 2026-11-02).
+ */
+export async function isPublishedTeacher(
+  tx: Client,
+  requester: RequesterGender,
+  teacherUserId: string,
+): Promise<boolean> {
+  const visible = await visibleTeachers(tx, requester, {
+    purpose: 'discover',
+    teacherIds: [teacherUserId],
+  });
+  return visible.length === 1;
+}
+
 /** The teachers among `teacherIds` visible to the requester for `purpose`, in id order. */
 export async function visibleTeachers(
   tx: Client,

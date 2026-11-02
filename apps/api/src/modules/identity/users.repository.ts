@@ -9,7 +9,7 @@
 // how the account signs in and a teacher's profile standing, and the four settings a person changes.
 // The device's time zone is written only where `timezone_overridden_at` is null, in the same
 // statement, so a zone chosen by hand at the same moment is never overwritten (FR-AUTH-10).
-import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 
 type Client = Pick<Database, 'user'>;
@@ -135,4 +135,20 @@ export class UsersRepository {
       data: { timezone },
     });
   }
+}
+
+/**
+ * The live account's IANA zone, on the caller's transaction; null for a person not there or
+ * deleted. The catalog module stores it on a teacher's new slot, read under the account's lock
+ * (T019, FR-313: the teacher's zone at creation).
+ */
+export async function accountTimezone(
+  tx: Pick<Transaction, 'user'>,
+  userId: string,
+): Promise<string | null> {
+  const user = await tx.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: { timezone: true },
+  });
+  return user?.timezone ?? null;
 }

@@ -29,12 +29,14 @@ import { z } from 'zod';
 
 import { createApplication, surfacePaths } from '../app.module.js';
 import type { IdentityServices } from '../modules/identity/index.js';
+import type { CatalogServices } from '../modules/catalog/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 import { reportError } from '../platform/errors/reporting.js';
 import { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { html } from '../platform/web/html.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
+import { unusedTeacherProfileServices } from './services.fixtures.js';
 import {
   adminPublicProcedure,
   createAdminRouter,
@@ -100,6 +102,7 @@ const identity = only<IdentityServices>('identity', {
   signIn: { providerNonce: async () => NONCE },
 });
 const verification = only<VerificationServices>('verification', {});
+const catalog = only<CatalogServices>('catalog', {});
 const adminServices = only<AdminSurfaceServices>('admin', {});
 
 // Every public procedure declares a limit (T170); the limits are tested in platform/guards, so
@@ -128,6 +131,8 @@ const services = {
   subjects: { listActive: async () => [] },
   identity,
   verification,
+  catalog,
+  teacherProfile: unusedTeacherProfileServices,
 };
 
 const sessions = {

@@ -9,10 +9,11 @@
 // `--teacher` is the teacher's user id (a `teacher_profiles` id is accepted too); `--api` names the
 // API's origin, `http://localhost:<PORT>` by default. The recipient reference is read from
 // `teacher_profiles.payout_account_ref_encrypted` and decrypted with the column cipher, bound to the
-// profile's row as the identity module stores it (R-DB-8). The body is the stand-in's own form
-// (`{ id, type, recipient, reason? }`), signed by HMAC-SHA256 in `x-fake-signature` under the secret
-// the API verifies with, `standInWebhookSecret` of the payment port's entry: the configured
-// `PAYMENT_GATEWAY_WEBHOOK_SECRET`, or the one derived from `ENCRYPTION_KEY` (T121). The event id is
+// profile's row as the identity module stores it (R-DB-8). T013: the event is built, signed and sent
+// by the gateway stand-in's harness (`tests/support/gateway-stand-in.ts`, R-213), the one way the
+// suite produces a gateway event: the stand-in's own form, signed under the secret the API verifies
+// with (the configured `PAYMENT_GATEWAY_WEBHOOK_SECRET`, or the one derived from `ENCRYPTION_KEY`,
+// T121), POSTed to the payments module's `PAYMENT_WEBHOOK_PATH` on the API's origin. The event id is
 // decided by the reference, the verdict and the reason, so the same command twice sends the same
 // event, which the API records once (FR-PAYG-4).
 //
@@ -21,19 +22,19 @@
 // names a database on this machine (`localhost`, `127.0.0.1` or `::1`, with no `host` parameter
 // pointing elsewhere), and the API's origin is on this machine too. It prints the event's id and the
 // API's status, never the reference.
-import { createHash, createHmac } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 
-import { PAYMENT_WEBHOOK_PATH } from '../../apps/api/src/modules/payments/index';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption';
-import { standInWebhookSecret } from '../../apps/api/src/platform/ports/payment/index';
-
-/** The stand-in's signature header (note under T117). */
-const SIGNATURE_HEADER = 'x-fake-signature';
+import {
+  gatewayStandIn,
+  type GatewayStandIn,
+  type StandInEvent,
+} from '../../tests/support/gateway-stand-in';
 
 /** Where the identity module keeps the reference, as the cipher binds it (R-DB-8). */
 const PAYOUT_REF_COLUMN = 'teacher_profiles.payout_account_ref_encrypted';
@@ -42,7 +43,6 @@ const DEVELOPMENT_MODES: ReadonlySet<string> = new Set(['development', 'test']);
 const LOCAL_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEFAULT_PORT = '3000';
-const SEND_TIMEOUT_MILLISECONDS = 10_000;
 
 const USAGE =
   'usage: emit-recipient-event.ts --teacher <id> --verdict verified|rejected [--reason "…"] [--api <origin>]';
@@ -127,44 +127,25 @@ export function refusalOf(env: Env, apiOrigin: string): string | null {
   return null;
 }
 
-/** The stand-in's recipient event body (note under T117). */
-export interface RecipientEventBody {
-  readonly id: string;
-  readonly type: 'recipient_verified' | 'recipient_rejected';
-  readonly recipient: string;
-  readonly reason?: string;
-}
-
-/** The event for `verdict` on `recipientRef`; its id the same whenever the three are. */
-export function recipientEventBody(
-  recipientRef: string,
-  verdict: Verdict,
-  reason?: string,
-): RecipientEventBody {
+/** The event's id, the same whenever the reference, the verdict and the reason are. */
+export function eventIdOf(recipientRef: string, verdict: Verdict, reason?: string): string {
   const digest = createHash('sha256')
     .update(JSON.stringify([recipientRef, verdict, reason ?? null]))
     .digest('hex');
-  const id = `fake_evt_${digest.slice(0, 32)}`;
-  return verdict === 'verified'
-    ? { id, type: 'recipient_verified', recipient: recipientRef }
-    : {
-        id,
-        type: 'recipient_rejected',
-        recipient: recipientRef,
-        ...(reason === undefined ? {} : { reason }),
-      };
+  return `fake_evt_${digest.slice(0, 32)}`;
 }
 
-/** The body as sent and its signature, under the secret the API's stand-in verifies with. */
-export function signedEvent(
-  body: RecipientEventBody,
-  config: Parameters<typeof standInWebhookSecret>[0],
-): { readonly rawBody: Buffer; readonly headers: Readonly<Record<string, string>> } {
-  const rawBody = Buffer.from(JSON.stringify(body));
-  const signature = createHmac('sha256', standInWebhookSecret(config))
-    .update(rawBody)
-    .digest('hex');
-  return { rawBody, headers: { [SIGNATURE_HEADER]: signature } };
+/** The verdict's event on `recipientRef`, built and signed by the harness under its decided id. */
+export function verdictEvent(
+  harness: GatewayStandIn,
+  recipientRef: string,
+  verdict: Verdict,
+  reason?: string,
+): StandInEvent {
+  const eventId = eventIdOf(recipientRef, verdict, reason);
+  return verdict === 'verified'
+    ? harness.recipientVerified(recipientRef, { eventId })
+    : harness.recipientRejected(recipientRef, reason, { eventId });
 }
 
 /** What the script reads the database through. */
@@ -237,21 +218,20 @@ export async function run(
     say(recipientRef.missing);
     return 1;
   }
-  const body = recipientEventBody(recipientRef, parsed.verdict, parsed.reason);
   const webhookSecret = env['PAYMENT_GATEWAY_WEBHOOK_SECRET'] || undefined;
-  const { rawBody, headers } = signedEvent(body, {
-    ENCRYPTION_KEY: encryptionKey,
-    ...(webhookSecret === undefined ? {} : { PAYMENT_GATEWAY_WEBHOOK_SECRET: webhookSecret }),
+  const harness = gatewayStandIn({
+    origin: api,
+    config: {
+      ENCRYPTION_KEY: encryptionKey,
+      ...(webhookSecret === undefined ? {} : { PAYMENT_GATEWAY_WEBHOOK_SECRET: webhookSecret }),
+    },
+    fetch: deps.fetch,
   });
-  const response = await deps.fetch(new URL(PAYMENT_WEBHOOK_PATH, api), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: new Uint8Array(rawBody),
-    signal: AbortSignal.timeout(SEND_TIMEOUT_MILLISECONDS),
-  });
-  await response.body?.cancel();
-  const line = `${body.type} event ${body.id} for teacher ${parsed.teacher}: HTTP ${response.status}`;
-  if (!response.ok) {
+  const event = verdictEvent(harness, recipientRef, parsed.verdict, parsed.reason);
+  const status = await harness.deliver(event);
+  const type = parsed.verdict === 'verified' ? 'recipient_verified' : 'recipient_rejected';
+  const line = `${type} event ${event.providerEventId} for teacher ${parsed.teacher}: HTTP ${status}`;
+  if (status < 200 || status > 299) {
     say(line);
     return 1;
   }

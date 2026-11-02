@@ -38,7 +38,9 @@ import {
   userProcedure,
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
+  unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
 import {
@@ -367,6 +369,8 @@ const caller = createAppCallerFactory(
       subjects: { listActive: async () => [] },
       identity: unusedIdentityServices,
       verification: unusedVerificationServices,
+      catalog: unusedCatalogServices,
+      teacherProfile: unusedTeacherProfileServices,
     },
   }),
 );

@@ -14,7 +14,12 @@ import { PUBLIC_PAGE_RATE_LIMIT } from '../platform/web/route.js';
 import { type AppServices, createAppContext } from './context.js';
 import { createAppCallerFactory, createAppRouter } from './procedures.js';
 import { platformRouter } from './public-config.router.js';
-import { unusedIdentityServices, unusedVerificationServices } from './services.fixtures.js';
+import {
+  unusedCatalogServices,
+  unusedIdentityServices,
+  unusedTeacherProfileServices,
+  unusedVerificationServices,
+} from './services.fixtures.js';
 
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const CLIENT = '203.0.113.9';
@@ -60,6 +65,8 @@ function fixture(changes: Readonly<Record<string, unknown>> = {}) {
     },
     identity: unusedIdentityServices,
     verification: unusedVerificationServices,
+    catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const router = createAppRouter({ platform: platformRouter });
   const caller = createAppCallerFactory(router)(

@@ -24,7 +24,9 @@ import type { GatewayEvent, PaymentPort } from '../ports/payment/payment.port.js
 import { SettingError, type SettingsReader } from '../settings/settings-reader.js';
 import {
   unusedAdminServices,
+  unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
 import { PUBLIC_PAGE_CSP, PUBLIC_PAGE_RATE_LIMIT, type NodeHandler } from './route.js';
@@ -70,6 +72,8 @@ async function applicationWith(
       subjects: { listActive: async () => [] },
       identity: unusedIdentityServices,
       verification: unusedVerificationServices,
+      catalog: unusedCatalogServices,
+      teacherProfile: unusedTeacherProfileServices,
     },
     adminServices: unusedAdminServices,
     routes,

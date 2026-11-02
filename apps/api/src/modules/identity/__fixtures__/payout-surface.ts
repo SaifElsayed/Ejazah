@@ -10,7 +10,9 @@ import { createLogger, type Logger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
+  unusedCatalogServices,
   unusedIdentityServices,
+  unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import type { IdentityServices } from '../index.js';
@@ -113,6 +115,8 @@ export function appContextFor(
     subjects: { listActive: async () => [] },
     identity,
     verification: unusedVerificationServices,
+    catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }

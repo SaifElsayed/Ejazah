@@ -8,7 +8,11 @@ import type { RateLimiter } from '../../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
-import { unusedIdentityServices } from '../../../surfaces/services.fixtures.js';
+import {
+  unusedCatalogServices,
+  unusedIdentityServices,
+  unusedTeacherProfileServices,
+} from '../../../surfaces/services.fixtures.js';
 import { applicationRouter } from '../application.router.js';
 import { credentialsRouter } from '../credentials.router.js';
 import { identityVerificationRouter } from '../identity-verification.router.js';
@@ -121,6 +125,8 @@ export function surfaceOf(verification: VerificationServices): VerificationSurfa
     subjects: { listActive: async () => [] },
     identity: unusedIdentityServices,
     verification,
+    catalog: unusedCatalogServices,
+    teacherProfile: unusedTeacherProfileServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

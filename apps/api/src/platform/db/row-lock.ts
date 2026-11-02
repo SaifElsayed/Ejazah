@@ -24,9 +24,12 @@
 // `lockKey('teacher-slots', …)`), then the hold, the enrollment and the payment. A path that inserts
 // a row referencing `users` (a hold, an enrollment) locks that account with identity's
 // `lockAccount` first; a row referencing several accounts (an enrollment: the student and the
-// teacher) locks every one of them first, in id order. `LockedTable` lists its tables in this
-// order; nothing here enforces it, so a transaction taking two of them takes them in the order
-// they are listed.
+// teacher) locks every one of them first, in id order, in one `lockRows(tx, 'users', ids)` call.
+// `lockKey('teacher-slots', …)` comes before any `availability_slots` row. Rows of one table are
+// taken in id order in every table, holds, enrollments and payments included, in one statement
+// where it can. A termination path writes no row referencing an account it did not lock first.
+// `LockedTable` lists its tables in this order; nothing here enforces it, so a transaction taking
+// two of them takes them in the order they are listed.
 import type { Transaction } from './prisma.repository.js';
 
 /** The tables a move locks rows of, listed in the one lock order (rule 2 above). */

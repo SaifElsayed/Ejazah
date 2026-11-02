@@ -17,14 +17,14 @@ visibility predicate first (research R-201, R-202).
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
 | `teacher.packages.list` | teacher(approved) | `{}` | `{ published, packages: [{ id, subject, track, sessionCount, sessionDurationMinutes, price_piasters, perSession_piasters, isActive, activeEnrollmentCount, frozen }] }` | `frozen` true once an enrollment exists (FR-312); `perSession_piasters` by `packages/money` (R-212) |
-| `teacher.packages.create` | teacher(approved), idempotent | `{ subjectId, track, sessionCount, sessionDurationMinutes: 30 \| 45 \| 60, price_piasters, isActive, idempotencyKey }` | the package | `SUBJECT_NOT_APPROVED` unless the subject is in the teacher's `teacher_subjects` (FR-311); `price_piasters` > 0 |
+| `teacher.packages.create` | teacher(approved), idempotent | `{ subjectId, track, sessionCount, sessionDurationMinutes: 30 \| 45 \| 60, price_piasters, isActive, idempotencyKey }` | the package | `sessionCount` 1 to 52 on create and update (FR-311, the owner's decision of 2026-11-02); `SUBJECT_NOT_APPROVED` unless the subject is in the teacher's `teacher_subjects` (FR-311); `price_piasters` > 0 |
 | `teacher.packages.update` | teacher(approved) | `{ packageId, sessionCount?, track?, sessionDurationMinutes?, price_piasters?, isActive? }` | the package | `PACKAGE_FROZEN` for track or length once an enrollment exists; a price change applies to later purchases (FR-312); only the caller's own package: another teacher's id answers `NOT_FOUND` and writes nothing (PR #109's review, M3) |
 
 ## `teacher.slots` — catalog (FR-313, FR-314, FR-317, FR-318)
 
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
-| `teacher.slots.list` | teacher(approved) | `{}` | `{ timezone, slots: [{ id, dayOfWeek, startTimeLocal, durationMinutes, isActive, state: 'free' \| 'booked' \| 'disabled' }] }` | `booked` = in use (R-207), derived |
+| `teacher.slots.list` | teacher(approved) | `{}` | `{ timezone, slots: [{ id, dayOfWeek, startTimeLocal, durationMinutes, timezone, isActive, state: 'free' \| 'booked' \| 'disabled' }] }` | `booked` = in use (R-207), derived; each slot carries the zone it was saved in, which may differ from the teacher's current one (T016, zone on output; the owner's decision of 2026-11-02) |
 | `teacher.slots.create` | teacher(approved), idempotent | `{ dayOfWeek, startTimeLocal, durationMinutes: 30 \| 45 \| 60, idempotencyKey }` | the slot | Zone = the teacher's at creation; `SLOT_OVERLAP` on the week (R-206) |
 | `teacher.slots.update` | teacher(approved) | `{ slotId, dayOfWeek?, startTimeLocal?, durationMinutes?, isActive? }` | the slot | `SLOT_IN_USE` for day, time or length while a hold or a pending or confirmed enrollment uses it; deactivation always allowed; reactivation re-checks overlap; only the caller's own slot: another teacher's id answers `NOT_FOUND` and writes nothing (M3) |
 
