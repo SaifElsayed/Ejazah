@@ -79,7 +79,11 @@ export const discoveryCard = z.object({
   displayName: z.string(),
   /** The matched prefix of `displayName`, in its characters, for the phone to mark (FR-333). */
   match: z.object({ length: z.int().positive() }).optional(),
-  /** A signed, expiring link to the profile photo, when one is set. */
+  /**
+   * Deprecated, never sent: a card carries no photo (FR-335), the photo is on the teacher's page
+   * only (FR-336), by the owner's decision of 2026-11-02. It stays published until the contract gate removes
+   * a deprecated field (R-API-9, T075).
+   */
   photoUrl: z.string().optional(),
   subjects: z.array(subjectSummary),
   /** The tracks of the teacher's active packages. */
