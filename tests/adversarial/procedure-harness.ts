@@ -30,9 +30,9 @@
 // teacher or that acts on a teacher's slot fails the spec until someone decides which it is; an
 // entry naming no such procedure fails too, so the lists cannot drift from the surface.
 //
-// The four routers do not exist yet. Today every student-facing procedure is Phase 1's and is
-// exempt below; T028 and T043 add their registrations to `registeredAttacks`, each from its own
-// module, as their routers land.
+// Phase 1's student-facing procedures are exempt below. T028 registers `discovery`'s three from
+// `discovery.attacks.ts`, and T043 the booking, checkout and enrollments procedures from a module of
+// their own, each added to `registeredAttacks` in `registered-attacks.ts` as its router lands.
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
@@ -136,10 +136,14 @@ export function attackCases(registrations: readonly ProcedureAttacks[]): AttackC
   );
 }
 
+/** How long one attack may run: the first case of a registration seeds the world (T028). */
+const ATTACK_TIMEOUT_MS = 180_000;
+
 /** The registered attacks as cases, each registration on the database only (T124). */
 export function describeProcedureAttacks(registrations: readonly ProcedureAttacks[]): void {
   for (const registration of registrations) {
-    describe(`the attacks on ${registration.path}`, { tags: ['database'] }, () => {
+    const options = { tags: ['database'], timeout: ATTACK_TIMEOUT_MS };
+    describe(`the attacks on ${registration.path}`, options, () => {
       for (const attackCase of attackCases([registration])) {
         it(attackCase.title, () => attackCase.run());
       }
@@ -287,8 +291,8 @@ export function coverageFailures(
 // The lists
 // ---------------------------------------------------------------------------------------------
 
-/** Every registration, run by `procedure-harness.spec.ts` in both directions; T028 and T043 add theirs. */
-export const registeredAttacks: readonly ProcedureAttacks[] = [];
+// The registrations themselves are listed in `registered-attacks.ts` (T028): each is written in a
+// module of its own that imports this file, so the list that imports them lives outside it.
 
 const SIGN_IN =
   'signs in or holds a session; returns tokens and the caller’s own landing, never a teacher';

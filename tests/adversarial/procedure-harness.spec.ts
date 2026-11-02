@@ -11,8 +11,8 @@
 // caller, a hidden profile passes as a nonexistent one, and a 403, another message, a field in the
 // body or an answer instead of a refusal are each caught.
 //
-// The registered attacks themselves run at the end, against the real router; none is registered
-// until `discovery` lands (T028), and each runs only on a database (T124).
+// The registered attacks themselves run at the end, against the real router (`registered-attacks.ts`:
+// `discovery`'s three since T028), and each runs only on a database (T124).
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
@@ -57,9 +57,9 @@ import {
   expectAnswersAsNonexistent,
   notApplicable,
   type ProcedureAttacks,
-  registeredAttacks,
   studentFacingProcedures,
 } from './procedure-harness.js';
+import { registeredAttacks } from './registered-attacks.js';
 
 const anyone = { key: 'rate_limit_search', subjectOf: () => 'anyone' } as const;
 
