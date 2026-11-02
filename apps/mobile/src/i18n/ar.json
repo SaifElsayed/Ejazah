@@ -1553,6 +1553,7 @@
     },
     "profile": {
       "bio": "نبذة",
+      "bioTooLong": "لا تزيد النبذة على {max} حرف.",
       "changePhoto": "تغيير الصورة",
       "displayName": "الاسم الظاهر",
       "gender": "الجنس",

@@ -1553,6 +1553,7 @@
     },
     "profile": {
       "bio": "Bio",
+      "bioTooLong": "The bio is at most {max} characters.",
       "changePhoto": "Change photo",
       "displayName": "Display name",
       "gender": "Gender",
