@@ -193,11 +193,16 @@ const services = {
   }),
   // `discovery` (T026): catalog's discovery service (T025) composed with booking's nearest slots.
   discovery: booking.createDiscoveryServices({
-    // B27 integration: T025's catalog discovery service binds here through catalog's entry.
-    catalog: {
-      browse: () => Promise.reject(new Error('T025: catalog discovery is not bound yet')),
-      filters: () => Promise.reject(new Error('T025: catalog discovery is not bound yet')),
-    },
+    // T025's catalog discovery through catalog's entry, each call in a transaction of its own (B27
+    // integration): the seam takes none, and catalog's reads run on the one they are given.
+    catalog: (() => {
+      const discovery = catalog.createDiscoveryCatalog(settings);
+      const reads = transactionsOver(database);
+      return {
+        browse: (requester, input) => reads.run((tx) => discovery.browse(tx, requester, input)),
+        filters: (requester, input) => reads.run((tx) => discovery.filters(tx, requester, input)),
+      };
+    })(),
     database,
     settings,
   }),
