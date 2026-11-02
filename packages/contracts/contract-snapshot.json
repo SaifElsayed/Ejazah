@@ -1286,6 +1286,121 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "teacher.packages.create": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.price_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "required": true, "type": "integer" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.subjectId": { "required": true, "type": "string" },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.activeEnrollmentCount": { "required": true, "type": "integer" },
+          "$.frozen": { "required": true, "type": "boolean" },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.perSession_piasters": { "required": true, "type": "integer" },
+          "$.price_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "required": true, "type": "integer" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        }
+      },
+      "teacher.packages.list": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.packages": { "required": true, "type": "array" },
+          "$.packages[]": { "type": "object" },
+          "$.packages[].activeEnrollmentCount": { "required": true, "type": "integer" },
+          "$.packages[].frozen": { "required": true, "type": "boolean" },
+          "$.packages[].id": { "required": true, "type": "string" },
+          "$.packages[].isActive": { "required": true, "type": "boolean" },
+          "$.packages[].perSession_piasters": { "required": true, "type": "integer" },
+          "$.packages[].price_piasters": { "required": true, "type": "integer" },
+          "$.packages[].sessionCount": { "required": true, "type": "integer" },
+          "$.packages[].sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.packages[].subject": { "required": true, "type": "object" },
+          "$.packages[].subject.id": { "required": true, "type": "string" },
+          "$.packages[].subject.nameAr": { "required": true, "type": "string" },
+          "$.packages[].subject.nameEn": { "required": true, "type": "string" },
+          "$.packages[].track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.published": { "required": true, "type": "boolean" }
+        }
+      },
+      "teacher.packages.update": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.isActive": { "type": "boolean" },
+          "$.packageId": { "required": true, "type": "string" },
+          "$.price_piasters": { "type": "integer" },
+          "$.sessionCount": { "type": "integer" },
+          "$.sessionDurationMinutes": { "type": "number", "values": ["30", "45", "60"] },
+          "$.track": { "type": "string", "values": ["ijazah_track", "recitation"] }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.activeEnrollmentCount": { "required": true, "type": "integer" },
+          "$.frozen": { "required": true, "type": "boolean" },
+          "$.id": { "required": true, "type": "string" },
+          "$.isActive": { "required": true, "type": "boolean" },
+          "$.perSession_piasters": { "required": true, "type": "integer" },
+          "$.price_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "required": true, "type": "integer" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        }
+      },
       "teacher.payout.get": {
         "caller": "teacher",
         "input": { "$": { "type": "unknown" } },

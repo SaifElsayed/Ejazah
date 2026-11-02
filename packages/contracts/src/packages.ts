@@ -1,8 +1,8 @@
 // T016: the `teacher.packages` namespace of the user surface (specs/003-booking/contracts/
 // app-surface.md "`teacher.packages` — catalog"; FR-311 to FR-315).
 //
-// A package is a subject among the teacher's approved ones, a track, a session count of at least
-// one, a session length of 30, 45 or 60 minutes and a total price in whole piasters of more than
+// A package is a subject among the teacher's approved ones, a track, a session count of one to 52
+// (the owner's decision of 2026-11-02), a session length of 30, 45 or 60 minutes and a total price in whole piasters of more than
 // zero (FR-PROFILE-2 as amended 2026-10-31; ERD §15 rule 36, which the database enforces too).
 // Money crosses the wire as `_piasters` integers; formatting is the client's (R-MONEY-1, R-212).
 // `create` is keyed, so it carries the kernel's idempotency key. The list answers whether the
@@ -24,7 +24,13 @@ export const packageTrack = z.enum(['recitation', 'ijazah_track']);
 /** A package's total price, whole piasters, more than zero (FR-311). */
 export const packagePricePiasters = z.int().positive();
 
-const sessionCount = z.int().min(1);
+/**
+ * The most sessions a package may have (the owner's decision of 2026-11-02): the confirmation
+ * generates every session of the enrollment in one transaction (FR-BOOK-4), so the count is bounded.
+ */
+export const MAX_SESSION_COUNT = 52;
+
+const sessionCount = z.int().min(1).max(MAX_SESSION_COUNT);
 
 /** One of the teacher's packages: `list`'s item, and `create`'s and `update`'s answer. */
 export const teacherPackage = z.object({

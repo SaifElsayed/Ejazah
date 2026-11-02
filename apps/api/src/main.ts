@@ -182,7 +182,10 @@ const services = {
     use: {
       slotInUse: booking.slotInUse,
       packageHasEnrollment: booking.packageHasEnrollment,
+      packageEnrollmentCounts: booking.packageEnrollmentCounts,
     },
+    database,
+    idempotency,
   }),
 };
 

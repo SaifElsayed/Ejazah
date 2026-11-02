@@ -5,3 +5,5 @@
  * whether a slot is in use and whether a package has an enrollment. `main.ts` binds them.
  */
 export { packageHasEnrollment, slotInUse } from './catalog-use.repository.js';
+/** Each of a teacher's packages' enrollments, for catalog's list (T018). */
+export { packageEnrollmentCounts } from './catalog-use.repository.js';

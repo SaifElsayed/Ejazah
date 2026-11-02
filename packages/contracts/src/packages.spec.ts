@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_SESSION_COUNT,
   packagesCreateInput,
   packagesListOutput,
   packagesUpdateInput,
@@ -86,12 +87,24 @@ describe('the price (whole piasters, more than zero, FR-311)', () => {
   });
 });
 
-describe('the session count (at least one)', () => {
+describe('the session count (at least one, at most 52: the owner’s decision of 2026-11-02)', () => {
   it('takes one and refuses zero, a negative count and a fraction', () => {
     expect(packagesCreateInput.safeParse({ ...create, sessionCount: 1 }).success).toBe(true);
     for (const sessionCount of [0, -1, 2.5]) {
       expect(packagesCreateInput.safeParse({ ...create, sessionCount }).success).toBe(false);
     }
+  });
+
+  it('takes 52 and refuses 53, on create and on update', () => {
+    expect(MAX_SESSION_COUNT).toBe(52);
+    expect(packagesCreateInput.safeParse({ ...create, sessionCount: 52 }).success).toBe(true);
+    expect(
+      packagesUpdateInput.safeParse({ packageId: ids.package, sessionCount: 52 }).success,
+    ).toBe(true);
+    expect(packagesCreateInput.safeParse({ ...create, sessionCount: 53 }).success).toBe(false);
+    expect(
+      packagesUpdateInput.safeParse({ packageId: ids.package, sessionCount: 53 }).success,
+    ).toBe(false);
   });
 });
 

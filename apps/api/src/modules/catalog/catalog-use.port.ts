@@ -20,4 +20,21 @@ export interface CatalogUse {
    * (`PACKAGE_FROZEN`, FR-312).
    */
   packageHasEnrollment(tx: Transaction, packageId: string): Promise<boolean>;
+  /**
+   * Of `packageIds`, each package's enrollments (T018, the teacher's list: `frozen` and
+   * `activeEnrollmentCount`), in one question rather than one per package. A package with none is
+   * absent from the map.
+   */
+  packageEnrollmentCounts(
+    tx: Transaction,
+    packageIds: readonly string[],
+  ): Promise<ReadonlyMap<string, PackageEnrollmentCounts>>;
+}
+
+/** A package's enrollments as `packageEnrollmentCounts` counts them (T018). */
+export interface PackageEnrollmentCounts {
+  /** Every live enrollment, any status: the package is frozen once there is one (FR-312). */
+  readonly total: number;
+  /** The `confirmed` ones, the enrollments under way. */
+  readonly active: number;
 }

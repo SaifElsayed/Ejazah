@@ -4,7 +4,8 @@
 // A slot is in use while an active hold (`released_at IS NULL`) or an enrollment awaiting payment or
 // confirmed uses it; a released hold, a cancelled enrollment and a soft-deleted one do not count,
 // and another slot's rows never do. A package has an enrollment once any live enrollment, of any
-// status, was made on it. The answers are reached through booking's entry, as `main.ts` binds them.
+// status, was made on it. T018 adds each package's count, every live enrollment and the confirmed
+// ones, for the teacher's list. The answers are reached through booking's entry, as `main.ts` binds them.
 //
 // The parents an enrollment needs (two people, a subject, a package, a slot) are written by this
 // file on the probe's own transaction: a helper under `tests/` may write any table (R-API-6 binds
@@ -14,7 +15,11 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { packageHasEnrollment, slotInUse } from '../../apps/api/src/modules/booking/index.js';
+import {
+  packageEnrollmentCounts,
+  packageHasEnrollment,
+  slotInUse,
+} from '../../apps/api/src/modules/booking/index.js';
 import {
   closeDatabase,
   type Database,
@@ -254,6 +259,39 @@ describe('packageHasEnrollment (T020, R-207, FR-312)', () => {
       const other = { ...on, packageId: on.otherPackageId };
       await enrollment(tx, other, { status: 'confirmed' }, { deleted: true });
       expect(await packageHasEnrollment(tx, on.otherPackageId)).toBe(false);
+    });
+  });
+});
+
+describe('packageEnrollmentCounts (T018, the teacher list’s `frozen` and `activeEnrollmentCount`)', () => {
+  it('answers no entry for a package with no enrollment, and an empty map for no package', async () => {
+    await rolledBack(async (tx) => {
+      const on = await offer(tx);
+      expect(await packageEnrollmentCounts(tx, [on.packageId])).toEqual(new Map());
+      expect(await packageEnrollmentCounts(tx, [])).toEqual(new Map());
+    });
+  });
+
+  it('counts every live enrollment of each package, and its confirmed ones, in one answer', async () => {
+    await rolledBack(async (tx) => {
+      const on = await offer(tx);
+      await enrollment(tx, on, { status: 'confirmed' });
+      await enrollment(tx, on, { status: 'confirmed' });
+      await enrollment(tx, on, { status: 'pending_payment' });
+      await enrollment(tx, on, { status: 'cancelled' });
+      await enrollment(tx, on, { status: 'completed' });
+      await enrollment(tx, on, { status: 'confirmed' }, { deleted: true });
+      const other = { ...on, packageId: on.otherPackageId };
+      await enrollment(tx, other, { status: 'cancelled' });
+      expect(await packageEnrollmentCounts(tx, [on.packageId, on.otherPackageId])).toEqual(
+        new Map([
+          [on.packageId, { total: 5, active: 2 }],
+          [on.otherPackageId, { total: 1, active: 0 }],
+        ]),
+      );
+      expect(await packageEnrollmentCounts(tx, [on.otherPackageId])).toEqual(
+        new Map([[on.otherPackageId, { total: 1, active: 0 }]]),
+      );
     });
   });
 });
