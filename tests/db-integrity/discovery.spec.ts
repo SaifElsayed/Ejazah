@@ -648,6 +648,25 @@ describe('discovery.browse: the search by subject (T070, FR-333, R-203)', () => 
     });
   });
 
+  it('drops the article «ال» from the subject and the query: «تجويد», «التجويد» and «تج» find «التجويد», the article or «ل» alone no subject', async () => {
+    await inRollback(async (tx) => {
+      const tag = tagged();
+      const tajweed = await namedSubject(tx, `التجويد ${tag}`, `Tajweed ${tag}`);
+      const salem = await teacher(tx, { gender: 'male', displayName: 'سالم' });
+      await offer(tx, salem, tajweed);
+      const inTab = (query: string) =>
+        catalog.browse(tx, requesterOf('male'), { subjectId: tajweed.id, query });
+      // Inside the subject's own tab, so the database's other subjects and teachers stay out.
+      for (const query of ['تجويد', 'التجويد', 'تج', 'تَجْويد']) {
+        expect(pick(await inTab(query)), query).toEqual([{ teacherId: salem, match: undefined }]);
+      }
+      // The owner's decision of 2026-11-02: a lone «ل», or the article alone, matches no subject.
+      for (const query of ['ل', 'ال']) {
+        expect(pick(await inTab(query)), query).toEqual([]);
+      }
+    });
+  });
+
   it('a mixed search: a teacher whose name has the prefix or who teaches a subject that begins with it, the name marked', async () => {
     await inRollback(async (tx) => {
       const tag = `zq${tagged()}`;

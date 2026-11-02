@@ -300,7 +300,10 @@ export class DiscoveryService implements DiscoveryCatalog {
 
   /**
    * Of `candidates`, those with an active package in an active subject whose Arabic or English
-   * name, folded, begins with `query`, folded (T070), of the tab and the track when named.
+   * name, folded, begins with `query`, folded (T070), of the tab and the track when named. The
+   * article «ال» is dropped from the start of both first, so «تجويد» finds «التجويد» as the
+   * student would type it; a query that is the article alone matches no subject (R-203, the
+   * owner's decision of 2026-11-02).
    */
   async #bySubjectName(
     tx: Transaction,
@@ -315,12 +318,14 @@ export class DiscoveryService implements DiscoveryCatalog {
       ...subjects.map(({ nameAr }) => nameAr),
       ...subjects.map(({ nameEn }) => nameEn),
     ]);
-    const arabic = folded.slice(0, subjects.length);
+    const prefix = withoutArticle(wanted);
+    if (prefix === '') return [];
+    const arabic = folded.slice(0, subjects.length).map((name) => withoutArticle(name ?? ''));
     const english = folded.slice(subjects.length);
     const matched = new Set(
       subjects
         .filter((_, index) =>
-          [arabic[index], english[index]].some((name) => name?.startsWith(wanted) === true),
+          [arabic[index], english[index]].some((name) => name?.startsWith(prefix) === true),
         )
         .map(({ id }) => id),
     );
@@ -454,4 +459,12 @@ export class DiscoveryService implements DiscoveryCatalog {
       return length;
     });
   }
+}
+
+/** The Arabic definite article, as `ijazah_fold` leaves it at the start of a folded text. */
+const ARTICLE = 'ال';
+
+/** `text` without the article at its start (R-203, T070). */
+function withoutArticle(text: string): string {
+  return text.startsWith(ARTICLE) ? text.slice(ARTICLE.length) : text;
 }

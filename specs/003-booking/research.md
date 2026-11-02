@@ -73,7 +73,9 @@ asks for a measured slow query first, and T057 measures (analysis C1). One kerne
 restricts its page to the ids it returns. The
 highlight is computed on the server as the length of the matched prefix in the original name's characters, returned
 with the result; the phone marks it. Subject search uses the same function over `subjects.name_ar`/`name_en`, no index
-(a few dozen rows).
+(a few dozen rows), and matches a prefix after the article «ال» is dropped from the start of the folded subject name and
+of the folded query, so «تجويد» and «تج» find «التجويد» as a student types them, while «ل» or «ال» alone matches no
+subject (the owner's decision of 2026-11-02, T070).
 
 **Rationale.** One fold, in one place, applied identically to both sides, is the only way FR-333's "same normalisation
 on the stored name and the typed text" holds; the fold runs in the query, so it cannot drift
