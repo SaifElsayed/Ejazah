@@ -91,6 +91,7 @@ import { DEFAULT_LOCALE, type Locale } from '../platform/http/locale.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
+import type { DiscoveryServices } from '../modules/booking/index.js';
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
@@ -202,6 +203,11 @@ export interface AppServices {
   readonly catalog: CatalogServices;
   /** `teacher.profile.*`: the identity module's profile service (T017, FR-310). */
   readonly teacherProfile: TeacherProfileServices;
+  /**
+   * `discovery.*`: catalog's cards composed with booking's nearest free slot on booking's router
+   * (T026, R-205).
+   */
+  readonly discovery: DiscoveryServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */

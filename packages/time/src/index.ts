@@ -424,6 +424,19 @@ export function localDateIn(at: Date, timezone: TimeZoneId): LocalDate {
 }
 
 /**
+ * The local date `weeks` whole calendar weeks after `localDate` (T026: a slot's release, the week
+ * after the final session plus `slot_release_buffer_weeks`, R-205, FR-BOOK-10). A step on the wall
+ * calendar, where a week is seven days whatever the clocks do (R-TIME-2), so no zone is involved.
+ */
+export function calendarWeeksAfter(localDate: LocalDate, weeks: number): LocalDate {
+  assertLocalDate('localDate', localDate);
+  if (!Number.isSafeInteger(weeks) || weeks < 0) {
+    throw new TimeError('weeks', String(weeks), 'expected a whole number of weeks ≥ 0');
+  }
+  return Temporal.PlainDate.from(localDate).add({ weeks }).toString();
+}
+
+/**
  * A calendar day as a `date` column is written: its midnight in UTC, which `calendarDateOf` reads
  * back as the same day (T068: `teacher_profiles.verification_call_completed_on`).
  */

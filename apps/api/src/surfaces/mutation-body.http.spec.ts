@@ -21,7 +21,7 @@ import type { VerificationServices } from '../modules/verification/index.js';
 import { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
-import { unusedTeacherProfileServices } from './services.fixtures.js';
+import { unusedDiscoveryServices, unusedTeacherProfileServices } from './services.fixtures.js';
 
 const NONCE = { nonce: 'n-0199d0a0', expiresAt: '2026-10-27T10:00:00.000Z' };
 
@@ -156,6 +156,7 @@ beforeAll(async () => {
       verification,
       catalog,
       teacherProfile: unusedTeacherProfileServices,
+      discovery: unusedDiscoveryServices,
     },
     adminServices,
   });

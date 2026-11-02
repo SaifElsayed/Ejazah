@@ -22,11 +22,7 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import {
-  packageEnrollmentCounts,
-  packageHasEnrollment,
-  slotInUse,
-} from '../../apps/api/src/modules/booking/index.js';
+import { createCatalogUse } from '../../apps/api/src/modules/booking/index.js';
 import {
   PackagesService,
   packagesRouter,
@@ -59,6 +55,7 @@ import {
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -70,7 +67,8 @@ let watcher: Db;
 let database: Database;
 let idempotency: IdempotencyService<Transaction>;
 
-const use = { slotInUse, packageHasEnrollment, packageEnrollmentCounts };
+/** Booking's port as `main.ts` binds it (T026), the release buffer at its default of 0 weeks. */
+const use = createCatalogUse({ settings: { read: async (_key, schema) => schema.parse(0) } });
 
 beforeAll(async () => {
   [db, watcher] = await Promise.all([connectAsApplication(), connectAsApplication()]);
@@ -144,6 +142,7 @@ function surfaceCaller(teacherId: string) {
         identity: unusedIdentityServices,
         verification: unusedVerificationServices,
         teacherProfile: unusedTeacherProfileServices,
+        discovery: unusedDiscoveryServices,
         catalog,
       },
     }),
@@ -194,6 +193,7 @@ function publishedCaller(teacherId: string, gender: 'male' | 'female') {
         catalog: new Proxy(unusedCatalogServices, {
           get: (target, name) => (name === 'packages' ? service() : Reflect.get(target, name)),
         }),
+        discovery: unusedDiscoveryServices,
       },
     }),
   );

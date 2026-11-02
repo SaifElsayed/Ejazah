@@ -6,7 +6,10 @@
 // The two locks are the kernel's (`platform/db/row-lock.ts`), taken here because this module owns
 // the table (R-API-6): the teacher's slots by the advisory key `teacher-slots`, and one slot's row.
 // A caller takes them in T005's order: the account, then the key, then the row.
-import { localTimeOf, timeColumnOf } from '@ijazah/time';
+//
+// T026: `offeredSlotsOf`, the slots booking's discovery read may offer, reached through the entry;
+// read-only, no lock.
+import { type LocalTime, localTimeOf, timeColumnOf } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { lockKey, lockRows } from '../../platform/db/row-lock.js';
@@ -104,6 +107,63 @@ export async function activeSlotsOf(tx: Client, teacherUserId: string): Promise<
     },
   });
   return slots.map(rowOf);
+}
+
+/** A slot booking may offer, with its teacher (T026, R-205). */
+export interface OfferedSlot {
+  readonly id: string;
+  readonly teacherUserId: string;
+  readonly dayOfWeek: number;
+  readonly startTimeLocal: LocalTime;
+  readonly durationMinutes: number;
+  readonly timezone: string;
+}
+
+/**
+ * Of `teacherIds` (a page of discovery, already visible), each teacher's active slots whose length
+ * is the length of one of that teacher's active packages, by id (T026, R-205: booking decides which
+ * are free). Bounded by the page and the week: a teacher's active slots never overlap (R-206).
+ */
+export async function offeredSlotsOf(
+  tx: Pick<Transaction, 'availabilitySlot' | 'package'>,
+  teacherIds: readonly string[],
+): Promise<OfferedSlot[]> {
+  if (teacherIds.length === 0) return [];
+  const lengths = await tx.package.findMany({
+    where: { teacherUserId: { in: [...teacherIds] }, isActive: true },
+    distinct: ['teacherUserId', 'sessionDurationMinutes'],
+    select: { teacherUserId: true, sessionDurationMinutes: true },
+  });
+  if (lengths.length === 0) return [];
+  const offered = new Set(
+    lengths.map(({ teacherUserId, sessionDurationMinutes }) =>
+      lengthKey(teacherUserId, sessionDurationMinutes),
+    ),
+  );
+  const slots = await tx.availabilitySlot.findMany({
+    where: {
+      teacherUserId: { in: [...teacherIds] },
+      isActive: true,
+      durationMinutes: { in: [...new Set(lengths.map((row) => row.sessionDurationMinutes))] },
+    },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      teacherUserId: true,
+      dayOfWeek: true,
+      startTimeLocal: true,
+      durationMinutes: true,
+      timezone: true,
+    },
+  });
+  return slots
+    .filter((row) => offered.has(lengthKey(row.teacherUserId, row.durationMinutes)))
+    .map(({ startTimeLocal, ...row }) => ({ ...row, startTimeLocal: localTimeOf(startTimeLocal) }));
+}
+
+/** A teacher's package length, as one key. */
+function lengthKey(teacherUserId: string, minutes: number): string {
+  return `${teacherUserId}:${String(minutes)}`;
 }
 
 export async function insertSlot(tx: Client, slot: NewSlot): Promise<SlotRow> {

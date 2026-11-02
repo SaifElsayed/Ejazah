@@ -179,6 +179,11 @@ export { PackagesService };
 export { packagesRouter } from './packages.router.js';
 /** The `teacher.slots` namespace, mounted by `app.router.ts` (T019). */
 export { slotsRouter } from './slots.router.js';
+/**
+ * The active slots of the lengths of each teacher's active packages, on the caller's transaction:
+ * what booking's discovery read decides is free (T026, R-205).
+ */
+export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
 export type { TeacherSlots };
 
 /** The subjects list's router, mounted under `catalog.subjects` by `app.router.ts` (T038). */

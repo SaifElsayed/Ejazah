@@ -3,28 +3,10 @@
 // locks before it asks (T005's rule 1, lock then read). A soft-deleted enrollment is left out by
 // the client's extension (T148).
 //
-// A slot is in use while an active hold (`released_at IS NULL`, data-model §3) or an enrollment
-// `pending_payment` or `confirmed` uses it. A confirmed enrollment counts until its slot's release,
-// the week after its last session plus `slot_release_buffer_weeks` (R-205, FR-BOOK-10); that release
-// reads the last session through `sessions/index.ts`, which T026 brings, so until then every
-// confirmed enrollment counts, the side that refuses an edit rather than allows one.
+// Whether a slot is in use is R-205's occupancy since T026 (`slot-occupancy.service.ts`): an active
+// hold or an enrollment `pending_payment`, or a `confirmed` one until its slot's release, the week
+// after its last session plus `slot_release_buffer_weeks` (FR-BOOK-10).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-
-type Client = Pick<Transaction, 'slotHold' | 'enrollment'>;
-
-/** Whether an active hold, or an enrollment awaiting payment or confirmed, uses the slot. */
-export async function slotInUse(tx: Client, slotId: string): Promise<boolean> {
-  const hold = await tx.slotHold.findFirst({
-    where: { slotId, releasedAt: null },
-    select: { id: true },
-  });
-  if (hold !== null) return true;
-  const enrollment = await tx.enrollment.findFirst({
-    where: { slotId, status: { in: ['pending_payment', 'confirmed'] } },
-    select: { id: true },
-  });
-  return enrollment !== null;
-}
 
 /**
  * Of `packageIds`, each package's live enrollments in any status and its `confirmed` ones (T018),

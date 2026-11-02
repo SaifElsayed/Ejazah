@@ -11,6 +11,7 @@ import { type AppServices, createAppContext, type UserSession } from '../../../s
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -117,6 +118,7 @@ export function appContextFor(
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
+    discovery: unusedDiscoveryServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }

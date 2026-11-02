@@ -12,6 +12,7 @@ import { type AppServices, createAppContext, type UserSession } from '../../../s
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -74,6 +75,7 @@ export function surfaceOf(
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,
     teacherProfile: unusedTeacherProfileServices,
+    discovery: unusedDiscoveryServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

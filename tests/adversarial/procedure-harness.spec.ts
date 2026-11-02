@@ -39,6 +39,7 @@ import {
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
@@ -371,6 +372,7 @@ const caller = createAppCallerFactory(
       verification: unusedVerificationServices,
       catalog: unusedCatalogServices,
       teacherProfile: unusedTeacherProfileServices,
+      discovery: unusedDiscoveryServices,
     },
   }),
 );
