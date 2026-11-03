@@ -24,6 +24,7 @@ import {
   weekdayIn,
 } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../../shared/__tests__/api-double';
+import { CHECKOUT_CURRENT_QUERY_KEY } from '../checkout/keys';
 import { BookingSheet } from './index';
 
 let mockApi = fakeApi();
@@ -258,6 +259,23 @@ describe('BookingSheet (FR-350, FR-386)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/(student)/checkout/previous');
     expect(onClose).toHaveBeenCalled();
     expect(screen.queryByText(ar('common.state.actionError'))).toBeNull();
+  });
+
+  // PR #121's review, round 1 (the note under T045): the checkout's cached `checkout.current` is
+  // marked stale, so the screen the sheet leads to reads it again.
+  it.each([
+    ['a hold placed', undefined],
+    ['a hold refused PREVIOUS_CHECKOUT', 'PREVIOUS_CHECKOUT'],
+  ] as const)('marks the checkout’s cached summary stale after %s', async (_case, refusal) => {
+    if (refusal !== undefined) {
+      mockApi.api.checkout.hold.mutate.mockRejectedValue(apiError(refusal));
+    }
+    queries.setQueryData(CHECKOUT_CURRENT_QUERY_KEY, { hold: undefined });
+    await renderIn('rtl', sheet());
+    await fireEvent.press(await screen.findByText(slotLabel('rtl', saturday)));
+    await fireEvent.press(continueButton());
+    expect(onClose).toHaveBeenCalled();
+    expect(queries.getQueryState(CHECKOUT_CURRENT_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 
   it('with no free slot of the package’s length, says so and offers another package', async () => {

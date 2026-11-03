@@ -59,7 +59,10 @@ function nextOf(hold: CheckoutCurrentHold | undefined, loaded: boolean): Next {
 export function CheckoutPrevious() {
   const current = useCheckoutCurrent();
   const retry = () => void current.refetch();
-  const next = nextOf(current.data?.hold, current.data !== undefined);
+  // Only a read made since this screen mounted decides where it goes: the cache may hold an earlier
+  // checkout's answer (PR #121's review, round 1, the note under T045).
+  const fresh = current.isFetchedAfterMount ? current.data : undefined;
+  const next = nextOf(fresh?.hold, fresh !== undefined);
   const leaving = next.kind === 'gone' || next.kind === 'processing';
   const processingId = next.kind === 'processing' ? next.enrollmentId : undefined;
   useEffect(() => {

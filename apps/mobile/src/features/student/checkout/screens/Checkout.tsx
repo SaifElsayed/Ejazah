@@ -41,14 +41,17 @@ import { CheckoutExpired } from './CheckoutExpired';
 export function Checkout() {
   const current = useCheckoutCurrent();
   const retry = () => void current.refetch();
-  const hold = current.data?.hold;
+  // Only a read made since this screen mounted decides where it goes: the cache may hold an earlier
+  // checkout's answer (PR #121's review, round 1, the note under T045).
+  const fresh = current.isFetchedAfterMount ? current.data : undefined;
+  const hold = fresh?.hold;
   const enrollmentId = hold?.enrollmentId;
   useEffect(() => {
     if (enrollmentId !== undefined) {
       router.replace({ pathname: CHECKOUT_PROCESSING_ROUTE, params: { enrollmentId } });
     }
   }, [enrollmentId]);
-  if (current.data !== undefined && hold === undefined) return <CheckoutExpired />;
+  if (fresh !== undefined && hold === undefined) return <CheckoutExpired />;
   if (hold === undefined || enrollmentId !== undefined) {
     return (
       <StackScreen header={<CheckoutHeader />}>

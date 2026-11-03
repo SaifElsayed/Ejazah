@@ -9,13 +9,15 @@ import type {
   CheckoutQuotedSummary,
   CheckoutSummary,
 } from '@ijazah/contracts';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 import { useRef } from 'react';
 
 import { useApi } from '../../../lib/api';
 
-export const CHECKOUT_CURRENT_QUERY_KEY = ['student', 'checkout', 'current'] as const;
+import { CHECKOUT_CURRENT_QUERY_KEY } from './keys';
+
+export { CHECKOUT_CURRENT_QUERY_KEY };
 
 // `checkout.status`, read by `CheckoutExpired` too, is T046's (`outcome-api.ts`): one key, one hook.
 export { checkoutStatusQueryKey, isEnrollmentId, useCheckoutStatus } from './outcome-api';
@@ -41,6 +43,7 @@ export function quotedOf(summary: CheckoutSummary): CheckoutQuotedSummary {
 /** `checkout.pay` on `holdId`, keyed once per quoted summary. */
 export function usePay(holdId: string) {
   const { client } = useApi();
+  const queries = useQueryClient();
   const keyed = useRef<{ readonly quoted: string; readonly key: string } | null>(null);
   const keyFor = (quoted: CheckoutQuotedSummary): string => {
     const written = JSON.stringify(quoted);
@@ -52,6 +55,8 @@ export function usePay(holdId: string) {
   return useMutation({
     mutationFn: (quoted: CheckoutQuotedSummary) =>
       client.api.checkout.pay.mutate({ holdId, quoted, idempotencyKey: keyFor(quoted) }),
+    // The hold now has an enrollment: `checkout.current` is stale (PR #121's review, round 1).
+    onSuccess: () => queries.invalidateQueries({ queryKey: CHECKOUT_CURRENT_QUERY_KEY }),
   });
 }
 

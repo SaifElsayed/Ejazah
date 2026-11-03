@@ -280,6 +280,19 @@ describe('Checkout: Pay sends the summary the screen shows (the owner, 2026-11-0
     },
   );
 
+  it('reads the summary again once Pay is accepted (PR #121’s review, round 1)', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(hold());
+    mockApi.api.checkout.pay.mutate.mockResolvedValue({
+      enrollmentId: ENROLLMENT_ID,
+      checkoutUrl: CHECKOUT_URL,
+      orderExpiresAt: '2026-11-09T10:10:00.000Z',
+    });
+    await renderAr(<Checkout />);
+    await pressPay();
+    await advance(0);
+    expect(mockApi.api.checkout.current.query.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('says so and stays when no browser could open, for a new press to ask again', async () => {
     mockApi.api.checkout.current.query.mockResolvedValue(hold());
     mockApi.api.checkout.pay.mutate.mockResolvedValue({
@@ -531,5 +544,45 @@ describe('CheckoutPrevious (FR-BOOK-12 (c))', () => {
     await renderAr(<CheckoutPrevious />);
     await advance(0);
     expect(mockNavigate).toHaveBeenCalledWith('back');
+  });
+});
+
+// PR #121's review, round 1, Major (the note under T045): `Checkout` and `CheckoutPrevious` share
+// `checkout.current`'s cache, so each mount below shares the test's one `QueryClient`, a minute
+// apart, as the phone does when the student books again.
+describe('the shared checkout.current cache, read again on each screen', () => {
+  const payable = hold({
+    enrollmentId: ENROLLMENT_ID,
+    lastOrder: { status: 'created', expiresAt: '2026-11-09T10:10:00.000Z', canContinue: true },
+  });
+
+  it('CheckoutPrevious after Checkout shows the payable order the server answers, not the cached hold', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValueOnce(hold());
+    const first = await renderAr(<Checkout />);
+    await advance(0);
+    await first.unmount();
+    // Pay ran and the student closed the hosted page; a minute later a new hold is refused
+    // PREVIOUS_CHECKOUT and the phone opens CheckoutPrevious.
+    await advance(60_000);
+    mockApi.api.checkout.current.query.mockResolvedValue(payable);
+    mockNavigate.mockReset();
+    await renderAr(<CheckoutPrevious />);
+    expect(await screen.findByText(said('rtl', 'student.checkoutPrevious.title'))).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalledWith('back');
+  });
+
+  it('Checkout after CheckoutPrevious shows the new hold, not the cached enrollment’s processing', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValueOnce(payable);
+    const first = await renderAr(<CheckoutPrevious />);
+    await advance(0);
+    await first.unmount();
+    await advance(60_000);
+    mockApi.api.checkout.current.query.mockResolvedValue(
+      hold({ holdId: '0193a6f0-0000-7000-8000-0000000000c2' }),
+    );
+    mockNavigate.mockReset();
+    await renderAr(<Checkout />);
+    expect(await screen.findByText(recitationSummary.teacher.displayName)).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalledWith('replace', expect.anything());
   });
 });
