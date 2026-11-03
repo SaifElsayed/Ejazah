@@ -10,11 +10,12 @@
 //
 // VERIFICATION is the kernel's guard core, `verifyInboundEvent`, over the port's own
 // `verifyAndParseEvent`; its statuses are the guard's (`webhook-signature.guard.ts`): an absent or
-// wrong signature 401, a signed body the port cannot read 400. Only a verified event reaches
-// `recipient-events.service.ts`, which records it under its unique provider event id before
+// wrong signature 401, a signed body the port cannot read 400. Only a verified event reaches a
+// service: a payout recipient's `recipient-events.service.ts`, a gateway order's
+// `order-events.service.ts` (T038), each recording it under its unique provider event id before
 // anything acts (R-MONEY-8). Whatever it answers (applied, a replay, a reference nobody holds, an
-// order event this phase cannot have caused) is acknowledged with 200, so the gateway stops
-// retrying; a failure while recording is a 500, so the gateway retries the event whole.
+// order no row holds) is acknowledged with 200, so the gateway stops retrying; a failure while
+// recording, or while enqueueing what a paid event asks, is a 500, so the gateway retries the event.
 //
 // THE ANSWERS leave in the kernel's one error shape (T101) with `Cache-Control: no-store`; after a
 // refusal the socket is closed once the answer is flushed, since a refused body may still be
@@ -36,15 +37,22 @@ import {
 import { type Logger, requestLogger } from '../../platform/logging/logger.js';
 import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
+import { isOrderEvent, type OrderEventsService } from './order-events.service.js';
 import type { RecipientEventsService } from './recipient-events.service.js';
 
 /** Where the gateway posts its signed events. */
 export const PAYMENT_WEBHOOK_PATH = '/webhooks/payment';
 
+/** The two services a verified event is handed to, by what it concerns. */
+export interface WebhookEvents {
+  readonly recipients: Pick<RecipientEventsService, 'record'>;
+  readonly orders: Pick<OrderEventsService, 'record'>;
+}
+
 export interface PaymentWebhookDependencies {
   /** The payment port's verify operation. */
   readonly verify: InboundEventVerifier<GatewayEvent>;
-  readonly events: Pick<RecipientEventsService, 'record'>;
+  readonly events: WebhookEvents;
   readonly log: Logger;
   /** The largest body read, in bytes (`MAX_REQUEST_BODY_BYTES`). */
   readonly maxBodyBytes: number;
@@ -167,7 +175,10 @@ export function paymentWebhookRoute({
         const rawBody = await readRawBody(request, maxBodyBytes);
         const receivedAt = now();
         const event = await verifyInboundEvent(verify, rawBody, request.headers);
-        await events.record(event, { rawBody, receivedAt, signatureVerifiedAt: now() });
+        const receipt = { rawBody, receivedAt, signatureVerifiedAt: now() };
+        await (isOrderEvent(event)
+          ? events.orders.record(event, receipt)
+          : events.recipients.record(event, receipt));
         send(request, response, constants.HTTP_STATUS_OK, { received: true }, { close: false });
       } catch (error: unknown) {
         if (error instanceof BodyAbortedError) {

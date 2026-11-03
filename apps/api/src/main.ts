@@ -229,6 +229,13 @@ const uploads = {
   log,
   ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
 };
+// The queue (T112), opened on the first add, so a process that never adds a job never connects to it
+// for that: `admins.add` queues `deliver-admin-invite` (T067), the webhook's paid events
+// `confirm-enrollment` (T038).
+let jobQueue: ReturnType<typeof openQueue> | undefined;
+const queue = (): ReturnType<typeof openQueue> =>
+  (jobQueue ??= openQueue(connectionFor(config.REDIS_URL)));
+
 const routes = {
   [verification.DOCUMENTS_UPLOAD_PATH]: verification.createDocumentsUploadRoute({
     ...uploads,
@@ -246,12 +253,19 @@ const routes = {
   }),
   ...filesRoutes(ports.storage),
   // The gateway's signed webhook (T077): its raw body read under the request limit, verified by the
-  // payment port, and a recipient event recorded and handed to identity's entries (R-121).
+  // payment port, and a recipient event recorded and handed to identity's entries (R-121); an order
+  // event recorded and its order moved, a paid one enqueueing `confirm-enrollment` by the payment's
+  // id, under that id as the job's (T038, R-214).
   [payments.PAYMENT_WEBHOOK_PATH]: payments.createPaymentWebhookRoute({
     database,
     payment: ports.payment,
     log,
     maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
+    confirmations: {
+      enqueue: async (paymentId) => {
+        await queue().add('confirm-enrollment', { paymentId }, { jobId: paymentId });
+      },
+    },
   }),
   // The stand-in's hosted page (T012, R-213): a route only while the payment port is the stand-in
   // (`PAYMENT_GATEWAY=fake`); it posts its signed events to the webhook above over HTTP.
@@ -264,9 +278,7 @@ const routes = {
 };
 
 // The admin module's services behind the administrator surface (T067), bound to the surface's port.
-// `admins.add` queues `deliver-admin-invite` with the id alone (R-110); the queue is opened on the
-// first add, so a process that never adds an administrator never connects to it for that.
-let inviteQueue: ReturnType<typeof openQueue> | undefined;
+// `admins.add` queues `deliver-admin-invite` with the id alone (R-110), on the queue above.
 const adminServices = createAdminServices({
   database,
   settings,
@@ -276,8 +288,7 @@ const adminServices = createAdminServices({
   consequences,
   inviteQueue: {
     queue: async (adminId) => {
-      inviteQueue ??= openQueue(connectionFor(config.REDIS_URL));
-      await inviteQueue.add(DELIVER_ADMIN_INVITE, { adminId });
+      await queue().add(DELIVER_ADMIN_INVITE, { adminId });
     },
   },
 });
@@ -309,12 +320,12 @@ await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
 
 // Once, however many signals arrive: stop listening and close the application (Nest's shutdown
-// hooks are enabled by the application, so its providers hear it too), then the invite queue when
-// an add opened it (T067), then the database; exit 0 when all closed, 1 when any failed (T173).
+// hooks are enabled by the application, so its providers hear it too), then the queue when an add
+// opened it (T067, T038), then the database; exit 0 when all closed, 1 when any failed (T173).
 onShutdown(
   async () => {
     await application.close();
-    await inviteQueue?.close();
+    await jobQueue?.close();
     await closeDatabase(database);
   },
   { log },

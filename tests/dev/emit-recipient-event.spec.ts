@@ -302,6 +302,8 @@ describe('a replay is a no-op end to end (T079, FR-PAYG-4)', { tags: ['database'
       payment: createPaymentPort({ PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY }),
       log: createLogger({ level: 'info', destination: { write: (line) => void lines.push(line) } }),
       maxBodyBytes: 1_048_576,
+      // Only recipient events are delivered here; a paid order event would be T038's.
+      confirmations: { enqueue: () => Promise.reject(new Error('no order event is delivered')) },
     });
     server = createServer((request, response) => {
       const url = request.url ?? '/';

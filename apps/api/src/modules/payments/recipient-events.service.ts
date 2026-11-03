@@ -12,10 +12,10 @@
 // A REFERENCE NO TEACHER HOLDS (identity answers false) is still recorded, is reported, and changes
 // no row (R-114).
 //
-// AN ORDER EVENT (`paid`, `failed`, `expired`, `refunded`) cannot legitimately arrive in Phase 1,
-// since no order exists yet. It is reported and acknowledged and nothing is written: rule 20
-// (`payment_id` NULL exactly for a recipient event) forbids recording it without its payment. Phase
-// 2's checkout task replaces this branch (B15 check, the owner's decision 1).
+// AN ORDER EVENT (`paid`, `failed`, `expired`, `refunded`) is `order-events.service.ts`'s since
+// T038, which replaced the branch here that answered it `unexpected_order_event` while no order
+// existed (B15 check, the owner's decision 1); the webhook hands each event to its own service, both
+// recording under `payment_events`' unique `provider_event_id`.
 //
 // Nothing of the raw body is logged or reported (R-SEC-2): the log line and the report name the
 // provider's event id and the event's type, never the reference, its hash or the reason.
@@ -55,7 +55,7 @@ export interface Receipt {
   readonly signatureVerifiedAt: Date;
 }
 
-export type RecordOutcome = 'applied' | 'replayed' | 'unmatched' | 'unexpected_order_event';
+export type RecordOutcome = 'applied' | 'replayed' | 'unmatched';
 
 /** A signed recipient event whose reference no teacher holds (R-114). */
 export class UnmatchedRecipientEventError extends Error {
@@ -65,15 +65,11 @@ export class UnmatchedRecipientEventError extends Error {
   }
 }
 
-/** A signed order event, which Phase 1 cannot have caused: no order exists yet. */
-export class UnexpectedOrderEventError extends Error {
-  constructor(providerEventId: string, eventType: string) {
-    super(`An order event (${eventType}) arrived before any order exists: ${providerEventId}.`);
-    this.name = 'UnexpectedOrderEventError';
-  }
-}
-
-type RecipientEvent = Extract<GatewayEvent, { type: 'recipient_verified' | 'recipient_rejected' }>;
+/** A verified event of a payout recipient. */
+export type RecipientEvent = Extract<
+  GatewayEvent,
+  { type: 'recipient_verified' | 'recipient_rejected' }
+>;
 
 export class RecipientEventsService {
   readonly #database: Pick<Database, '$transaction'>;
@@ -89,12 +85,7 @@ export class RecipientEventsService {
   }
 
   /** Records `event` and applies its verdict once; what happened, for the webhook to acknowledge. */
-  async record(event: GatewayEvent, receipt: Receipt): Promise<RecordOutcome> {
-    if (event.type !== 'recipient_verified' && event.type !== 'recipient_rejected') {
-      this.#warn(event, 'An order event arrived before any order exists; nothing was recorded');
-      this.#report(new UnexpectedOrderEventError(event.providerEventId, event.type));
-      return 'unexpected_order_event';
-    }
+  async record(event: RecipientEvent, receipt: Receipt): Promise<RecordOutcome> {
     const outcome = await this.#database.$transaction((tx) => this.#apply(tx, event, receipt));
     if (outcome === 'unmatched') {
       this.#warn(event, 'No teacher holds the recipient of a signed event; it was recorded alone');
@@ -120,7 +111,7 @@ export class RecipientEventsService {
     return matched ? 'applied' : 'unmatched';
   }
 
-  #warn(event: GatewayEvent, message: string): void {
+  #warn(event: RecipientEvent, message: string): void {
     this.#log.warn({ providerEventId: event.providerEventId, eventType: event.type }, message);
   }
 }

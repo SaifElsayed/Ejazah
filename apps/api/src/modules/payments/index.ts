@@ -4,38 +4,63 @@
 //
 // Phase 1 (T077): the webhook route alone, which records a signed payout-recipient event and hands
 // its verdict to the identity module's entries (payments imports identity, never the reverse; R-121).
+// Phase 2 (T038): the route's order branch, which records an order event, moves the order, appends a
+// failed order's outcome through booking's entry, and enqueues `confirm-enrollment` on a paid one.
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
+import { recordOrderFailed } from '../booking/index.js';
 import { markPayoutRejected, markPayoutVerified, payoutRefHash } from '../identity/index.js';
+import { type ConfirmationQueue, OrderEventsService } from './order-events.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { RecipientEventsService } from './recipient-events.service.js';
 import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.js';
 
 export { PAYMENT_WEBHOOK_PATH };
+export type { ConfirmationQueue };
 
-/** `POST /webhooks/payment` (T077), over the payment port and the identity module's two entries. */
+/**
+ * `POST /webhooks/payment` (T077, T038), over the payment port, the identity module's two entries,
+ * booking's `recordOrderFailed`, and the queue `confirm-enrollment` is enqueued on.
+ */
 export function createPaymentWebhookRoute({
   database,
   payment,
   log,
   maxBodyBytes,
+  confirmations,
+  report,
 }: {
   readonly database: Database;
   readonly payment: Pick<PaymentPort, 'verifyAndParseEvent'>;
   readonly log: Logger;
   /** `MAX_REQUEST_BODY_BYTES`. */
   readonly maxBodyBytes: number;
+  /** Enqueues `confirm-enrollment({ paymentId })` under the job id `paymentId` (R-214). */
+  readonly confirmations: ConfirmationQueue;
+  /** The process's error reporting by default (T111); a recorder in the specs. */
+  readonly report?: (error: Error) => void;
 }): NodeHandler {
+  const reporting = report === undefined ? {} : { report };
   return paymentWebhookRoute({
     verify: (rawBody, headers) => payment.verifyAndParseEvent(rawBody, headers),
-    events: new RecipientEventsService({
-      database,
-      identity: { markPayoutVerified, markPayoutRejected, payoutRefHash },
-      log,
-    }),
+    events: {
+      recipients: new RecipientEventsService({
+        database,
+        identity: { markPayoutVerified, markPayoutRejected, payoutRefHash },
+        log,
+        ...reporting,
+      }),
+      orders: new OrderEventsService({
+        database,
+        booking: { recordOrderFailed },
+        confirmations,
+        log,
+        ...reporting,
+      }),
+    },
     log,
     maxBodyBytes,
   });

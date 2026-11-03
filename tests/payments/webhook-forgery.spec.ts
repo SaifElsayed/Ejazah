@@ -168,6 +168,8 @@ beforeAll(async () => {
     payment: createPaymentPort(config),
     log,
     maxBodyBytes: 1_048_576,
+    // The page's paid event reaches T038's branch, which enqueues confirmation: nothing to run here.
+    confirmations: { enqueue: () => Promise.resolve() },
   });
   stand = gatewayStandIn({ origin, config, payment });
 }, 60_000);

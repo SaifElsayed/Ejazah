@@ -354,7 +354,14 @@ async function build(): Promise<Built> {
     API_PUBLIC_ORIGIN: origin,
   };
   const payment = createPaymentPort(config);
-  route = createPaymentWebhookRoute({ database, payment, log, maxBodyBytes: MAX_BODY_BYTES });
+  route = createPaymentWebhookRoute({
+    database,
+    payment,
+    log,
+    maxBodyBytes: MAX_BODY_BYTES,
+    // Only recipient events are delivered here; a paid order event would be T038's.
+    confirmations: { enqueue: () => Promise.reject(new Error('discovery world: not reached')) },
+  });
   const stand: GatewayStandIn = gatewayStandIn({ origin, config, payment });
 
   // The recipient reference the port answered each registration, so the case can verify it.

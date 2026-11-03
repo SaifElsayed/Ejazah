@@ -18,4 +18,5 @@ Hold, route, balance, transfer or refund money; the gateway settles directly to 
 
 `SRS-PAY-*`: FR-PAYG-1 to FR-PAYG-18, FR-ADMIN-18, section 3.6. _Filled as they land._
 
-- FR-PAYG-4, FR-PAYG-15, FR-191 (Phase 1, T077): the webhook, and the recipient events recorded once and routed to the teacher by the reference's hash. An order event is reported and acknowledged, and nothing is written, until Phase 2's checkout lands.
+- FR-PAYG-4, FR-PAYG-15, FR-191 (Phase 1, T077): the webhook, and the recipient events recorded once and routed to the teacher by the reference's hash.
+- FR-360, FR-365, FR-367 (Phase 2, T038; R-214): `order-events.service.ts`, the webhook's order branch. In one transaction, the order's enrollment and then the order locked (T005's order), the event recorded under its unique provider event id with the body's hash, the order moved monotonically (`created` to `paid`, `failed` or `expired`; `failed` or `expired` to `paid`; `paid` to `refunded` only) with the transaction id, fee and net as reported on `paid`, the address cleared, and a failed order's `order_failed` outcome appended through booking's `recordOrderFailed`; after commit, every paid event of a known order, a replay included, enqueues `confirm-enrollment` under the job id `paymentId` (bound by `main.ts`). An order no row holds is acknowledged, written nowhere and reported.

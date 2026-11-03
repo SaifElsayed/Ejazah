@@ -6,8 +6,9 @@
 // body parser off, the handler under its path), over the payment port's stand-in reached through the
 // port's entry, as every caller reaches it (R-API-4). Its events are written here in the stand-in's
 // own form, a JSON body signed by HMAC-SHA256 in `x-fake-signature`, as the guard's spec writes
-// them. What the route hands the event to is a recorder: what the event does is
-// `recipient-events.spec.ts`'s. The log is captured line by line, so "nothing of the body is
+// them. What the route hands the event to is a recorder, one per service: what a recipient event does
+// is `recipient-events.spec.ts`'s, what an order event does `tests/payments/order-events.spec.ts`'s
+// (T038). The log is captured line by line, so "nothing of the body is
 // logged" is a sweep over every line.
 //
 // Statuses: a recorded or replayed event 200; an absent or wrong signature 401; a signed body the
@@ -36,6 +37,7 @@ const port = createPaymentPort({
 });
 
 interface Recorded {
+  readonly service: 'recipients' | 'orders';
   readonly event: GatewayEvent;
   readonly receipt: Receipt;
 }
@@ -61,9 +63,18 @@ beforeAll(async () => {
     paymentWebhookRoute({
       verify: (rawBody, headers) => port.verifyAndParseEvent(rawBody, headers),
       events: {
-        record: (event, receipt) => {
-          recorded.push({ event, receipt });
-          return answer();
+        recipients: {
+          record: (event, receipt) => {
+            recorded.push({ service: 'recipients', event, receipt });
+            return answer();
+          },
+        },
+        orders: {
+          record: async (event, receipt) => {
+            recorded.push({ service: 'orders', event, receipt });
+            await answer();
+            return 'moved';
+          },
         },
       },
       log: createLogger({ level: 'info', destination: { write: (line) => void lines.push(line) } }),
@@ -132,6 +143,7 @@ describe(`POST ${PAYMENT_WEBHOOK_PATH} (T077, FR-PAYG-4, R-MONEY-9)`, () => {
     expect(response.status).toBe(200);
     expect(JSON.parse(response.text)).toEqual({ received: true });
     expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.service).toBe('recipients');
     expect(recorded[0]?.event).toMatchObject({
       type: 'recipient_rejected',
       recipientRef: RECIPIENT,
@@ -145,7 +157,24 @@ describe(`POST ${PAYMENT_WEBHOOK_PATH} (T077, FR-PAYG-4, R-MONEY-9)`, () => {
     );
   });
 
-  it.each(['replayed', 'unmatched', 'unexpected_order_event'] as const)(
+  it('hands a correctly signed order event to the order branch (T038), and answers 200', async () => {
+    const { rawBody, headers } = signed({
+      id: `fake_evt_${randomUUID()}`,
+      type: 'failed',
+      order: 'fake_ord_0193d1b0',
+    });
+
+    expect((await post(rawBody, headers)).status).toBe(200);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.service).toBe('orders');
+    expect(recorded[0]?.event).toMatchObject({
+      type: 'failed',
+      gatewayOrderId: 'fake_ord_0193d1b0',
+    });
+    expect(recorded[0]?.receipt.rawBody.equals(rawBody)).toBe(true);
+  });
+
+  it.each(['replayed', 'unmatched'] as const)(
     'acknowledges an event the payments module answered %s with 200, so the gateway stops retrying',
     async (outcome) => {
       answer = () => Promise.resolve(outcome);
