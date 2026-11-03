@@ -8,12 +8,12 @@
 //   - the same failed job retried by the webhook (a replayed paid event) and by the sweep at the
 //     same moment runs once.
 //
-// Over Redis (`REDIS_URL`, as stage 4 of CI has it since PR #120's pipeline), on a queue of the
-// spec's own name and a random id of the run, so no other file running beside it touches its jobs,
-// with
-// the queue's own defaults (three attempts, backoff from one second); the queue's keys are removed
-// at the end, by that name and nothing else. The queue is paused while the two callers race, so
-// neither retry is run before both have returned.
+// Over Redis (`REDIS_URL`, as stage 4 of CI has it since PR #120's pipeline), on a queue named
+// after the spec and a random id of the run, so two runs, or a development worker, sharing one Redis
+// never touch its jobs (the database probes run one file at a time), with the queue's own defaults
+// (three attempts, backoff from one second); the queue's keys are removed at the end, by that name
+// and nothing else. The queue is paused while the two callers race, so neither retry is run before
+// both have returned.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
