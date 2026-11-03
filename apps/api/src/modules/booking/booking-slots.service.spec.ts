@@ -2,7 +2,8 @@
 //
 // Over a store of fakes standing for catalog's, identity's and sessions' entries and T026's
 // occupancy: the predicate asked first and NOT_FOUND with nothing else read; the slots of exactly the
-// package's length; occupancy; the student's own sessions overlapping a slot's first session; the
+// package's length; occupancy; the student's and the teacher's own sessions overlapping any of a
+// slot's sessions, read once over the window they span (T033, the check the hold shares); the
 // lead at its boundary; the last session the package's count of weeks on; Cairo's 2026 April gap
 // and October change; the zone the teacher's line is labelled with. Over the real tables,
 // `tests/db-integrity/booking-slots.spec.ts`, which also holds the previews against T034's
@@ -82,13 +83,8 @@ function storeOf(world: World) {
       reads.push(['occupancyOf', slotIds]);
       return world.occupancy ?? new Map();
     },
-    studentSessionsBetween: async (_tx, studentUserId, window) => {
-      reads.push([
-        'studentSessionsBetween',
-        studentUserId,
-        window.from.toISOString(),
-        window.to.toISOString(),
-      ]);
+    sessionsBetween: async (_tx, parties, window) => {
+      reads.push(['sessionsBetween', parties, window.from.toISOString(), window.to.toISOString()]);
       return world.sessions ?? [];
     },
     teacherTimezone: async (_tx, teacherUserId) => {
@@ -217,23 +213,33 @@ describe('the offerable slots (FR-350, R-205)', () => {
   it('answers an empty list, with the teacher’s zone, when nothing is offerable', async () => {
     const { answer, reads } = ask({ slots: [] });
     expect(await answer).toEqual({ teacherTimezone: CAIRO, slots: [] });
-    expect(reads.map(([name]) => name)).not.toContain('studentSessionsBetween');
+    expect(reads.map(([name]) => name)).not.toContain('sessionsBetween');
   });
 });
 
-describe("the student's own sessions (R-205, FR-BOOK-5)", () => {
+describe("the student's and the teacher's own sessions (R-205, FR-351, FR-BOOK-5; T033)", () => {
   const thursday = () => slot({ dayOfWeek: 4, startTimeLocal: '09:00:00' });
   const saturday = () => slot({ dayOfWeek: 6, startTimeLocal: '10:00:00' });
 
-  it('reads them over the window the first sessions span, by the session’s student', async () => {
+  it('reads them over the window every session of the package spans, by the session’s student and the package’s teacher', async () => {
     const { answer, reads } = ask({ slots: [thursday(), saturday()] });
     await answer;
     expect(reads).toContainEqual([
-      'studentSessionsBetween',
-      STUDENT,
+      'sessionsBetween',
+      { studentUserId: STUDENT, teacherUserId: TEACHER },
       '2026-11-05T07:00:00.000Z',
-      '2026-11-07T09:00:00.000Z',
+      '2026-11-28T09:00:00.000Z',
     ]);
+  });
+
+  it('leaves out a slot whose third session overlaps one of them, not only its first (T033)', async () => {
+    const overlapped = thursday();
+    const free = saturday();
+    const { answer } = ask({
+      slots: [overlapped, free],
+      sessions: [session('2026-11-19T07:30:00Z', '2026-11-19T08:30:00Z')],
+    });
+    expect((await answer).slots.map(({ slotId }) => slotId)).toEqual([free.id]);
   });
 
   it('leaves out a slot whose first session overlaps one of them, by a minute', async () => {
