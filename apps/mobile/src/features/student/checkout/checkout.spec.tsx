@@ -26,6 +26,7 @@ import { formatPounds } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../../shared/__tests__/api-double';
 import {
   Checkout,
+  CHECKOUT_CURRENT_QUERY_KEY,
   CHECKOUT_PROCESSING_ROUTE,
   CHECKOUT_RETURN_URL,
   CheckoutExpiredRoute,
@@ -280,17 +281,39 @@ describe('Checkout: Pay sends the summary the screen shows (the owner, 2026-11-0
     },
   );
 
-  it('reads the summary again once Pay is accepted (PR #121’s review, round 1)', async () => {
-    mockApi.api.checkout.current.query.mockResolvedValue(hold());
+  // PR #121's review, rounds 1 and 2 (N2): once Pay is accepted the server's `checkout.current`
+  // carries the enrollment, as these doubles answer from then on. The cache is marked stale for the
+  // next screen, and nothing reads it again while this one is open.
+  const afterPay = () => {
+    mockApi.api.checkout.current.query
+      .mockResolvedValueOnce(hold())
+      .mockResolvedValue(hold({ enrollmentId: ENROLLMENT_ID }));
     mockApi.api.checkout.pay.mutate.mockResolvedValue({
       enrollmentId: ENROLLMENT_ID,
       checkoutUrl: CHECKOUT_URL,
       orderExpiresAt: '2026-11-09T10:10:00.000Z',
     });
+  };
+
+  it('marks the summary stale once Pay is accepted, and stays while the hosted page is open', async () => {
+    afterPay();
+    mockOpenAuthSession.mockReturnValue(new Promise(() => undefined));
     await renderAr(<Checkout />);
     await pressPay();
     await advance(0);
-    expect(mockApi.api.checkout.current.query.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(queries.getQueryState(CHECKOUT_CURRENT_QUERY_KEY)?.isInvalidated).toBe(true);
+    expect(mockApi.api.checkout.current.query).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalledWith('replace', expect.anything());
+  });
+
+  it('with no browser, after an accepted Pay, says so and stays rather than leave for processing', async () => {
+    afterPay();
+    mockOpenAuthSession.mockRejectedValue(new Error('no browser'));
+    await renderAr(<Checkout />);
+    await pressPay();
+    expect(await screen.findByText(said('rtl', 'common.state.actionError'))).toBeTruthy();
+    await advance(1_000);
+    expect(mockNavigate).not.toHaveBeenCalledWith('replace', expect.anything());
   });
 
   it('says so and stays when no browser could open, for a new press to ask again', async () => {

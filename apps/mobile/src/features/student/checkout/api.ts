@@ -55,8 +55,11 @@ export function usePay(holdId: string) {
   return useMutation({
     mutationFn: (quoted: CheckoutQuotedSummary) =>
       client.api.checkout.pay.mutate({ holdId, quoted, idempotencyKey: keyFor(quoted) }),
-    // The hold now has an enrollment: `checkout.current` is stale (PR #121's review, round 1).
-    onSuccess: () => queries.invalidateQueries({ queryKey: CHECKOUT_CURRENT_QUERY_KEY }),
+    // The hold now has an enrollment: `checkout.current` is marked stale for the next screen that
+    // opens, and not read again here, where the answer would send this screen to `processing` while
+    // the hosted page is still open (PR #121's review, rounds 1 and 2).
+    onSuccess: () =>
+      queries.invalidateQueries({ queryKey: CHECKOUT_CURRENT_QUERY_KEY, refetchType: 'none' }),
   });
 }
 
