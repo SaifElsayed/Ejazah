@@ -771,6 +771,7 @@
         "receipt": "الإيصال"
       },
       "date": "التاريخ",
+      "firstSessionMoved": "تأخّر تأكيد الدفع، فانتقلت أول جلسة من {quoted} إلى {actual}.",
       "lede": "جلساتك كل {weekday} {time}، من {date}.",
       "sessionDate": "{date} · {time}",
       "sessionN": "الجلسة {n}",
@@ -804,6 +805,7 @@
     },
     "checkoutProcessing": {
       "delayed": {
+        "inApp": "حين تؤكد بوابة الدفع دفعتك يظهر اشتراكك مؤكَّدًا في اشتراكاتي.",
         "text": "سيصلك إشعار عند اكتماله.",
         "title": "يستغرق الدفع وقتًا أطول قليلًا"
       },
