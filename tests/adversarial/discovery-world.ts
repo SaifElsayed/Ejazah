@@ -901,11 +901,6 @@ class Seeder {
         subjectId: subject.id,
       })),
     });
-    // The approved credentials before the packages (B30, the note under T079): `allTabCount`'s SQL
-    // counts a teacher once an active package exists, and `discovery.browse` once its credentials
-    // are approved, so a teacher must not be seen between the two by another file's count.
-    await this.#credential(id, shared, riwaya, admin);
-    await this.#credential(id, privateSubject, COMMON_RIWAYA, admin);
     const packages = await this.#database.package.createManyAndReturn({
       select: { id: true },
       data: [
@@ -934,6 +929,8 @@ class Seeder {
       },
       select: { id: true },
     });
+    await this.#credential(id, shared, riwaya, admin);
+    await this.#credential(id, privateSubject, COMMON_RIWAYA, admin);
     return {
       id,
       gender,
