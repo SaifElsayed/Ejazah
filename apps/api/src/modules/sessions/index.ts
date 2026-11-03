@@ -4,8 +4,11 @@
 /** Each enrollment's final session's local date, for a slot's release (T026, R-205, FR-394). */
 export { lastSessionDateOf } from './sessions.repository.js';
 
-/** The times of a student's sessions in a window, for the booking sheet's overlap (T032, R-205). */
-export { type SessionTime, studentSessionsBetween } from './sessions.repository.js';
+/**
+ * The times of a student's and a teacher's sessions in a window, for the one overlap check of the
+ * booking sheet and the hold (T032, T033, R-205, FR-351, FR-BOOK-5).
+ */
+export { partiesSessionsBetween, type SessionTime } from './sessions.repository.js';
 
 /**
  * T034 (R-209, FR-368, FR-369): an enrollment's sessions, written on the confirmation's

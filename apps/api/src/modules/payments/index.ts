@@ -47,3 +47,10 @@ export function createEncryptedColumns(
 ): readonly EncryptedColumn[] {
   return [checkoutAddresses(database)];
 }
+
+/**
+ * Each enrollment's order standing, payments' answer to booking's release of a hold (T033, FR-363):
+ * the `orders` a caller of booking's hold functions hands in, on the caller's transaction, after the
+ * enrollments' locks (T005).
+ */
+export { orderStandingsOf } from './order-standing.repository.js';

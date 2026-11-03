@@ -98,3 +98,41 @@ export function createDiscoveryServices({
     nearest: createNearestSlots({ database, settings, ...(now === undefined ? {} : { now }) }),
   });
 }
+
+/**
+ * Holds (T033, FR-351 to FR-353, FR-363, FR-PAYG-19, R-208), each on the caller's transaction:
+ * placing one (`checkout.hold`, T036), releasing holds with their reason (FR-BOOK-12's new checkout,
+ * T036; the sweeps, T040; the terminations, T041), releasing a slot's and a student's expired holds,
+ * and FR-PAYG-19's re-hold of a paid enrollment (T039). The orders' standing is payments'
+ * `orderStandingsOf`, handed in by the caller (R-208). `readHoldTerms` reads the hold's settings
+ * before the caller's transaction; `holdsStore` is the placement's store over the owners' entries,
+ * exported for the probes (`tests/db-integrity/hold-concurrency.spec.ts`).
+ */
+export {
+  type EnrollmentToHold,
+  type HoldRequest,
+  type HoldScope,
+  type HoldsStore,
+  holdsStore,
+  type HoldStudent,
+  type HoldTerms,
+  type OrderStanding,
+  type OrderStandings,
+  type PlacedHold,
+  placeHold,
+  readHoldTerms,
+  type ReleasedHolds,
+  type ReleaseReason,
+  releaseExpiredHolds,
+  releaseHolds,
+  reholdEnrollment,
+} from './holds.service.js';
+/**
+ * Booking's one writer of `enrollment_events` rows (T033, R-216, FR-385), on the caller's transaction
+ * holding the enrollment's lock (and the payment's when the row names one).
+ */
+export {
+  type EnrollmentCancellationReason,
+  type EnrollmentOutcome,
+  recordEnrollmentEvents,
+} from './enrollment-events.repository.js';
