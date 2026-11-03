@@ -238,6 +238,19 @@ describe('the harness delivers over HTTP (T013, SC-311)', () => {
     expect(await stand.deliverInOrder([failed, paid])).toEqual([200, 200]);
     expect(arrivals.map((arrival) => arrival.event?.type)).toEqual(['failed', 'paid']);
   });
+
+  it('deliverAfter runs the hook to its end before it sends the event (the note under T013)', async () => {
+    const paid = stand.paid(await order());
+    const seenByHook: number[] = [];
+    const status = await stand.deliverAfter(paid, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      seenByHook.push(arrivals.length);
+    });
+
+    expect(status).toBe(200);
+    expect(seenByHook).toEqual([0]);
+    expect(arrivals.map((arrival) => arrival.event?.type)).toEqual(['paid']);
+  });
 });
 
 describe('tamper: each forged variant is refused by the signature check (T013, FR-372, SC-311)', () => {

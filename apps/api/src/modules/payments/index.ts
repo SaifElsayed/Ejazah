@@ -79,3 +79,10 @@ export function createEncryptedColumns(
  * enrollments' locks (T005).
  */
 export { orderStandingsOf } from './order-standing.repository.js';
+
+/**
+ * What the `confirm-enrollment` job reads of its paid order (T039, R-215): the order's enrollment,
+ * with no lock, and, under the locks the job takes through booking's `lockForConfirmation` (whose
+ * `orders` is `orderStandingsOf` above), the order's status and when its paid event was recorded.
+ */
+export { orderEnrollmentOf, type PaidOrder, paidOrderOf } from './confirmation-order.repository.js';

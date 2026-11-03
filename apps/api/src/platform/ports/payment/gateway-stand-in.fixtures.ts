@@ -17,7 +17,9 @@
 // state moves as the gateway's would (`cancelCheckout` answers `paid` once paid). A recipient event
 // is built here for any reference, since the reference may have been registered by another process
 // (`scripts/dev/emit-recipient-event.ts` reads it from the database). Every event carries a fresh
-// provider event id unless the caller names one (the script's replay). `tamper` makes the three
+// provider event id unless the caller names one (the script's replay). `deliverAfter` runs the
+// caller's hook (a hold expired or released) before it delivers (the note under T013, added by
+// T039). `tamper` makes the three
 // forgeries FR-372 names: a wrong secret, no signature, and a body changed after signing (here, the
 // same event under a new provider id, so it would be recorded anew were the signature not checked).
 //
@@ -63,6 +65,11 @@ export interface GatewayStandIn {
   deliverTwice(event: StandInEvent): Promise<readonly [number, number]>;
   /** One after the other, in the order given, whatever order they were built in. */
   deliverInOrder(events: readonly StandInEvent[]): Promise<number[]>;
+  /**
+   * Runs `hook` first (a hold expired or released, R-213), then POSTs the event; the status it
+   * answered (the note under T013).
+   */
+  deliverAfter(event: StandInEvent, hook: () => Promise<unknown>): Promise<number>;
   /** A forged variant of the event. */
   tamper(event: StandInEvent, how: Forgery): StandInEvent;
   /** What the stand-in's `cancelCheckout` answers for that order from now on. */
@@ -143,6 +150,10 @@ export function createGatewayStandIn({
       const statuses: number[] = [];
       for (const event of events) statuses.push(await deliver(event));
       return statuses;
+    },
+    deliverAfter: async (event, hook) => {
+      await hook();
+      return deliver(event);
     },
     tamper: (event, how) => tampered(event, how),
     onCancel: (gatewayOrderId, outcome) => standIn().onCancel(gatewayOrderId, outcome),

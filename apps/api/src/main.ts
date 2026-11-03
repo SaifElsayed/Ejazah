@@ -41,6 +41,7 @@ const [
   { filesRoutes },
   payments,
   { standInCheckoutRoutes },
+  { CONFIRM_ENROLLMENT },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -68,6 +69,7 @@ const [
   import('./platform/ports/storage/files.route.js'),
   import('./modules/payments/index.js'),
   import('./platform/web/stand-in-checkout.js'),
+  import('./jobs/confirm-enrollment.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -263,7 +265,7 @@ const routes = {
     maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
     confirmations: {
       enqueue: async (paymentId) => {
-        await queue().add('confirm-enrollment', { paymentId }, { jobId: paymentId });
+        await queue().add(CONFIRM_ENROLLMENT, { paymentId }, { jobId: paymentId });
       },
     },
   }),

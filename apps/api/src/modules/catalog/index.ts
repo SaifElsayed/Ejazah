@@ -187,6 +187,13 @@ export { slotsRouter } from './slots.router.js';
  * what booking's discovery read decides is free (T026, R-205).
  */
 export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
+/**
+ * A slot by its id, active or not, on the caller's transaction: the weekday and local start the
+ * confirm job generates an enrollment's sessions on, read under the slot's lock (T039, T034's note).
+ * A slot in use keeps its day, time and length (R-207), so they are the enrollment's.
+ */
+export { readSlot } from './slots.repository.js';
+export type { SlotRow } from './slots.service.js';
 /** An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350). */
 export { type BookablePackage, bookablePackageOf } from './packages.repository.js';
 export type { TeacherSlots };

@@ -11,3 +11,10 @@ export {
   type CompensationReason,
   openCompensationCase,
 } from './compensation-case.service.js';
+
+/**
+ * When the enrollment's latest compensation case was opened, or null when it has none, read on the
+ * caller's transaction under the enrollment's lock (T039): the confirm job's "a case exists" and
+ * the order a case covers (the note under T035).
+ */
+export { latestCaseOpenedAt } from './compensation-case.repository.js';
