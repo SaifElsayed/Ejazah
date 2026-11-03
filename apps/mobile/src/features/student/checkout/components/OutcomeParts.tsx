@@ -106,3 +106,18 @@ export function OutcomeLoading({
     </OutcomeScreen>
   );
 }
+
+/**
+ * The order's reference in a receipt's row, written left to right and wrapped inside the row: a
+ * value that is not plain text gets no room to shrink from `Summary`, so a long reference ran past
+ * the card's edge (B30's device run).
+ */
+export function OrderReference({ reference }: { readonly reference: string }) {
+  return (
+    <View style={{ flexShrink: 1 }}>
+      <Text weight="medium" ltr>
+        {reference}
+      </Text>
+    </View>
+  );
+}

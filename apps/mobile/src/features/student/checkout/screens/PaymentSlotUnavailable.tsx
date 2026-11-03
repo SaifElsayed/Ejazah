@@ -14,12 +14,12 @@ import {
   IconTile,
   PageIntro,
   Summary,
-  Text,
 } from '../../../../design/primitives';
 import { useLocale, useT } from '../../../../i18n';
 import { formatPounds } from '../../../../lib/formatters';
 import {
   EnrollmentValue,
+  OrderReference,
   OutcomeLoading,
   OutcomeScreen,
   useEnrollmentParam,
@@ -62,11 +62,7 @@ export function PaymentSlotUnavailable() {
           { label: t('student.checkout.enrollment'), value: <EnrollmentValue summary={summary} /> },
           {
             label: t('student.checkout.orderNumber'),
-            value: (
-              <Text weight="medium" ltr>
-                {lastOrder.reference}
-              </Text>
-            ),
+            value: <OrderReference reference={lastOrder.reference} />,
           },
           {
             label: t('student.checkout.amountPaid'),

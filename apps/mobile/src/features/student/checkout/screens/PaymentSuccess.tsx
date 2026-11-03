@@ -27,6 +27,7 @@ import { useMe } from '../../../../lib/account';
 import { formatPounds, useFormatters, weekdayIn } from '../../../../lib/formatters';
 import {
   EnrollmentValue,
+  OrderReference,
   OutcomeLoading,
   OutcomeScreen,
   useEnrollmentParam,
@@ -114,11 +115,7 @@ function Receipt({
             },
             {
               label: t('student.checkout.orderNumber'),
-              value: (
-                <Text weight="medium" ltr>
-                  {status.lastOrder.reference}
-                </Text>
-              ),
+              value: <OrderReference reference={status.lastOrder.reference} />,
             },
             {
               label: t('student.checkout.amountPaid'),
