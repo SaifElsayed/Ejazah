@@ -15,6 +15,7 @@ import {
 } from '../../../surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -116,6 +117,7 @@ export function profileSurfaceOf(teacherProfile: TeacherProfileServices) {
     teacherProfile,
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
+    checkout: unusedCheckoutServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

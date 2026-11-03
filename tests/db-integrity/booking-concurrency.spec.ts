@@ -72,12 +72,15 @@ function sessionValues(
 
 /** The columns of one hold of `slotId` by `studentId`, active unless `extra` releases it. */
 function holdValues(
-  slotId: string,
+  { slotId, packageId }: { readonly slotId: string; readonly packageId: string },
   studentId: string,
   extra: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
     slot_id: slotId,
+    // B29: a hold records the package it is for and that package's session count.
+    package_id: packageId,
+    session_count: 4,
     student_user_id: studentId,
     // The database never compares a hold with the clock: a NULL `released_at` is what makes it active.
     expires_at: at(15),
@@ -209,8 +212,8 @@ describe('one transaction (T142)', () => {
       const offer = await makeOffer(db);
       const student = await makeUser(db);
       const released = { released_at: '2026-10-04T08:00:00Z' };
-      expect(await tryInsert('slot_holds', holdValues(offer.slotId, student, released))).toBeNull();
-      expect(await tryInsert('slot_holds', holdValues(offer.slotId, student))).toBeNull();
+      expect(await tryInsert('slot_holds', holdValues(offer, student, released))).toBeNull();
+      expect(await tryInsert('slot_holds', holdValues(offer, student))).toBeNull();
     });
   });
 });
@@ -366,8 +369,8 @@ describe('two transactions (T142)', () => {
     const offer = await committedOffer();
     const [one, two] = [await committedStudent(), await committedStudent()];
     const refused = await race(
-      (db) => insertWith(db, 'slot_holds', holdValues(offer.slotId, one)),
-      (db) => insertWith(db, 'slot_holds', holdValues(offer.slotId, two)),
+      (db) => insertWith(db, 'slot_holds', holdValues(offer, one)),
+      (db) => insertWith(db, 'slot_holds', holdValues(offer, two)),
     );
     expect(refused).toBe(SQLSTATE.uniqueViolation);
     expect(await activeHolds('slot_id', offer.slotId)).toBe(1);
@@ -377,8 +380,8 @@ describe('two transactions (T142)', () => {
     const [offerOne, offerTwo] = [await committedOffer(), await committedOffer()];
     const student = await committedStudent();
     const refused = await race(
-      (db) => insertWith(db, 'slot_holds', holdValues(offerOne.slotId, student)),
-      (db) => insertWith(db, 'slot_holds', holdValues(offerTwo.slotId, student)),
+      (db) => insertWith(db, 'slot_holds', holdValues(offerOne, student)),
+      (db) => insertWith(db, 'slot_holds', holdValues(offerTwo, student)),
     );
     expect(refused).toBe(SQLSTATE.uniqueViolation);
     expect(await activeHolds('student_user_id', student)).toBe(1);
@@ -394,7 +397,7 @@ describe('two transactions (T142)', () => {
     const expired = await insertRow(
       setup,
       'slot_holds',
-      holdValues(offer.slotId, expiredFor, { expires_at: '2026-10-04T08:00:00Z' }),
+      holdValues(offer, expiredFor, { expires_at: '2026-10-04T08:00:00Z' }),
     );
     const release =
       'UPDATE "slot_holds" SET released_at = now() WHERE id = $1 AND released_at IS NULL';
@@ -402,11 +405,11 @@ describe('two transactions (T142)', () => {
     const refused = await race(
       async (db) => {
         await db.query(release, [expired]);
-        await insertWith(db, 'slot_holds', holdValues(offer.slotId, one));
+        await insertWith(db, 'slot_holds', holdValues(offer, one));
       },
       async (db) => {
         secondReleased = (await db.query(release, [expired])).rowCount;
-        await insertWith(db, 'slot_holds', holdValues(offer.slotId, two));
+        await insertWith(db, 'slot_holds', holdValues(offer, two));
       },
     );
     expect(secondReleased).toBe(0);

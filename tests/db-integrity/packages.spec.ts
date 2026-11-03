@@ -55,6 +55,7 @@ import {
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -145,6 +146,7 @@ function surfaceCaller(teacherId: string) {
         teacherProfile: unusedTeacherProfileServices,
         discovery: unusedDiscoveryServices,
         booking: unusedBookingServices,
+        checkout: unusedCheckoutServices,
         catalog,
       },
     }),
@@ -197,6 +199,7 @@ function publishedCaller(teacherId: string, gender: 'male' | 'female') {
         }),
         discovery: unusedDiscoveryServices,
         booking: unusedBookingServices,
+        checkout: unusedCheckoutServices,
       },
     }),
   );

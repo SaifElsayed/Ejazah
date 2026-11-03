@@ -3,8 +3,10 @@
 // caller's transaction and take no lock. A soft-deleted session is left out by the client's extension
 // (T148). T034: generation's one write, an enrollment's sessions in one statement, on the
 // confirmation's transaction, whose caller holds the locks (`generation.service.ts`). T032: the
-// times of a student's sessions in a window, for the booking sheet; read-only, no lock.
-import { calendarDateOf, type LocalDate } from '@ijazah/time';
+// times of a student's sessions in a window, for the booking sheet; read-only, no lock. T033 widens
+// it to the student's and the teacher's, for the one overlap check the hold and the sheet share
+// (FR-351, FR-BOOK-5).
+import { calendarDateOf, type LocalDate, type LocalTime, localTimeOf } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
@@ -32,7 +34,7 @@ export async function lastSessionDateOf(
   return dates;
 }
 
-/** A session's time, as the student's own sessions are read for the booking sheet (T032). */
+/** A session's time, as the parties' own sessions are read for the booking sheet and the hold. */
 export interface SessionTime {
   readonly startsAt: Date;
   readonly endsAt: Date;
@@ -42,19 +44,21 @@ export interface SessionTime {
 const TIME_FREEING_STATUSES = ['cancelled_by_agreement', 'cancelled_by_admin'] as const;
 
 /**
- * The times of the student's sessions that hold time in `[from, to)` (T032, R-205, FR-350): every
- * status but the two cancellations, a soft-deleted one left out by the client's extension, so the
- * sheet leaves out what `sessions_student_no_overlap` would refuse. Over `student_user_id`'s index;
- * bounded by the window, since that constraint keeps one student's sessions from overlapping.
+ * The times of the student's and the teacher's sessions that hold time in `[from, to)` (T032, T033,
+ * R-205, FR-350, FR-351, FR-BOOK-5), as one list: every status but the two cancellations, a
+ * soft-deleted one left out by the client's extension, so a booking leaves out what
+ * `sessions_student_no_overlap` and `sessions_teacher_no_overlap` would refuse. Over the
+ * `student_user_id` and `teacher_user_id` indexes; bounded by the window, since those constraints
+ * keep each party's sessions from overlapping one another.
  */
-export async function studentSessionsBetween(
+export async function partiesSessionsBetween(
   tx: Pick<Transaction, 'session'>,
-  studentUserId: string,
+  parties: { readonly studentUserId: string; readonly teacherUserId: string },
   window: { readonly from: Date; readonly to: Date },
 ): Promise<readonly SessionTime[]> {
   const rows = await tx.session.findMany({
     where: {
-      studentUserId,
+      OR: [{ studentUserId: parties.studentUserId }, { teacherUserId: parties.teacherUserId }],
       status: { notIn: [...TIME_FREEING_STATUSES] },
       scheduledStartAt: { lt: window.to },
       scheduledEndAt: { gt: window.from },
@@ -92,4 +96,45 @@ export async function insertSessions(
   rows: readonly NewSessionRow[],
 ): Promise<void> {
   await tx.session.createMany({ data: [...rows] });
+}
+
+/** One session of an enrollment, as `checkout.status` shows it (T037, FR-386, FR-393, R-TIME-6). */
+export interface EnrollmentSessionRow {
+  readonly sequenceNumber: number;
+  readonly localDate: LocalDate;
+  readonly startTimeLocal: LocalTime;
+  readonly timezone: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
+/**
+ * The enrollment's sessions by sequence number (T037), a soft-deleted one left out by the client's
+ * extension. Over the `(enrollment_id, sequence_number)` index; bounded by the package's count
+ * (at most 52, FR-311).
+ */
+export async function enrollmentSessionsOf(
+  tx: Pick<Transaction, 'session'>,
+  enrollmentId: string,
+): Promise<readonly EnrollmentSessionRow[]> {
+  const rows = await tx.session.findMany({
+    where: { enrollmentId },
+    orderBy: { sequenceNumber: 'asc' },
+    select: {
+      sequenceNumber: true,
+      scheduledDateLocal: true,
+      scheduledStartTimeLocal: true,
+      timezone: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+    },
+  });
+  return rows.map((row) => ({
+    sequenceNumber: row.sequenceNumber,
+    localDate: calendarDateOf(row.scheduledDateLocal),
+    startTimeLocal: localTimeOf(row.scheduledStartTimeLocal),
+    timezone: row.timezone,
+    startsAt: row.scheduledStartAt,
+    endsAt: row.scheduledEndAt,
+  }));
 }

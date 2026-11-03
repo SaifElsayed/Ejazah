@@ -39,6 +39,7 @@ import {
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -375,6 +376,7 @@ const caller = createAppCallerFactory(
       teacherProfile: unusedTeacherProfileServices,
       discovery: unusedDiscoveryServices,
       booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
     },
   }),
 );

@@ -11,7 +11,9 @@
 // Each action answers what it moved, the state before and after, for its audit entry (T116);
 // suspend, ban and reinstate lock the account's row before they read it (T126), so the `before`
 // they answer is the state they moved and a concurrent move on the account waits for them; a ban
-// then locks the application's row too (T164), always after the account's.
+// then locks the application's row too (T164), always after the account's. A revocation locks the
+// account's row first too (PR #120's review, M1): it turns the bookable predicate false, so a Pay or
+// a confirmation holding the account is waited for, and one after it reads the revocation.
 // Each of the three ends every session of the person (`user_sessions.revoked_reason`) and calls the
 // one consequences entry (`consequences.ts`), all on the administrator kind's transaction, so the
 // change, the revocations, the consequences and the audit entry commit together.
@@ -147,6 +149,7 @@ export class StandingService {
     teacherUserId: string,
     reason: string,
   ): Promise<VerificationMove> {
+    await this.#store.lockAccount(tx, teacherUserId);
     const standing = await this.#teacher(tx, teacherUserId);
     if (standing.teacher.verificationStatus !== 'approved' || standing.accountStatus === 'banned') {
       throw conflict(standing);

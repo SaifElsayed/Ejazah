@@ -21,6 +21,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -127,6 +128,7 @@ function callerAs(session: UserSession | null): Caller {
     teacherProfile: unusedTeacherProfileServices,
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
+    checkout: unusedCheckoutServices,
     catalog,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });

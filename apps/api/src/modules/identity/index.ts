@@ -72,7 +72,12 @@ export function createTeacherProfileService(
  * The payments module's two entries for a signed recipient event, on its transaction, and the hash
  * that routes the event to its teacher (T077, R-114, R-121: payments calls identity, never back).
  */
-export { markPayoutRejected, markPayoutVerified, payoutRefHash } from './payout.service.js';
+export {
+  lockPayoutHolder,
+  markPayoutRejected,
+  markPayoutVerified,
+  payoutRefHash,
+} from './payout.service.js';
 
 /**
  * What the module's routers call, carried by every request in `AppServices.identity` (T048): each

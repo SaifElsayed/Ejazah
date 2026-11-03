@@ -9,9 +9,10 @@
 // THE SLOTS. Catalog's offered slots of the teacher (R-API-6) of exactly the package's length; of
 // those, the ones free on their first session's date by T026's occupancy (`offerableOccurrences`:
 // no active hold, no enrollment awaiting payment, a confirmed one's slot again from the week after
-// its final session plus the buffer, FR-394); of those, the ones whose first session overlaps none
-// of the student's own sessions, read through the sessions module's entry over the window the first
-// sessions span (R-205). The first session is `firstOccurrenceAfter` with `first_session_lead_hours`
+// its final session plus the buffer, FR-394); of those, the ones none of whose sessions overlaps
+// one of the student's or the teacher's own sessions, by the one check the hold applies too
+// (`session-overlap.service.ts`, T033: every one of the package's sessions, not its first alone;
+// FR-351, FR-BOOK-5, R-205). The first session is `firstOccurrenceAfter` with `first_session_lead_hours`
 // from now in the slot's own zone, the call generation makes from the confirmation (T034); the last
 // is the package's session count of consecutive weeks from it by `resolveOccurrences`, the call
 // generation makes for the rest (R-209, FR-368, FR-386). No date is computed here (R-TIME-1); two
@@ -27,7 +28,7 @@
 // Read-only: no lock, nothing written (T005's rule 1). The answer is a preview; the hold (T033)
 // decides under its locks.
 import type { BookingSlot, BookingSlotsInput, BookingSlotsOutput } from '@ijazah/contracts';
-import { type DayOfWeek, type Occurrence, resolveOccurrences } from '@ijazah/time';
+import type { Occurrence } from '@ijazah/time';
 
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
@@ -41,13 +42,18 @@ import {
   offeredSlotsOf,
 } from '../catalog/index.js';
 import { accountTimezone, visibleTeachers } from '../identity/index.js';
-import { type SessionTime, studentSessionsBetween } from '../sessions/index.js';
+import { partiesSessionsBetween } from '../sessions/index.js';
 import {
   type DiscoveryClock,
   FIRST_SESSION_LEAD_SETTING,
   firstSessionLeadHours,
   offerableOccurrences,
 } from './nearest-slot.service.js';
+import {
+  freeOfPartiesSessions,
+  packageSessionsOn,
+  type SessionsBetween,
+} from './session-overlap.service.js';
 import {
   occupancyOf,
   SLOT_RELEASE_BUFFER_SETTING,
@@ -72,11 +78,7 @@ export interface BookingSlotsStore {
     slotIds: readonly string[],
     bufferWeeks: () => Promise<number>,
   ): Promise<ReadonlyMap<string, SlotOccupancy>>;
-  studentSessionsBetween(
-    tx: Transaction,
-    studentUserId: string,
-    window: { readonly from: Date; readonly to: Date },
-  ): Promise<readonly SessionTime[]>;
+  sessionsBetween: SessionsBetween;
   teacherTimezone(tx: Transaction, teacherUserId: string): Promise<string | null>;
 }
 
@@ -88,50 +90,15 @@ export const bookingSlotsStore: BookingSlotsStore = {
       .length === 1,
   offeredSlotsOf,
   occupancyOf,
-  studentSessionsBetween,
+  sessionsBetween: partiesSessionsBetween,
   teacherTimezone: accountTimezone,
 };
 
-/** A free slot with its first session by FR-368's rule. */
+/** A free slot with its first session by FR-368's rule, and every session of the package on it. */
 interface Offerable {
   readonly slot: OfferedSlot;
   readonly first: Occurrence;
-}
-
-/** The window the first sessions span: the earliest start to the latest end. */
-export function windowOf(offerable: readonly Offerable[]): { from: Date; to: Date } {
-  // Canonical UTC instants order as text.
-  const starts = offerable.map(({ first }) => first.startsAt).sort();
-  const ends = offerable.map(({ first }) => first.endsAt).sort();
-  const from = starts.at(0);
-  const to = ends.at(-1);
-  if (from === undefined || to === undefined) throw new Error('windowOf: no first session');
-  return { from: new Date(from), to: new Date(to) };
-}
-
-/** Whether `first` overlaps one of `sessions`; each range holds its start and not its end. */
-export function overlapsAny(first: Occurrence, sessions: readonly SessionTime[]): boolean {
-  const start = Date.parse(first.startsAt);
-  const end = Date.parse(first.endsAt);
-  return sessions.some(
-    ({ startsAt, endsAt }) => start < endsAt.getTime() && startsAt.getTime() < end,
-  );
-}
-
-/** The package's last session on the slot: its `sessionCount`-th week from the first (R-209). */
-export function lastSessionOf(
-  slot: OfferedSlot,
-  first: Occurrence,
-  sessionCount: number,
-): Occurrence {
-  const occurrences = resolveOccurrences(
-    // `availability_slots.day_of_week` is 0 to 6 by its check (ERD §15 rule 37); the package asserts it.
-    { ...slot, dayOfWeek: slot.dayOfWeek as DayOfWeek },
-    { fromLocalDate: first.requestedLocalDate, count: sessionCount },
-  );
-  const last = occurrences.at(-1);
-  if (last === undefined) throw new Error('resolveOccurrences returned no occurrence');
-  return last;
+  readonly sessions: readonly Occurrence[];
 }
 
 /** The seconds a `time` column carries and the contract's `HH:MM` does not (as T019's slots). */
@@ -139,10 +106,10 @@ const SECONDS = ':00';
 
 /** One slot of the answer, its previews the requested local dates generation stores (ADR 0009 D1). */
 export function bookingSlotOf(
-  { slot, first }: Offerable,
+  { slot, first, sessions }: Offerable,
   pkg: Pick<BookablePackage, 'sessionCount' | 'sessionDurationMinutes'>,
 ): BookingSlot {
-  const last = lastSessionOf(slot, first, pkg.sessionCount);
+  const last = sessions.at(-1) ?? first;
   return {
     slotId: slot.id,
     dayOfWeek: slot.dayOfWeek,
@@ -190,9 +157,14 @@ export async function bookingSlotsOf(
     clock.bufferWeeks,
   );
   const free = offerableOccurrences(slots, occupancy, clock);
-  const own =
-    free.length === 0 ? [] : await store.studentSessionsBetween(tx, student.userId, windowOf(free));
-  const offered = free.filter(({ first }) => !overlapsAny(first, own)).toSorted(bySoonest);
+  const runs = free.map((one) => ({
+    ...one,
+    sessions: packageSessionsOn(one.slot, one.first, pkg.sessionCount),
+  }));
+  const parties = { studentUserId: student.userId, teacherUserId: pkg.teacherUserId };
+  const offered = (await freeOfPartiesSessions(tx, store.sessionsBetween, parties, runs)).toSorted(
+    bySoonest,
+  );
   const teacherTimezone =
     sharedZoneOf(offered) ?? (await store.teacherTimezone(tx, pkg.teacherUserId));
   if (teacherTimezone === null) throw new Error('booking.slots: the bookable teacher has no zone');

@@ -31,6 +31,7 @@ import { PUBLIC_FORM_MAX_BYTES, PUBLIC_PAGE_CSP } from '../../../platform/web/ro
 import {
   unusedAdminServices,
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -68,6 +69,7 @@ const services = {
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
+  checkout: unusedCheckoutServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

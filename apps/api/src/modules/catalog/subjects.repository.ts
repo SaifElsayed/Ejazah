@@ -24,6 +24,22 @@ export interface SubjectRow {
   readonly nameEn: string;
 }
 
+/**
+ * Of `ids`, each subject with both names, active or not (T037: an enrollment keeps the subject it
+ * was bought in, FR-358), on `tx`. Bounded by the ids given.
+ */
+export async function subjectSummariesOf(
+  tx: Pick<Transaction, 'subject'>,
+  ids: readonly string[],
+): Promise<ReadonlyMap<string, SubjectRow>> {
+  if (ids.length === 0) return new Map();
+  const rows = await tx.subject.findMany({
+    where: { id: { in: [...ids] } },
+    select: { id: true, nameAr: true, nameEn: true },
+  });
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
 export class SubjectsRepository {
   readonly #database: Client;
 

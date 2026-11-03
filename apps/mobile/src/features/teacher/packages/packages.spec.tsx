@@ -178,7 +178,11 @@ describe('Packages', () => {
       pathname: '/(teacher)/packages/[id]',
       params: { id: 'new' },
     });
-    await fireEvent.press(screen.getAllByRole('button', { name: ar('common.action.edit') })[1]!);
+    // «باقة جديدة» is drawn before the list arrives, so the cards' buttons are waited for (PR #120's
+    // pipeline, the follow-up under T021).
+    await fireEvent.press(
+      (await screen.findAllByRole('button', { name: ar('common.action.edit') }))[1]!,
+    );
     expect(mockNavigate).toHaveBeenCalledWith({
       pathname: '/(teacher)/packages/[id]',
       params: { id: ijazahTrack.id },

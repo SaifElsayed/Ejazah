@@ -13,7 +13,9 @@
 // - `markPayoutVerified` and `markPayoutRejected` are the payments module's two entries, called on
 //   its transaction with the hash of the reference the signed event carried (R-114, R-121: payments
 //   calls identity, never back). Each answers false for a hash no teacher holds and changes no row,
-//   so a verdict for an account a replacement retired changes nothing. The gateway's latest verdict
+//   so a verdict for an account a replacement retired changes nothing. A registration and a
+//   rejection clear `payout_verified_at`, which the bookable predicate reads: each locks the
+//   teacher's account first (T005; PR #120's review, M1). The gateway's latest verdict
 //   stands: a rejection leaves even a verified account unverified, a verification clears the
 //   rejection, and a second verification keeps the first instant. A reason is kept as plain text,
 //   control characters made spaces and cut to the contract's length; a rejection with no reason is
@@ -36,10 +38,12 @@ import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import {
   markRejected,
   markVerified,
+  payoutHolderOf,
   type PayoutRow,
   PayoutRepository,
 } from './payout.repository.js';
 import type { IdentityDependencies } from './session.service.js';
+import { lockAccount } from './standing.repository.js';
 
 /** The column the recipient reference is encrypted under, bound to the profile's id (R-DB-8). */
 export const PAYOUT_ACCOUNT_REF_COLUMN = 'teacher_profiles.payout_account_ref_encrypted';
@@ -116,6 +120,10 @@ export class PayoutService {
         input: { details },
       },
       async (tx) => {
+        // The account's row first (T005; PR #120's review, M1): a replacement clears
+        // `payout_verified_at`, which the bookable predicate reads, so a Pay holding the account is
+        // waited for, and one after it reads the account unverified.
+        await lockAccount(tx, teacherUserId);
         // A profile is never hard-deleted, so the row read above is still there.
         if (!(await this.#payouts.storeRecipient(tx, profileId, recipient))) {
           throw new Error('payout: the teacher profile disappeared during registration');
@@ -131,6 +139,16 @@ type Writer = Pick<Transaction, 'teacherProfile'>;
 /** The gateway verified the recipient whose reference hashes to `refHash`; false if no teacher holds it. */
 export function markPayoutVerified(tx: Writer, refHash: string, at: Date): Promise<boolean> {
   return markVerified(tx, refHash, at);
+}
+
+/**
+ * Locks the account of the teacher holding the reference hashing to `refHash`, where one does: the
+ * payments module takes it before a rejection is recorded (PR #120's review, M1). The holder is
+ * read without a lock; a replacement committed meanwhile leaves the rejection matching nobody.
+ */
+export async function lockPayoutHolder(tx: Transaction, refHash: string): Promise<void> {
+  const userId = await payoutHolderOf(tx, refHash);
+  if (userId !== null) await lockAccount(tx, userId);
 }
 
 /** The gateway rejected that recipient, with its reason where it sent one; false if no teacher holds it. */

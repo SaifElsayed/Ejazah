@@ -68,6 +68,8 @@ export const redactedKeys: readonly (readonly string[])[] = [
       'presigned',
       'photo',
       'signature',
+      // T037: the gateway's hosted checkout, which may carry a payment token (data-model §2.4.1).
+      'checkout',
     ].map((file) => [noun, file]),
   ),
   ['storage', 'key'],

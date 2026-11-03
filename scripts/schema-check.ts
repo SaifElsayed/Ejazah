@@ -94,11 +94,13 @@ const AGGREGATE_WORDS: ReadonlySet<string> = new Set([
 ]);
 
 // Columns whose name holds an aggregate word and that are stored on purpose. The first two are
-// caches R-DB-4 declares; the other four are not derived at all.
+// caches R-DB-4 declares; the others are not derived at all.
 const AGGREGATE_NAMES_ALLOWED: ReadonlyMap<string, string> = new Map([
   ['teacher_profiles.average_rating', 'a cache R-DB-4 declares'],
   ['teacher_profiles.review_count', 'a cache R-DB-4 declares'],
   ['enrollments.snapshot_session_count', "the package's count when booked, a snapshot"],
+  // Phase 2 (T036, the owner's decision of 2026-11-03): the count the hold's overlap check covered.
+  ['slot_holds.session_count', "the package's count when held, a snapshot"],
   ['packages.session_count', "a package's own property, set by the teacher"],
   ['otp_codes.attempt_count', 'the state of a code, counted as attempts happen'],
   // Phase 1 (T013, ADR 0019 D3): the lockout pair's count, counted as attempts fail.

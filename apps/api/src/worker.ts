@@ -9,7 +9,8 @@
 // purge stores of both modules bound for the three purge sweeps (T025), the verification module's
 // store of unreferenced documents over the identity and catalog modules' pointers (Phase 1's T093),
 // the admin module's invites with the email port and the invite marks for `deliver-admin-invite`
-// (T066), the stores of deleted people's files for `erase-deleted-files` (B16), every sweep
+// (T066), the stores of deleted people's files for `erase-deleted-files` (B16), `confirm-enrollment`
+// over the database and the settings reader (T039), the two expiry sweeps (T040), every sweep
 // registered on its schedule, and the queue's deliveries run through the
 // registered jobs (T112).
 //
@@ -45,6 +46,9 @@ const [
   catalog,
   { selectPorts, selectPushPort },
   queueing,
+  { CONFIRM_ENROLLMENT, confirmEnrollment },
+  { expireHolds },
+  { expirePendingPayments },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -70,6 +74,9 @@ const [
   import('./modules/catalog/index.js'),
   import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
+  import('./jobs/confirm-enrollment.js'),
+  import('./jobs/expire-holds.js'),
+  import('./jobs/expire-pending-payments.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -142,6 +149,20 @@ const inviteMarks = createRedisSingleUseMarks({
   onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
 });
 
+// The queue, opened before the jobs: `expire-pending-payments` hands a paid order to
+// `confirm-enrollment` on it, added under the payment's id or, when that job failed all its attempts,
+// retried (`addOrRetry`, the owner's decision of 2026-11-03), as the webhook's enqueue in main.ts.
+const connection = queueing.connectionFor(config.REDIS_URL);
+const queue = queueing.openQueue(connection);
+const confirmations = {
+  enqueue: (paymentId: string) =>
+    queueing.addOrRetry(
+      queue,
+      { name: CONFIRM_ENROLLMENT, data: { paymentId }, jobId: paymentId },
+      log,
+    ),
+};
+
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [
   expireIdempotencyKeys(idempotency),
@@ -152,10 +173,16 @@ const jobs: readonly Job[] = [
   purgeUnreferencedDocuments({ store: unreferencedDocuments, storage: ports.storage, settings }),
   eraseDeletedFiles({ stores: erasedFiles, storage: ports.storage }),
   deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
+  // A paid order's confirmation (T039, R-215): the modules' entries on the job's transactions, the
+  // hold's terms and the first session's lead read through the settings reader.
+  confirmEnrollment({ database, settings }),
+  // The expiry sweeps (T040, FR-364), every minute: the holds with no enrollment, booking's; the
+  // orders past their expiry, the holds with an enrollment, and the hand-off of a paid order whose
+  // confirmation was lost, payments', reading `checkout_confirmation_timeout_seconds`.
+  expireHolds({ database }),
+  expirePendingPayments({ database, settings, confirmations }),
 ];
 
-const connection = queueing.connectionFor(config.REDIS_URL);
-const queue = queueing.openQueue(connection);
 await queueing.scheduleSweeps(queue, jobs);
 const worker = queueing.startWorker({
   connection,

@@ -61,6 +61,7 @@ model Package {
   subject Subject @relation(fields: [subjectId], references: [id])
 
   enrollments Enrollment[]
+  slotHolds   SlotHold[]
 
   @@index([teacherUserId])
   @@index([subjectId])

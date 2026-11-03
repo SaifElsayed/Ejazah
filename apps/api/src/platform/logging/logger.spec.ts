@@ -312,3 +312,52 @@ describe('the correlation identifier (T095, FR-040)', () => {
     expect(out.lines).toHaveLength(0);
   });
 });
+
+// T037 (data-model §2.4.1, FR-BOOK-12 (c)): the hosted checkout's address may carry a payment token,
+// so a logged response and a reported error that carry it are written without it, the order's
+// expiry beside it kept.
+describe('the hosted checkout’s address (T037)', () => {
+  const address = `https://checkout.example/pay/${planted}`;
+
+  it('redacts `checkoutUrl`, `checkoutUri` and `checkoutLink` in every spelling', () => {
+    for (const key of [
+      'checkoutUrl',
+      'checkout_url',
+      'checkoutUri',
+      'checkoutLink',
+      'checkout-url',
+      'CHECKOUT_URL',
+    ]) {
+      expect(redact({ [key]: address }), key).toEqual({ [key]: REDACTED });
+    }
+  });
+
+  it('writes a logged checkout response without the address, its expiry kept', () => {
+    const { records, write } = capture();
+    const log = createLogger({ level: 'info', destination: { write } });
+    log.info(
+      {
+        response: {
+          result: {
+            data: { checkoutUrl: address, orderExpiresAt: '2026-11-03T08:10:00.000Z' },
+          },
+        },
+      },
+      'checkout.continue answered',
+    );
+    expect(JSON.stringify(records())).not.toContain(planted);
+    expect(JSON.stringify(records())).toContain('2026-11-03T08:10:00.000Z');
+  });
+
+  it('writes a logged error carrying the address without it, in its cause chain too', () => {
+    const { records, write } = capture();
+    const log = createLogger({ level: 'info', destination: { write } });
+    const cause = Object.assign(new Error('the gateway refused'), { checkoutUrl: address });
+    const error = Object.assign(new Error('checkout failed', { cause }), {
+      details: { checkoutLink: address },
+    });
+    log.error({ err: error }, 'checkout.continue failed');
+    expect(JSON.stringify(records())).not.toContain(planted);
+    expect(JSON.stringify(records())).toContain('the gateway refused');
+  });
+});

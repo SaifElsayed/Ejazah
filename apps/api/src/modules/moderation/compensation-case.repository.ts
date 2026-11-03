@@ -45,3 +45,39 @@ export async function insertCase(
   });
   return id;
 }
+
+/**
+ * When the enrollment's latest compensation case was opened (`disputes.created_at`, the database's
+ * clock), open or not, or null when it has none (T039; the note under T035). Read under the
+ * enrollment's lock, which every opening takes, so no case is opened meanwhile.
+ */
+export async function latestCaseOpenedAt(tx: Client, enrollmentId: string): Promise<Date | null> {
+  const latest = await tx.dispute.findFirst({
+    where: { enrollmentId, kind: 'compensation_case' },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  return latest?.createdAt ?? null;
+}
+
+/**
+ * Of `enrollmentIds`, when each one's latest compensation case was opened, open or not; an enrollment
+ * with none is absent (T040: the sweep hands on a paid order no case covers, as `latestCaseOpenedAt`
+ * tells the confirm job). Read with no lock: the confirm job decides under its own.
+ */
+export async function latestCasesOpenedAt(
+  tx: Client,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, Date>> {
+  if (enrollmentIds.length === 0) return new Map();
+  const rows = await tx.dispute.groupBy({
+    by: ['enrollmentId'],
+    where: { enrollmentId: { in: [...enrollmentIds] }, kind: 'compensation_case' },
+    _max: { createdAt: true },
+  });
+  return new Map(
+    rows.flatMap(({ enrollmentId, _max }) =>
+      _max.createdAt ? [[enrollmentId, _max.createdAt]] : [],
+    ),
+  );
+}

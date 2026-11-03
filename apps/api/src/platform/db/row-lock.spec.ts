@@ -10,6 +10,9 @@
 // second caller of the advisory lock waits for the first and goes on once it commits or rolls back,
 // seen waiting by `pg_stat_activity` as `booking-concurrency.spec.ts` stages a race, so the order is
 // the database's, not timing's. The advisory lock needs no row, so these specs write none.
+//
+// T033 widens the union to `slot_holds` and `payments` (B29's conflict check, the owner's decision
+// of 2026-11-03): their statements, and against Postgres that the application role may run them.
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -42,7 +45,14 @@ function recordingTransaction(): { readonly tx: Transaction; readonly sent: Sent
 const IDS = ['0199d0a0-0000-7000-8000-000000000002', '0199d0a0-0000-7000-8000-000000000001'];
 
 describe('lockRows (T126, T005)', () => {
-  it.each<LockedTable>(['users', 'teacher_profiles', 'availability_slots', 'enrollments'])(
+  it.each<LockedTable>([
+    'users',
+    'teacher_profiles',
+    'availability_slots',
+    'slot_holds',
+    'enrollments',
+    'payments',
+  ])(
     'locks the rows of %s by id, in id order, FOR UPDATE, the ids bound as one uuid array',
     async (table) => {
       const { tx, sent } = recordingTransaction();
@@ -159,7 +169,7 @@ describe(
       return { pid, ended };
     }
 
-    it.each<LockedTable>(['availability_slots', 'enrollments'])(
+    it.each<LockedTable>(['availability_slots', 'slot_holds', 'enrollments', 'payments'])(
       'lockRows on %s is a statement the application role may run',
       async (table) => {
         await expect(

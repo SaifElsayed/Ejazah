@@ -24,8 +24,8 @@
 // (identity's `lockAccount`: the new row references `users`), then
 // `lockKey('teacher-slots', teacherId)`, then reads the zone and the active slots. `update` locks
 // the account, then the key, then the slot's row, then asks whether it is in use and reads the
-// others. The key is never taken after a slot's row, and `checkout.hold` takes the same key before
-// it inserts a hold (R-207), so a save and a hold do not cross. The slot's teacher is read before
+// others. The key is never taken after a slot's row, and `checkout.hold` locks the same account
+// before it inserts a hold (R-207), so a save and a hold do not cross. The slot's teacher is read before
 // its row is locked: it never changes, and a row of another teacher is never locked.
 import {
   type SlotState,
