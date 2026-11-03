@@ -338,6 +338,22 @@ Because no new features are added here, and every team that breaks that rule res
 
 ---
 
+## After the MVP
+
+Features decided for after the MVP. None is built before every phase has closed.
+
+- **An assessment first, then a program paid in stages** (the owner's decision of 2026-11-03). A package whose first session is an assessment:
+  - the first payment is for the assessment session only;
+  - after it, the teacher sets the level, the program's length, the number of sessions and their length (30, 45 or 60 minutes), and the student receives an offer with one total price, the session's price derived from it;
+  - the second payment is the rest, in full or in instalments through Paymob's subscription service (a charge every period the platform sets), the split to the teacher applying there too (OPEN-11's answers of 2026-11-03);
+  - the student continues with the same teacher to the khatma, and the teacher grants the ijazah and issues the sanad.
+
+  What it changes when it is built: (1) an enrollment is confirmed in stages, the assessment after the first payment and the rest after the second; (2) several paid orders on one enrollment become normal, so an order has a kind (assessment, rest, instalment) and FR-375 is amended to tell them apart; (3) the number of sessions and the price are set after the assessment, not by the package; (4) new rules: the time allowed between the assessment and the second payment, and what happens when the student does not pay or stops partway through the instalments.
+
+  Note for Phase 3's Spec Kit cycle (D19): the session code reads the number and the length of sessions from the enrollment's snapshot, never from the package, and nowhere hard to change later assumes that all of an enrollment's sessions are generated at once.
+
+---
+
 ## Descope ladder
 
 Cut in this order if a gate slips. The phase each cut belongs to is in brackets, so a slipping phase knows which of its own deliverables go first.
