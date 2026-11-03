@@ -162,13 +162,19 @@ async function enrollment(
   return id;
 }
 
-/** One hold of `slotId` by a fresh student, active unless `released`. */
-async function hold(tx: Transaction, slotId: string, released: boolean): Promise<void> {
+/** One hold of the offer's slot for its package by a fresh student, active unless `released`. */
+async function hold(
+  tx: Transaction,
+  { slotId, packageId }: { readonly slotId: string; readonly packageId: string },
+  released: boolean,
+): Promise<void> {
   const studentId = (await person(tx)).id;
   await tx.slotHold.create({
     data: {
       slotId,
       studentUserId: studentId,
+      packageId,
+      sessionCount: 1,
       expiresAt: new Date('2026-10-04T07:20:00Z'),
       ...(released ? { releasedAt: new Date('2026-10-04T07:10:00Z') } : {}),
     },
@@ -192,9 +198,9 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
   it('answers true while an active hold uses the slot, and false once it is released', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
-      await hold(tx, on.slotId, true);
+      await hold(tx, on, true);
       expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(false);
-      await hold(tx, on.slotId, false);
+      await hold(tx, on, false);
       expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(true);
     });
   });
@@ -235,7 +241,7 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
   it("never counts another slot's hold or enrollment", async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
-      await hold(tx, on.slotId, false);
+      await hold(tx, on, false);
       await enrollment(tx, on, { status: 'confirmed' });
       expect(await slotInUse(tx, on.otherSlotId, RELEASE)).toBe(false);
     });

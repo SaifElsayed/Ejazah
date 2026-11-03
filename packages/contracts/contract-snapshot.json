@@ -1129,6 +1129,89 @@
           "$[].nameEn": { "required": true, "type": "string" }
         }
       },
+      "checkout.hold": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.packageId": { "required": true, "type": "string" },
+          "$.slotId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.firstSession": { "required": true, "type": "object" },
+          "$.firstSession.localDate": { "required": true, "type": "string" },
+          "$.firstSession.startsAt": { "required": true, "type": "string" },
+          "$.holdId": { "required": true, "type": "string" },
+          "$.lastSession": { "required": true, "type": "object" },
+          "$.lastSession.localDate": { "required": true, "type": "string" },
+          "$.lastSession.startsAt": { "required": true, "type": "string" },
+          "$.summary": { "required": true, "type": "object" },
+          "$.summary.price_piasters": { "required": true, "type": "integer" },
+          "$.summary.sessionCount": { "required": true, "type": "integer" },
+          "$.summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.summary.subject": { "required": true, "type": "object" },
+          "$.summary.subject.id": { "required": true, "type": "string" },
+          "$.summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.summary.teacher": { "required": true, "type": "object" },
+          "$.summary.teacher.displayName": { "required": true, "type": "string" },
+          "$.summary.teacher.teacherId": { "required": true, "type": "string" },
+          "$.summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        }
+      },
+      "checkout.pay": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.holdId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.quoted": { "required": true, "type": "object" },
+          "$.quoted.price_piasters": { "required": true, "type": "integer" },
+          "$.quoted.sessionCount": { "required": true, "type": "integer" },
+          "$.quoted.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.quoted.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.orderExpiresAt": { "required": true, "type": "string" }
+        }
+      },
+      "checkout.retry": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" },
+          "$.orderExpiresAt": { "required": true, "type": "string" }
+        }
+      },
       "discovery.browse": {
         "caller": "student",
         "input": {

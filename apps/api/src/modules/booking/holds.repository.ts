@@ -27,10 +27,16 @@ export interface HoldScope {
   readonly studentUserId?: string;
 }
 
-/** A hold to write; `enrollmentId` is set by FR-PAYG-19's re-hold, NULL at placement (ADR 0010 D2). */
+/**
+ * A hold to write; `enrollmentId` is set by FR-PAYG-19's re-hold, NULL at placement (ADR 0010 D2).
+ * `packageId` and `sessionCount` are the package the hold is for and its session count the overlap
+ * check ran on (B29, the owner's decision of 2026-11-03).
+ */
 export interface NewHold {
   readonly slotId: string;
   readonly studentUserId: string;
+  readonly packageId: string;
+  readonly sessionCount: number;
   readonly enrollmentId: string | null;
   readonly expiresAt: Date;
 }
@@ -124,6 +130,21 @@ export async function cancelPending(
     where: { id: { in: [...enrollmentIds] }, status: 'pending_payment' },
     data: { status: 'cancelled', cancellationReason: reason },
   });
+}
+
+/**
+ * The enrollment's package and snapshot session count, read under its lock: what FR-PAYG-19's
+ * re-hold records on the hold it writes for it (B29). Null when the enrollment is gone.
+ */
+export async function enrollmentTermsOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<{ readonly packageId: string; readonly sessionCount: number } | null> {
+  const row = await tx.enrollment.findUnique({
+    where: { id: enrollmentId },
+    select: { packageId: true, snapshotSessionCount: true },
+  });
+  return row === null ? null : { packageId: row.packageId, sessionCount: row.snapshotSessionCount };
 }
 
 /** Writes the hold and answers its id. */

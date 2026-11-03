@@ -1,0 +1,527 @@
+// T036, T037 — the checkout's orchestration (ARCHITECTURE §8.1, FR-BOOK-12, FR-354 to FR-357; the
+// owner's decisions of 2026-11-03: keyed in two steps), over fakes standing for the idempotency
+// store, the gateway, the cipher and the transaction-level steps. What the fakes show plainly: that
+// the gateway is called outside any transaction and never for a completed key, that a payable
+// previous order is cancelled before the hold is placed again, and that an order the transaction
+// refused or a duplicate made unnecessary is cancelled at the gateway. Over the real tables and the
+// stand-in gateway: `tests/db-integrity/checkout.spec.ts`.
+import { piasters } from '@ijazah/money';
+import { describe, expect, it } from 'vitest';
+
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
+import type { JsonValue } from '../../platform/idempotency/idempotency.service.js';
+import type { CancelOutcome, Checkout } from '../../platform/ports/payment/payment.port.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import {
+  type CheckoutHold,
+  type CheckoutEnrollmentRow,
+  type HeldRow,
+  PayableCheckout,
+} from '../booking/index.js';
+import { CHECKOUT_URL_COLUMN, CheckoutService, type CheckoutSteps } from './checkout.service.js';
+
+const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
+const STUDENT = id(10);
+const TEACHER = id(90);
+const PACKAGE = id(30);
+const SLOT = id(40);
+const HOLD = id(50);
+const ENROLLMENT = id(60);
+const PAYMENT = id(70);
+const OTHER_PAYMENT = id(71);
+const KEY = 'checkout-attempt-0001';
+const student = { userId: STUDENT, gender: 'female' as RequesterGender };
+
+/** Tuesday 2026-11-03, 10:00 in Cairo. */
+const NOW = new Date('2026-11-03T08:00:00Z');
+/** The hold placed at NOW: ten minutes of checkout and five of grace. */
+const HOLD_EXPIRES = new Date('2026-11-03T08:15:00Z');
+const ORDER_EXPIRES = new Date('2026-11-03T08:10:00Z');
+
+const settings: SettingsReader = {
+  read: async (key, schema) =>
+    schema.parse(
+      {
+        slot_hold_ttl_minutes: 10,
+        slot_hold_grace_minutes: 5,
+        first_session_lead_hours: 24,
+        slot_release_buffer_weeks: 0,
+      }[key],
+    ),
+};
+
+/** A key store with Postgres's visible behaviour: a repeat answers the first outcome. */
+function fakeIdempotency(log: unknown[][]) {
+  const stored = new Map<string, JsonValue>();
+  let competitor: JsonValue | undefined;
+  return {
+    stored,
+    /** The next `run` meets a duplicate that committed this outcome first. */
+    duplicateFirst(outcome: JsonValue) {
+      competitor = outcome;
+    },
+    service: {
+      completed: async <T extends JsonValue>(request: { key: string; scope: string }) => {
+        log.push(['key read', request.scope]);
+        return stored.get(`${request.scope}:${request.key}`) as T | undefined;
+      },
+      run: async <T extends JsonValue>(
+        request: { key: string; scope: string },
+        effect: (tx: Transaction) => Promise<T>,
+      ) => {
+        const name = `${request.scope}:${request.key}`;
+        if (competitor !== undefined) {
+          stored.set(name, competitor);
+          competitor = undefined;
+        }
+        const first = stored.get(name);
+        if (first !== undefined) return first as T;
+        log.push(['transaction']);
+        const outcome = await effect({} as Transaction);
+        log.push(['commit']);
+        stored.set(name, outcome);
+        return outcome;
+      },
+    },
+  };
+}
+
+const heldAnswer: CheckoutHold = {
+  holdId: HOLD,
+  expiresAt: HOLD_EXPIRES,
+  summary: {
+    teacher: { teacherId: TEACHER, displayName: 'الشيخ' },
+    subject: { id: id(5), nameAr: 'تجويد', nameEn: 'Tajweed' },
+    track: 'recitation',
+    sessionCount: 4,
+    sessionDurationMinutes: 60,
+    price_piasters: 100_000,
+  },
+  firstSession: {
+    requestedLocalDate: '2026-11-05',
+    startsAt: '2026-11-05T07:00:00.000Z',
+  } as unknown as CheckoutHold['firstSession'],
+  lastSession: {
+    requestedLocalDate: '2026-11-26',
+    startsAt: '2026-11-26T07:00:00.000Z',
+  } as unknown as CheckoutHold['lastSession'],
+};
+
+const enrollmentRow: CheckoutEnrollmentRow = {
+  id: ENROLLMENT,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
+  packageId: PACKAGE,
+  slotId: SLOT,
+  status: 'pending_payment',
+  cancellationReason: null,
+  snapshotPricePiasters: 100_000n,
+  snapshotSessionCount: 4,
+  snapshotDurationMinutes: 60,
+  snapshotSubjectId: id(5),
+  snapshotSlotTimezone: 'Africa/Cairo',
+  snapshotTrack: 'recitation',
+  quotedFirstSessionLocalDate: new Date('2026-11-05T00:00:00Z'),
+};
+const holdRow: HeldRow = {
+  id: HOLD,
+  slotId: SLOT,
+  studentUserId: STUDENT,
+  enrollmentId: ENROLLMENT,
+  expiresAt: HOLD_EXPIRES,
+};
+
+interface World {
+  /** What each placement attempt does, in turn; the last repeats. */
+  readonly placements?: readonly (CheckoutHold | Error)[];
+  readonly cancel?: CancelOutcome;
+  readonly hold?: HeldRow | null;
+  readonly targetError?: Error;
+  readonly lockError?: Error;
+  /** The order's row a repeat reads its address again from. */
+  readonly order?: { status: 'created' | 'paid' | 'failed' | 'expired'; expiresAt: Date };
+  readonly now?: Date;
+  readonly cancelFails?: boolean;
+  readonly payTargetError?: Error;
+}
+
+function setUp(world: World = {}) {
+  const log: unknown[][] = [];
+  const idempotency = fakeIdempotency(log);
+  let placement = 0;
+  let draws = 0;
+  let orders = 0;
+  const steps: CheckoutSteps = {
+    transaction: async (work) => work({} as Transaction),
+    placeHold: async (_tx, who, request, dependencies) => {
+      log.push(['place', who.userId, request.slotId, dependencies.terms.now.toISOString()]);
+      const outcomes = world.placements ?? [heldAnswer];
+      const outcome = outcomes[Math.min(placement, outcomes.length - 1)];
+      placement += 1;
+      if (outcome instanceof Error) throw outcome;
+      return outcome ?? heldAnswer;
+    },
+    retryTarget: async () => {
+      log.push(['read target']);
+      if (world.targetError !== undefined) throw world.targetError;
+      return { enrollment: enrollmentRow, hold: world.hold === undefined ? holdRow : world.hold };
+    },
+    lockOrderTarget: async (_tx, target, stillPayable) => {
+      log.push(['lock target', target.holdId, stillPayable(HOLD_EXPIRES)]);
+      if (world.lockError !== undefined) throw world.lockError;
+    },
+    insertOrder: async (_tx, order) => {
+      log.push(['insert order', order.id, order.gatewayOrderId, [...order.checkoutUrlEncrypted]]);
+    },
+    recordCancelled: async (enrollmentId, paymentId) => {
+      log.push(['record failed', enrollmentId, paymentId]);
+    },
+    studentEnrollment: async () => enrollmentRow,
+    orderById: async (_tx, paymentId) => ({
+      id: paymentId,
+      enrollmentId: ENROLLMENT,
+      status: world.order?.status ?? 'created',
+      expiresAt: world.order?.expiresAt ?? ORDER_EXPIRES,
+      checkoutUrlEncrypted: Uint8Array.from([1, 2, 3]),
+    }),
+    lastOrderOf: async () => null,
+    drawRowId: async () => {
+      draws += 1;
+      log.push(['draw', draws]);
+      return draws === 1 ? PAYMENT : id(100 + draws);
+    },
+    payTarget: async (_tx, request, quoted) => {
+      log.push(['read pay target', request.holdId, quoted.price_piasters]);
+      if (world.payTargetError !== undefined) throw world.payTargetError;
+      return {
+        hold: {
+          id: HOLD,
+          slotId: SLOT,
+          studentUserId: STUDENT,
+          packageId: PACKAGE,
+          sessionCount: 4,
+          enrollmentId: null,
+          expiresAt: world.hold?.expiresAt ?? HOLD_EXPIRES,
+          releasedAt: null,
+        },
+        packageId: PACKAGE,
+        teacherUserId: TEACHER,
+        price_piasters: piasters(100_000),
+      };
+    },
+    enrollOnHold: async (_tx, target, enrolment) => {
+      log.push(['enroll', target.hold.id, enrolment.enrollmentId, enrolment.leadHours]);
+      if (world.lockError !== undefined) throw world.lockError;
+    },
+  };
+  const payment = {
+    createCheckout: async (
+      enrollmentId: string,
+      gross: number,
+      currency: string,
+      latestExpiry: Date,
+    ): Promise<Checkout> => {
+      log.push(['gateway create', enrollmentId, gross, currency, latestExpiry.toISOString()]);
+      orders += 1;
+      return {
+        gatewayOrderId: `fake_ord_${String(orders)}`,
+        checkoutUrl: `https://pay.example/${String(orders)}`,
+        expiresAt: latestExpiry,
+      };
+    },
+    cancelCheckout: async (gatewayOrderId: string): Promise<CancelOutcome> => {
+      log.push(['gateway cancel', gatewayOrderId]);
+      if (world.cancelFails === true) throw new Error('the gateway is down');
+      return world.cancel ?? 'cancelled';
+    },
+  };
+  const cipher = {
+    encrypt: (plaintext: string, column: string, rowId: string) =>
+      Buffer.from(`${column}|${rowId}|${plaintext}`),
+    decrypt: (_stored: Uint8Array, column: string, rowId: string) =>
+      `https://pay.example/again/${column}/${rowId}`,
+  };
+  const reported: Error[] = [];
+  const service = new CheckoutService({
+    settings,
+    idempotency: idempotency.service,
+    payment,
+    cipher,
+    gateway: 'fake',
+    now: () => world.now ?? NOW,
+    report: (error) => void reported.push(error),
+    steps,
+  });
+  return { log, service, idempotency, reported };
+}
+
+async function refusal(promise: Promise<unknown>): Promise<DomainError> {
+  return promise.then(
+    () => {
+      throw new Error('expected a refusal');
+    },
+    (error: unknown) => {
+      if (!(error instanceof DomainError)) throw error;
+      return error;
+    },
+  );
+}
+
+const holdInput = { packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY };
+const retryInput = { enrollmentId: ENROLLMENT, idempotencyKey: KEY };
+const payable = () =>
+  new PayableCheckout(id(61), {
+    paymentId: id(72),
+    gatewayOrderId: 'fake_ord_previous',
+    expiresAt: ORDER_EXPIRES,
+  });
+
+describe('checkout.hold (FR-BOOK-12, FR-357)', () => {
+  it('answers the hold as the contract writes it', async () => {
+    const { service } = setUp();
+    await expect(service.hold(student, holdInput)).resolves.toEqual({
+      holdId: HOLD,
+      expiresAt: HOLD_EXPIRES.toISOString(),
+      summary: heldAnswer.summary,
+      firstSession: { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' },
+      lastSession: { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' },
+    });
+  });
+
+  it('answers a completed key’s outcome without placing anything again', async () => {
+    const { service, log } = setUp();
+    const first = await service.hold(student, holdInput);
+    log.length = 0;
+    await expect(service.hold(student, holdInput)).resolves.toEqual(first);
+    expect(log).toEqual([['key read', 'checkout.hold']]);
+  });
+
+  it('(b) cancels the previous payable order outside any transaction, records it failed, then holds again', async () => {
+    const { service, log } = setUp({ placements: [payable(), heldAnswer] });
+    await expect(service.hold(student, holdInput)).resolves.toMatchObject({ holdId: HOLD });
+    expect(log.filter(([kind]) => kind !== 'place')).toEqual([
+      ['key read', 'checkout.hold'],
+      ['transaction'],
+      ['gateway cancel', 'fake_ord_previous'],
+      ['record failed', id(61), id(72)],
+      ['transaction'],
+      ['commit'],
+    ]);
+  });
+
+  it.each(['paid', 'in_progress'] as const)(
+    '(b) refuses PREVIOUS_CHECKOUT as processing when the gateway answers %s, writing nothing',
+    async (outcome) => {
+      const { service, log } = setUp({ placements: [payable()], cancel: outcome });
+      const error = await refusal(service.hold(student, holdInput));
+      expect(error.code).toBe('PREVIOUS_CHECKOUT');
+      expect(error.details).toEqual([
+        { path: 'enrollmentId', code: id(61) },
+        { path: 'state', code: 'processing' },
+      ]);
+      expect(log.some(([kind]) => kind === 'record failed' || kind === 'commit')).toBe(false);
+    },
+  );
+
+  it('(c) refuses PREVIOUS_CHECKOUT as payable, with the time left, when the gateway offers no cancellation', async () => {
+    const { service, log } = setUp({ placements: [payable()], cancel: 'unsupported' });
+    const error = await refusal(service.hold(student, holdInput));
+    expect(error.details).toEqual([
+      { path: 'enrollmentId', code: id(61) },
+      { path: 'state', code: 'payable' },
+      { path: 'expiresAt', code: ORDER_EXPIRES.toISOString() },
+    ]);
+    expect(log.some(([kind]) => kind === 'record failed' || kind === 'commit')).toBe(false);
+  });
+
+  it('stops when the order it recorded failed comes back payable, rather than loop', async () => {
+    const { service } = setUp({ placements: [payable()] });
+    await expect(service.hold(student, holdInput)).rejects.toThrow(/came back payable/);
+  });
+});
+
+describe('checkout.retry (FR-356, FR-357, ARCHITECTURE §8.1)', () => {
+  it('creates the order outside any transaction, no later than the hold’s expiry minus the grace, then records it with its address encrypted to its row', async () => {
+    const { service, log } = setUp();
+    await expect(service.retry(student, retryInput)).resolves.toEqual({
+      checkoutUrl: 'https://pay.example/1',
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    const encrypted = [
+      ...Buffer.from(`${CHECKOUT_URL_COLUMN}|${PAYMENT}|https://pay.example/1`),
+    ];
+    expect(log).toEqual([
+      ['key read', 'checkout.retry'],
+      ['read target'],
+      ['draw', 1],
+      ['gateway create', ENROLLMENT, piasters(100_000), 'EGP', ORDER_EXPIRES.toISOString()],
+      ['transaction'],
+      ['lock target', HOLD, true],
+      ['insert order', PAYMENT, 'fake_ord_1', encrypted],
+      ['commit'],
+    ]);
+  });
+
+  it('answers a completed key by reading the address again under continue’s conditions, calling no gateway', async () => {
+    const { service, log } = setUp();
+    await service.retry(student, retryInput);
+    log.length = 0;
+    await expect(service.retry(student, retryInput)).resolves.toEqual({
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT}`,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    expect(log).toEqual([['key read', 'checkout.retry']]);
+  });
+
+  it('answers a completed key ORDER_NOT_PAYABLE once its order is no longer payable', async () => {
+    for (const order of [
+      { status: 'paid' as const, expiresAt: ORDER_EXPIRES },
+      { status: 'created' as const, expiresAt: NOW },
+    ]) {
+      const { service } = setUp({ order });
+      await service.retry(student, retryInput);
+      const error = await refusal(service.retry(student, retryInput));
+      expect(error.code).toBe('ORDER_NOT_PAYABLE');
+    }
+  });
+
+  it('answers NOT_FOUND for another student’s enrollment, calling no gateway and writing nothing', async () => {
+    const { service, log } = setUp({ targetError: new DomainError('NOT_FOUND') });
+    const error = await refusal(service.retry(student, retryInput));
+    expect(error.code).toBe('NOT_FOUND');
+    expect(log.some(([kind]) => kind === 'gateway create' || kind === 'transaction')).toBe(false);
+  });
+
+  it.each([
+    ['no active hold', { hold: null }],
+    ['the hold’s expiry minus the grace already past', { now: new Date('2026-11-03T08:10:00Z') }],
+  ])('refuses ORDER_NOT_PAYABLE with %s, calling no gateway', async (_name, world) => {
+    const { service, log } = setUp(world);
+    const error = await refusal(service.retry(student, retryInput));
+    expect(error.code).toBe('ORDER_NOT_PAYABLE');
+    expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
+  });
+
+  it('cancels the new order at the gateway when the transaction refuses it, and answers the refusal', async () => {
+    const { service, log } = setUp({ lockError: new DomainError('ORDER_NOT_PAYABLE') });
+    const error = await refusal(service.retry(student, retryInput));
+    expect(error.code).toBe('ORDER_NOT_PAYABLE');
+    expect(log.at(-1)).toEqual(['gateway cancel', 'fake_ord_1']);
+    expect(log.some(([kind]) => kind === 'insert order')).toBe(false);
+  });
+
+  it('when a duplicate with the same key committed first, answers its outcome and cancels the extra order', async () => {
+    const { service, log, idempotency } = setUp();
+    idempotency.duplicateFirst({ paymentId: OTHER_PAYMENT, orderExpiresAt: ORDER_EXPIRES.toISOString() });
+    await expect(service.retry(student, retryInput)).resolves.toEqual({
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${OTHER_PAYMENT}`,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    expect(log.some(([kind]) => kind === 'insert order')).toBe(false);
+    expect(log).toContainEqual(['gateway cancel', 'fake_ord_1']);
+  });
+
+  it('reports a cancellation the gateway failed, and still answers the refusal it had', async () => {
+    const { service, reported } = setUp({
+      lockError: new DomainError('ORDER_NOT_PAYABLE'),
+      cancelFails: true,
+    });
+    const error = await refusal(service.retry(student, retryInput));
+    expect(error.code).toBe('ORDER_NOT_PAYABLE');
+    expect(reported.map(({ message }) => message)).toEqual(['the gateway is down']);
+  });
+});
+
+const payInput = {
+  holdId: HOLD,
+  quoted: {
+    price_piasters: 100_000,
+    sessionCount: 4,
+    sessionDurationMinutes: 60 as const,
+    track: 'recitation' as const,
+  },
+  idempotencyKey: KEY,
+};
+const ENROLLMENT_DRAWN = PAYMENT;
+const PAYMENT_DRAWN = id(102);
+
+describe('checkout.pay (FR-354, FR-355, FR-357; the owner’s decisions of 2026-11-03)', () => {
+  it('draws the enrollment’s id first, hands it to the gateway outside any transaction, then writes the enrollment and records the order in one', async () => {
+    const { service, log } = setUp();
+    await expect(service.pay(student, payInput)).resolves.toEqual({
+      enrollmentId: ENROLLMENT_DRAWN,
+      checkoutUrl: 'https://pay.example/1',
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    const encrypted = [
+      ...Buffer.from(`${CHECKOUT_URL_COLUMN}|${PAYMENT_DRAWN}|https://pay.example/1`),
+    ];
+    expect(log).toEqual([
+      ['key read', 'checkout.pay'],
+      ['read pay target', HOLD, 100_000],
+      ['draw', 1],
+      ['draw', 2],
+      ['gateway create', ENROLLMENT_DRAWN, piasters(100_000), 'EGP', ORDER_EXPIRES.toISOString()],
+      ['transaction'],
+      ['enroll', HOLD, ENROLLMENT_DRAWN, 24],
+      ['insert order', PAYMENT_DRAWN, 'fake_ord_1', encrypted],
+      ['commit'],
+    ]);
+  });
+
+  it.each([
+    ['SUMMARY_CHANGED', new DomainError('SUMMARY_CHANGED')],
+    ['NOT_FOUND', new DomainError('NOT_FOUND')],
+    ['HOLD_EXPIRED', new DomainError('HOLD_EXPIRED')],
+  ])('refuses %s before the gateway: no order created and nothing written', async (code, error) => {
+    const { service, log } = setUp({ payTargetError: error });
+    const refused = await refusal(service.pay(student, payInput));
+    expect(refused.code).toBe(code);
+    expect(log.some(([kind]) => kind === 'gateway create' || kind === 'transaction')).toBe(false);
+  });
+
+  it('refuses HOLD_EXPIRED past the hold’s expiry minus the grace, calling no gateway', async () => {
+    const { service, log } = setUp({ now: new Date('2026-11-03T08:10:00Z') });
+    const refused = await refusal(service.pay(student, payInput));
+    expect(refused.code).toBe('HOLD_EXPIRED');
+    expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
+  });
+
+  it('cancels the order at the gateway when the summary changed under the locks, and answers SUMMARY_CHANGED', async () => {
+    const { service, log } = setUp({ lockError: new DomainError('SUMMARY_CHANGED') });
+    const refused = await refusal(service.pay(student, payInput));
+    expect(refused.code).toBe('SUMMARY_CHANGED');
+    expect(log.some(([kind]) => kind === 'insert order')).toBe(false);
+    expect(log.at(-1)).toEqual(['gateway cancel', 'fake_ord_1']);
+  });
+
+  it('two calls with one key at the same moment: one enrollment, one address, the extra order cancelled at the gateway', async () => {
+    const { service, log, idempotency } = setUp();
+    idempotency.duplicateFirst({
+      enrollmentId: ENROLLMENT,
+      paymentId: OTHER_PAYMENT,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    await expect(service.pay(student, payInput)).resolves.toEqual({
+      enrollmentId: ENROLLMENT,
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${OTHER_PAYMENT}`,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    expect(log.some(([kind]) => kind === 'enroll' || kind === 'insert order')).toBe(false);
+    expect(log).toContainEqual(['gateway cancel', 'fake_ord_1']);
+  });
+
+  it('answers a completed key’s enrollment and the address read again, calling no gateway', async () => {
+    const { service, log } = setUp();
+    await service.pay(student, payInput);
+    log.length = 0;
+    await expect(service.pay(student, payInput)).resolves.toEqual({
+      enrollmentId: ENROLLMENT_DRAWN,
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT_DRAWN}`,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    expect(log).toEqual([['key read', 'checkout.pay']]);
+  });
+});

@@ -6,13 +6,28 @@
 // its verdict to the identity module's entries (payments imports identity, never the reverse; R-121).
 // Phase 2 (T038): the route's order branch, which records an order event, moves the order, appends a
 // failed order's outcome through booking's entry, and enqueues `confirm-enrollment` on a paid one.
-import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
-import type { Database } from '../../platform/db/prisma.repository.js';
+// Phase 2 (T036): the student's `checkout` procedures, the gateway's orders created outside any
+// transaction and recorded through booking's holds and enrollments (R-208).
+import type {
+  CheckoutHandover,
+  CheckoutHoldInput,
+  CheckoutHoldOutput,
+  CheckoutPayInput,
+  CheckoutPayOutput,
+  CheckoutRetryInput,
+} from '@ijazah/contracts';
+
+import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import { recordOrderFailed } from '../booking/index.js';
 import { markPayoutRejected, markPayoutVerified, payoutRefHash } from '../identity/index.js';
+import type { PaymentGateway } from './checkout.repository.js';
+import { type CheckoutStudent, CheckoutService, checkoutStepsOver } from './checkout.service.js';
 import { type ConfirmationQueue, OrderEventsService } from './order-events.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { RecipientEventsService } from './recipient-events.service.js';
@@ -79,3 +94,53 @@ export function createEncryptedColumns(
  * enrollments' locks (T005).
  */
 export { orderStandingsOf } from './order-standing.repository.js';
+
+/**
+ * The `checkout` procedures' services (T036, R-208), bound once by `main.ts` and carried by the
+ * request context; `checkoutRouter` is mounted under `checkout` by `app.router.ts`.
+ */
+export interface CheckoutServices {
+  hold(student: CheckoutStudent, input: CheckoutHoldInput): Promise<CheckoutHoldOutput>;
+  pay(student: CheckoutStudent, input: CheckoutPayInput): Promise<CheckoutPayOutput>;
+  retry(student: CheckoutStudent, input: CheckoutRetryInput): Promise<CheckoutHandover>;
+}
+
+export { checkoutRouter } from './checkout.router.js';
+export type { CheckoutStudent };
+
+/**
+ * The checkout over the process's client, the kernel's idempotency, the payment port and the column
+ * cipher (T036): the gateway's orders recorded with their address encrypted (R-DB-8).
+ */
+export function createCheckoutServices({
+  database,
+  settings,
+  idempotency,
+  payment,
+  cipher,
+  gateway,
+  now,
+}: {
+  readonly database: Database;
+  readonly settings: SettingsReader;
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run' | 'completed'>;
+  readonly payment: Pick<PaymentPort, 'createCheckout' | 'cancelCheckout'>;
+  readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
+  readonly gateway: PaymentGateway;
+  readonly now?: () => Date;
+}): CheckoutServices {
+  const service = new CheckoutService({
+    settings,
+    idempotency,
+    payment,
+    cipher,
+    gateway,
+    steps: checkoutStepsOver(database, now),
+    ...(now === undefined ? {} : { now }),
+  });
+  return {
+    hold: (student, input) => service.hold(student, input),
+    pay: (student, input) => service.pay(student, input),
+    retry: (student, input) => service.retry(student, input),
+  };
+}

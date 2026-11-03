@@ -191,6 +191,8 @@ describe('the Phase 2 codes (T003; specs/003-booking/contracts/README.md "Errors
     ['SLOT_OVERLAP', 409],
     ['SLOT_IN_USE', 409],
     ['PACKAGE_FROZEN', 409],
+    // B29 (T036, the owner's decisions of 2026-11-03): Pay on a package no longer as the student saw it.
+    ['SUMMARY_CHANGED', 409],
   ] as const)('%s is a stable code with one message, answered %i', (code, status) => {
     const mapped = mapError(new DomainError(code));
     expect(mapped.status).toBe(status);

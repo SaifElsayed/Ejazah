@@ -23,6 +23,7 @@ import { createLogger } from '../platform/logging/logger.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedTeacherProfileServices,
 } from './services.fixtures.js';
@@ -162,6 +163,7 @@ beforeAll(async () => {
       teacherProfile: unusedTeacherProfileServices,
       discovery: unusedDiscoveryServices,
       booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
     },
     adminServices,
   });

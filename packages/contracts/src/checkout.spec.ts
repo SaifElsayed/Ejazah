@@ -39,6 +39,13 @@ const ids = {
 };
 
 const attempt = 'checkout-0199d0a0-0000-7000';
+/** The summary the student saw, as `checkout.pay` sends it (the owner's decisions of 2026-11-03). */
+const quoted = {
+  price_piasters: 150_000,
+  sessionCount: 4,
+  sessionDurationMinutes: 60,
+  track: 'recitation',
+};
 
 const summary = {
   teacher: { teacherId: ids.teacher, displayName: 'أحمد سالم' },
@@ -104,10 +111,14 @@ describe('every checkout input names what is asked for, never who asks (R-GENDER
         ...sent,
       }),
     ).toEqual({ packageId: ids.package, slotId: ids.slot, idempotencyKey: attempt });
-    expect(checkoutPayInput.parse({ holdId: ids.hold, idempotencyKey: attempt, ...sent })).toEqual({
-      holdId: ids.hold,
-      idempotencyKey: attempt,
-    });
+    expect(
+      checkoutPayInput.parse({
+        holdId: ids.hold,
+        quoted,
+        idempotencyKey: attempt,
+        ...sent,
+      }),
+    ).toEqual({ holdId: ids.hold, quoted, idempotencyKey: attempt });
     expect(
       checkoutRetryInput.parse({ enrollmentId: ids.enrollment, idempotencyKey: attempt, ...sent }),
     ).toEqual({ enrollmentId: ids.enrollment, idempotencyKey: attempt });
@@ -119,11 +130,40 @@ describe('every checkout input names what is asked for, never who asks (R-GENDER
   });
 });
 
+describe('pay carries the summary the student saw (T036, the owner’s decisions of 2026-11-03)', () => {
+  const body = { holdId: ids.hold, idempotencyKey: attempt };
+
+  it('requires the price, the session count, the length and the track', () => {
+    expect(checkoutPayInput.safeParse({ ...body, quoted }).success).toBe(true);
+    expect(checkoutPayInput.safeParse(body).success).toBe(false);
+    for (const field of ['price_piasters', 'sessionCount', 'sessionDurationMinutes', 'track']) {
+      const rest = Object.fromEntries(Object.entries(quoted).filter(([name]) => name !== field));
+      expect(checkoutPayInput.safeParse({ ...body, quoted: rest }).success, field).toBe(false);
+    }
+  });
+
+  it('refuses a price that is not a positive whole number of piasters, and values no package holds', () => {
+    for (const change of [
+      { price_piasters: 0 },
+      { price_piasters: -1 },
+      { price_piasters: 1.5 },
+      { price_piasters: '150000' },
+      { sessionCount: 0 },
+      { sessionCount: 53 },
+      { sessionDurationMinutes: 50 },
+      { track: 'other' },
+    ]) {
+      const changed = { ...body, quoted: { ...quoted, ...change } };
+      expect(checkoutPayInput.safeParse(changed).success, JSON.stringify(change)).toBe(false);
+    }
+  });
+});
+
 describe('hold, pay and retry are keyed (FR-357)', () => {
   it('each requires the kernel’s idempotency key and refuses a malformed one', () => {
     const bodies = [
       [checkoutHoldInput, { packageId: ids.package, slotId: ids.slot }],
-      [checkoutPayInput, { holdId: ids.hold }],
+      [checkoutPayInput, { holdId: ids.hold, quoted }],
       [checkoutRetryInput, { enrollmentId: ids.enrollment }],
     ] as const;
     for (const [schema, body] of bodies) {

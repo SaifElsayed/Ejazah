@@ -219,6 +219,27 @@ export class IdempotencyService<TTransaction> {
     }
   }
 
+  /**
+   * The stored outcome of this request when its key is completed and unexpired, read in a short
+   * transaction of its own before the caller's effect; undefined otherwise (B29, T036: a keyed
+   * procedure whose gateway call runs outside any transaction asks this first, so a repeat calls no
+   * gateway). A key another transaction claimed and has not committed is not seen (READ COMMITTED):
+   * `run` then waits on it and answers its outcome. The same key with another input is refused as
+   * `run` refuses it.
+   */
+  async completed<TResult extends JsonValue>(
+    request: IdempotentRequest,
+  ): Promise<TResult | undefined> {
+    const { scope, actorId } = parsePrincipal(request);
+    const key = parseKey(request.key);
+    const now = this.#clock();
+    const row = await this.#store.transaction((tx) => this.#store.find(tx, scope, actorId, key));
+    if (row === null || row.expiresAt <= now) return undefined;
+    const hash = requestHash(request);
+    if (row.requestHash === hash && row.status !== 'completed') return undefined;
+    return this.#replay<TResult>(row, hash);
+  }
+
   /** Deletes every key past its retention (the `expire-idempotency-keys` job). */
   async sweepExpired(): Promise<number> {
     return this.#store.removeExpired(this.#clock());

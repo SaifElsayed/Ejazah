@@ -12,6 +12,13 @@ model SlotHold {
   id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
   slotId        String    @map("slot_id") @db.Uuid
   studentUserId String    @map("student_user_id") @db.Uuid
+  // The package the hold was placed for, as the placement checked it (B29, T036; the owner's
+  // decision of 2026-11-03): Pay names the hold alone, and a teacher may have several packages of
+  // the slot's length.
+  packageId     String    @map("package_id") @db.Uuid
+  // The package's session count when the hold was placed, the count the hold's overlap check ran
+  // on (FR-351); Pay refuses a package whose count changed since (the owner's decision of 2026-11-03).
+  sessionCount  Int       @map("session_count")
   // Set in the transaction that creates the enrollment at Pay; NULL while the student is in
   // checkout before Pay (ADR 0010 D2).
   enrollmentId  String?   @map("enrollment_id") @db.Uuid
@@ -24,10 +31,12 @@ model SlotHold {
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   slot       AvailabilitySlot @relation(fields: [slotId], references: [id])
+  package    Package          @relation(fields: [packageId], references: [id])
   student    User             @relation(fields: [studentUserId], references: [id])
   enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
 
   @@index([slotId])
+  @@index([packageId])
   @@index([studentUserId])
   @@index([enrollmentId])
   @@map("slot_holds")

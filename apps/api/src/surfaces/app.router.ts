@@ -12,7 +12,7 @@
 // and `teacher.credentials` since T056 and T057, and its `account.identityVerification`, merged into
 // identity's `account`, since T068 (R-121); the identity module's `teacher.payout` since T077; the
 // catalog module's `teacher.packages` since T018 and `teacher.slots` since T019; the booking module's
-// `discovery` since T026 and `booking` since T032.
+// `discovery` since T026 and `booking` since T032; the payments module's `checkout` since T036.
 import { bookingRouter, discoveryRouter } from '../modules/booking/index.js';
 import { packagesRouter, slotsRouter, subjectsRouter } from '../modules/catalog/index.js';
 import {
@@ -22,6 +22,7 @@ import {
   payoutRouter,
   teacherProfileRouter,
 } from '../modules/identity/index.js';
+import { checkoutRouter } from '../modules/payments/index.js';
 import {
   applicationRouter,
   credentialsRouter,
@@ -49,6 +50,7 @@ export const appRouter = createAppRouter({
   }),
   discovery: discoveryRouter,
   booking: bookingRouter,
+  checkout: checkoutRouter,
 });
 
 /** The user surface's type, the only one the mobile application may see. */

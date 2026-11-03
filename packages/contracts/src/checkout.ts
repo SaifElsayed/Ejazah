@@ -94,7 +94,24 @@ export const checkoutHoldOutput = z.object({
   lastSession: sessionPreview,
 });
 
-export const checkoutPayInput = z.object({ holdId: z.uuid(), idempotencyKey });
+/**
+ * What the student saw on the summary when they pressed Pay (the owner's decisions of 2026-11-03):
+ * the price, the session count, the length and the track, under the summary's own names. A package
+ * that no longer matches refuses `SUMMARY_CHANGED` before any order, with nothing written.
+ */
+export const checkoutQuotedSummary = z.object({
+  price_piasters: packagePricePiasters,
+  sessionCount: z.int().min(1).max(MAX_SESSION_COUNT),
+  sessionDurationMinutes: sessionLengthMinutes,
+  track: packageTrack,
+});
+
+/** Pay on the hold, with the summary the student saw. */
+export const checkoutPayInput = z.object({
+  holdId: z.uuid(),
+  quoted: checkoutQuotedSummary,
+  idempotencyKey,
+});
 
 /** The hosted checkout handed over, and the order's expiry the countdown runs to (FR-358). */
 export const checkoutHandover = z.object({
@@ -156,6 +173,7 @@ export type CheckoutSummary = z.infer<typeof checkoutSummary>;
 export type EnrollmentSession = z.infer<typeof enrollmentSession>;
 export type CheckoutHoldInput = z.infer<typeof checkoutHoldInput>;
 export type CheckoutHoldOutput = z.infer<typeof checkoutHoldOutput>;
+export type CheckoutQuotedSummary = z.infer<typeof checkoutQuotedSummary>;
 export type CheckoutPayInput = z.infer<typeof checkoutPayInput>;
 export type CheckoutHandover = z.infer<typeof checkoutHandover>;
 export type CheckoutPayOutput = z.infer<typeof checkoutPayOutput>;

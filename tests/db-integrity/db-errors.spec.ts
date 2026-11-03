@@ -115,6 +115,11 @@ async function committedOffer(): Promise<Offer> {
   return offer;
 }
 
+/** The slot and package a hold of the offer names (B29: a hold records its package and count). */
+function heldFor(offer: Offer): { slotId: string; packageId: string; sessionCount: number } {
+  return { slotId: offer.slotId, packageId: offer.packageId, sessionCount: 4 };
+}
+
 /** A student, committed and recorded for removal. */
 async function committedStudent(): Promise<string> {
   const id = await makeUser(setup);
@@ -185,10 +190,10 @@ describe('the four refusals, each named exactly (T006, R-215)', () => {
     const [first, second] = await Promise.all([committedStudent(), committedStudent()]);
     const error = await refusal(async (tx) => {
       await tx.slotHold.create({
-        data: { slotId: offer.slotId, studentUserId: first, expiresAt: HOLD_EXPIRES_AT },
+        data: { ...heldFor(offer), studentUserId: first, expiresAt: HOLD_EXPIRES_AT },
       });
       await tx.slotHold.create({
-        data: { slotId: offer.slotId, studentUserId: second, expiresAt: HOLD_EXPIRES_AT },
+        data: { ...heldFor(offer), studentUserId: second, expiresAt: HOLD_EXPIRES_AT },
       });
     });
     expect(namedAs(error)).toEqual(['slot_holds_slot_id_active_key']);
@@ -199,10 +204,10 @@ describe('the four refusals, each named exactly (T006, R-215)', () => {
     const student = await committedStudent();
     const error = await refusal(async (tx) => {
       await tx.slotHold.create({
-        data: { slotId: one.slotId, studentUserId: student, expiresAt: HOLD_EXPIRES_AT },
+        data: { ...heldFor(one), studentUserId: student, expiresAt: HOLD_EXPIRES_AT },
       });
       await tx.slotHold.create({
-        data: { slotId: other.slotId, studentUserId: student, expiresAt: HOLD_EXPIRES_AT },
+        data: { ...heldFor(other), studentUserId: student, expiresAt: HOLD_EXPIRES_AT },
       });
     });
     expect(namedAs(error)).toEqual(['slot_holds_student_user_id_active_key']);
@@ -250,10 +255,13 @@ describe('anything else is none of the four, so the caller rethrows it (T006)', 
 
   it('a foreign key refusal on slot_holds', async () => {
     const student = await committedStudent();
+    const offer = await committedOffer();
     const error = await refusal((tx) =>
       tx.slotHold.create({
         data: {
           slotId: '0199d0a0-0000-7000-8000-000000000001',
+          packageId: offer.packageId,
+          sessionCount: 4,
           studentUserId: student,
           expiresAt: HOLD_EXPIRES_AT,
         },
@@ -367,10 +375,10 @@ describe('withDeferredSessionConstraints (T006, R-210, ERD §15 rule 19)', () =>
     const error = await refusal(async (tx) => {
       await withDeferredSessionConstraints(tx);
       await tx.slotHold.create({
-        data: { slotId: offer.slotId, studentUserId: first, expiresAt: HOLD_EXPIRES_AT },
+        data: { ...heldFor(offer), studentUserId: first, expiresAt: HOLD_EXPIRES_AT },
       });
       await tx.slotHold.create({
-        data: { slotId: offer.slotId, studentUserId: second, expiresAt: HOLD_EXPIRES_AT },
+        data: { ...heldFor(offer), studentUserId: second, expiresAt: HOLD_EXPIRES_AT },
       });
       reached = true;
     });
