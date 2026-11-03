@@ -14,9 +14,10 @@ export interface EventRow {
 }
 
 export class EventRows {
-  readonly #database: Database;
+  readonly #database: Pick<Database, 'paymentEvent'>;
 
-  constructor(database: Database) {
+  /** Over the spec's client, or over the transaction an event is recorded on (T041). */
+  constructor(database: Pick<Database, 'paymentEvent'>) {
     this.#database = database;
   }
 

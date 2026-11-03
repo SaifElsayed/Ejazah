@@ -194,6 +194,12 @@ export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
  * reads the held slot the same way, its zone the snapshot's (T036).
  */
 export { readSlot } from './slots.repository.js';
+/**
+ * A teacher's slots' advisory lock (R-206) and every slot of the teacher, active or not, each on the
+ * caller's transaction: booking's release of the holds on them when the teacher's account ends
+ * (T041, R-219), taken after the account's lock and before the holds' (T005).
+ */
+export { lockTeacherSlots, slotsOf as teacherSlotsOf } from './slots.repository.js';
 export type { SlotRow } from './slots.service.js';
 /** An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350). */
 export { type BookablePackage, bookablePackageOf } from './packages.repository.js';

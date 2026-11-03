@@ -96,6 +96,33 @@ export function activeHoldsOf(tx: Client, scope: Required<HoldScope>): Promise<H
   });
 }
 
+/** Which active holds an account's end is about: those on a teacher's slots, or a student's (T041). */
+export type ActiveHoldScope =
+  { readonly slotIds: readonly string[] } | { readonly studentUserId: string };
+
+/**
+ * The ids of the scope's active holds, expired or not, in id order (the order they are locked in):
+ * at most one per slot, and one of a student (ERD §15 rules 17–18). Read with no lock; the release
+ * locks them and reads them again (T041).
+ */
+export async function activeHoldIds(
+  tx: Client,
+  scope: ActiveHoldScope,
+): Promise<readonly string[]> {
+  if ('slotIds' in scope && scope.slotIds.length === 0) return [];
+  const rows = await tx.slotHold.findMany({
+    where: {
+      releasedAt: null,
+      ...('slotIds' in scope
+        ? { slotId: { in: [...scope.slotIds] } }
+        : { studentUserId: scope.studentUserId }),
+    },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  });
+  return rows.map(({ id }) => id);
+}
+
 /** Releases the still-active holds of `ids` at `at`, by one conditional update. */
 export async function markReleased(tx: Client, ids: readonly string[], at: Date): Promise<void> {
   if (ids.length === 0) return;

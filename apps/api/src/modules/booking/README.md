@@ -26,6 +26,8 @@ Write the `sessions` table; session generation is requested through the sessions
 
 `hold-expiry.repository.ts` (T040) is what the expiry sweeps read, with no lock: a page of the expired active holds with no enrollment (`expire-holds`) and with one (`expire-pending-payments`), each released through `releaseHolds` under `expired`, which locks before it decides; and, of some enrollments, those `confirm-enrollment` may still take (awaiting payment or cancelled), for the sweep's hand-off of a paid order.
 
+`termination.subscriber.ts` (T041) is booking's consequence of an account's end, subscribed to identity's `AccountConsequences` by `main.ts` over payments' `orderStandingsOf`: on the termination's transaction, after its account lock, it takes the teacher's slots' key, reads the active holds on the account's slots and the account's own (`activeHoldIds` in `holds.repository.ts`) and releases them through `releaseHolds`, `teacher_suspended` or `admin` (`account_deleted` for a deletion), so their enrollments awaiting payment are cancelled with one `enrollment_events` row each and one with a paid order is left for the confirm job. It writes no row referencing an account.
+
 ## Requirement ids
 
 - FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`, `slot-occupancy.service.ts`.
@@ -35,4 +37,5 @@ Write the `sessions` table; session generation is requested through the sessions
 - FR-350, FR-386 (the booking sheet's slots and their first and last sessions; R-205, R-209): `booking-slots.service.ts`, `booking.router.ts`.
 - FR-351 to FR-353, FR-363, FR-PAYG-19, FR-BOOK-5 (holds, their releases and the one overlap check; R-208): `holds.service.ts`, `holds.repository.ts`, `session-overlap.service.ts`.
 - FR-385 (the outcomes' rows; R-216): `enrollment-events.repository.ts`.
+- R-219, FR-PAYG-6, FR-BOOK-9 (an account's end releases its holds and cancels their enrollments awaiting payment): `termination.subscriber.ts`.
 - FR-361, FR-362, FR-375, FR-PAYG-19 (the confirmation and the refusal of a paid order, for `confirm-enrollment`; R-215): `confirmation.service.ts`, `confirmation.repository.ts`.
