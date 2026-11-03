@@ -91,6 +91,8 @@ export async function insertOrder(tx: Client, order: NewOrder): Promise<void> {
 export interface AddressedOrder {
   readonly id: string;
   readonly enrollmentId: string;
+  /** The gateway's order reference, FR-384's `reference`. */
+  readonly gatewayOrderId: string;
   readonly status: OrderStatus;
   readonly expiresAt: Date;
   readonly checkoutUrlEncrypted: Uint8Array | null;
@@ -103,6 +105,7 @@ export function orderById(tx: Client, paymentId: string): Promise<AddressedOrder
     select: {
       id: true,
       enrollmentId: true,
+      gatewayOrderId: true,
       status: true,
       expiresAt: true,
       checkoutUrlEncrypted: true,
@@ -118,6 +121,7 @@ export function lastOrderOf(tx: Client, enrollmentId: string): Promise<Addressed
     select: {
       id: true,
       enrollmentId: true,
+      gatewayOrderId: true,
       status: true,
       expiresAt: true,
       checkoutUrlEncrypted: true,

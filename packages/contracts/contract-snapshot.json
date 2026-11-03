@@ -1129,6 +1129,59 @@
           "$[].nameEn": { "required": true, "type": "string" }
         }
       },
+      "checkout.continue": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" },
+          "$.orderExpiresAt": { "required": true, "type": "string" }
+        }
+      },
+      "checkout.current": {
+        "caller": "student",
+        "input": { "$": { "type": "object" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.hold": { "type": "object" },
+          "$.hold.enrollmentId": { "type": "string" },
+          "$.hold.expiresAt": { "required": true, "type": "string" },
+          "$.hold.holdId": { "required": true, "type": "string" },
+          "$.hold.lastOrder": { "type": "object" },
+          "$.hold.lastOrder.canContinue": { "required": true, "type": "boolean" },
+          "$.hold.lastOrder.expiresAt": { "required": true, "type": "string" },
+          "$.hold.lastOrder.status": {
+            "required": true,
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          },
+          "$.hold.summary": { "required": true, "type": "object" },
+          "$.hold.summary.price_piasters": { "required": true, "type": "integer" },
+          "$.hold.summary.sessionCount": { "required": true, "type": "integer" },
+          "$.hold.summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.hold.summary.subject": { "required": true, "type": "object" },
+          "$.hold.summary.subject.id": { "required": true, "type": "string" },
+          "$.hold.summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.hold.summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.hold.summary.teacher": { "required": true, "type": "object" },
+          "$.hold.summary.teacher.displayName": { "required": true, "type": "string" },
+          "$.hold.summary.teacher.teacherId": { "required": true, "type": "string" },
+          "$.hold.summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        }
+      },
       "checkout.hold": {
         "caller": "student",
         "input": {
@@ -1210,6 +1263,79 @@
           "$": { "type": "object" },
           "$.checkoutUrl": { "required": true, "type": "string" },
           "$.orderExpiresAt": { "required": true, "type": "string" }
+        }
+      },
+      "checkout.status": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.cancellationReason": {
+            "type": "string",
+            "values": [
+              "account_deleted",
+              "admin",
+              "checkout_abandoned",
+              "gender_correction",
+              "payment_expired",
+              "payment_failed",
+              "slot_unavailable",
+              "teacher_suspended"
+            ]
+          },
+          "$.firstSessionMoved": { "type": "object" },
+          "$.firstSessionMoved.actual": { "required": true, "type": "string" },
+          "$.firstSessionMoved.quoted": { "required": true, "type": "string" },
+          "$.lastOrder": { "required": true, "type": "object" },
+          "$.lastOrder.reference": { "required": true, "type": "string" },
+          "$.lastOrder.status": {
+            "required": true,
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          },
+          "$.sessions": { "type": "array" },
+          "$.sessions[]": { "type": "object" },
+          "$.sessions[].endsAt": { "required": true, "type": "string" },
+          "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].startsAt": { "required": true, "type": "string" },
+          "$.sessions[].timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.summary": { "required": true, "type": "object" },
+          "$.summary.price_piasters": { "required": true, "type": "integer" },
+          "$.summary.sessionCount": { "required": true, "type": "integer" },
+          "$.summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.summary.subject": { "required": true, "type": "object" },
+          "$.summary.subject.id": { "required": true, "type": "string" },
+          "$.summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.summary.teacher": { "required": true, "type": "object" },
+          "$.summary.teacher.displayName": { "required": true, "type": "string" },
+          "$.summary.teacher.teacherId": { "required": true, "type": "string" },
+          "$.summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
         }
       },
       "discovery.browse": {

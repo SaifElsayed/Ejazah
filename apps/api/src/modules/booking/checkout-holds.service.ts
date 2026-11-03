@@ -311,7 +311,11 @@ export async function retryTargetOf(
  */
 export async function lockOrderTarget(
   tx: Transaction,
-  target: { readonly holdId: string; readonly enrollmentId: string; readonly studentUserId: string },
+  target: {
+    readonly holdId: string;
+    readonly enrollmentId: string;
+    readonly studentUserId: string;
+  },
   stillPayable: (holdExpiresAt: Date) => boolean,
   store: OrderTargetStore = orderTargetStore,
 ): Promise<void> {

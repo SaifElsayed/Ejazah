@@ -101,6 +101,30 @@ const checkout: CheckoutServices = {
     calls.push(['retry', ...args]);
     return handover;
   },
+  current: async (...args) => {
+    calls.push(['current', ...args]);
+    return {
+      hold: {
+        holdId: HOLD,
+        expiresAt: '2026-11-03T08:15:00.000Z',
+        enrollmentId: ENROLLMENT,
+        summary,
+        lastOrder: { status: 'created', expiresAt: handover.orderExpiresAt, canContinue: true },
+      },
+    };
+  },
+  continue: async (...args) => {
+    calls.push(['continue', ...args]);
+    return handover;
+  },
+  status: async (...args) => {
+    calls.push(['status', ...args]);
+    return {
+      status: 'pending_payment',
+      lastOrder: { status: 'created', reference: 'ord-1' },
+      summary,
+    };
+  },
 };
 
 const quoted = {
@@ -183,18 +207,37 @@ describe.each(Object.entries(procedures))("'checkout.%s' (T036)", (name, call) =
 // The authorization gate reads one path per test: `checkout.hold` and `checkout.retry` named here.
 describe('the student kind on each keyed procedure (R-MOBILE-13)', () => {
   it("refuses 'checkout.hold' UNAUTHENTICATED and FORBIDDEN", async () => {
-    await expect(callerAs(null).checkout.hold({ packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY })).rejects.toEqual(refused('UNAUTHENTICATED'));
-    await expect(callerAs(sessionOf('teacher')).checkout.hold({ packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY })).rejects.toEqual(refused('FORBIDDEN'));
+    await expect(
+      callerAs(null).checkout.hold({ packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY }),
+    ).rejects.toEqual(refused('UNAUTHENTICATED'));
+    await expect(
+      callerAs(sessionOf('teacher')).checkout.hold({
+        packageId: PACKAGE,
+        slotId: SLOT,
+        idempotencyKey: KEY,
+      }),
+    ).rejects.toEqual(refused('FORBIDDEN'));
   });
 
   it("refuses 'checkout.pay' UNAUTHENTICATED and FORBIDDEN", async () => {
-    await expect(callerAs(null).checkout.pay({ holdId: HOLD, quoted, idempotencyKey: KEY })).rejects.toEqual(refused('UNAUTHENTICATED'));
-    await expect(callerAs(sessionOf('teacher')).checkout.pay({ holdId: HOLD, quoted, idempotencyKey: KEY })).rejects.toEqual(refused('FORBIDDEN'));
+    await expect(
+      callerAs(null).checkout.pay({ holdId: HOLD, quoted, idempotencyKey: KEY }),
+    ).rejects.toEqual(refused('UNAUTHENTICATED'));
+    await expect(
+      callerAs(sessionOf('teacher')).checkout.pay({ holdId: HOLD, quoted, idempotencyKey: KEY }),
+    ).rejects.toEqual(refused('FORBIDDEN'));
   });
 
   it("refuses 'checkout.retry' UNAUTHENTICATED and FORBIDDEN", async () => {
-    await expect(callerAs(null).checkout.retry({ enrollmentId: ENROLLMENT, idempotencyKey: KEY })).rejects.toEqual(refused('UNAUTHENTICATED'));
-    await expect(callerAs(sessionOf('teacher')).checkout.retry({ enrollmentId: ENROLLMENT, idempotencyKey: KEY })).rejects.toEqual(refused('FORBIDDEN'));
+    await expect(
+      callerAs(null).checkout.retry({ enrollmentId: ENROLLMENT, idempotencyKey: KEY }),
+    ).rejects.toEqual(refused('UNAUTHENTICATED'));
+    await expect(
+      callerAs(sessionOf('teacher')).checkout.retry({
+        enrollmentId: ENROLLMENT,
+        idempotencyKey: KEY,
+      }),
+    ).rejects.toEqual(refused('FORBIDDEN'));
   });
 });
 
@@ -210,7 +253,12 @@ describe('the session, never the input (R-GENDER-4)', () => {
         gender: other,
         userId: TEACHER,
       } as never);
-      await caller.checkout.pay({ holdId: HOLD, quoted, idempotencyKey: KEY, gender: other } as never);
+      await caller.checkout.pay({
+        holdId: HOLD,
+        quoted,
+        idempotencyKey: KEY,
+        gender: other,
+      } as never);
       await caller.checkout.retry({
         enrollmentId: ENROLLMENT,
         idempotencyKey: KEY,
@@ -218,19 +266,109 @@ describe('the session, never the input (R-GENDER-4)', () => {
       } as never);
     }
     expect(calls).toEqual([
-      ['hold', { userId: CALLER, gender: 'female' }, { packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY }],
+      [
+        'hold',
+        { userId: CALLER, gender: 'female' },
+        { packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY },
+      ],
       ['pay', { userId: CALLER, gender: 'female' }, { holdId: HOLD, quoted, idempotencyKey: KEY }],
-      ['retry', { userId: CALLER, gender: 'female' }, { enrollmentId: ENROLLMENT, idempotencyKey: KEY }],
-      ['hold', { userId: CALLER, gender: 'male' }, { packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY }],
+      [
+        'retry',
+        { userId: CALLER, gender: 'female' },
+        { enrollmentId: ENROLLMENT, idempotencyKey: KEY },
+      ],
+      [
+        'hold',
+        { userId: CALLER, gender: 'male' },
+        { packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY },
+      ],
       ['pay', { userId: CALLER, gender: 'male' }, { holdId: HOLD, quoted, idempotencyKey: KEY }],
-      ['retry', { userId: CALLER, gender: 'male' }, { enrollmentId: ENROLLMENT, idempotencyKey: KEY }],
+      [
+        'retry',
+        { userId: CALLER, gender: 'male' },
+        { enrollmentId: ENROLLMENT, idempotencyKey: KEY },
+      ],
     ]);
   });
 
   it("answers 'checkout.hold' and 'checkout.retry' parsed by their output schemas", async () => {
     const caller = callerAs(sessionOf('student'));
     await expect(procedures.hold(caller)).resolves.toMatchObject({ holdId: HOLD, summary });
-    await expect(procedures.pay(caller)).resolves.toEqual({ enrollmentId: ENROLLMENT, ...handover });
+    await expect(procedures.pay(caller)).resolves.toEqual({
+      enrollmentId: ENROLLMENT,
+      ...handover,
+    });
     await expect(procedures.retry(caller)).resolves.toEqual(handover);
+  });
+});
+
+/** The three reads (T037): the student kind, no rate limit declared (app-surface.md). */
+const reads = {
+  current: (caller: Caller) => caller.checkout.current({}),
+  continue: (caller: Caller) => caller.checkout.continue({ enrollmentId: ENROLLMENT }),
+  status: (caller: Caller) => caller.checkout.status({ enrollmentId: ENROLLMENT }),
+};
+
+describe('the reads of T037 (FR-BOOK-12 (c), FR-380 to FR-386, M3)', () => {
+  it("refuses 'checkout.current' UNAUTHENTICATED and FORBIDDEN before the service", async () => {
+    await expect(callerAs(null).checkout.current({})).rejects.toEqual(refused('UNAUTHENTICATED'));
+    await expect(callerAs(sessionOf('teacher')).checkout.current({})).rejects.toEqual(
+      refused('FORBIDDEN'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses 'checkout.continue' UNAUTHENTICATED and FORBIDDEN before the service", async () => {
+    await expect(callerAs(null).checkout.continue({ enrollmentId: ENROLLMENT })).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    await expect(
+      callerAs(sessionOf('teacher')).checkout.continue({ enrollmentId: ENROLLMENT }),
+    ).rejects.toEqual(refused('FORBIDDEN'));
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses 'checkout.status' UNAUTHENTICATED and FORBIDDEN before the service", async () => {
+    await expect(callerAs(null).checkout.status({ enrollmentId: ENROLLMENT })).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    await expect(
+      callerAs(sessionOf('teacher')).checkout.status({ enrollmentId: ENROLLMENT }),
+    ).rejects.toEqual(refused('FORBIDDEN'));
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a suspended or a banned student ACCOUNT_RESTRICTED before the service, each read', async () => {
+    for (const call of Object.values(reads)) {
+      for (const who of ['suspended student', 'banned student'] as const) {
+        await expect(call(callerAs(sessionOf(who))), who).rejects.toEqual(
+          refused('ACCOUNT_RESTRICTED'),
+        );
+      }
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('hands each read the session’s account and gender, in both directions, and counts none of them', async () => {
+    for (const gender of ['female', 'male'] as const) {
+      const caller = callerAs(sessionOf('student', gender));
+      for (const call of Object.values(reads)) await call(caller);
+    }
+    expect(calls).toEqual([
+      ['current', { userId: CALLER, gender: 'female' }],
+      ['continue', { userId: CALLER, gender: 'female' }, { enrollmentId: ENROLLMENT }],
+      ['status', { userId: CALLER, gender: 'female' }, { enrollmentId: ENROLLMENT }],
+      ['current', { userId: CALLER, gender: 'male' }],
+      ['continue', { userId: CALLER, gender: 'male' }, { enrollmentId: ENROLLMENT }],
+      ['status', { userId: CALLER, gender: 'male' }, { enrollmentId: ENROLLMENT }],
+    ]);
+    expect(limited).toEqual([]);
+  });
+
+  it('answers each read parsed by its output schema', async () => {
+    const caller = callerAs(sessionOf('student'));
+    await expect(reads.current(caller)).resolves.toMatchObject({ hold: { holdId: HOLD } });
+    await expect(reads.continue(caller)).resolves.toEqual(handover);
+    await expect(reads.status(caller)).resolves.toMatchObject({ status: 'pending_payment' });
   });
 });

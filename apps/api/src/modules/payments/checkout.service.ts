@@ -30,15 +30,29 @@
 // the order's row (R-DB-8), so the order's id is drawn before the row is written, and handed to the
 // student only after the commit.
 //
+// WHAT THE STUDENT READS (T037; FR-BOOK-12 (c), FR-380 to FR-386, data-model §2.4.1). `current` is
+// the student's own unexpired hold with its package's summary now and, after Pay, its last order and
+// whether it can still be continued (`created`, before its `expires_at`); it decrypts nothing.
+// `continue` answers `NOT_FOUND` unless the enrollment is the student's, and decrypts the last
+// order's address only while that order is `created` and before its `expires_at`
+// (`ORDER_NOT_PAYABLE` otherwise, nothing decrypted). `status` answers `NOT_FOUND` unless the
+// enrollment is the student's, and its last order with the gateway's reference; `confirmed` comes
+// only from the row (R-HONEST-1). The address is never logged: the logger's list redacts
+// `checkoutUrl` (T037).
+//
 // A CANCELLATION THE GATEWAY FAILS is reported (T111) and never hides the answer it followed: the
 // order it left is the one FR-375's `duplicate_payment` case covers if it is ever paid.
 import type {
   CheckoutHandover,
   CheckoutHoldInput,
   CheckoutHoldOutput,
+  CheckoutContinueInput,
+  CheckoutCurrentOutput,
   CheckoutPayInput,
   CheckoutPayOutput,
   CheckoutRetryInput,
+  CheckoutStatusInput,
+  CheckoutStatusOutput,
 } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { addMinutes } from '@ijazah/time';
@@ -55,6 +69,10 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import {
   type CheckoutEnrollmentRow,
   type CheckoutHold,
+  type CurrentHold,
+  currentHoldOf,
+  type EnrollmentStatusAnswer,
+  enrollmentStatusOf,
   type Enrolment,
   enrollOnHold,
   type PayTarget,
@@ -157,6 +175,14 @@ export interface CheckoutSteps {
   orderById(tx: Transaction, paymentId: string): Promise<AddressedOrder | null>;
   lastOrderOf(tx: Transaction, enrollmentId: string): Promise<AddressedOrder | null>;
   drawRowId(): Promise<string>;
+  /** The student's current hold (booking's `currentHoldOf`, T037). */
+  currentHold(tx: Transaction, student: CheckoutStudent, now: Date): Promise<CurrentHold | null>;
+  /** The student's own enrollment's status (booking's `enrollmentStatusOf`, T037). */
+  enrollmentStatus(
+    tx: Transaction,
+    studentUserId: string,
+    enrollmentId: string,
+  ): Promise<EnrollmentStatusAnswer>;
   /** Pay's checks before the gateway (booking's `payTargetOf`). */
   payTarget(
     tx: Transaction,
@@ -174,6 +200,9 @@ export function checkoutStepsOver(
 ): CheckoutSteps {
   const pay = payStoreOver();
   return {
+    currentHold: (tx, student, at) => currentHoldOf(tx, student, at),
+    enrollmentStatus: (tx, studentUserId, enrollmentId) =>
+      enrollmentStatusOf(tx, studentUserId, enrollmentId),
     payTarget: (tx, request, quoted) => payTargetOf(tx, request, quoted, pay),
     enrollOnHold: (tx, target, enrolment) => enrollOnHold(tx, target, enrolment, pay),
     transaction: (work) => database.$transaction(work),
@@ -308,7 +337,8 @@ export class CheckoutService {
     const now = this.#now();
     const { graceMinutes } = await readHoldTerms(this.#settings, now);
     const lastMoment = (holdExpiresAt: Date) => new Date(addMinutes(holdExpiresAt, -graceMinutes));
-    const stillPayable = (holdExpiresAt: Date) => lastMoment(holdExpiresAt).getTime() > now.getTime();
+    const stillPayable = (holdExpiresAt: Date) =>
+      lastMoment(holdExpiresAt).getTime() > now.getTime();
     const { enrollment, hold } = await this.#steps.transaction((tx) =>
       this.#steps.retryTarget(tx, student.userId, enrollmentId),
     );
@@ -339,7 +369,10 @@ export class CheckoutService {
    */
   async pay(student: CheckoutStudent, input: CheckoutPayInput): Promise<CheckoutPayOutput> {
     const { holdId } = input;
-    const quoted: QuotedSummary = { ...input.quoted, price_piasters: piasters(input.quoted.price_piasters) };
+    const quoted: QuotedSummary = {
+      ...input.quoted,
+      price_piasters: piasters(input.quoted.price_piasters),
+    };
     const request = {
       scope: 'checkout.pay' as const,
       key: input.idempotencyKey,
@@ -348,7 +381,10 @@ export class CheckoutService {
     };
     const stored = await this.#idempotency.completed<StoredOrder>(request);
     if (stored !== undefined) {
-      return { enrollmentId: enrollmentOf(stored), ...(await this.#handoverAgain(stored.paymentId)) };
+      return {
+        enrollmentId: enrollmentOf(stored),
+        ...(await this.#handoverAgain(stored.paymentId)),
+      };
     }
     const now = this.#now();
     const { graceMinutes, leadHours } = await readHoldTerms(this.#settings, now);
@@ -365,7 +401,13 @@ export class CheckoutService {
         gross_piasters: target.price_piasters,
         latestExpiry,
         lockTarget: (tx) =>
-          this.#steps.enrollOnHold(tx, target, { student, enrollmentId, at: now, leadHours, quoted }),
+          this.#steps.enrollOnHold(tx, target, {
+            student,
+            enrollmentId,
+            at: now,
+            leadHours,
+            quoted,
+          }),
       },
       { enrollmentId },
     );
@@ -430,6 +472,70 @@ export class CheckoutService {
     return { checkoutUrl: checkout.checkoutUrl, orderExpiresAt: stored.orderExpiresAt, stored };
   }
 
+  /** `checkout.current` (FR-BOOK-12 (c), T037): what `CheckoutPrevious` shows. */
+  async current(student: CheckoutStudent): Promise<CheckoutCurrentOutput> {
+    const now = this.#now();
+    return this.#steps.transaction(async (tx) => {
+      const hold = await this.#steps.currentHold(tx, student, now);
+      if (hold === null) return {};
+      const order =
+        hold.enrollmentId === null ? null : await this.#steps.lastOrderOf(tx, hold.enrollmentId);
+      return {
+        hold: {
+          holdId: hold.holdId,
+          expiresAt: hold.expiresAt.toISOString(),
+          ...(hold.enrollmentId === null ? {} : { enrollmentId: hold.enrollmentId }),
+          summary: hold.summary,
+          ...(order === null
+            ? {}
+            : {
+                lastOrder: {
+                  status: order.status,
+                  expiresAt: order.expiresAt.toISOString(),
+                  canContinue: this.#payable(order, now),
+                },
+              }),
+        },
+      };
+    });
+  }
+
+  /** `checkout.continue` (FR-BOOK-12 (c), data-model §2.4.1, T037): the payable order's page again. */
+  async continue(
+    student: CheckoutStudent,
+    { enrollmentId }: CheckoutContinueInput,
+  ): Promise<CheckoutHandover> {
+    const order = await this.#steps.transaction(async (tx) => {
+      const enrollment = await this.#steps.studentEnrollment(tx, enrollmentId, student.userId);
+      if (enrollment === null) throw new DomainError('NOT_FOUND');
+      return this.#steps.lastOrderOf(tx, enrollmentId);
+    });
+    return this.#handoverOf(order);
+  }
+
+  /** `checkout.status` (FR-380 to FR-386, T037): the enrollment as the server holds it. */
+  async status(
+    student: CheckoutStudent,
+    { enrollmentId }: CheckoutStatusInput,
+  ): Promise<CheckoutStatusOutput> {
+    return this.#steps.transaction(async (tx) => {
+      const { enrollmentId: _id, ...answer } = await this.#steps.enrollmentStatus(
+        tx,
+        student.userId,
+        enrollmentId,
+      );
+      const order = await this.#steps.lastOrderOf(tx, enrollmentId);
+      // Pay writes the enrollment and its first order in one transaction (FR-354).
+      if (order === null) throw new Error('checkout: an enrollment without an order');
+      return { ...answer, lastOrder: { status: order.status, reference: order.gatewayOrderId } };
+    });
+  }
+
+  /** Whether an order can still be paid: `created` and before its `expires_at`. */
+  #payable(order: AddressedOrder, at: Date): boolean {
+    return order.status === 'created' && order.expiresAt.getTime() > at.getTime();
+  }
+
   /**
    * The address of an order this student's key recorded, decrypted only while the order is
    * `created` and before its `expires_at`; `ORDER_NOT_PAYABLE` otherwise, nothing decrypted.
@@ -441,8 +547,8 @@ export class CheckoutService {
 
   #handoverOf(order: AddressedOrder | null): CheckoutHandover {
     if (
-      order?.status !== 'created' ||
-      order.expiresAt.getTime() <= this.#now().getTime() ||
+      order === null ||
+      !this.#payable(order, this.#now()) ||
       order.checkoutUrlEncrypted === null
     ) {
       throw new DomainError('ORDER_NOT_PAYABLE');

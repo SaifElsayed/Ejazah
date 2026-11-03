@@ -12,9 +12,13 @@ import type {
   CheckoutHandover,
   CheckoutHoldInput,
   CheckoutHoldOutput,
+  CheckoutContinueInput,
+  CheckoutCurrentOutput,
   CheckoutPayInput,
   CheckoutPayOutput,
   CheckoutRetryInput,
+  CheckoutStatusInput,
+  CheckoutStatusOutput,
 } from '@ijazah/contracts';
 
 import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
@@ -103,6 +107,9 @@ export interface CheckoutServices {
   hold(student: CheckoutStudent, input: CheckoutHoldInput): Promise<CheckoutHoldOutput>;
   pay(student: CheckoutStudent, input: CheckoutPayInput): Promise<CheckoutPayOutput>;
   retry(student: CheckoutStudent, input: CheckoutRetryInput): Promise<CheckoutHandover>;
+  current(student: CheckoutStudent): Promise<CheckoutCurrentOutput>;
+  continue(student: CheckoutStudent, input: CheckoutContinueInput): Promise<CheckoutHandover>;
+  status(student: CheckoutStudent, input: CheckoutStatusInput): Promise<CheckoutStatusOutput>;
 }
 
 export { checkoutRouter } from './checkout.router.js';
@@ -142,5 +149,8 @@ export function createCheckoutServices({
     hold: (student, input) => service.hold(student, input),
     pay: (student, input) => service.pay(student, input),
     retry: (student, input) => service.retry(student, input),
+    current: (student) => service.current(student),
+    continue: (student, input) => service.continue(student, input),
+    status: (student, input) => service.status(student, input),
   };
 }

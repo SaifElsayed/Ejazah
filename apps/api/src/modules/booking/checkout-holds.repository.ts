@@ -4,6 +4,7 @@
 // left out by the client's extension (T148). Every read is bounded: one student's active hold (the
 // partial unique index allows one), one enrollment, one hold by its id.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { EnrollmentCancellationReason } from './enrollment-events.repository.js';
 import type { HeldRow } from './holds.repository.js';
 
 type Client = Pick<Transaction, 'slotHold' | 'enrollment'>;
@@ -23,10 +24,7 @@ export function ownActiveHold(tx: Client, studentUserId: string): Promise<HeldRo
 }
 
 /** The active hold linked to the enrollment, or null (ADR 0010 D2). */
-export function activeHoldOfEnrollment(
-  tx: Client,
-  enrollmentId: string,
-): Promise<HeldRow | null> {
+export function activeHoldOfEnrollment(tx: Client, enrollmentId: string): Promise<HeldRow | null> {
   return tx.slotHold.findFirst({
     where: { enrollmentId, releasedAt: null },
     orderBy: { id: 'desc' },
@@ -47,8 +45,9 @@ export interface CheckoutEnrollmentRow {
   readonly teacherUserId: string;
   readonly packageId: string;
   readonly slotId: string;
-  readonly status: 'pending_payment' | 'confirmed' | 'completed' | 'terminated_no_show' | 'cancelled';
-  readonly cancellationReason: string | null;
+  readonly status:
+    'pending_payment' | 'confirmed' | 'completed' | 'terminated_no_show' | 'cancelled';
+  readonly cancellationReason: EnrollmentCancellationReason | null;
   readonly snapshotPricePiasters: bigint;
   readonly snapshotSessionCount: number;
   readonly snapshotDurationMinutes: number;
@@ -95,4 +94,20 @@ export async function enrollmentStatus(
     select: { status: true },
   });
   return row?.status ?? null;
+}
+
+/** The student's active hold with the package it names, as `checkout.current` reads it (T037). */
+export interface CurrentHoldRow {
+  readonly id: string;
+  readonly packageId: string;
+  readonly enrollmentId: string | null;
+  readonly expiresAt: Date;
+}
+
+/** The student's active hold, expired or not, with its package, or null: at most one (rule 18). */
+export function ownCurrentHold(tx: Client, studentUserId: string): Promise<CurrentHoldRow | null> {
+  return tx.slotHold.findFirst({
+    where: { studentUserId, releasedAt: null },
+    select: { id: true, packageId: true, enrollmentId: true, expiresAt: true },
+  });
 }

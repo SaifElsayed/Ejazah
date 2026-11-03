@@ -5,12 +5,18 @@
 // service call with the session's account and gender (R-GENDER-4, R-GENDER-5), the output parsed by
 // its schema (R-API-1). Mounted under `checkout` by `app.router.ts`.
 import {
+  checkoutContinueInput,
+  checkoutContinueOutput,
+  checkoutCurrentOutput,
   checkoutHoldInput,
   checkoutHoldOutput,
   checkoutPayInput,
   checkoutPayOutput,
   checkoutRetryInput,
   checkoutRetryOutput,
+  checkoutStatusInput,
+  checkoutStatusOutput,
+  emptyInput,
 } from '@ijazah/contracts';
 
 import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
@@ -44,4 +50,20 @@ export const checkoutRouter = createAppRouter({
     output: checkoutRetryOutput,
     rateLimit: initiation,
   }).mutation(({ ctx, input }) => ctx.services.checkout.retry(studentOf(ctx.caller), input)),
+
+  // T037: the reads, the student kind and no declared limit (app-surface.md).
+  current: studentProcedure({
+    input: emptyInput,
+    output: checkoutCurrentOutput,
+  }).query(({ ctx }) => ctx.services.checkout.current(studentOf(ctx.caller))),
+
+  continue: studentProcedure({
+    input: checkoutContinueInput,
+    output: checkoutContinueOutput,
+  }).query(({ ctx, input }) => ctx.services.checkout.continue(studentOf(ctx.caller), input)),
+
+  status: studentProcedure({
+    input: checkoutStatusInput,
+    output: checkoutStatusOutput,
+  }).query(({ ctx, input }) => ctx.services.checkout.status(studentOf(ctx.caller), input)),
 });

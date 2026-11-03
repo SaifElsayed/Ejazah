@@ -82,7 +82,8 @@ let cipher: ColumnCipher;
 let checkout: CheckoutServices;
 const calls = { create: 0, cancel: [] as string[] };
 /** When set, each order's creation waits until `count` creations have arrived: both read the key first. */
-let together: { count: number; arrived: number; open: () => void; opened: Promise<void> } | undefined;
+let together:
+  { count: number; arrived: number; open: () => void; opened: Promise<void> } | undefined;
 
 function meetAt(count: number): void {
   let open = () => undefined as void;
@@ -394,7 +395,9 @@ describe('a new checkout over the student’s own unexpired hold (FR-BOOK-12)', 
       expect(error.details).toEqual([
         { path: 'enrollmentId', code: own.enrollmentId },
         { path: 'state', code: state },
-        ...(state === 'payable' ? [{ path: 'expiresAt', code: order.expiresAt.toISOString() }] : []),
+        ...(state === 'payable'
+          ? [{ path: 'expiresAt', code: order.expiresAt.toISOString() }]
+          : []),
       ]);
       expect((await ordersOf(own.enrollmentId)).map(({ status }) => status)).toEqual(['created']);
       expect(await eventsOf(own.enrollmentId)).toEqual([]);
@@ -588,8 +591,16 @@ describe('checkout.pay (FR-354, FR-355, M3; the owner’s decisions of 2026-11-0
       (q: ReturnType<typeof quotedOf>) => ({ ...q, sessionCount: 8 }),
     ],
     ['the package deactivated', { isActive: false }, (q: ReturnType<typeof quotedOf>) => q],
-    ['the session length changed', { sessionDurationMinutes: 45 }, (q: ReturnType<typeof quotedOf>) => q],
-    ['the track changed', { track: 'ijazah_track' as const }, (q: ReturnType<typeof quotedOf>) => q],
+    [
+      'the session length changed',
+      { sessionDurationMinutes: 45 },
+      (q: ReturnType<typeof quotedOf>) => q,
+    ],
+    [
+      'the track changed',
+      { track: 'ijazah_track' as const },
+      (q: ReturnType<typeof quotedOf>) => q,
+    ],
   ])(
     'refuses SUMMARY_CHANGED when %s: no order created and nothing written',
     async (_name, change, sent) => {

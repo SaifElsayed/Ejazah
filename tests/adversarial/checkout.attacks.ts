@@ -41,6 +41,7 @@ import type { AppCaller, SeededTeacher } from './discovery-world.js';
 import {
   type Direction,
   expectAnswersAsNonexistent,
+  notApplicable,
   type ProcedureAttacks,
 } from './procedure-harness.js';
 
@@ -242,7 +243,6 @@ const retry: ProcedureAttacks = {
   },
 };
 
-
 /** The requester's hold on a visible teacher's package: the hold and the summary Pay sends back. */
 async function heldBy(caller: AppCaller, teacher: SeededTeacher | undefined) {
   const packageId = teacher?.packageIds[0];
@@ -342,5 +342,134 @@ const pay: ProcedureAttacks = {
   },
 };
 
-/** The `checkout` namespace's registrations, Pay last: its enrollments hold the slots it paid on. */
-export const checkoutAttacks: readonly ProcedureAttacks[] = [hold, retry, pay];
+/** T037: each student holds a visible teacher of their own gender and pays: the two enrollments. */
+async function paidFor(direction: Direction) {
+  const found = await holdsFor(direction);
+  const other = found.surface.student(direction.other);
+  const [own, theirs] = await Promise.all([
+    payOf(found.caller, found.own.holdId, found.own.quoted),
+    payOf(other.caller, found.theirs.holdId, found.theirs.quoted),
+  ]);
+  return { ...found, ownEnrollment: own.enrollmentId, theirEnrollment: theirs.enrollmentId };
+}
+
+const SESSION_ONLY = 'takes no id: it answers the session’s own hold, and no input names one';
+
+const current: ProcedureAttacks = {
+  path: 'checkout.current',
+  holds: 'R-GENDER-2, R-GENDER-4, R-GENDER-5, FR-BOOK-12 (c)',
+  attacks: {
+    async directCall(direction) {
+      const { caller, visible } = await holdsFor(direction);
+      const answer = await caller.checkout.current({});
+      expect(answer.hold?.summary.teacher.teacherId).toBe(visible[0]?.id);
+    },
+    forgedId: notApplicable(SESSION_ONLY),
+    guessedId: notApplicable(SESSION_ONLY),
+    async tamperedToken(direction) {
+      const { surface } = await surfaceFor(direction);
+      const mine = surface.student(direction.requester);
+      const theirs = surface.student(direction.other);
+      for (const token of tamperedTokens(direction, mine.accessToken, theirs.sessionId)) {
+        const tampered = await surface.bearing(token);
+        await expectUnauthenticated(() => tampered.checkout.current({}));
+      }
+    },
+    async clientSuppliedGender(direction) {
+      const { caller, visible } = await holdsFor(direction);
+      // The input is strictly empty: a gender sent is refused, and never reaches the service.
+      await expect(
+        caller.checkout.current({ gender: direction.other } as unknown as Record<string, never>),
+      ).rejects.toThrow();
+      const answer = await caller.checkout.current({});
+      expect(answer.hold?.summary.teacher.teacherId).toBe(visible[0]?.id);
+    },
+  },
+};
+
+/** An enrollment answers as one that never existed, through `call`. */
+function expectEnrollmentHidden(
+  call: (enrollmentId: string) => Promise<unknown>,
+  enrollmentId: string,
+): Promise<void> {
+  return expectAnswersAsNonexistent(
+    () => call(enrollmentId),
+    () => call(randomUUID()),
+  );
+}
+
+/** `continue` and `status` take the student's own enrollment: one registration each, one shape. */
+function enrollmentRead(
+  path: 'checkout.continue' | 'checkout.status',
+  read: (caller: AppCaller, input: { enrollmentId: string }) => Promise<unknown>,
+  expectOwn: (answer: unknown) => void,
+): ProcedureAttacks {
+  return {
+    path,
+    holds: 'R-GENDER-2, R-GENDER-4, R-GENDER-5, M3, data-model §2.4.1',
+    attacks: {
+      async directCall(direction) {
+        const { caller, ownEnrollment, theirEnrollment } = await paidFor(direction);
+        expectOwn(await read(caller, { enrollmentId: ownEnrollment }));
+        await expectEnrollmentHidden((id) => read(caller, { enrollmentId: id }), theirEnrollment);
+      },
+      async forgedId(direction) {
+        const { caller, theirEnrollment, theirs, own } = await paidFor(direction);
+        for (const forged of [theirEnrollment, theirs.holdId, own.holdId]) {
+          await expectEnrollmentHidden((id) => read(caller, { enrollmentId: id }), forged);
+        }
+      },
+      async guessedId(direction) {
+        const { caller, theirEnrollment } = await paidFor(direction);
+        for (const guessed of [
+          randomUUID(),
+          neighbourOf(theirEnrollment),
+          theirEnrollment.toUpperCase(),
+        ]) {
+          await expectEnrollmentHidden((id) => read(caller, { enrollmentId: id }), guessed);
+        }
+      },
+      async tamperedToken(direction) {
+        const { surface, ownEnrollment } = await paidFor(direction);
+        const mine = surface.student(direction.requester);
+        const theirs = surface.student(direction.other);
+        for (const token of tamperedTokens(direction, mine.accessToken, theirs.sessionId)) {
+          const tampered = await surface.bearing(token);
+          await expectUnauthenticated(() => read(tampered, { enrollmentId: ownEnrollment }));
+        }
+      },
+      async clientSuppliedGender(direction) {
+        const { caller, ownEnrollment, theirEnrollment } = await paidFor(direction);
+        const withGender = (enrollmentId: string) =>
+          read(caller, { enrollmentId, gender: direction.other } as { enrollmentId: string });
+        await expectEnrollmentHidden(withGender, theirEnrollment);
+        expectOwn(await withGender(ownEnrollment));
+      },
+    },
+  };
+}
+
+const continueOrder = enrollmentRead(
+  'checkout.continue',
+  (caller, input) => caller.checkout.continue(input),
+  (answer) => expect((answer as { checkoutUrl: string }).checkoutUrl).toMatch(/^https?:\/\//),
+);
+
+const status = enrollmentRead(
+  'checkout.status',
+  (caller, input) => caller.checkout.status(input),
+  (answer) => expect((answer as { status: string }).status).toBe('pending_payment'),
+);
+
+/**
+ * The `checkout` namespace's registrations (T036, T037), Pay and the reads after Retry: their
+ * enrollments hold the slots they paid on.
+ */
+export const checkoutAttacks: readonly ProcedureAttacks[] = [
+  hold,
+  retry,
+  pay,
+  current,
+  continueOrder,
+  status,
+];

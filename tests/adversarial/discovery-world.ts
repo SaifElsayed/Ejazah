@@ -103,12 +103,17 @@ import {
 import type {
   BookingSlotsInput,
   BookingSlotsOutput,
+  CheckoutContinueInput,
+  CheckoutContinueOutput,
+  CheckoutCurrentOutput,
   CheckoutHoldInput,
   CheckoutHoldOutput,
   CheckoutPayInput,
   CheckoutPayOutput,
   CheckoutRetryInput,
   CheckoutRetryOutput,
+  CheckoutStatusInput,
+  CheckoutStatusOutput,
   DiscoveryBrowseInput,
   DiscoveryBrowseOutput,
   DiscoveryFiltersInput,
@@ -285,6 +290,9 @@ export interface AppCaller {
     hold(input: CheckoutHoldInput): Promise<CheckoutHoldOutput>;
     pay(input: CheckoutPayInput): Promise<CheckoutPayOutput>;
     retry(input: CheckoutRetryInput): Promise<CheckoutRetryOutput>;
+    current(input: Record<string, never>): Promise<CheckoutCurrentOutput>;
+    continue(input: CheckoutContinueInput): Promise<CheckoutContinueOutput>;
+    status(input: CheckoutStatusInput): Promise<CheckoutStatusOutput>;
   };
 }
 
@@ -322,7 +330,9 @@ export interface DiscoverySurface {
    * `checkout.pay` writes them (until `checkout.pay` lands, written here); one per gender, made on
    * first use. Retry is attacked on it.
    */
-  pendingEnrollment(gender: Gender): Promise<{ readonly enrollmentId: string; readonly holdId: string }>;
+  pendingEnrollment(
+    gender: Gender,
+  ): Promise<{ readonly enrollmentId: string; readonly holdId: string }>;
 }
 
 interface Built extends DiscoverySurface {

@@ -113,6 +113,18 @@ export function packagesOf(tx: Client, teacherUserId: string): Promise<PackageRo
   return readPackages(tx, teacherUserId);
 }
 
+/**
+ * The teacher of the package of that id, active or not; null for an unknown id (T037: a hold names
+ * its package, and `checkout.current` reads it with its teacher).
+ */
+export async function packageOwnerOf(tx: Client, packageId: string): Promise<string | null> {
+  const row = await tx.package.findUnique({
+    where: { id: packageId },
+    select: { teacherUserId: true },
+  });
+  return row?.teacherUserId ?? null;
+}
+
 /** The teacher's package of that id; null for an unknown id and for another teacher's. */
 export async function packageOf(
   tx: Client,

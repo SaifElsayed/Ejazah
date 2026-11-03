@@ -141,7 +141,14 @@ interface World {
   readonly targetError?: Error;
   readonly lockError?: Error;
   /** The order's row a repeat reads its address again from. */
-  readonly order?: { status: 'created' | 'paid' | 'failed' | 'expired'; expiresAt: Date };
+  readonly order?: { status: 'created' | 'paid' | 'failed' | 'expired'; expiresAt: Date } | null;
+  readonly enrollment?: CheckoutEnrollmentRow | null;
+  readonly current?: {
+    holdId: string;
+    expiresAt: Date;
+    enrollmentId: string | null;
+    summary: CheckoutHold['summary'];
+  } | null;
   readonly now?: Date;
   readonly cancelFails?: boolean;
   readonly payTargetError?: Error;
@@ -178,15 +185,41 @@ function setUp(world: World = {}) {
     recordCancelled: async (enrollmentId, paymentId) => {
       log.push(['record failed', enrollmentId, paymentId]);
     },
-    studentEnrollment: async () => enrollmentRow,
+    studentEnrollment: async () =>
+      world.enrollment === undefined ? enrollmentRow : world.enrollment,
     orderById: async (_tx, paymentId) => ({
       id: paymentId,
       enrollmentId: ENROLLMENT,
+      gatewayOrderId: 'fake_ord_recorded',
       status: world.order?.status ?? 'created',
       expiresAt: world.order?.expiresAt ?? ORDER_EXPIRES,
       checkoutUrlEncrypted: Uint8Array.from([1, 2, 3]),
     }),
-    lastOrderOf: async () => null,
+    lastOrderOf: async () =>
+      world.order === null
+        ? null
+        : {
+            id: PAYMENT,
+            enrollmentId: ENROLLMENT,
+            gatewayOrderId: 'fake_ord_last',
+            status: world.order?.status ?? 'created',
+            expiresAt: world.order?.expiresAt ?? ORDER_EXPIRES,
+            checkoutUrlEncrypted:
+              (world.order?.status ?? 'created') === 'created' ? Uint8Array.from([1, 2, 3]) : null,
+          },
+    currentHold: async () =>
+      world.current === undefined
+        ? {
+            holdId: HOLD,
+            expiresAt: HOLD_EXPIRES,
+            enrollmentId: ENROLLMENT,
+            summary: heldAnswer.summary,
+          }
+        : world.current,
+    enrollmentStatus: async () => {
+      if (world.enrollment === null) throw new DomainError('NOT_FOUND');
+      return { enrollmentId: ENROLLMENT, status: 'pending_payment', summary: heldAnswer.summary };
+    },
     drawRowId: async () => {
       draws += 1;
       log.push(['draw', draws]);
@@ -240,8 +273,10 @@ function setUp(world: World = {}) {
   const cipher = {
     encrypt: (plaintext: string, column: string, rowId: string) =>
       Buffer.from(`${column}|${rowId}|${plaintext}`),
-    decrypt: (_stored: Uint8Array, column: string, rowId: string) =>
-      `https://pay.example/again/${column}/${rowId}`,
+    decrypt: (_stored: Uint8Array, column: string, rowId: string) => {
+      log.push(['decrypt', rowId]);
+      return `https://pay.example/again/${column}/${rowId}`;
+    },
   };
   const reported: Error[] = [];
   const service = new CheckoutService({
@@ -349,9 +384,7 @@ describe('checkout.retry (FR-356, FR-357, ARCHITECTURE §8.1)', () => {
       checkoutUrl: 'https://pay.example/1',
       orderExpiresAt: ORDER_EXPIRES.toISOString(),
     });
-    const encrypted = [
-      ...Buffer.from(`${CHECKOUT_URL_COLUMN}|${PAYMENT}|https://pay.example/1`),
-    ];
+    const encrypted = [...Buffer.from(`${CHECKOUT_URL_COLUMN}|${PAYMENT}|https://pay.example/1`)];
     expect(log).toEqual([
       ['key read', 'checkout.retry'],
       ['read target'],
@@ -372,7 +405,10 @@ describe('checkout.retry (FR-356, FR-357, ARCHITECTURE §8.1)', () => {
       checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT}`,
       orderExpiresAt: ORDER_EXPIRES.toISOString(),
     });
-    expect(log).toEqual([['key read', 'checkout.retry']]);
+    expect(log).toEqual([
+      ['key read', 'checkout.retry'],
+      ['decrypt', PAYMENT],
+    ]);
   });
 
   it('answers a completed key ORDER_NOT_PAYABLE once its order is no longer payable', async () => {
@@ -414,7 +450,10 @@ describe('checkout.retry (FR-356, FR-357, ARCHITECTURE §8.1)', () => {
 
   it('when a duplicate with the same key committed first, answers its outcome and cancels the extra order', async () => {
     const { service, log, idempotency } = setUp();
-    idempotency.duplicateFirst({ paymentId: OTHER_PAYMENT, orderExpiresAt: ORDER_EXPIRES.toISOString() });
+    idempotency.duplicateFirst({
+      paymentId: OTHER_PAYMENT,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
     await expect(service.retry(student, retryInput)).resolves.toEqual({
       checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${OTHER_PAYMENT}`,
       orderExpiresAt: ORDER_EXPIRES.toISOString(),
@@ -522,6 +561,102 @@ describe('checkout.pay (FR-354, FR-355, FR-357; the owner’s decisions of 2026-
       checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT_DRAWN}`,
       orderExpiresAt: ORDER_EXPIRES.toISOString(),
     });
-    expect(log).toEqual([['key read', 'checkout.pay']]);
+    expect(log).toEqual([
+      ['key read', 'checkout.pay'],
+      ['decrypt', PAYMENT_DRAWN],
+    ]);
+  });
+});
+
+describe('checkout.current: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)', () => {
+  it('answers no hold as an empty answer', async () => {
+    const { service } = setUp({ current: null });
+    await expect(service.current(student)).resolves.toEqual({});
+  });
+
+  it('answers a hold before Pay without an order', async () => {
+    const { service } = setUp({
+      current: {
+        holdId: HOLD,
+        expiresAt: HOLD_EXPIRES,
+        enrollmentId: null,
+        summary: heldAnswer.summary,
+      },
+    });
+    await expect(service.current(student)).resolves.toEqual({
+      hold: { holdId: HOLD, expiresAt: HOLD_EXPIRES.toISOString(), summary: heldAnswer.summary },
+    });
+  });
+
+  it.each([
+    [
+      'a created order before its expiry',
+      { status: 'created' as const, expiresAt: ORDER_EXPIRES },
+      true,
+    ],
+    ['a created order past its expiry', { status: 'created' as const, expiresAt: NOW }, false],
+    ['a paid order', { status: 'paid' as const, expiresAt: ORDER_EXPIRES }, false],
+    ['a failed order', { status: 'failed' as const, expiresAt: ORDER_EXPIRES }, false],
+  ])('answers %s with canContinue %s, decrypting nothing', async (_name, order, canContinue) => {
+    const { service, log } = setUp({ order });
+    await expect(service.current(student)).resolves.toEqual({
+      hold: {
+        holdId: HOLD,
+        expiresAt: HOLD_EXPIRES.toISOString(),
+        enrollmentId: ENROLLMENT,
+        summary: heldAnswer.summary,
+        lastOrder: { status: order.status, expiresAt: order.expiresAt.toISOString(), canContinue },
+      },
+    });
+    expect(log.some(([kind]) => kind === 'decrypt')).toBe(false);
+  });
+});
+
+describe('checkout.continue: the payable order’s page again (data-model §2.4.1, T037)', () => {
+  it('decrypts the address of a created order before its expiry, for the student who owns it', async () => {
+    const { service, log } = setUp();
+    await expect(service.continue(student, { enrollmentId: ENROLLMENT })).resolves.toEqual({
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT}`,
+      orderExpiresAt: ORDER_EXPIRES.toISOString(),
+    });
+    expect(log).toContainEqual(['decrypt', PAYMENT]);
+  });
+
+  it('answers another student’s enrollment NOT_FOUND, decrypting nothing (M3)', async () => {
+    const { service, log } = setUp({ enrollment: null });
+    const error = await refusal(service.continue(student, { enrollmentId: ENROLLMENT }));
+    expect(error.code).toBe('NOT_FOUND');
+    expect(log.some(([kind]) => kind === 'decrypt')).toBe(false);
+  });
+
+  it.each([
+    ['paid', { status: 'paid' as const, expiresAt: ORDER_EXPIRES }],
+    ['failed', { status: 'failed' as const, expiresAt: ORDER_EXPIRES }],
+    ['expired', { status: 'expired' as const, expiresAt: ORDER_EXPIRES }],
+    ['created past its expires_at', { status: 'created' as const, expiresAt: NOW }],
+    ['missing', null],
+  ])('answers an order %s ORDER_NOT_PAYABLE, decrypting nothing', async (_name, order) => {
+    const { service, log } = setUp({ order });
+    const error = await refusal(service.continue(student, { enrollmentId: ENROLLMENT }));
+    expect(error.code).toBe('ORDER_NOT_PAYABLE');
+    expect(log.some(([kind]) => kind === 'decrypt')).toBe(false);
+  });
+});
+
+describe('checkout.status: the enrollment as the server holds it (FR-380 to FR-386, T037)', () => {
+  it('answers the status, the summary and the last order with its reference', async () => {
+    const { service, log } = setUp({ order: { status: 'failed', expiresAt: ORDER_EXPIRES } });
+    await expect(service.status(student, { enrollmentId: ENROLLMENT })).resolves.toEqual({
+      status: 'pending_payment',
+      summary: heldAnswer.summary,
+      lastOrder: { status: 'failed', reference: 'fake_ord_last' },
+    });
+    expect(log.some(([kind]) => kind === 'decrypt')).toBe(false);
+  });
+
+  it('answers another student’s enrollment NOT_FOUND (M3)', async () => {
+    const { service } = setUp({ enrollment: null });
+    const error = await refusal(service.status(student, { enrollmentId: ENROLLMENT }));
+    expect(error.code).toBe('NOT_FOUND');
   });
 });

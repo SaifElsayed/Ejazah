@@ -193,7 +193,11 @@ export { type BookablePackage, bookablePackageOf } from './packages.repository.j
  * A teacher's package by its id, with its subject, track and price, on the caller's transaction:
  * the checkout's payment summary (T036, FR-358). Null for an unknown id and for another teacher's.
  */
-export { packageOf as teacherPackageOf, type PackageRow } from './packages.repository.js';
+export {
+  packageOwnerOf,
+  packageOf as teacherPackageOf,
+  type PackageRow,
+} from './packages.repository.js';
 /**
  * A slot by its id, active or not, on the caller's transaction: the held slot `checkout.pay` writes
  * the enrollment on (T036), its zone the snapshot's. Null for an unknown id.

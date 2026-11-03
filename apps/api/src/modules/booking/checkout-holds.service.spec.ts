@@ -178,7 +178,10 @@ describe('placeCheckoutHold: FR-BOOK-12 (a), the own hold with no payable order'
   });
 
   it('leaves an expired own hold, and one released meanwhile, to the placement', async () => {
-    for (const world of [{ own: ownHold({ expiresAt: PAST }) }, { own: ownHold(), ownStillActive: false }]) {
+    for (const world of [
+      { own: ownHold({ expiresAt: PAST }) },
+      { own: ownHold(), ownStillActive: false },
+    ]) {
       const { log, run } = setUp(world);
       await run();
       expect(log.some(([kind]) => kind === 'release')).toBe(false);
@@ -265,7 +268,8 @@ function targetStore(world: {
     studentEnrollment: async () =>
       world.enrollment === undefined ? enrollment() : world.enrollment,
     activeHoldOfEnrollment: async () => world.hold ?? null,
-    activeHoldsByIds: async () => (world.hold === undefined || world.hold === null ? [] : [world.hold]),
+    activeHoldsByIds: async () =>
+      world.hold === undefined || world.hold === null ? [] : [world.hold],
     enrollmentStatus: async () => (world.status === undefined ? 'pending_payment' : world.status),
   };
   return { log, store };

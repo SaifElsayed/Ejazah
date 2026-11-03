@@ -164,6 +164,19 @@ export {
   retryTargetOf,
   summaryOf,
 } from './checkout-holds.service.js';
+/**
+ * `checkout.current`'s and `checkout.status`'s reads (T037, FR-358, FR-380 to FR-386), each on the
+ * caller's transaction: the student's own unexpired hold with its package's summary now, and the
+ * student's own enrollment as the server holds it.
+ */
+export {
+  type CheckoutReadsStore,
+  checkoutReadsStore,
+  type CurrentHold,
+  currentHoldOf,
+  type EnrollmentStatusAnswer,
+  enrollmentStatusOf,
+} from './checkout-reads.service.js';
 /** The student's own enrollment of that id, or null (T037, M3), on the caller's transaction. */
 export { studentEnrollment as studentCheckoutEnrollment } from './checkout-holds.repository.js';
 /**
