@@ -12,8 +12,9 @@
 //      payment for `confirm-enrollment` (FR-363 as amended 2026-11-03).
 //   3. THE HAND-OFF. Every `paid` order whose paid event was recorded at least
 //      `checkout_confirmation_timeout_seconds` before the run, whose enrollment is `pending_payment`
-//      or `cancelled` and has no compensation case, is handed to `confirm-enrollment` (job id
-//      `paymentId`, through payments' `ConfirmationQueue`), so a paid event whose enqueue was lost
+//      or `cancelled`, and that no compensation case covers (`case-cover.ts`, the confirm job's
+//      rule: a case opened after the order's first paid event), is handed to `confirm-enrollment`
+//      (job id `paymentId`, through payments' `ConfirmationQueue`), so a paid event whose enqueue was lost
 //      after its commit is confirmed all the same, and a paid enrollment a new checkout or another
 //      student's hold cancelled meanwhile is confirmed by the late branch or gets one compensation
 //      case, never left cancelled without one. The job decides under its own locks; the sweep only
@@ -38,7 +39,7 @@ import {
   expiredEnrollmentHoldIds,
   releaseHolds,
 } from '../modules/booking/index.js';
-import { enrollmentsWithCompensationCase } from '../modules/moderation/index.js';
+import { latestCasesOpenedAt } from '../modules/moderation/index.js';
 import {
   type ConfirmationQueue,
   expiredOrderIds,
@@ -47,6 +48,7 @@ import {
   type PaidOrderRef,
   paidOrdersRecordedBefore,
 } from '../modules/payments/index.js';
+import { covers } from './case-cover.js';
 import { EVERY_MINUTE, EXPIRY_PAGE_SIZE, inPages } from './expire-holds.js';
 import { defineJob, type Job } from './job.js';
 import { instantBefore } from './window.js';
@@ -83,7 +85,10 @@ export interface PendingPaymentSteps {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<readonly string[]>;
-  withCase(tx: Transaction, enrollmentIds: readonly string[]): Promise<ReadonlySet<string>>;
+  latestCases(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, Date>>;
 }
 
 /** The steps over the modules' entries. */
@@ -95,7 +100,7 @@ export const pendingPaymentSteps: PendingPaymentSteps = {
     releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf }),
   paidOrders: paidOrdersRecordedBefore,
   awaitingConfirmation: awaitingConfirmationAmong,
-  withCase: enrollmentsWithCompensationCase,
+  latestCases: latestCasesOpenedAt,
 };
 
 export interface ExpirePendingPaymentsOptions {
@@ -118,15 +123,19 @@ export function expirePendingPayments({
   clock = () => new Date(),
   pageSize = EXPIRY_PAGE_SIZE,
 }: ExpirePendingPaymentsOptions): Job {
-  /** The page's paid orders whose enrollment awaits confirmation and has no case. */
+  /** The page's paid orders whose enrollment awaits confirmation and that no case covers. */
   const due = async (tx: Transaction, orders: readonly PaidOrderRef[]): Promise<string[]> => {
     const awaiting = new Set(
       await steps.awaitingConfirmation(tx, [...new Set(orders.map((o) => o.enrollmentId))]),
     );
     if (awaiting.size === 0) return [];
-    const withCase = await steps.withCase(tx, [...awaiting]);
+    const latestCase = await steps.latestCases(tx, [...awaiting]);
     return orders
-      .filter(({ enrollmentId }) => awaiting.has(enrollmentId) && !withCase.has(enrollmentId))
+      .filter(
+        ({ enrollmentId, paidRecordedAt }) =>
+          awaiting.has(enrollmentId) &&
+          !covers(latestCase.get(enrollmentId) ?? null, paidRecordedAt),
+      )
       .map(({ paymentId }) => paymentId);
   };
 

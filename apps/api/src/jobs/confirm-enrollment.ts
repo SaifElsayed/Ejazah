@@ -67,6 +67,7 @@ import {
   paidOrderOf,
 } from '../modules/payments/index.js';
 import { type EnrollmentToSchedule, generateForEnrollment } from '../modules/sessions/index.js';
+import { covers } from './case-cover.js';
 import { defineJob, type Job } from './job.js';
 
 /** The job's name, the one `main.ts` enqueues it by (T038). */
@@ -142,11 +143,6 @@ function refusedByDatabase(error: unknown): boolean {
     isExclusionViolation(error, 'sessions_teacher_no_overlap') ||
     isExclusionViolation(error, 'sessions_student_no_overlap')
   );
-}
-
-/** Whether a case opened at `caseAt` covers an order whose paid event was recorded at `paidAt`. */
-function covers(caseAt: Date | null, paidAt: Date | null): boolean {
-  return caseAt !== null && paidAt !== null && caseAt.getTime() >= paidAt.getTime();
 }
 
 class Confirmer {

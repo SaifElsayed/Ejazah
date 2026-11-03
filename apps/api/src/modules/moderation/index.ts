@@ -20,8 +20,8 @@ export {
 export { latestCaseOpenedAt } from './compensation-case.repository.js';
 
 /**
- * Of some enrollments, those with a compensation case, read with no lock (T040): the
- * `expire-pending-payments` sweep hands a paid order to `confirm-enrollment` only when its
- * enrollment has none.
+ * Of some enrollments, when each one's latest compensation case was opened, read with no lock
+ * (T040): the `expire-pending-payments` sweep hands a paid order to `confirm-enrollment` only when
+ * no case covers it, by the confirm job's rule.
  */
-export { enrollmentsWithCompensationCase } from './compensation-case.repository.js';
+export { latestCasesOpenedAt } from './compensation-case.repository.js';

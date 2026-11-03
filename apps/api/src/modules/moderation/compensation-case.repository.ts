@@ -61,18 +61,23 @@ export async function latestCaseOpenedAt(tx: Client, enrollmentId: string): Prom
 }
 
 /**
- * Of `enrollmentIds`, those with a compensation case, open or not (T040: the sweep hands a paid order
- * on only when its enrollment has none). Read with no lock: the confirm job decides under its own.
+ * Of `enrollmentIds`, when each one's latest compensation case was opened, open or not; an enrollment
+ * with none is absent (T040: the sweep hands on a paid order no case covers, as `latestCaseOpenedAt`
+ * tells the confirm job). Read with no lock: the confirm job decides under its own.
  */
-export async function enrollmentsWithCompensationCase(
+export async function latestCasesOpenedAt(
   tx: Client,
   enrollmentIds: readonly string[],
-): Promise<ReadonlySet<string>> {
-  if (enrollmentIds.length === 0) return new Set();
-  const rows = await tx.dispute.findMany({
+): Promise<ReadonlyMap<string, Date>> {
+  if (enrollmentIds.length === 0) return new Map();
+  const rows = await tx.dispute.groupBy({
+    by: ['enrollmentId'],
     where: { enrollmentId: { in: [...enrollmentIds] }, kind: 'compensation_case' },
-    distinct: ['enrollmentId'],
-    select: { enrollmentId: true },
+    _max: { createdAt: true },
   });
-  return new Set(rows.map(({ enrollmentId }) => enrollmentId));
+  return new Map(
+    rows.flatMap(({ enrollmentId, _max }) =>
+      _max.createdAt ? [[enrollmentId, _max.createdAt]] : [],
+    ),
+  );
 }

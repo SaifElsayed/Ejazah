@@ -63,15 +63,16 @@ export async function markOrdersExpired(
   });
 }
 
-/** A paid order and its enrollment. */
+/** A paid order, its enrollment, and when its first paid event was recorded (as `paidOrderOf`). */
 export interface PaidOrderRef {
   readonly paymentId: string;
   readonly enrollmentId: string;
+  readonly paidRecordedAt: Date | null;
 }
 
 /**
  * A page of the `paid` orders whose paid event was recorded at or before `recordedBefore`, in id
- * order after `after`, at most `limit`, each with its enrollment.
+ * order after `after`, at most `limit`, each with its enrollment and its first paid event's record.
  */
 export async function paidOrdersRecordedBefore(
   tx: Client,
@@ -87,7 +88,20 @@ export async function paidOrdersRecordedBefore(
     },
     orderBy: { id: 'asc' },
     take: limit,
-    select: { id: true, enrollmentId: true },
+    select: {
+      id: true,
+      enrollmentId: true,
+      events: {
+        where: { eventType: 'paid' },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+        select: { createdAt: true },
+      },
+    },
   });
-  return rows.map(({ id, enrollmentId }) => ({ paymentId: id, enrollmentId }));
+  return rows.map(({ id, enrollmentId, events }) => ({
+    paymentId: id,
+    enrollmentId,
+    paidRecordedAt: events[0]?.createdAt ?? null,
+  }));
 }

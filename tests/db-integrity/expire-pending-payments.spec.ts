@@ -316,6 +316,18 @@ describe('expire-pending-payments hands on only what awaits confirmation', () =>
     expect(handedOff).not.toContain(paid);
   });
 
+  it('a paid order recorded after its enrollment’s case was opened, its enqueue lost: handed on, the job’s rule', async () => {
+    const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
+    await database.$transaction((tx) =>
+      openCompensationCase(tx, on.enrollmentId, 'slot_unavailable'),
+    );
+    const paid = await order(on.enrollmentId);
+    await sweepThenConfirm(paid);
+    // The job's own rule (step 3 of `confirm-enrollment`): an enrollment with a case does nothing.
+    expect(await enrollmentOf(on.enrollmentId)).toMatchObject({ status: 'cancelled' });
+    expect(await casesOf(on.enrollmentId)).toHaveLength(1);
+  });
+
   it('not a paid order whose enrollment is confirmed', async () => {
     const on = await world();
     const paid = await order(on.enrollmentId);

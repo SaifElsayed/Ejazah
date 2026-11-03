@@ -46,7 +46,8 @@ interface Hold {
 interface Enrollment {
   readonly id: string;
   status: 'pending_payment' | 'confirmed' | 'cancelled';
-  readonly hasCase: boolean;
+  /** When its latest compensation case was opened; none when it has none. */
+  readonly caseOpenedAt?: Date;
 }
 
 interface WorldRows {
@@ -150,7 +151,11 @@ function paymentsWorld({ orders = [], holds = [], enrollments = [] }: WorldRows)
           order.paidRecordedAt <= recordedBefore,
         after,
         limit,
-      ).map(({ id, enrollmentId }) => ({ paymentId: id, enrollmentId }));
+      ).map(({ id, enrollmentId, paidRecordedAt }) => ({
+        paymentId: id,
+        enrollmentId,
+        paidRecordedAt,
+      }));
     },
     awaitingConfirmation: async (client, ids) => {
       expect(client).toBe(tx);
@@ -159,11 +164,13 @@ function paymentsWorld({ orders = [], holds = [], enrollments = [] }: WorldRows)
         .filter(({ id, status }) => ids.includes(id) && status !== 'confirmed')
         .map(({ id }) => id);
     },
-    withCase: async (client, ids) => {
+    latestCases: async (client, ids) => {
       expect(client).toBe(tx);
       current?.push(`cases ${ids.join(',')}`);
-      return new Set(
-        enrollments.filter(({ id, hasCase }) => ids.includes(id) && hasCase).map(({ id }) => id),
+      return new Map(
+        enrollments.flatMap(({ id, caseOpenedAt }) =>
+          ids.includes(id) && caseOpenedAt !== undefined ? [[id, caseOpenedAt] as const] : [],
+        ),
       );
     },
   };
@@ -249,9 +256,9 @@ describe('expire-pending-payments (T040, FR-364)', () => {
         { id: 'h3', enrollmentId: 'e3', expiresAt: at('2026-11-03T07:59:00Z'), releasedAt: null },
       ],
       enrollments: [
-        { id: 'e1', status: 'pending_payment', hasCase: false },
-        { id: 'e2', status: 'pending_payment', hasCase: false },
-        { id: 'e3', status: 'pending_payment', hasCase: false },
+        { id: 'e1', status: 'pending_payment' },
+        { id: 'e2', status: 'pending_payment' },
+        { id: 'e3', status: 'pending_payment' },
       ],
     });
     const job = expirePendingPayments({
@@ -274,7 +281,7 @@ describe('expire-pending-payments (T040, FR-364)', () => {
     ]);
   });
 
-  it('hands to confirm-enrollment every paid order recorded before the timeout whose enrollment awaits it with no case', async () => {
+  it('hands to confirm-enrollment every paid order recorded before the timeout whose enrollment awaits it and that no case covers', async () => {
     const recorded = at('2026-11-03T07:59:45Z');
     const world = paymentsWorld({
       orders: [
@@ -290,24 +297,27 @@ describe('expire-pending-payments (T040, FR-364)', () => {
           paidRecordedAt: at('2026-11-03T07:59:46Z'),
         },
         { id: 'o6', enrollmentId: 'e6', status: 'failed', expiresAt: NOW, paidRecordedAt: null },
+        { id: 'o7', enrollmentId: 'e7', status: 'paid', expiresAt: NOW, paidRecordedAt: recorded },
       ],
       enrollments: [
-        { id: 'e1', status: 'pending_payment', hasCase: false },
-        { id: 'e2', status: 'cancelled', hasCase: false },
-        { id: 'e3', status: 'confirmed', hasCase: false },
-        { id: 'e4', status: 'cancelled', hasCase: true },
-        { id: 'e5', status: 'pending_payment', hasCase: false },
-        { id: 'e6', status: 'cancelled', hasCase: false },
+        { id: 'e1', status: 'pending_payment' },
+        { id: 'e2', status: 'cancelled' },
+        { id: 'e3', status: 'confirmed' },
+        // A case opened after the paid event covers the order; one opened before it does not.
+        { id: 'e4', status: 'cancelled', caseOpenedAt: at('2026-11-03T07:59:50Z') },
+        { id: 'e5', status: 'pending_payment' },
+        { id: 'e6', status: 'cancelled' },
+        { id: 'e7', status: 'cancelled', caseOpenedAt: at('2026-11-03T07:00:00Z') },
       ],
     });
     const settings = settingsOf(TIMEOUT_SECONDS);
     const job = expirePendingPayments({ ...world, settings, clock: () => NOW, pageSize: 3 });
     await job.handle({});
     expect(settings.keys).toEqual([CONFIRMATION_TIMEOUT_SETTING]);
-    expect([...world.queued.keys()]).toEqual(['o1', 'o2']);
+    expect([...world.queued.keys()]).toEqual(['o1', 'o2', 'o7']);
     expect(world.transactions.filter((calls) => calls[0]?.startsWith('paid'))).toEqual([
       ['paid after -', 'awaiting e1,e2,e3', 'cases e1,e2'],
-      ['paid after o3', 'awaiting e4', 'cases e4'],
+      ['paid after o3', 'awaiting e4,e7', 'cases e4,e7'],
     ]);
   });
 
@@ -339,7 +349,7 @@ describe('expire-pending-payments (T040, FR-364)', () => {
           paidRecordedAt: at('2026-11-03T07:00:00Z'),
         },
       ],
-      enrollments: [{ id: 'e1', status: 'pending_payment', hasCase: false }],
+      enrollments: [{ id: 'e1', status: 'pending_payment' }],
     });
     const job = expirePendingPayments({
       ...world,
@@ -389,8 +399,8 @@ describe('expire-pending-payments (T040, FR-364)', () => {
             },
           ],
           enrollments: [
-            { id: 'e1', status: 'pending_payment', hasCase: false },
-            { id: 'e2', status: 'pending_payment', hasCase: false },
+            { id: 'e1', status: 'pending_payment' },
+            { id: 'e2', status: 'pending_payment' },
           ],
         }),
       run: (world) =>
