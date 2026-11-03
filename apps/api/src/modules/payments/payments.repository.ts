@@ -1,6 +1,8 @@
 // T077: the payments module's queries (ERD §7, ADR 0007). Phase 1 writes one: the record of a signed
 // payout-recipient event in `payment_events`. Queries only, each on the transaction it is handed;
-// `recipient-events.service.ts` holds the rules.
+// `recipient-events.service.ts` holds the rules. T038 adds the order branch's: the order a gateway
+// order id names, its lock, its status read under the lock, the record of an order event, and the
+// order's move; `order-events.service.ts` holds the rules.
 //
 // The insert is `INSERT … ON CONFLICT DO NOTHING` (Prisma's `skipDuplicates`), so a replayed
 // `provider_event_id` is refused by the unique NOT NULL column itself and leaves the transaction
@@ -9,10 +11,71 @@
 // committed. The table is append-only (`20261007000500_append_only_tables`), so nothing here updates
 // or deletes a row of it. Since T004 the module's `_encrypted` column is reached here too, for the
 // `reencrypt-columns` job.
+import { type Piasters, toPlainNumber } from '@ijazah/money';
+
 import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encryption.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
-type Client = Pick<Transaction, 'paymentEvent'>;
+type Client = Pick<Transaction, 'paymentEvent' | 'payment'>;
+
+/** `payments.status` (ERD §7). */
+export type OrderStatus = 'created' | 'paid' | 'failed' | 'expired' | 'refunded';
+
+/** The event types of a gateway order: every `payment_events.event_type` but the recipient's. */
+export type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded';
+
+/** An order as the branch finds it by the gateway's order id: its row and its enrollment. */
+export interface OrderRef {
+  readonly paymentId: string;
+  readonly enrollmentId: string;
+}
+
+/** A signed order event as it is kept: its order, and never the body, only its hash (R-SEC-2). */
+export interface OrderEventRecord {
+  readonly paymentId: string;
+  readonly providerEventId: string;
+  readonly eventType: OrderEventType;
+  readonly signatureVerifiedAt: Date;
+  readonly payloadHash: string;
+  readonly receivedAt: Date;
+}
+
+/** What a paid event reports, recorded as the gateway reported it (R-MONEY-5, FR-367). */
+export interface ReportedPayment {
+  readonly gatewayTransactionId: string;
+  readonly gateway_fee_piasters: Piasters;
+  readonly net_piasters: Piasters;
+}
+
+/**
+ * The order the gateway's order id names, or null when no row holds it. Read before any lock: an
+ * order's enrollment never changes, and what the branch decides on is read again under the lock.
+ */
+export async function orderNamed(
+  database: Pick<Transaction, 'payment'>,
+  gatewayOrderId: string,
+): Promise<OrderRef | null> {
+  const order = await database.payment.findUnique({
+    where: { gatewayOrderId },
+    select: { id: true, enrollmentId: true },
+  });
+  return order === null ? null : { paymentId: order.id, enrollmentId: order.enrollmentId };
+}
+
+/**
+ * Locks the order's enrollment, then the order, FOR UPDATE until the transaction ends: T005's one
+ * order, the enrollment before the payment (the note under T038), so a sweep holding the enrollment
+ * while it waits for the payment never meets this branch the other way round. The enrollment is
+ * booking's row, locked as `row-lock.ts` allows (the order references it); no column of it is read.
+ */
+export async function lockOrder(
+  tx: Transaction,
+  { paymentId, enrollmentId }: OrderRef,
+): Promise<void> {
+  await lockRows(tx, 'enrollments', [enrollmentId]);
+  await lockRows(tx, 'payments', [paymentId]);
+}
 
 /** A signed recipient event as it is kept: never the body, only its hash (R-SEC-2). */
 export interface RecipientEventRecord {
@@ -40,6 +103,51 @@ export class PaymentsRepository {
       skipDuplicates: true,
     });
     return count === 1;
+  }
+
+  /** Records an order event under its order. False when its provider event id is already recorded. */
+  async recordOrderEvent(event: OrderEventRecord): Promise<boolean> {
+    const { count } = await this.#tx.paymentEvent.createMany({
+      data: [event],
+      skipDuplicates: true,
+    });
+    return count === 1;
+  }
+
+  /** The order's status, read under `lockOrder`. */
+  async statusOf(paymentId: string): Promise<OrderStatus> {
+    const { status } = await this.#tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { status: true },
+    });
+    return status;
+  }
+
+  /**
+   * Moves the order to `status`, with what a paid event reported, and clears its hosted page's
+   * address: a moved order has left `created`, and the address is kept only while it is `created`
+   * (data-model §2.4).
+   */
+  async moveOrder(
+    paymentId: string,
+    status: OrderStatus,
+    reported: ReportedPayment | undefined,
+  ): Promise<void> {
+    await this.#tx.payment.update({
+      where: { id: paymentId },
+      data: {
+        status,
+        checkoutUrlEncrypted: null,
+        ...(reported === undefined
+          ? {}
+          : {
+              gatewayTransactionId: reported.gatewayTransactionId,
+              gatewayFeePiasters: BigInt(toPlainNumber(reported.gateway_fee_piasters)),
+              netPiasters: BigInt(toPlainNumber(reported.net_piasters)),
+            }),
+      },
+      select: { id: true },
+    });
   }
 }
 

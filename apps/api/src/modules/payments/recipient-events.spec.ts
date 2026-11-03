@@ -124,6 +124,8 @@ function clock(): () => Date {
 function harness(identity: RecipientVerdicts) {
   const lines: string[] = [];
   const reported: Error[] = [];
+  /** The order events the route handed to the order branch (T038's service, a recorder here). */
+  const orders: string[] = [];
   const log = createLogger({
     level: 'info',
     destination: { write: (line: string) => void lines.push(line) },
@@ -136,12 +138,20 @@ function harness(identity: RecipientVerdicts) {
   });
   route = paymentWebhookRoute({
     verify: (rawBody, headers) => payment.verifyAndParseEvent(rawBody, headers),
-    events: service,
+    events: {
+      recipients: service,
+      orders: {
+        record: (event) => {
+          orders.push(event.type);
+          return Promise.resolve('moved');
+        },
+      },
+    },
     log,
     maxBodyBytes: 1_048_576,
     now: clock(),
   });
-  return { lines, reported };
+  return { lines, reported, orders };
 }
 
 const freshRef = (): string => `fake_rcp_${randomUUID()}`;
@@ -258,14 +268,15 @@ describe('a reference no teacher holds (R-114)', () => {
   });
 });
 
-// The harness names `paid`, `failed` and `expired` (T013); `refunded` has no call of its own, and
-// Phase 2's order branch (T038) replaces this one.
-describe('an order event, which no order of this phase can produce (owner, B15 check)', () => {
+// The harness names `paid`, `failed` and `expired` (T013); `refunded` has no call of its own. Since
+// T038 an order event is the order branch's (`order-events.service.ts`, its spec
+// `tests/payments/order-events.spec.ts`): this service neither records it nor calls identity.
+describe('an order event goes to the order branch, not to this service (T038)', () => {
   it.each(['paid', 'failed', 'expired'] as const)(
-    'a %s event is reported and acknowledged, writing nothing and calling nobody',
+    'a %s event is handed to the order branch, writing nothing here and calling nobody',
     async (type) => {
       const { identity, calls } = recordingIdentity();
-      const { lines, reported } = harness(identity);
+      const { lines, reported, orders } = harness(identity);
       const { gatewayOrderId } = await payment.createCheckout(
         randomUUID(),
         piasters(100),
@@ -276,14 +287,11 @@ describe('an order event, which no order of this phase can produce (owner, B15 c
 
       expect(await stand.deliver(event)).toBe(200);
 
+      expect(orders).toEqual([type]);
       expect(await rowsOf(event.providerEventId)).toEqual([]);
       expect(calls).toEqual([]);
-      expect(reported).toHaveLength(1);
-      expect(JSON.parse(lines[0] ?? '{}')).toMatchObject({
-        level: 'warn',
-        providerEventId: event.providerEventId,
-        eventType: type,
-      });
+      expect(reported).toEqual([]);
+      expect(lines).toEqual([]);
     },
   );
 });

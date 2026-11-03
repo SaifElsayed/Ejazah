@@ -24,6 +24,8 @@ export { packageHasEnrollment } from './catalog-use.repository.js';
 export { type SlotRelease, slotInUse } from './slot-occupancy.service.js';
 /** Each of a teacher's packages' enrollments, for catalog's list (T018). */
 export { packageEnrollmentCounts } from './catalog-use.repository.js';
+/** The `order_failed` outcome the payments module's order branch appends (T038, R-214). */
+export { recordOrderFailed } from './order-failed.repository.js';
 
 /**
  * Catalog's `CatalogUse` port over booking's answers (T020, T026), bound once by `main.ts`: a slot's

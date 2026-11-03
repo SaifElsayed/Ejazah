@@ -25,4 +25,5 @@ Write the `sessions` table; session generation is requested through the sessions
 - FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`, `slot-occupancy.service.ts`.
 - FR-394, FR-BOOK-10 (a slot offered again from the week after its final session plus the buffer; R-205): `slot-occupancy.service.ts`.
 - FR-335 (the card's nearest free slot; R-205): `nearest-slot.service.ts`, `discovery.service.ts`, `discovery.router.ts`.
+- FR-365, FR-385 (a failed order's `order_failed` outcome, appended by the payments module's order branch on its transaction; R-214, R-216): `order-failed.repository.ts`, until B29's integration makes booking's one writer of `enrollment_events`.
 - FR-350, FR-386 (the booking sheet's slots and their first and last sessions; R-205, R-209): `booking-slots.service.ts`, `booking.router.ts`.
