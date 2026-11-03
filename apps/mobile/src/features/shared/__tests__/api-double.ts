@@ -3,6 +3,7 @@
 // upload and the deletion). `useApi()` is replaced by a client whose procedures
 // are mocks answering what each case says, and a session store in memory; an API refusal is the
 // tRPC client error the real client raises, carrying the code and details the screens read.
+import type { PublicConfig } from '@ijazah/contracts';
 import { jest } from '@jest/globals';
 import { TRPCClientError } from '@trpc/client';
 
@@ -50,12 +51,13 @@ export function fakeProcedures() {
       filters: { query: procedure() },
       teacher: { query: procedure() },
     },
-    // B30 (T045): the checkout screen, `CheckoutPrevious` and `CheckoutExpired`.
+    // B30: Checkout, `CheckoutPrevious` and `CheckoutExpired` (T045), and the outcomes (T046).
     checkout: {
       current: { query: procedure() },
       pay: { mutate: procedure() },
       continue: { query: procedure() },
       status: { query: procedure() },
+      retry: { mutate: procedure() },
     },
     teacher: {
       application: {
@@ -120,9 +122,7 @@ export interface FakeApi {
   readonly value: {
     readonly client: {
       readonly api: FakeProcedures;
-      readonly publicConfig: jest.Mock<
-        () => Promise<{ supportEmail: string; termsVersion: string }>
-      >;
+      readonly publicConfig: jest.Mock<() => Promise<PublicConfig>>;
       /** The documents upload: a fresh document id for each file unless a case says otherwise. */
       readonly uploadDocument: jest.Mock<
         (kind: 'identity' | 'credential', file: { uri: string; name: string }) => Promise<string>
@@ -136,11 +136,23 @@ export interface FakeApi {
   };
 }
 
+/** `platform.publicConfig`'s checkout numbers at their seeded defaults (B30, T046; FR-383). */
+export const CHECKOUT_POLLING: PublicConfig['checkout'] = {
+  confirmationTimeoutSeconds: 15,
+  processingPollSeconds: 2,
+  confirmingPollSeconds: 30,
+  confirmingPollWindowMinutes: 10,
+};
+
 /** What `useApi()` answers in a spec. */
 export function fakeApi(termsVersion = '2026-10'): FakeApi {
   const api = fakeProcedures();
   const sessions = memorySessions();
-  const publicConfig = jest.fn(async () => ({ supportEmail: 'support@ijazah.test', termsVersion }));
+  const publicConfig = jest.fn(async (): Promise<PublicConfig> => ({
+    supportEmail: 'support@ijazah.test',
+    termsVersion,
+    checkout: CHECKOUT_POLLING,
+  }));
   let uploaded = 0;
   const uploadDocument = jest.fn(
     async (_kind: 'identity' | 'credential', _file: { uri: string; name: string }) => {

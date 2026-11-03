@@ -7,10 +7,8 @@
 import type {
   CheckoutCurrentOutput,
   CheckoutQuotedSummary,
-  CheckoutStatusOutput,
   CheckoutSummary,
 } from '@ijazah/contracts';
-import { checkoutStatusInput } from '@ijazah/contracts';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 import { useRef } from 'react';
@@ -19,28 +17,14 @@ import { useApi } from '../../../lib/api';
 
 export const CHECKOUT_CURRENT_QUERY_KEY = ['student', 'checkout', 'current'] as const;
 
-export const checkoutStatusQueryKey = (enrollmentId: string) =>
-  ['student', 'checkout', 'status', enrollmentId] as const;
+// `checkout.status`, read by `CheckoutExpired` too, is T046's (`outcome-api.ts`): one key, one hook.
+export { checkoutStatusQueryKey, isEnrollmentId, useCheckoutStatus } from './outcome-api';
 
 export function useCheckoutCurrent() {
   const { client } = useApi();
   return useQuery<CheckoutCurrentOutput>({
     queryKey: CHECKOUT_CURRENT_QUERY_KEY,
     queryFn: () => client.api.checkout.current.query({}),
-  });
-}
-
-/** Whether `enrollmentId` can name an enrollment at all (the procedure's own input). */
-export function isEnrollmentId(enrollmentId: string): boolean {
-  return checkoutStatusInput.safeParse({ enrollmentId }).success;
-}
-
-export function useCheckoutStatus(enrollmentId: string) {
-  const { client } = useApi();
-  return useQuery<CheckoutStatusOutput>({
-    queryKey: checkoutStatusQueryKey(enrollmentId),
-    queryFn: () => client.api.checkout.status.query({ enrollmentId }),
-    enabled: isEnrollmentId(enrollmentId),
   });
 }
 

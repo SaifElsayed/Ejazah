@@ -772,6 +772,7 @@
         "receipt": "Receipt"
       },
       "date": "Date",
+      "firstSessionMoved": "The payment was confirmed late, so your first session moved from {quoted} to {actual}.",
       "lede": "Your sessions are every {weekday} at {time}, from {date}.",
       "sessionDate": "{date} · {time}",
       "sessionN": "Session {n}",
@@ -805,6 +806,7 @@
     },
     "checkoutProcessing": {
       "delayed": {
+        "inApp": "When the payment gateway confirms your payment, your enrollment shows as confirmed under Enrollments.",
         "text": "You will get a notification when it completes.",
         "title": "The payment is taking a little longer"
       },
