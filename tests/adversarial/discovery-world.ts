@@ -40,7 +40,9 @@
 // (`checkout.attacks.ts`).
 // T043: a refusal is read back for "nothing written" (`checkoutRows`), a teacher's standing is
 // changed in place as the world seeds every state (`setAccountStatus`), and a teacher deletes the
-// account through identity's real deletion (`deleteAccount`, FR-141), for `checkout-standing.spec.ts`.
+// account through identity's real deletion (`deleteAccount`, FR-141), for `checkout-standing.spec.ts`;
+// an administrator suspends a teacher through identity's real `StandingService` (`suspend`), and both
+// reach booking's T041 subscriber on the one `AccountConsequences`, bound as `main.ts` binds it.
 //
 // NOTHING STAYS VISIBLE. At the end of the file every account the world created is soft-deleted and
 // every subject deactivated, so a later run, or another spec, never meets these teachers.
@@ -59,17 +61,24 @@ import { afterAll } from 'vitest';
 import {
   createBookingServices,
   createDiscoveryServices,
+  terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
-import { createDiscoveryCatalog } from '../../apps/api/src/modules/catalog/index.js';
+import {
+  createDiscoveryCatalog,
+  revokeSubjects,
+} from '../../apps/api/src/modules/catalog/index.js';
 import {
   AccountConsequences,
   createIdentityServices,
   type IdentityServices,
   resolveUserSession,
+  StandingService,
+  standingStoreOver,
 } from '../../apps/api/src/modules/identity/index.js';
 import {
   createCheckoutServices,
   createPaymentWebhookRoute,
+  orderStandingsOf,
   PAYMENT_WEBHOOK_PATH,
 } from '../../apps/api/src/modules/payments/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
@@ -346,6 +355,8 @@ export interface DiscoverySurface {
   setAccountStatus(teacherId: string, status: AccountStatus): Promise<void>;
   /** T043: the teacher deletes the account through identity's real deletion (FR-141). */
   deleteAccount(teacherId: string): Promise<void>;
+  /** T043: an administrator suspends the teacher through identity's real `StandingService` (FR-165). */
+  suspend(teacherId: string): Promise<void>;
 }
 
 /** An account standing a case moves a teacher to (SRS §3.7.1, `002:T143`). */
@@ -441,6 +452,9 @@ async function build(): Promise<Built> {
     store: new IdempotencyRepository(database),
     settings,
   });
+  // The one registry of an account's end, booking's T041 subscriber bound as `main.ts` binds it.
+  const consequences = new AccountConsequences();
+  consequences.subscribe(terminationSubscriber({ orders: orderStandingsOf }));
   const identity: IdentityServices = createIdentityServices({
     ...identityBase,
     cipher,
@@ -461,8 +475,16 @@ async function build(): Promise<Built> {
       },
     },
     idempotency,
-    consequences: new AccountConsequences(),
+    consequences,
     report: () => undefined,
+  });
+  // T043: the suspension as the panel's admin services build it, on the same registry (FR-165).
+  const standing = new StandingService({
+    store: standingStoreOver(database),
+    consequences,
+    revokeSubjects,
+    // Read by a reinstatement only (T113), which no case here makes.
+    hasOpenIdentityRequest: async () => false,
   });
 
   // As `main.ts` binds them (T025, T026, T027): catalog's discovery through catalog's entry, each
@@ -713,6 +735,9 @@ async function build(): Promise<Built> {
         reauth: { kind: 'password', password: PASSWORD },
         idempotencyKey: randomUUID(),
       });
+    },
+    async suspend(teacherId) {
+      await database.$transaction((tx) => standing.suspend(tx, admin, teacherId));
     },
     async allTabCount(gender) {
       // SRS §3.7.1's five conjuncts as written, and FR-332's "with an active package".
