@@ -9,7 +9,8 @@
 // purge stores of both modules bound for the three purge sweeps (T025), the verification module's
 // store of unreferenced documents over the identity and catalog modules' pointers (Phase 1's T093),
 // the admin module's invites with the email port and the invite marks for `deliver-admin-invite`
-// (T066), the stores of deleted people's files for `erase-deleted-files` (B16), every sweep
+// (T066), the stores of deleted people's files for `erase-deleted-files` (B16), `confirm-enrollment`
+// over the database and the settings reader (T039), every sweep
 // registered on its schedule, and the queue's deliveries run through the
 // registered jobs (T112).
 //
@@ -45,6 +46,7 @@ const [
   catalog,
   { selectPorts, selectPushPort },
   queueing,
+  { confirmEnrollment },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -70,6 +72,7 @@ const [
   import('./modules/catalog/index.js'),
   import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
+  import('./jobs/confirm-enrollment.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -152,6 +155,9 @@ const jobs: readonly Job[] = [
   purgeUnreferencedDocuments({ store: unreferencedDocuments, storage: ports.storage, settings }),
   eraseDeletedFiles({ stores: erasedFiles, storage: ports.storage }),
   deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
+  // A paid order's confirmation (T039, R-215): the modules' entries on the job's transactions, the
+  // hold's terms and the first session's lead read through the settings reader.
+  confirmEnrollment({ database, settings }),
 ];
 
 const connection = queueing.connectionFor(config.REDIS_URL);

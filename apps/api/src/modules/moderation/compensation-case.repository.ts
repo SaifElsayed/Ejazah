@@ -45,3 +45,17 @@ export async function insertCase(
   });
   return id;
 }
+
+/**
+ * When the enrollment's latest compensation case was opened (`disputes.created_at`, the database's
+ * clock), open or not, or null when it has none (T039; the note under T035). Read under the
+ * enrollment's lock, which every opening takes, so no case is opened meanwhile.
+ */
+export async function latestCaseOpenedAt(tx: Client, enrollmentId: string): Promise<Date | null> {
+  const latest = await tx.dispute.findFirst({
+    where: { enrollmentId, kind: 'compensation_case' },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  return latest?.createdAt ?? null;
+}

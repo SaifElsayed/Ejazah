@@ -138,3 +138,19 @@ export {
   type EnrollmentOutcome,
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
+/**
+ * The confirm job's booking (T039, R-215, FR-361, FR-362, FR-375, FR-PAYG-19), each on the job's
+ * transaction: an enrollment's parties read with no lock; every lock the confirmation takes, in
+ * T005's order, and the enrollment read under them; `confirmEnrollment`, the only writer of
+ * `confirmed_at` (R-HONEST-1); and the refusal of a paid event.
+ */
+export {
+  type Confirmation,
+  confirmationPartiesOf,
+  confirmEnrollment,
+  type EnrollmentParties,
+  type LockedEnrollment,
+  lockForConfirmation,
+  type Refusal,
+  refuseEnrollment,
+} from './confirmation.service.js';

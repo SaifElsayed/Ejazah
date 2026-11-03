@@ -2,7 +2,8 @@
 // (contracts/gateway.md "The test harness", R-213, FR-372, SC-302, SC-311). The only way a spec
 // produces a gateway event: it holds the stand-in's secret and the listening API's address, builds
 // each event signed as the gateway would (`paid`, `failed`, `expired`, `recipientVerified`,
-// `recipientRejected`), delivers it over HTTP (`deliver`, `deliverTwice`, `deliverInOrder`), forges
+// `recipientRejected`), delivers it over HTTP (`deliver`, `deliverTwice`, `deliverInOrder`,
+// `deliverAfter`), forges
 // it (`tamper`), and sets what the stand-in's `cancelCheckout` answers (`onCancel`).
 //
 // The building is `apps/api/src/platform/ports/payment/gateway-stand-in.fixtures.ts` (its header
