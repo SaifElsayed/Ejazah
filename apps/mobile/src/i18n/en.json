@@ -760,6 +760,7 @@
       "payWithin": "Complete the payment within {time}",
       "slot": "Slot",
       "slotWithCity": "{slot} ({city})",
+      "summaryChanged": "The package has changed since you saw it. Review the order as it is now, then pay.",
       "teacher": "Teacher",
       "title": "Review your order",
       "toEnrollments": "To my enrollments",

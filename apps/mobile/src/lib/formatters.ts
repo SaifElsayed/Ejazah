@@ -5,7 +5,8 @@
 // constructs or moves a datetime (R-TIME-1): parsing one string is all it does. T109: a month's name
 // and a year, for the phone's own date-of-birth picker. T009: an amount of piasters, in pounds.
 // T022: a weekday's name and a slot's wall-clock start, which belong to no zone, and the weekday
-// an instant falls on in a zone. T070: a teacher's rating, to one decimal.
+// an instant falls on in a zone. T070: a teacher's rating, to one decimal. T045: the checkout's
+// countdown, as minutes and seconds.
 import { type Piasters, toPlainNumber } from '@ijazah/money';
 import { useMemo } from 'react';
 
@@ -28,6 +29,25 @@ export function formatRating(value: number, locale: Locale): string {
     minimumFractionDigits: RATING_DECIMALS,
     maximumFractionDigits: RATING_DECIMALS,
   }).format(value);
+}
+
+const SECONDS_PER_MINUTE = 60;
+const SECOND_DIGITS = 2;
+
+/**
+ * A countdown's whole seconds as minutes and two-digit seconds, «8:12» as the checkout's boards
+ * draw it (T045). The seconds are a count `secondsUntil` gave (`@ijazah/time/calendar`); nothing
+ * here reads a clock.
+ */
+export function formatCountdown(seconds: number, locale: Locale): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const tag = formattingTag(locale);
+  const minutes = new Intl.NumberFormat(tag, { useGrouping: false });
+  const rest = new Intl.NumberFormat(tag, {
+    useGrouping: false,
+    minimumIntegerDigits: SECOND_DIGITS,
+  });
+  return `${minutes.format(Math.floor(whole / SECONDS_PER_MINUTE))}:${rest.format(whole % SECONDS_PER_MINUTE)}`;
 }
 
 const PIASTERS_PER_POUND = 100;
@@ -190,6 +210,7 @@ export function useFormatters() {
     () => ({
       number: (value: number) => formatNumber(value, locale),
       rating: (value: number) => formatRating(value, locale),
+      countdown: (seconds: number) => formatCountdown(seconds, locale),
       date: (instant: string, timeZone: string) => formatDate(instant, timeZone, locale),
       fullDate: (instant: string, timeZone: string) => formatFullDate(instant, timeZone, locale),
       calendarDate: (date: string) => formatCalendarDate(date, locale),

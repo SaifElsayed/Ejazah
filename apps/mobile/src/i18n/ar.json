@@ -760,6 +760,7 @@
       "payWithin": "أكمل الدفع خلال {time}",
       "slot": "الموعد",
       "slotWithCity": "{slot} ({city})",
+      "summaryChanged": "تغيّرت الباقة منذ أن رأيتها. راجع الطلب كما هو الآن ثم ادفع.",
       "teacher": "المعلم",
       "title": "مراجعة الطلب",
       "toEnrollments": "إلى اشتراكاتي",

@@ -6,6 +6,7 @@ import { piasters } from '@ijazah/money';
 import { isolate } from '../i18n';
 import {
   formatCalendarDate,
+  formatCountdown,
   formatDate,
   formatFullDate,
   formatMonth,
@@ -134,5 +135,15 @@ describe('formatRating (T070; PR #118’s review, nit 5)', () => {
       expect(formatRating(5, locale)).toBe('5.0');
       expect(formatRating(1, locale)).toBe('1.0');
     }
+  });
+});
+
+describe('formatCountdown (T045, the checkout countdown)', () => {
+  it('writes whole seconds as minutes and two-digit seconds, as the board draws «8:12»', () => {
+    expect(formatCountdown(492, 'ar')).toBe('8:12');
+    expect(formatCountdown(492, 'en')).toBe('8:12');
+    expect(formatCountdown(600, 'en')).toBe('10:00');
+    expect(formatCountdown(9, 'ar')).toBe('0:09');
+    expect(formatCountdown(0, 'en')).toBe('0:00');
   });
 });
