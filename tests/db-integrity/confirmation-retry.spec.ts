@@ -10,7 +10,7 @@
 //
 // Over Redis (`REDIS_URL`, as CI's database job has it), on a queue of the spec's own name, with
 // the queue's own defaults (three attempts, backoff from one second); the queue's keys are removed
-// at the end, by that name and nothing else. The worker is paused while the two callers race, so
+// at the end, by that name and nothing else. The queue is paused while the two callers race, so
 // neither retry is run before both have returned.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
@@ -181,10 +181,10 @@ describe('a confirm-enrollment that failed all its attempts (the owner’s decis
     const { on, paid, paymentId } = await failedConfirmation();
     lines.length = 0;
 
-    await worker.pause(true);
+    await queue.pause();
     const [status] = await Promise.all([webhook.stand.deliver(paid), sweep()]);
     expect(status).toBe(200);
-    worker.resume();
+    await queue.resume();
     await until(
       async () => (await enrollmentOf(on.enrollmentId)).status === 'confirmed',
       'the enrollment is confirmed',
