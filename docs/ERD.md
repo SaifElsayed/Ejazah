@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.12 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.3 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog*
+*Version 1.13 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.4 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog; v1.13 on 2026-11-03, a hold's package and session count (T036 of `specs/003-booking/tasks.md`), in the "v1.12 → v1.13" changelog*
 
 ## 0. How to read this
 
@@ -352,6 +352,8 @@ Checkout reservation with TTL (FR-BOOK-9). Enforced against double-booking toget
 | id | uuid | PK |
 | slot_id | FK → availability_slots | |
 | student_user_id | FK → users | |
+| package_id | FK → packages | The package the hold was placed for, whose sessions its overlap check covered; Pay and the checkout's summary read the package from it, a teacher's several packages of one length being otherwise indistinguishable (FR-351, FR-354; the owner's decision of 2026-11-03) (v1.13) |
+| session_count | integer | The package's session count when the hold was placed, the count its overlap check covered; Pay refuses `SUMMARY_CHANGED` when the package's count now differs from it (FR-351; the owner's decision of 2026-11-03) (v1.13) |
 | enrollment_id | FK → enrollments, nullable | Set in the transaction that creates the enrollment at Pay; NULL while the student is in checkout before Pay. Conversion, release, the late-payment branch and a new checkout find the hold through it (ADR 0010 D2) |
 | expires_at | timestamptz | Gateway checkout TTL plus the hold grace, counted from placement (defaults 10 + 5 min, admin-configurable; FR-BOOK-9, ADR 0010 D4) |
 | released_at | timestamptz, nullable | Set on conversion, on expiry (by the expiry jobs, or before a new hold on the same slot or by the same student, ADR 0010 D3), by the student's own new checkout (FR-BOOK-12, ADR 0010 D6), or by the refusal branch of FR-PAYG-19. A failed gateway event does not set it (ADR 0010 D4). A release without conversion cancels the linked enrollment in the same transaction (ADR 0010 D7). NULL means active: §15.17–18 count the row even past `expires_at` |
@@ -770,6 +772,7 @@ erDiagram
 erDiagram
     users ||--o{ slot_holds : "student holds"
     availability_slots ||--o{ slot_holds : "held"
+    packages ||--o{ slot_holds : "held for"
     enrollments |o--o{ slot_holds : "checked out through"
     users ||--o{ enrollments : "student buys"
     users ||--o{ enrollments : "teacher delivers"
@@ -1069,3 +1072,14 @@ Phase 2 writes the booking and payment tables for the first time, and three thin
 | 4 | §7 `payments.expires_at timestamptz NOT NULL` and `payments.checkout_url_encrypted bytea`, nullable, which joins the `reencrypt-columns` job's list (`002:T134`) | the same |
 | 5 | §2 `ijazah_fold(text)`, IMMUTABLE and PARALLEL SAFE, the one fold of FR-333 on both sides of the name search; no column, no index | the same |
 | 6 | §13.2 and §13.3 draw `enrollment_events` | this document pass (T004) |
+
+## Changelog — v1.12 → v1.13 (a hold's package, 2026-11-03)
+
+Nothing recorded which package a hold was placed for, while a teacher may offer several active packages of one session length, so Pay and the checkout's summary before Pay could not know it; and a package edited between the hold and Pay could change the session count the hold's overlap check covered. The decisions are the owner's (2026-11-03, B29's integration; `specs/003-booking/tasks.md`, the notes under T036).
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §5 `slot_holds.package_id` (FK → `packages`, NOT NULL, `ON DELETE RESTRICT ON UPDATE CASCADE` as the table's other foreign keys, with its plain index `slot_holds_package_id_idx`) and `slot_holds.session_count integer NOT NULL`; existing rows filled from their enrollment (`package_id`, `snapshot_session_count`) | `20261103120000_slot_hold_package` |
+| 2 | §13.2 draws `packages ||--o{ slot_holds` | this document pass |
+
+No table is added: 42 tables.

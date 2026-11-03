@@ -6,7 +6,7 @@ Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through
 except `subjects` (seeded), `teacher_subjects` (granted by approval) and the recipient events of `payment_events`.
 This phase writes them for the first time. The pass below is what it adds: one table, three columns, one function,
 no index, the column checks T140 carries, and five settings rows. The ERD is amended in the same batch as each
-migration (ERD changelog v1.10 → v1.11 for T140's checks, v1.11 → v1.12 for the Phase 2 pass of T004, 42 tables), as Phase 1 did.
+migration (ERD changelog v1.10 → v1.11 for T140's checks, v1.11 → v1.12 for the Phase 2 pass of T004, 42 tables; v1.12 → v1.13 for a hold's package, §2.6), as Phase 1 did.
 
 ## 1. Who writes what
 
@@ -97,9 +97,18 @@ Rules: `CHECK ((kind = 'cancelled') = (cancellation_reason IS NOT NULL))`; `CHEC
 UPDATE, DELETE and TRUNCATE revoked from the application role (ERD §15 rule 21's pattern). `packages/config/module-tables.json`
 gives it to `booking`.
 
-### 2.6 Nothing else
+### 2.6 `slot_holds` — the hold's package (B29, the owner's decision of 2026-11-03)
 
-`slot_holds`, `sessions`, `payment_events` and `disputes` are written as the ERD defines them. The exclusion constraints
+| Column | Type | Notes |
+|---|---|---|
+| `package_id` | uuid, FK → `packages`, NOT NULL | The package the hold was placed for; Pay and `checkout.current` read it (T036). Index `slot_holds_package_id_idx` |
+| `session_count` | integer, NOT NULL | The package's session count at placement, the count the overlap check covered; Pay refuses `SUMMARY_CHANGED` when the package's count differs |
+
+Migration `20261103120000_slot_hold_package`: both columns added, existing rows filled from their enrollment, then NOT NULL.
+
+### 2.7 Nothing else
+
+`sessions`, `payment_events` and `disputes` are written as the ERD defines them. The exclusion constraints
 and the two partial unique indexes on `slot_holds` exist since Phase 0 (migrations `20261007000200`, `20261007000400`).
 No `booked` flag on a slot, no stored "sessions remaining" (R-DB-4): occupancy and counts are derived (R-205).
 
@@ -164,5 +173,6 @@ exclusion constraints as second line); a slot in use keeps its day, time and len
 2. **The Phase 2 pass**: `ijazah_fold` (no column, no index, §2.2); `enrollments.quoted_first_session_local_date`;
    `payments.expires_at` and `checkout_url_encrypted`; `enrollment_event_kind` and `enrollment_events` with its rule;
    the five settings rows in the seed. Probes for rule 39 and for the fold's equivalences (SC-314's data).
+3. **A hold's package** (B29): `slot_holds.package_id` and `session_count`, §2.6.
 
-Both are forward-only and additive (R-DB-1, R-API-9).
+All three are forward-only and additive (R-DB-1, R-API-9).

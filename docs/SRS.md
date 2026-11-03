@@ -717,7 +717,7 @@ User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdenti
 
 **AvailabilitySlot** — id, teacher_user_id, day_of_week, start_time_local, duration_minutes, timezone (IANA, teacher's), active.
 
-**SlotHold** — id, slot_id, student_user_id, enrollment_id (nullable, set when the Enrollment is created), expires_at, released_at. Enforces FR-BOOK-9 and FR-BOOK-12 *(ADR 0010)*.
+**SlotHold** — id, slot_id, student_user_id, package_id (the Package the hold was placed for) and session_count (its session count at placement, which the overlap check covered) (amended 2026-11-03, the owner's decision of 2026-11-03), enrollment_id (nullable, set when the Enrollment is created), expires_at, released_at. Enforces FR-BOOK-9 and FR-BOOK-12 *(ADR 0010)*.
 
 **Enrollment** — id, student_user_id, teacher_user_id, package_id, slot_id, snapshot fields: snapshot_price_piasters, snapshot_session_count, snapshot_duration_minutes, snapshot_subject_id, snapshot_track (ADR 0018); status (Pending-Payment / Confirmed / Completed / Terminated-No-Show / Cancelled), confirmed_at (set by the confirm-enrollment step on the gateway's paid event, FR-PAYG-5), cancellation_reason, purchased_at *(v1.4)*, quoted_first_session_local_date (the first session's local date quoted at checkout) *(Phase 2)*. `sessions_remaining` and the teacher no-show count are derived, never stored *(v1.3)*.
 
