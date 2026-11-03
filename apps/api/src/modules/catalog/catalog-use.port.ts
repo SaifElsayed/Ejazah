@@ -4,9 +4,9 @@
 // `AccountConsequences` registry binds its subscribers (research R-121 of Phase 1).
 //
 // Each answer is read on the caller's transaction (`tx`) and takes no lock: the caller takes its
-// locks first, in T005's order, and then asks (lock, then read). A slot's edit holds
-// `lockKey('teacher-slots', teacherId)` (R-206), which `checkout.hold` takes before it inserts, so
-// an edit and a hold cannot cross.
+// locks first, in T005's order, and then asks (lock, then read). A slot's edit locks the teacher's
+// account and then holds `lockKey('teacher-slots', teacherId)` (R-206); `checkout.hold` locks the
+// same account before it inserts, so an edit and a hold cannot cross.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 export interface CatalogUse {

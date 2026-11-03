@@ -161,8 +161,9 @@ cannot express the wrap from Saturday to Sunday as one range, and it would need 
 
 **Decision.** `teacher.slots.update` changes day, time or length only when no active hold and no enrollment in
 `pending_payment` or `confirmed` uses the slot; it reads that through booking's entry
-(`slotInUse(tx, slotId)`, through the port below) under the lock of R-206, and `checkout.hold` takes the same lock before it inserts, so an
-edit and a hold cannot cross. Deactivation is always allowed (FR-314). A package's track and length are frozen once an
+(`slotInUse(tx, slotId)`, through the port below) under the lock of R-206, which it takes after the teacher's account's
+(the note under T019); `checkout.hold` locks the same account before it inserts, so an edit and a hold cannot cross
+(corrected 2026-11-03, PR #120's review, Minor 2: the hold takes the account's lock, not the key). Deactivation is always allowed (FR-314). A package's track and length are frozen once an
 enrollment exists, read the same way (`packageHasEnrollment`), and its price change applies to later purchases
 because enrollments hold the snapshot (FR-312).
 
