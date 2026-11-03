@@ -50,6 +50,13 @@ export function fakeProcedures() {
       filters: { query: procedure() },
       teacher: { query: procedure() },
     },
+    // B30 (T045): the checkout screen, `CheckoutPrevious` and `CheckoutExpired`.
+    checkout: {
+      current: { query: procedure() },
+      pay: { mutate: procedure() },
+      continue: { query: procedure() },
+      status: { query: procedure() },
+    },
     teacher: {
       application: {
         get: { query: procedure() },
