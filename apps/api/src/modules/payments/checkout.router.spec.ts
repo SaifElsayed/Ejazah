@@ -88,6 +88,7 @@ const checkout: CheckoutServices = {
     return {
       holdId: HOLD,
       expiresAt: '2026-11-03T08:15:00.000Z',
+      payBy: '2026-11-03T08:10:00.000Z',
       summary,
       firstSession: { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' },
       lastSession: { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' },
@@ -107,6 +108,7 @@ const checkout: CheckoutServices = {
       hold: {
         holdId: HOLD,
         expiresAt: '2026-11-03T08:15:00.000Z',
+        payBy: '2026-11-03T08:10:00.000Z',
         enrollmentId: ENROLLMENT,
         summary,
         lastOrder: { status: 'created', expiresAt: handover.orderExpiresAt, canContinue: true },

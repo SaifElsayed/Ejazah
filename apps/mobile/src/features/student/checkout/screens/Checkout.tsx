@@ -2,9 +2,9 @@
 // payment summary `checkout.current` gives, the track's caption (recitation only: the ijazah
 // track's variant is not drawn) and the gateway's, and in the action bar the countdown and «ادفع».
 //
-// THE COUNTDOWN runs to the hold's expiry (`checkout.current` gives no other instant before Pay),
-// read every second from the phone's clock, so it continues offline; at zero the screen is
-// `CheckoutExpired` in place.
+// THE COUNTDOWN runs to `payBy`, the instant Pay stops being accepted (the hold's expiry minus the
+// grace, the expiry of the order Pay would create: FR-355, FR-358), read every second from the
+// phone's clock, so it continues offline; at zero the screen is `CheckoutExpired` in place.
 //
 // PAY sends the summary the screen shows. `SUMMARY_CHANGED` reads `checkout.current` again, draws
 // the package as it now is with a line saying so, and pays nothing until a new press, which sends
@@ -82,7 +82,7 @@ function OpenCheckout({
 }) {
   const t = useT();
   const locale = useLocale();
-  const seconds = useSecondsLeft(hold.expiresAt);
+  const seconds = useSecondsLeft(hold.payBy);
   const pay = usePay(hold.holdId);
   const [refused, setRefused] = useState<'changed' | 'expired' | 'failed' | null>(null);
   const { summary } = hold;

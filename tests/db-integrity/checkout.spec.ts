@@ -54,7 +54,7 @@ import {
   SettingError,
   type SettingsReader,
 } from '../../apps/api/src/platform/settings/settings-reader.js';
-import { addMinutes } from '../../packages/time/src/index.js';
+import { addMinutes, addSeconds } from '../../packages/time/src/index.js';
 import { type GatewayStandIn, gatewayStandIn } from '../support/gateway-stand-in';
 
 const CAIRO = 'Africa/Cairo';
@@ -138,6 +138,31 @@ beforeAll(() => {
     gateway: 'fake',
   });
 });
+
+/** The services as `beforeAll` binds them, with the clock stopped at `at`. */
+function servicesAt(at: Date): CheckoutServices {
+  return createCheckoutServices({
+    database,
+    settings,
+    idempotency: new IdempotencyService<Transaction>({
+      store: new IdempotencyRepository(database),
+      settings,
+    }),
+    payment: {
+      createCheckout: (...args) => {
+        calls.create += 1;
+        return gateway.createCheckout(...args);
+      },
+      cancelCheckout: (gatewayOrderId) => {
+        calls.cancel.push(gatewayOrderId);
+        return gateway.cancelCheckout(gatewayOrderId);
+      },
+    },
+    cipher,
+    gateway: 'fake',
+    now: () => at,
+  });
+}
 
 afterAll(async () => {
   await closeDatabase(database);
@@ -566,6 +591,38 @@ describe('checkout.pay (FR-354, FR-355, M3; the owner’s decisions of 2026-11-0
     const [order] = await ordersOf(answer.enrollmentId);
     expect(order?.status).toBe('created');
     expect(answer.orderExpiresAt).toBe(order?.expiresAt.toISOString());
+  });
+
+  it('answers payBy on hold and current, the order Pay creates expires at it, and refuses Pay one second after it (FR-355, FR-358)', async () => {
+    const on = await offer();
+    const student = await person();
+    const held = await holdOn(student, on);
+    const row = await database.slotHold.findUniqueOrThrow({
+      where: { id: held.holdId },
+      select: { expiresAt: true },
+    });
+    const grace = Number(SETTINGS['slot_hold_grace_minutes']);
+    expect(held.payBy).toBe(new Date(addMinutes(row.expiresAt, -grace)).toISOString());
+    const current = await checkout.current(studentOf(student));
+    expect(current.hold?.payBy).toBe(held.payBy);
+
+    const late = servicesAt(new Date(addSeconds(new Date(held.payBy), 1)));
+    const created = calls.create;
+    const refused = await refusal(
+      late.pay(studentOf(student), {
+        holdId: held.holdId,
+        quoted: quotedOf(held),
+        idempotencyKey: randomUUID(),
+      }),
+    );
+    expect(refused.code).toBe('HOLD_EXPIRED');
+    expect(calls.create).toBe(created);
+    expect(await enrollmentsOf(student)).toEqual([]);
+
+    const answer = await payOn(student, held);
+    const [order] = await ordersOf(answer.enrollmentId);
+    expect(order?.expiresAt.toISOString()).toBe(held.payBy);
+    expect(answer.orderExpiresAt).toBe(held.payBy);
   });
 
   it('answers another student’s hold NOT_FOUND, creating no order and writing nothing', async () => {
