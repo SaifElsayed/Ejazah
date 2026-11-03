@@ -51,8 +51,11 @@ export function fakeProcedures() {
       filters: { query: procedure() },
       teacher: { query: procedure() },
     },
-    // B30: Checkout, `CheckoutPrevious` and `CheckoutExpired` (T045), and the outcomes (T046).
+    // B30: the booking sheet (T044); Checkout, `CheckoutPrevious` and `CheckoutExpired` (T045),
+    // and the outcomes (T046).
+    booking: { slots: { query: procedure() } },
     checkout: {
+      hold: { mutate: procedure() },
       current: { query: procedure() },
       pay: { mutate: procedure() },
       continue: { query: procedure() },

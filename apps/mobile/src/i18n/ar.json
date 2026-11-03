@@ -672,6 +672,7 @@
     "booking": {
       "availableSlots": "المواعيد المتاحة",
       "continueToPayment": "متابعة إلى الدفع",
+      "inYourZone": "{slot} بتوقيتك",
       "noSlots": {
         "action": "اختر باقة أخرى",
         "text": "كل مواعيد المعلم بهذه المدة محجوزة.",
