@@ -4,7 +4,8 @@
 // A RECIPIENT EVENT (`recipient_verified`, `recipient_rejected`) is applied in ONE transaction, in
 // this order: the event is recorded in `payment_events` under its unique `provider_event_id` first
 // (R-MONEY-8), then the verdict is handed to the identity module's entry with the lookup hash of the
-// reference the event carried. A provider event id already recorded is a replay: nothing else runs
+// reference the event carried; a rejection locks the teacher's account before both (PR #120's
+// review, M1). A provider event id already recorded is a replay: nothing else runs
 // and the webhook acknowledges it. Should identity fail, the record is rolled back with it, so the
 // gateway's retry finds the event new and applies it whole. The payments module calls identity and
 // never the reverse (R-121), and writes no `teacher_profiles` column itself (README, "Never").
@@ -38,6 +39,8 @@ export interface RecipientVerdicts {
     refHash: string,
     reason: string | undefined,
   ) => Promise<boolean>;
+  /** Locks the account of the teacher holding the hash, where one does (PR #120's review, M1). */
+  readonly lockPayoutHolder: (tx: Transaction, refHash: string) => Promise<void>;
 }
 
 export interface RecipientEventsDependencies {
@@ -95,6 +98,10 @@ export class RecipientEventsService {
   }
 
   async #apply(tx: Transaction, event: RecipientEvent, receipt: Receipt): Promise<RecordOutcome> {
+    const refHash = this.#identity.payoutRefHash(event.recipientRef);
+    // A rejection clears `payout_verified_at`, which the bookable predicate reads: the teacher's
+    // account is locked before anything is read or written (T005; PR #120's review, M1).
+    if (event.type === 'recipient_rejected') await this.#identity.lockPayoutHolder(tx, refHash);
     const recorded = await new PaymentsRepository(tx).recordRecipientEvent({
       providerEventId: event.providerEventId,
       eventType: event.type,
@@ -103,7 +110,6 @@ export class RecipientEventsService {
       receivedAt: receipt.receivedAt,
     });
     if (!recorded) return 'replayed';
-    const refHash = this.#identity.payoutRefHash(event.recipientRef);
     const matched =
       event.type === 'recipient_verified'
         ? await this.#identity.markPayoutVerified(tx, refHash, receipt.signatureVerifiedAt)

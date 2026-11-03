@@ -107,6 +107,7 @@ function recordingIdentity(matches = true, failure?: Error) {
       calls.push({ entry: 'markPayoutRejected', onTransaction: tx !== undefined, refHash, reason });
       return answer();
     },
+    lockPayoutHolder: async () => undefined,
   };
   return { identity, calls };
 }

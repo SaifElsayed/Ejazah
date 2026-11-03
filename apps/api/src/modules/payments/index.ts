@@ -29,7 +29,12 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import { recordOrderFailed } from '../booking/index.js';
-import { markPayoutRejected, markPayoutVerified, payoutRefHash } from '../identity/index.js';
+import {
+  lockPayoutHolder,
+  markPayoutRejected,
+  markPayoutVerified,
+  payoutRefHash,
+} from '../identity/index.js';
 import type { PaymentGateway } from './checkout.repository.js';
 import { type CheckoutStudent, CheckoutService, checkoutStepsOver } from './checkout.service.js';
 import { type ConfirmationQueue, OrderEventsService } from './order-events.service.js';
@@ -68,7 +73,7 @@ export function createPaymentWebhookRoute({
     events: {
       recipients: new RecipientEventsService({
         database,
-        identity: { markPayoutVerified, markPayoutRejected, payoutRefHash },
+        identity: { markPayoutVerified, markPayoutRejected, lockPayoutHolder, payoutRefHash },
         log,
         ...reporting,
       }),

@@ -90,3 +90,12 @@ export async function markRejected(tx: Writer, refHash: string, reason: string):
   });
   return count === 1;
 }
+
+/** The account of the teacher holding the reference hashing to `refHash`; null when none does. */
+export async function payoutHolderOf(tx: Writer, refHash: string): Promise<string | null> {
+  const row = await tx.teacherProfile.findFirst({
+    where: { payoutAccountRefHash: refHash },
+    select: { userId: true },
+  });
+  return row?.userId ?? null;
+}
