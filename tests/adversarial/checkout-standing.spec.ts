@@ -14,20 +14,24 @@
 //   - a `verification_required` teacher's slot is refused at hold: `NOT_BOOKABLE` for the own
 //     gender's teacher, who stays visible (FR-VERIFY-10), and as a nonexistent package for the other
 //     gender's, with nothing written; the same teacher made active again is held (FR-303, T143);
+//   - a teacher suspended between hold and pay, through identity's real `StandingService` with
+//     booking's T041 subscriber on its registry: the suspension releases the hold, so Pay is refused
+//     `HOLD_EXPIRED` and writes nothing (FR-303, R-219, the note under T043);
 //   - `checkout.status` keeps the teacher's name for the student who bought, read from the
 //     enrollment, never through discovery's predicate: after the teacher's suspension the answer is
 //     unchanged while the teacher answers no one on `booking.slots`; after the teacher deletes the
 //     account the answer carries what the deletion leaves, the teacher's id and no name (FR-141
-//     erases `display_name`); the other gender's student is answered as for an enrollment that never
-//     existed throughout (M3).
-//
-// «A teacher suspended between hold and pay» lands with T041's subscriber (the note under T043).
+//     erases `display_name`), and T041's cancellation (`account_deleted`); the other gender's student
+//     is answered as for an enrollment that never existed throughout (M3).
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import type { CheckoutStatusOutput } from '../../packages/contracts/src/index.js';
+import type {
+  CheckoutHoldOutput,
+  CheckoutStatusOutput,
+} from '../../packages/contracts/src/index.js';
 import { refusalOf, surfaceFor } from './discovery.attacks.js';
 import type { AppCaller, SeededTeacher } from './discovery-world.js';
 import { type Direction, directions, expectAnswersAsNonexistent } from './procedure-harness.js';
@@ -61,20 +65,23 @@ function otherGendersVisible(excluded: readonly SeededTeacher[], direction: Dire
   return teacher;
 }
 
-/** The student holds the teacher's package and pays: the enrollment awaiting payment. */
-async function boughtFrom(caller: AppCaller, teacher: SeededTeacher): Promise<string> {
-  const held = await holdOf(caller, packageOf(teacher), teacher.slotId);
-  const { summary } = held;
-  const paid = await caller.checkout.pay({
+/** Pay on the hold with the summary the hold answered, as the phone sends it. */
+const payOf = (caller: AppCaller, held: CheckoutHoldOutput) =>
+  caller.checkout.pay({
     holdId: held.holdId,
     quoted: {
-      price_piasters: summary.price_piasters,
-      sessionCount: summary.sessionCount,
-      sessionDurationMinutes: summary.sessionDurationMinutes,
-      track: summary.track,
+      price_piasters: held.summary.price_piasters,
+      sessionCount: held.summary.sessionCount,
+      sessionDurationMinutes: held.summary.sessionDurationMinutes,
+      track: held.summary.track,
     },
     idempotencyKey: randomUUID(),
   });
+
+/** The student holds the teacher's package and pays: the enrollment awaiting payment. */
+async function boughtFrom(caller: AppCaller, teacher: SeededTeacher): Promise<string> {
+  const held = await holdOf(caller, packageOf(teacher), teacher.slotId);
+  const paid = await payOf(caller, held);
   return paid.enrollmentId;
 }
 
@@ -146,6 +153,27 @@ describe.each(directions)(
       }
     });
 
+    it('a teacher suspended between hold and pay: Pay refused HOLD_EXPIRED, nothing written (FR-303, R-219)', async () => {
+      const { surface, caller } = await surfaceFor(direction);
+      const { teacher } = await surface.loneTeacher(direction.requester);
+      try {
+        const held = await holdOf(caller, packageOf(teacher), teacher.slotId);
+        // The panel's suspension: T041's subscriber releases the holds on the teacher's slots.
+        await surface.suspend(teacher.id);
+        const before = await surface.checkoutRows(direction.requester, [teacher.slotId]);
+        const refusal = await refusalOf(() => payOf(caller, held));
+        expect({ status: refusal.status, body: refusal.body }).toStrictEqual({
+          status: 409,
+          body: { code: 'HOLD_EXPIRED', message: refusal.body.message },
+        });
+        const after = await surface.checkoutRows(direction.requester, [teacher.slotId]);
+        expect(after).toStrictEqual(before);
+        expect(after.holds.find((row) => row.startsWith(held.holdId))).not.toContain(' active ');
+      } finally {
+        await surface.endHolds(direction.requester);
+      }
+    });
+
     it("checkout.status keeps the teacher's name for the buyer after the teacher's suspension", async () => {
       const { surface, caller } = await surfaceFor(direction);
       const other = surface.student(direction.other).caller;
@@ -177,9 +205,12 @@ describe.each(directions)(
       expect(before.summary.teacher.displayName).toBe(teacher.displayName);
 
       await surface.deleteAccount(teacher.id);
-      // FR-141 erases the display name; the enrollment keeps the teacher's id and everything else.
+      // FR-141 erases the display name; the enrollment keeps the teacher's id and its snapshot, and
+      // T041's subscriber cancels it while it awaits payment (R-219).
       expect(await statusOf(caller, enrollmentId)).toStrictEqual({
         ...before,
+        status: 'cancelled',
+        cancellationReason: 'account_deleted',
         summary: { ...before.summary, teacher: { teacherId: teacher.id, displayName: '' } },
       });
       await expectStatusHidden(other, enrollmentId);
