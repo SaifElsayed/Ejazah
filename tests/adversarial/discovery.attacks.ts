@@ -94,7 +94,7 @@ function expectNothingOf(answer: unknown, excluded: readonly SeededTeacher[]): v
 }
 
 /** A refused call's status and body through the surface's one formatter; throws if it answered. */
-async function refusalOf(call: () => Promise<unknown>): Promise<MappedError> {
+export async function refusalOf(call: () => Promise<unknown>): Promise<MappedError> {
   try {
     await call();
   } catch (error) {
