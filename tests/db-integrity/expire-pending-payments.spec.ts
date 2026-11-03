@@ -149,7 +149,13 @@ describe('a paid event whose enqueue was dropped, then the sweep (M2, round 2 N1
         orders: orderStandingsOf,
       });
       const { id } = await tx.slotHold.create({
-        data: { slotId: elsewhere, studentUserId: on.studentId, expiresAt: farFuture() },
+        data: {
+          slotId: elsewhere,
+          packageId: on.packageId,
+          sessionCount: 4,
+          studentUserId: on.studentId,
+          expiresAt: farFuture(),
+        },
         select: { id: true },
       });
       return id;
@@ -176,7 +182,13 @@ describe('a paid event whose enqueue was dropped, then the sweep (M2, round 2 N1
     await database.$transaction(async (tx) => {
       await releaseExpiredHolds(tx, { slotId: on.slotId }, { at: NOW, orders: orderStandingsOf });
       await tx.slotHold.create({
-        data: { slotId: on.slotId, studentUserId: other, expiresAt: farFuture() },
+        data: {
+          slotId: on.slotId,
+          packageId: on.packageId,
+          sessionCount: 4,
+          studentUserId: other,
+          expiresAt: farFuture(),
+        },
       });
     });
     expect((await enrollmentOf(on.enrollmentId)).status).toBe('pending_payment');
@@ -318,7 +330,10 @@ describe('expire-pending-payments hands on only what awaits confirmation', () =>
 
 describe('expire-holds (FR-364, ADR 0010 D7)', () => {
   /** A hold that carries no enrollment: a student in checkout who never pressed Pay. */
-  async function checkoutHold(teacherId: string, expiresAt: Date): Promise<string> {
+  async function checkoutHold(
+    { teacherId, packageId }: { readonly teacherId: string; readonly packageId: string },
+    expiresAt: Date,
+  ): Promise<string> {
     const { id: slotId } = await database.availabilitySlot.create({
       data: {
         teacherUserId: teacherId,
@@ -331,7 +346,13 @@ describe('expire-holds (FR-364, ADR 0010 D7)', () => {
       select: { id: true },
     });
     const { id } = await database.slotHold.create({
-      data: { slotId, studentUserId: await person('female'), expiresAt },
+      data: {
+        slotId,
+        packageId,
+        sessionCount: 4,
+        studentUserId: await person('female'),
+        expiresAt,
+      },
       select: { id: true },
     });
     return id;
@@ -342,8 +363,8 @@ describe('expire-holds (FR-364, ADR 0010 D7)', () => {
 
   it('releases the expired holds that carry no enrollment, and leaves the running ones and the linked ones', async () => {
     const on = await world();
-    const expired = await checkoutHold(on.teacherId, NOW);
-    const running = await checkoutHold(on.teacherId, farFuture());
+    const expired = await checkoutHold(on, NOW);
+    const running = await checkoutHold(on, farFuture());
     const at = sweepInstant();
     await sweepHolds(at);
     expect(await releasedAt(expired)).toEqual(at);
@@ -358,8 +379,8 @@ describe('expire-holds (FR-364, ADR 0010 D7)', () => {
       world: async () => {
         const on = await world();
         return {
-          expired: await checkoutHold(on.teacherId, NOW),
-          running: await checkoutHold(on.teacherId, farFuture()),
+          expired: await checkoutHold(on, NOW),
+          running: await checkoutHold(on, farFuture()),
         };
       },
       run: () => sweepHolds(at),

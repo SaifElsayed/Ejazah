@@ -95,6 +95,7 @@ import type { BookingServices, DiscoveryServices } from '../modules/booking/inde
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
+import type { CheckoutServices } from '../modules/payments/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 
 // The request's language and the client's address are the kernel's (`platform/http/`, PR #79
@@ -210,6 +211,8 @@ export interface AppServices {
   readonly discovery: DiscoveryServices;
   /** `booking.*`: the booking sheet's slots on booking's router (T032, R-205). */
   readonly booking: BookingServices;
+  /** `checkout.*`: the payments module's checkout over booking's holds and enrollments (T036, R-208). */
+  readonly checkout: CheckoutServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */

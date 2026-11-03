@@ -35,6 +35,9 @@
 // T032: every teacher, in every state, also has one active slot of the packages' length (Thursday
 // 09:00 in Cairo), and its package and slot ids are kept, so `booking.slots` is attacked in the same
 // world (`booking.attacks.ts`).
+// T036: the surface's `checkout` is the one `main.ts` binds, over the stand-in gateway this file
+// already serves, so `checkout.hold`, `checkout.retry` and `checkout.pay` are attacked in the same world
+// (`checkout.attacks.ts`).
 //
 // NOTHING STAYS VISIBLE. At the end of the file every account the world created is soft-deleted and
 // every subject deactivated, so a later run, or another spec, never meets these teachers.
@@ -62,6 +65,7 @@ import {
   resolveUserSession,
 } from '../../apps/api/src/modules/identity/index.js';
 import {
+  createCheckoutServices,
   createPaymentWebhookRoute,
   PAYMENT_WEBHOOK_PATH,
 } from '../../apps/api/src/modules/payments/index.js';
@@ -99,6 +103,17 @@ import {
 import type {
   BookingSlotsInput,
   BookingSlotsOutput,
+  CheckoutContinueInput,
+  CheckoutContinueOutput,
+  CheckoutCurrentOutput,
+  CheckoutHoldInput,
+  CheckoutHoldOutput,
+  CheckoutPayInput,
+  CheckoutPayOutput,
+  CheckoutRetryInput,
+  CheckoutRetryOutput,
+  CheckoutStatusInput,
+  CheckoutStatusOutput,
   DiscoveryBrowseInput,
   DiscoveryBrowseOutput,
   DiscoveryFiltersInput,
@@ -106,9 +121,13 @@ import type {
   DiscoveryTeacherInput,
   DiscoveryTeacherOutput,
 } from '../../packages/contracts/src/index.js';
+import { addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 
 type Gender = 'male' | 'female';
+
+/** A hold's minutes: the checkout's ten and the grace's five (the seeded settings). */
+const HOLD_MINUTES = 15;
 
 export const GENDERS: readonly Gender[] = ['male', 'female'];
 
@@ -218,6 +237,9 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   discovery_page_size: 20,
   document_link_ttl_seconds: 300,
   rate_limit_search: { limit: 60, window_seconds: 60 },
+  rate_limit_payment_initiation: { limit: 10, window_seconds: 600 },
+  slot_hold_ttl_minutes: 10,
+  slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
   slot_release_buffer_weeks: 0,
   session_access_ttl_minutes: 15,
@@ -264,6 +286,14 @@ export interface AppCaller {
   readonly booking: {
     slots(input: BookingSlotsInput): Promise<BookingSlotsOutput>;
   };
+  readonly checkout: {
+    hold(input: CheckoutHoldInput): Promise<CheckoutHoldOutput>;
+    pay(input: CheckoutPayInput): Promise<CheckoutPayOutput>;
+    retry(input: CheckoutRetryInput): Promise<CheckoutRetryOutput>;
+    current(input: Record<string, never>): Promise<CheckoutCurrentOutput>;
+    continue(input: CheckoutContinueInput): Promise<CheckoutContinueOutput>;
+    status(input: CheckoutStatusInput): Promise<CheckoutStatusOutput>;
+  };
 }
 
 /** A signed-in student and the bearer token the sign-in issued. */
@@ -290,6 +320,19 @@ export interface DiscoverySurface {
   replacePayout(teacherId: string): Promise<{ verify(): Promise<number> }>;
   /** The visible teachers of `gender` with an active package, counted in SQL from SRS §3.7.1. */
   allTabCount(gender: Gender): Promise<number>;
+  /**
+   * T036: ends the student's active holds that carry no enrollment, so a later case of the file
+   * meets the world's slots free again (a hold outlives its case by its fifteen minutes).
+   */
+  endHolds(gender: Gender): Promise<void>;
+  /**
+   * T036: the student's enrollment awaiting payment, on a hold of a lone visible teacher's slot, as
+   * `checkout.pay` writes them (until `checkout.pay` lands, written here); one per gender, made on
+   * first use. Retry is attacked on it.
+   */
+  pendingEnrollment(
+    gender: Gender,
+  ): Promise<{ readonly enrollmentId: string; readonly holdId: string }>;
 }
 
 interface Built extends DiscoverySurface {
@@ -368,9 +411,14 @@ async function build(): Promise<Built> {
   const recipients = new Map<string, string>();
   const unreachable = () => Promise.reject(new Error('discovery world: not reached'));
   const identityBase = { database, settings, encryptionKey };
+  const cipher = new ColumnCipher(encryptionKey);
+  const idempotency = new IdempotencyService<Transaction>({
+    store: new IdempotencyRepository(database),
+    settings,
+  });
   const identity: IdentityServices = createIdentityServices({
     ...identityBase,
-    cipher: new ColumnCipher(encryptionKey),
+    cipher,
     marks: new MemorySingleUseMarks(() => new Date()),
     signIn: {
       verifyIdentityToken: unreachable,
@@ -387,10 +435,7 @@ async function build(): Promise<Built> {
         return recipientRef;
       },
     },
-    idempotency: new IdempotencyService<Transaction>({
-      store: new IdempotencyRepository(database),
-      settings,
-    }),
+    idempotency,
     consequences: new AccountConsequences(),
     report: () => undefined,
   });
@@ -418,6 +463,15 @@ async function build(): Promise<Built> {
     }),
     // As `main.ts` binds it (T032): the booking sheet's slots over the owners' entries.
     booking: createBookingServices({ database, settings }),
+    // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
+    checkout: createCheckoutServices({
+      database,
+      settings,
+      idempotency,
+      payment,
+      cipher,
+      gateway: 'fake',
+    }),
   };
   const rateLimiter = new RateLimiter({
     settings,
@@ -468,6 +522,7 @@ async function build(): Promise<Built> {
   }
 
   const students = new Map<Gender, Student>();
+  const pending = new Map<Gender, Promise<{ enrollmentId: string; holdId: string }>>();
   for (const gender of GENDERS) {
     const { userId, email } = await seeder.student(gender);
     const { accessToken } = await identity.emailAuth.signIn(email, PASSWORD);
@@ -506,6 +561,71 @@ async function build(): Promise<Built> {
     async replacePayout(teacherId) {
       const recipientRef = await registerReplacement(teacherId);
       return { verify: () => stand.deliver(stand.recipientVerified(recipientRef)) };
+    },
+    async endHolds(gender) {
+      const student = students.get(gender);
+      if (student === undefined) throw new Error(`no ${gender} student`);
+      await database.slotHold.updateMany({
+        where: { studentUserId: student.userId, releasedAt: null, enrollmentId: null },
+        data: { releasedAt: new Date() },
+      });
+    },
+    pendingEnrollment(gender) {
+      const made = pending.get(gender);
+      if (made !== undefined) return made;
+      const making = (async () => {
+        const student = students.get(gender);
+        if (student === undefined) throw new Error(`no ${gender} student`);
+        const subject = await seeder.subject();
+        const teacher = await seeder.teacher({
+          gender,
+          state: 'plainName',
+          shared: subject,
+          admin,
+          sharedRiwaya: `رواية ${randomUUID()}`,
+        });
+        const [packageId] = teacher.packageIds;
+        if (packageId === undefined) throw new Error('a world teacher without a package');
+        await database.slotHold.updateMany({
+          where: { studentUserId: student.userId, releasedAt: null, enrollmentId: null },
+          data: { releasedAt: new Date() },
+        });
+        return database.$transaction(async (tx) => {
+          const { id: enrollmentId } = await tx.enrollment.create({
+            data: {
+              studentUserId: student.userId,
+              teacherUserId: teacher.id,
+              packageId,
+              slotId: teacher.slotId,
+              snapshotPricePiasters: BigInt(100_000),
+              snapshotSessionCount: 4,
+              snapshotDurationMinutes: 60,
+              snapshotSubjectId: subject.id,
+              snapshotSlotTimezone: 'Africa/Cairo',
+              snapshotTrack: 'recitation',
+              status: 'pending_payment',
+              purchasedAt: new Date(),
+              quotedFirstSessionLocalDate: new Date('2026-12-03T00:00:00Z'),
+            },
+            select: { id: true },
+          });
+          const { id: holdId } = await tx.slotHold.create({
+            data: {
+              slotId: teacher.slotId,
+              studentUserId: student.userId,
+              packageId,
+              sessionCount: 4,
+              enrollmentId,
+              // The checkout's ten minutes and the grace's five, from now (FR-BOOK-9).
+              expiresAt: new Date(addMinutes(new Date(), HOLD_MINUTES)),
+            },
+            select: { id: true },
+          });
+          return { enrollmentId, holdId };
+        });
+      })();
+      pending.set(gender, making);
+      return making;
     },
     async allTabCount(gender) {
       // SRS §3.7.1's five conjuncts as written, and FR-332's "with an active package".

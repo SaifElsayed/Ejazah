@@ -15,6 +15,7 @@ import { createLogger } from '../logging/logger.js';
 import {
   unusedAdminServices,
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -39,6 +40,7 @@ const services = {
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
+  checkout: unusedCheckoutServices,
 };
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests

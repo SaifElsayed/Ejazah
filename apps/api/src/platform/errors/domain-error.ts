@@ -79,6 +79,12 @@ export const errorCodes = {
   SLOT_IN_USE: { status: 409, message: 'This slot is in use and cannot change.' },
   // Track or length after the package's first enrollment.
   PACKAGE_FROZEN: { status: 409, message: 'The track and length cannot change now.' },
+  // B29 (T036, the owner's decisions of 2026-11-03): Pay on a package that is no longer what the
+  // student saw (deactivated, or its price, session count, length or track changed), refused before
+  // any order with nothing written. The package as it now is travels in details, one issue per
+  // field: `summary.price_piasters`, `summary.sessionCount`, `summary.sessionDurationMinutes` and
+  // `summary.track`, each `code` the current value as text, or `package` with `inactive`.
+  SUMMARY_CHANGED: { status: 409, message: 'This package has changed since you saw it.' },
 } as const satisfies Record<string, { status: number; message: string }>;
 
 export type ErrorCode = keyof typeof errorCodes;

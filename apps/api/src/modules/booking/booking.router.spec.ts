@@ -21,6 +21,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
@@ -105,6 +106,7 @@ function callerAs(session: UserSession | null): Caller {
     catalog: unusedCatalogServices,
     discovery: unusedDiscoveryServices,
     booking,
+    checkout: unusedCheckoutServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

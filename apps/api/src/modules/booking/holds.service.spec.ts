@@ -129,6 +129,7 @@ function storeOf(world: World) {
       log.push(['events', outcomes.length]);
       events.push(...outcomes);
     },
+    enrollmentTerms: async () => ({ packageId: PACKAGE, sessionCount: 4 }),
     insertHold: async (_tx, hold) => {
       log.push(['insert', hold]);
       const row = { ...hold, id: id(100 + inserted.length), releasedAt: null };
@@ -242,6 +243,8 @@ describe('placeHold: the order (FR-351, T005)', () => {
       expect.objectContaining({
         slotId: SLOT,
         studentUserId: STUDENT,
+        packageId: PACKAGE,
+        sessionCount: 4,
         enrollmentId: null,
         expiresAt: new Date('2026-11-03T08:15:00Z'),
       }),
@@ -459,7 +462,14 @@ describe('reholdEnrollment: FR-PAYG-19’s new hold (for T039)', () => {
       ['lock', 'enrollments', [id(5), id(7)]],
     ]);
     expect(fake.inserted).toEqual([
-      expect.objectContaining({ slotId: SLOT, studentUserId: STUDENT, enrollmentId: id(5) }),
+      expect.objectContaining({
+        slotId: SLOT,
+        studentUserId: STUDENT,
+        enrollmentId: id(5),
+        // The enrollment's package and snapshot count, read under its lock (B29).
+        packageId: PACKAGE,
+        sessionCount: 4,
+      }),
     ]);
     expect(holdId).toBe(fake.inserted[0]?.id);
   });

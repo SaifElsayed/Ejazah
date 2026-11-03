@@ -128,6 +128,8 @@ describe('confirm-enrollment on a late payment (FR-362, FR-PAYG-19)', () => {
     const { id: otherHold } = await database.slotHold.create({
       data: {
         slotId: on.slotId,
+        packageId: on.packageId,
+        sessionCount: 4,
         studentUserId: otherStudent,
         enrollmentId: otherEnrollment,
         expiresAt: EARLIER,
@@ -167,7 +169,13 @@ describe('confirm-enrollment on a late payment (FR-362, FR-PAYG-19)', () => {
     const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
     const otherStudent = await person('female');
     const { id: otherHold } = await database.slotHold.create({
-      data: { slotId: on.slotId, studentUserId: otherStudent, expiresAt: LATER },
+      data: {
+        slotId: on.slotId,
+        packageId: on.packageId,
+        sessionCount: 4,
+        studentUserId: otherStudent,
+        expiresAt: LATER,
+      },
       select: { id: true },
     });
     await confirm(await order(on.enrollmentId));
@@ -211,7 +219,13 @@ describe('confirm-enrollment on a late payment (FR-362, FR-PAYG-19)', () => {
       select: { id: true },
     });
     const { id: ownHold } = await database.slotHold.create({
-      data: { slotId: elsewhere, studentUserId: on.studentId, expiresAt: LATER },
+      data: {
+        slotId: elsewhere,
+        packageId: on.packageId,
+        sessionCount: 4,
+        studentUserId: on.studentId,
+        expiresAt: LATER,
+      },
       select: { id: true },
     });
     await confirm(await order(on.enrollmentId));
@@ -454,7 +468,13 @@ describe('confirm-enrollment is idempotent (R-API-14, R-215)', () => {
       world: async () => {
         const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
         await database.slotHold.create({
-          data: { slotId: on.slotId, studentUserId: await person('female'), expiresAt: LATER },
+          data: {
+            slotId: on.slotId,
+            packageId: on.packageId,
+            sessionCount: 4,
+            studentUserId: await person('female'),
+            expiresAt: LATER,
+          },
         });
         return { on, paid: await order(on.enrollmentId) };
       },

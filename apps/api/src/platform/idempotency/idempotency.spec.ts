@@ -375,3 +375,46 @@ describe('one transaction covers the key and the effect (T096, research R-14)', 
     expect(store.committed.effects).toEqual(['checkout by the competitor']);
   });
 });
+
+// B29 (T036, the owner's decision of 2026-11-03): a keyed procedure whose gateway call runs outside
+// any transaction first reads the key, so a completed key answers its stored outcome and the gateway
+// is never called again.
+describe('reading a key before the effect (T036, keyed in two steps)', () => {
+  it('answers the stored outcome of a completed key, running nothing', async () => {
+    const { service, effect, runs } = setUp();
+    await service.run(request(), effect);
+
+    await expect(service.completed(request())).resolves.toEqual({ checkoutId: 'checkout-1' });
+    expect(runs()).toBe(1);
+  });
+
+  it('answers nothing for a key never used, for another actor and once the key expired', async () => {
+    const { service, effect, later } = setUp();
+    await expect(service.completed(request())).resolves.toBeUndefined();
+
+    await service.run(request(), effect);
+    await expect(service.completed(request({ actorId: OTHER_STUDENT }))).resolves.toBeUndefined();
+
+    later(25);
+    await expect(service.completed(request())).resolves.toBeUndefined();
+  });
+
+  it('refuses the same key with another input, as a repeat would', async () => {
+    const { service, effect } = setUp();
+    await service.run(request(), effect);
+
+    const error = await refusal(service.completed(request({ input: { packageId: 'pkg-2' } })));
+    expect(error).toBeInstanceOf(DomainError);
+    expect((error as DomainError).code).toBe('CONFLICT');
+  });
+
+  it('refuses a malformed key, an unlisted scope and an anonymous actor as `run` does', async () => {
+    const { service } = setUp();
+    const malformed = await refusal(service.completed(request({ key: 'short' })));
+    expect((malformed as DomainError).code).toBe('VALIDATION_FAILED');
+    await expect(
+      service.completed(request({ scope: 'not.listed' as IdempotentProcedure })),
+    ).rejects.toThrow(/not a keyed procedure/);
+    await expect(service.completed(request({ actorId: '' }))).rejects.toThrow(/anonymous/);
+  });
+});

@@ -309,6 +309,8 @@ describe('booking.slots: the offerable slots (FR-350, R-205, FR-394)', () => {
         data: {
           slotId: on.thursday,
           studentUserId: holder.id,
+          packageId: on.packageId,
+          sessionCount: 4,
           expiresAt: new Date('2026-11-03T08:20:00Z'),
         },
       });

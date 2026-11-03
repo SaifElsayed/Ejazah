@@ -157,12 +157,18 @@ async function plantOrder(): Promise<Order> {
     PAY_BY,
   );
   const { enrollmentId, studentId } = await makeEnrollment(db);
-  const { rows } = await db.query<{ slot_id: string }>(
-    'SELECT slot_id FROM enrollments WHERE id = $1',
-    [enrollmentId],
-  );
+  const { rows } = await db.query<{
+    slot_id: string;
+    package_id: string;
+    snapshot_session_count: number;
+  }>('SELECT slot_id, package_id, snapshot_session_count FROM enrollments WHERE id = $1', [
+    enrollmentId,
+  ]);
   const holdId = await insertRow(db, 'slot_holds', {
     slot_id: rows[0]?.slot_id,
+    // B29: a hold records the package it is for and that package's session count.
+    package_id: rows[0]?.package_id,
+    session_count: rows[0]?.snapshot_session_count,
     student_user_id: studentId,
     enrollment_id: enrollmentId,
     expires_at: PAY_BY,

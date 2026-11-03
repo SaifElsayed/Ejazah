@@ -227,7 +227,10 @@ async function order(
             ${status}::payment_status, '2026-11-03T07:10:00Z', now())`;
 }
 
-/** A hold of `studentId` on `slotId`, expiring at `expiresAt`, linked to `enrollmentId` if given. */
+/**
+ * A hold of `studentId` on `slotId`, expiring at `expiresAt`, linked to `enrollmentId` if given; its
+ * package is the slot's teacher's first, as a placement records it (B29).
+ */
 async function hold(
   tx: Transaction,
   slotId: string,
@@ -235,8 +238,24 @@ async function hold(
   expiresAt: Date,
   enrollmentId: string | null = null,
 ): Promise<string> {
+  const { teacherUserId } = await tx.availabilitySlot.findUniqueOrThrow({
+    where: { id: slotId },
+    select: { teacherUserId: true },
+  });
+  const pkg = await tx.package.findFirstOrThrow({
+    where: { teacherUserId },
+    orderBy: { id: 'asc' },
+    select: { id: true, sessionCount: true },
+  });
   const { id } = await tx.slotHold.create({
-    data: { slotId, studentUserId: studentId, expiresAt, enrollmentId },
+    data: {
+      slotId,
+      studentUserId: studentId,
+      packageId: pkg.id,
+      sessionCount: pkg.sessionCount,
+      expiresAt,
+      enrollmentId,
+    },
     select: { id: true },
   });
   return id;

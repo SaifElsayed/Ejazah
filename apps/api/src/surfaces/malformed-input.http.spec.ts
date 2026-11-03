@@ -38,6 +38,7 @@ import { html } from '../platform/web/html.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedTeacherProfileServices,
 } from './services.fixtures.js';
@@ -139,6 +140,7 @@ const services = {
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
+  checkout: unusedCheckoutServices,
 };
 
 const sessions = {

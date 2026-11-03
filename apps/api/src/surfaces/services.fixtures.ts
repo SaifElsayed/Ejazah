@@ -2,11 +2,12 @@
 // not hand in answers every call by throwing, so a procedure reaching a service its spec did not
 // expect fails loudly instead of answering from a stand-in nobody wrote. T056 adds the
 // verification module's, T067 the administrator surface's, T020 the catalog module's, T026 the
-// booking module's discovery, T032 its `booking` namespace.
+// booking module's discovery, T032 its `booking` namespace, T036 the payments module's `checkout`.
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
 import type { CatalogServices } from '../modules/catalog/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
+import type { CheckoutServices } from '../modules/payments/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 import type { AdminSurfaceServices } from './context.js';
 
@@ -59,3 +60,9 @@ export const unusedBookingServices = new Proxy(
   {},
   { get: (_target, method) => () => unreached(`booking.${String(method)}`) },
 ) as BookingServices;
+
+/** The `checkout` procedures' services, whose methods the spec never calls (T036). */
+export const unusedCheckoutServices = new Proxy(
+  {},
+  { get: (_target, method) => () => unreached(`checkout.${String(method)}`) },
+) as CheckoutServices;

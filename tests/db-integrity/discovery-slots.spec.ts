@@ -417,6 +417,8 @@ describe('nearestFreeSlots (T026, R-205, FR-335)', () => {
         data: {
           slotId: on.slotId,
           studentUserId: student.id,
+          packageId: on.packageId,
+          sessionCount: 4,
           expiresAt: new Date('2026-11-03T08:20:00Z'),
         },
       });

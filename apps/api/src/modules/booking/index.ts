@@ -112,6 +112,7 @@ export function createDiscoveryServices({
  */
 export {
   type EnrollmentToHold,
+  type HeldRow,
   type HoldRequest,
   type HoldScope,
   type HoldsStore,
@@ -165,3 +166,61 @@ export {
   expiredCheckoutHoldIds,
   expiredEnrollmentHoldIds,
 } from './hold-expiry.repository.js';
+/**
+ * What `payments`' checkout asks of booking (T036, FR-BOOK-12, FR-356, R-208), each on the caller's
+ * transaction: a new checkout's hold with FR-BOOK-12's release of the student's own (its payable
+ * order thrown as `PayableCheckout` for the caller to cancel outside any transaction), and a Retry's
+ * enrollment and hold, read first and then locked in T005's order.
+ */
+export {
+  type CheckoutEnrollmentRow,
+  type CheckoutHold,
+  type CheckoutHoldDependencies,
+  type CheckoutHoldStore,
+  checkoutHoldStore,
+  type HeldOrders,
+  type HeldOrdersOf,
+  lockOrderTarget,
+  type OrderTargetStore,
+  orderTargetStore,
+  PayableCheckout,
+  type PayableOrder,
+  placeCheckoutHold,
+  previousCheckout,
+  type RetryTarget,
+  retryTargetOf,
+  summaryOf,
+} from './checkout-holds.service.js';
+/**
+ * `checkout.current`'s and `checkout.status`'s reads (T037, FR-358, FR-380 to FR-386), each on the
+ * caller's transaction: the student's own unexpired hold with its package's summary now, and the
+ * student's own enrollment as the server holds it.
+ */
+export {
+  type CheckoutReadsStore,
+  checkoutReadsStore,
+  type CurrentHold,
+  currentHoldOf,
+  type EnrollmentStatusAnswer,
+  enrollmentStatusOf,
+} from './checkout-reads.service.js';
+/** The student's own enrollment of that id, or null (T037, M3), on the caller's transaction. */
+export { studentEnrollment as studentCheckoutEnrollment } from './checkout-holds.repository.js';
+/**
+ * `checkout.pay`'s part (T036, FR-354, FR-386, R-209; the owner's decisions of 2026-11-03): the
+ * checks before the gateway, and the transaction that writes the enrollment with the id the caller
+ * drew and links the hold, each on the caller's transaction; `summaryChanges` is
+ * `SUMMARY_CHANGED`'s comparison. The hold's package is its `slot_holds.package_id`, the count its
+ * overlap check ran on its `session_count`.
+ */
+export {
+  type Enrolment,
+  enrollOnHold,
+  type HeldTerms,
+  type PayStore,
+  payStoreOver,
+  type PayTarget,
+  payTargetOf,
+  type QuotedSummary,
+  summaryChanges,
+} from './pay.service.js';

@@ -10,6 +10,9 @@ export { lastSessionDateOf } from './sessions.repository.js';
  */
 export { partiesSessionsBetween, type SessionTime } from './sessions.repository.js';
 
+/** An enrollment's sessions by sequence number, for `checkout.status` (T037, FR-386, FR-393). */
+export { type EnrollmentSessionRow, enrollmentSessionsOf } from './sessions.repository.js';
+
 /**
  * T034 (R-209, FR-368, FR-369): an enrollment's sessions, written on the confirmation's
  * transaction by the confirm job (T039), which holds the locks `generation.service.ts` names.

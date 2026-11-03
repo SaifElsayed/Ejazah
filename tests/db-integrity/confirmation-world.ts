@@ -144,6 +144,8 @@ export function confirmationWorld(databaseOf: () => Database) {
     const { id: holdId } = await databaseOf().slotHold.create({
       data: {
         slotId,
+        packageId,
+        sessionCount: 4,
         studentUserId: studentId,
         enrollmentId,
         expiresAt: running ? LATER : EARLIER,

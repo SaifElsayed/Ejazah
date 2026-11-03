@@ -6,7 +6,7 @@
 // times of a student's sessions in a window, for the booking sheet; read-only, no lock. T033 widens
 // it to the student's and the teacher's, for the one overlap check the hold and the sheet share
 // (FR-351, FR-BOOK-5).
-import { calendarDateOf, type LocalDate } from '@ijazah/time';
+import { calendarDateOf, type LocalDate, type LocalTime, localTimeOf } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
@@ -96,4 +96,45 @@ export async function insertSessions(
   rows: readonly NewSessionRow[],
 ): Promise<void> {
   await tx.session.createMany({ data: [...rows] });
+}
+
+/** One session of an enrollment, as `checkout.status` shows it (T037, FR-386, FR-393, R-TIME-6). */
+export interface EnrollmentSessionRow {
+  readonly sequenceNumber: number;
+  readonly localDate: LocalDate;
+  readonly startTimeLocal: LocalTime;
+  readonly timezone: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
+/**
+ * The enrollment's sessions by sequence number (T037), a soft-deleted one left out by the client's
+ * extension. Over the `(enrollment_id, sequence_number)` index; bounded by the package's count
+ * (at most 52, FR-311).
+ */
+export async function enrollmentSessionsOf(
+  tx: Pick<Transaction, 'session'>,
+  enrollmentId: string,
+): Promise<readonly EnrollmentSessionRow[]> {
+  const rows = await tx.session.findMany({
+    where: { enrollmentId },
+    orderBy: { sequenceNumber: 'asc' },
+    select: {
+      sequenceNumber: true,
+      scheduledDateLocal: true,
+      scheduledStartTimeLocal: true,
+      timezone: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+    },
+  });
+  return rows.map((row) => ({
+    sequenceNumber: row.sequenceNumber,
+    localDate: calendarDateOf(row.scheduledDateLocal),
+    startTimeLocal: localTimeOf(row.scheduledStartTimeLocal),
+    timezone: row.timezone,
+    startsAt: row.scheduledStartAt,
+    endsAt: row.scheduledEndAt,
+  }));
 }

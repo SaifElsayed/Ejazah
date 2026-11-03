@@ -34,6 +34,7 @@ import { PhotoTurns } from './photo-turns.js';
 import {
   unusedAdminServices,
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedCatalogServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -117,6 +118,7 @@ const services = {
   teacherProfile: unusedTeacherProfileServices,
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
+  checkout: unusedCheckoutServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const storage = storageStub();

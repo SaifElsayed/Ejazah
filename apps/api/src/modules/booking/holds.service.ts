@@ -65,6 +65,7 @@ import {
   expiredHoldIds,
   type HeldRow,
   type HoldScope,
+  enrollmentTermsOf,
   insertHold,
   lockRows,
   markReleased,
@@ -133,6 +134,11 @@ export interface HoldRows {
   ): Promise<void>;
   recordEvents(tx: Transaction, outcomes: readonly EnrollmentOutcome[]): Promise<void>;
   insertHold(tx: Transaction, hold: NewHold): Promise<string>;
+  /** The enrollment's package and snapshot count, read under its lock (the re-hold's). */
+  enrollmentTerms(
+    tx: Transaction,
+    enrollmentId: string,
+  ): Promise<{ readonly packageId: string; readonly sessionCount: number } | null>;
 }
 
 /** What a placement reads besides booking's rows, each through its owner's entry (R-API-6). */
@@ -171,6 +177,7 @@ export const holdRows: HoldRows = {
   cancelPending,
   recordEvents: recordEnrollmentEvents,
   insertHold,
+  enrollmentTerms: enrollmentTermsOf,
 };
 
 /** The placement's store over booking's rows and catalog's, identity's and sessions' entries. */
@@ -444,6 +451,8 @@ export async function placeHold(
   const holdId = await insertNamed(store, tx, {
     slotId: slot.id,
     studentUserId: student.userId,
+    packageId: pkg.id,
+    sessionCount: pkg.sessionCount,
     enrollmentId: null,
     expiresAt,
   });
@@ -498,9 +507,13 @@ export async function reholdEnrollment(
     at,
   );
   await release(tx, ids, 'expired', { at, orders: dependencies.orders, store }, [enrollment.id]);
+  const terms = await store.enrollmentTerms(tx, enrollment.id);
+  if (terms === null) throw new Error('rehold: the enrollment is not there to read');
   return store.insertHold(tx, {
     slotId: enrollment.slotId,
     studentUserId: enrollment.studentUserId,
+    packageId: terms.packageId,
+    sessionCount: terms.sessionCount,
     enrollmentId: enrollment.id,
     expiresAt: expiryOf(dependencies.terms),
   });

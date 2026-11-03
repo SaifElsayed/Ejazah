@@ -19,6 +19,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
   unusedTeacherProfileServices,
@@ -112,6 +113,7 @@ function as(session: UserSession | null) {
     teacherProfile: unusedTeacherProfileServices,
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
+    checkout: unusedCheckoutServices,
     catalog: { slots, packages: unusedPackages },
   };
   return callerFor(

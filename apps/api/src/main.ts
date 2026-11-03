@@ -213,6 +213,17 @@ const services = {
   }),
   // `booking` (T032): the booking sheet's slots, over catalog's, identity's and sessions' entries.
   booking: booking.createBookingServices({ database, settings }),
+  // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
+  // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two
+  // steps through the kernel's idempotency, the address encrypted with the column cipher (R-DB-8).
+  checkout: payments.createCheckoutServices({
+    database,
+    settings,
+    idempotency,
+    payment: ports.payment,
+    cipher,
+    gateway: config.PAYMENT_GATEWAY,
+  }),
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
