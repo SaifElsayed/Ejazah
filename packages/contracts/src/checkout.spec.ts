@@ -214,21 +214,32 @@ describe('checkout.hold (FR-351 to FR-353, FR-358, FR-386)', () => {
     }
   });
 
-  it('answers the hold, its expiry, the summary and the two session previews', () => {
+  it('answers the hold, its expiry, the last moment Pay is accepted, the summary and the two session previews', () => {
     const output = {
       holdId: ids.hold,
       expiresAt: '2026-11-05T10:15:00.000Z',
+      payBy: '2026-11-05T10:10:00.000Z',
       summary,
       firstSession,
       lastSession,
     };
     expect(checkoutHoldOutput.parse(output)).toEqual(output);
-    for (const missing of ['holdId', 'expiresAt', 'summary', 'firstSession', 'lastSession']) {
+    for (const missing of [
+      'holdId',
+      'expiresAt',
+      'payBy',
+      'summary',
+      'firstSession',
+      'lastSession',
+    ]) {
       const { [missing]: _gone, ...rest } = output as Record<string, unknown>;
       expect(checkoutHoldOutput.safeParse(rest).success).toBe(false);
     }
     expect(
       checkoutHoldOutput.safeParse({ ...output, expiresAt: '2026-11-05T12:15:00+02:00' }).success,
+    ).toBe(false);
+    expect(
+      checkoutHoldOutput.safeParse({ ...output, payBy: '2026-11-05T12:10:00+02:00' }).success,
     ).toBe(false);
   });
 });
@@ -338,14 +349,22 @@ describe('checkout.current (FR-BOOK-12, CheckoutPrevious)', () => {
   });
 
   it('answers the hold before Pay, with no enrollment and no order', () => {
-    const hold = { holdId: ids.hold, expiresAt: '2026-11-05T10:15:00.000Z', summary };
+    const hold = {
+      holdId: ids.hold,
+      expiresAt: '2026-11-05T10:15:00.000Z',
+      payBy: '2026-11-05T10:10:00.000Z',
+      summary,
+    };
     expect(checkoutCurrentOutput.parse({ hold })).toEqual({ hold });
+    const { payBy: _gone, ...withoutPayBy } = hold;
+    expect(checkoutCurrentOutput.safeParse({ hold: withoutPayBy }).success).toBe(false);
   });
 
   it('answers the hold with its enrollment and its last order, and whether it can be continued', () => {
     const hold = {
       holdId: ids.hold,
       expiresAt: '2026-11-05T10:15:00.000Z',
+      payBy: '2026-11-05T10:10:00.000Z',
       enrollmentId: ids.enrollment,
       summary,
       lastOrder: { status: 'created', expiresAt: '2026-11-05T10:10:00.000Z', canContinue: true },
@@ -364,6 +383,7 @@ describe('checkout.current (FR-BOOK-12, CheckoutPrevious)', () => {
     const hold = {
       holdId: ids.hold,
       expiresAt: '2026-11-05T10:15:00.000Z',
+      payBy: '2026-11-05T10:10:00.000Z',
       summary,
       lastOrder: {
         status: 'created',

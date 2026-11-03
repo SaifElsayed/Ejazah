@@ -55,7 +55,6 @@ import type {
   CheckoutStatusOutput,
 } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
-import { addMinutes } from '@ijazah/time';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -84,6 +83,7 @@ import {
   lockOrderTarget,
   type OrderStandings,
   PayableCheckout,
+  payByOf,
   placeCheckoutHold,
   previousCheckout,
   readHoldTerms,
@@ -241,10 +241,14 @@ export interface CheckoutDependencies {
   readonly report?: (error: Error) => void;
 }
 
-function asHoldOutput(held: CheckoutHold): CheckoutHoldOutput {
+function asHoldOutput(
+  held: CheckoutHold,
+  terms: Pick<HoldTerms, 'graceMinutes'>,
+): CheckoutHoldOutput {
   return {
     holdId: held.holdId,
     expiresAt: held.expiresAt.toISOString(),
+    payBy: payByOf(held.expiresAt, terms).toISOString(),
     summary: held.summary,
     firstSession: {
       localDate: held.firstSession.requestedLocalDate,
@@ -310,6 +314,7 @@ export class CheckoutService {
               { packageId, slotId },
               { terms, orders: orderStandingsOf, heldOrders: heldOrdersOf },
             ),
+            terms,
           ),
         );
       } catch (error) {
@@ -335,8 +340,8 @@ export class CheckoutService {
     const stored = await this.#idempotency.completed<StoredOrder>(request);
     if (stored !== undefined) return this.#handoverAgain(stored.paymentId);
     const now = this.#now();
-    const { graceMinutes } = await readHoldTerms(this.#settings, now);
-    const lastMoment = (holdExpiresAt: Date) => new Date(addMinutes(holdExpiresAt, -graceMinutes));
+    const terms = await readHoldTerms(this.#settings, now);
+    const lastMoment = (holdExpiresAt: Date) => payByOf(holdExpiresAt, terms);
     const stillPayable = (holdExpiresAt: Date) =>
       lastMoment(holdExpiresAt).getTime() > now.getTime();
     const { enrollment, hold } = await this.#steps.transaction((tx) =>
@@ -387,11 +392,12 @@ export class CheckoutService {
       };
     }
     const now = this.#now();
-    const { graceMinutes, leadHours } = await readHoldTerms(this.#settings, now);
+    const terms = await readHoldTerms(this.#settings, now);
+    const { leadHours } = terms;
     const target = await this.#steps.transaction((tx) =>
       this.#steps.payTarget(tx, { studentUserId: student.userId, holdId, at: now }, quoted),
     );
-    const latestExpiry = new Date(addMinutes(target.hold.expiresAt, -graceMinutes));
+    const latestExpiry = payByOf(target.hold.expiresAt, terms);
     if (latestExpiry.getTime() <= now.getTime()) throw new DomainError('HOLD_EXPIRED');
     const enrollmentId = await this.#steps.drawRowId();
     const recorded = await this.#createAndRecord(
@@ -475,6 +481,7 @@ export class CheckoutService {
   /** `checkout.current` (FR-BOOK-12 (c), T037): what `CheckoutPrevious` shows. */
   async current(student: CheckoutStudent): Promise<CheckoutCurrentOutput> {
     const now = this.#now();
+    const terms = await readHoldTerms(this.#settings, now);
     return this.#steps.transaction(async (tx) => {
       const hold = await this.#steps.currentHold(tx, student, now);
       if (hold === null) return {};
@@ -484,6 +491,7 @@ export class CheckoutService {
         hold: {
           holdId: hold.holdId,
           expiresAt: hold.expiresAt.toISOString(),
+          payBy: payByOf(hold.expiresAt, terms).toISOString(),
           ...(hold.enrollmentId === null ? {} : { enrollmentId: hold.enrollmentId }),
           summary: hold.summary,
           ...(order === null

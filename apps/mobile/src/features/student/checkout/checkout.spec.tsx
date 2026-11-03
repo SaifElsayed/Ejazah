@@ -1,8 +1,9 @@
 // T045 (FR-358, FR-382, FR-BOOK-12 (c), R-217; screens.md §5): the checkout on the phone, in both
 // languages. `Checkout` shows the one payment summary `checkout.current` gives (the teacher, then
 // the package with its track, then the price), the track's caption and the gateway's, and a
-// countdown read by `secondsUntil` from the phone's clock, which keeps counting with no connection
-// and falls to `CheckoutExpired` at zero. Pay sends the summary the screen shows; on
+// countdown to `payBy` (the last moment Pay is accepted, the hold's expiry minus the grace) read by
+// `secondsUntil` from the phone's clock, which keeps counting with no connection and falls to
+// `CheckoutExpired` at zero. Pay sends the summary the screen shows; on
 // `SUMMARY_CHANGED` the screen reads the summary again and pays only on a new press. The hosted
 // page opens through `openAuthSessionAsync(checkoutUrl, 'ijazah://checkout/return')`, and whatever
 // the session answers the phone goes to `processing` with the enrollment's id. `CheckoutPrevious`
@@ -78,13 +79,14 @@ const recitationSummary: CheckoutSummary = {
   price_piasters: 120_000,
 };
 
-/** A hold placed at `NOW` with ten minutes left on it. */
+/** A hold placed at `NOW`: ten minutes to pay, then five of grace. */
 const hold = (
   overrides: Partial<NonNullable<CheckoutCurrentOutput['hold']>> = {},
 ): CheckoutCurrentOutput => ({
   hold: {
     holdId: HOLD_ID,
-    expiresAt: '2026-11-09T10:10:00.000Z',
+    expiresAt: '2026-11-09T10:15:00.000Z',
+    payBy: '2026-11-09T10:10:00.000Z',
     summary: recitationSummary,
     ...overrides,
   },
@@ -191,7 +193,7 @@ describe('Checkout: the countdown by secondsUntil (FR-358, R-217)', () => {
 
   it('falls to CheckoutExpired at zero, with the summary and «ملغى»', async () => {
     mockApi.api.checkout.current.query.mockResolvedValue(
-      hold({ expiresAt: '2026-11-09T10:00:03.000Z' }),
+      hold({ payBy: '2026-11-09T10:00:03.000Z' }),
     );
     await renderAr(<Checkout />);
     expect(await screen.findByText(payWithin('rtl', '0:03'))).toBeTruthy();
@@ -201,6 +203,17 @@ describe('Checkout: the countdown by secondsUntil (FR-358, R-217)', () => {
     expect(screen.getByText(recitationSummary.teacher.displayName)).toBeTruthy();
     expect(screen.getByText(said('rtl', 'status.enrollment.cancelled'))).toBeTruthy();
     expect(screen.queryByText(said('rtl', 'student.checkout.note.gateway'))).toBeNull();
+  });
+
+  it('runs to payBy, not to the hold’s expiry: at payBy the grace is left but Pay is not', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(
+      hold({ expiresAt: '2026-11-09T10:05:01.000Z', payBy: '2026-11-09T10:00:01.000Z' }),
+    );
+    await renderAr(<Checkout />);
+    expect(await screen.findByText(payWithin('rtl', '0:01'))).toBeTruthy();
+    await advance(1_000);
+    expect(await screen.findByText(said('rtl', 'student.checkoutExpired.title'))).toBeTruthy();
+    expect(mockApi.api.checkout.pay.mutate).not.toHaveBeenCalled();
   });
 
   it('is CheckoutExpired when the student holds nothing', async () => {

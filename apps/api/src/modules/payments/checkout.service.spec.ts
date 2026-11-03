@@ -6,6 +6,7 @@
 // refused or a duplicate made unnecessary is cancelled at the gateway. Over the real tables and the
 // stand-in gateway: `tests/db-integrity/checkout.spec.ts`.
 import { piasters } from '@ijazah/money';
+import { addSeconds } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -319,6 +320,7 @@ describe('checkout.hold (FR-BOOK-12, FR-357)', () => {
     await expect(service.hold(student, holdInput)).resolves.toEqual({
       holdId: HOLD,
       expiresAt: HOLD_EXPIRES.toISOString(),
+      payBy: ORDER_EXPIRES.toISOString(),
       summary: heldAnswer.summary,
       firstSession: { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' },
       lastSession: { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' },
@@ -528,6 +530,34 @@ describe('checkout.pay (FR-354, FR-355, FR-357; the owner’s decisions of 2026-
     expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
   });
 
+  it('accepts Pay until payBy as checkout.hold answered it, and the order expires at that instant (FR-355, FR-358)', async () => {
+    const { service: holding } = setUp();
+    const { payBy } = await holding.hold(student, holdInput);
+    const justBefore = new Date(addSeconds(new Date(payBy), -1));
+    const { service, log } = setUp({ now: justBefore });
+    const answer = await service.pay(student, payInput);
+    expect(answer.orderExpiresAt).toBe(payBy);
+    expect(log).toContainEqual([
+      'gateway create',
+      ENROLLMENT_DRAWN,
+      piasters(100_000),
+      'EGP',
+      payBy,
+    ]);
+  });
+
+  it.each([
+    ['at payBy', 0],
+    ['one second after payBy', 1],
+  ])('refuses HOLD_EXPIRED %s, calling no gateway', async (_when, after) => {
+    const { service: holding } = setUp();
+    const { payBy } = await holding.hold(student, holdInput);
+    const { service, log } = setUp({ now: new Date(addSeconds(new Date(payBy), after)) });
+    const refused = await refusal(service.pay(student, payInput));
+    expect(refused.code).toBe('HOLD_EXPIRED');
+    expect(log.some(([kind]) => kind === 'gateway create' || kind === 'transaction')).toBe(false);
+  });
+
   it('cancels the order at the gateway when the summary changed under the locks, and answers SUMMARY_CHANGED', async () => {
     const { service, log } = setUp({ lockError: new DomainError('SUMMARY_CHANGED') });
     const refused = await refusal(service.pay(student, payInput));
@@ -584,7 +614,12 @@ describe('checkout.current: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)',
       },
     });
     await expect(service.current(student)).resolves.toEqual({
-      hold: { holdId: HOLD, expiresAt: HOLD_EXPIRES.toISOString(), summary: heldAnswer.summary },
+      hold: {
+        holdId: HOLD,
+        expiresAt: HOLD_EXPIRES.toISOString(),
+        payBy: ORDER_EXPIRES.toISOString(),
+        summary: heldAnswer.summary,
+      },
     });
   });
 
@@ -603,6 +638,7 @@ describe('checkout.current: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)',
       hold: {
         holdId: HOLD,
         expiresAt: HOLD_EXPIRES.toISOString(),
+        payBy: ORDER_EXPIRES.toISOString(),
         enrollmentId: ENROLLMENT,
         summary: heldAnswer.summary,
         lastOrder: { status: order.status, expiresAt: order.expiresAt.toISOString(), canContinue },

@@ -226,6 +226,16 @@ export async function readHoldTerms(settings: SettingsReader, now: Date): Promis
   };
 }
 
+/**
+ * The instant Pay stops being accepted on a hold expiring at `holdExpiresAt`: its expiry minus the
+ * grace (FR-355, FR-PAYG-6). It is the latest expiry an order created on the hold may take, Pay and
+ * Retry are refused from it on, and `checkout.hold` and `checkout.current` answer it as `payBy`, the
+ * instant the phone's countdown runs to (FR-358): one function, so the three never disagree.
+ */
+export function payByOf(holdExpiresAt: Date, terms: Pick<HoldTerms, 'graceMinutes'>): Date {
+  return new Date(addMinutes(holdExpiresAt, -terms.graceMinutes));
+}
+
 /** A hold's expiry: the checkout time plus the grace from `now` (FR-BOOK-9). */
 function expiryOf(terms: Pick<HoldTerms, 'now' | 'ttlMinutes' | 'graceMinutes'>): Date {
   return new Date(addMinutes(terms.now, terms.ttlMinutes + terms.graceMinutes));

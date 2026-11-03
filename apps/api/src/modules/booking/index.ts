@@ -107,7 +107,8 @@ export function createDiscoveryServices({
  * T036; the sweeps, T040; the terminations, T041), releasing a slot's and a student's expired holds,
  * and FR-PAYG-19's re-hold of a paid enrollment (T039). The orders' standing is payments'
  * `orderStandingsOf`, handed in by the caller (R-208). `readHoldTerms` reads the hold's settings
- * before the caller's transaction; `holdsStore` is the placement's store over the owners' entries,
+ * before the caller's transaction; `payByOf` is the instant Pay stops being accepted (B30, FR-355,
+ * FR-358); `holdsStore` is the placement's store over the owners' entries,
  * exported for the probes (`tests/db-integrity/hold-concurrency.spec.ts`).
  */
 export {
@@ -121,6 +122,7 @@ export {
   type HoldTerms,
   type OrderStanding,
   type OrderStandings,
+  payByOf,
   type PlacedHold,
   placeHold,
   readHoldTerms,
