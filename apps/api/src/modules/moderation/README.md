@@ -16,7 +16,7 @@ Auto-resolve under_threshold or provider_outage sessions; those are terminal onl
 
 ## Shape
 
-The rules live in the services: `compensation-case.service.ts` (the system's compensation case, `openCompensationCase`, T035). The queries live in the repositories: `compensation-case.repository.ts` (the open case of an enrollment and reason, its insert, and the enrollment's row lock the opening serialises on, T005; when the enrollment's latest case was opened, for the confirm job, T039). A router, when one arrives, is thin: validate, call one service method, return. `index.ts` is the only import path. The probe over the real tables, the race included, is `tests/db-integrity/compensation-case.spec.ts`.
+The rules live in the services: `compensation-case.service.ts` (the system's compensation case, `openCompensationCase`, T035). The queries live in the repositories: `compensation-case.repository.ts` (the open case of an enrollment and reason, its insert, and the enrollment's row lock the opening serialises on, T005; when the enrollment's latest case was opened, for the confirm job, T039; which of some enrollments have a case, for the `expire-pending-payments` sweep, T040). A router, when one arrives, is thin: validate, call one service method, return. `index.ts` is the only import path. The probe over the real tables, the race included, is `tests/db-integrity/compensation-case.spec.ts`.
 
 ## Requirement ids
 
