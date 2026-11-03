@@ -28,7 +28,7 @@
 // carries the common riwaya for everyone (so the riwaya filter has a candidate to leak). Other specs
 // commit teachers to this database at the same time, so every exact answer is read inside the
 // world's own subjects; an answer across all subjects is checked for leaks only, and the tab of all
-// subjects against the predicate counted in SQL from the SRS text (`allTabCount`).
+// subjects against the predicate's teachers read in SQL from the SRS text (`allTabIds`).
 // T070: the shared subject's Arabic name is written with every variant FR-333 folds, then a tag of
 // its own, so a search by a subject's name is attacked in both directions, and a search typed with
 // its whole name and tag is an exact answer across all subjects.
@@ -330,8 +330,8 @@ export interface DiscoverySurface {
    * delivered to the webhook, and the webhook's status.
    */
   replacePayout(teacherId: string): Promise<{ verify(): Promise<number> }>;
-  /** The visible teachers of `gender` with an active package, counted in SQL from SRS §3.7.1. */
-  allTabCount(gender: Gender): Promise<number>;
+  /** The ids of the visible teachers of `gender` with an active package, in SQL from SRS §3.7.1. */
+  allTabIds(gender: Gender): Promise<readonly string[]>;
   /**
    * T036: ends the student's active holds that carry no enrollment, so a later case of the file
    * meets the world's slots free again (a hold outlives its case by its fifteen minutes).
@@ -739,17 +739,18 @@ async function build(): Promise<Built> {
     async suspend(teacherId) {
       await database.$transaction((tx) => standing.suspend(tx, admin, teacherId));
     },
-    async allTabCount(gender) {
+    async allTabIds(gender) {
       // SRS §3.7.1's five conjuncts as written, and FR-332's "with an active package".
-      const rows = await database.$queryRaw<{ count: bigint }[]>`
-        SELECT count(*) AS count FROM users u JOIN teacher_profiles t ON t.user_id = u.id
+      const rows = await database.$queryRaw<{ id: string }[]>`
+        SELECT u.id::text AS id FROM users u JOIN teacher_profiles t ON t.user_id = u.id
          WHERE u.gender::text = ${gender}
            AND t.verification_status::text = 'approved'
            AND u.deleted_at IS NULL
            AND t.payout_verified_at IS NOT NULL
            AND u.account_status::text NOT IN ('suspended', 'banned')
-           AND EXISTS (SELECT 1 FROM packages p WHERE p.teacher_user_id = u.id AND p.is_active)`;
-      return Number(rows[0]?.count ?? 0);
+           AND EXISTS (SELECT 1 FROM packages p WHERE p.teacher_user_id = u.id AND p.is_active)
+         ORDER BY u.id`;
+      return rows.map(({ id }) => id);
     },
   };
 }
