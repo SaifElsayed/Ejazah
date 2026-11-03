@@ -59,3 +59,20 @@ export async function latestCaseOpenedAt(tx: Client, enrollmentId: string): Prom
   });
   return latest?.createdAt ?? null;
 }
+
+/**
+ * Of `enrollmentIds`, those with a compensation case, open or not (T040: the sweep hands a paid order
+ * on only when its enrollment has none). Read with no lock: the confirm job decides under its own.
+ */
+export async function enrollmentsWithCompensationCase(
+  tx: Client,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (enrollmentIds.length === 0) return new Set();
+  const rows = await tx.dispute.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] }, kind: 'compensation_case' },
+    distinct: ['enrollmentId'],
+    select: { enrollmentId: true },
+  });
+  return new Set(rows.map(({ enrollmentId }) => enrollmentId));
+}

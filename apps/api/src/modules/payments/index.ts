@@ -86,3 +86,17 @@ export { orderStandingsOf } from './order-standing.repository.js';
  * `orders` is `orderStandingsOf` above), the order's status and when its paid event was recorded.
  */
 export { orderEnrollmentOf, type PaidOrder, paidOrderOf } from './confirmation-order.repository.js';
+
+/**
+ * What `expire-pending-payments` reads and writes of the orders (T040, FR-364; PR #109's review, M2
+ * and round 2 N1), on the caller's transaction: a page of the `created` orders past their expiry,
+ * their move to `expired` under the orders' locks, and a page of the `paid` orders whose paid event
+ * was recorded before an instant, each with its enrollment, for the hand-off to `confirm-enrollment`
+ * through the `ConfirmationQueue` above.
+ */
+export {
+  expiredOrderIds,
+  markOrdersExpired,
+  type PaidOrderRef,
+  paidOrdersRecordedBefore,
+} from './order-expiry.repository.js';

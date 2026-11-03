@@ -154,3 +154,14 @@ export {
   type Refusal,
   refuseEnrollment,
 } from './confirmation.service.js';
+/**
+ * The expiry sweeps' reads (T040, FR-364), on the caller's transaction and with no lock, the release
+ * locking what it decides on: a page of the expired active holds with no enrollment (`expire-holds`)
+ * and with one (`expire-pending-payments`); and, of some enrollments, those `confirm-enrollment` may
+ * still take (awaiting payment or cancelled), for the sweep's hand-off of a paid order.
+ */
+export {
+  awaitingConfirmationAmong,
+  expiredCheckoutHoldIds,
+  expiredEnrollmentHoldIds,
+} from './hold-expiry.repository.js';

@@ -36,7 +36,7 @@ const [
   { selectPorts },
   { TERMS_PATH, termsRoute },
   { createApplication },
-  { connectionFor, openQueue },
+  { addOrRetry, connectionFor, openQueue },
   { DELIVER_ADMIN_INVITE },
   { filesRoutes },
   payments,
@@ -265,7 +265,11 @@ const routes = {
     maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
     confirmations: {
       enqueue: async (paymentId) => {
-        await queue().add(CONFIRM_ENROLLMENT, { paymentId }, { jobId: paymentId });
+        await addOrRetry(
+          queue(),
+          { name: CONFIRM_ENROLLMENT, data: { paymentId }, jobId: paymentId },
+          log,
+        );
       },
     },
   }),

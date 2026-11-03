@@ -24,6 +24,8 @@ Write the `sessions` table; session generation is requested through the sessions
 
 `confirmation.service.ts` and `confirmation.repository.ts` (T039) are the `confirm-enrollment` job's booking, on its transaction: `lockForConfirmation` takes every lock in T005's order (both accounts, the slot, the active holds on the slot and of the student, their enrollments with this one, then payments' orders through the `orders` handed in) and reads the enrollment under them; `confirmEnrollment` converts the enrollment's hold by a conditional update and only then confirms it from `pending_payment` or `cancelled`, with one `confirmed` row naming the order, the only writer of `confirmed_at` (R-HONEST-1); `refuseEnrollment` releases what it holds through `releaseHolds` under `slot_unavailable` and cancels it, `slot_unavailable` or, refused for a party while already cancelled, its own reason, with one `cancelled` row (FR-362).
 
+`hold-expiry.repository.ts` (T040) is what the expiry sweeps read, with no lock: a page of the expired active holds with no enrollment (`expire-holds`) and with one (`expire-pending-payments`), each released through `releaseHolds` under `expired`, which locks before it decides; and, of some enrollments, those `confirm-enrollment` may still take (awaiting payment or cancelled), for the sweep's hand-off of a paid order.
+
 ## Requirement ids
 
 - FR-312, FR-318 (a package with an enrollment and a slot in use keep their terms; R-207): `catalog-use.repository.ts`, `slot-occupancy.service.ts`.
