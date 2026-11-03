@@ -38,6 +38,9 @@
 // T036: the surface's `checkout` is the one `main.ts` binds, over the stand-in gateway this file
 // already serves, so `checkout.hold`, `checkout.retry` and `checkout.pay` are attacked in the same world
 // (`checkout.attacks.ts`).
+// T043: a refusal is read back for "nothing written" (`checkoutRows`), a teacher's standing is
+// changed in place as the world seeds every state (`setAccountStatus`), and a teacher deletes the
+// account through identity's real deletion (`deleteAccount`, FR-141), for `checkout-standing.spec.ts`.
 //
 // NOTHING STAYS VISIBLE. At the end of the file every account the world created is soft-deleted and
 // every subject deactivated, so a later run, or another spec, never meets these teachers.
@@ -333,6 +336,28 @@ export interface DiscoverySurface {
   pendingEnrollment(
     gender: Gender,
   ): Promise<{ readonly enrollmentId: string; readonly holdId: string }>;
+  /**
+   * T043: every row the student's checkout writes, with its state, read back so a refusal can be
+   * shown to have written nothing (FR-353): the holds of the student and of `slotIds`, the student's
+   * enrollments, their orders and events, and the student's idempotency keys.
+   */
+  checkoutRows(gender: Gender, slotIds: readonly string[]): Promise<CheckoutRows>;
+  /** T043: the teacher's account standing changed in place, as the world seeds every state. */
+  setAccountStatus(teacherId: string, status: AccountStatus): Promise<void>;
+  /** T043: the teacher deletes the account through identity's real deletion (FR-141). */
+  deleteAccount(teacherId: string): Promise<void>;
+}
+
+/** An account standing a case moves a teacher to (SRS §3.7.1, `002:T143`). */
+export type AccountStatus = 'active' | 'suspended' | 'verification_required';
+
+/** The rows of `checkoutRows`, each a row's id and its state, in id order. */
+export interface CheckoutRows {
+  readonly holds: readonly string[];
+  readonly enrollments: readonly string[];
+  readonly payments: readonly string[];
+  readonly events: readonly string[];
+  readonly idempotencyKeys: readonly string[];
 }
 
 interface Built extends DiscoverySurface {
@@ -626,6 +651,68 @@ async function build(): Promise<Built> {
       })();
       pending.set(gender, making);
       return making;
+    },
+    async checkoutRows(gender, slotIds) {
+      const student = students.get(gender);
+      if (student === undefined) throw new Error(`no ${gender} student`);
+      const byId = { orderBy: { id: 'asc' as const } };
+      const [holds, enrollments, keys] = await Promise.all([
+        database.slotHold.findMany({
+          where: { OR: [{ studentUserId: student.userId }, { slotId: { in: [...slotIds] } }] },
+          select: { id: true, releasedAt: true, enrollmentId: true },
+          ...byId,
+        }),
+        database.enrollment.findMany({
+          where: { studentUserId: student.userId },
+          select: { id: true, status: true, cancellationReason: true },
+          ...byId,
+        }),
+        database.idempotencyKey.findMany({
+          where: { actorId: student.userId },
+          select: { id: true },
+          ...byId,
+        }),
+      ]);
+      const enrollmentIds = enrollments.map(({ id }) => id);
+      const [payments, events] = await Promise.all([
+        database.payment.findMany({
+          where: { enrollmentId: { in: enrollmentIds } },
+          select: { id: true, status: true },
+          ...byId,
+        }),
+        database.enrollmentEvent.findMany({
+          where: { enrollmentId: { in: enrollmentIds } },
+          select: { id: true },
+          ...byId,
+        }),
+      ]);
+      return {
+        holds: holds.map(
+          (row) =>
+            `${row.id} ${row.releasedAt?.toISOString() ?? 'active'} ${row.enrollmentId ?? '-'}`,
+        ),
+        enrollments: enrollments.map(
+          (row) => `${row.id} ${row.status} ${row.cancellationReason ?? '-'}`,
+        ),
+        payments: payments.map((row) => `${row.id} ${row.status}`),
+        events: events.map(({ id }) => id),
+        idempotencyKeys: keys.map(({ id }) => id),
+      };
+    },
+    async setAccountStatus(teacherId, status) {
+      await database.user.update({ where: { id: teacherId }, data: { accountStatus: status } });
+    },
+    async deleteAccount(teacherId) {
+      // A world teacher has no password; one is set so the deletion's own proof holds (FR-140).
+      await database.user.update({
+        where: { id: teacherId },
+        data: { passwordHash: await hashPassword(PASSWORD) },
+      });
+      await identity.deletion.deleteAccount(teacherId, {
+        confirmation: 'DELETE',
+        reauth: { kind: 'password', password: PASSWORD },
+        idempotencyKey: randomUUID(),
+      });
     },
     async allTabCount(gender) {
       // SRS §3.7.1's five conjuncts as written, and FR-332's "with an active package".

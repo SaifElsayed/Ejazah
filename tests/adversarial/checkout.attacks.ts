@@ -1,7 +1,9 @@
 // T036 — `checkout.hold`'s, `checkout.retry`'s and `checkout.pay`'s attacks, registered with T011's harness as their
 // router lands (FR-410, SC-304; FR-351 to FR-356, M3; R-GENDER-1, R-GENDER-2, R-GENDER-4,
-// R-GENDER-5), as B28's T032 registered `booking.slots`. T043 adds the checkout's further cases (a
-// suspension between hold and pay, a foreign slot through pay) and the procedures still to land.
+// R-GENDER-5), as B28's T032 registered `booking.slots`. T043's further cases (a foreign slot with
+// nothing written, a verification-required teacher at hold, the teacher's name on `checkout.status`
+// after a suspension and a deletion) are in `checkout-standing.spec.ts`; a suspension between hold
+// and pay lands with T041's subscriber (the note under T043).
 //
 // The procedures are called through the real user surface and the real checkout services over the
 // stand-in gateway (`discovery-world.ts`), once per direction: a male requester against female
