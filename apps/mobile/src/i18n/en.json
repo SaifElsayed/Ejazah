@@ -672,6 +672,7 @@
     "booking": {
       "availableSlots": "Available slots",
       "continueToPayment": "Continue to payment",
+      "inYourZone": "{slot} your time",
       "noSlots": {
         "action": "Choose another package",
         "text": "Every slot of the teacher with this length is booked.",

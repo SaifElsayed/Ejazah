@@ -50,6 +50,9 @@ export function fakeProcedures() {
       filters: { query: procedure() },
       teacher: { query: procedure() },
     },
+    // B30 (T044): the booking sheet.
+    booking: { slots: { query: procedure() } },
+    checkout: { hold: { mutate: procedure() } },
     teacher: {
       application: {
         get: { query: procedure() },
