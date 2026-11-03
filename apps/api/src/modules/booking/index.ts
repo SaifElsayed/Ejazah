@@ -224,3 +224,17 @@ export {
   type QuotedSummary,
   summaryChanges,
 } from './pay.service.js';
+/**
+ * Booking's consequence of an account's end (T041, R-219, FR-PAYG-6), subscribed to identity's
+ * `AccountConsequences` by `main.ts` with payments' `orderStandingsOf`: the holds on an ended
+ * teacher's slots and an ended student's own hold released, their enrollments awaiting payment
+ * cancelled with one `enrollment_events` row each, on the termination's transaction after its
+ * account lock.
+ */
+export {
+  type ActiveHoldScope,
+  type TerminationDependencies,
+  type TerminationStore,
+  terminationStore,
+  terminationSubscriber,
+} from './termination.subscriber.js';

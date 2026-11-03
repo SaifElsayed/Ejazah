@@ -8,10 +8,11 @@
 //   - a refused hold keeps nothing once its transaction ends: the student whose third session would
 //     overlap their own session is refused, and no hold of theirs or on the slot is left;
 //   - a teacher's ban racing a booking of one of the teacher's slots, each order seen waiting on the
-//     other's lock: neither deadlocks. The ban runs through identity's `StandingService` with a
-//     consequence standing in for T041's, which locks the teacher's slots after the account (the
-//     order B22 found deadlocking against a booking that took the slot first). That no hold of the
-//     teacher's slots is left after the ban commits is T041's to assert, once it subscribes (R-219).
+//     other's lock: neither deadlocks, and no hold of the teacher's slots is left after the ban
+//     commits (R-219). The ban runs through identity's `StandingService` with booking's T041
+//     subscriber bound to its registry, as `main.ts` binds it: after the account it takes the
+//     teacher's slots' key, then the holds, their enrollments and their orders (T005), the order B22
+//     found deadlocking against a booking that took the slot first.
 //
 // HOW THE ROWS GO. The parents are committed as the application role through the API's client; the
 // suite removes every row it recorded creating through an OWNER connection afterwards, the only role
@@ -30,6 +31,7 @@ import {
   holdsStore,
   type HoldTerms,
   placeHold,
+  terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
 import {
   AccountConsequences,
@@ -43,7 +45,6 @@ import {
   openDatabase,
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
-import { lockRows } from '../../apps/api/src/platform/db/row-lock.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error.js';
 import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender.js';
@@ -316,20 +317,7 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
 
   beforeAll(() => {
     const consequences = new AccountConsequences();
-    // Standing in for T041's subscriber: the teacher's slots locked after the account, as the ban's
-    // consequence will take them.
-    consequences.subscribe(async (tx, userId) => {
-      const slots = await tx.availabilitySlot.findMany({
-        where: { teacherUserId: userId },
-        orderBy: { id: 'asc' },
-        select: { id: true },
-      });
-      await lockRows(
-        tx,
-        'availability_slots',
-        slots.map(({ id }) => id),
-      );
-    });
+    consequences.subscribe(terminationSubscriber({ orders: orderStandingsOf, now: () => NOW }));
     standing = new StandingService({
       store: standingStoreOver(database),
       consequences,
@@ -503,6 +491,7 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
     const [booked, banned] = [await booking, await ban];
     expect(deadlocked(booked) || deadlocked(banned)).toBe(false);
     expect('value' in booked && 'value' in banned).toBe(true);
+    expect(await activeHolds({ slotId: on.slotId })).toBe(0);
   });
 
   it('the booking first: the ban waits, then bans the teacher', async () => {
@@ -517,5 +506,6 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
       select: { accountStatus: true },
     });
     expect(accountStatus).toBe('banned');
+    expect(await activeHolds({ slotId: on.slotId })).toBe(0);
   });
 });
