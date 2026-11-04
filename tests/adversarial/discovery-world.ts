@@ -43,6 +43,8 @@
 // account through identity's real deletion (`deleteAccount`, FR-141), for `checkout-standing.spec.ts`;
 // an administrator suspends a teacher through identity's real `StandingService` (`suspend`), and both
 // reach booking's T041 subscriber on the one `AccountConsequences`, bound as `main.ts` binds it.
+// T049: the surface's `booking` services carry the lists, so `enrollments.list` and
+// `enrollments.get` are attacked in the same world (`enrollments.attacks.ts`).
 //
 // NOTHING STAYS VISIBLE. At the end of the file every account the world created is soft-deleted and
 // every subject deactivated, so a later run, or another spec, never meets these teachers.
@@ -132,6 +134,10 @@ import type {
   DiscoveryFiltersOutput,
   DiscoveryTeacherInput,
   DiscoveryTeacherOutput,
+  EnrollmentsGetInput,
+  EnrollmentsGetOutput,
+  EnrollmentsListInput,
+  EnrollmentsListOutput,
 } from '../../packages/contracts/src/index.js';
 import { addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
@@ -305,6 +311,11 @@ export interface AppCaller {
     current(input: Record<string, never>): Promise<CheckoutCurrentOutput>;
     continue(input: CheckoutContinueInput): Promise<CheckoutContinueOutput>;
     status(input: CheckoutStatusInput): Promise<CheckoutStatusOutput>;
+  };
+  /** T049: the student's own enrollments, attacked in `enrollments.attacks.ts`. */
+  readonly enrollments: {
+    list(input: EnrollmentsListInput): Promise<EnrollmentsListOutput>;
+    get(input: EnrollmentsGetInput): Promise<EnrollmentsGetOutput>;
   };
 }
 

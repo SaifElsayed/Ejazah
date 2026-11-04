@@ -344,8 +344,11 @@ const pay: ProcedureAttacks = {
   },
 };
 
-/** T037: each student holds a visible teacher of their own gender and pays: the two enrollments. */
-async function paidFor(direction: Direction) {
+/**
+ * T037: each student holds a visible teacher of their own gender and pays: the two enrollments.
+ * Exported for `enrollments.attacks.ts` (T049), whose reads attack the same two enrollments.
+ */
+export async function paidFor(direction: Direction) {
   const found = await holdsFor(direction);
   const other = found.surface.student(direction.other);
   const [own, theirs] = await Promise.all([

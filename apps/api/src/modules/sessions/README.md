@@ -17,3 +17,5 @@ Accept attendance from the client; provider webhooks into `session_participant_e
 ## Requirement ids
 
 `SRS-SES-*`: `FR-SESS-*`, `FR-NOSHOW-*`, `FR-CANCEL-*`, section 3.7.5. _Filled as they land._
+
+- FR-392, R-DB-4 (an enrollment's upcoming, completed and remaining sessions, derived on read; consumed are `done` and `student_no_show`): `progress.ts`. FR-390, FR-391 (the sessions of some enrollments and of a teacher's day, for booking's lists): `sessions.repository.ts`.

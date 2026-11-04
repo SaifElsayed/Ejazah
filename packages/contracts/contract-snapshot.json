@@ -16,6 +16,7 @@
         "slot_unavailable",
         "teacher_suspended"
       ],
+      "enrollmentListTab": ["active", "ended"],
       "enrollmentStatus": [
         "cancelled",
         "completed",
@@ -32,6 +33,18 @@
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
       "sessionLengthMinutes": ["30", "45", "60"],
+      "sessionStatus": [
+        "both_no_show",
+        "cancelled_by_admin",
+        "cancelled_by_agreement",
+        "disputed",
+        "done",
+        "provider_outage",
+        "scheduled",
+        "student_no_show",
+        "teacher_no_show",
+        "under_threshold"
+      ],
       "signInMethod": ["apple", "email", "google"],
       "slotState": ["booked", "disabled", "free"],
       "teacherApplicationStatus": [
@@ -1447,6 +1460,216 @@
           "$.teacherId": { "required": true, "type": "string" }
         }
       },
+      "enrollments.get": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.completed": { "required": true, "type": "integer" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.last": { "type": "object" },
+          "$.last.endsAt": { "required": true, "type": "string" },
+          "$.last.localDate": { "required": true, "type": "string" },
+          "$.last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.last.startTimeLocal": { "required": true, "type": "string" },
+          "$.last.startsAt": { "required": true, "type": "string" },
+          "$.last.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.last.timezone": { "required": true, "type": "string" },
+          "$.next": { "type": "object" },
+          "$.next.endsAt": { "required": true, "type": "string" },
+          "$.next.localDate": { "required": true, "type": "string" },
+          "$.next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.next.startTimeLocal": { "required": true, "type": "string" },
+          "$.next.startsAt": { "required": true, "type": "string" },
+          "$.next.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.next.timezone": { "required": true, "type": "string" },
+          "$.remaining": { "required": true, "type": "integer" },
+          "$.sessions": { "required": true, "type": "array" },
+          "$.sessions[]": { "type": "object" },
+          "$.sessions[].endsAt": { "required": true, "type": "string" },
+          "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].startsAt": { "required": true, "type": "string" },
+          "$.sessions[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.sessions[].timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.summary": { "required": true, "type": "object" },
+          "$.summary.sessionCount": { "required": true, "type": "integer" },
+          "$.summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.summary.subject": { "required": true, "type": "object" },
+          "$.summary.subject.id": { "required": true, "type": "string" },
+          "$.summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.displayName": { "required": true, "type": "string" },
+          "$.teacher.teacherId": { "required": true, "type": "string" },
+          "$.upcoming": { "required": true, "type": "integer" }
+        }
+      },
+      "enrollments.list": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.tab": { "required": true, "type": "string", "values": ["active", "ended"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].completed": { "required": true, "type": "integer" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].last": { "type": "object" },
+          "$.items[].last.endsAt": { "required": true, "type": "string" },
+          "$.items[].last.localDate": { "required": true, "type": "string" },
+          "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
+          "$.items[].last.startsAt": { "required": true, "type": "string" },
+          "$.items[].last.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.items[].last.timezone": { "required": true, "type": "string" },
+          "$.items[].next": { "type": "object" },
+          "$.items[].next.endsAt": { "required": true, "type": "string" },
+          "$.items[].next.localDate": { "required": true, "type": "string" },
+          "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
+          "$.items[].next.startsAt": { "required": true, "type": "string" },
+          "$.items[].next.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.items[].next.timezone": { "required": true, "type": "string" },
+          "$.items[].remaining": { "required": true, "type": "integer" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.items[].summary": { "required": true, "type": "object" },
+          "$.items[].summary.sessionCount": { "required": true, "type": "integer" },
+          "$.items[].summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.items[].summary.subject": { "required": true, "type": "object" },
+          "$.items[].summary.subject.id": { "required": true, "type": "string" },
+          "$.items[].summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.items[].summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.items[].summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.displayName": { "required": true, "type": "string" },
+          "$.items[].teacher.teacherId": { "required": true, "type": "string" },
+          "$.items[].upcoming": { "required": true, "type": "integer" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
       "onboarding.complete": {
         "caller": "public",
         "input": {
@@ -1901,6 +2124,268 @@
             "type": "string",
             "values": ["booked", "disabled", "free"]
           },
+          "$.timezone": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.students.get": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.completed": { "required": true, "type": "integer" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.last": { "type": "object" },
+          "$.last.endsAt": { "required": true, "type": "string" },
+          "$.last.localDate": { "required": true, "type": "string" },
+          "$.last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.last.startTimeLocal": { "required": true, "type": "string" },
+          "$.last.startsAt": { "required": true, "type": "string" },
+          "$.last.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.last.timezone": { "required": true, "type": "string" },
+          "$.next": { "type": "object" },
+          "$.next.endsAt": { "required": true, "type": "string" },
+          "$.next.localDate": { "required": true, "type": "string" },
+          "$.next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.next.startTimeLocal": { "required": true, "type": "string" },
+          "$.next.startsAt": { "required": true, "type": "string" },
+          "$.next.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.next.timezone": { "required": true, "type": "string" },
+          "$.remaining": { "required": true, "type": "integer" },
+          "$.sessions": { "required": true, "type": "array" },
+          "$.sessions[]": { "type": "object" },
+          "$.sessions[].endsAt": { "required": true, "type": "string" },
+          "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].startsAt": { "required": true, "type": "string" },
+          "$.sessions[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.sessions[].timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.student": { "required": true, "type": "object" },
+          "$.student.displayName": { "required": true, "type": "string" },
+          "$.summary": { "required": true, "type": "object" },
+          "$.summary.sessionCount": { "required": true, "type": "integer" },
+          "$.summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.summary.subject": { "required": true, "type": "object" },
+          "$.summary.subject.id": { "required": true, "type": "string" },
+          "$.summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.upcoming": { "required": true, "type": "integer" }
+        }
+      },
+      "teacher.students.list": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.query": { "type": "string" },
+          "$.tab": { "required": true, "type": "string", "values": ["active", "ended"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].completed": { "required": true, "type": "integer" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].last": { "type": "object" },
+          "$.items[].last.endsAt": { "required": true, "type": "string" },
+          "$.items[].last.localDate": { "required": true, "type": "string" },
+          "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
+          "$.items[].last.startsAt": { "required": true, "type": "string" },
+          "$.items[].last.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.items[].last.timezone": { "required": true, "type": "string" },
+          "$.items[].next": { "type": "object" },
+          "$.items[].next.endsAt": { "required": true, "type": "string" },
+          "$.items[].next.localDate": { "required": true, "type": "string" },
+          "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
+          "$.items[].next.startsAt": { "required": true, "type": "string" },
+          "$.items[].next.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.items[].next.timezone": { "required": true, "type": "string" },
+          "$.items[].remaining": { "required": true, "type": "integer" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.displayName": { "required": true, "type": "string" },
+          "$.items[].summary": { "required": true, "type": "object" },
+          "$.items[].summary.sessionCount": { "required": true, "type": "integer" },
+          "$.items[].summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.items[].summary.subject": { "required": true, "type": "object" },
+          "$.items[].summary.subject.id": { "required": true, "type": "string" },
+          "$.items[].summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.items[].summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.items[].summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.items[].upcoming": { "required": true, "type": "integer" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "teacher.today": {
+        "caller": "teacher",
+        "input": { "$": { "type": "object" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.localDate": { "required": true, "type": "string" },
+          "$.sessions": { "required": true, "type": "array" },
+          "$.sessions[]": { "type": "object" },
+          "$.sessions[].endsAt": { "required": true, "type": "string" },
+          "$.sessions[].enrollmentId": { "required": true, "type": "string" },
+          "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].startsAt": { "required": true, "type": "string" },
+          "$.sessions[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.sessions[].student": { "required": true, "type": "object" },
+          "$.sessions[].student.displayName": { "required": true, "type": "string" },
+          "$.sessions[].summary": { "required": true, "type": "object" },
+          "$.sessions[].summary.sessionCount": { "required": true, "type": "integer" },
+          "$.sessions[].summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.sessions[].summary.subject": { "required": true, "type": "object" },
+          "$.sessions[].summary.subject.id": { "required": true, "type": "string" },
+          "$.sessions[].summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.sessions[].summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.sessions[].summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.sessions[].timezone": { "required": true, "type": "string" },
           "$.timezone": { "required": true, "type": "string" }
         }
       }

@@ -1,0 +1,277 @@
+// T049 — the teacher's «طلابي» and «اليوم» as the user surface serves them (app-surface.md
+// "`enrollments` and the teacher's lists"; FR-391, FR-392, FR-393, FR-395, M3).
+//
+// `teacher.students.list`, `teacher.students.get` and `teacher.today` are the teacher kind admitting
+// an approved teacher (`admits: 'approved'`): an anonymous caller is UNAUTHENTICATED, a student and
+// an applicant FORBIDDEN, a suspended or banned teacher ACCOUNT_RESTRICTED, and none of them reaches
+// the service. The service is handed the session's own account, never anything the input says, so
+// a teacher asks only for their own students; another teacher's enrollment is NOT_FOUND with no
+// field. The output schema strips what R-HONEST-4 keeps from the teacher, a date of birth, a minor
+// flag, documents, a dispute history, an id or a photo key, should a service ever return one. The
+// authorization gate (R-MOBILE-13, `pnpm check:authz`) reads these cases by path.
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import { createLogger } from '../../platform/logging/logger.js';
+import { type AppServices, createAppContext, type UserSession } from '../../surfaces/context.js';
+import {
+  createAppCallerFactory,
+  createAppRouter,
+  toErrorShape,
+} from '../../surfaces/procedures.js';
+import {
+  unusedCatalogServices,
+  unusedCheckoutServices,
+  unusedDiscoveryServices,
+  unusedIdentityServices,
+  unusedTeacherProfileServices,
+  unusedVerificationServices,
+} from '../../surfaces/services.fixtures.js';
+import type { BookingServices } from './index.js';
+import { teacherStudentsRouter, teacherTodayProcedure } from './teacher-students.router.js';
+
+const CALLER = '0199d0a0-0000-7000-8000-0000000000f1';
+const OWN = '0199d0a0-0000-7000-8000-0000000000f2';
+const OTHERS = '0199d0a0-0000-7000-8000-0000000000f3';
+const STUDENT = '0199d0a0-0000-7000-8000-0000000000f4';
+const SUBJECT = '0199d0a0-0000-7000-8000-0000000000f5';
+
+const surfaceRouter = createAppRouter({
+  teacher: createAppRouter({ students: teacherStudentsRouter, today: teacherTodayProcedure }),
+});
+const callerFor = createAppCallerFactory(surfaceRouter);
+type Caller = ReturnType<typeof callerFor>;
+
+type Who = 'student' | 'applicant' | 'approved' | 'suspended teacher' | 'banned teacher';
+
+function sessionOf(who: Who): UserSession {
+  const base = {
+    userId: CALLER,
+    sessionId: '0199d0a0-0000-7000-8000-0000000000f9',
+    gender: 'male' as const,
+    preferredLanguage: 'ar' as const,
+  };
+  if (who === 'student') return { ...base, role: 'student', accountStatus: 'active' };
+  const applicant = who === 'applicant';
+  return {
+    ...base,
+    role: 'teacher',
+    accountStatus:
+      who === 'suspended teacher' ? 'suspended' : who === 'banned teacher' ? 'banned' : 'active',
+    teacher: {
+      verificationStatus: applicant ? 'pending' : 'approved',
+      payoutVerified: !applicant,
+      applicationStatus: applicant ? 'in_review' : 'approved',
+    },
+  };
+}
+
+const session = {
+  sequenceNumber: 2,
+  localDate: '2026-11-12',
+  startTimeLocal: '09:00',
+  timezone: 'Africa/Cairo',
+  startsAt: '2026-11-12T07:00:00.000Z',
+  endsAt: '2026-11-12T08:00:00.000Z',
+  status: 'scheduled' as const,
+};
+
+const summary = {
+  subject: { id: SUBJECT, nameAr: 'حفظ القرآن', nameEn: 'Quran memorisation' },
+  track: 'ijazah_track' as const,
+  sessionCount: 4,
+  sessionDurationMinutes: 60 as const,
+};
+
+const item = {
+  enrollmentId: OWN,
+  student: { displayName: 'يوسف علي' },
+  summary,
+  status: 'confirmed' as const,
+  next: session,
+  upcoming: 3,
+  completed: 1,
+  remaining: 3,
+};
+
+/** What R-HONEST-4 keeps from the teacher, as a careless service might add it. */
+const leaked = {
+  dateOfBirth: '2012-01-01',
+  isMinor: true,
+  documents: [{ id: STUDENT }],
+  disputes: [{ kind: 'session_dispute' }],
+  genderFlags: [{ status: 'pending' }],
+  photoKey: 'photos/1',
+  userId: STUDENT,
+};
+
+let calls: unknown[][];
+
+const unreached = (name: string) => () => Promise.reject(new Error(`${name} is not reached here`));
+
+const booking: BookingServices = {
+  slots: unreached('booking.slots'),
+  enrollments: unreached('enrollments.list'),
+  enrollment: unreached('enrollments.get'),
+  students: async (...args) => {
+    calls.push(['students', ...args]);
+    return {
+      items: [{ ...item, ...leaked, student: { ...item.student, ...leaked } }],
+    } as never;
+  },
+  student: async (...args) => {
+    calls.push(['student', ...args]);
+    if (args[1].enrollmentId !== OWN) throw new DomainError('NOT_FOUND');
+    return {
+      ...item,
+      ...leaked,
+      student: { ...item.student, ...leaked },
+      sessions: [session],
+    } as never;
+  },
+  today: async (...args) => {
+    calls.push(['today', ...args]);
+    return {
+      localDate: '2026-11-12',
+      timezone: 'Africa/Cairo',
+      sessions: [
+        { ...session, enrollmentId: OWN, student: { ...item.student, ...leaked }, summary },
+      ],
+    } as never;
+  },
+};
+
+beforeEach(() => {
+  calls = [];
+});
+
+function callerAs(who: UserSession | null): Caller {
+  const services: AppServices = {
+    settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+    publicConfig: { supportEmail: 'support@ijazah.invalid' },
+    subjects: { listActive: async () => [] },
+    identity: unusedIdentityServices,
+    verification: unusedVerificationServices,
+    teacherProfile: unusedTeacherProfileServices,
+    catalog: unusedCatalogServices,
+    discovery: unusedDiscoveryServices,
+    booking,
+    checkout: unusedCheckoutServices,
+  };
+  const log = createLogger({ level: 'info', destination: { write: () => undefined } });
+  const rateLimiter = { check: vi.fn(async () => undefined) } as unknown as RateLimiter;
+  return callerFor(
+    createAppContext({ session: who, log, rateLimiter, clientAddress: '203.0.113.9', services }),
+  );
+}
+
+const refused = (code: string) =>
+  expect.objectContaining({ cause: expect.objectContaining({ code }) });
+
+/** The three procedures, each called as the phone calls it. */
+function procedures(caller: Caller) {
+  return {
+    'teacher.students.list': () => caller.teacher.students.list({ tab: 'active' }),
+    'teacher.students.get': () => caller.teacher.students.get({ enrollmentId: OWN }),
+    'teacher.today': () => caller.teacher.today({}),
+  };
+}
+
+describe("the teacher's lists' callers (T049)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED before the service: 'teacher.students.list', 'teacher.students.get', 'teacher.today'", async () => {
+    for (const [path, call] of Object.entries(procedures(callerAs(null)))) {
+      await expect(call(), path).rejects.toEqual(refused('UNAUTHENTICATED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a student FORBIDDEN before the service: 'teacher.students.list', 'teacher.students.get', 'teacher.today'", async () => {
+    for (const [path, call] of Object.entries(procedures(callerAs(sessionOf('student'))))) {
+      await expect(call(), path).rejects.toEqual(refused('FORBIDDEN'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses an applicant FORBIDDEN, since students follow approval: 'teacher.students.list', 'teacher.students.get', 'teacher.today'", async () => {
+    for (const [path, call] of Object.entries(procedures(callerAs(sessionOf('applicant'))))) {
+      await expect(call(), path).rejects.toEqual(refused('FORBIDDEN'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended or a banned teacher ACCOUNT_RESTRICTED before the service: 'teacher.students.list', 'teacher.students.get', 'teacher.today'", async () => {
+    for (const who of ['suspended teacher', 'banned teacher'] as const) {
+      for (const [path, call] of Object.entries(procedures(callerAs(sessionOf(who))))) {
+        await expect(call(), `${who} ${path}`).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+      }
+    }
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
+  it("hands the service the session's own account and the tab, the name typed trimmed, whatever else the input says", async () => {
+    await callerAs(sessionOf('approved')).teacher.students.list({
+      tab: 'ended',
+      query: '  يوس ',
+      cursor: OWN,
+      teacherUserId: OTHERS,
+      userId: OTHERS,
+    } as never);
+    expect(calls).toEqual([['students', CALLER, { tab: 'ended', query: 'يوس', cursor: OWN }]]);
+  });
+
+  it('answers the student by display name alone: R-HONEST-4’s fields stripped', async () => {
+    const answer = await callerAs(sessionOf('approved')).teacher.students.list({ tab: 'active' });
+    expect(answer).toEqual({ items: [item] });
+    const detail = await callerAs(sessionOf('approved')).teacher.students.get({
+      enrollmentId: OWN,
+    });
+    expect(detail).toEqual({ ...item, sessions: [session] });
+  });
+
+  it('sends another teacher’s enrollment NOT_FOUND with no field: the code and its message alone', async () => {
+    const thrown: unknown = await callerAs(sessionOf('approved'))
+      .teacher.students.get({ enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0])).toEqual({
+      status: 404,
+      body: { code: 'NOT_FOUND', message: 'Not found.' },
+      unexpected: false,
+    });
+    expect(calls).toEqual([['student', CALLER, { enrollmentId: OTHERS }]]);
+  });
+
+  it('refuses a blank name VALIDATION_FAILED before the service', async () => {
+    const thrown: unknown = await callerAs(sessionOf('approved'))
+      .teacher.students.list({ tab: 'active', query: '   ' })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("'teacher.today' (T049)", () => {
+  it("hands the service the session's own account and answers the day with R-HONEST-4’s fields stripped", async () => {
+    const answer = await callerAs(sessionOf('approved')).teacher.today({});
+    expect(calls).toEqual([['today', CALLER]]);
+    expect(answer).toEqual({
+      localDate: '2026-11-12',
+      timezone: 'Africa/Cairo',
+      sessions: [{ ...session, enrollmentId: OWN, student: { displayName: 'يوسف علي' }, summary }],
+    });
+  });
+
+  it('takes nothing: an input naming another teacher is refused before the service', async () => {
+    const thrown: unknown = await callerAs(sessionOf('approved'))
+      .teacher.today({ teacherUserId: OTHERS } as never)
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+  });
+});
