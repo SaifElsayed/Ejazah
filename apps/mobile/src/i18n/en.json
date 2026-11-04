@@ -750,6 +750,7 @@
       "amountPaid": "Amount paid",
       "enrollment": "Enrollment",
       "firstSession": "First session",
+      "lastSession": "Last session",
       "note": {
         "gateway": "You choose the payment method on the payment gateway's page; the platform does not store your card details.",
         "recitation": "Recitation package: if the teacher misses a session, you choose between a make-up session and a refund of its price."

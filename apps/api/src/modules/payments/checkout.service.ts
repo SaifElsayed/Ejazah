@@ -31,8 +31,10 @@
 // student only after the commit.
 //
 // WHAT THE STUDENT READS (T037; FR-BOOK-12 (c), FR-380 to FR-386, data-model §2.4.1). `current` is
-// the student's own unexpired hold with its package's summary now and, after Pay, its last order and
-// whether it can still be continued (`created`, before its `expires_at`); it decrypts nothing.
+// the student's own unexpired hold with its package's summary now, the first and last session it
+// would get if confirmed now (booking's previews with `first_session_lead_hours`, FR-386, T085) and,
+// after Pay, its last order and whether it can still be continued (`created`, before its
+// `expires_at`); it decrypts nothing.
 // `continue` answers `NOT_FOUND` unless the enrollment is the student's, and decrypts the last
 // order's address only while that order is `created` and before its `expires_at`
 // (`ORDER_NOT_PAYABLE` otherwise, nothing decrypted). `status` answers `NOT_FOUND` unless the
@@ -175,8 +177,12 @@ export interface CheckoutSteps {
   orderById(tx: Transaction, paymentId: string): Promise<AddressedOrder | null>;
   lastOrderOf(tx: Transaction, enrollmentId: string): Promise<AddressedOrder | null>;
   drawRowId(): Promise<string>;
-  /** The student's current hold (booking's `currentHoldOf`, T037). */
-  currentHold(tx: Transaction, student: CheckoutStudent, now: Date): Promise<CurrentHold | null>;
+  /** The student's current hold at `rule.now`, previewed with `rule.leadHours` (booking's `currentHoldOf`, T037, T085). */
+  currentHold(
+    tx: Transaction,
+    student: CheckoutStudent,
+    rule: Pick<HoldTerms, 'now' | 'leadHours'>,
+  ): Promise<CurrentHold | null>;
   /** The student's own enrollment's status (booking's `enrollmentStatusOf`, T037). */
   enrollmentStatus(
     tx: Transaction,
@@ -200,7 +206,7 @@ export function checkoutStepsOver(
 ): CheckoutSteps {
   const pay = payStoreOver();
   return {
-    currentHold: (tx, student, at) => currentHoldOf(tx, student, at),
+    currentHold: (tx, student, rule) => currentHoldOf(tx, student, rule),
     enrollmentStatus: (tx, studentUserId, enrollmentId) =>
       enrollmentStatusOf(tx, studentUserId, enrollmentId),
     payTarget: (tx, request, quoted) => payTargetOf(tx, request, quoted, pay),
@@ -483,7 +489,7 @@ export class CheckoutService {
     const now = this.#now();
     const terms = await readHoldTerms(this.#settings, now);
     return this.#steps.transaction(async (tx) => {
-      const hold = await this.#steps.currentHold(tx, student, now);
+      const hold = await this.#steps.currentHold(tx, student, terms);
       if (hold === null) return {};
       const order =
         hold.enrollmentId === null ? null : await this.#steps.lastOrderOf(tx, hold.enrollmentId);
@@ -494,6 +500,8 @@ export class CheckoutService {
           payBy: payByOf(hold.expiresAt, terms).toISOString(),
           ...(hold.enrollmentId === null ? {} : { enrollmentId: hold.enrollmentId }),
           summary: hold.summary,
+          firstSession: hold.firstSession,
+          lastSession: hold.lastSession,
           ...(order === null
             ? {}
             : {
