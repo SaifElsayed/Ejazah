@@ -7,7 +7,10 @@
 // so a student who comes back after the teacher changed it reads the new terms (the note under
 // T045). The teacher's name is read through the visibility predicate with the session's gender: a
 // teacher the student may no longer see answers no hold (R-GENDER-2); a termination releases such a
-// hold (R-219).
+// hold (R-219). It carries the first and last session the student would get if confirmed at the
+// read's instant (FR-386, FR-368; T085): the held slot, read through catalog's entry as Pay and the
+// confirm job read it (`readSlot`), previewed by the booking sheet's own `sessionPreviewsOn` with the
+// package's session count the summary shows and the lead the caller read.
 //
 // THE STATUS (`enrollmentStatusOf`): only the student's own enrollment (`NOT_FOUND` otherwise, M3),
 // its status and reason as the database holds them (R-HONEST-1), the snapshot's summary, its
@@ -23,11 +26,14 @@ import type { RequesterGender } from '../../platform/guards/requester-gender.js'
 import {
   type PackageRow,
   packageOwnerOf,
+  readSlot,
+  type SlotRow,
   subjectSummariesOf,
   teacherPackageOf,
 } from '../catalog/index.js';
 import { readTargetPerson, visibleTeachers } from '../identity/index.js';
 import { type EnrollmentSessionRow, enrollmentSessionsOf } from '../sessions/index.js';
+import { type SessionPreviews, sessionPreviewsOn } from './booking-slots.service.js';
 import {
   type CheckoutEnrollmentRow,
   type CurrentHoldRow,
@@ -35,10 +41,13 @@ import {
   studentEnrollment,
 } from './checkout-holds.repository.js';
 import { summaryOf } from './checkout-holds.service.js';
+import type { FirstSessionRule } from './nearest-slot.service.js';
 
 /** What the reads read, each through its owner's entry; faked in a spec. */
 export interface CheckoutReadsStore {
   ownCurrentHold(tx: Transaction, studentUserId: string): Promise<CurrentHoldRow | null>;
+  /** A slot by its id, active or not: the held slot's weekday, local start, length and zone. */
+  slotOf(tx: Transaction, slotId: string): Promise<SlotRow | null>;
   packageOwnerOf(tx: Transaction, packageId: string): Promise<string | null>;
   teacherPackageOf(
     tx: Transaction,
@@ -64,6 +73,7 @@ export interface CheckoutReadsStore {
 
 export const checkoutReadsStore: CheckoutReadsStore = {
   ownCurrentHold,
+  slotOf: readSlot,
   packageOwnerOf,
   teacherPackageOf,
   visibleTeacherName: async (tx, requester, teacherUserId) => {
@@ -81,34 +91,41 @@ export const checkoutReadsStore: CheckoutReadsStore = {
 };
 
 /** The current hold as `checkout.current` answers it, before payments adds its last order. */
-export interface CurrentHold {
+export interface CurrentHold extends SessionPreviews {
   readonly holdId: string;
   readonly expiresAt: Date;
   readonly enrollmentId: string | null;
   readonly summary: CheckoutSummary;
 }
 
-/** The student's own unexpired hold and its package's summary now, or null (this file's head). */
+/**
+ * The student's own hold unexpired at `rule.now`, its package's summary now and the sessions it
+ * would get if confirmed then by `rule`'s lead, or null (this file's head).
+ */
 export async function currentHoldOf(
   tx: Transaction,
   student: { readonly userId: string; readonly gender: RequesterGender },
-  now: Date,
+  rule: FirstSessionRule,
   store: CheckoutReadsStore = checkoutReadsStore,
 ): Promise<CurrentHold | null> {
   const hold = await store.ownCurrentHold(tx, student.userId);
-  if (hold === null || hold.expiresAt.getTime() <= now.getTime()) return null;
+  if (hold === null || hold.expiresAt.getTime() <= rule.now.getTime()) return null;
   const teacherUserId = await store.packageOwnerOf(tx, hold.packageId);
   if (teacherUserId === null) return null;
-  const [pkg, displayName] = await Promise.all([
+  const [pkg, displayName, slot] = await Promise.all([
     store.teacherPackageOf(tx, teacherUserId, hold.packageId),
     store.visibleTeacherName(tx, student.gender, teacherUserId),
+    store.slotOf(tx, hold.slotId),
   ]);
   if (pkg === null || displayName === null) return null;
+  // `slot_holds.slot_id` is a foreign key to the slot (ERD `slot_holds`), as Pay reads it.
+  if (slot === null) throw new Error('checkout: a hold without its slot');
   return {
     holdId: hold.id,
     expiresAt: hold.expiresAt,
     enrollmentId: hold.enrollmentId,
     summary: summaryOf({ teacherId: teacherUserId, displayName }, pkg),
+    ...sessionPreviewsOn(slot, rule, pkg.sessionCount),
   };
 }
 

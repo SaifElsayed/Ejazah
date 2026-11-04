@@ -7,8 +7,10 @@
 // `SUMMARY_CHANGED` the screen reads the summary again and pays only on a new press. The hosted
 // page opens through `openAuthSessionAsync(checkoutUrl, 'ijazah://checkout/return')`, and whatever
 // the session answers the phone goes to `processing` with the enrollment's id. `CheckoutPrevious`
-// continues the payable order (`checkout.continue`) with the time left on it. Each case waits for
-// the loaded content with `findBy*` before it reads anything with `getBy*`.
+// continues the payable order (`checkout.continue`) with the time left on it. T085: `Checkout`'s
+// summary shows the first and last session dates `checkout.current` answers (FR-386), each a local
+// calendar date in the slot's zone. Each case waits for the loaded content with `findBy*` before it
+// reads anything with `getBy*`.
 import type {
   CheckoutCurrentOutput,
   CheckoutStatusOutput,
@@ -22,7 +24,7 @@ import type { ReactElement } from 'react';
 
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, type MessageValues, translate } from '../../../i18n';
-import { formatPounds } from '../../../lib/formatters';
+import { formatCalendarDate, formatPounds } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../../shared/__tests__/api-double';
 import {
   Checkout,
@@ -80,6 +82,10 @@ const recitationSummary: CheckoutSummary = {
   price_piasters: 120_000,
 };
 
+/** The run a confirmation now would give: eight Thursdays at 09:00 in Cairo (FR-368, FR-386). */
+const FIRST_SESSION = { localDate: '2026-11-12', startsAt: '2026-11-12T07:00:00Z' };
+const LAST_SESSION = { localDate: '2026-12-31', startsAt: '2026-12-31T07:00:00Z' };
+
 /** A hold placed at `NOW`: ten minutes to pay, then five of grace. */
 const hold = (
   overrides: Partial<NonNullable<CheckoutCurrentOutput['hold']>> = {},
@@ -89,6 +95,8 @@ const hold = (
     expiresAt: '2026-11-09T10:15:00.000Z',
     payBy: '2026-11-09T10:10:00.000Z',
     summary: recitationSummary,
+    firstSession: FIRST_SESSION,
+    lastSession: LAST_SESSION,
     ...overrides,
   },
 });
@@ -164,6 +172,37 @@ describe('Checkout: the one payment summary (FR-358)', () => {
         ).toBeTruthy();
       },
     );
+  });
+
+  it('shows the first and last session dates the student would get if confirmed now, in both languages (FR-386, T085)', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(hold());
+    await inBothDirections(
+      withQueries(() => <Checkout />),
+      async (_rendered, direction) => {
+        expect(await screen.findByText(recitationSummary.teacher.displayName)).toBeTruthy();
+        expect(screen.getByText(said(direction, 'student.checkout.firstSession'))).toBeTruthy();
+        expect(
+          screen.getByText(formatCalendarDate(FIRST_SESSION.localDate, locale(direction))),
+        ).toBeTruthy();
+        expect(screen.getByText(said(direction, 'student.checkout.lastSession'))).toBeTruthy();
+        expect(
+          screen.getByText(formatCalendarDate(LAST_SESSION.localDate, locale(direction))),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('draws the dates `checkout.current` answers, computing none of its own', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(
+      hold({
+        firstSession: { localDate: '2026-11-19', startsAt: '2026-11-19T07:00:00Z' },
+        lastSession: { localDate: '2027-01-07', startsAt: '2027-01-07T07:00:00Z' },
+      }),
+    );
+    await renderAr(<Checkout />);
+    expect(await screen.findByText(formatCalendarDate('2026-11-19', 'ar'))).toBeTruthy();
+    expect(screen.getByText(formatCalendarDate('2027-01-07', 'ar'))).toBeTruthy();
+    expect(screen.queryByText(formatCalendarDate(FIRST_SESSION.localDate, 'ar'))).toBeNull();
   });
 
   it('draws no recitation caption for an ijazah-track package (its variant is not drawn)', async () => {

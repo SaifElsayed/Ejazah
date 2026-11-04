@@ -354,10 +354,40 @@ describe('checkout.current (FR-BOOK-12, CheckoutPrevious)', () => {
       expiresAt: '2026-11-05T10:15:00.000Z',
       payBy: '2026-11-05T10:10:00.000Z',
       summary,
+      firstSession,
+      lastSession,
     };
     expect(checkoutCurrentOutput.parse({ hold })).toEqual({ hold });
     const { payBy: _gone, ...withoutPayBy } = hold;
     expect(checkoutCurrentOutput.safeParse({ hold: withoutPayBy }).success).toBe(false);
+  });
+
+  // T085 (FR-386; PR #121's review, round 1, F2): the first and last session the student would get
+  // if confirmed now, `booking.slots`' previews, on every hold the answer carries (B30a, additive).
+  it('answers the hold with the first and last session previews, both required', () => {
+    const hold = {
+      holdId: ids.hold,
+      expiresAt: '2026-11-05T10:15:00.000Z',
+      payBy: '2026-11-05T10:10:00.000Z',
+      summary,
+      firstSession,
+      lastSession,
+    };
+    expect(checkoutCurrentOutput.parse({ hold }).hold).toMatchObject({ firstSession, lastSession });
+    for (const missing of ['firstSession', 'lastSession']) {
+      const { [missing]: _gone, ...rest } = hold as Record<string, unknown>;
+      expect(checkoutCurrentOutput.safeParse({ hold: rest }).success).toBe(false);
+    }
+    for (const preview of [
+      { localDate: '2026-11-08' },
+      { startsAt: '2026-11-08T15:00:00.000Z' },
+      { localDate: '08/11/2026', startsAt: '2026-11-08T15:00:00.000Z' },
+      { localDate: '2026-11-08', startsAt: '2026-11-08T17:00:00+02:00' },
+    ]) {
+      expect(
+        checkoutCurrentOutput.safeParse({ hold: { ...hold, firstSession: preview } }).success,
+      ).toBe(false);
+    }
   });
 
   it('answers the hold with its enrollment and its last order, and whether it can be continued', () => {
@@ -367,6 +397,8 @@ describe('checkout.current (FR-BOOK-12, CheckoutPrevious)', () => {
       payBy: '2026-11-05T10:10:00.000Z',
       enrollmentId: ids.enrollment,
       summary,
+      firstSession,
+      lastSession,
       lastOrder: { status: 'created', expiresAt: '2026-11-05T10:10:00.000Z', canContinue: true },
     };
     expect(checkoutCurrentOutput.parse({ hold })).toEqual({ hold });
@@ -385,6 +417,8 @@ describe('checkout.current (FR-BOOK-12, CheckoutPrevious)', () => {
       expiresAt: '2026-11-05T10:15:00.000Z',
       payBy: '2026-11-05T10:10:00.000Z',
       summary,
+      firstSession,
+      lastSession,
       lastOrder: {
         status: 'created',
         expiresAt: '2026-11-05T10:10:00.000Z',

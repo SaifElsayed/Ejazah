@@ -14,6 +14,9 @@
 //   - a second and a third paid order on one confirmed enrollment: one open `duplicate_payment`
 //     case, the enrollment as it was; a replay of the confirming order: no case; after the case is
 //     resolved, a replay of the second order opens none (the note under T035) and a fourth opens one;
+//   - the cases that cover an order (T082): one paid while a case is open, or before a case was
+//     resolved or dismissed, does nothing; one paid after every case was closed opens one
+//     `duplicate_payment` case, a second run none; two cases, one open and one closed;
 //   - a refunded order is ignored; two runs leave what one leaves.
 //
 // The job runs its own transactions, the refusal a second one, so every world is committed, each
@@ -23,6 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { CONFIRM_ENROLLMENT, confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import { runOnceAndTwice } from '../../apps/api/src/jobs/double-run';
+import { openCompensationCase } from '../../apps/api/src/modules/moderation/index';
 import {
   closeDatabase,
   type Database,
@@ -66,15 +70,42 @@ const job = () => confirmEnrollment({ database, settings, clock: () => NOW });
 const confirm = (paymentId: string) => job().handle({ paymentId });
 
 async function resolve(caseId: string): Promise<void> {
+  await close(caseId, 'resolved');
+}
+
+/**
+ * Closes the case as an administrator's decision would (Phase 3 writes `resolved_at` with the
+ * status, the note under T082). `earlier` moves its opening and its closing a few minutes back, so
+ * an order paid after it is later by more than the millisecond the rule compares at.
+ */
+async function close(
+  caseId: string,
+  status: 'resolved' | 'dismissed',
+  earlier = false,
+): Promise<void> {
   const adminId = await makeAdmin(db);
   await db.query(
     `UPDATE disputes
-        SET status = 'resolved', resolution = 'compensation_ordered',
-            resolution_notes = 'Probe decision', resolved_by_admin_id = $2, resolved_at = now(),
+        SET status = $2::dispute_status,
+            resolution = CASE WHEN $2 = 'resolved' THEN 'compensation_ordered'::dispute_resolution END,
+            resolution_notes = 'Probe decision', resolved_by_admin_id = $3,
+            created_at = CASE WHEN $4 THEN now() - interval '3 minutes' ELSE created_at END,
+            resolved_at = CASE WHEN $4 THEN now() - interval '2 minutes' ELSE now() END,
             updated_at = now()
       WHERE id = $1`,
-    [caseId, adminId],
+    [caseId, status, adminId, earlier],
   );
+}
+
+/** One compensation case opened by moderation, committed. */
+async function openCase(
+  enrollmentId: string,
+  reason: 'slot_unavailable' | 'party_restricted' | 'duplicate_payment',
+): Promise<string> {
+  const { caseId } = await database.$transaction((tx) =>
+    openCompensationCase(tx, enrollmentId, reason),
+  );
+  return caseId;
 }
 
 describe('confirm-enrollment with the hold active (FR-361)', () => {
@@ -440,6 +471,74 @@ describe('confirm-enrollment ignores (the note under T035)', () => {
     await confirm(await order(on.enrollmentId, 'created'));
     expect(await enrollmentOf(on.enrollmentId)).toMatchObject({ status: 'pending_payment' });
     expect(await sessionsOf(on.enrollmentId)).toEqual([]);
+  });
+});
+
+describe('confirm-enrollment and the cases that cover an order (T082, FR-362, FR-PAYG-19)', () => {
+  const cancelled = { enrollment: { status: 'cancelled', reason: 'payment_expired' } } as const;
+  const asItWas = { status: 'cancelled', cancellationReason: 'payment_expired', confirmedAt: null };
+  const casesNow = async (enrollmentId: string) =>
+    (await casesOf(enrollmentId)).map(({ reason, status }) => [reason, status]);
+
+  it('an order paid while a case is open: covered, no new case, nothing changed', async () => {
+    const on = await world(cancelled);
+    await openCase(on.enrollmentId, 'slot_unavailable');
+    await confirm(await order(on.enrollmentId));
+    expect(await enrollmentOf(on.enrollmentId)).toEqual(asItWas);
+    expect(await casesNow(on.enrollmentId)).toEqual([['slot_unavailable', 'open']]);
+    expect(await eventsOf(on.enrollmentId)).toEqual([]);
+    expect(await sessionsOf(on.enrollmentId)).toEqual([]);
+  });
+
+  it.each(['resolved', 'dismissed'] as const)(
+    'an order paid before a case was %s stays covered after it',
+    async (status) => {
+      const on = await world(cancelled);
+      const caseId = await openCase(on.enrollmentId, 'slot_unavailable');
+      const paid = await order(on.enrollmentId);
+      await close(caseId, status);
+      await confirm(paid);
+      expect(await enrollmentOf(on.enrollmentId)).toEqual(asItWas);
+      expect(await casesNow(on.enrollmentId)).toEqual([['slot_unavailable', status]]);
+      expect(await eventsOf(on.enrollmentId)).toEqual([]);
+    },
+  );
+
+  it('an order paid after every case was closed opens one duplicate_payment case; a second run opens none', async () => {
+    const on = await world(cancelled);
+    await close(await openCase(on.enrollmentId, 'party_restricted'), 'resolved', true);
+    const paid = await order(on.enrollmentId);
+    await confirm(paid);
+    await confirm(paid);
+    expect(await enrollmentOf(on.enrollmentId)).toEqual(asItWas);
+    expect(await casesNow(on.enrollmentId)).toEqual([
+      ['party_restricted', 'resolved'],
+      ['duplicate_payment', 'open'],
+    ]);
+    expect(await eventsOf(on.enrollmentId)).toEqual([]);
+    expect(await holdsOf(on.enrollmentId)).toEqual([{ id: on.holdId, releasedAt: EARLIER }]);
+  });
+
+  it('an enrollment with two cases, one open and one closed: an order paid after the closing is covered', async () => {
+    const on = await world(cancelled);
+    await close(await openCase(on.enrollmentId, 'slot_unavailable'), 'dismissed', true);
+    await openCase(on.enrollmentId, 'party_restricted');
+    await confirm(await order(on.enrollmentId));
+    expect(await enrollmentOf(on.enrollmentId)).toEqual(asItWas);
+    expect(await casesNow(on.enrollmentId)).toEqual([
+      ['slot_unavailable', 'dismissed'],
+      ['party_restricted', 'open'],
+    ]);
+  });
+
+  it('a covered order still does nothing: paid before its case was opened', async () => {
+    const on = await world(cancelled);
+    const paid = await order(on.enrollmentId);
+    await openCase(on.enrollmentId, 'slot_unavailable');
+    await confirm(paid);
+    expect(await enrollmentOf(on.enrollmentId)).toEqual(asItWas);
+    expect(await casesNow(on.enrollmentId)).toEqual([['slot_unavailable', 'open']]);
+    expect(await eventsOf(on.enrollmentId)).toEqual([]);
   });
 });
 

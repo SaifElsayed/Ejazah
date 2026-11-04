@@ -3,8 +3,10 @@
 // that is not `paid` (a `refunded` one) or that a compensation case already covers is ignored (the
 // note under T035); an enrollment whose `confirmed` event names another order gets one
 // `duplicate_payment` case and nothing else (FR-375), while a replay of the confirming order does
-// nothing; an enrollment with a case does nothing (FR-PAYG-19); one R-219 cancelled takes the
-// refusal at once (`party_restricted`); an active hold is converted and the enrollment confirmed
+// nothing; an order no case covers, on an enrollment whose cases were all closed before it was
+// paid, gets one `duplicate_payment` case (T082, FR-PAYG-19 as amended 2026-11-04); one R-219
+// cancelled takes the refusal at once (`party_restricted`); an active hold is converted and the
+// enrollment confirmed
 // with its sessions, no party checked; a late one checks the parties (`party_restricted` when they
 // may not book), then re-holds and confirms; the database's four named refusals are refused in a
 // new transaction (`slot_unavailable`), anything else rethrown. The same steps over the real tables
@@ -12,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LockedEnrollment } from '../modules/booking/index.js';
+import type { CaseInstants } from '../modules/moderation/index.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import {
@@ -46,7 +49,8 @@ interface World {
   /** The order as the payments module reads it under the lock. */
   status: 'paid' | 'refunded' | 'created';
   paidRecordedAt: Date | null;
-  latestCase: Date | null;
+  /** The enrollment's compensation cases as moderation folds them; null when it has none. */
+  cases: CaseInstants | null;
   enrollment: Partial<LockedEnrollment>;
   bookable: boolean;
   /** No order has the payment's id. */
@@ -106,7 +110,10 @@ function harness(world: World) {
       return locked(world.enrollment);
     },
     paidOrderOf: async () => ({ status: world.status, paidRecordedAt: world.paidRecordedAt }),
-    latestCaseOpenedAt: async () => world.latestCase,
+    casesOf: async (_tx, enrollmentId) => {
+      expect(enrollmentId).toBe(ENROLLMENT);
+      return world.cases;
+    },
     openCase: async (_tx, enrollmentId, reason) => {
       calls.push(`case ${reason}`);
       expect(enrollmentId).toBe(ENROLLMENT);
@@ -173,7 +180,7 @@ function harness(world: World) {
 const paid = (overrides: Partial<World> = {}): World => ({
   status: 'paid',
   paidRecordedAt: PAID_AT,
-  latestCase: null,
+  cases: null,
   enrollment: {},
   bookable: true,
   ...overrides,
@@ -325,9 +332,13 @@ describe('confirm-enrollment: a confirmed enrollment (FR-375)', () => {
   });
 
   it('checks the duplicate before the early return on an existing case', async () => {
-    const resolvedEarlier = new Date('2026-11-03T07:00:00Z');
+    const resolvedEarlier: CaseInstants = {
+      open: false,
+      lastOpenedAt: new Date('2026-11-03T07:00:00Z'),
+      lastClosedAt: new Date('2026-11-03T07:30:00Z'),
+    };
     const recorded = await run(
-      paid({ enrollment: confirmedBy(OTHER_PAYMENT), latestCase: resolvedEarlier }),
+      paid({ enrollment: confirmedBy(OTHER_PAYMENT), cases: resolvedEarlier }),
     );
     expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment']);
   });
@@ -344,20 +355,51 @@ describe('confirm-enrollment: a confirmed enrollment (FR-375)', () => {
   });
 });
 
+/** Cases opened at `openedAt`, open, or closed at `closedAt`. */
+const casesOf = (openedAt: string, closedAt: string | null, open = false): CaseInstants => ({
+  open,
+  lastOpenedAt: new Date(openedAt),
+  lastClosedAt: closedAt === null ? null : new Date(closedAt),
+});
+
 describe('confirm-enrollment: what it ignores (FR-PAYG-19; the note under T035)', () => {
+  const duplicate = {
+    status: 'confirmed' as const,
+    confirmed: true,
+    confirmingPaymentId: OTHER_PAYMENT,
+  };
+
   it.each([
     ['a refunded order', paid({ status: 'refunded' })],
     ['an order not paid', paid({ status: 'created', paidRecordedAt: null })],
     [
       'an order a case opened after its paid event covers',
+      paid({ cases: casesOf('2026-11-03T07:59:30Z', null, true), enrollment: duplicate }),
+    ],
+    [
+      'an order paid while a case of its enrollment is open (T082)',
       paid({
-        latestCase: new Date('2026-11-03T07:59:30Z'),
-        enrollment: { status: 'confirmed', confirmed: true, confirmingPaymentId: OTHER_PAYMENT },
+        cases: casesOf('2026-11-03T07:00:00Z', null, true),
+        enrollment: { status: 'cancelled' },
       }),
     ],
     [
-      'an enrollment with a compensation case, the order paid after it',
-      paid({ latestCase: new Date('2026-11-03T07:00:00Z'), enrollment: { status: 'cancelled' } }),
+      'an order paid while a case was open, the case since resolved (T082)',
+      paid({
+        cases: casesOf('2026-11-03T07:00:00Z', '2026-11-03T07:59:30Z'),
+        enrollment: { status: 'cancelled' },
+      }),
+    ],
+    [
+      'an order of a confirmed enrollment paid while its duplicate case is open (T082)',
+      paid({ cases: casesOf('2026-11-03T07:00:00Z', null, true), enrollment: duplicate }),
+    ],
+    [
+      'an order paid after one case was closed while another is open (T082)',
+      paid({
+        cases: { ...casesOf('2026-11-03T07:00:00Z', '2026-11-03T07:30:00Z'), open: true },
+        enrollment: { status: 'cancelled' },
+      }),
     ],
   ])('ignores %s', async (_name, world) => {
     expect((await run(world)).calls).toEqual(PREAMBLE);
@@ -366,8 +408,8 @@ describe('confirm-enrollment: what it ignores (FR-PAYG-19; the note under T035)'
   it('counts a case opened in the same millisecond as the paid event as covering it', async () => {
     const recorded = await run(
       paid({
-        latestCase: PAID_AT,
-        enrollment: { status: 'confirmed', confirmed: true, confirmingPaymentId: OTHER_PAYMENT },
+        cases: { open: false, lastOpenedAt: PAID_AT, lastClosedAt: null },
+        enrollment: duplicate,
       }),
     );
     expect(recorded.calls).toEqual(PREAMBLE);
@@ -377,6 +419,57 @@ describe('confirm-enrollment: what it ignores (FR-PAYG-19; the note under T035)'
     const { job, recorded } = harness(paid({ orderMissing: true }));
     await expect(job.handle({ paymentId: PAYMENT })).rejects.toThrow(/no order/i);
     expect(recorded().calls).toEqual(['begin', 'order this']);
+  });
+});
+
+describe('confirm-enrollment: an order paid after every case was closed (T082, FR-PAYG-19)', () => {
+  const closedBeforePaid = casesOf('2026-11-03T07:00:00Z', '2026-11-03T07:30:00Z');
+
+  it.each([
+    ['cancelled with its refusal’s case resolved', { status: 'cancelled' as const }],
+    [
+      'R-219 cancelled, its party_restricted case dismissed',
+      {
+        status: 'cancelled' as const,
+        cancellationReason: 'teacher_suspended' as const,
+        cancelledByTermination: true,
+        activeHoldId: null,
+      },
+    ],
+  ])(
+    'opens one duplicate_payment case on an enrollment %s, and nothing else',
+    async (_name, enrollment) => {
+      const recorded = await run(paid({ cases: closedBeforePaid, enrollment }));
+      expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment']);
+    },
+  );
+
+  it('counts a closed case with no recorded closing as closed when it was opened', async () => {
+    const recorded = await run(
+      paid({
+        cases: casesOf('2026-11-03T07:00:00Z', null),
+        enrollment: { status: 'cancelled' },
+      }),
+    );
+    expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment']);
+  });
+
+  it('a second run opens no second case: the first one’s case, open, covers the order', async () => {
+    const { once, twice } = await runOnceAndTwice({
+      world: () => {
+        const world = paid({ cases: closedBeforePaid, enrollment: { status: 'cancelled' } });
+        const { job, recorded } = harness(world);
+        return { world, job, recorded };
+      },
+      run: async ({ world, job }) => {
+        await job.handle({ paymentId: PAYMENT });
+        world.cases = { ...closedBeforePaid, open: true, lastOpenedAt: NOW };
+      },
+      observe: ({ recorded }) =>
+        recorded().calls.filter((call) => !['begin', 'order this', 'lock'].includes(call)),
+    });
+    expect(once).toEqual(['case duplicate_payment']);
+    expect(twice).toEqual(once);
   });
 });
 

@@ -27,7 +27,16 @@
 //
 // Read-only: no lock, nothing written (T005's rule 1). The answer is a preview; the hold (T033)
 // decides under its locks.
-import type { BookingSlot, BookingSlotsInput, BookingSlotsOutput } from '@ijazah/contracts';
+//
+// THE CHECKOUT'S PREVIEWS (T085, FR-386). `checkout.current` previews the held slot through
+// `sessionPreviewsOn`: the same first session, run and mapping as each slot of the sheet, from the
+// read's instant, so the checkout shows the dates the sheet would show at that moment.
+import type {
+  BookingSlot,
+  BookingSlotsInput,
+  BookingSlotsOutput,
+  SessionPreview,
+} from '@ijazah/contracts';
 import type { Occurrence } from '@ijazah/time';
 
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -46,11 +55,14 @@ import { partiesSessionsBetween } from '../sessions/index.js';
 import {
   type DiscoveryClock,
   FIRST_SESSION_LEAD_SETTING,
+  type FirstSessionRule,
   firstSessionLeadHours,
+  firstSessionOf,
   offerableOccurrences,
 } from './nearest-slot.service.js';
 import {
   freeOfPartiesSessions,
+  type PackageSlot,
   packageSessionsOn,
   type SessionsBetween,
 } from './session-overlap.service.js';
@@ -104,20 +116,45 @@ interface Offerable {
 /** The seconds a `time` column carries and the contract's `HH:MM` does not (as T019's slots). */
 const SECONDS = ':00';
 
-/** One slot of the answer, its previews the requested local dates generation stores (ADR 0009 D1). */
+/** A run's first and last session as previewed: the requested local dates generation stores (ADR 0009 D1). */
+export interface SessionPreviews {
+  readonly firstSession: SessionPreview;
+  readonly lastSession: SessionPreview;
+}
+
+function previewsOf(first: Occurrence, sessions: readonly Occurrence[]): SessionPreviews {
+  const last = sessions.at(-1) ?? first;
+  return {
+    firstSession: { localDate: first.requestedLocalDate, startsAt: first.startsAt },
+    lastSession: { localDate: last.requestedLocalDate, startsAt: last.startsAt },
+  };
+}
+
+/** One slot of the answer, with its previews. */
 export function bookingSlotOf(
   { slot, first, sessions }: Offerable,
   pkg: Pick<BookablePackage, 'sessionCount' | 'sessionDurationMinutes'>,
 ): BookingSlot {
-  const last = sessions.at(-1) ?? first;
   return {
     slotId: slot.id,
     dayOfWeek: slot.dayOfWeek,
     startTimeLocal: slot.startTimeLocal.slice(0, -SECONDS.length),
     durationMinutes: pkg.sessionDurationMinutes,
-    firstSession: { localDate: first.requestedLocalDate, startsAt: first.startsAt },
-    lastSession: { localDate: last.requestedLocalDate, startsAt: last.startsAt },
+    ...previewsOf(first, sessions),
   };
+}
+
+/**
+ * The first and last of `sessionCount` sessions on `slot` if confirmed by `rule` (FR-368, FR-386),
+ * as the sheet previews each slot: `checkout.current`'s dates for the held slot (T085).
+ */
+export function sessionPreviewsOn(
+  slot: PackageSlot,
+  rule: FirstSessionRule,
+  sessionCount: number,
+): SessionPreviews {
+  const first = firstSessionOf(slot, rule);
+  return previewsOf(first, packageSessionsOn(slot, first, sessionCount));
 }
 
 /** The zone the slots share, or undefined when there are none or they do not share one. */

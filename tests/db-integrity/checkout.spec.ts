@@ -13,7 +13,9 @@
 //     no order created; past the last moment an order may be created ORDER_NOT_PAYABLE with none;
 //   - keyed in two steps: a repeat with a completed key calls no gateway and reads the address again;
 //     two Retries with one key at the same moment record one order, both answer its one address,
-//     and the extra order is cancelled at the gateway.
+//     and the extra order is cancelled at the gateway;
+//   - `checkout.current`'s first and last session (T085, FR-386): the booking sheet's previews of the
+//     held slot at the same instant, and the dates of a later read moving with its instant.
 //
 // HOW THE ROWS GO. The parents are committed as the application role through the API's client; the
 // suite removes every row it recorded creating through an OWNER connection afterwards, as
@@ -24,6 +26,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { createBookingServices } from '../../apps/api/src/modules/booking/index.js';
 import {
   type CheckoutServices,
   createCheckoutServices,
@@ -709,5 +712,48 @@ describe('checkout.pay (FR-354, FR-355, M3; the owner’s decisions of 2026-11-0
       expect(gatewayOrderId).not.toBe(orders[0]?.gatewayOrderId);
       expect(standIn.payableOrder(gatewayOrderId)).toBeUndefined();
     }
+  });
+});
+
+describe('checkout.current: the first and last session if confirmed now (FR-386, FR-368, T085)', () => {
+  it('answers the booking sheet’s previews of the held slot at the same instant, and moves them with the read’s instant', async () => {
+    // Wednesday 2026-11-11, 08:55 in Cairo: the offer's Thursday 09:00 slot is 24 hours and five
+    // minutes on, just past the lead; ten minutes later it is inside it, and the run starts a week on.
+    const at = new Date('2026-11-11T06:55:00Z');
+    const later = new Date(addMinutes(at, 10));
+    const on = await offer();
+    const student = await person();
+    const booking = createBookingServices({ database, settings, now: () => at });
+    const { slots } = await booking.slots(studentOf(student), { packageId: on.packageId });
+    const sheet = slots.find(({ slotId }) => slotId === on.slotId);
+    expect(sheet?.firstSession).toEqual({
+      localDate: '2026-11-12',
+      startsAt: '2026-11-12T07:00:00Z',
+    });
+    expect(sheet?.lastSession).toEqual({
+      localDate: '2026-12-03',
+      startsAt: '2026-12-03T07:00:00Z',
+    });
+
+    const held = await servicesAt(at).hold(studentOf(student), {
+      packageId: on.packageId,
+      slotId: on.slotId,
+      idempotencyKey: randomUUID(),
+    });
+    const now = await servicesAt(at).current(studentOf(student));
+    expect(now.hold?.holdId).toBe(held.holdId);
+    expect(now.hold?.firstSession).toEqual(sheet?.firstSession);
+    expect(now.hold?.lastSession).toEqual(sheet?.lastSession);
+
+    const afterwards = await servicesAt(later).current(studentOf(student));
+    expect(afterwards.hold?.holdId).toBe(held.holdId);
+    expect(afterwards.hold?.firstSession).toEqual({
+      localDate: '2026-11-19',
+      startsAt: '2026-11-19T07:00:00Z',
+    });
+    expect(afterwards.hold?.lastSession).toEqual({
+      localDate: '2026-12-10',
+      startsAt: '2026-12-10T07:00:00Z',
+    });
   });
 });

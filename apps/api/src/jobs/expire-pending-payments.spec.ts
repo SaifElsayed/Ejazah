@@ -8,13 +8,15 @@
 //      release under `'expired'` (which cancels with `payment_failed` or `payment_expired` and
 //      leaves an enrollment with a `paid` order awaiting payment), a page per transaction;
 //   3. every `paid` order whose paid event was recorded at least `checkout_confirmation_timeout_seconds`
-//      before the run, whose enrollment is `pending_payment` or `cancelled` and has no compensation
-//      case, is handed to `confirm-enrollment` by its id (M2, round 2 N1), after the page's reads.
+//      before the run, whose enrollment is `pending_payment` or `cancelled`, and that none of its
+//      enrollment's compensation cases covers (`case-cover.ts`, T082), is handed to
+//      `confirm-enrollment` by its id (M2, round 2 N1), after the page's reads.
 //
 // A failed hand-off fails the run, for the queue's retry. Two runs leave what one leaves. The same
 // over the real tables, behind the webhook, is `tests/db-integrity/expire-pending-payments.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
+import type { CaseInstants } from '../modules/moderation/index.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import { SettingError, type SettingsReader } from '../platform/settings/settings-reader.js';
 import { runOnceAndTwice } from './double-run.js';
@@ -46,8 +48,8 @@ interface Hold {
 interface Enrollment {
   readonly id: string;
   status: 'pending_payment' | 'confirmed' | 'cancelled';
-  /** When its latest compensation case was opened; none when it has none. */
-  readonly caseOpenedAt?: Date;
+  /** Its compensation cases as moderation folds them; none when it has none. */
+  readonly cases?: CaseInstants;
 }
 
 interface WorldRows {
@@ -164,12 +166,12 @@ function paymentsWorld({ orders = [], holds = [], enrollments = [] }: WorldRows)
         .filter(({ id, status }) => ids.includes(id) && status !== 'confirmed')
         .map(({ id }) => id);
     },
-    latestCases: async (client, ids) => {
+    cases: async (client, ids) => {
       expect(client).toBe(tx);
       current?.push(`cases ${ids.join(',')}`);
       return new Map(
-        enrollments.flatMap(({ id, caseOpenedAt }) =>
-          ids.includes(id) && caseOpenedAt !== undefined ? [[id, caseOpenedAt] as const] : [],
+        enrollments.flatMap(({ id, cases }) =>
+          ids.includes(id) && cases !== undefined ? [[id, cases] as const] : [],
         ),
       );
     },
@@ -298,16 +300,45 @@ describe('expire-pending-payments (T040, FR-364)', () => {
         },
         { id: 'o6', enrollmentId: 'e6', status: 'failed', expiresAt: NOW, paidRecordedAt: null },
         { id: 'o7', enrollmentId: 'e7', status: 'paid', expiresAt: NOW, paidRecordedAt: recorded },
+        { id: 'o8', enrollmentId: 'e8', status: 'paid', expiresAt: NOW, paidRecordedAt: recorded },
+        { id: 'o9', enrollmentId: 'e9', status: 'paid', expiresAt: NOW, paidRecordedAt: recorded },
       ],
       enrollments: [
         { id: 'e1', status: 'pending_payment' },
         { id: 'e2', status: 'cancelled' },
         { id: 'e3', status: 'confirmed' },
-        // A case opened after the paid event covers the order; one opened before it does not.
-        { id: 'e4', status: 'cancelled', caseOpenedAt: at('2026-11-03T07:59:50Z') },
+        // A case opened after the paid event covers the order (T082: so does one open, and one
+        // closed after it); one closed before it does not.
+        {
+          id: 'e4',
+          status: 'cancelled',
+          cases: { open: false, lastOpenedAt: at('2026-11-03T07:59:50Z'), lastClosedAt: null },
+        },
         { id: 'e5', status: 'pending_payment' },
         { id: 'e6', status: 'cancelled' },
-        { id: 'e7', status: 'cancelled', caseOpenedAt: at('2026-11-03T07:00:00Z') },
+        {
+          id: 'e7',
+          status: 'cancelled',
+          cases: {
+            open: false,
+            lastOpenedAt: at('2026-11-03T07:00:00Z'),
+            lastClosedAt: at('2026-11-03T07:30:00Z'),
+          },
+        },
+        {
+          id: 'e8',
+          status: 'cancelled',
+          cases: { open: true, lastOpenedAt: at('2026-11-03T07:00:00Z'), lastClosedAt: null },
+        },
+        {
+          id: 'e9',
+          status: 'cancelled',
+          cases: {
+            open: false,
+            lastOpenedAt: at('2026-11-03T07:00:00Z'),
+            lastClosedAt: at('2026-11-03T07:59:50Z'),
+          },
+        },
       ],
     });
     const settings = settingsOf(TIMEOUT_SECONDS);
@@ -317,7 +348,8 @@ describe('expire-pending-payments (T040, FR-364)', () => {
     expect([...world.queued.keys()]).toEqual(['o1', 'o2', 'o7']);
     expect(world.transactions.filter((calls) => calls[0]?.startsWith('paid'))).toEqual([
       ['paid after -', 'awaiting e1,e2,e3', 'cases e1,e2'],
-      ['paid after o3', 'awaiting e4,e7', 'cases e4,e7'],
+      ['paid after o3', 'awaiting e4,e7,e8', 'cases e4,e7,e8'],
+      ['paid after o8', 'awaiting e9', 'cases e9'],
     ]);
   });
 
