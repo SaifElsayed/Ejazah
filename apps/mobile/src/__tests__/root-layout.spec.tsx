@@ -130,6 +130,14 @@ beforeEach(() => {
   mockApi = fakeProcedures();
   // Unless a case says otherwise, `account.me` is still on its way.
   mockApi.account.me.query.mockReturnValue(new Promise(() => undefined));
+  // The homes and tabs read their lists (T050, T051); empty, they draw their empty states.
+  mockApi.enrollments.list.query.mockResolvedValue({ items: [] });
+  mockApi.teacher.students.list.query.mockResolvedValue({ items: [] });
+  mockApi.teacher.today.query.mockResolvedValue({
+    localDate: '2026-11-04',
+    timezone: 'Africa/Cairo',
+    sessions: [],
+  });
   mockDeviceZone = 'Africa/Cairo';
   process.env['EXPO_PUBLIC_API_URL'] = 'https://api.test';
   setLocale('ar');
