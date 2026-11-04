@@ -23,6 +23,8 @@ describe('the target label (T021, FR-180)', () => {
     expect(targetLabel('verification_request', USER_ID)).toBe(`طلب إثبات هوية · ${USER_ID}`);
     expect(targetLabel('admin', USER_ID)).toBe(`مشرف · ${USER_ID}`);
     expect(targetLabel('setting', 'rate_limit_search')).toBe('إعداد · rate_limit_search');
+    // T052: the payments monitor's `payments.viewed` names the order it opened.
+    expect(targetLabel('payment', USER_ID)).toBe(`طلب دفع · ${USER_ID}`);
     for (const [type, word] of Object.entries(auditTargetKinds)) {
       expect(targetLabel(type, 'x')).toBe(`${word}${LABEL_SEPARATOR}x`);
     }
@@ -88,5 +90,6 @@ describe('the read-time name and the fused forms (T021, FR-181)', () => {
     expect(await resolveTargetName(tx, 'admin', 'admin-1', readers)).toBe('عمر');
     expect(await resolveTargetName(tx, 'setting', 'rate_limit_search', readers)).toBeNull();
     expect(await resolveTargetName(tx, 'credential', USER_ID, readers)).toBeNull();
+    expect(await resolveTargetName(tx, 'payment', USER_ID, readers)).toBeNull();
   });
 });

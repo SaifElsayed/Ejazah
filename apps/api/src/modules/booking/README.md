@@ -42,3 +42,4 @@ Write the `sessions` table; session generation is requested through the sessions
 - R-219, FR-PAYG-6, FR-BOOK-9 (an account's end releases its holds and cancels their enrollments awaiting payment): `termination.subscriber.ts`.
 - FR-361, FR-362, FR-375, FR-PAYG-19 (the confirmation and the refusal of a paid order, for `confirm-enrollment`; R-215): `confirmation.service.ts`, `confirmation.repository.ts`.
 - FR-390 to FR-393, FR-395, FR-BOOK-7 (the student's enrollments, the teacher's students and day, derived progress, both zones, the fields each side sees): `enrollment-lists.service.ts`, `enrollment-lists.repository.ts`, `enrollments.router.ts`, `teacher-students.router.ts`.
+- FR-400, R-220 (what the admin's payments monitor reads of an order's enrollment: its student and status for a page of orders, and one enrollment's package, status, progress and outcomes; read-only, no lock): `order-enrollments.service.ts`, `order-enrollments.repository.ts`.

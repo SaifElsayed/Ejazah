@@ -16,6 +16,8 @@ export const auditTargetType = z.enum([
   'verification_request',
   'admin',
   'setting',
+  /** A gateway order the payments monitor opened (T052). */
+  'payment',
 ]);
 
 /**

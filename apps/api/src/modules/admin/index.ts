@@ -18,6 +18,7 @@ import {
   StandingService,
   standingStoreOver,
 } from '../identity/index.js';
+import { createPaymentsMonitorService } from '../payments/index.js';
 import {
   type ApplicationReviewService,
   createVerificationAdminServices,
@@ -80,6 +81,8 @@ export interface AdminServices {
     'link' | 'requireIdentity' | 'accept' | 'requestAnother'
   >;
   readonly teachers: Pick<StandingService, 'suspend' | 'revokeApproval' | 'ban' | 'reinstate'>;
+  /** The payments module's read-only monitor, composed here for the surface (T052, FR-400). */
+  readonly payments: ReturnType<typeof createPaymentsMonitorService>;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -123,6 +126,7 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     credentials: createCredentialReviewService(dependencies),
     ...createVerificationAdminServices({ ...dependencies, standing }),
     teachers: standing,
+    payments: createPaymentsMonitorService(dependencies),
   };
 }
 

@@ -45,6 +45,7 @@ const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
   verification_request: 'admin.audit.targets.verificationRequest',
   admin: 'admin.audit.targets.admin',
   setting: 'admin.audit.targets.setting',
+  payment: 'admin.audit.targets.payment',
 };
 
 type Translate = ReturnType<typeof useT>;

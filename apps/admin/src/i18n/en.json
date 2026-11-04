@@ -233,6 +233,7 @@
         "admin": "Administrator",
         "credential": "Ijazah",
         "document": "Document",
+        "payment": "Payment order",
         "setting": "Setting",
         "teacherApplication": "Application",
         "user": "User",
