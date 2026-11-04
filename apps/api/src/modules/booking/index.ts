@@ -240,3 +240,8 @@ export {
   terminationStore,
   terminationSubscriber,
 } from './termination.subscriber.js';
+/**
+ * Each enrollment's session length (T048, ADR 0009 D2), for the time zone re-resolution job, on the
+ * caller's transaction and with no lock.
+ */
+export { sessionLengthsOf } from './session-lengths.repository.js';
