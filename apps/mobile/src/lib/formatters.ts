@@ -6,7 +6,8 @@
 // and a year, for the phone's own date-of-birth picker. T009: an amount of piasters, in pounds.
 // T022: a weekday's name and a slot's wall-clock start, which belong to no zone, and the weekday
 // an instant falls on in a zone. T070: a teacher's rating, to one decimal. T045: the checkout's
-// countdown, as minutes and seconds.
+// countdown, as minutes and seconds. T051: the teacher's day, its date with its weekday and the
+// hours of its sessions.
 import { type Piasters, toPlainNumber } from '@ijazah/money';
 import { useMemo } from 'react';
 
@@ -32,7 +33,7 @@ export function formatRating(value: number, locale: Locale): string {
 }
 
 const SECONDS_PER_MINUTE = 60;
-const SECOND_DIGITS = 2;
+const TWO_DIGITS = 2;
 
 /**
  * A countdown's whole seconds as minutes and two-digit seconds, «8:12» as the checkout's boards
@@ -40,14 +41,29 @@ const SECOND_DIGITS = 2;
  * here reads a clock.
  */
 export function formatCountdown(seconds: number, locale: Locale): string {
-  const whole = Math.max(0, Math.floor(seconds));
+  return unitsAndTwoDigits(seconds, SECONDS_PER_MINUTE, locale);
+}
+
+const MINUTES_PER_HOUR = 60;
+
+/**
+ * A length of time in whole minutes as hours and two-digit minutes, «5:15» as the teacher's day
+ * sums its sessions (T051). The minutes are a sum of session lengths; nothing here reads a clock.
+ */
+export function formatHoursMinutes(minutes: number, locale: Locale): string {
+  return unitsAndTwoDigits(minutes, MINUTES_PER_HOUR, locale);
+}
+
+/** `count` small units as the large units they make, then the rest in two digits: «8:12». */
+function unitsAndTwoDigits(count: number, perLarge: number, locale: Locale): string {
+  const whole = Math.max(0, Math.floor(count));
   const tag = formattingTag(locale);
-  const minutes = new Intl.NumberFormat(tag, { useGrouping: false });
+  const large = new Intl.NumberFormat(tag, { useGrouping: false });
   const rest = new Intl.NumberFormat(tag, {
     useGrouping: false,
-    minimumIntegerDigits: SECOND_DIGITS,
+    minimumIntegerDigits: TWO_DIGITS,
   });
-  return `${minutes.format(Math.floor(whole / SECONDS_PER_MINUTE))}:${rest.format(whole % SECONDS_PER_MINUTE)}`;
+  return `${large.format(Math.floor(whole / perLarge))}:${rest.format(whole % perLarge)}`;
 }
 
 const PIASTERS_PER_POUND = 100;
@@ -101,6 +117,16 @@ export function formatFullDate(instant: string, timeZone: string, locale: Locale
  */
 export function formatCalendarDate(date: string, locale: Locale): string {
   return dateTime(locale, 'UTC', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    parseCalendarDate(date),
+  );
+}
+
+/**
+ * A calendar date with its weekday, «الأربعاء، 4 نوفمبر», "Wednesday, November 4": the teacher's
+ * local day as the server names it (T051). Read in UTC, so no zone moves it.
+ */
+export function formatCalendarWeekdayDate(date: string, locale: Locale): string {
+  return dateTime(locale, 'UTC', { weekday: 'long', day: 'numeric', month: 'long' }).format(
     parseCalendarDate(date),
   );
 }
@@ -214,6 +240,8 @@ export function useFormatters() {
       date: (instant: string, timeZone: string) => formatDate(instant, timeZone, locale),
       fullDate: (instant: string, timeZone: string) => formatFullDate(instant, timeZone, locale),
       calendarDate: (date: string) => formatCalendarDate(date, locale),
+      calendarWeekdayDate: (date: string) => formatCalendarWeekdayDate(date, locale),
+      hoursMinutes: (minutes: number) => formatHoursMinutes(minutes, locale),
       month: (month: number) => formatMonth(month, locale),
       year: (year: number) => formatYear(year, locale),
       weekdayDate: (instant: string, timeZone: string) =>

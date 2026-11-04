@@ -97,6 +97,12 @@ export function fakeProcedures() {
         create: { mutate: procedure() },
         update: { mutate: procedure() },
       },
+      // B31 (T051): the teacher's students and day.
+      students: {
+        list: { query: procedure() },
+        get: { query: procedure() },
+      },
+      today: { query: procedure() },
     },
   };
 }
