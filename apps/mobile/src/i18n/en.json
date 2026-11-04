@@ -1666,6 +1666,7 @@
       },
       "endedMeta": "{done} of {total} · completed {completedDate} · ijazah issued {issuedDate}",
       "endedNote": "Ended enrollments stay here with their sessions and ijazahs.",
+      "inViewerZone": "{date} · {time} ({city})",
       "search": "Search by student name",
       "searchEmpty": {
         "text": "Try another name.",

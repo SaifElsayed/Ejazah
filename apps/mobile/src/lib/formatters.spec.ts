@@ -6,9 +6,11 @@ import { piasters } from '@ijazah/money';
 import { isolate } from '../i18n';
 import {
   formatCalendarDate,
+  formatCalendarWeekdayDate,
   formatCountdown,
   formatDate,
   formatFullDate,
+  formatHoursMinutes,
   formatMonth,
   formatNumber,
   formatPoundAmount,
@@ -145,5 +147,24 @@ describe('formatCountdown (T045, the checkout countdown)', () => {
     expect(formatCountdown(600, 'en')).toBe('10:00');
     expect(formatCountdown(9, 'ar')).toBe('0:09');
     expect(formatCountdown(0, 'en')).toBe('0:00');
+  });
+});
+
+describe('formatCalendarWeekdayDate (T051, the teacher’s day)', () => {
+  it('writes a calendar date with its weekday, in no zone', () => {
+    expect(formatCalendarWeekdayDate('2026-11-04', 'ar')).toBe(
+      formatWeekdayDate('2026-11-04T12:00:00Z', 'UTC', 'ar'),
+    );
+    expect(formatCalendarWeekdayDate('2026-11-04', 'en')).toBe('Wednesday, November 4');
+    expect(() => formatCalendarWeekdayDate('2026-02-30', 'en')).toThrow(RangeError);
+  });
+});
+
+describe('formatHoursMinutes (T051, the hours of the teacher’s day)', () => {
+  it('writes minutes as hours and two-digit minutes, as the board draws «5:15»', () => {
+    expect(formatHoursMinutes(315, 'ar')).toBe('5:15');
+    expect(formatHoursMinutes(315, 'en')).toBe('5:15');
+    expect(formatHoursMinutes(45, 'en')).toBe('0:45');
+    expect(formatHoursMinutes(120, 'ar')).toBe('2:00');
   });
 });

@@ -1666,6 +1666,7 @@
       },
       "endedMeta": "{done} من {total} · اكتمل {completedDate} · صدرت الإجازة {issuedDate}",
       "endedNote": "تبقى الاشتراكات المنتهية هنا مع جلساتها وإجازاتها.",
+      "inViewerZone": "{date} · {time} ({city})",
       "search": "ابحث باسم الطالب",
       "searchEmpty": {
         "text": "جرّب اسمًا آخر.",
