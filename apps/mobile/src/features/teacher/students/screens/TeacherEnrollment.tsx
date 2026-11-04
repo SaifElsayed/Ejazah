@@ -5,8 +5,10 @@
 // weekly time as the slot holds it, in the sessions' zone with its city, until the last session, or
 // from the first to the last once ended; and when the teacher's zone is now another, the next
 // session there (ADR 0009 D5). Then the sessions by number (`session-rows.ts`). It decides only on
-// what it read since it opened (`read-since-mount.ts`). Phase 3's parts are not drawn: the report,
-// the no-show tile and banner, the chat, the cancellation and every session's sub-line.
+// what it read since it opened (`read-since-mount.ts`). A link with no enrollment id is never read:
+// it draws the load error, as the student's detail does, and its retry sends nothing (T091).
+// Phase 3's parts are not drawn: the report, the no-show tile and banner, the chat, the
+// cancellation and every session's sub-line.
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -31,7 +33,7 @@ import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { readSinceMount } from '../../read-since-mount';
-import { useTeacherEnrollment } from '../api';
+import { isEnrollmentId, useTeacherEnrollment } from '../api';
 import { EnrollmentBadges, SessionStatusBadge } from '../components/Badges';
 import { initialOf } from '../components/StudentRow';
 import { type SessionRow, sessionRows } from '../session-rows';
@@ -40,10 +42,14 @@ import { useInViewerZone } from '../zone';
 export function TeacherEnrollment() {
   const t = useT();
   const online = useOnline();
-  const { enrollmentId } = useLocalSearchParams<{ enrollmentId: string }>();
+  const params = useLocalSearchParams<{ enrollmentId: string }>();
+  const enrollmentId = typeof params.enrollmentId === 'string' ? params.enrollmentId : '';
+  const valid = isEnrollmentId(enrollmentId);
   const query = useTeacherEnrollment(enrollmentId);
   const read = readSinceMount(query);
-  const retry = () => void query.refetch();
+  const retry = () => {
+    if (valid) void query.refetch();
+  };
   const offlineCached = read.state === 'waiting' && !online ? read.cached : undefined;
   const enrollment = read.state === 'read' ? read.data : offlineCached;
   return (
@@ -57,7 +63,7 @@ export function TeacherEnrollment() {
     >
       {offlineCached === undefined ? null : <OfflineNotice onRetry={retry} />}
       {enrollment === undefined ? (
-        <NotLoaded failed={read.state === 'failed'} onRetry={retry} />
+        <NotLoaded failed={!valid || read.state === 'failed'} onRetry={retry} />
       ) : (
         <EnrollmentBody enrollment={enrollment} />
       )}

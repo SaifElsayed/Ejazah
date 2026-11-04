@@ -114,7 +114,11 @@ export interface ReresolveSessionInstantsOptions {
   readonly clock?: () => Date;
 }
 
-/** Whether `error` is the commit refused by one of the two overlap constraints. */
+/**
+ * Whether `error` is the commit refused by one of the two overlap constraints. Only that refusal
+ * is rerun inside the job. A `40P01` deadlock at the deferred commit, against a generation insert
+ * of an overlapping session, is not: it leaves the run, and the queue's retry runs the job again.
+ */
 function refusedByOverlap(error: unknown): boolean {
   return (
     isExclusionViolation(error, 'sessions_teacher_no_overlap') ||

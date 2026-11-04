@@ -4,10 +4,11 @@
 // is the server's: what the teacher typed goes in `query`, folded there (R-203), never filtered here.
 // Every read runs again when a screen opens, which decides only on what it read since
 // (`read-since-mount.ts`).
-import type {
-  TeacherStudentsGetOutput,
-  TeacherStudentsListInput,
-  TeacherStudentsListOutput,
+import {
+  type TeacherStudentsGetOutput,
+  teacherStudentsGetInput,
+  type TeacherStudentsListInput,
+  type TeacherStudentsListOutput,
 } from '@ijazah/contracts';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
@@ -38,11 +39,18 @@ export function useTeacherStudents(query: StudentsQuery) {
   });
 }
 
+/** Whether `enrollmentId` can name an enrollment at all (the procedure's own input, T091). */
+export function isEnrollmentId(enrollmentId: string): boolean {
+  return teacherStudentsGetInput.safeParse({ enrollmentId }).success;
+}
+
+/** `teacher.students.get`; a link with no enrollment id is never read (T091). */
 export function useTeacherEnrollment(enrollmentId: string) {
   const { client } = useApi();
   return useQuery<TeacherStudentsGetOutput>({
     queryKey: enrollmentQueryKey(enrollmentId),
     queryFn: () => client.api.teacher.students.get.query({ enrollmentId }),
+    enabled: isEnrollmentId(enrollmentId),
     refetchOnMount: 'always',
   });
 }

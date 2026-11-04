@@ -44,6 +44,7 @@ import {
   ENDED_ENROLLMENTS_QUERY_KEY,
   enrollmentQueryKey,
 } from './api';
+import { checkoutStatusQueryKey } from '../checkout/outcome-api';
 import { Main } from '../home';
 import { EnrollmentDetail, Enrollments, EnrollmentsEnded } from './index';
 
@@ -652,5 +653,54 @@ describe.each<[string, () => ReactElement]>([
     expect(await screen.findByText('الشيخ يوسف')).toBeTruthy();
     expect(screen.queryByText(ar('status.enrollment.confirming'))).toBeNull();
     expect(screen.queryByText(ar('status.enrollment.pendingPayment'))).toBeNull();
+  });
+
+  // T091 (PR #123's review, round 1, Minor 1): the order read fails on opening while an earlier
+  // visit's Confirming answer is cached; the screen claims nothing on it and says it could not read.
+  it('an order read that fails on opening, with an earlier created answer cached: no badge, no schedule, no message, the retry state', async () => {
+    jest.useFakeTimers();
+    answer(confirming);
+    queries.setQueryData(checkoutStatusQueryKey(SECOND_ENROLLMENT_ID), orderIs('created'));
+    mockApi.api.checkout.status.query.mockRejectedValue(apiError('INTERNAL_SERVER_ERROR'));
+    await renderIn('rtl', within(ui())());
+    expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
+    expect(screen.getByText('الشيخ يوسف')).toBeTruthy();
+    expect(screen.queryByText(ar('status.enrollment.confirming'))).toBeNull();
+    expect(screen.queryByText(ar('status.enrollment.pendingPayment'))).toBeNull();
+    const before = reads();
+    const orderReads = mockApi.api.checkout.status.query.mock.calls.length;
+    await elapse(WINDOW_MS);
+    expect(reads()).toBe(before);
+    expect(mockApi.api.checkout.status.query.mock.calls.length).toBe(orderReads);
+    expect(screen.queryByText(ar('student.enrollments.confirming.title'))).toBeNull();
+  });
+
+  // T091: after a failed order the student retries; Processing reads the new order into the same
+  // `checkout.status` entry. The card is Confirming again, and FR-384's message gives the
+  // new order's reference, never the failed one's.
+  it('a failed order followed by a new one: «قيد التأكيد» again, and the message gives the new order’s reference', async () => {
+    jest.useFakeTimers();
+    const FAILED_REFERENCE = 'IJZ-FAILED1';
+    const NEW_REFERENCE = 'IJZ-NEW0002';
+    const orderOf = (
+      status: CheckoutStatusOutput['lastOrder']['status'],
+      reference: string,
+    ): CheckoutStatusOutput => ({ ...statusOf, lastOrder: { status, reference } });
+    answer(confirming);
+    mockApi.api.checkout.status.query.mockResolvedValue(orderOf('failed', FAILED_REFERENCE));
+    await renderIn('rtl', within(ui())());
+    expect(await screen.findByText(ar('status.enrollment.pendingPayment'))).toBeTruthy();
+
+    const renewed = orderOf('created', NEW_REFERENCE);
+    mockApi.api.checkout.status.query.mockResolvedValue(renewed);
+    await act(async () => {
+      queries.setQueryData(checkoutStatusQueryKey(SECOND_ENROLLMENT_ID), renewed);
+    });
+    expect(await screen.findByText(ar('status.enrollment.confirming'))).toBeTruthy();
+    expect(screen.queryByText(ar('status.enrollment.pendingPayment'))).toBeNull();
+    await elapse(WINDOW_MS);
+    expect(await screen.findByText(ar('student.enrollments.confirming.title'))).toBeTruthy();
+    expect(await screen.findByText(ltrRun(NEW_REFERENCE))).toBeTruthy();
+    expect(screen.queryByText(ltrRun(FAILED_REFERENCE))).toBeNull();
   });
 });
