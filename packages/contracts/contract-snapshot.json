@@ -1160,6 +1160,7 @@
             "type": "string",
             "values": ["created", "expired", "failed", "paid", "refunded"]
           },
+          "$.hold.payBy": { "required": true, "type": "string" },
           "$.hold.summary": { "required": true, "type": "object" },
           "$.hold.summary.price_piasters": { "required": true, "type": "integer" },
           "$.hold.summary.sessionCount": { "required": true, "type": "integer" },
@@ -1201,6 +1202,7 @@
           "$.lastSession": { "required": true, "type": "object" },
           "$.lastSession.localDate": { "required": true, "type": "string" },
           "$.lastSession.startsAt": { "required": true, "type": "string" },
+          "$.payBy": { "required": true, "type": "string" },
           "$.summary": { "required": true, "type": "object" },
           "$.summary.price_piasters": { "required": true, "type": "integer" },
           "$.summary.sessionCount": { "required": true, "type": "integer" },

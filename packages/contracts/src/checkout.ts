@@ -85,10 +85,18 @@ export const checkoutHoldInput = z.object({
   idempotencyKey,
 });
 
+/**
+ * Pay is accepted before this instant and refused from it (`HOLD_EXPIRED`): the hold's expiry minus
+ * the grace, which is also the expiry of the order Pay creates (FR-355, FR-PAYG-6). The checkout's
+ * countdown runs to it (FR-358). B30, additive (R-API-9).
+ */
+const checkoutPayBy = z.iso.datetime();
+
 /** The hold, until when it lasts, and what the checkout screen shows (FR-358, FR-386). */
 export const checkoutHoldOutput = z.object({
   holdId: z.uuid(),
   expiresAt: z.iso.datetime(),
+  payBy: checkoutPayBy,
   summary: checkoutSummary,
   firstSession: sessionPreview,
   lastSession: sessionPreview,
@@ -129,6 +137,7 @@ export const checkoutRetryOutput = checkoutHandover;
 export const checkoutCurrentHold = z.object({
   holdId: z.uuid(),
   expiresAt: z.iso.datetime(),
+  payBy: checkoutPayBy,
   /** Absent before Pay. */
   enrollmentId: z.uuid().optional(),
   summary: checkoutSummary,

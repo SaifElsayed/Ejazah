@@ -672,6 +672,7 @@
     "booking": {
       "availableSlots": "المواعيد المتاحة",
       "continueToPayment": "متابعة إلى الدفع",
+      "inYourZone": "{slot} بتوقيتك",
       "noSlots": {
         "action": "اختر باقة أخرى",
         "text": "كل مواعيد المعلم بهذه المدة محجوزة.",
@@ -760,6 +761,7 @@
       "payWithin": "أكمل الدفع خلال {time}",
       "slot": "الموعد",
       "slotWithCity": "{slot} ({city})",
+      "summaryChanged": "تغيّرت الباقة منذ أن رأيتها. راجع الطلب كما هو الآن ثم ادفع.",
       "teacher": "المعلم",
       "title": "مراجعة الطلب",
       "toEnrollments": "إلى اشتراكاتي",
@@ -771,6 +773,7 @@
         "receipt": "الإيصال"
       },
       "date": "التاريخ",
+      "firstSessionMoved": "تأخّر تأكيد الدفع، فانتقلت أول جلسة من {quoted} إلى {actual}.",
       "lede": "جلساتك كل {weekday} {time}، من {date}.",
       "sessionDate": "{date} · {time}",
       "sessionN": "الجلسة {n}",
@@ -804,6 +807,7 @@
     },
     "checkoutProcessing": {
       "delayed": {
+        "inApp": "حين تؤكد بوابة الدفع دفعتك يظهر اشتراكك مؤكَّدًا في اشتراكاتي.",
         "text": "سيصلك إشعار عند اكتماله.",
         "title": "يستغرق الدفع وقتًا أطول قليلًا"
       },

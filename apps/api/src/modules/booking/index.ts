@@ -107,7 +107,8 @@ export function createDiscoveryServices({
  * T036; the sweeps, T040; the terminations, T041), releasing a slot's and a student's expired holds,
  * and FR-PAYG-19's re-hold of a paid enrollment (T039). The orders' standing is payments'
  * `orderStandingsOf`, handed in by the caller (R-208). `readHoldTerms` reads the hold's settings
- * before the caller's transaction; `holdsStore` is the placement's store over the owners' entries,
+ * before the caller's transaction; `payByOf` is the instant Pay stops being accepted (B30, FR-355,
+ * FR-358); `holdsStore` is the placement's store over the owners' entries,
  * exported for the probes (`tests/db-integrity/hold-concurrency.spec.ts`).
  */
 export {
@@ -121,6 +122,7 @@ export {
   type HoldTerms,
   type OrderStanding,
   type OrderStandings,
+  payByOf,
   type PlacedHold,
   placeHold,
   readHoldTerms,
@@ -224,3 +226,17 @@ export {
   type QuotedSummary,
   summaryChanges,
 } from './pay.service.js';
+/**
+ * Booking's consequence of an account's end (T041, R-219, FR-PAYG-6), subscribed to identity's
+ * `AccountConsequences` by `main.ts` with payments' `orderStandingsOf`: the holds on an ended
+ * teacher's slots and an ended student's own hold released, their enrollments awaiting payment
+ * cancelled with one `enrollment_events` row each, on the termination's transaction after its
+ * account lock.
+ */
+export {
+  type ActiveHoldScope,
+  type TerminationDependencies,
+  type TerminationStore,
+  terminationStore,
+  terminationSubscriber,
+} from './termination.subscriber.js';

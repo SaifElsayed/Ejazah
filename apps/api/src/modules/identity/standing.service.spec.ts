@@ -365,6 +365,16 @@ describe("the account's lock (T126)", () => {
     ]);
   });
 
+  it('revokeApproval locks the account, then the application, before it reads the standing (T041)', async () => {
+    const teacher = approvedTeacher();
+    await standing.revokeApproval(TX, ADMIN, teacher, 'شكوى');
+    expect(store.journal.slice(0, 3)).toEqual([
+      `lock:${teacher}`,
+      `lock-application:${teacher}`,
+      `read:${teacher}`,
+    ]);
+  });
+
   it('reinstate locks the account before it reads the standing and the open request', async () => {
     const userId = approvedTeacher('suspended');
     await standing.reinstate(TX, ADMIN, userId);

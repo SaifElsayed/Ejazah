@@ -83,17 +83,25 @@ afterAll(async () => {
   await closeDatabase(database);
 });
 
-/** One call identity's entries received, with whether it came on a transaction. */
+/**
+ * One call identity's entries received, with whether it came on a transaction; the lock's, with
+ * whether the event's `payment_events` row was written yet when it was taken (T041).
+ */
 interface VerdictCall {
-  readonly entry: 'markPayoutVerified' | 'markPayoutRejected';
+  readonly entry: 'markPayoutVerified' | 'markPayoutRejected' | 'lockPayoutHolder';
   readonly onTransaction: boolean;
   readonly refHash: string;
   readonly at?: Date;
   readonly reason?: string | undefined;
+  readonly eventRecorded?: boolean;
 }
 
-/** Identity's two entries as recorders, answering `matches` (false: no teacher holds the hash). */
-function recordingIdentity(matches = true, failure?: Error) {
+/**
+ * Identity's three entries as recorders in one ordered list, answering `matches` (false: no teacher
+ * holds the hash). The lock reads, on the event's transaction, whether the row of the event that
+ * `eventId` names was written yet.
+ */
+function recordingIdentity(matches = true, failure?: Error, eventId: () => string = () => '') {
   const calls: VerdictCall[] = [];
   const answer = (): Promise<boolean> =>
     failure === undefined ? Promise.resolve(matches) : Promise.reject(failure);
@@ -107,10 +115,22 @@ function recordingIdentity(matches = true, failure?: Error) {
       calls.push({ entry: 'markPayoutRejected', onTransaction: tx !== undefined, refHash, reason });
       return answer();
     },
-    lockPayoutHolder: async () => undefined,
+    lockPayoutHolder: async (tx, refHash) => {
+      const rows = await new EventRows(tx).of(eventId());
+      calls.push({
+        entry: 'lockPayoutHolder',
+        onTransaction: tx !== undefined,
+        refHash,
+        eventRecorded: rows.length > 0,
+      });
+    },
   };
   return { identity, calls };
 }
+
+/** The verdicts among the calls, the lock left out. */
+const verdicts = (calls: readonly VerdictCall[]): VerdictCall[] =>
+  calls.filter(({ entry }) => entry !== 'lockPayoutHolder');
 
 const RECEIVED_AT = new Date('2026-10-26T09:00:00.000Z');
 const VERIFIED_AT = new Date('2026-10-26T09:00:00.250Z');
@@ -203,7 +223,7 @@ describe('a signed recipient event (T075, FR-191, R-114)', () => {
     expect(await rowsOf(event.providerEventId)).toMatchObject([
       { eventType: 'recipient_rejected', paymentId: null },
     ]);
-    expect(calls).toEqual([
+    expect(verdicts(calls)).toEqual([
       {
         entry: 'markPayoutRejected',
         onTransaction: true,
@@ -219,7 +239,50 @@ describe('a signed recipient event (T075, FR-191, R-114)', () => {
 
     await stand.deliver(stand.recipientRejected(freshRef()));
 
-    expect(calls).toMatchObject([{ entry: 'markPayoutRejected', reason: undefined }]);
+    expect(verdicts(calls)).toMatchObject([{ entry: 'markPayoutRejected', reason: undefined }]);
+  });
+});
+
+// T041 (PR #120's review, round 2, follow-up 1; the owner's decision of 2026-11-03): a rejection
+// clears `payout_verified_at`, which the bookable predicate reads, so it locks the teacher's account
+// before it records the event or hands the verdict to identity; a verification turns the predicate
+// true, not false, and takes no lock. The lock sits in the one ordered list beside the verdicts, and
+// it reads, on the event's transaction, whether the event's row was written yet.
+describe("the teacher's lock (PR #120's review, M1)", () => {
+  it('a rejection locks the teacher before it records the event and before the verdict', async () => {
+    let eventId = '';
+    const { identity, calls } = recordingIdentity(true, undefined, () => eventId);
+    harness(identity);
+    const recipientRef = freshRef();
+    const event = stand.recipientRejected(recipientRef, 'name mismatch');
+    eventId = event.providerEventId;
+
+    expect(await stand.deliver(event)).toBe(200);
+
+    expect(calls).toEqual([
+      {
+        entry: 'lockPayoutHolder',
+        onTransaction: true,
+        refHash: sha256(recipientRef),
+        eventRecorded: false,
+      },
+      {
+        entry: 'markPayoutRejected',
+        onTransaction: true,
+        refHash: sha256(recipientRef),
+        reason: 'name mismatch',
+      },
+    ]);
+    expect(await rowsOf(event.providerEventId)).toHaveLength(1);
+  });
+
+  it('a verification takes no lock', async () => {
+    const { identity, calls } = recordingIdentity();
+    harness(identity);
+
+    expect(await stand.deliver(stand.recipientVerified(freshRef()))).toBe(200);
+
+    expect(calls.map(({ entry }) => entry)).toEqual(['markPayoutVerified']);
   });
 });
 
@@ -244,7 +307,7 @@ describe('a replayed provider event id (FR-PAYG-4, R-MONEY-8)', () => {
 
     expect(statuses).toEqual([200, 200]);
     expect(await rowsOf(event.providerEventId)).toHaveLength(1);
-    expect(calls).toHaveLength(1);
+    expect(verdicts(calls)).toHaveLength(1);
   });
 });
 

@@ -672,6 +672,7 @@
     "booking": {
       "availableSlots": "Available slots",
       "continueToPayment": "Continue to payment",
+      "inYourZone": "{slot} in your time",
       "noSlots": {
         "action": "Choose another package",
         "text": "Every slot of the teacher with this length is booked.",
@@ -760,6 +761,7 @@
       "payWithin": "Complete the payment within {time}",
       "slot": "Slot",
       "slotWithCity": "{slot} ({city})",
+      "summaryChanged": "The package has changed since you saw it. Review the order as it is now, then pay.",
       "teacher": "Teacher",
       "title": "Review your order",
       "toEnrollments": "To my enrollments",
@@ -771,6 +773,7 @@
         "receipt": "Receipt"
       },
       "date": "Date",
+      "firstSessionMoved": "The payment was confirmed late, so your first session moved from {quoted} to {actual}.",
       "lede": "Your sessions are every {weekday} at {time}, from {date}.",
       "sessionDate": "{date} · {time}",
       "sessionN": "Session {n}",
@@ -804,6 +807,7 @@
     },
     "checkoutProcessing": {
       "delayed": {
+        "inApp": "When the payment gateway confirms your payment, your enrollment shows as confirmed under Enrollments.",
         "text": "You will get a notification when it completes.",
         "title": "The payment is taking a little longer"
       },

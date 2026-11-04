@@ -147,8 +147,11 @@ const cipher = createColumnCipher(config);
 // identity module's deletion call it, and the modules that keep what an account had subscribe to it
 // (B16 check, decision 2). The verification module subscribes the erasure of a deleted person's
 // documents, and its file erasure removes their files after the deletion's commit (decision 1).
+// Booking subscribes the release of the account's holds and the cancellation of their enrollments
+// awaiting payment (T041, R-219), over payments' order standing (R-208).
 const consequences = new identity.AccountConsequences();
 consequences.subscribe(verification.documentErasureConsequence());
+consequences.subscribe(booking.terminationSubscriber({ orders: payments.orderStandingsOf }));
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,

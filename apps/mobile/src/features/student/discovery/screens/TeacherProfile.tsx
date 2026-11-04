@@ -4,13 +4,18 @@
 // no-reviews line with no stars; the bio, the qualification and the active packages. No riwaya,
 // tariq or chain, which are Phase 4's (FR-ISNAD-5). An excluded teacher is the unknown-teacher
 // state, with no hint of why (R-GENDER-2); the shared states draw loading, failure and offline.
-import type { DiscoveryTeacherOutput } from '@ijazah/contracts';
+// T044 (FR-BOOK-1, screens.md §4 and §5): the student chooses a package, the first until another is
+// pressed, and the action bar «اختيار الموعد · {package}» opens the booking sheet for it over the page.
+import type { DiscoveryTeacherOutput, DiscoveryTeacherPackage } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import {
+  ActionBar,
   Avatar,
   Badge,
+  Button,
   EmptyState,
   Icon,
   Section,
@@ -22,6 +27,7 @@ import { useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { initialsOf } from '../../../shared/account';
+import { BookingSheet } from '../../booking';
 import { BackBar, StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { ProfilePackage } from '../components/ProfilePackage';
@@ -32,20 +38,30 @@ export function TeacherProfile() {
   const teacherId = typeof params.teacherId === 'string' ? params.teacherId : '';
   const profile = useDiscoveryTeacher(teacherId);
   const retry = () => void profile.refetch();
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const [booking, setBooking] = useState(false);
+  const packages = profile.data?.packages ?? [];
+  const chosen = packages.find(({ packageId }) => packageId === chosenId) ?? packages[0];
   return (
-    <StackScreen header={<BackBar onPress={() => router.back()} />}>
+    <StackScreen
+      header={<BackBar onPress={() => router.back()} />}
+      footer={
+        chosen === undefined || isUnknownTeacher(profile.error) ? undefined : (
+          <ChooseSlot item={chosen} onPress={() => setBooking(true)} />
+        )
+      }
+    >
       {!isTeacherId(teacherId) || isUnknownTeacher(profile.error) ? (
         <UnknownTeacher />
       ) : profile.data === undefined ? (
-        <NotLoaded
-          failed={profile.isError}
-          onRetry={retry}
-          loading={<Skeleton shape="block" />}
-        />
+        <NotLoaded failed={profile.isError} onRetry={retry} loading={<Skeleton shape="block" />} />
       ) : (
         <>
           <OfflineNotice onRetry={retry} />
-          <Profile teacher={profile.data} />
+          <Profile teacher={profile.data} chosenId={chosen?.packageId} onChoose={setChosenId} />
+          {booking && chosen !== undefined ? (
+            <BookingSheet item={chosen} onClose={() => setBooking(false)} />
+          ) : null}
         </>
       )}
     </StackScreen>
@@ -63,7 +79,41 @@ function UnknownTeacher() {
   );
 }
 
-function Profile({ teacher }: { readonly teacher: DiscoveryTeacherOutput }) {
+/** «اختيار الموعد · {package}»: the booking sheet for the package chosen. */
+function ChooseSlot({
+  item,
+  onPress,
+}: {
+  readonly item: DiscoveryTeacherPackage;
+  readonly onPress: () => void;
+}) {
+  const t = useT();
+  const nameOf = useSubjectName();
+  return (
+    <ActionBar>
+      <Button
+        label={t('student.teacherProfile.chooseSlot', {
+          package: t('common.format.packageShort', {
+            subject: nameOf(item.subject),
+            count: item.sessionCount,
+          }),
+        })}
+        layout="block"
+        onPress={onPress}
+      />
+    </ActionBar>
+  );
+}
+
+function Profile({
+  teacher,
+  chosenId,
+  onChoose,
+}: {
+  readonly teacher: DiscoveryTeacherOutput;
+  readonly chosenId: string | undefined;
+  readonly onChoose: (packageId: string) => void;
+}) {
   const t = useT();
   return (
     <>
@@ -86,7 +136,12 @@ function Profile({ teacher }: { readonly teacher: DiscoveryTeacherOutput }) {
       {teacher.packages.length === 0 ? null : (
         <Section title={t('student.teacherProfile.packages')}>
           {teacher.packages.map((item) => (
-            <ProfilePackage key={item.packageId} item={item} />
+            <ProfilePackage
+              key={item.packageId}
+              item={item}
+              selected={item.packageId === chosenId}
+              onPress={() => onChoose(item.packageId)}
+            />
           ))}
         </Section>
       )}

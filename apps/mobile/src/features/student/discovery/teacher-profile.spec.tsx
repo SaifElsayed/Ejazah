@@ -4,7 +4,9 @@
 // remedy line (ADR 0018 D2), the session length, the total and the price per session drawn in
 // pounds from piasters. It never shows a riwaya, a tariq or a chain (Phase 4's, FR-ISNAD-5). An
 // excluded teacher (`NOT_FOUND`, R-GENDER-2) is one unknown-teacher state with no hint of why. Each
-// case waits for the loaded content itself, never for a frame drawn while loading (PR #117).
+// case waits for the loaded content itself, never for a frame drawn while loading (PR #117). T044:
+// a package is chosen on the page, the first one until another is pressed, and the action bar opens
+// the booking sheet for it (screens.md §4 and §5).
 import type { DiscoveryTeacherOutput } from '@ijazah/contracts';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { piasters } from '@ijazah/money';
@@ -44,7 +46,11 @@ const QURAN = {
   nameAr: 'حفظ القرآن',
   nameEn: 'Quran memorization',
 };
-const TAJWEED = { id: '0193a6f0-0000-7000-8000-0000000000a2', nameAr: 'التجويد', nameEn: 'Tajweed' };
+const TAJWEED = {
+  id: '0193a6f0-0000-7000-8000-0000000000a2',
+  nameAr: 'التجويد',
+  nameEn: 'Tajweed',
+};
 const PHOTO = 'https://files.ijazah.test/photos/ahmed.jpg?signature=1';
 
 const recitation = {
@@ -162,7 +168,9 @@ describe('TeacherProfile', () => {
       expect(screen.getByText(ratingLine)).toBeTruthy();
       expect(screen.queryByText(said(direction, 'student.teacherProfile.noReviews'))).toBeNull();
       expect(screen.getByText(full.bio)).toBeTruthy();
-      expect(screen.getByText(said(direction, 'student.teacherProfile.qualification'))).toBeTruthy();
+      expect(
+        screen.getByText(said(direction, 'student.teacherProfile.qualification')),
+      ).toBeTruthy();
       expect(screen.getByText(full.qualificationSummary)).toBeTruthy();
       expect(screen.getByText(said(direction, 'student.teacherProfile.packages'))).toBeTruthy();
       for (const item of [recitation, ijazahTrack]) {
@@ -211,19 +219,22 @@ describe('TeacherProfile', () => {
   it.each([
     ['recitation', recitation, 'student.teacherProfile.remedy.recitation'],
     ['ijazah_track', ijazahTrack, 'student.teacherProfile.remedy.ijazahTrack'],
-  ] as const)('writes the remedy line of the %s track under its package', async (_track, item, key) => {
-    mockApi.api.discovery.teacher.query.mockResolvedValue({ ...full, packages: [item] });
-    const other =
-      key === 'student.teacherProfile.remedy.recitation'
-        ? 'student.teacherProfile.remedy.ijazahTrack'
-        : 'student.teacherProfile.remedy.recitation';
-    await inBothDirections(profile, async (_rendered, direction) => {
-      expect(await screen.findByText(said(direction, key))).toBeTruthy();
-      expect(screen.queryByText(said(direction, other))).toBeNull();
-      // No promise of an ijazah on completion (FR-IJAZAH-1; the owner's decision of 2026-11-02).
-      expect(screen.queryByText(/الإجازة بعد الإتمام|ijazah after completion/)).toBeNull();
-    });
-  });
+  ] as const)(
+    'writes the remedy line of the %s track under its package',
+    async (_track, item, key) => {
+      mockApi.api.discovery.teacher.query.mockResolvedValue({ ...full, packages: [item] });
+      const other =
+        key === 'student.teacherProfile.remedy.recitation'
+          ? 'student.teacherProfile.remedy.ijazahTrack'
+          : 'student.teacherProfile.remedy.recitation';
+      await inBothDirections(profile, async (_rendered, direction) => {
+        expect(await screen.findByText(said(direction, key))).toBeTruthy();
+        expect(screen.queryByText(said(direction, other))).toBeNull();
+        // No promise of an ijazah on completion (FR-IJAZAH-1; the owner's decision of 2026-11-02).
+        expect(screen.queryByText(/الإجازة بعد الإتمام|ijazah after completion/)).toBeNull();
+      });
+    },
+  );
 
   it('draws the prices sent in piasters in pounds, whole pounds bare and piasters to two places', async () => {
     mockApi.api.discovery.teacher.query.mockResolvedValue({
@@ -274,7 +285,9 @@ describe('TeacherProfile', () => {
       expect(
         await screen.findByText(said(direction, 'student.teacherProfile.notFound.title')),
       ).toBeTruthy();
-      expect(screen.getByText(said(direction, 'student.teacherProfile.notFound.text'))).toBeTruthy();
+      expect(
+        screen.getByText(said(direction, 'student.teacherProfile.notFound.text')),
+      ).toBeTruthy();
       expect(screen.queryByText(said(direction, 'common.state.loadError'))).toBeNull();
       expect(
         screen.queryByRole('button', { name: said(direction, 'common.action.retry') }),
@@ -288,9 +301,9 @@ describe('TeacherProfile', () => {
     await renderIn('rtl', profile());
     // Were it read again, the state would wait for the last of the cache's three retries.
     expect(await screen.findByText(ar('student.teacherProfile.notFound.title'))).toBeTruthy();
-    expect(queries.getQueryState(['student', 'discovery', 'teacher', TEACHER_ID])?.fetchStatus).toBe(
-      'idle',
-    );
+    expect(
+      queries.getQueryState(['student', 'discovery', 'teacher', TEACHER_ID])?.fetchStatus,
+    ).toBe('idle');
     expect(mockApi.api.discovery.teacher.query).toHaveBeenCalledTimes(1);
   });
 
@@ -333,5 +346,68 @@ describe('TeacherProfile', () => {
     expect(await screen.findByText(full.displayName)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
     expect(mockNavigate).toHaveBeenCalledWith('back');
+  });
+
+  describe('choosing a package and its slot (T044, screens.md §4 and §5)', () => {
+    const chooseSlot = (direction: Direction, item: typeof recitation | typeof ijazahTrack) =>
+      said(direction, 'student.teacherProfile.chooseSlot', {
+        package: said(direction, 'common.format.packageShort', {
+          subject: named(direction, item.subject),
+          count: item.sessionCount,
+        }),
+      });
+
+    beforeEach(() => {
+      mockApi.api.booking.slots.query.mockResolvedValue({
+        teacherTimezone: 'Africa/Cairo',
+        slots: [],
+      });
+    });
+
+    it('offers the first package until another is pressed, then that one', async () => {
+      await inBothDirections(profile, async (_rendered, direction) => {
+        expect(await screen.findByText(full.displayName)).toBeTruthy();
+        expect(
+          screen.getByRole('button', { name: chooseSlot(direction, recitation) }),
+        ).toBeTruthy();
+        await fireEvent.press(
+          screen.getByText(
+            said(direction, 'common.format.packageShort', {
+              subject: named(direction, TAJWEED),
+              count: ijazahTrack.sessionCount,
+            }),
+          ),
+        );
+        expect(
+          screen.getByRole('button', { name: chooseSlot(direction, ijazahTrack) }),
+        ).toBeTruthy();
+        expect(
+          screen.queryByRole('button', { name: chooseSlot(direction, recitation) }),
+        ).toBeNull();
+      });
+    });
+
+    it('opens the booking sheet for the chosen package, and closes it', async () => {
+      await renderIn('rtl', profile());
+      expect(await screen.findByText(full.displayName)).toBeTruthy();
+      await fireEvent.press(
+        screen.getByText(ar('common.format.packageShort', { subject: TAJWEED.nameAr, count: 12 })),
+      );
+      await fireEvent.press(screen.getByRole('button', { name: chooseSlot('rtl', ijazahTrack) }));
+      expect(await screen.findByText(ar('student.booking.noSlots.title'))).toBeTruthy();
+      expect(screen.getByText(ar('student.booking.title'))).toBeTruthy();
+      expect(mockApi.api.booking.slots.query).toHaveBeenCalledWith({
+        packageId: ijazahTrack.packageId,
+      });
+      await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.close') }));
+      expect(screen.queryByText(ar('student.booking.title'))).toBeNull();
+    });
+
+    it('offers no slot to choose for a teacher with no active package', async () => {
+      mockApi.api.discovery.teacher.query.mockResolvedValue({ ...full, packages: [] });
+      await renderIn('rtl', profile());
+      expect(await screen.findByText(full.displayName)).toBeTruthy();
+      expect(screen.queryByText(/اختيار الموعد/)).toBeNull();
+    });
   });
 });

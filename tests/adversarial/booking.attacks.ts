@@ -1,6 +1,7 @@
 // T032 — `booking.slots`' attacks, registered with T011's harness as its router lands (FR-410,
-// SC-304; FR-350; R-GENDER-1, R-GENDER-2, R-GENDER-4, R-GENDER-5). T043 adds the checkout's and the
-// cases this one leaves to it (a hold, a suspension between hold and pay, a foreign slot).
+// SC-304; FR-350; R-GENDER-1, R-GENDER-2, R-GENDER-4, R-GENDER-5). The cases the five attacks do not
+// reach (a foreign slot, a verification-required teacher at hold, a suspension between hold and pay)
+// are T043's, in `checkout-standing.spec.ts`.
 //
 // The procedure is called through the real user surface and the real booking services
 // (`discovery-world.ts`), once per direction: a male requester against female teachers and a female

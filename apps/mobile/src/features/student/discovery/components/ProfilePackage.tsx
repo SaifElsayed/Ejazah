@@ -1,7 +1,8 @@
 // T030 (FR-336, FR-337, ADR 0018 D1/D2): one active package on the teacher's profile (screens.md
 // §4): the subject and count with the track's badge, the session length, the track's remedy line,
 // then the total and the price per session, both computed by the server in `packages/money` and
-// drawn here in pounds. The remedy line is the phone's copy by track; the answer carries none.
+// drawn here in pounds. The remedy line is the phone's copy by track; the answer carries none. T044:
+// the package the student chose is drawn selected, and a press chooses it (screens.md §4).
 import type { DiscoveryTeacherPackage, PackageTrack } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { View } from 'react-native';
@@ -19,12 +20,20 @@ const REMEDY_LINE: Readonly<Record<PackageTrack, MessageKey>> = {
   ijazah_track: 'student.teacherProfile.remedy.ijazahTrack',
 };
 
-export function ProfilePackage({ item }: { readonly item: DiscoveryTeacherPackage }) {
+export function ProfilePackage({
+  item,
+  selected,
+  onPress,
+}: {
+  readonly item: DiscoveryTeacherPackage;
+  readonly selected: boolean;
+  readonly onPress: () => void;
+}) {
   const t = useT();
   const locale = useLocale();
   const nameOf = useSubjectName();
   return (
-    <Card variant="compact">
+    <Card variant={selected ? 'selected' : 'compact'} onPress={onPress}>
       <View
         style={{
           flexDirection: 'row',

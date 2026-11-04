@@ -94,7 +94,7 @@ function expectNothingOf(answer: unknown, excluded: readonly SeededTeacher[]): v
 }
 
 /** A refused call's status and body through the surface's one formatter; throws if it answered. */
-async function refusalOf(call: () => Promise<unknown>): Promise<MappedError> {
+export async function refusalOf(call: () => Promise<unknown>): Promise<MappedError> {
   try {
     await call();
   } catch (error) {
@@ -153,20 +153,22 @@ export async function surfaceFor(direction: Direction) {
 /**
  * The tab of all subjects counts the visible teachers with an active package and no one else
  * (FR-332, R-GENDER-3). Other specs commit teachers meanwhile, so the answer is compared with the
- * predicate counted in SQL just before and just after it, and read again until the two agree.
+ * predicate's teachers read in SQL just before and just after it, and read again until the two
+ * reads name the same teachers: equal counts are not enough, since one teacher arriving while
+ * another leaves keeps the count and changes the set (the note under T079, B30).
  */
 async function expectAllTabCountsTheVisible(
   caller: AppCaller,
-  count: () => Promise<number>,
+  visibleIds: () => Promise<readonly string[]>,
   excluded: readonly SeededTeacher[],
 ): Promise<void> {
   for (let attempt = 1; attempt <= STABLE_READ_ATTEMPTS; attempt += 1) {
-    const before = await count();
+    const before = await visibleIds();
     const answer = await caller.discovery.browse({});
-    const after = await count();
+    const after = await visibleIds();
     expectNothingOf(answer, excluded);
-    if (before === after) {
-      expect(tabCount(answer, null), 'the tab of all subjects').toBe(before);
+    if (before.join() === after.join()) {
+      expect(tabCount(answer, null), 'the tab of all subjects').toBe(before.length);
       return;
     }
   }
@@ -226,7 +228,7 @@ const browse: ProcedureAttacks = {
       expectNothingOf(tab, excluded);
       await expectAllTabCountsTheVisible(
         caller,
-        () => surface.allTabCount(direction.requester),
+        () => surface.allTabIds(direction.requester),
         excluded,
       );
 
