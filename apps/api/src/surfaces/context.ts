@@ -209,7 +209,10 @@ export interface AppServices {
    * (T026, R-205).
    */
   readonly discovery: DiscoveryServices;
-  /** `booking.*`: the booking sheet's slots on booking's router (T032, R-205). */
+  /**
+   * `booking.*`: the booking sheet's slots on booking's router (T032, R-205); `enrollments.*`,
+   * `teacher.students.*` and `teacher.today`, the lists on booking's routers (T049).
+   */
   readonly booking: BookingServices;
   /** `checkout.*`: the payments module's checkout over booking's holds and enrollments (T036, R-208). */
   readonly checkout: CheckoutServices;

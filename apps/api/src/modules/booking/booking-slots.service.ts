@@ -53,6 +53,10 @@ import {
 import { accountTimezone, visibleTeachers } from '../identity/index.js';
 import { partiesSessionsBetween } from '../sessions/index.js';
 import {
+  createEnrollmentListServices,
+  type EnrollmentListServices,
+} from './enrollment-lists.service.js';
+import {
   type DiscoveryClock,
   FIRST_SESSION_LEAD_SETTING,
   type FirstSessionRule,
@@ -208,14 +212,18 @@ export async function bookingSlotsOf(
   return { teacherTimezone, slots: offered.map((one) => bookingSlotOf(one, pkg)) };
 }
 
-/** `booking.*`'s services on the user surface (T032). */
-export interface BookingServices {
+/**
+ * `booking.*`'s services on the user surface (T032): the booking sheet's slots, and the lists
+ * (T049: `enrollments.*`, `teacher.students.*`, `teacher.today`; `enrollment-lists.service.ts`).
+ */
+export interface BookingServices extends EnrollmentListServices {
   slots(student: BookingStudent, input: BookingSlotsInput): Promise<BookingSlotsOutput>;
 }
 
 /**
  * The booking services over the process's client: the lead read before the transaction, the reads
- * in one, the buffer only when a confirmed enrollment needs its release (as `createNearestSlots`).
+ * in one, the buffer only when a confirmed enrollment needs its release (as `createNearestSlots`);
+ * the lists' over the same client and clock (T049).
  */
 export function createBookingServices({
   database,
@@ -230,6 +238,7 @@ export function createBookingServices({
 }): BookingServices {
   const transactions = transactionsOver(database);
   return {
+    ...createEnrollmentListServices({ database, settings, now }),
     slots: async (student, input) => {
       const leadHours = await settings.read(FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours);
       const clock: DiscoveryClock = {

@@ -22,3 +22,16 @@ export {
   generateForEnrollment,
   type ScheduledSession,
 } from './generation.service.js';
+
+/**
+ * T049 (FR-390 to FR-393): the lists' reads, each on the caller's transaction with no lock, and an
+ * enrollment's progress derived from its sessions (FR-392, R-DB-4): the sessions of some
+ * enrollments, the sessions of a teacher's day, and the next, last, upcoming, completed and
+ * remaining of one enrollment.
+ */
+export {
+  sessionsOfEnrollments,
+  type DaySession,
+  teacherSessionsBetween,
+} from './sessions.repository.js';
+export { type SessionProgress, sessionProgress } from './progress.js';

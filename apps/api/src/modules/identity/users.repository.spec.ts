@@ -5,7 +5,7 @@
 // table, not Postgres.
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from '../../platform/db/prisma.repository.js';
-import { UsersRepository } from './users.repository.js';
+import { displayNamesOf, UsersRepository } from './users.repository.js';
 
 const USER = '0199d0a0-0000-7000-8000-00000000000a';
 
@@ -68,5 +68,30 @@ describe('replacePhotoKey (T024)', () => {
     await expect(
       new UsersRepository(database).replacePhotoKey(USER, 'photos/u/new.jpg'),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// 003:T049 (FR-391, FR-395, R-HONEST-4): the names booking's lists show of an enrollment's other party,
+// read in one statement by id, the display name and nothing else; a deleted account, which the
+// client's extension leaves out and whose name is erased, is absent.
+describe('displayNamesOf (003:T049)', () => {
+  const OTHER = '0199d0a0-0000-7000-8000-00000000000b';
+
+  it('reads the display names of the ids in one statement, selecting nothing else', async () => {
+    const findMany = vi.fn(async () => [{ id: USER, displayName: 'يوسف علي' }]);
+    const tx = { user: { findMany } } as unknown as Parameters<typeof displayNamesOf>[0];
+    const names = await displayNamesOf(tx, [USER, OTHER]);
+    expect([...names]).toEqual([[USER, 'يوسف علي']]);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { id: { in: [USER, OTHER] } },
+      select: { id: true, displayName: true },
+    });
+  });
+
+  it('asks nothing for no id', async () => {
+    const findMany = vi.fn();
+    const tx = { user: { findMany } } as unknown as Parameters<typeof displayNamesOf>[0];
+    expect((await displayNamesOf(tx, [])).size).toBe(0);
+    expect(findMany).not.toHaveBeenCalled();
   });
 });

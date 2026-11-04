@@ -14,6 +14,7 @@ export * from './catalog.js';
 export * from './checkout.js';
 export * from './discovery.js';
 export * from './empty-input.js';
+export * from './enrollments.js';
 export {
   type IdempotentProcedure,
   idempotentProcedures,
@@ -28,3 +29,4 @@ export * from './slots.js';
 export * from './teacher-application.js';
 export * from './teacher-credentials.js';
 export * from './teacher-profile.js';
+export * from './teacher-students.js';
