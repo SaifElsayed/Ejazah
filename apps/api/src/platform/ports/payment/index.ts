@@ -15,8 +15,9 @@
 // other gateway, so `platform/web/stand-in-checkout.ts` mounts the page only with the stand-in.
 //
 // T056: `paymob` serves Paymob (`paymob.adapter.ts`) from its keys; every intention names the webhook
-// on `PUBLIC_WEBHOOK_ORIGIN` as its callback address. The configuration refuses `paymob` without
-// them (T056), and this entry refuses again, naming the key, so no caller can build it half-set.
+// on `PUBLIC_WEBHOOK_ORIGIN` as its callback address, and `SUPPORT_EMAIL` as its billing email (the
+// platform's address, never a student's). The configuration refuses `paymob` without them (T056),
+// and this entry refuses again, naming the key, so no caller can build it half-set.
 import type { Config } from '../../config/config.module.js';
 import { deriveStandInSecret } from '../inbound-event.js';
 import { FakePaymentAdapter, type StandInCheckout } from './fake.adapter.js';
@@ -42,7 +43,8 @@ export type PaymentConfig = Pick<
   | 'PAYMENT_GATEWAY_INTEGRATION_ID'
   | 'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID'
   | 'PUBLIC_WEBHOOK_ORIGIN'
->;
+> &
+  Partial<Pick<Config, 'SUPPORT_EMAIL'>>;
 
 // The payments module's `PAYMENT_WEBHOOK_PATH` (T077), written out as the stand-in writes it: the
 // kernel imports no module.
@@ -95,6 +97,7 @@ function paymobFrom(config: PaymentConfig): PaymobPaymentAdapter {
       ? {}
       : { splitIntegrationId: config.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID }),
     notificationUrl: new URL(WEBHOOK_PATH, origin).toString(),
+    billingEmail: required(config.SUPPORT_EMAIL, 'SUPPORT_EMAIL'),
   });
 }
 

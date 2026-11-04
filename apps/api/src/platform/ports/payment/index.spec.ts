@@ -102,6 +102,7 @@ describe('the gateway (T056)', () => {
     PAYMENT_GATEWAY_WEBHOOK_SECRET: 'hmac-placeholder',
     PAYMENT_GATEWAY_INTEGRATION_ID: 1_000_001,
     PUBLIC_WEBHOOK_ORIGIN: 'https://tunnel.example.com',
+    SUPPORT_EMAIL: 'support@ijazah.invalid',
   };
 
   afterEach(() => {
@@ -130,6 +131,7 @@ describe('the gateway (T056)', () => {
       {
         notification_url: 'https://tunnel.example.com/webhooks/payment',
         payment_methods: [1_000_001],
+        billing_data: { email: 'support@ijazah.invalid' },
       },
     ]);
   });
@@ -140,6 +142,7 @@ describe('the gateway (T056)', () => {
     'PAYMENT_GATEWAY_WEBHOOK_SECRET',
     'PAYMENT_GATEWAY_INTEGRATION_ID',
     'PUBLIC_WEBHOOK_ORIGIN',
+    'SUPPORT_EMAIL',
   ] as const)('refuses to build Paymob without %s, naming it', (key) => {
     const { [key]: _omitted, ...config } = paymob;
 

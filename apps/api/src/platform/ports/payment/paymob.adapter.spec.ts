@@ -14,6 +14,7 @@ const HMAC_SECRET = 'hmac-secret-placeholder';
 const INTEGRATION_ID = 1_000_001;
 const SPLIT_INTEGRATION_ID = 1_000_002;
 const NOTIFICATION_URL = 'https://tunnel.example.com/webhooks/payment';
+const BILLING_EMAIL = 'support@ijazah.invalid';
 const NOW = new Date('2026-11-04T10:00:00.400Z');
 const PAY_BY = new Date('2026-11-04T10:15:00.900Z');
 
@@ -68,6 +69,7 @@ function adapter(
     hmacSecret: HMAC_SECRET,
     integrationId: INTEGRATION_ID,
     notificationUrl: NOTIFICATION_URL,
+    billingEmail: BILLING_EMAIL,
     now: () => NOW,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
@@ -382,7 +384,13 @@ describe('creating a checkout (the Intention API, Unified Checkout)', () => {
       currency: 'EGP',
       payment_methods: [INTEGRATION_ID],
       items: [{ name: 'Package', amount: 25_000, quantity: 1 }],
-      billing_data: { first_name: 'NA', last_name: 'NA', email: 'NA', phone_number: 'NA' },
+      // The platform's email from the option (Paymob refuses "NA" there); the name and phone "NA".
+      billing_data: {
+        first_name: 'NA',
+        last_name: 'NA',
+        email: BILLING_EMAIL,
+        phone_number: 'NA',
+      },
       // From now, 10:00:00.400, to the latest expiry, 10:15:00.900, in whole seconds (900).
       expiration: 900,
       notification_url: NOTIFICATION_URL,

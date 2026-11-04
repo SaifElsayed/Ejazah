@@ -6,7 +6,9 @@
 // secret key as `Authorization: Token <key>`: the gross on the card integration, the order's
 // lifetime in whole seconds (`expiration`) and the webhook's address (`notification_url`). Paymob
 // requires `billing_data`; the port carries nothing of the student (no data leaves for a third party
-// that the checkout does not need), so each field is Paymob's "NA". The order's id is Paymob's
+// that the checkout does not need). The email is the platform's own address (`SUPPORT_EMAIL`, as
+// `billingEmail`), never the student's, as Paymob refuses "NA" there (its test account,
+// 2026-11-04); the name and phone are Paymob's "NA". The order's id is Paymob's
 // `intention_order_id`, the id its callbacks name under `obj.order.id`; the hosted page is the
 // Unified Checkout under the public key and the intention's client secret, an address that carries a
 // payment token and is stored encrypted only (R-DB-8). The expiry answered is the latest expiry's
@@ -175,6 +177,8 @@ export interface PaymobOptions {
   readonly splitIntegrationId?: number;
   /** Where Paymob posts its processed callbacks: the webhook on `PUBLIC_WEBHOOK_ORIGIN`. */
   readonly notificationUrl: string;
+  /** The billing email every intention carries: the platform's `SUPPORT_EMAIL`, never a student's. */
+  readonly billingEmail: string;
   readonly timeoutMs?: number;
   readonly fetch?: typeof fetch;
   readonly now?: () => Date;
@@ -219,7 +223,7 @@ export class PaymobPaymentAdapter implements PaymentPort {
         billing_data: {
           first_name: NOT_GIVEN,
           last_name: NOT_GIVEN,
-          email: NOT_GIVEN,
+          email: this.#options.billingEmail,
           phone_number: NOT_GIVEN,
         },
         expiration: lifetimeSeconds,
