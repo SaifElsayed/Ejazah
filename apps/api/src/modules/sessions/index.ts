@@ -22,3 +22,15 @@ export {
   generateForEnrollment,
   type ScheduledSession,
 } from './generation.service.js';
+
+/**
+ * T048 (R-210, FR-370, ERD §15 rule 19): the re-resolution job's recomputation of every scheduled
+ * session's cached instants, on the job's one transaction with the overlap constraints deferred,
+ * and its store over the `sessions` table.
+ */
+export {
+  type Reresolution,
+  reresolveScheduledSessions,
+  type SessionLengths,
+} from './reresolution.service.js';
+export { reresolutionStore } from './reresolution.repository.js';
