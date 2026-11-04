@@ -11,7 +11,7 @@
 // committed. The table is append-only (`20261007000500_append_only_tables`), so nothing here updates
 // or deletes a row of it. Since T004 the module's `_encrypted` column is reached here too, for the
 // `reencrypt-columns` job.
-import { type Piasters, toPlainNumber } from '@ijazah/money';
+import { type Piasters, piasters, toPlainNumber } from '@ijazah/money';
 
 import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encryption.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -31,6 +31,12 @@ export interface OrderRef {
   readonly enrollmentId: string;
 }
 
+/** What an order was created for: its amount and currency (T056). */
+export interface OrderCharge {
+  readonly gross_piasters: Piasters;
+  readonly currency: string;
+}
+
 /** A signed order event as it is kept: its order, and never the body, only its hash (R-SEC-2). */
 export interface OrderEventRecord {
   readonly paymentId: string;
@@ -41,11 +47,18 @@ export interface OrderEventRecord {
   readonly receivedAt: Date;
 }
 
-/** What a paid event reports, recorded as the gateway reported it (R-MONEY-5, FR-367). */
+/**
+ * What a paid event reports, recorded as the gateway reported it (R-MONEY-5, FR-367): a fee or net
+ * the event did not report is NULL, as the ERD lets it be (T056), never computed.
+ */
 export interface ReportedPayment {
   readonly gatewayTransactionId: string;
-  readonly gateway_fee_piasters: Piasters;
-  readonly net_piasters: Piasters;
+  readonly gateway_fee_piasters: Piasters | null;
+  readonly net_piasters: Piasters | null;
+}
+
+function asColumn(reported_piasters: Piasters | null): bigint | null {
+  return reported_piasters === null ? null : BigInt(toPlainNumber(reported_piasters));
 }
 
 /**
@@ -115,6 +128,15 @@ export class PaymentsRepository {
   }
 
   /** The order's status, read under `lockOrder`. */
+  /** The amount and currency the order was created for (T056). */
+  async chargeOf(paymentId: string): Promise<OrderCharge> {
+    const { grossPiasters, currency } = await this.#tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { grossPiasters: true, currency: true },
+    });
+    return { gross_piasters: piasters(Number(grossPiasters)), currency };
+  }
+
   async statusOf(paymentId: string): Promise<OrderStatus> {
     const { status } = await this.#tx.payment.findUniqueOrThrow({
       where: { id: paymentId },
@@ -142,8 +164,8 @@ export class PaymentsRepository {
           ? {}
           : {
               gatewayTransactionId: reported.gatewayTransactionId,
-              gatewayFeePiasters: BigInt(toPlainNumber(reported.gateway_fee_piasters)),
-              netPiasters: BigInt(toPlainNumber(reported.net_piasters)),
+              gatewayFeePiasters: asColumn(reported.gateway_fee_piasters),
+              netPiasters: asColumn(reported.net_piasters),
             }),
       },
       select: { id: true },

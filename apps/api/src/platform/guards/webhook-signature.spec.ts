@@ -32,6 +32,7 @@ import {
 import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mapError } from '../errors/error-filter.js';
+import { NonFinalEventError } from '../ports/inbound-event.js';
 import { createPaymentPort } from '../ports/payment/index.js';
 import type { GatewayEvent } from '../ports/payment/payment.port.js';
 import {
@@ -272,5 +273,30 @@ describe('verifying an inbound event (T133; review of PR #45, m1)', () => {
     );
 
     expect(seen).toEqual({ 'x-fake-signature': 'abc' });
+  });
+
+  it('hands on a signed event that is not final as it is, so the route can acknowledge it (T056)', async () => {
+    const notFinal = new NonFinalEventError();
+
+    await expect(verifyInboundEvent(() => Promise.reject(notFinal), rawBody, {})).rejects.toBe(
+      notFinal,
+    );
+  });
+
+  it("passes the verifier the request target's single-valued query parameters, none without one (T056)", async () => {
+    const seen: Readonly<Record<string, string | undefined>>[] = [];
+    const verify = (
+      _raw: Buffer,
+      _headers: Readonly<Record<string, string | undefined>>,
+      query: Readonly<Record<string, string | undefined>>,
+    ): Promise<string> => {
+      seen.push(query);
+      return Promise.resolve('ok');
+    };
+
+    await verifyInboundEvent(verify, rawBody, {}, '/webhooks/payment?hmac=ab%2012&x=1&x=2&empty=');
+    await verifyInboundEvent(verify, rawBody, {});
+
+    expect(seen).toEqual([{ hmac: 'ab 12', empty: '' }, {}]);
   });
 });

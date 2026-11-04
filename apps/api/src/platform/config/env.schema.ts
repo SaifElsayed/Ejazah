@@ -41,6 +41,29 @@ const encryptionKey = z
     error: 'must decode to exactly 32 bytes (openssl rand -base64 32)',
   });
 
+// T056: a gateway's integration id, a positive whole number as its dashboard shows it.
+const integrationId = z.coerce
+  .number()
+  .int({ error: 'must be a whole number' })
+  .positive({ error: 'must be a positive whole number' });
+
+// T056 (R-HONEST-1): the keys the gateway selected by `PAYMENT_GATEWAY=paymob` cannot start without.
+const paymobKeys = [
+  'PAYMENT_GATEWAY_SECRET_KEY',
+  'PAYMENT_GATEWAY_PUBLIC_KEY',
+  'PAYMENT_GATEWAY_WEBHOOK_SECRET',
+  'PAYMENT_GATEWAY_INTEGRATION_ID',
+  'PUBLIC_WEBHOOK_ORIGIN',
+] as const;
+
+// T056: what marks a live key from the gateway's dashboard (`sk_live`, `pk_live`, under a region's
+// prefix such as `egy_`). Outside development and test a key must carry it: the rule is "live", so
+// a key of a shape nobody named is refused as a test key is.
+const paymobLiveMarks = {
+  PAYMENT_GATEWAY_SECRET_KEY: 'sk_live',
+  PAYMENT_GATEWAY_PUBLIC_KEY: 'pk_live',
+} as const;
+
 function isEncryptionKey(value: unknown): value is string {
   return encryptionKey.safeParse(value).success;
 }
@@ -152,10 +175,16 @@ const envObject = z.object({
 
   // Selects the adapter behind the payment port (R-API-4). Real gateway names are added here by their
   // Phase 2 adapter task, together with the DB enum in T059. No default: a deployment must say which
-  // gateway it runs (R-HONEST-1).
-  PAYMENT_GATEWAY: z.enum(['fake']),
+  // gateway it runs (R-HONEST-1). T056 adds Paymob (FR-371, R-221): its secret key authorises the
+  // calls, its public key opens the hosted checkout, the webhook secret is its HMAC secret, and the
+  // integration ids name the card integration and, for the split, the auth integration.
+  PAYMENT_GATEWAY: z.enum(['fake', 'paymob']),
   PAYMENT_GATEWAY_API_KEY: nonEmpty.optional(),
   PAYMENT_GATEWAY_WEBHOOK_SECRET: nonEmpty.optional(),
+  PAYMENT_GATEWAY_SECRET_KEY: nonEmpty.optional(),
+  PAYMENT_GATEWAY_PUBLIC_KEY: nonEmpty.optional(),
+  PAYMENT_GATEWAY_INTEGRATION_ID: integrationId.optional(),
+  PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: integrationId.optional(),
 
   // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
   // stand-in until the phase that first calls the port adds its real member (FR-054), so each
@@ -238,6 +267,10 @@ const envKeyKinds = {
   PAYMENT_GATEWAY: 'platform',
   PAYMENT_GATEWAY_API_KEY: 'provider',
   PAYMENT_GATEWAY_WEBHOOK_SECRET: 'provider',
+  PAYMENT_GATEWAY_SECRET_KEY: 'provider',
+  PAYMENT_GATEWAY_PUBLIC_KEY: 'provider',
+  PAYMENT_GATEWAY_INTEGRATION_ID: 'provider',
+  PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: 'provider',
   VIDEO_PROVIDER: 'platform',
   PUSH_PROVIDER: 'platform',
   SMS_PROVIDER: 'platform',
@@ -330,6 +363,36 @@ export const envSchema = envObject.superRefine((env, ctx) => {
       path: ['PAYMENT_GATEWAY'],
       message: 'the stand-in gateway is refused outside development and test (R-HONEST-1)',
     });
+  }
+
+  // T056: Paymob cannot start without its keys and the origin its events are sent to. Outside
+  // development and test its test mode is refused as the stand-in is: a test payment confirms a
+  // booking nobody paid for (R-HONEST-1). The key is named, never its value (R-SEC-2).
+  if (env.PAYMENT_GATEWAY === 'paymob') {
+    for (const key of paymobKeys) {
+      if (env[key] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'required when PAYMENT_GATEWAY=paymob (T056)',
+        });
+      }
+    }
+    if (!standInsAllowed) {
+      for (const [key, mark] of Object.entries(paymobLiveMarks) as [
+        keyof typeof paymobLiveMarks,
+        string,
+      ][]) {
+        const value = env[key];
+        if (value !== undefined && !value.includes(mark)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `the gateway's test mode is refused outside development and test; a live key carries ${mark} (R-HONEST-1)`,
+          });
+        }
+      }
+    }
   }
 
   // The same for the video, push and messaging stand-ins (T153, FR-056): each answers without

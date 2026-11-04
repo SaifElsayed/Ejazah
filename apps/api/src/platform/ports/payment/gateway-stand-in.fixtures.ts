@@ -48,6 +48,15 @@ export interface StandInEvent extends SignedEvent {
 /** What the gateway reports on a paid event; by default no fee and the whole gross settled. */
 export type ReportedAmounts = Omit<PaidEventOptions, 'signature'>;
 
+/**
+ * A paid event that reports neither a fee nor a net, as Paymob's callback does (T056). Named here, in
+ * the port's folder, so a spec outside it asks for it without naming a gateway amount (R-MONEY-6).
+ */
+export const UNREPORTED_AMOUNTS: ReportedAmounts = {
+  gateway_fee_piasters: null,
+  net_piasters: null,
+};
+
 /** A provider event id the caller decides, so the same command twice is a replay. */
 export interface EventIdOption {
   readonly eventId?: string;

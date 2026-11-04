@@ -105,9 +105,12 @@ export interface RecipientEventOptions extends EventOptions {
 }
 
 export interface PaidEventOptions extends EventOptions {
-  /** As the gateway would report them; by default no fee, and the whole gross settled. */
-  readonly gateway_fee_piasters?: Piasters;
-  readonly net_piasters?: Piasters;
+  /**
+   * As the gateway would report them; by default no fee, and the whole gross settled. Null reports
+   * none, as a gateway whose event carries neither does (T056).
+   */
+  readonly gateway_fee_piasters?: Piasters | null;
+  readonly net_piasters?: Piasters | null;
 }
 
 interface Order {
@@ -120,6 +123,7 @@ interface Order {
 }
 
 const amount = z.number().transform((value) => piasters(value));
+const reportedAmount = amount.nullable();
 
 const eventBody = z.discriminatedUnion('type', [
   z.object({
@@ -128,8 +132,8 @@ const eventBody = z.discriminatedUnion('type', [
     order: z.string().min(1),
     transaction: z.string().min(1),
     gross_piasters: amount,
-    gateway_fee_piasters: amount,
-    net_piasters: amount,
+    gateway_fee_piasters: reportedAmount,
+    net_piasters: reportedAmount,
     currency: z.string().regex(/^[A-Z]{3}$/),
   }),
   z.object({
@@ -359,8 +363,12 @@ export class FakePaymentAdapter
             order: gatewayOrderId,
             transaction: `fake_txn_${randomUUID()}`,
             gross_piasters: order.gross_piasters,
-            gateway_fee_piasters: options.gateway_fee_piasters ?? piasters(0),
-            net_piasters: options.net_piasters ?? order.gross_piasters,
+            gateway_fee_piasters:
+              options.gateway_fee_piasters === undefined
+                ? piasters(0)
+                : options.gateway_fee_piasters,
+            net_piasters:
+              options.net_piasters === undefined ? order.gross_piasters : options.net_piasters,
             currency: order.currency,
           }
         : { id, type, order: gatewayOrderId };
