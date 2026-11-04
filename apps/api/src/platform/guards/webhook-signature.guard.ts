@@ -35,7 +35,7 @@
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { DomainError } from '../errors/domain-error.js';
-import { MalformedEventError } from '../ports/inbound-event.js';
+import { MalformedEventError, NonFinalEventError } from '../ports/inbound-event.js';
 
 /**
  * A port's verify operation: the raw body, the headers and the query parameters in, the verified
@@ -91,6 +91,8 @@ export async function verifyInboundEvent<T>(
     // Awaited inside the try, so a verifier that throws synchronously is refused like one that rejects.
     return await verify(rawBody, singleValued(headers), singleValuedQuery(target));
   } catch (error: unknown) {
+    // Signed, and not final yet (T056): handed on as it is, for the route to acknowledge.
+    if (error instanceof NonFinalEventError) throw error;
     if (error instanceof MalformedEventError) {
       throw new DomainError('VALIDATION_FAILED', 'The event could not be read.');
     }

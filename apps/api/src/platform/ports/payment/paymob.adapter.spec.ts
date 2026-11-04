@@ -5,7 +5,7 @@
 import { createHmac } from 'node:crypto';
 import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
-import { EventSignatureError, MalformedEventError } from './payment.port.js';
+import { EventSignatureError, MalformedEventError, NonFinalEventError } from './payment.port.js';
 import { GatewayRequestError, PaymobPaymentAdapter, paymobHmacMessage } from './paymob.adapter.js';
 
 const SECRET_KEY = 'egy_sk_test_placeholder';
@@ -301,10 +301,25 @@ describe("mapping Paymob's transaction states to the port's events", () => {
     expect(second.providerEventId).toBe(first.providerEventId);
   });
 
-  it('refuses, as a signed body it cannot read, a pending or authorise-only transaction and an unknown type', async () => {
+  // The owner's decision of 2026-11-04: Paymob sends a new callback once the state is final, so a
+  // pending or authorise-only one is acknowledged and changes nothing.
+  it('answers a signed pending or authorise-only transaction as not final', async () => {
     for (const obj of [transaction({ pending: true }), transaction({ is_auth: true })]) {
-      await expect(eventOf(obj)).rejects.toThrow(MalformedEventError);
+      await expect(eventOf(obj)).rejects.toThrow(NonFinalEventError);
     }
+  });
+
+  it('still refuses a pending transaction that is not signed, or signed under another secret', async () => {
+    const pending = transaction({ pending: true });
+    const { rawBody, query } = callback(pending, 'another-secret');
+
+    await expect(adapter().verifyAndParseEvent(rawBody, {}, query)).rejects.toThrow(
+      EventSignatureError,
+    );
+    await expect(adapter().verifyAndParseEvent(rawBody, {})).rejects.toThrow(EventSignatureError);
+  });
+
+  it('refuses, as a signed body it cannot read, an unknown type', async () => {
     const obj = transaction();
     const { query } = callback(obj);
     const rawBody = Buffer.from(JSON.stringify({ type: 'TOKEN', obj }));

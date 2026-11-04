@@ -22,7 +22,10 @@
 // are trusted: the mapping reads nothing else, so a field outside the signature cannot steer it. The
 // digests are compared in constant time. Every refusal is `EventSignatureError` (no or a wrong hmac,
 // or a body from which the message cannot be built) or `MalformedEventError` (signed, but a state
-// the port does not record), and neither carries the body or the digest (R-SEC-2). The callback
+// the port does not record), and neither carries the body or the digest (R-SEC-2). A signed pending
+// or authorise-only transaction is `NonFinalEventError`: Paymob sends the final state in a callback
+// of its own, so the webhook acknowledges it and records nothing (the owner's decision of
+// 2026-11-04). The callback
 // carries no fee and no net (`merchant_commission` is null on the documented sample), so a paid event
 // reports neither: they are never computed here (R-MONEY-5). A transaction's id and the state read
 // from it form the provider event id, so a callback Paymob sends again is a replay (R-MONEY-8).
@@ -42,6 +45,7 @@ import { z } from 'zod';
 import {
   EventSignatureError,
   MalformedEventError,
+  NonFinalEventError,
   type CancelOutcome,
   type Checkout,
   type CheckoutPayee,
@@ -244,7 +248,9 @@ export class PaymobPaymentAdapter implements PaymentPort {
       return Promise.resolve(this.#verified(rawBody, query.hmac));
     } catch (error: unknown) {
       return Promise.reject(
-        error instanceof MalformedEventError ? error : new EventSignatureError(),
+        error instanceof MalformedEventError || error instanceof NonFinalEventError
+          ? error
+          : new EventSignatureError(),
       );
     }
   }
@@ -335,7 +341,7 @@ function eventOf(transaction: SignedTransaction): GatewayEvent {
   const gatewayOrderId = String(transaction.order.id);
   const transactionId = String(transaction.id);
   const providerEventId = (type: GatewayEvent['type']): string => `paymob:${transactionId}:${type}`;
-  if (transaction.pending) throw new MalformedEventError();
+  if (transaction.pending) throw new NonFinalEventError();
   if (!transaction.success) {
     return { type: 'failed', providerEventId: providerEventId('failed'), gatewayOrderId };
   }
@@ -346,7 +352,7 @@ function eventOf(transaction: SignedTransaction): GatewayEvent {
     return { type: 'refunded', providerEventId: providerEventId('refunded'), gatewayOrderId };
   }
   // An authorisation alone has taken nothing yet; its capture is the payment.
-  if (transaction.is_auth && !transaction.is_capture) throw new MalformedEventError();
+  if (transaction.is_auth && !transaction.is_capture) throw new NonFinalEventError();
   let gross_piasters: Piasters;
   try {
     gross_piasters = piasters(transaction.amount_cents);

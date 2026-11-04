@@ -35,7 +35,10 @@ import {
   verifyInboundEvent,
 } from '../../platform/guards/webhook-signature.guard.js';
 import { type Logger, requestLogger } from '../../platform/logging/logger.js';
-import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js';
+import {
+  type GatewayEvent,
+  NonFinalEventError,
+} from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import { isOrderEvent, type OrderEventsService } from './order-events.service.js';
 import type { RecipientEventsService } from './recipient-events.service.js';
@@ -181,6 +184,15 @@ export function paymentWebhookRoute({
           : events.recipients.record(event, receipt));
         send(request, response, constants.HTTP_STATUS_OK, { received: true }, { close: false });
       } catch (error: unknown) {
+        if (error instanceof NonFinalEventError) {
+          // T056: the gateway sends the final state in a callback of its own; this one changes nothing.
+          requestLog.info(
+            {},
+            'Payment webhook acknowledged an event that is not final; nothing was recorded',
+          );
+          send(request, response, constants.HTTP_STATUS_OK, { received: true }, { close: false });
+          return;
+        }
         if (error instanceof BodyAbortedError) {
           requestLog.info({}, 'Payment webhook aborted by the sender');
           return;

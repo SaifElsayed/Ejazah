@@ -81,7 +81,7 @@ export type GatewayEvent =
     };
 
 // The refusals of an inbound event, shared with the video port since T118.
-export { EventSignatureError, MalformedEventError } from '../inbound-event.js';
+export { EventSignatureError, MalformedEventError, NonFinalEventError } from '../inbound-event.js';
 
 export interface PaymentPort {
   /**
