@@ -151,13 +151,13 @@ describe('the local check (.husky/pre-commit, T082)', () => {
 });
 
 describe('the pipeline check (ci.yml secret-scan, T083)', () => {
-  it('passes a clean history', () => {
+  // B31a (the note under 003:T080): Gitleaks over a repository's history ran past the default five
+  // seconds in a full run on `ijazah_integrity`; each history case has the staged-change case's room.
+  it('passes a clean history', { timeout: 15_000 }, () => {
     const dir = repository();
     expect(run(pipelineCommand(), dir).status).toBe(0);
   });
 
-  // B31a (the note under 003:T080): two commits and Gitleaks over the history ran past the default
-  // five seconds in a full run on `ijazah_integrity`; the room is the staged-change case's.
   it.each(['src/config.ts', 'specs/001-foundations/notes.md'])(
     'rejects a secret committed in %s and removed in a later commit',
     { timeout: 15_000 },
