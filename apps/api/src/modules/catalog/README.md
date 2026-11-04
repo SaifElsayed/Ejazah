@@ -30,6 +30,16 @@ Discovery is not a module. Its catalog half is `discovery.service.ts` with `disc
 
 The rules live in the services: `credential-review.service.ts` (the administrator's credential review, T069, T155), `subjects.service.ts` (the public subjects list, T038), `packages.service.ts` (the teacher's packages, T018) and `slots.service.ts` (the teacher's weekly slots, T019). The queries live in `credential-review.repository.ts` (the review over `teacher_credentials` and `isnad_entries`), `credentials.repository.ts` (the credential rows as verification's application and credentials read and write them through this module's entry, the subjects an approval grants and a revocation removes, the admin home's credentials card), `subjects.repository.ts`, `packages.repository.ts` and `slots.repository.ts`. A router is thin: validate, call one service method, return: `subjects.router.ts` (under `catalog.subjects`), `credentials-admin.router.ts` (the administrator surface's `credentials` namespace, mounted by `admin.router.ts`, its service composed by the admin module), `packages.router.ts` (under `teacher.packages`) and `slots.router.ts` (under `teacher.slots`). What only booking can answer, whether a slot or a package is in use, comes through the `CatalogUse` port (`catalog-use.port.ts`, T020) that `main.ts` binds. `teacher_signatures` has no code yet. `index.ts` is the only import path.
 
+## Public entry
+
+Catalog imports identity alone (ARCHITECTURE §4, the module graph). What `index.ts` gives the others, each read or write on the caller's transaction:
+
+- Booking (Phase 2): `offeredSlotsOf` (the active slots of the lengths of each teacher's active packages, for discovery's nearest slot and the booking sheet, T026, T032); `readSlot` (a slot by its id, active or not, read under the slot's lock by Pay and the confirm job, T036, T039); `lockTeacherSlots` and `teacherSlotsOf` (the slots' key and every slot of a teacher, for the release of an ended account's holds, after the account's lock and before the holds', T041); `bookablePackageOf`, `packageOwnerOf`, `teacherPackageOf` and `subjectSummariesOf` (the booking sheet's package, the checkout's summary, an enrollment's snapshot subject, T032, T036, T037); the `CatalogUse` type, which booking's `createCatalogUse` implements (R-207).
+- The `confirm-enrollment` job: `readSlot`.
+- Verification (Phase 1): the credential rows (`addCredential`, `listCredentials`, `replaceCredentialDocument`, `closeUndecidedCredentials`, `credentialsOfTeachers`, `grantSubjects`) and `activeSubjectsAmong`.
+- The admin module: `createCredentialReviewService`, `readCredentialQueue`, `revokeSubjects`.
+- The composition root and the surfaces: `createCatalogServices` (over the `CatalogUse` that `main.ts` binds), `createDiscoveryCatalog` (handed to booking's `discovery` services, T026), `createSubjectsService`, `createDocumentReferences`, and the routers `packagesRouter`, `slotsRouter`, `subjectsRouter` and `credentialsAdminRouter`. The stores (`credentialReviewStore`, `packagesStore`, `discoveryStore`) are exported for the probes under `tests/db-integrity/`.
+
 ## Requirement ids
 
 - FR-153 (a subject becomes an approved teacher's on its credential's approval): `credential-review.service.ts`, `credentials.repository.ts`.
@@ -38,3 +48,5 @@ The rules live in the services: `credential-review.service.ts` (the administrato
 - FR-331 to FR-336, FR-338 (discovery's cards, tabs, filters and the teacher profile): `discovery.service.ts`, `discovery.repository.ts`, `discovery-cursor.ts`.
 - FR-311, FR-312, FR-314, FR-315 (the teacher's packages): `packages.service.ts`, `packages.repository.ts`, `packages.router.ts`.
 - FR-313, FR-317, FR-318 (the teacher's weekly slots: no overlap on the week, a slot in use keeps its day, start and length): `slots.service.ts`, `slots.repository.ts`, `slots.router.ts`.
+- FR-337 (a per-session price only from `packages/money`): `discovery.service.ts`, `packages.service.ts`.
+- FR-350, FR-358 (the package, slots and subjects booking's sheet and checkout read through this entry): `packages.repository.ts`, `slots.repository.ts`, `subjects.repository.ts`.
