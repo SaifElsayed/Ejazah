@@ -660,7 +660,7 @@ Separate from `users` entirely (FR-ADMIN-1) — different auth, different tables
 | mfa_last_accepted_step | bigint, nullable | The last TOTP step accepted, so a code is never accepted twice within its step (RFC 6238 §5.2). A counter, not a secret: the schema check's allow-list names it |
 | mfa_enrolled_at | timestamptz, nullable | Null until the first code is confirmed at setup; the secret exists from invite |
 | failed_sign_in_count / locked_until_at | int, default 0; timestamptz, nullable | The lockout pair (settings `admin_lockout_attempts`, `admin_lockout_minutes`, ADR 0019 D3); a lock never exists without the count that caused it (§15 rule 30) |
-| invited_by_admin_id / invited_at | FK → admin_users, nullable; timestamptz, nullable | |
+| invited_by_admin_id / invited_at | FK → admin_users, nullable; timestamptz, nullable | `invited_by_admin_id` NULL means made without an administrator: the seed, or the development script of `specs/003-booking/tasks.md` T097 (`scripts/dev/admin-invite.ts --email --name`) |
 | password_set_at / disabled_at / last_sign_in_at | timestamptz, nullable | `is_active` is held equal to `disabled_at IS NULL` by §15 rule 31 |
 | display_name | text | |
 | is_active | boolean | |
@@ -1091,5 +1091,6 @@ T056 of `specs/003-booking/tasks.md` integrates Paymob, the gateway's test accou
 | # | Change | Migration |
 |---|---|---|
 | 1 | §7 `payments.gateway`: the enum is `fake · paymob`; the adapter is still selected by config (R-API-4), production refusing `fake` and the gateway's test keys | `20261104120000_payment_gateway_paymob` |
+| 2 | §12 `admin_users.invited_by_admin_id`: NULL means made without an administrator: the seed, or the development script of T097 in `specs/003-booking/tasks.md` (B32, the owner's decision of 2026-11-04). A note only, no change to the column | none |
 
 No table is added: 42 tables.

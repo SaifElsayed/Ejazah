@@ -297,6 +297,10 @@ invite: the worker (`pnpm dev` starts it) writes the mail where the mails land
 (Local setup). The link opens the panel's `/set-password`, then the second
 factor's setup; save the recovery codes it shows once. Run it again for a fresh
 link after `admin_invite_ttl_hours`; once a password is set it queues nothing.
+When nobody knows an existing administrator's password, invite a new one the
+same way (T097): `pnpm exec tsx scripts/dev/admin-invite.ts --email <x> --name <y>`
+writes it through `admins.add`'s repository, invited by nobody and with no audit
+entry, refuses an address another administrator holds, and queues the invite.
 The panel calls the API at `VITE_API_URL` (in `apps/admin/.env`), and the API
 answers it only when `ADMIN_ALLOWED_ORIGINS` lists `http://localhost:5173`.
 

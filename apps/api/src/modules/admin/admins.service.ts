@@ -83,7 +83,10 @@ export class AdminsService {
     this.#now = dependencies.now ?? (() => new Date());
   }
 
-  /** `admins.add`: the new administrator's id; the invite is queued. */
+  /**
+   * `admins.add`: the new administrator's id; the invite is queued. `scripts/dev/admin-invite.ts`
+   * (T097) writes the same row with SQL, so a change made here is made there too.
+   */
   async add(
     tx: Tx,
     actorId: string,
