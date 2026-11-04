@@ -389,6 +389,54 @@ describe('a paid event (FR-360, FR-367, R-214)', () => {
   });
 });
 
+// T056 (the owner's decision of 2026-11-04): a paid event whose amount or currency is not its
+// order's moves nothing and is refused, and the difference is reported for a refund from the
+// gateway's dashboard, with no personal data.
+describe('a paid event that does not match its order (T056)', () => {
+  /** Plants an order, then changes its row's amount or currency by SQL, the stand-in's left as created. */
+  async function mismatchedOrder(change: 'amount' | 'currency'): Promise<Order> {
+    const order = await plantOrder();
+    await db.query(
+      change === 'amount'
+        ? 'UPDATE payments SET gross_piasters = gross_piasters + 1 WHERE id = $1'
+        : "UPDATE payments SET currency = 'USD' WHERE id = $1",
+      [order.paymentId],
+    );
+    return order;
+  }
+
+  it.each([
+    ['amount', { order: 25_001, currency: 'EGP' }],
+    ['currency', { order: 25_000, currency: 'USD' }],
+  ] as const)(
+    'whose %s differs: refused, the order unchanged and nothing recorded or enqueued, the difference reported',
+    async (change, ours) => {
+      const order = await mismatchedOrder(change);
+      const event = stand.paid(order.gatewayOrderId);
+      const sent = JSON.parse(event.rawBody.toString('utf8')) as { transaction: string };
+
+      expect(await stand.deliver(event)).toBe(400);
+
+      expect(await orderOf(order.paymentId)).toEqual({
+        status: 'created',
+        transaction: null,
+        address: ADDRESS,
+        as_reported: null,
+      });
+      expect(await eventsOf(order.paymentId)).toEqual([]);
+      expect(enqueued).toEqual([]);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]?.name).toBe('PaidAmountMismatchError');
+      expect((reported[0] as Error & { details?: unknown }).details).toEqual({
+        gatewayOrderId: order.gatewayOrderId,
+        gatewayTransactionId: sent.transaction,
+        callback: { amount: 25_000, currency: 'EGP' },
+        order: { amount: ours.order, currency: ours.currency },
+      });
+    },
+  );
+});
+
 describe('a failed event (FR-365, R-214)', () => {
   it('moves the order to failed, clears the address, appends order_failed with the order, and leaves the hold and the enrollment', async () => {
     const order = await plantOrder();

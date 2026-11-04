@@ -136,7 +136,10 @@ export function paymobHmacMessage(obj: Record<string, unknown>): string {
 // has no separators, so a character could move across the boundary of two neighbouring fields and
 // leave the digest as it was; each boundary the mapping depends on is closed by a shape a moved
 // character breaks: the time must start as a timestamp (after the amount), the currency is three
-// capitals, and the integration (after the transaction id) must be this adapter's.
+// capitals, and the integration (after the transaction id) must be this adapter's. One boundary
+// stays open here, the order id's and the owner's (a digit moved between them names a shorter
+// order id); it is closed by the payments module, which refuses a paid event whose amount or
+// currency is not its order's (T056, `order-events.service.ts`).
 const signedTransaction = z.object({
   id: z.number().int(),
   amount_cents: z.number(),
