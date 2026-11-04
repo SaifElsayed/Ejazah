@@ -5,6 +5,7 @@
 // sessions the server counted (FR-392), and the day it runs until. No price and no photo: the
 // summary carries neither (T049).
 import type { StudentEnrollmentItem } from '@ijazah/contracts';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { Badge, Card, Stats, Text } from '../../../../design/primitives';
@@ -52,13 +53,19 @@ export function PackageLine({ summary }: { readonly summary: StudentEnrollmentIt
   );
 }
 
-/** The enrollment's status badge (Confirming while it awaits its payment's confirmation). */
+/**
+ * The enrollment's status badge; one awaiting payment draws `pending`, its order's badge
+ * (`PendingOrderBadge`), or nothing.
+ */
 export function EnrollmentStatusBadge({
   status,
+  pending = null,
 }: {
   readonly status: StudentEnrollmentItem['status'];
+  readonly pending?: ReactNode;
 }) {
   const t = useT();
+  if (status === 'pending_payment') return pending;
   const badge = ENROLLMENT_STATUS[status];
   return <Badge label={t(badge.label)} tone={badge.tone} />;
 }
@@ -82,11 +89,14 @@ export function EnrollmentCard({
   item,
   zone,
   onPress,
+  pendingBadge,
 }: {
   readonly item: StudentEnrollmentItem;
   /** The student's own zone. */
   readonly zone: string;
   readonly onPress: () => void;
+  /** The badge of an enrollment awaiting payment (`PendingOrderBadge`). */
+  readonly pendingBadge?: ReactNode;
 }) {
   const t = useT();
   const format = useFormatters();
@@ -111,7 +121,7 @@ export function EnrollmentCard({
         }}
       >
         <Text tone="muted">{completedOn ?? item.teacher.displayName}</Text>
-        <EnrollmentStatusBadge status={item.status} />
+        <EnrollmentStatusBadge status={item.status} pending={pendingBadge} />
       </View>
       {next === undefined ? null : (
         <View style={{ gap: tokens.space['1'] }}>

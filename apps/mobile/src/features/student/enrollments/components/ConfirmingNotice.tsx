@@ -1,22 +1,17 @@
 // T050 (FR-384, R-HONEST-1, ADR 0021 D4): what a screen says once FR-383's schedule ends with the
 // enrollment still Confirming. Plainly: the gateway has not reported the payment yet; a payment
 // made is confirmed when it does and appears on this screen; the order reference (from
-// `checkout.status`, read since this notice opened, so an earlier order's never shows), the support
-// address (`platform.publicConfig`) and «تحقق مرة أخرى», which reads the enrollment again. It never
-// says the payment failed: only the server's report of a failed order or a cancelled enrollment
-// could, and those are the checkout's screens.
+// `checkout.status`: a screen draws this notice only once that read, answered since the screen
+// opened, says the order is Confirming, so an earlier order's never shows), the support address
+// (`platform.publicConfig`) and «تحقق مرة أخرى», which reads the enrollment again. It never says the
+// payment failed: only the server's report of a failed order or a cancelled enrollment could.
 import { View } from 'react-native';
 
 import { Banner, Button, Summary, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
-import { useAnsweredSinceMount } from '../../../shared/states/fresh';
 import { OrderReference } from '../../checkout/components/OutcomeParts';
-import {
-  checkoutStatusQueryKey,
-  useCheckoutStatus,
-  usePublicConfig,
-} from '../../checkout/outcome-api';
+import { useCheckoutStatus, usePublicConfig } from '../../checkout/outcome-api';
 
 export function ConfirmingNotice({
   enrollmentId,
@@ -27,9 +22,8 @@ export function ConfirmingNotice({
 }) {
   const t = useT();
   const status = useCheckoutStatus(enrollmentId);
-  const answered = useAnsweredSinceMount(status, checkoutStatusQueryKey(enrollmentId));
   const config = usePublicConfig();
-  const reference = answered ? status.data?.lastOrder.reference : undefined;
+  const reference = status.data?.lastOrder.reference;
   const supportEmail = config.data?.supportEmail;
   const rows = [
     ...(reference === undefined

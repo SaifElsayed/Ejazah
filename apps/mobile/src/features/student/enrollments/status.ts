@@ -1,8 +1,8 @@
 // T050 (FR-390; screens.md §6 `Enrollments`, `EnrollmentsEnded`, `SessionStates`): an enrollment's
 // and a session's status as their badges say them, in the tones the boards draw. An enrollment
-// awaiting its payment's confirmation is Confirming (FR-383). Every session status the API can
-// answer has its badge, though this phase writes only `scheduled`; the two statuses awaiting the
-// administration's review share one word, as `SessionStates` draws them.
+// awaiting payment takes its badge from its last order (`order-state.ts`). Every session status
+// the API can answer has its badge, though this phase writes only `scheduled`; the two statuses
+// awaiting the administration's review share one word, as `SessionStates` draws them.
 import type { EnrollmentStatus, SessionStatus } from '@ijazah/contracts';
 
 import type { BadgeProps } from '../../../design/primitives';
@@ -13,8 +13,10 @@ interface StatusBadge {
   readonly tone: BadgeProps['tone'];
 }
 
-export const ENROLLMENT_STATUS: Readonly<Record<EnrollmentStatus, StatusBadge>> = {
-  pending_payment: { label: 'status.enrollment.confirming', tone: 'warning' },
+/** An enrollment awaiting payment takes its badge from its last order (`order-state.ts`). */
+export const ENROLLMENT_STATUS: Readonly<
+  Record<Exclude<EnrollmentStatus, 'pending_payment'>, StatusBadge>
+> = {
   confirmed: { label: 'status.enrollment.confirmed', tone: 'success' },
   completed: { label: 'status.enrollment.completed', tone: 'success' },
   terminated_no_show: { label: 'status.enrollment.terminatedNoShow', tone: 'danger' },

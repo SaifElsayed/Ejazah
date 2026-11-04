@@ -3,12 +3,14 @@
 // package with its track, the status, the weekly time in the student's zone and the teacher's, the
 // sessions held of the package's count and the day it runs until, the upcoming, completed and
 // remaining sessions (FR-392); then every session by number, its day and time in both zones and its
-// status's badge. A Confirming enrollment is read on FR-383's schedule and, once the window ends
-// unconfirmed, says FR-384's message. Drawn only on an answer read since the screen opened. The
+// status's badge. One awaiting payment says what its last order says (`PendingOrderBadge`): a
+// Confirming one is read on FR-383's schedule and, once the window ends unconfirmed, says FR-384's
+// message. Drawn only on an answer read since the screen opened. The
 // back arrow returns where it was opened from (the tab or the home).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import {
@@ -29,11 +31,13 @@ import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useOnline } from '../../../../lib/online';
-import { enrollmentQueryKey, isConfirming, useEnrollment } from '../api';
+import { enrollmentQueryKey, isAwaitingPayment, useEnrollment } from '../api';
 import { ConfirmingNotice } from '../components/ConfirmingNotice';
 import { EnrollmentStatusBadge, PackageLine, SessionCounts } from '../components/EnrollmentCard';
+import { PendingOrderBadge } from '../components/PendingOrderBadge';
 import { SessionWhen, zonesOf } from '../components/SessionWhen';
 import { useConfirmingSchedule, useScheduledRead } from '../confirming';
+import { useOrderStates } from '../order-state';
 import { SESSION_STATUS } from '../status';
 
 /** The route's `id`, or '' when the link carries none. */
@@ -49,12 +53,18 @@ export function EnrollmentDetail() {
   const me = useMe();
   const schedule = useConfirmingSchedule();
   const enrollment = useEnrollment(enrollmentId, schedule.everyMs);
+  const orders = useOrderStates();
   const read = useScheduledRead(
     schedule,
     enrollment,
     enrollmentQueryKey(enrollmentId),
-    isConfirming,
+    (answer) => isAwaitingPayment(answer) && orders.isConfirming(answer.enrollmentId),
   );
+  const failed = read.failed || orders.failed([enrollmentId]);
+  const retry = () => {
+    read.retry();
+    orders.retry();
+  };
   const zone = me.data?.timezone;
   const header = (
     <NavHeader
@@ -78,10 +88,22 @@ export function EnrollmentDetail() {
   const shown = read.data;
   return (
     <StackScreen header={header}>
-      <OfflineNotice onRetry={read.retry} />
-      {read.failed && online ? <LoadError onRetry={read.retry} /> : null}
-      <Overview enrollment={shown} zone={zone} />
-      {read.over && isConfirming(shown) ? (
+      <OfflineNotice onRetry={retry} />
+      {failed && online ? <LoadError onRetry={retry} /> : null}
+      <Overview
+        enrollment={shown}
+        zone={zone}
+        pendingBadge={
+          isAwaitingPayment(shown) ? (
+            <PendingOrderBadge
+              enrollmentId={shown.enrollmentId}
+              everyMs={schedule.everyMs}
+              onReport={orders.report}
+            />
+          ) : undefined
+        }
+      />
+      {read.over && isAwaitingPayment(shown) && orders.isConfirming(shown.enrollmentId) ? (
         <ConfirmingNotice enrollmentId={shown.enrollmentId} onCheckAgain={read.retry} />
       ) : null}
       {shown.sessions.length === 0 ? null : (
@@ -100,9 +122,11 @@ export function EnrollmentDetail() {
 function Overview({
   enrollment,
   zone,
+  pendingBadge,
 }: {
   readonly enrollment: EnrollmentsGetOutput;
   readonly zone: string;
+  readonly pendingBadge: ReactNode;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -117,7 +141,7 @@ function Overview({
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text variant="headline">{enrollment.teacher.displayName}</Text>
         </View>
-        <EnrollmentStatusBadge status={enrollment.status} />
+        <EnrollmentStatusBadge status={enrollment.status} pending={pendingBadge} />
       </View>
       <PackageLine summary={enrollment.summary} />
       {weekly === undefined ? null : (

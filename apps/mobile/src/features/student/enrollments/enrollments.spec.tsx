@@ -44,6 +44,7 @@ import {
   ENDED_ENROLLMENTS_QUERY_KEY,
   enrollmentQueryKey,
 } from './api';
+import { Main } from '../home';
 import { EnrollmentDetail, Enrollments, EnrollmentsEnded } from './index';
 
 let mockApi = fakeApi();
@@ -585,5 +586,71 @@ describe('EnrollmentDetail', () => {
     expect(await screen.findByText(TEACHER)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
     expect(mockBack).toHaveBeenCalled();
+  });
+});
+
+// The owner's decision of 2026-11-04 (reading 6 of B31's report refused): a pending enrollment
+// whose last order the server reports failed or expired is not Confirming. It says «بانتظار الدفع»,
+// runs no schedule and never says FR-384's message; one whose order is not read since the screen
+// opened claims nothing. On the tab, the home and the detail alike.
+describe.each<[string, () => ReactElement]>([
+  ['Enrollments', () => <Enrollments />],
+  ['Main', () => <Main />],
+  ['EnrollmentDetail', () => <EnrollmentDetail />],
+])('%s: a pending enrollment’s last order', (_name, ui) => {
+  const answer = (item: StudentEnrollmentItem) => {
+    mockApi.api.enrollments.list.query.mockResolvedValue(list(item));
+    mockApi.api.enrollments.get.query.mockResolvedValue({ ...item, sessions: [] });
+  };
+  const orderIs = (status: CheckoutStatusOutput['lastOrder']['status']): CheckoutStatusOutput => ({
+    ...statusOf,
+    lastOrder: { status, reference: REFERENCE },
+  });
+  const reads = () => listCalls() + getCalls();
+  beforeEach(() => {
+    mockParams = { id: SECOND_ENROLLMENT_ID };
+  });
+
+  it.each(['failed', 'expired'] as const)(
+    'an order the server reports %s: «بانتظار الدفع», no schedule and no FR-384 message',
+    async (status) => {
+      jest.useFakeTimers();
+      answer(confirming);
+      mockApi.api.checkout.status.query.mockResolvedValue(orderIs(status));
+      await renderIn('rtl', within(ui())());
+      expect(await screen.findByText(ar('status.enrollment.pendingPayment'))).toBeTruthy();
+      expect(screen.queryByText(ar('status.enrollment.confirming'))).toBeNull();
+      const before = reads();
+      await elapse(WINDOW_MS);
+      expect(reads()).toBe(before);
+      expect(screen.queryByText(ar('student.enrollments.confirming.title'))).toBeNull();
+      expect(screen.getByText(ar('status.enrollment.pendingPayment'))).toBeTruthy();
+    },
+  );
+
+  it('an order that fails inside the window: the Confirming badge goes, and no message follows', async () => {
+    jest.useFakeTimers();
+    answer(confirming);
+    mockApi.api.checkout.status.query.mockResolvedValue(orderIs('created'));
+    await renderIn('rtl', within(ui())());
+    expect(await screen.findByText(ar('status.enrollment.confirming'))).toBeTruthy();
+
+    mockApi.api.checkout.status.query.mockResolvedValue(orderIs('failed'));
+    await elapse(POLL_MS);
+    expect(await screen.findByText(ar('status.enrollment.pendingPayment'))).toBeTruthy();
+    expect(screen.queryByText(ar('status.enrollment.confirming'))).toBeNull();
+    const before = reads();
+    await elapse(WINDOW_MS);
+    expect(reads()).toBe(before);
+    expect(screen.queryByText(ar('student.enrollments.confirming.title'))).toBeNull();
+  });
+
+  it('an order not read since the screen opened: no status claimed', async () => {
+    answer(confirming);
+    mockApi.api.checkout.status.query.mockReturnValue(new Promise(() => undefined));
+    await renderIn('rtl', within(ui())());
+    expect(await screen.findByText('الشيخ يوسف')).toBeTruthy();
+    expect(screen.queryByText(ar('status.enrollment.confirming'))).toBeNull();
+    expect(screen.queryByText(ar('status.enrollment.pendingPayment'))).toBeNull();
   });
 });

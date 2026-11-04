@@ -29,8 +29,8 @@ export function isEnrollmentId(enrollmentId: string): boolean {
   return enrollmentsGetInput.safeParse({ enrollmentId }).success;
 }
 
-/** The Confirming state: the enrollment awaits its payment's confirmation (FR-383, FR-384). */
-export function isConfirming(item: Pick<StudentEnrollmentItem, 'status'>): boolean {
+/** Awaiting payment: Confirming or not by its last order (`order-state.ts`; FR-383, FR-384). */
+export function isAwaitingPayment(item: Pick<StudentEnrollmentItem, 'status'>): boolean {
   return item.status === 'pending_payment';
 }
 
