@@ -8,7 +8,10 @@
 //   - an expired hold's enrollment cancelled `payment_failed` when its last order failed and
 //     `payment_expired` otherwise, with one `enrollment_events` row each, its created order marked
 //     `expired`; one with a `paid` order left awaiting payment, with no row;
-//   - not handed off: a paid order recorded within the timeout, and one whose enrollment has a case;
+//   - not handed off: a paid order recorded within the timeout, and one a case of its enrollment
+//     covers (T082: recorded before the case was opened, while it is open, or before it was
+//     resolved or dismissed); one recorded after every case was closed is handed on once, the job
+//     opening one `duplicate_payment` case that covers it from then on;
 //   - `expire-holds` releases the expired holds that carry no enrollment, and nothing else;
 //   - both sweeps run twice as once.
 //
@@ -101,7 +104,36 @@ async function paidThroughWebhook(gatewayOrderId: string): Promise<void> {
   expect(await webhook.stand.deliver(webhook.stand.paid(gatewayOrderId))).toBe(200);
 }
 
-/** Confirmed, or cancelled with exactly one compensation case: never cancelled without one. */
+/** A `slot_unavailable` case opened by moderation on the enrollment, committed. Its id. */
+async function openCase(enrollmentId: string): Promise<string> {
+  const { caseId } = await database.$transaction((tx) =>
+    openCompensationCase(tx, enrollmentId, 'slot_unavailable'),
+  );
+  return caseId;
+}
+
+/**
+ * Closes the case as an administrator's decision would (Phase 3 writes `resolved_at` with the
+ * status, the note under T082). `earlier` moves its opening and its closing a few minutes back, so
+ * an order paid after it is later by more than the millisecond the rule compares at.
+ */
+async function closeCase(
+  caseId: string,
+  status: 'resolved' | 'dismissed',
+  earlier = false,
+): Promise<void> {
+  // The database's clock, as the paid event's and the case's own instants.
+  await database.$executeRaw`
+    UPDATE disputes
+       SET status = ${status}::dispute_status,
+           resolution = CASE WHEN ${status} = 'resolved'
+                             THEN 'compensation_ordered'::dispute_resolution END,
+           resolution_notes = 'Probe decision',
+           created_at = CASE WHEN ${earlier} THEN now() - interval '3 minutes' ELSE created_at END,
+           resolved_at = CASE WHEN ${earlier} THEN now() - interval '2 minutes' ELSE now() END,
+           updated_at = now()
+     WHERE id = ${caseId}::uuid`;
+}
 async function honoured(enrollmentId: string): Promise<'confirmed' | 'cancelled with one case'> {
   const { status } = await enrollmentOf(enrollmentId);
   const cases = await casesOf(enrollmentId);
@@ -316,16 +348,45 @@ describe('expire-pending-payments hands on only what awaits confirmation', () =>
     expect(handedOff).not.toContain(paid);
   });
 
-  it('a paid order recorded after its enrollment’s case was opened, its enqueue lost: handed on, the job’s rule', async () => {
+  it('not a paid order recorded while its enrollment’s case is open (T082)', async () => {
     const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
-    await database.$transaction((tx) =>
-      openCompensationCase(tx, on.enrollmentId, 'slot_unavailable'),
-    );
+    await openCase(on.enrollmentId);
+    const paid = await order(on.enrollmentId);
+    handedOff.length = 0;
+    await sweep();
+    expect(handedOff).not.toContain(paid);
+  });
+
+  it.each(['resolved', 'dismissed'] as const)(
+    'not a paid order recorded before its enrollment’s case was %s (T082)',
+    async (status) => {
+      const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
+      const caseId = await openCase(on.enrollmentId);
+      const paid = await order(on.enrollmentId);
+      await closeCase(caseId, status);
+      handedOff.length = 0;
+      await sweep();
+      expect(handedOff).not.toContain(paid);
+    },
+  );
+
+  it('a paid order recorded after its enrollment’s case was closed, its enqueue lost: handed on once, one duplicate_payment case (T082)', async () => {
+    const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
+    await closeCase(await openCase(on.enrollmentId), 'resolved', true);
     const paid = await order(on.enrollmentId);
     await sweepThenConfirm(paid);
-    // The job's own rule (step 3 of `confirm-enrollment`): an enrollment with a case does nothing.
-    expect(await enrollmentOf(on.enrollmentId)).toMatchObject({ status: 'cancelled' });
-    expect(await casesOf(on.enrollmentId)).toHaveLength(1);
+    expect(await enrollmentOf(on.enrollmentId)).toMatchObject({
+      status: 'cancelled',
+      cancellationReason: 'payment_expired',
+    });
+    expect((await casesOf(on.enrollmentId)).map(({ reason, status }) => [reason, status])).toEqual([
+      ['slot_unavailable', 'resolved'],
+      ['duplicate_payment', 'open'],
+    ]);
+    // The case the job opened covers the order: the next run hands it on no more.
+    handedOff.length = 0;
+    await sweep();
+    expect(handedOff).not.toContain(paid);
   });
 
   it('not a paid order whose enrollment is confirmed', async () => {

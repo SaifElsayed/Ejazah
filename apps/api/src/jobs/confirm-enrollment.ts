@@ -15,13 +15,16 @@
 // THE DECISION, in R-215's order, in one transaction:
 //   1. an order that is not `paid` (a `refunded` one), or that a compensation case covers, is
 //      ignored: a case covers every order of its enrollment whose paid event was recorded before the
-//      case was opened, both instants the database's (the note under T035; `disputes` has no payment
-//      column, so the covered order is read from the two instants and recorded nowhere new);
+//      case was opened, while it is open, or before it was closed (`resolved_at`), all three the
+//      database's instants, over every case of the enrollment (`case-cover.ts`, T082; the note under
+//      T035: `disputes` has no payment column, so the covered order is read from the instants and
+//      recorded nowhere new). An order paid while a case is open joins that case: no new one;
 //   2. an enrollment confirmed by another order (its `confirmed` event names another, or it is
 //      confirmed with none) gets one `duplicate_payment` case, joined while open, and nothing else
-//      (FR-375); a replay of the confirming order does nothing. This runs before 3, so a paid order
-//      after a resolved duplicate case opens a new one;
-//   3. an enrollment with a compensation case does nothing (FR-PAYG-19);
+//      (FR-375); a replay of the confirming order does nothing;
+//   3. an enrollment with compensation cases, all closed before this order was paid (1 found none
+//      covering it), gets one new `duplicate_payment` case, as 2, and nothing else (FR-PAYG-19 as
+//      amended 2026-11-04, the owner's decision); the case, open, covers the order from then on;
 //   4. an enrollment R-219 cancelled takes the refusal at once, its reason kept, `party_restricted`;
 //   5. its hold active: converted, confirmed, its sessions generated (FR-361), no party checked;
 //   6. its hold released (a late payment): the parties checked with no new rule, through identity's
@@ -38,7 +41,7 @@
 // rethrown, and the queue's retries try again.
 //
 // IDEMPOTENT (R-API-14). A second run meets the first's outcome under the same locks: a confirmed
-// enrollment naming this order (2), or the case the refusal opened (1, 3).
+// enrollment naming this order (2), or the case the refusal, 2 or 3 opened, which covers it (1).
 import { z } from 'zod';
 
 import { isExclusionViolation, isUniqueViolation } from '../platform/db/db-errors.js';
@@ -56,8 +59,9 @@ import type {
 import { readSlot } from '../modules/catalog/index.js';
 import { isBookablePair } from '../modules/identity/index.js';
 import {
+  type CaseInstants,
+  caseInstantsOf,
   type CompensationReason,
-  latestCaseOpenedAt,
   openCompensationCase,
 } from '../modules/moderation/index.js';
 import {
@@ -85,7 +89,7 @@ export interface ConfirmationSteps {
   partiesOf(tx: Transaction, enrollmentId: string): Promise<EnrollmentParties | null>;
   lock(tx: Transaction, parties: EnrollmentParties): Promise<LockedEnrollment>;
   paidOrderOf(tx: Transaction, paymentId: string): Promise<PaidOrder>;
-  latestCaseOpenedAt(tx: Transaction, enrollmentId: string): Promise<Date | null>;
+  casesOf(tx: Transaction, enrollmentId: string): Promise<CaseInstants | null>;
   openCase(tx: Transaction, enrollmentId: string, reason: CompensationReason): Promise<unknown>;
   confirm(tx: Transaction, confirmation: Confirmation): Promise<'confirmed' | 'no_active_hold'>;
   bookablePair(tx: Transaction, studentUserId: string, teacherUserId: string): Promise<boolean>;
@@ -111,7 +115,7 @@ export const confirmationSteps: ConfirmationSteps = {
   partiesOf: booking.confirmationPartiesOf,
   lock: (tx, parties) => booking.lockForConfirmation(tx, parties, { orders: orderStandingsOf }),
   paidOrderOf,
-  latestCaseOpenedAt,
+  casesOf: caseInstantsOf,
   openCase: openCompensationCase,
   confirm: booking.confirmEnrollment,
   bookablePair: isBookablePair,
@@ -162,17 +166,17 @@ class Confirmer {
     const parties = await steps.partiesOf(tx, enrollmentId);
     if (parties === null) throw new Error(`No live enrollment has the id ${enrollmentId}`);
     const enrollment = await steps.lock(tx, parties);
-    const [order, latestCase] = await Promise.all([
+    const [order, cases] = await Promise.all([
       steps.paidOrderOf(tx, paymentId),
-      steps.latestCaseOpenedAt(tx, enrollmentId),
+      steps.casesOf(tx, enrollmentId),
     ]);
-    if (order.status !== 'paid' || covers(latestCase, order.paidRecordedAt)) return;
+    if (order.status !== 'paid' || covers(cases, order.paidRecordedAt)) return;
     if (enrollment.confirmingPaymentId === paymentId) return;
-    if (enrollment.confirmed || enrollment.confirmingPaymentId !== null) {
+    const duplicate = enrollment.confirmed || enrollment.confirmingPaymentId !== null;
+    if (duplicate || cases !== null) {
       await steps.openCase(tx, enrollmentId, 'duplicate_payment');
       return;
     }
-    if (latestCase !== null) return;
     if (enrollment.cancelledByTermination) {
       await this.#refuse(tx, enrollment, 'party_restricted');
       return;

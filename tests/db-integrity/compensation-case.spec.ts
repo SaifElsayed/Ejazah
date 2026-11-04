@@ -6,6 +6,10 @@
 // case per enrollment and reason: a call while it is open joins it, a call after it was resolved or
 // dismissed opens a new one, and another reason on the same enrollment is a case of its own.
 //
+// T082: what the covering rule (`jobs/case-cover.ts`) reads of an enrollment's cases, through
+// `caseInstantsOf` and `caseInstantsAmong`: whether one is open, the latest opening, and the latest
+// closing (`resolved_at`), with two cases, a case closed with no closing recorded, and none.
+//
 // The race: `disputes` has no unique index that keeps one open case per enrollment and reason, so
 // the function locks the enrollment's row (T005's `lockRows`) and only then reads the open case.
 // HOW THE RACE IS STAGED, as `teacher-slots.spec.ts` stages it: transaction A opens the case and
@@ -19,6 +23,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  caseInstantsAmong,
+  caseInstantsOf,
   COMPENSATION_REASONS,
   openCompensationCase,
 } from '../../apps/api/src/modules/moderation/index.js';
@@ -171,6 +177,97 @@ describe('one open case per enrollment and reason (the owner’s decisions of 20
     const second = await open(other.enrollmentId, 'slot_unavailable');
     expect(second.opened).toBe(true);
     expect(second.caseId).not.toBe(first.caseId);
+  });
+});
+
+/** The case's opening and closing instants as the database holds them, to the millisecond. */
+async function instantsOf(caseId: string): Promise<{ openedAt: Date; closedAt: Date | null }> {
+  const { rows } = await db.query<{ created_at: Date; resolved_at: Date | null }>(
+    `SELECT created_at, resolved_at FROM disputes WHERE id = $1`,
+    [caseId],
+  );
+  const [row] = rows;
+  if (row === undefined) throw new Error(`no case ${caseId}`);
+  return { openedAt: row.created_at, closedAt: row.resolved_at };
+}
+
+describe('the cases the covering rule reads (T082, `jobs/case-cover.ts`)', () => {
+  it('an enrollment with no case is absent', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    expect(await caseInstantsOf(database, enrollmentId)).toBeNull();
+    expect((await caseInstantsAmong(database, [enrollmentId])).size).toBe(0);
+    expect((await caseInstantsAmong(database, [])).size).toBe(0);
+  });
+
+  it('one open case: open, its opening, no closing', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const { caseId } = await open(enrollmentId, 'slot_unavailable');
+    const { openedAt } = await instantsOf(caseId);
+    expect(await caseInstantsOf(database, enrollmentId)).toEqual({
+      open: true,
+      lastOpenedAt: openedAt,
+      lastClosedAt: null,
+    });
+  });
+
+  it('a case resolved, or dismissed: not open, its opening and its closing', async () => {
+    for (const status of ['resolved', 'dismissed'] as const) {
+      const { enrollmentId } = await makeEnrollment(db);
+      const { caseId } = await open(enrollmentId, 'party_restricted');
+      await close(caseId, status);
+      const { openedAt, closedAt } = await instantsOf(caseId);
+      expect(closedAt).not.toBeNull();
+      expect(await caseInstantsOf(database, enrollmentId)).toEqual({
+        open: false,
+        lastOpenedAt: openedAt,
+        lastClosedAt: closedAt,
+      });
+    }
+  });
+
+  it('two cases, one closed and one open: open, the later opening, the closed one’s closing', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const restricted = await open(enrollmentId, 'party_restricted');
+    await close(restricted.caseId, 'resolved');
+    const duplicate = await open(enrollmentId, 'duplicate_payment');
+    const closed = await instantsOf(restricted.caseId);
+    const opened = await instantsOf(duplicate.caseId);
+    expect(await caseInstantsOf(database, enrollmentId)).toEqual({
+      open: true,
+      lastOpenedAt: opened.openedAt,
+      lastClosedAt: closed.closedAt,
+    });
+  });
+
+  it('a closed case with no recorded closing: not open, no closing', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const { caseId } = await open(enrollmentId, 'slot_unavailable');
+    await db.query(`UPDATE disputes SET status = 'dismissed', updated_at = now() WHERE id = $1`, [
+      caseId,
+    ]);
+    const { openedAt } = await instantsOf(caseId);
+    expect(await caseInstantsOf(database, enrollmentId)).toEqual({
+      open: false,
+      lastOpenedAt: openedAt,
+      lastClosedAt: null,
+    });
+  });
+
+  it('reads several enrollments in one call, each its own', async () => {
+    const one = await makeEnrollment(db);
+    const other = await makeEnrollment(db);
+    const none = await makeEnrollment(db);
+    await open(one.enrollmentId, 'slot_unavailable');
+    const closing = await open(other.enrollmentId, 'duplicate_payment');
+    await close(closing.caseId, 'dismissed');
+    const cases = await caseInstantsAmong(database, [
+      one.enrollmentId,
+      other.enrollmentId,
+      none.enrollmentId,
+    ]);
+    expect([...cases.keys()].sort()).toEqual([one.enrollmentId, other.enrollmentId].sort());
+    expect(cases.get(one.enrollmentId)?.open).toBe(true);
+    expect(cases.get(other.enrollmentId)?.open).toBe(false);
   });
 });
 

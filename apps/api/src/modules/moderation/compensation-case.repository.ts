@@ -47,37 +47,60 @@ export async function insertCase(
 }
 
 /**
- * When the enrollment's latest compensation case was opened (`disputes.created_at`, the database's
- * clock), open or not, or null when it has none (T039; the note under T035). Read under the
- * enrollment's lock, which every opening takes, so no case is opened meanwhile.
+ * An enrollment's compensation cases as the covering rule reads them (T082, `jobs/case-cover.ts`),
+ * every instant the database's clock: whether one of them is open, when the latest was opened
+ * (`created_at`), and when the latest closed one was closed (`resolved_at`, for `resolved` and
+ * `dismissed`; null when no closed case records it).
  */
-export async function latestCaseOpenedAt(tx: Client, enrollmentId: string): Promise<Date | null> {
-  const latest = await tx.dispute.findFirst({
-    where: { enrollmentId, kind: 'compensation_case' },
-    orderBy: { createdAt: 'desc' },
-    select: { createdAt: true },
-  });
-  return latest?.createdAt ?? null;
+export interface CaseInstants {
+  readonly open: boolean;
+  readonly lastOpenedAt: Date;
+  readonly lastClosedAt: Date | null;
+}
+
+/** The later of two instants, either possibly absent. */
+function later(one: Date | null, other: Date | null): Date | null {
+  if (one === null) return other;
+  if (other === null) return one;
+  return other.getTime() > one.getTime() ? other : one;
 }
 
 /**
- * Of `enrollmentIds`, when each one's latest compensation case was opened, open or not; an enrollment
- * with none is absent (T040: the sweep hands on a paid order no case covers, as `latestCaseOpenedAt`
- * tells the confirm job). Read with no lock: the confirm job decides under its own.
+ * Of `enrollmentIds`, each one's compensation cases folded as `CaseInstants`; an enrollment with no
+ * case is absent. One grouped read over `disputes_enrollment_id_idx`, at most a row per enrollment
+ * and status. It takes no lock: the confirm job reads it under the enrollment's lock, which every
+ * opening takes and Phase 3's closing will take (`compensation-case.service.ts`), and the
+ * `expire-pending-payments` sweep reads it with none, the job deciding under its own (T040).
  */
-export async function latestCasesOpenedAt(
+export async function caseInstantsAmong(
   tx: Client,
   enrollmentIds: readonly string[],
-): Promise<ReadonlyMap<string, Date>> {
+): Promise<ReadonlyMap<string, CaseInstants>> {
   if (enrollmentIds.length === 0) return new Map();
   const rows = await tx.dispute.groupBy({
-    by: ['enrollmentId'],
+    by: ['enrollmentId', 'status'],
     where: { enrollmentId: { in: [...enrollmentIds] }, kind: 'compensation_case' },
-    _max: { createdAt: true },
+    _max: { createdAt: true, resolvedAt: true },
   });
-  return new Map(
-    rows.flatMap(({ enrollmentId, _max }) =>
-      _max.createdAt ? [[enrollmentId, _max.createdAt]] : [],
-    ),
-  );
+  const cases = new Map<string, CaseInstants>();
+  for (const { enrollmentId, status, _max } of rows) {
+    const openedAt = _max.createdAt;
+    if (openedAt === null) continue;
+    const isOpen = status === 'open';
+    const seen = cases.get(enrollmentId);
+    cases.set(enrollmentId, {
+      open: isOpen || (seen?.open ?? false),
+      lastOpenedAt: later(seen?.lastOpenedAt ?? null, openedAt) ?? openedAt,
+      lastClosedAt: later(seen?.lastClosedAt ?? null, isOpen ? null : _max.resolvedAt),
+    });
+  }
+  return cases;
+}
+
+/** The enrollment's compensation cases folded as `CaseInstants`, or null when it has none. */
+export async function caseInstantsOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<CaseInstants | null> {
+  return (await caseInstantsAmong(tx, [enrollmentId])).get(enrollmentId) ?? null;
 }
