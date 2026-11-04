@@ -41,11 +41,18 @@ export interface OrderEventRecord {
   readonly receivedAt: Date;
 }
 
-/** What a paid event reports, recorded as the gateway reported it (R-MONEY-5, FR-367). */
+/**
+ * What a paid event reports, recorded as the gateway reported it (R-MONEY-5, FR-367): a fee or net
+ * the event did not report is NULL, as the ERD lets it be (T056), never computed.
+ */
 export interface ReportedPayment {
   readonly gatewayTransactionId: string;
-  readonly gateway_fee_piasters: Piasters;
-  readonly net_piasters: Piasters;
+  readonly gateway_fee_piasters: Piasters | null;
+  readonly net_piasters: Piasters | null;
+}
+
+function asColumn(reported_piasters: Piasters | null): bigint | null {
+  return reported_piasters === null ? null : BigInt(toPlainNumber(reported_piasters));
 }
 
 /**
@@ -142,8 +149,8 @@ export class PaymentsRepository {
           ? {}
           : {
               gatewayTransactionId: reported.gatewayTransactionId,
-              gatewayFeePiasters: BigInt(toPlainNumber(reported.gateway_fee_piasters)),
-              netPiasters: BigInt(toPlainNumber(reported.net_piasters)),
+              gatewayFeePiasters: asColumn(reported.gateway_fee_piasters),
+              netPiasters: asColumn(reported.net_piasters),
             }),
       },
       select: { id: true },

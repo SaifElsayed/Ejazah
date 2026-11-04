@@ -134,7 +134,7 @@
         "recipient_verified",
         "refunded"
       ],
-      "PaymentGateway": ["fake"],
+      "PaymentGateway": ["fake", "paymob"],
       "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "RemedyKind": ["makeup", "refund"],
       "RemedyStatus": ["awaiting_choice", "booked", "counter_proposed", "proposed", "refund_case"],

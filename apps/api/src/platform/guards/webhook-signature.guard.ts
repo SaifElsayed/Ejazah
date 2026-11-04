@@ -28,15 +28,23 @@
 // application's body parser is off (T149), so the route reads its body untouched, with its own size
 // limit, and sets `request.rawBody` to the bytes before this guard runs. Replay is not this guard's:
 // the provider's event id is stored under a unique NOT NULL column before anything acts (R-MONEY-8).
+//
+// THE QUERY (T056): a provider may sign in the request's query rather than a header (Paymob appends
+// its `hmac` to the callback's address), so the verifier is handed the request target's query
+// parameters too, single-valued as the headers are: a repeated parameter reaches no verifier.
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { DomainError } from '../errors/domain-error.js';
 import { MalformedEventError } from '../ports/inbound-event.js';
 
-/** A port's verify operation: the raw body and headers in, the verified event out, or a refusal. */
+/**
+ * A port's verify operation: the raw body, the headers and the query parameters in, the verified
+ * event out, or a refusal.
+ */
 export type InboundEventVerifier<T> = (
   rawBody: Buffer,
   headers: Readonly<Record<string, string | undefined>>,
+  query: Readonly<Record<string, string | undefined>>,
 ) => Promise<T>;
 
 /** A webhook request: its raw body as captured by the route, and the event once verified. */
@@ -54,18 +62,34 @@ function singleValued(headers: IncomingHttpHeaders): Record<string, string> {
   return flat;
 }
 
-/** Verify `rawBody` through `verify`, answering the event or the refusal its failure deserves. */
+/** The request target's query parameters that appear once; none when it has no query. */
+function singleValuedQuery(target: string | undefined): Record<string, string> {
+  const flat: Record<string, string> = {};
+  if (target === undefined || !URL.canParse(target, 'http://local')) return flat;
+  const parameters = new URL(target, 'http://local').searchParams;
+  for (const name of new Set(parameters.keys())) {
+    const values = parameters.getAll(name);
+    if (values.length === 1 && values[0] !== undefined) flat[name] = values[0];
+  }
+  return flat;
+}
+
+/**
+ * Verify `rawBody` through `verify`, answering the event or the refusal its failure deserves.
+ * `target` is the request's target (`request.url`), whose query parameters the verifier reads.
+ */
 export async function verifyInboundEvent<T>(
   verify: InboundEventVerifier<T>,
   rawBody: unknown,
   headers: IncomingHttpHeaders,
+  target?: string,
 ): Promise<T> {
   if (!Buffer.isBuffer(rawBody)) {
     throw new Error('The webhook route did not capture the raw body; nothing was verified.');
   }
   try {
     // Awaited inside the try, so a verifier that throws synchronously is refused like one that rejects.
-    return await verify(rawBody, singleValued(headers));
+    return await verify(rawBody, singleValued(headers), singleValuedQuery(target));
   } catch (error: unknown) {
     if (error instanceof MalformedEventError) {
       throw new DomainError('VALIDATION_FAILED', 'The event could not be read.');
@@ -80,7 +104,12 @@ export class WebhookSignatureGuard<T> implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<WebhookRequest>();
-    request.verifiedEvent = await verifyInboundEvent(this.verify, request.rawBody, request.headers);
+    request.verifiedEvent = await verifyInboundEvent(
+      this.verify,
+      request.rawBody,
+      request.headers,
+      request.url,
+    );
     return true;
   }
 }

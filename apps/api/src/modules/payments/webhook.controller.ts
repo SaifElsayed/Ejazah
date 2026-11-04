@@ -174,7 +174,7 @@ export function paymentWebhookRoute({
         if (declaredLength !== undefined && declaredLength > maxBodyBytes) throw tooLarge();
         const rawBody = await readRawBody(request, maxBodyBytes);
         const receivedAt = now();
-        const event = await verifyInboundEvent(verify, rawBody, request.headers);
+        const event = await verifyInboundEvent(verify, rawBody, request.headers, request.url);
         const receipt = { rawBody, receivedAt, signatureVerifiedAt: now() };
         await (isOrderEvent(event)
           ? events.orders.record(event, receipt)

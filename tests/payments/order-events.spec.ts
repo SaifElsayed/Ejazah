@@ -47,6 +47,7 @@ import {
   gatewayStandIn,
   type GatewayStandIn,
   type StandInEvent,
+  UNREPORTED_AMOUNTS,
 } from '../support/gateway-stand-in';
 
 const ENCRYPTION_KEY = randomBytes(32).toString('base64');
@@ -290,6 +291,21 @@ describe('a paid event (FR-360, FR-367, R-214)', () => {
     });
     expect(await outcomesOf(order.enrollmentId)).toEqual([]);
     expect(reported).toEqual([]);
+  });
+
+  it('reporting no fee and no net, as Paymob’s callback does, records both as NULL and still enqueues confirmation (T056, R-MONEY-5)', async () => {
+    const order = await plantOrder();
+    const event = stand.paid(order.gatewayOrderId, UNREPORTED_AMOUNTS);
+
+    expect(await stand.deliver(event)).toBe(200);
+
+    const { rows } = await db.query<{ status: string; fee: string | null; net: string | null }>(
+      `SELECT status::text AS status, gateway_fee_piasters AS fee, net_piasters AS net
+         FROM payments WHERE id = $1`,
+      [order.paymentId],
+    );
+    expect(rows).toEqual([{ status: 'paid', fee: null, net: null }]);
+    expect(enqueued).toEqual([{ paymentId: order.paymentId, committedStatus: 'paid' }]);
   });
 
   it('delivered twice: one row and nothing changed by the second, but confirmation enqueued again (M2)', async () => {

@@ -69,7 +69,7 @@ export function createPaymentWebhookRoute({
 }): NodeHandler {
   const reporting = report === undefined ? {} : { report };
   return paymentWebhookRoute({
-    verify: (rawBody, headers) => payment.verifyAndParseEvent(rawBody, headers),
+    verify: (rawBody, headers, query) => payment.verifyAndParseEvent(rawBody, headers, query),
     events: {
       recipients: new RecipientEventsService({
         database,

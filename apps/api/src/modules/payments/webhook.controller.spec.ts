@@ -43,6 +43,8 @@ interface Recorded {
 }
 
 const recorded: Recorded[] = [];
+/** The query parameters the last verification was handed (T056). */
+let verifiedQuery: Readonly<Record<string, string | undefined>> | undefined;
 const lines: string[] = [];
 let answer: () => Promise<RecordOutcome> = () => Promise.resolve('applied');
 
@@ -61,7 +63,10 @@ beforeAll(async () => {
   application.use(
     PAYMENT_WEBHOOK_PATH,
     paymentWebhookRoute({
-      verify: (rawBody, headers) => port.verifyAndParseEvent(rawBody, headers),
+      verify: (rawBody, headers, query) => {
+        verifiedQuery = query;
+        return port.verifyAndParseEvent(rawBody, headers, query);
+      },
       events: {
         recipients: {
           record: (event, receipt) => {
@@ -201,6 +206,19 @@ describe(`POST ${PAYMENT_WEBHOOK_PATH} (T077, FR-PAYG-4, R-MONEY-9)`, () => {
     });
     expect(recorded).toEqual([]);
     expectNothingLogged(RECIPIENT, rawBody.toString('utf8'));
+  });
+
+  it("hands the port the request's single-valued query parameters, where a gateway signs (T056)", async () => {
+    const { rawBody, headers } = verifiedEvent();
+
+    const response = await post(
+      rawBody,
+      headers,
+      `${PAYMENT_WEBHOOK_PATH}?hmac=ab12&twice=1&twice=2`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(verifiedQuery).toEqual({ hmac: 'ab12' });
   });
 
   it('refuses a correctly signed body the port cannot read with 400, quoting nothing of it', async () => {

@@ -3,14 +3,17 @@
 // secret derived from `ENCRYPTION_KEY`, so every process of one deployment verifies what another
 // signed and no credential is needed (SC-005).
 import { piasters } from '@ijazah/money';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakePaymentAdapter } from './fake.adapter.js';
 import { createPaymentPort, standInCheckoutOf, type PaymentConfig } from './index.js';
 import { EventSignatureError, type PaymentPort } from './payment.port.js';
+import { PaymobPaymentAdapter } from './paymob.adapter.js';
 
 const KEY = Buffer.alloc(32, 7).toString('base64');
 const OTHER_KEY = Buffer.alloc(32, 9).toString('base64');
 const PAY_BY = new Date('2026-10-08T10:30:00Z');
+/** Far enough ahead that an order created now has a lifetime. */
+const PAY_BY_LATER = new Date('2099-01-01T00:00:00Z');
 
 const base: PaymentConfig = { PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY: KEY };
 
@@ -85,5 +88,61 @@ describe("the stand-in's hosted page (T012, R-213)", () => {
 
     expect(standInCheckoutOf(createPaymentPort(base))).toBeDefined();
     expect(standInCheckoutOf(stub)).toBeUndefined();
+  });
+});
+
+// T056 (FR-371): Paymob from its keys, no value real (R-SEC-1). Its callbacks reach the webhook on
+// PUBLIC_WEBHOOK_ORIGIN, which every intention names; no hosted page of the stand-in is mounted.
+describe('the gateway (T056)', () => {
+  const paymob: PaymentConfig = {
+    ...base,
+    PAYMENT_GATEWAY: 'paymob',
+    PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_test_placeholder',
+    PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_test_placeholder',
+    PAYMENT_GATEWAY_WEBHOOK_SECRET: 'hmac-placeholder',
+    PAYMENT_GATEWAY_INTEGRATION_ID: 1_000_001,
+    PUBLIC_WEBHOOK_ORIGIN: 'https://tunnel.example.com',
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('serves Paymob when PAYMENT_GATEWAY is paymob, and hands no hosted page to the stand-in route', () => {
+    const port = createPaymentPort(paymob);
+
+    expect(port).toBeInstanceOf(PaymobPaymentAdapter);
+    expect(standInCheckoutOf(port)).toBeUndefined();
+  });
+
+  it('names the webhook on PUBLIC_WEBHOOK_ORIGIN as every intention’s callback address', async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal('fetch', (_url: URL, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return Promise.resolve(
+        Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 }),
+      );
+    });
+
+    await createPaymentPort(paymob).createCheckout('enr-1', piasters(100), 'EGP', PAY_BY_LATER);
+
+    expect(bodies).toMatchObject([
+      {
+        notification_url: 'https://tunnel.example.com/webhooks/payment',
+        payment_methods: [1_000_001],
+      },
+    ]);
+  });
+
+  it.each([
+    'PAYMENT_GATEWAY_SECRET_KEY',
+    'PAYMENT_GATEWAY_PUBLIC_KEY',
+    'PAYMENT_GATEWAY_WEBHOOK_SECRET',
+    'PAYMENT_GATEWAY_INTEGRATION_ID',
+    'PUBLIC_WEBHOOK_ORIGIN',
+  ] as const)('refuses to build Paymob without %s, naming it', (key) => {
+    const { [key]: _omitted, ...config } = paymob;
+
+    expect(() => createPaymentPort(config)).toThrow(key);
   });
 });
