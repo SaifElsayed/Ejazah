@@ -6,7 +6,7 @@
 //   boundaries/no-deep-module-import     R-API-3     a module is imported only through index.ts
 //   boundaries/no-adapter-import         R-API-4     a concrete adapter stays inside its port folder
 //   boundaries/no-upward-admin-import    R-API-4     nothing imports upward into admin
-//   boundaries/no-money-vocabulary       R-MONEY-6   wallet/ledger/balance/escrow banned everywhere; gateway amounts only in modules/payments and ports/payment (ADR 0007)
+//   boundaries/no-money-vocabulary       R-MONEY-6   wallet/ledger/balance/escrow banned everywhere; gateway amounts only in modules/payments and ports/payment, and the monitor's contracts file and panel folder (ADR 0007, T052)
 //
 // DECISION (2026-09-09) — the six rules themselves live in the internal plugin, under
 // `eslint-plugin-ijazah/rules/`, not in `eslint-plugin-boundaries` configuration as this file
@@ -75,9 +75,21 @@ const wall = {
   // No folder beyond these two is exempt, `packages/money` included. The money package is where
   // R-MONEY-5 allows piaster arithmetic, so it is exactly where `net = gross - fee`, which ADR 0007
   // forbids computing anywhere, would otherwise be written unseen.
+  //
+  // The admin's payments monitor (T052; the owner's decision of 2026-11-04): FR-400 asks it for
+  // gross, fee and net as reported, so the leave widens by exactly one contracts file and one panel
+  // folder, which only show the reported figures; not `apps/admin` as a whole and not
+  // `packages/contracts`. Each entry is a whole run of segments, so `payments.ts.bak`,
+  // `payments-extra.ts` and `pages/payments-old/` are not it
+  // (`tests/lint-plugin/no-money-vocabulary-monitor.spec.ts`).
   gatewayAmountWords: ['gross', 'fee', 'net'],
   amountMarkerWords: ['piasters', 'amount', 'total', 'cents'],
-  paymentFolders: ['apps/api/src/modules/payments', 'apps/api/src/platform/ports/payment'],
+  paymentFolders: [
+    'apps/api/src/modules/payments',
+    'apps/api/src/platform/ports/payment',
+    'packages/contracts/src/admin/payments.ts',
+    'apps/admin/src/pages/payments',
+  ],
 };
 
 module.exports = [{ settings: { ijazah: { boundaries: wall } } }];

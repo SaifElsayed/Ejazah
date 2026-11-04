@@ -93,6 +93,7 @@ export function surfaceOf(
     applications: unusedAdminServices.applications,
     documents: unusedAdminServices.documents,
     teachers: unusedAdminServices.teachers,
+    payments: unusedAdminServices.payments,
   };
   const administration = {
     transactions: transactionsOver(database),
