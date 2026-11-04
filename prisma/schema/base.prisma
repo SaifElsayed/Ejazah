@@ -316,9 +316,11 @@ enum CancellationRequestStatus {
 // recording stand-in, the port's second implementation from day one (ARCHITECTURE), so its rows exist
 // in development and tests; production refuses it in config, not here. A real gateway's member is
 // added when it is integrated (SRS OPEN-11). Members are permanent (R-API-9). The PAYMENT_GATEWAY env
-// value selects the adapter (R-API-4) and shares the name `fake`.
+// value selects the adapter (R-API-4) and shares the name `fake`. T056 adds `paymob` (FR-371, R-221),
+// the PAYMENT_GATEWAY value of the same name.
 enum PaymentGateway {
   fake
+  paymob
 
   @@map("payment_gateway")
 }

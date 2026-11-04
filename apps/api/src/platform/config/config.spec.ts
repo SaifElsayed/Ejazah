@@ -613,6 +613,114 @@ describe('the Phase 1 keys (T001)', () => {
   });
 });
 
+// T056 (FR-371, R-221): the gateway's member and its keys. Every value below is a placeholder of
+// the shape the gateway gives, never a real key (R-SEC-1): a test key carries `sk_test`/`pk_test`,
+// a live one `sk_live`/`pk_live`.
+describe('the gateway (T056)', () => {
+  const paymobTest: Record<string, string> = {
+    ...validEnv,
+    PAYMENT_GATEWAY: 'paymob',
+    PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_test_placeholder',
+    PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_test_placeholder',
+    PAYMENT_GATEWAY_WEBHOOK_SECRET: 'hmac-placeholder',
+    PAYMENT_GATEWAY_INTEGRATION_ID: '1000001',
+    PUBLIC_WEBHOOK_ORIGIN: 'https://tunnel.example.com',
+  };
+  const paymobLive: Record<string, string> = {
+    ...paymobTest,
+    PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_live_placeholder',
+    PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_live_placeholder',
+  };
+  // Production also refuses the other ports' stand-ins (T153), so each case looks for its own keys.
+  const productionBase: Record<string, string> = { NODE_ENV: 'production' };
+
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('selects the gateway with its keys, the integration id read as a number', () => {
+    const config = loadConfig(paymobTest);
+
+    expect(config.PAYMENT_GATEWAY).toBe('paymob');
+    expect(config.PAYMENT_GATEWAY_INTEGRATION_ID).toBe(1_000_001);
+    expect(config.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID).toBeUndefined();
+    expect(
+      loadConfig({ ...paymobTest, PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: '1000002' })
+        .PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID,
+    ).toBe(1_000_002);
+  });
+
+  it.each([
+    'PAYMENT_GATEWAY_SECRET_KEY',
+    'PAYMENT_GATEWAY_PUBLIC_KEY',
+    'PAYMENT_GATEWAY_WEBHOOK_SECRET',
+    'PAYMENT_GATEWAY_INTEGRATION_ID',
+    'PUBLIC_WEBHOOK_ORIGIN',
+  ])('refuses the gateway without %s, naming it and never a value', (key) => {
+    const failure = refusal(without(paymobTest, key));
+
+    expect(failure.offendingKeys).toEqual([key]);
+    expect(failure.message).toContain(`${key} (required when PAYMENT_GATEWAY=paymob`);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
+  it('refuses an integration id that is not a positive whole number', () => {
+    for (const value of ['card', '0', '-4', '1.5']) {
+      expect(
+        refusal({ ...paymobTest, PAYMENT_GATEWAY_INTEGRATION_ID: value }).offendingKeys,
+      ).toEqual(['PAYMENT_GATEWAY_INTEGRATION_ID']);
+    }
+  });
+
+  it("refuses the gateway's test mode outside development and test, naming each test key and never its value (R-HONEST-1)", () => {
+    const failure = refusal({ ...paymobTest, ...productionBase });
+
+    expect(failure.offendingKeys).toContain('PAYMENT_GATEWAY_SECRET_KEY');
+    expect(failure.offendingKeys).toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
+    expect(failure.offendingKeys).not.toContain('PAYMENT_GATEWAY');
+    expect(failure.message).toMatch(/PAYMENT_GATEWAY_SECRET_KEY \(the gateway's test mode/);
+    expect(failure.message).not.toContain('placeholder');
+
+    // A key that is not marked live is refused as a test key is: the rule is "live", never "not test".
+    const unmarked = refusal({
+      ...paymobLive,
+      ...productionBase,
+      PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_placeholder',
+    });
+    expect(unmarked.offendingKeys).toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
+    expect(unmarked.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
+  });
+
+  it('takes live keys outside development and test, and test keys in development and test', () => {
+    const live = refusal({ ...paymobLive, ...productionBase });
+    expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY');
+    expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
+    expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
+
+    for (const nodeEnv of ['development', 'test']) {
+      expect(loadConfig({ ...paymobTest, NODE_ENV: nodeEnv }).PAYMENT_GATEWAY).toBe('paymob');
+    }
+  });
+
+  it('classifies the gateway keys as provider keys, so no test run holds one (T114, SC-005)', () => {
+    for (const key of [
+      'PAYMENT_GATEWAY_SECRET_KEY',
+      'PAYMENT_GATEWAY_PUBLIC_KEY',
+      'PAYMENT_GATEWAY_INTEGRATION_ID',
+      'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID',
+    ]) {
+      expect(providerKeys).toContain(key);
+      expect(platformKeys).not.toContain(key);
+    }
+  });
+});
+
 describe('loadConfigOrExit (T015, FR-039)', () => {
   afterEach(() => {
     vi.restoreAllMocks();

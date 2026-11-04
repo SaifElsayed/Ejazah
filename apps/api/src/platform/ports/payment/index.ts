@@ -54,6 +54,9 @@ export function createPaymentPort(config: PaymentConfig): PaymentPort {
         webhookSecret: standInWebhookSecret(config),
         ...(config.API_PUBLIC_ORIGIN === undefined ? {} : { origin: config.API_PUBLIC_ORIGIN }),
       });
+    case 'paymob':
+      // T056's adapter lands in the commit after the one naming its keys.
+      throw new Error('The Paymob adapter is not built yet (T056).');
   }
 }
 
