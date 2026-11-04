@@ -230,6 +230,8 @@ export {
 export { lockAccount, readStanding } from './standing.repository.js';
 /** The account's zone on the caller's transaction, a teacher's new slot's (T019, FR-313). */
 export { accountTimezone } from './users.repository.js';
+/** The display names of some accounts, for booking's lists (003:T049, FR-390, FR-391, FR-395). */
+export { displayNamesOf } from './users.repository.js';
 
 /**
  * The visibility predicate (T010, `002:T143`, SRS §3.7.1, R-201): the only way any module learns

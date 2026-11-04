@@ -2,7 +2,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 
 // Coverage thresholds are declared PER PATH, never globally (research R-13).
 // The 80% floor covers packages/money, packages/time, the kernel's guard and error paths (T086), and
-// the four modules Phase 1 created (002-identity T086).
+// the four modules Phase 1 created (002-identity T086), and payments (002-identity T141).
 // A floor is never lowered (R-PROC-10); the covered surface only widens as modules arrive.
 //
 // T086: the four paths FR-062 names, as globs relative to the repository root, where the pipeline
@@ -12,6 +12,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // reports only the files a test loaded unless `include` names them, so a guard or error file no
 // spec imports would otherwise escape its floor instead of counting at 0%.
 // 002-identity T086: the identity, verification, catalog and admin modules join (FR-213).
+// 002-identity T141: the payments module joins, real code since B15 (Phase 2's B31).
 const coveredPaths = [
   'packages/money/src/**',
   'packages/time/src/**',
@@ -21,6 +22,7 @@ const coveredPaths = [
   'apps/api/src/modules/verification/**',
   'apps/api/src/modules/catalog/**',
   'apps/api/src/modules/admin/**',
+  'apps/api/src/modules/payments/**',
 ];
 
 // What the specs share is test code, not a module's rules: counted, a fixture the specs run end to
@@ -34,7 +36,8 @@ const notMeasured = ['**/__fixtures__/**', '**/*.fixtures.ts', '**/*.md'];
 // calls. Measured before setting it (full suite): every path is at or above 95% on all four.
 // Measured before the modules joined (full suite, fixtures left out; statements/branches/functions/
 // lines): identity 92.4/87.5/92.4/95.5, verification 93.0/83.9/93.1/95.1, catalog 92.2/84.2/91.8/95.0,
-// admin 91.8/87.6/88.0/93.6.
+// admin 91.8/87.6/88.0/93.6. Measured before payments joined (002-identity T141; the specs that load
+// the module, by `vitest related`, fixtures left out): payments 90.2/82.6/86.1/92.7.
 const floor = { statements: 80, branches: 80, functions: 80, lines: 80 };
 
 export default defineConfig({

@@ -71,6 +71,25 @@ export {
   createBookingServices,
 } from './booking-slots.service.js';
 
+/**
+ * The lists (T049, FR-390 to FR-393, FR-395): the `enrollments` namespace and the teacher's
+ * `teacher.students` and `teacher.today`, mounted by `app.router.ts`; their services are part of
+ * `BookingServices`. The reads on the caller's transaction over the owners' entries, exported for
+ * the probe of their queries (`tests/db-integrity/enrollment-lists.spec.ts`).
+ */
+export { enrollmentsRouter } from './enrollments.router.js';
+export { teacherStudentsRouter, teacherTodayProcedure } from './teacher-students.router.js';
+export {
+  type EnrollmentListServices,
+  type EnrollmentListsStore,
+  enrollmentListsStore,
+  studentEnrollmentOf,
+  studentEnrollmentsOf,
+  teacherStudentOf,
+  teacherStudentsOf,
+  teacherTodayOf,
+} from './enrollment-lists.service.js';
+
 /** The `discovery` namespace, mounted by `app.router.ts` (T026). */
 export { discoveryRouter } from './discovery.router.js';
 export type {
@@ -240,3 +259,8 @@ export {
   terminationStore,
   terminationSubscriber,
 } from './termination.subscriber.js';
+/**
+ * Each enrollment's session length (T048, ADR 0009 D2), for the time zone re-resolution job, on the
+ * caller's transaction and with no lock.
+ */
+export { sessionLengthsOf } from './session-lengths.repository.js';

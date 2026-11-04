@@ -138,6 +138,28 @@ export class UsersRepository {
 }
 
 /**
+ * The display names of `userIds`, in one statement on the caller's transaction (003:T049: the other
+ * party of an enrollment on booking's lists, FR-390, FR-391). The name and nothing else (FR-395,
+ * R-HONEST-4). A deleted account is left out by the client's extension, its name erased (FR-141),
+ * so it is absent. Read-only, no lock.
+ */
+export async function displayNamesOf(
+  tx: Pick<Transaction, 'user'>,
+  userIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (userIds.length === 0) return new Map();
+  const rows = await tx.user.findMany({
+    where: { id: { in: [...userIds] } },
+    select: { id: true, displayName: true },
+  });
+  return new Map(
+    rows.flatMap(({ id, displayName }) =>
+      displayName === null ? [] : [[id, displayName] as const],
+    ),
+  );
+}
+
+/**
  * The live account's IANA zone, on the caller's transaction; null for a person not there or
  * deleted. The catalog module stores it on a teacher's new slot, read under the account's lock
  * (T019, FR-313: the teacher's zone at creation).

@@ -10,7 +10,8 @@
 // store of unreferenced documents over the identity and catalog modules' pointers (Phase 1's T093),
 // the admin module's invites with the email port and the invite marks for `deliver-admin-invite`
 // (T066), the stores of deleted people's files for `erase-deleted-files` (B16), `confirm-enrollment`
-// over the database and the settings reader (T039), the two expiry sweeps (T040), every sweep
+// over the database and the settings reader (T039), the two expiry sweeps (T040), the time zone
+// re-resolution over the kernel's record of its runs, added once at start (T048), every sweep
 // registered on its schedule, and the queue's deliveries run through the
 // registered jobs (T112).
 //
@@ -49,6 +50,8 @@ const [
   { CONFIRM_ENROLLMENT, confirmEnrollment },
   { expireHolds },
   { expirePendingPayments },
+  { RERESOLVE_SESSION_INSTANTS, reresolveSessionInstants },
+  { jobRunsOver },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -77,6 +80,8 @@ const [
   import('./jobs/confirm-enrollment.js'),
   import('./jobs/expire-holds.js'),
   import('./jobs/expire-pending-payments.js'),
+  import('./jobs/reresolve-session-instants.js'),
+  import('./platform/idempotency/job-runs.repository.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -181,9 +186,15 @@ const jobs: readonly Job[] = [
   // confirmation was lost, payments', reading `checkout_confirmation_timeout_seconds`.
   expireHolds({ database }),
   expirePendingPayments({ database, settings, confirmations }),
+  // The time zone re-resolution (T048, R-210, ADR 0009 D3), daily and once at start below: it runs
+  // when `process.versions.tz` differs from its last run's, kept by the kernel in `idempotency_keys`.
+  reresolveSessionInstants({ database, runs: jobRunsOver(database), settings }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);
+// ADR 0009 D3: the worker reads the time zone data version at its start, so the re-resolution runs
+// once now, through the queue (its retries and failure reporting), besides its daily schedule.
+await queue.add(RERESOLVE_SESSION_INSTANTS, {});
 const worker = queueing.startWorker({
   connection,
   jobs,

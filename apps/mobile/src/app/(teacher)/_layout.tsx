@@ -2,7 +2,8 @@
 // only where `allows` says (lib/session.ts). Each screen draws its own header. The tabs draw the
 // device's top inset in their own layout; the application's steps and status (T058), the
 // credentials pages (T059), the payout screens (T078), the deletion (T084), the public profile
-// (T158) and the package editor (T021) take the device's insets here.
+// (T158), the package editor (T021), and the ended students and an enrollment (T051) take the
+// device's insets here.
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,6 +21,8 @@ const FRAMED = [
   'account/delete',
   'profile',
   'packages/[id]',
+  'students/ended',
+  'students/[enrollmentId]',
 ] as const;
 
 export default function Layout() {

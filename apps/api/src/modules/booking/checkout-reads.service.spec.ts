@@ -91,6 +91,7 @@ const session = (
   timezone: 'Africa/Cairo',
   startsAt: new Date(startsAt),
   endsAt: new Date(endsAt),
+  status: 'scheduled',
 });
 
 interface World {

@@ -273,7 +273,10 @@ is unchanged.
 - `confirm-enrollment({ paymentId })`: ARCHITECTURE §8.1 verbatim. It locks the enrollment row (`lockRows`). If its
   `confirmed` event names another order (the student paid twice) it opens a `duplicate_payment` case through T035, which
   joins an open one and opens a new one after a resolved one, and leaves the enrollment as it is (FR-375); otherwise it
-  returns if the enrollment is confirmed by this order or a compensation case exists for it; if R-219 cancelled it, it
+  returns if the enrollment is confirmed by this order or a compensation case of the enrollment covers the order (paid
+  before the case was opened, while it is open, or before its `resolved_at`: `jobs/case-cover.ts`, FR-PAYG-19 as amended
+  2026-11-04), and opens one `duplicate_payment` case for an order paid after every case of the enrollment was closed;
+  if R-219 cancelled it, it
   takes the refusal branch at once (`party_restricted`, FR-362); before a late branch it checks the parties with no new
   rule, through identity's `isBookablePair` (R-201: the teacher by the predicate's `'book'` clause, the student by
   `account_status = 'active'`), and takes the refusal branch (`party_restricted`) if it answers false; otherwise it tries one transaction (hold conversion by conditional
@@ -281,7 +284,7 @@ is unchanged.
   database refusal (unique violation on `slot_holds`, exclusion violation on `sessions`) it rolls back and runs the
   refusal transaction (release, `slot_unavailable`, `moderation.openCompensationCase`, a `cancelled` outcome).
 - `expire-pending-payments` (every minute): ARCHITECTURE §8.1's enrollment-keyed release, never for an enrollment with a
-  `paid` order. It also recovers a lost enqueue by the order, not by the enrollment's status: every `paid` order older than `checkout_confirmation_timeout_seconds` whose enrollment is `pending_payment` or `cancelled` and has no compensation case is handed to `confirm-enrollment` (job id `paymentId`, through `payments`' entry). A new
+  `paid` order. It also recovers a lost enqueue by the order, not by the enrollment's status: every `paid` order older than `checkout_confirmation_timeout_seconds` whose enrollment is `pending_payment` or `cancelled` and that no compensation case of that enrollment covers (the job's own rule, `jobs/case-cover.ts`, amended 2026-11-04) is handed to `confirm-enrollment` (job id `paymentId`, through `payments`' entry). A new
   checkout (FR-BOOK-12) or another student's hold (FR-351) may have cancelled that enrollment meanwhile; the job then
   confirms it by the late branch or opens one compensation case by the refusal branch, so a paid enrollment never stays
   cancelled without one (PR #109's review, M2 and round 2 N1).

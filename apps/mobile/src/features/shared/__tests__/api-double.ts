@@ -62,6 +62,11 @@ export function fakeProcedures() {
       status: { query: procedure() },
       retry: { mutate: procedure() },
     },
+    // B31 (T050): the student's enrollments and home.
+    enrollments: {
+      list: { query: procedure() },
+      get: { query: procedure() },
+    },
     teacher: {
       application: {
         get: { query: procedure() },
@@ -97,6 +102,12 @@ export function fakeProcedures() {
         create: { mutate: procedure() },
         update: { mutate: procedure() },
       },
+      // B31 (T051): the teacher's students and day.
+      students: {
+        list: { query: procedure() },
+        get: { query: procedure() },
+      },
+      today: { query: procedure() },
     },
   };
 }

@@ -5,7 +5,9 @@
 // confirmation's transaction, whose caller holds the locks (`generation.service.ts`). T032: the
 // times of a student's sessions in a window, for the booking sheet; read-only, no lock. T033 widens
 // it to the student's and the teacher's, for the one overlap check the hold and the sheet share
-// (FR-351, FR-BOOK-5).
+// (FR-351, FR-BOOK-5). T049: the lists' reads, each session with its status: the sessions of some
+// enrollments, and the sessions of a teacher's day (FR-390, FR-391); read-only, no lock.
+import type { SessionStatus } from '@ijazah/contracts';
 import { calendarDateOf, type LocalDate, type LocalTime, localTimeOf } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -41,7 +43,7 @@ export interface SessionTime {
 }
 
 /** The statuses that free a session's time, as the overlap constraints read them (ERD §15 rule 19). */
-const TIME_FREEING_STATUSES = ['cancelled_by_agreement', 'cancelled_by_admin'] as const;
+export const TIME_FREEING_STATUSES = ['cancelled_by_agreement', 'cancelled_by_admin'] as const;
 
 /**
  * The times of the student's and the teacher's sessions that hold time in `[from, to)` (T032, T033,
@@ -98,7 +100,10 @@ export async function insertSessions(
   await tx.session.createMany({ data: [...rows] });
 }
 
-/** One session of an enrollment, as `checkout.status` shows it (T037, FR-386, FR-393, R-TIME-6). */
+/**
+ * One session of an enrollment, as `checkout.status` shows it (T037, FR-386, FR-393, R-TIME-6),
+ * with its status for the lists (T049, FR-390, FR-391).
+ */
 export interface EnrollmentSessionRow {
   readonly sequenceNumber: number;
   readonly localDate: LocalDate;
@@ -106,6 +111,29 @@ export interface EnrollmentSessionRow {
   readonly timezone: string;
   readonly startsAt: Date;
   readonly endsAt: Date;
+  readonly status: SessionStatus;
+}
+
+interface SelectedSession {
+  readonly sequenceNumber: number;
+  readonly scheduledDateLocal: Date;
+  readonly scheduledStartTimeLocal: Date;
+  readonly timezone: string;
+  readonly scheduledStartAt: Date;
+  readonly scheduledEndAt: Date;
+  readonly status: SessionStatus;
+}
+
+function sessionRowOf(row: SelectedSession): EnrollmentSessionRow {
+  return {
+    sequenceNumber: row.sequenceNumber,
+    localDate: calendarDateOf(row.scheduledDateLocal),
+    startTimeLocal: localTimeOf(row.scheduledStartTimeLocal),
+    timezone: row.timezone,
+    startsAt: row.scheduledStartAt,
+    endsAt: row.scheduledEndAt,
+    status: row.status,
+  };
 }
 
 /**
@@ -121,20 +149,82 @@ export async function enrollmentSessionsOf(
     where: { enrollmentId },
     orderBy: { sequenceNumber: 'asc' },
     select: {
+      enrollmentId: true,
       sequenceNumber: true,
       scheduledDateLocal: true,
       scheduledStartTimeLocal: true,
       timezone: true,
       scheduledStartAt: true,
       scheduledEndAt: true,
+      status: true,
     },
   });
-  return rows.map((row) => ({
-    sequenceNumber: row.sequenceNumber,
-    localDate: calendarDateOf(row.scheduledDateLocal),
-    startTimeLocal: localTimeOf(row.scheduledStartTimeLocal),
-    timezone: row.timezone,
-    startsAt: row.scheduledStartAt,
-    endsAt: row.scheduledEndAt,
-  }));
+  return rows.map(sessionRowOf);
+}
+
+/**
+ * Each of `enrollmentIds`' sessions by sequence number, in one statement (T049, FR-390, FR-391); an
+ * enrollment with no session is absent. Read-only, no lock: nothing is decided on it. Over the
+ * `(enrollment_id, sequence_number)` index, bounded by the ids the caller holds and each package's
+ * count.
+ */
+export async function sessionsOfEnrollments(
+  tx: Pick<Transaction, 'session'>,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, readonly EnrollmentSessionRow[]>> {
+  const byEnrollment = new Map<string, EnrollmentSessionRow[]>();
+  if (enrollmentIds.length === 0) return byEnrollment;
+  const rows = await tx.session.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] } },
+    orderBy: [{ enrollmentId: 'asc' }, { sequenceNumber: 'asc' }],
+    select: {
+      enrollmentId: true,
+      sequenceNumber: true,
+      scheduledDateLocal: true,
+      scheduledStartTimeLocal: true,
+      timezone: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      status: true,
+    },
+  });
+  for (const row of rows) {
+    const sessions = byEnrollment.get(row.enrollmentId) ?? [];
+    sessions.push(sessionRowOf(row));
+    byEnrollment.set(row.enrollmentId, sessions);
+  }
+  return byEnrollment;
+}
+
+/** A session of a teacher's day, with the enrollment it belongs to (T049). */
+export interface DaySession extends EnrollmentSessionRow {
+  readonly enrollmentId: string;
+}
+
+/**
+ * The teacher's sessions starting in `[from, to)`, by start (T049, FR-391: «اليوم»), every status,
+ * a soft-deleted one left out by the client's extension. Read-only, no lock: nothing is decided on
+ * it. Over the `teacher_user_id` index, bounded by the window, since `sessions_teacher_no_overlap`
+ * keeps the teacher's sessions from overlapping one another.
+ */
+export async function teacherSessionsBetween(
+  tx: Pick<Transaction, 'session'>,
+  teacherUserId: string,
+  window: { readonly from: Date; readonly to: Date },
+): Promise<readonly DaySession[]> {
+  const rows = await tx.session.findMany({
+    where: { teacherUserId, scheduledStartAt: { gte: window.from, lt: window.to } },
+    orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }],
+    select: {
+      enrollmentId: true,
+      sequenceNumber: true,
+      scheduledDateLocal: true,
+      scheduledStartTimeLocal: true,
+      timezone: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      status: true,
+    },
+  });
+  return rows.map((row) => ({ enrollmentId: row.enrollmentId, ...sessionRowOf(row) }));
 }

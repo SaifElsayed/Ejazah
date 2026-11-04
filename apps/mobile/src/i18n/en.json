@@ -941,16 +941,28 @@
       "a11y": {
         "tabs": "Enrollment status"
       },
+      "activeEmpty": {
+        "text": "Every ongoing enrollment, and every one awaiting confirmation, appears here.",
+        "title": "No active enrollments"
+      },
       "card": {
         "cancelPending": "Cancellation request awaiting your reply",
         "compensationPending": "Compensation awaiting the administration's decision",
         "completedOn": "{teacher} · completed {date}",
         "endedOn": "{teacher} · ended {date}",
         "first": "First session: {date} · {time}",
+        "firstSession": "First session",
         "ijazahIssued": "Ijazah issued {date}",
         "next": "Next: {date}",
+        "nextSession": "Next session",
         "until": "until {date}",
         "weekly": "{teacher} · every {weekday} {time}"
+      },
+      "confirming": {
+        "checkAgain": "Check again",
+        "support": "Support",
+        "text": "If you paid, your enrollment is confirmed once the gateway reports it, and it will appear here.",
+        "title": "The payment gateway has not reported your payment yet"
       },
       "empty": {
         "action": "Explore teachers",
@@ -964,6 +976,12 @@
       "reviewPrompt": {
         "subtitle": "{subject} · {track} · {teacher}",
         "title": "An enrollment you have not reviewed yet"
+      },
+      "sessionTime": "{date} · {start}–{end} · {city} time",
+      "stat": {
+        "completed": "Done",
+        "remaining": "Remaining",
+        "upcoming": "Upcoming"
       },
       "tabs": {
         "active": "Active",
@@ -1666,6 +1684,7 @@
       },
       "endedMeta": "{done} of {total} · completed {completedDate} · ijazah issued {issuedDate}",
       "endedNote": "Ended enrollments stay here with their sessions and ijazahs.",
+      "inViewerZone": "{date} · {time} ({city})",
       "search": "Search by student name",
       "searchEmpty": {
         "text": "Try another name.",

@@ -365,7 +365,7 @@
       "dateTime": "{date} · {time}",
       "inZone": "({city})",
       "range": "{start} – {end}",
-      "weeklySlot": "كل {weekday} {time}",
+      "weeklySlot": "كل يوم {weekday} {time}",
       "zoneOf": "بتوقيت {city}"
     },
     "toast": {
@@ -416,7 +416,7 @@
         "title": "حصلت على إجازة في {subject} من {teacher}"
       },
       "paymentConfirmed": {
-        "body": "{subject} · {sessions, plural, one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}} · كل {weekday} {time} من {date}",
+        "body": "{subject} · {sessions, plural, one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}} · كل يوم {weekday} {time} من {date}",
         "bodyReady": "{subject} · {sessions, plural, one {جلسة واحدة جاهزة} two {جلستان جاهزتان} few {# جلسات جاهزة} many {# جلسة جاهزة} other {# جلسة جاهزة}}",
         "title": "تم تأكيد الدفع"
       },
@@ -775,7 +775,7 @@
       },
       "date": "التاريخ",
       "firstSessionMoved": "تأخّر تأكيد الدفع، فانتقلت أول جلسة من {quoted} إلى {actual}.",
-      "lede": "جلساتك كل {weekday} {time}، من {date}.",
+      "lede": "جلساتك كل يوم {weekday} {time}، من {date}.",
       "sessionDate": "{date} · {time}",
       "sessionN": "الجلسة {n}",
       "sessions": "جلساتك",
@@ -935,11 +935,15 @@
         "willContact": "سنتواصل معك بشأن الجلسات التي لم تتم."
       },
       "title": "تفاصيل الاشتراك",
-      "weekly": "كل {weekday} {time} ({city})"
+      "weekly": "كل يوم {weekday} {time} ({city})"
     },
     "enrollments": {
       "a11y": {
         "tabs": "حالة الاشتراك"
+      },
+      "activeEmpty": {
+        "text": "يظهر هنا كل اشتراك جارٍ أو بانتظار التأكيد.",
+        "title": "لا اشتراكات جارية"
       },
       "card": {
         "cancelPending": "طلب إلغاء بانتظار ردّك",
@@ -947,10 +951,18 @@
         "completedOn": "{teacher} · اكتمل {date}",
         "endedOn": "{teacher} · انتهى {date}",
         "first": "أول جلسة: {date} · {time}",
+        "firstSession": "أول جلسة",
         "ijazahIssued": "صدرت الإجازة {date}",
         "next": "القادمة: {date}",
+        "nextSession": "الجلسة القادمة",
         "until": "حتى {date}",
-        "weekly": "{teacher} · كل {weekday} {time}"
+        "weekly": "{teacher} · كل يوم {weekday} {time}"
+      },
+      "confirming": {
+        "checkAgain": "تحقق مرة أخرى",
+        "support": "الدعم",
+        "text": "إن كنت قد دفعت فسيُؤكَّد اشتراكك حين تُبلغنا البوابة، وسيظهر هنا.",
+        "title": "لم تُبلغنا بوابة الدفع بدفعتك بعد"
       },
       "empty": {
         "action": "استكشف المعلمين",
@@ -964,6 +976,12 @@
       "reviewPrompt": {
         "subtitle": "{subject} · {track} · {teacher}",
         "title": "اشتراك لم تقيّمه بعد"
+      },
+      "sessionTime": "{date} · {start} – {end} · بتوقيت {city}",
+      "stat": {
+        "completed": "تمت",
+        "remaining": "المتبقية",
+        "upcoming": "القادمة"
       },
       "tabs": {
         "active": "جارية",
@@ -1401,8 +1419,8 @@
       "payout": "دُفع {paid} ج.م · رسوم البوابة {fee} · يصلك {net} ج.م",
       "payoutEnded": "دُفع {paid} ج.م · رسوم البوابة {fee} · وصلك {net} ج.م",
       "requestCancel": "طلب إلغاء جلسة",
-      "schedule": "كل {day} {time} ({city}) · حتى {endDate}",
-      "scheduleEnded": "كان كل {day} {time} · من {startDate} إلى {endDate}",
+      "schedule": "كل يوم {day} {time} ({city}) · حتى {endDate}",
+      "scheduleEnded": "كان كل يوم {day} {time} · من {startDate} إلى {endDate}",
       "sessions": {
         "adminConfirmed": "اعتمدتها الإدارة بعد المراجعة",
         "cancelPending": "طلبت الإلغاء · بانتظار رد الطالب",
@@ -1666,6 +1684,7 @@
       },
       "endedMeta": "{done} من {total} · اكتمل {completedDate} · صدرت الإجازة {issuedDate}",
       "endedNote": "تبقى الاشتراكات المنتهية هنا مع جلساتها وإجازاتها.",
+      "inViewerZone": "{date} · {time} ({city})",
       "search": "ابحث باسم الطالب",
       "searchEmpty": {
         "text": "جرّب اسمًا آخر.",

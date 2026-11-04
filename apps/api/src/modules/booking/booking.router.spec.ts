@@ -69,7 +69,16 @@ let calls: unknown[][];
 let limited: unknown[][];
 let refuseAtLimit: boolean;
 
+/** The lists' services (T049), which no case here reaches. */
+const unreachedLists = Object.fromEntries(
+  (['enrollments', 'enrollment', 'students', 'student', 'today'] as const).map((name) => [
+    name,
+    () => Promise.reject(new Error(`${name} is not reached here`)),
+  ]),
+) as unknown as Omit<BookingServices, 'slots'>;
+
 const booking: BookingServices = {
+  ...unreachedLists,
   slots: async (...args) => {
     calls.push(['slots', ...args]);
     if (args[1].packageId !== PACKAGE) throw new DomainError('NOT_FOUND');
