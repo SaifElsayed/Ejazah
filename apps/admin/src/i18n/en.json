@@ -1474,7 +1474,7 @@
       "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
       "columns": {
         "fee": "Fee",
-        "gross": "Gross (EGP)",
+        "gross": "Gross",
         "net": "Net",
         "order": "Order",
         "status": "Status",
