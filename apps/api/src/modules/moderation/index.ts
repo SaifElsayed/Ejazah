@@ -13,15 +13,13 @@ export {
 } from './compensation-case.service.js';
 
 /**
- * When the enrollment's latest compensation case was opened, or null when it has none, read on the
- * caller's transaction under the enrollment's lock (T039): the confirm job's "a case exists" and
- * the order a case covers (the note under T035).
+ * An enrollment's compensation cases as the covering rule reads them (T082, `jobs/case-cover.ts`):
+ * whether one is open, the latest opening and the latest closing, the database's instants.
+ * `caseInstantsOf` for one enrollment, read by the confirm job under the enrollment's lock (T039);
+ * `caseInstantsAmong` for some, read with no lock by the `expire-pending-payments` sweep (T040).
  */
-export { latestCaseOpenedAt } from './compensation-case.repository.js';
-
-/**
- * Of some enrollments, when each one's latest compensation case was opened, read with no lock
- * (T040): the `expire-pending-payments` sweep hands a paid order to `confirm-enrollment` only when
- * no case covers it, by the confirm job's rule.
- */
-export { latestCasesOpenedAt } from './compensation-case.repository.js';
+export {
+  type CaseInstants,
+  caseInstantsAmong,
+  caseInstantsOf,
+} from './compensation-case.repository.js';

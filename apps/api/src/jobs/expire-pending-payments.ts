@@ -12,14 +12,15 @@
 //      payment for `confirm-enrollment` (FR-363 as amended 2026-11-03).
 //   3. THE HAND-OFF. Every `paid` order whose paid event was recorded at least
 //      `checkout_confirmation_timeout_seconds` before the run, whose enrollment is `pending_payment`
-//      or `cancelled`, and that no compensation case covers (`case-cover.ts`, the confirm job's
-//      rule: a case opened after the order's first paid event), is handed to `confirm-enrollment`
-//      (job id `paymentId`, through payments' `ConfirmationQueue`), so a paid event whose enqueue was lost
-//      after its commit is confirmed all the same, and a paid enrollment a new checkout or another
-//      student's hold cancelled meanwhile is confirmed by the late branch or gets one compensation
-//      case, never left cancelled without one. The job decides under its own locks; the sweep only
-//      reads, with no lock, and enqueues after the page's transaction. A failed enqueue fails the
-//      run, and the queue runs it again.
+//      or `cancelled`, and that no compensation case of its enrollment covers (`case-cover.ts`, the
+//      confirm job's rule, T082: paid before a case was opened, while one is open, or before one was
+//      closed), is handed to `confirm-enrollment` (job id `paymentId`, through payments'
+//      `ConfirmationQueue`), so a paid event whose enqueue was lost after its commit is confirmed all
+//      the same, and a paid enrollment a new checkout or another student's hold cancelled meanwhile
+//      is confirmed by the late branch or gets one compensation case, never left cancelled without
+//      one. An order an open case covers is not handed on: the job would only leave it to that case.
+//      The job decides under its own locks; the sweep only reads, with no lock, and enqueues after
+//      the page's transaction. A failed enqueue fails the run, and the queue runs it again.
 //
 // The holds' and the orders' windows are the expiries their rows carry, written from
 // `slot_hold_ttl_minutes` and `slot_hold_grace_minutes` when they were made (FR-BOOK-9, FR-355);
@@ -39,7 +40,7 @@ import {
   expiredEnrollmentHoldIds,
   releaseHolds,
 } from '../modules/booking/index.js';
-import { latestCasesOpenedAt } from '../modules/moderation/index.js';
+import { type CaseInstants, caseInstantsAmong } from '../modules/moderation/index.js';
 import {
   type ConfirmationQueue,
   expiredOrderIds,
@@ -85,10 +86,10 @@ export interface PendingPaymentSteps {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<readonly string[]>;
-  latestCases(
+  cases(
     tx: Transaction,
     enrollmentIds: readonly string[],
-  ): Promise<ReadonlyMap<string, Date>>;
+  ): Promise<ReadonlyMap<string, CaseInstants>>;
 }
 
 /** The steps over the modules' entries. */
@@ -100,7 +101,7 @@ export const pendingPaymentSteps: PendingPaymentSteps = {
     releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf }),
   paidOrders: paidOrdersRecordedBefore,
   awaitingConfirmation: awaitingConfirmationAmong,
-  latestCases: latestCasesOpenedAt,
+  cases: caseInstantsAmong,
 };
 
 export interface ExpirePendingPaymentsOptions {
@@ -129,12 +130,11 @@ export function expirePendingPayments({
       await steps.awaitingConfirmation(tx, [...new Set(orders.map((o) => o.enrollmentId))]),
     );
     if (awaiting.size === 0) return [];
-    const latestCase = await steps.latestCases(tx, [...awaiting]);
+    const cases = await steps.cases(tx, [...awaiting]);
     return orders
       .filter(
         ({ enrollmentId, paidRecordedAt }) =>
-          awaiting.has(enrollmentId) &&
-          !covers(latestCase.get(enrollmentId) ?? null, paidRecordedAt),
+          awaiting.has(enrollmentId) && !covers(cases.get(enrollmentId) ?? null, paidRecordedAt),
       )
       .map(({ paymentId }) => paymentId);
   };
