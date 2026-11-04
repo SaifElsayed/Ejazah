@@ -27,6 +27,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'credential.request_document': 'admin.audit.actions.credentialRequestDocument',
   'credential.correct': 'admin.audit.actions.credentialCorrect',
   'document.view': 'admin.audit.actions.documentView',
+  'payments.listed': 'admin.audit.actions.paymentsListed',
+  'payments.viewed': 'admin.audit.actions.paymentsViewed',
   'teacher.approve': 'admin.audit.actions.teacherApprove',
   'teacher.ban': 'admin.audit.actions.teacherBan',
   'teacher.reinstate': 'admin.audit.actions.teacherReinstate',
@@ -64,13 +66,15 @@ export function targetText(row: Pick<AuditRow, 'targetType' | 'targetName'>, t: 
     : t('admin.audit.targetNamed', { type, name: row.targetName });
 }
 
-/** The target's page in this phase: an application's or a credential's. */
+/** The target's page in this phase: an application's, a credential's or a payment order's. */
 export function targetHref(row: Pick<AuditRow, 'targetType' | 'targetId'>): string | undefined {
   switch (row.targetType) {
     case 'teacher_application':
       return `/applications?teacher=${row.targetId}`;
     case 'credential':
       return `/credentials?credential=${row.targetId}`;
+    case 'payment':
+      return `/payments?payment=${row.targetId}`;
     default:
       return undefined;
   }

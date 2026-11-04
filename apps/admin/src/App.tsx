@@ -8,6 +8,8 @@
 // T070: the sign-in pages are drawn. `/set-password`, the invite link's page, works by the token the
 // link carries and not by a session, so it sits outside the guard, in the sign-in frame.
 //
+// T053: `/payments`, the read-only payments monitor, behind the same guard as every console page.
+//
 // T071: the pages read through TanStack Query over the client (research R-113). One cache per App;
 // a session that ends empties it, so what one administrator read is never shown to the next.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -33,6 +35,7 @@ import { AdminHome } from './pages/home/AdminHome';
 import { AdminMfa } from './pages/mfa/AdminMfa';
 import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
 import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
+import { AdminPayments } from './pages/payments/AdminPayments';
 import { AdminSetPassword, SET_PASSWORD_PATH } from './pages/set-password/AdminSetPassword';
 import { AdminSignIn } from './pages/sign-in/AdminSignIn';
 
@@ -89,6 +92,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path={HOME_PATH} element={<AdminHome />} />
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
+              <Route path="/payments" element={<AdminPayments />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>

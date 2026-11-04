@@ -48,6 +48,8 @@ export const NAV_GROUPS: readonly {
   {
     label: 'admin.nav.groups.records',
     entries: [
+      // T053: the payments monitor, before the settings as the board orders the group.
+      { path: '/payments', label: 'admin.nav.items.payments', icon: 'credit-card' },
       { path: '/settings/admins', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
       { path: '/audit', label: 'admin.nav.items.audit', icon: 'list' },
     ],
