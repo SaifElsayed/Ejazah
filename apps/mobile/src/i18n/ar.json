@@ -941,16 +941,28 @@
       "a11y": {
         "tabs": "حالة الاشتراك"
       },
+      "activeEmpty": {
+        "text": "يظهر هنا كل اشتراك جارٍ أو بانتظار التأكيد.",
+        "title": "لا اشتراكات جارية"
+      },
       "card": {
         "cancelPending": "طلب إلغاء بانتظار ردّك",
         "compensationPending": "التعويض قيد قرار الإدارة",
         "completedOn": "{teacher} · اكتمل {date}",
         "endedOn": "{teacher} · انتهى {date}",
         "first": "أول جلسة: {date} · {time}",
+        "firstSession": "أول جلسة",
         "ijazahIssued": "صدرت الإجازة {date}",
         "next": "القادمة: {date}",
+        "nextSession": "الجلسة القادمة",
         "until": "حتى {date}",
         "weekly": "{teacher} · كل {weekday} {time}"
+      },
+      "confirming": {
+        "checkAgain": "تحقق مرة أخرى",
+        "support": "الدعم",
+        "text": "إن كنت قد دفعت فسيُؤكَّد اشتراكك حين تُبلغنا البوابة، وسيظهر هنا.",
+        "title": "لم تُبلغنا بوابة الدفع بدفعتك بعد"
       },
       "empty": {
         "action": "استكشف المعلمين",
@@ -964,6 +976,12 @@
       "reviewPrompt": {
         "subtitle": "{subject} · {track} · {teacher}",
         "title": "اشتراك لم تقيّمه بعد"
+      },
+      "sessionTime": "{date} · {start} – {end} · بتوقيت {city}",
+      "stat": {
+        "completed": "تمت",
+        "remaining": "المتبقية",
+        "upcoming": "القادمة"
       },
       "tabs": {
         "active": "جارية",
