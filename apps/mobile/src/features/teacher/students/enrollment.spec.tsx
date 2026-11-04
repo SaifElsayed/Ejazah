@@ -33,9 +33,10 @@ jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 
 const ENROLLMENT_ID = '0193a6f0-0000-7000-8000-0000000000e1';
 const mockBack = jest.fn();
+let mockParams: Record<string, string> = { enrollmentId: ENROLLMENT_ID };
 jest.mock('expo-router', () => ({
   router: { back: () => mockBack() },
-  useLocalSearchParams: () => ({ enrollmentId: ENROLLMENT_ID }),
+  useLocalSearchParams: () => mockParams,
 }));
 
 const CAIRO = 'Africa/Cairo';
@@ -99,6 +100,7 @@ const get = () => mockApi.api.teacher.students.get.query;
 beforeEach(() => {
   mockApi = fakeApi();
   mockBack.mockReset();
+  mockParams = { enrollmentId: ENROLLMENT_ID };
   queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queries.setQueryData(ME_QUERY_KEY, me);
 });
@@ -262,5 +264,22 @@ describe('TeacherEnrollment reads since it opened (the owner’s decision of 202
     get().mockResolvedValue(enrollment({ student: { displayName: 'يوسف أحمد علي' } }));
     await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
     expect(await screen.findByText('يوسف أحمد علي')).toBeTruthy();
+  });
+});
+
+// T091 (PR #123's review, round 1, nit 4): a link whose enrollment id is missing or is not one is
+// never read; the screen draws what the student's detail draws for it, the load error, and its
+// retry sends nothing the API could only refuse.
+describe('TeacherEnrollment checks the enrollment id before reading (T091)', () => {
+  it.each([
+    ['missing', {}],
+    ['empty', { enrollmentId: '' }],
+    ['not an id', { enrollmentId: 'not-an-enrollment' }],
+  ])('an id %s: no read, the load error, and a retry that reads nothing', async (_name, params) => {
+    mockParams = params;
+    await renderIn('rtl', detail());
+    expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
+    expect(get()).not.toHaveBeenCalled();
   });
 });

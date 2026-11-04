@@ -243,6 +243,21 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
     expect(calls).toEqual([['student', CALLER, { enrollmentId: OTHERS }]]);
   });
 
+  // T091: the phone reads no enrollment without an id (`TeacherEnrollment`); the server refuses
+  // one that is not an id all the same, before the service.
+  it.each(['', 'not-an-enrollment'])(
+    'refuses an enrollment id that is not one (%j) VALIDATION_FAILED before the service',
+    async (enrollmentId) => {
+      const thrown: unknown = await callerAs(sessionOf('approved'))
+        .teacher.students.get({ enrollmentId })
+        .catch((error: unknown) => error);
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+      expect(calls).toEqual([]);
+    },
+  );
+
   it('refuses a blank name VALIDATION_FAILED before the service', async () => {
     const thrown: unknown = await callerAs(sessionOf('approved'))
       .teacher.students.list({ tab: 'active', query: '   ' })
