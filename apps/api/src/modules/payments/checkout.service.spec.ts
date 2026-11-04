@@ -110,6 +110,10 @@ const heldAnswer: CheckoutHold = {
   } as unknown as CheckoutHold['lastSession'],
 };
 
+/** The first and last session `checkout.current` answers, as booking's `currentHoldOf` previews them (T085). */
+const FIRST_SESSION = { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' };
+const LAST_SESSION = { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' };
+
 const enrollmentRow: CheckoutEnrollmentRow = {
   id: ENROLLMENT,
   studentUserId: STUDENT,
@@ -149,6 +153,8 @@ interface World {
     expiresAt: Date;
     enrollmentId: string | null;
     summary: CheckoutHold['summary'];
+    firstSession: typeof FIRST_SESSION;
+    lastSession: typeof LAST_SESSION;
   } | null;
   readonly now?: Date;
   readonly cancelFails?: boolean;
@@ -208,15 +214,19 @@ function setUp(world: World = {}) {
             checkoutUrlEncrypted:
               (world.order?.status ?? 'created') === 'created' ? Uint8Array.from([1, 2, 3]) : null,
           },
-    currentHold: async () =>
-      world.current === undefined
+    currentHold: async (_tx, who, rule) => {
+      log.push(['current hold', who.userId, rule.now.toISOString(), rule.leadHours]);
+      return world.current === undefined
         ? {
             holdId: HOLD,
             expiresAt: HOLD_EXPIRES,
             enrollmentId: ENROLLMENT,
             summary: heldAnswer.summary,
+            firstSession: FIRST_SESSION,
+            lastSession: LAST_SESSION,
           }
-        : world.current,
+        : world.current;
+    },
     enrollmentStatus: async () => {
       if (world.enrollment === null) throw new DomainError('NOT_FOUND');
       return { enrollmentId: ENROLLMENT, status: 'pending_payment', summary: heldAnswer.summary };
@@ -611,6 +621,8 @@ describe('checkout.current: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)',
         expiresAt: HOLD_EXPIRES,
         enrollmentId: null,
         summary: heldAnswer.summary,
+        firstSession: FIRST_SESSION,
+        lastSession: LAST_SESSION,
       },
     });
     await expect(service.current(student)).resolves.toEqual({
@@ -619,8 +631,18 @@ describe('checkout.current: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)',
         expiresAt: HOLD_EXPIRES.toISOString(),
         payBy: ORDER_EXPIRES.toISOString(),
         summary: heldAnswer.summary,
+        firstSession: FIRST_SESSION,
+        lastSession: LAST_SESSION,
       },
     });
+  });
+
+  it('answers the first and last session booking previews from now with the lead setting (FR-386, T085)', async () => {
+    const { service, log } = setUp();
+    const answer = await service.current(student);
+    expect(answer.hold?.firstSession).toEqual(FIRST_SESSION);
+    expect(answer.hold?.lastSession).toEqual(LAST_SESSION);
+    expect(log).toContainEqual(['current hold', STUDENT, NOW.toISOString(), 24]);
   });
 
   it.each([
@@ -641,6 +663,8 @@ describe('checkout.current: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)',
         payBy: ORDER_EXPIRES.toISOString(),
         enrollmentId: ENROLLMENT,
         summary: heldAnswer.summary,
+        firstSession: FIRST_SESSION,
+        lastSession: LAST_SESSION,
         lastOrder: { status: order.status, expiresAt: order.expiresAt.toISOString(), canContinue },
       },
     });

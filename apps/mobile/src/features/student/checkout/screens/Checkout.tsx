@@ -1,6 +1,7 @@
 // T045 (FR-358, FR-354, FR-382, R-217; screens.md §5 `Checkout`): the order before Pay. The one
-// payment summary `checkout.current` gives, the track's caption (recitation only: the ijazah
-// track's variant is not drawn) and the gateway's, and in the action bar the countdown and «ادفع».
+// payment summary `checkout.current` gives with the first and last session dates it answers (FR-386,
+// T085), the track's caption (recitation only: the ijazah track's variant is not drawn) and the
+// gateway's, and in the action bar the countdown and «ادفع».
 //
 // THE COUNTDOWN runs to `payBy`, the instant Pay stops being accepted (the hold's expiry minus the
 // grace, the expiry of the order Pay would create: FR-355, FR-358), read every second from the
@@ -141,6 +142,7 @@ function OpenCheckout({
       <OrderSummary
         summary={summary}
         label={t('student.checkout.a11y.order')}
+        sessions={hold}
         rows={[{ label: t('student.checkout.total'), value: amount, kind: 'total' }]}
       />
       <View style={{ gap: tokens.space['2'] }}>

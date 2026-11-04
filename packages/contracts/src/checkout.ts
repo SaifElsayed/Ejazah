@@ -133,7 +133,11 @@ export const checkoutRetryInput = z.object({ enrollmentId: z.uuid(), idempotency
 
 export const checkoutRetryOutput = checkoutHandover;
 
-/** The student's unexpired hold, if any: what `CheckoutPrevious` shows (FR-BOOK-12). */
+/**
+ * The student's unexpired hold, if any: what `Checkout` and `CheckoutPrevious` show (FR-BOOK-12,
+ * FR-358). `firstSession` and `lastSession` are the sessions the student would get if confirmed at
+ * the read's instant, by FR-368's rule, as `booking.slots` previews them (FR-386; T085, additive).
+ */
 export const checkoutCurrentHold = z.object({
   holdId: z.uuid(),
   expiresAt: z.iso.datetime(),
@@ -141,6 +145,8 @@ export const checkoutCurrentHold = z.object({
   /** Absent before Pay. */
   enrollmentId: z.uuid().optional(),
   summary: checkoutSummary,
+  firstSession: sessionPreview,
+  lastSession: sessionPreview,
   /** The enrollment's last order; `canContinue` while it is still payable. */
   lastOrder: z
     .object({ status: paymentStatus, expiresAt: z.iso.datetime(), canContinue: z.boolean() })

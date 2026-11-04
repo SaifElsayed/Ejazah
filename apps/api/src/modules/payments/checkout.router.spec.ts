@@ -73,6 +73,9 @@ const summary = {
   sessionDurationMinutes: 60 as const,
   price_piasters: 100_000,
 };
+/** The first and last session a hold previews (FR-386): on `hold`, and on `current` since T085. */
+const firstSession = { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' };
+const lastSession = { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' };
 const handover = {
   checkoutUrl: 'https://pay.example/order',
   orderExpiresAt: '2026-11-03T08:10:00.000Z',
@@ -90,8 +93,8 @@ const checkout: CheckoutServices = {
       expiresAt: '2026-11-03T08:15:00.000Z',
       payBy: '2026-11-03T08:10:00.000Z',
       summary,
-      firstSession: { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' },
-      lastSession: { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' },
+      firstSession,
+      lastSession,
     };
   },
   pay: async (...args) => {
@@ -111,6 +114,8 @@ const checkout: CheckoutServices = {
         payBy: '2026-11-03T08:10:00.000Z',
         enrollmentId: ENROLLMENT,
         summary,
+        firstSession,
+        lastSession,
         lastOrder: { status: 'created', expiresAt: handover.orderExpiresAt, canContinue: true },
       },
     };
@@ -372,5 +377,11 @@ describe('the reads of T037 (FR-BOOK-12 (c), FR-380 to FR-386, M3)', () => {
     await expect(reads.current(caller)).resolves.toMatchObject({ hold: { holdId: HOLD } });
     await expect(reads.continue(caller)).resolves.toEqual(handover);
     await expect(reads.status(caller)).resolves.toMatchObject({ status: 'pending_payment' });
+  });
+
+  it("answers 'checkout.current' with the hold's first and last session through its output schema (FR-386, T085)", async () => {
+    const answer = await reads.current(callerAs(sessionOf('student')));
+    expect(answer.hold?.firstSession).toEqual(firstSession);
+    expect(answer.hold?.lastSession).toEqual(lastSession);
   });
 });

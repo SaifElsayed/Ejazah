@@ -96,18 +96,19 @@ export async function enrollmentStatus(
   return row?.status ?? null;
 }
 
-/** The student's active hold with the package it names, as `checkout.current` reads it (T037). */
+/** The student's active hold with the package and the slot it names, as `checkout.current` reads it (T037, T085). */
 export interface CurrentHoldRow {
   readonly id: string;
   readonly packageId: string;
+  readonly slotId: string;
   readonly enrollmentId: string | null;
   readonly expiresAt: Date;
 }
 
-/** The student's active hold, expired or not, with its package, or null: at most one (rule 18). */
+/** The student's active hold, expired or not, with its package and slot, or null: at most one (rule 18). */
 export function ownCurrentHold(tx: Client, studentUserId: string): Promise<CurrentHoldRow | null> {
   return tx.slotHold.findFirst({
     where: { studentUserId, releasedAt: null },
-    select: { id: true, packageId: true, enrollmentId: true, expiresAt: true },
+    select: { id: true, packageId: true, slotId: true, enrollmentId: true, expiresAt: true },
   });
 }

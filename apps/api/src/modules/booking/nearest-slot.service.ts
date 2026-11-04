@@ -51,8 +51,14 @@ export interface FirstSessionRule {
   readonly leadHours: number;
 }
 
-/** A slot's first session by FR-368's rule, in the slot's own zone. */
-function firstSessionOf(slot: OfferedSlot, rule: FirstSessionRule): Occurrence {
+/**
+ * A slot's first session by FR-368's rule, in the slot's own zone: the sheet's, the card's and, for
+ * the held slot, `checkout.current`'s (T085).
+ */
+export function firstSessionOf(
+  slot: Pick<OfferedSlot, 'dayOfWeek' | 'startTimeLocal' | 'durationMinutes' | 'timezone'>,
+  rule: FirstSessionRule,
+): Occurrence {
   return firstOccurrenceAfter(
     // `availability_slots.day_of_week` is 0 to 6 by its check (ERD §15 rule 37); the package asserts it.
     { ...slot, dayOfWeek: slot.dayOfWeek as DayOfWeek },
