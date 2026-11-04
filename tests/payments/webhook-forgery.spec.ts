@@ -96,23 +96,32 @@ async function plantPendingTeacher(recipientRef: string): Promise<string> {
 }
 
 /** An order the stand-in created, and its `payments` row awaiting payment. */
+/**
+ * The order's amount: the one the stand-in's order is created for and the one its `payments` row
+ * holds, so the paid event the stand-in reports always matches the row (T056).
+ */
+const order_piasters = piasters(25_000);
+
 async function plantOrder(): Promise<{ gatewayOrderId: string; paymentId: string }> {
-  // The stand-in's own order; the planted row's amount is the builder's.
+  // The stand-in's own order, and a row for it of the same amount and currency.
   const { gatewayOrderId } = await payment.createCheckout(
     randomUUID(),
-    piasters(25_000),
+    order_piasters,
     'EGP',
     PAY_BY,
   );
   const { enrollmentId } = await makeEnrollment(db);
-  const paymentId = await insertRow(db, 'payments', {
-    enrollment_id: enrollmentId,
-    gateway: 'fake',
-    gateway_order_id: gatewayOrderId,
-    currency: 'EGP',
-    status: 'created',
-    expires_at: PAY_BY,
-  });
+  // Written by SQL, as `confirmation-world.ts` writes it: the amount column is named only in
+  // payments (R-MONEY-6).
+  const { rows } = await db.query<{ id: string }>(
+    `INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                           status, expires_at, updated_at)
+     VALUES ($1, 'fake', $2, $3, 'EGP', 'created', $4, now())
+     RETURNING id::text AS id`,
+    [enrollmentId, gatewayOrderId, order_piasters, PAY_BY],
+  );
+  const paymentId = rows[0]?.id;
+  if (paymentId === undefined) throw new Error('no order written');
   return { gatewayOrderId, paymentId };
 }
 
