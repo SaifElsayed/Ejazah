@@ -699,7 +699,7 @@ Both mobile experiences share one codebase; an account sees its one role's navig
 
 ## 6. Data Model
 
-Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.12 — 42 tables.
+Rebuilt from v1.0. Principles: the only money values are package prices, held as integer piasters; the platform records gateway orders and their signed events but no balances; derived values are computed, not stored; snapshots are taken wherever a mutable parent could otherwise rewrite history. The authoritative model is `docs/ERD.md` v1.14 — 42 tables.
 
 ### 6.1 Entities
 
@@ -757,7 +757,7 @@ User, UserRole, UserSession, UserSessionRetiredToken, AuthIdentity, BannedIdenti
 
 **SessionRemedy** — id, session_id (unique), kind (Makeup / Refund), status (Awaiting-Choice / Proposed / Counter-Proposed / Booked / Refund-Case), proposed_date, counter_date, decided_at, case_id. What a session not consumed is owed (ADR 0018); columns only in Phase 1, written by Phase 3.
 
-Remaining entities (Review, Dispute, GenderFlag, UserReport, ChatMessage, Notification, Subject, TeacherSubject, VerificationDocument, VerificationRequest — with document_id and document_type since the Phase 1 pass —, OtpCode — with the Account-Deletion purpose —, DevicePushToken, TermsAcceptance, IjazahBar) follow the same conventions and are detailed in the accompanying ERD.
+Remaining entities (Review, Dispute, GenderFlag, UserReport, ChatMessage, Notification, Subject, TeacherSubject, VerificationDocument, VerificationRequest — with document_id and document_type since the Phase 1 pass —, OtpCode — with the Account-Deletion purpose —, DevicePushToken, TermsAcceptance, IjazahBar, EnrollmentEvent — since the Phase 2 pass —) follow the same conventions and are detailed in the accompanying ERD.
 
 ## 7. Business Rules Summary
 

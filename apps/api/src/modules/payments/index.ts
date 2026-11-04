@@ -1,6 +1,7 @@
 // PUBLIC ENTRY of the payments module (ADR 0007 D4). Other modules import this file and nothing below it (R-API-3).
-// Owns payments and payment_events; hosts the raw-body webhook endpoint outside tRPC; runs confirm-enrollment
-// and expire-pending-payments. Confirms an enrollment through booking's public entry; never writes enrollments itself.
+// Owns payments and payment_events; hosts the raw-body webhook endpoint outside tRPC. The jobs
+// confirm-enrollment and expire-pending-payments (`apps/api/src/jobs/`) read and move its orders through this
+// entry, and the confirm job confirms the enrollment through booking's entry; payments never writes enrollments.
 //
 // Phase 1 (T077): the webhook route alone, which records a signed payout-recipient event and hands
 // its verdict to the identity module's entries (payments imports identity, never the reverse; R-121).

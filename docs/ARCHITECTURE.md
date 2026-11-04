@@ -1,6 +1,6 @@
 # Ijazah — System Architecture
 
-_Version 3.2 · Companion to SRS v1.4, ERD v1.13, Constitution 2.4.4 · September 2026_
+_Version 3.2 · Companion to SRS v1.4, ERD v1.14, Constitution 2.4.4 · September 2026_
 _Adds ports-and-adapters for external capabilities. Supersedes v3.0. Amended by [ADR 0007](adr/0007-direct-gateway-checkout.md): direct gateway checkout with 0% commission and zero custody, payment port and payments module, post-approval payout gate; by [ADR 0005](adr/0005-phase-0-document-amendments.md): eleven modules with unified table ownership, worker as a second process of the API, `surfaces/` router directory, per-path coverage floor, `develop` as the integration branch; by [ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md): a session's local time is the schedule and its UTC instants are recomputed when time zone rules change; and by [ADR 0010](adr/0010-database-refuses-double-booking.md): the database refuses double booking, the slot hold outlives the gateway order, and the payment port can cancel an unpaid order._
 _Amended 2026-10-18 by the Phase 1 ERD pass and document pass (batch B3, [PR #78](https://github.com/SaifElsayed/Ejazah/pull/78), `specs/002-identity/`, tasks T014 and T015): §3.2 gains the sign-in port and §3.4 counts seven ports; §4 lists the six Phase 1 tables under their modules; §7.2 states the caller kinds Phase 1 adds; §12 says what `/ready` checks today; §14 names the secret nets that exist._
 
@@ -84,7 +84,7 @@ apps/api/src/platform/ports/
 ├── ports.module.ts                   selects every adapter by config
 ├── payment/
 │   ├── payment.port.ts               the interface — THE contract
-│   ├── gateway.adapter.ts            the selected gateway (OPEN-11), Phase 2
+│   ├── paymob.adapter.ts             Paymob, the gateway (OPEN-11), Phase 2 (T056)
 │   └── fake.adapter.ts               recording stand-in; can be told to fail
 ├── storage/
 │   ├── storage.port.ts               the interface — THE contract
@@ -223,6 +223,8 @@ ijazah/
 │   │                           evaluate-session · send-reminder · render-certificate
 │   │                           purge-chat · deliver-notification · reencrypt-columns
 │   │                           purge-otp-codes · purge-stale-push-tokens · purge-expired-sessions (Phase 1)
+│   │                           deliver-admin-invite · purge-unreferenced-documents · erase-deleted-files (Phase 1)
+│   │                           reresolve-session-instants (Phase 2)
 │   ├── mobile/             §6
 │   └── admin/              §6.5
 │
