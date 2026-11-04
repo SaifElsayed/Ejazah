@@ -187,6 +187,22 @@ describe('t: the catalogue is the only source', () => {
   });
 });
 
+describe('t: a weekly time in Arabic (B31, decided 2026-11-04)', () => {
+  it('says «كل يوم الأربعاء», since the weekday formatter gives the name with its article', () => {
+    // `format.weekday` answers «الأربعاء»; «كل الأربعاء» is not Arabic, «كل يوم الأربعاء» is.
+    const bare = allKeys().filter((key) => /كل \{(weekday|day)\}/u.test(translateRaw(key)));
+    expect(bare).toEqual([]);
+    expect(
+      t('student.enrollmentDetail.weekly', { weekday: 'الأربعاء', time: '9:00', city: 'القاهرة' }),
+    ).toContain('كل يوم ⁨الأربعاء⁩');
+  });
+});
+
+/** The Arabic template of `key` as the catalogue holds it. */
+function translateRaw(key: MessageKey): string {
+  return key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], ar) as string;
+}
+
 describe('the active locale', () => {
   it('starts in the language the native layout direction holds', () => {
     // First launch: the operating system lays out right-to-left for a right-to-left device
