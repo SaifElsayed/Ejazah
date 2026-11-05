@@ -10,17 +10,46 @@
 // `<STORAGE_LOCAL_ROOT>/mail/`. The link opens the panel's password page, then the second factor's
 // setup. Run it again after the link's lifetime (`admin_invite_ttl_hours`) for a fresh one.
 //
+// T097 (B32, the owner's decision of 2026-11-04): with `--email <x> --name <y>` it invites a NEW
+// administrator instead, for a development machine where nobody knows an existing administrator's
+// password:
+//
+//   pnpm exec tsx scripts/dev/admin-invite.ts --email <x> --name <y>
+//
+// The values pass `admins.add`'s own input contract. The row is written with SQL, as the seeded
+// administrator's invite above is, because R-API-4 lets only the three composition files import the
+// admin module, so neither `AdminsService.add` nor its repository can be reached from here. The row
+// is the one `AdminsService.add` writes, so A CHANGE TO EITHER IS MADE TO BOTH: the address trimmed
+// and lower-cased, a fresh second-factor secret encrypted to the row's id under
+// `admin_users.mfa_secret_encrypted`, no password, active, invited now, and `invited_by_admin_id`
+// NULL: no administrator invited it. `tests/dev/admin-invite.spec.ts` fails when `admin_users` gains
+// a column. An address another administrator holds is refused by the table's unique constraint and
+// nothing is queued. It writes NO AUDIT ENTRY: `admins.add`'s entry names the administrator who
+// acted, and here none did; like the seeded administrator's invite above, it is a development tool,
+// refused everywhere else, not an administrator's action.
+//
 // IT NEVER SENDS A REAL MAIL. It refuses unless `NODE_ENV` is `development` and the email provider
 // is the stand-in, and refuses without `ADMIN_PANEL_ORIGIN`, which the link needs (the worker would
 // fail the delivery). Like the seed, it writes through the application role's connection.
+import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
+import { parseArgs } from 'node:util';
 
 import { config as readDotenv } from 'dotenv';
 import pg from 'pg';
 
 import { DELIVER_ADMIN_INVITE } from '../../apps/api/src/jobs/deliver-admin-invite';
 import { connectionFor, openQueue } from '../../apps/api/src/jobs/queue';
+import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption';
+import { generateTotpSecret } from '../../apps/api/src/platform/crypto/totp';
+import { adminsAddInput } from '../../packages/contracts/src/admin/admins';
 import { ADMINISTRATOR, type Queryable } from '../../prisma/seed';
+
+/** The column the second-factor secret is encrypted under, bound to the row's id (R-DB-8). */
+const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';
+
+/** Postgres' unique_violation: the address is another administrator's. */
+const UNIQUE_VIOLATION = '23505';
 
 /** The email provider that writes mail to a folder and sends nothing (contracts/ports.md). */
 const STAND_IN_EMAIL = 'fake';
@@ -63,6 +92,88 @@ export async function inviteSeededAdministrator(
   return true;
 }
 
+/** A new administrator as `admins.add` takes one. */
+export interface NewAdministrator {
+  readonly email: string;
+  readonly displayName: string;
+}
+
+/** `--email` and `--name` read through `admins.add`'s input contract; null when neither is given. */
+export function newAdministratorOf(args: readonly string[]): NewAdministrator | null {
+  const { values } = parseArgs({
+    args: [...args],
+    options: { email: { type: 'string' }, name: { type: 'string' } },
+    strict: true,
+  });
+  if (values.email === undefined && values.name === undefined) return null;
+  return adminsAddInput.parse({ email: values.email, displayName: values.name });
+}
+
+/**
+ * Writes a new administrator invited by nobody, the row `admins.add` writes, and queues the invite;
+ * null, and nothing written or queued, when another administrator holds the address.
+ */
+export async function inviteNewAdministrator(
+  db: Queryable,
+  cipher: Pick<ColumnCipher, 'encrypt'>,
+  queue: InviteQueue,
+  { email, displayName }: NewAdministrator,
+): Promise<{ readonly adminId: string } | null> {
+  const adminId = randomUUID();
+  try {
+    await db.query(
+      `INSERT INTO admin_users
+         (id, email, password_hash, mfa_secret_encrypted, display_name, is_active,
+          invited_by_admin_id, invited_at, created_at, updated_at)
+       VALUES ($1, $2, NULL, $3, $4, true, NULL, now(), now(), now())`,
+      [
+        adminId,
+        email.trim().toLowerCase(),
+        cipher.encrypt(generateTotpSecret(), MFA_SECRET_COLUMN, adminId),
+        displayName,
+      ],
+    );
+  } catch (error: unknown) {
+    if ((error as { code?: unknown }).code === UNIQUE_VIOLATION) return null;
+    throw error;
+  }
+  await queue.add(DELIVER_ADMIN_INVITE, { adminId });
+  return { adminId };
+}
+
+async function inviteNew(
+  env: Readonly<Record<string, string | undefined>>,
+  admin: NewAdministrator,
+): Promise<number> {
+  const db = new pg.Client({
+    connectionString: env['DATABASE_URL'],
+    connectionTimeoutMillis: 5_000,
+  });
+  const queue = openQueue(connectionFor(env['REDIS_URL'] ?? ''));
+  try {
+    await db.connect();
+    const invited = await inviteNewAdministrator(
+      db,
+      new ColumnCipher(env['ENCRYPTION_KEY'] ?? ''),
+      queue,
+      admin,
+    );
+    if (invited === null) {
+      process.stderr.write(
+        'admin-invite: another administrator already holds this address; nothing was written or queued\n',
+      );
+      return 1;
+    }
+    process.stdout.write(
+      `admin-invite: administrator ${invited.adminId} written and the invite queued; with the worker running, the mail is under <STORAGE_LOCAL_ROOT>/mail/\n`,
+    );
+    return 0;
+  } finally {
+    await db.end().catch(() => undefined);
+    await queue.close().catch(() => undefined);
+  }
+}
+
 async function main(): Promise<number> {
   const fromDotenv: Record<string, string> = {};
   readDotenv({ processEnv: fromDotenv, quiet: true });
@@ -72,6 +183,8 @@ async function main(): Promise<number> {
     process.stderr.write(`admin-invite: ${refusal}\n`);
     return 1;
   }
+  const admin = newAdministratorOf(process.argv.slice(2));
+  if (admin !== null) return inviteNew(env, admin);
   const db = new pg.Client({
     connectionString: env['DATABASE_URL'],
     connectionTimeoutMillis: 5_000,

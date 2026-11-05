@@ -264,3 +264,14 @@ export {
  * caller's transaction and with no lock.
  */
 export { sessionLengthsOf } from './session-lengths.repository.js';
+/**
+ * The admin's payments monitor's reads (T052, FR-400, R-220), on the caller's transaction with no
+ * lock: a page of orders' enrollments, each one's student and status, and one enrollment's package,
+ * status, progress and outcomes. `payments` reads them here and never reads `enrollments` itself.
+ */
+export {
+  type MonitoredEnrollment,
+  monitoredEnrollmentOf,
+  type OrderEnrollmentParty,
+  orderEnrollmentPartiesAmong,
+} from './order-enrollments.service.js';

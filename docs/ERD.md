@@ -1,6 +1,6 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.13 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.4 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog; v1.13 on 2026-11-03, a hold's package and session count (T036 of `specs/003-booking/tasks.md`), in the "v1.12 → v1.13" changelog*
+*Version 1.14 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.5 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog; v1.13 on 2026-11-03, a hold's package and session count (T036 of `specs/003-booking/tasks.md`), in the "v1.12 → v1.13" changelog; v1.14 on 2026-11-04, the gateway's member `paymob` (T056 of `specs/003-booking/tasks.md`), in the "v1.13 → v1.14" changelog*
 
 ## 0. How to read this
 
@@ -498,7 +498,7 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | |
-| gateway | enum fake, then one value per integrated gateway | Declared in `base.prisma` by T059 with the single member `fake`, the recording stand-in the port carries from day one; production refuses `fake` in config (note under T059 in tasks.md). A real gateway's member is added when it is integrated (OPEN-11). The adapter is selected by config (R-API-4), independently of this enum |
+| gateway | enum fake, then one value per integrated gateway | Declared in `base.prisma` by T059 with the single member `fake`, the recording stand-in the port carries from day one; production refuses `fake` in config (note under T059 in tasks.md). A real gateway's member is added when it is integrated (OPEN-11): `paymob` since T056 of `specs/003-booking/tasks.md` (migration `20261104120000_payment_gateway_paymob`). The adapter is selected by config (R-API-4), independently of this enum |
 | gateway_order_id | text, unique | Created by the platform on the gateway (FR-PAYG-2) |
 | gateway_transaction_id | text, unique, nullable | Reported by the paid event |
 | gross_piasters | bigint | Gross — the snapshot price charged. Named for what it is, so the R-MONEY-6 confinement rule recognises it by its words (PR #20) |
@@ -660,7 +660,7 @@ Separate from `users` entirely (FR-ADMIN-1) — different auth, different tables
 | mfa_last_accepted_step | bigint, nullable | The last TOTP step accepted, so a code is never accepted twice within its step (RFC 6238 §5.2). A counter, not a secret: the schema check's allow-list names it |
 | mfa_enrolled_at | timestamptz, nullable | Null until the first code is confirmed at setup; the secret exists from invite |
 | failed_sign_in_count / locked_until_at | int, default 0; timestamptz, nullable | The lockout pair (settings `admin_lockout_attempts`, `admin_lockout_minutes`, ADR 0019 D3); a lock never exists without the count that caused it (§15 rule 30) |
-| invited_by_admin_id / invited_at | FK → admin_users, nullable; timestamptz, nullable | |
+| invited_by_admin_id / invited_at | FK → admin_users, nullable; timestamptz, nullable | `invited_by_admin_id` NULL means made without an administrator: the seed, or the development script of `specs/003-booking/tasks.md` T097 (`scripts/dev/admin-invite.ts --email --name`) |
 | password_set_at / disabled_at / last_sign_in_at | timestamptz, nullable | `is_active` is held equal to `disabled_at IS NULL` by §15 rule 31 |
 | display_name | text | |
 | is_active | boolean | |
@@ -1081,5 +1081,16 @@ Nothing recorded which package a hold was placed for, while a teacher may offer 
 |---|---|---|
 | 1 | §5 `slot_holds.package_id` (FK → `packages`, NOT NULL, `ON DELETE RESTRICT ON UPDATE CASCADE` as the table's other foreign keys, with its plain index `slot_holds_package_id_idx`) and `slot_holds.session_count integer NOT NULL`; existing rows filled from their enrollment (`package_id`, `snapshot_session_count`) | `20261103120000_slot_hold_package` |
 | 2 | §13.2 draws `packages ||--o{ slot_holds` | this document pass |
+
+No table is added: 42 tables.
+
+## Changelog — v1.13 → v1.14 (the gateway's member, 2026-11-04)
+
+T056 of `specs/003-booking/tasks.md` integrates Paymob, the gateway's test account (the owner's decision of 2026-11-03), so the enum `payment_gateway` gains the member its §7 row said a real gateway would add.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §7 `payments.gateway`: the enum is `fake · paymob`; the adapter is still selected by config (R-API-4), production refusing `fake` and the gateway's test keys | `20261104120000_payment_gateway_paymob` |
+| 2 | §12 `admin_users.invited_by_admin_id`: NULL means made without an administrator: the seed, or the development script of T097 in `specs/003-booking/tasks.md` (B32, the owner's decision of 2026-11-04). A note only, no change to the column | none |
 
 No table is added: 42 tables.

@@ -23,6 +23,15 @@ export interface Checkout {
 }
 
 /**
+ * Whom the order's net settles to, where the gateway splits at checkout (T056, OPEN-11): the
+ * teacher's recipient reference as `registerPayoutRecipient` answered it. The whole net is theirs
+ * (0% commission, ADR 0007); no share is computed here.
+ */
+export interface CheckoutPayee {
+  readonly recipientRef: string;
+}
+
+/**
  * What `cancelCheckout` found. `cancelled` also when the order was already cancelled or expired;
  * `paid` and `in_progress` refuse a new checkout and write nothing (ADR 0010 D6).
  */
@@ -48,8 +57,9 @@ export type GatewayEvent =
       readonly gatewayOrderId: string;
       readonly gatewayTransactionId: string;
       readonly gross_piasters: Piasters;
-      readonly gateway_fee_piasters: Piasters;
-      readonly net_piasters: Piasters;
+      /** As the gateway reported them; null when its event reports none (T056), never computed. */
+      readonly gateway_fee_piasters: Piasters | null;
+      readonly net_piasters: Piasters | null;
       readonly currency: string;
     }
   | {
@@ -71,25 +81,31 @@ export type GatewayEvent =
     };
 
 // The refusals of an inbound event, shared with the video port since T118.
-export { EventSignatureError, MalformedEventError } from '../inbound-event.js';
+export { EventSignatureError, MalformedEventError, NonFinalEventError } from '../inbound-event.js';
 
 export interface PaymentPort {
-  /** An order for `gross_piasters` that expires no later than `latestExpiry`, where the gateway lets it be set (ADR 0010 D4). */
+  /**
+   * An order for `gross_piasters` that expires no later than `latestExpiry`, where the gateway lets it
+   * be set (ADR 0010 D4); with `payee`, split to the teacher at checkout where the gateway does (T056).
+   */
   createCheckout(
     enrollmentId: string,
     gross_piasters: Piasters,
     currency: string,
     latestExpiry: Date,
+    payee?: CheckoutPayee,
   ): Promise<Checkout>;
   /** End an unpaid order before a new checkout (FR-BOOK-12, ADR 0010 D6). Moves no money. */
   cancelCheckout(gatewayOrderId: string): Promise<CancelOutcome>;
   /**
    * The only way a payment or recipient status becomes known. Rejects with `EventSignatureError` on an
-   * absent or invalid signature, and `MalformedEventError` on a signed body it cannot read.
+   * absent or invalid signature, and `MalformedEventError` on a signed body it cannot read. `query` is
+   * the request's single-valued query parameters, where a gateway puts its signature there (T056).
    */
   verifyAndParseEvent(
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,
+    query?: Readonly<Record<string, string | undefined>>,
   ): Promise<GatewayEvent>;
   /** Post-approval payout onboarding (FR-PAYG-13). Answers the gateway's recipient reference. */
   registerPayoutRecipient(teacherUserId: string, details: PayoutDetails): Promise<string>;

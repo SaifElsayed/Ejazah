@@ -23,7 +23,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createLogger } from '../../platform/logging/logger.js';
 import { createPaymentPort } from '../../platform/ports/payment/index.js';
-import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js';
+import {
+  type GatewayEvent,
+  NonFinalEventError,
+} from '../../platform/ports/payment/payment.port.js';
 import type { Receipt, RecordOutcome } from './recipient-events.service.js';
 import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.js';
 
@@ -43,6 +46,10 @@ interface Recorded {
 }
 
 const recorded: Recorded[] = [];
+/** The query parameters the last verification was handed (T056). */
+let verifiedQuery: Readonly<Record<string, string | undefined>> | undefined;
+/** When set, what the port's verification answers instead (T056). */
+let verifyAnswer: (() => Promise<GatewayEvent>) | undefined;
 const lines: string[] = [];
 let answer: () => Promise<RecordOutcome> = () => Promise.resolve('applied');
 
@@ -61,7 +68,10 @@ beforeAll(async () => {
   application.use(
     PAYMENT_WEBHOOK_PATH,
     paymentWebhookRoute({
-      verify: (rawBody, headers) => port.verifyAndParseEvent(rawBody, headers),
+      verify: (rawBody, headers, query) => {
+        verifiedQuery = query;
+        return verifyAnswer?.() ?? port.verifyAndParseEvent(rawBody, headers, query);
+      },
       events: {
         recipients: {
           record: (event, receipt) => {
@@ -93,6 +103,7 @@ beforeEach(() => {
   recorded.length = 0;
   lines.length = 0;
   answer = () => Promise.resolve('applied');
+  verifyAnswer = undefined;
 });
 
 const RECIPIENT = 'fake_rcp_0193d1b0-7a4e-7c55-9d2f-3b1e8a6c4f21';
@@ -201,6 +212,37 @@ describe(`POST ${PAYMENT_WEBHOOK_PATH} (T077, FR-PAYG-4, R-MONEY-9)`, () => {
     });
     expect(recorded).toEqual([]);
     expectNothingLogged(RECIPIENT, rawBody.toString('utf8'));
+  });
+
+  it("hands the port the request's single-valued query parameters, where a gateway signs (T056)", async () => {
+    const { rawBody, headers } = verifiedEvent();
+
+    const response = await post(
+      rawBody,
+      headers,
+      `${PAYMENT_WEBHOOK_PATH}?hmac=ab12&twice=1&twice=2`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(verifiedQuery).toEqual({ hmac: 'ab12' });
+  });
+
+  it('acknowledges a signed event that is not final with 200, records nothing, and logs one info line (T056)', async () => {
+    verifyAnswer = () => Promise.reject(new NonFinalEventError());
+    const { rawBody, headers } = verifiedEvent();
+
+    const response = await post(rawBody, headers);
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.text)).toEqual({ received: true });
+    expect(recorded).toEqual([]);
+    const logged = lines.map((line) => JSON.parse(line) as { level: string; msg: string });
+    expect(logged).toEqual([
+      expect.objectContaining({
+        level: 'info',
+        msg: 'Payment webhook acknowledged an event that is not final; nothing was recorded',
+      }),
+    ]);
   });
 
   it('refuses a correctly signed body the port cannot read with 400, quoting nothing of it', async () => {

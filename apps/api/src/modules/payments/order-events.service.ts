@@ -17,6 +17,13 @@
 // to `failed` appends the `order_failed` outcome through booking's entry (R-216, R-API-6), the hold
 // left in place for a Retry (FR-365).
 //
+// A PAID EVENT THAT DOES NOT MATCH ITS ORDER (T056, the owner's decision of 2026-11-04): before
+// anything is recorded, the order's amount and currency, read under its lock (T005's rule 1), are
+// compared with the event's. On a difference the transaction writes nothing, the difference is
+// reported (the gateway's order and transaction ids, the two amounts and currencies, no personal
+// data) so the payment can be refunded from the gateway's dashboard, and the event is refused with
+// `VALIDATION_FAILED`. Nothing confirms an order that was paid for another amount.
+//
 // A REPLAY (the provider event id already recorded) writes nothing. AFTER COMMIT, every paid event of
 // a known order, a replay included, enqueues `confirm-enrollment({ paymentId })` under the job id
 // `paymentId`, so an enqueue lost after a commit is recovered by the gateway's retry (PR #109's
@@ -29,7 +36,9 @@
 // body (R-SEC-2).
 import { createHash } from 'node:crypto';
 
+import { toPlainNumber } from '@ijazah/money';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
 import { reportError } from '../../platform/errors/reporting.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js';
@@ -89,6 +98,27 @@ export class UnknownOrderEventError extends Error {
   }
 }
 
+/** What a paid event reported beside what its order was created for: ids and amounts only. */
+export interface PaidAmountMismatch {
+  readonly gatewayOrderId: string;
+  readonly gatewayTransactionId: string;
+  readonly callback: { readonly amount: number; readonly currency: string };
+  readonly order: { readonly amount: number; readonly currency: string };
+}
+
+/** A paid event whose amount or currency is not its order's; nothing of it was recorded. */
+export class PaidAmountMismatchError extends Error {
+  constructor(readonly details: PaidAmountMismatch) {
+    const { gatewayOrderId, gatewayTransactionId, callback, order } = details;
+    super(
+      `The paid event of gateway order ${gatewayOrderId}, transaction ${gatewayTransactionId}, ` +
+        `reports ${String(callback.amount)} ${callback.currency} for an order of ` +
+        `${String(order.amount)} ${order.currency}; nothing was recorded.`,
+    );
+    this.name = 'PaidAmountMismatchError';
+  }
+}
+
 /** The statuses each event moves an order from (the header's table). */
 const MOVES_FROM: Readonly<Record<OrderEventType, readonly OrderStatus[]>> = {
   paid: ['created', 'failed', 'expired'],
@@ -132,9 +162,14 @@ export class OrderEventsService {
       this.#report(new UnknownOrderEventError(event.providerEventId, event.type));
       return 'unknown_order';
     }
-    const outcome = await this.#database.$transaction((tx) =>
-      this.#apply(tx, order, event, receipt),
-    );
+    let outcome: OrderOutcome;
+    try {
+      outcome = await this.#database.$transaction((tx) => this.#apply(tx, order, event, receipt));
+    } catch (error: unknown) {
+      if (!(error instanceof PaidAmountMismatchError)) throw error;
+      this.#report(error);
+      throw new DomainError('VALIDATION_FAILED', 'The paid event does not match its order.');
+    }
     if (event.type === 'paid') await this.#confirmations.enqueue(order.paymentId);
     return outcome;
   }
@@ -147,6 +182,7 @@ export class OrderEventsService {
   ): Promise<OrderOutcome> {
     await lockOrder(tx, order);
     const payments = new PaymentsRepository(tx);
+    if (event.type === 'paid') await refuseAnotherCharge(payments, order, event);
     const recorded = await payments.recordOrderEvent({
       paymentId: order.paymentId,
       providerEventId: event.providerEventId,
@@ -164,6 +200,26 @@ export class OrderEventsService {
     }
     return 'moved';
   }
+}
+
+/**
+ * Throws `PaidAmountMismatchError` when the paid event's amount or currency is not the order's. The
+ * caller holds the order's enrollment and payment rows (`lockOrder`), so the charge is read under
+ * its lock (T005's rule 1).
+ */
+async function refuseAnotherCharge(
+  payments: PaymentsRepository,
+  order: OrderRef,
+  event: Extract<OrderEvent, { readonly type: 'paid' }>,
+): Promise<void> {
+  const charge = await payments.chargeOf(order.paymentId);
+  if (event.gross_piasters === charge.gross_piasters && event.currency === charge.currency) return;
+  throw new PaidAmountMismatchError({
+    gatewayOrderId: event.gatewayOrderId,
+    gatewayTransactionId: event.gatewayTransactionId,
+    callback: { amount: toPlainNumber(event.gross_piasters), currency: event.currency },
+    order: { amount: toPlainNumber(charge.gross_piasters), currency: charge.currency },
+  });
 }
 
 /** What a paid event reported, as it reported it; nothing for any other event. */

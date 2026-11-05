@@ -1,0 +1,397 @@
+// T052 — the admin's payments monitor over the real tables (FR-400, FR-401, R-220): the service with
+// the store over the payments module's queries and the owners' entries (`createPaymentsMonitorService`),
+// as `main.ts` binds it through the admin module, and the namespace as `admin.router.ts` mounts it.
+//
+//   - the list is newest first by the time-ordered id, in keyset pages, a cursor only while more
+//     follow; the status filter and the search narrow it; the search matches an order reference
+//     exactly and a student's name folded (R-203), only the matching student's orders;
+//   - the detail carries the enrollment's package and progress, the order's events oldest first,
+//     the outcomes that concern the order, and every paid order of the enrollment;
+//   - NO MONITOR PROCEDURE WRITES BEYOND ITS AUDIT ENTRY (FR-401): each is called through the
+//     administrator kind on the probe's transaction, and Postgres' own count of the rows that
+//     transaction inserted, updated and deleted (`pg_stat_xact_user_tables`) does not move, while
+//     the kind describes exactly the call's one entry.
+//
+// The `payments` table is shared with every other spec, so each probe searches by a token of its
+// own, and writes its rows on one transaction it rolls back. The amounts' names are the payments
+// module's and the monitor's alone (R-MONEY-6), so the orders are written by SQL, as
+// `confirmation-world.ts` writes them, and their figures are `payments-monitor.service.spec.ts`'s.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
+import { randomUUID } from 'node:crypto';
+
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import {
+  createPaymentsMonitorService,
+  paymentsAdminRouter,
+} from '../../apps/api/src/modules/payments/index.js';
+import type { AuditRecord } from '../../apps/api/src/platform/audit/audit-writer.js';
+import {
+  closeDatabase,
+  type Database,
+  openDatabase,
+  type Transaction,
+} from '../../apps/api/src/platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
+import { DomainError } from '../../apps/api/src/platform/errors/domain-error.js';
+import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
+import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
+import {
+  type AdminSurfaceServices,
+  createAdminContext,
+} from '../../apps/api/src/surfaces/context.js';
+import {
+  createAdminCallerFactory,
+  createAdminRouter,
+} from '../../apps/api/src/surfaces/procedures.js';
+import { unusedAdminServices } from '../../apps/api/src/surfaces/services.fixtures.js';
+import { addMinutes, dateColumnOf, timeColumnOf } from '../../packages/time/src/index.js';
+
+let database: Database;
+
+beforeAll(() => {
+  database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
+    poolMax: 2,
+    statementTimeoutMs: 30_000,
+    idleInTransactionTimeoutMs: 60_000,
+  });
+});
+
+afterAll(async () => {
+  await closeDatabase(database);
+});
+
+const ROLLED_BACK = Symbol('rolled back');
+
+/** Runs `probe` on one transaction and rolls back whatever it wrote. */
+async function rolledBack(probe: (tx: Transaction) => Promise<void>): Promise<void> {
+  try {
+    await database.$transaction(
+      async (tx) => {
+        await probe(tx);
+        throw ROLLED_BACK;
+      },
+      { timeout: 30_000 },
+    );
+  } catch (thrown) {
+    if (thrown !== ROLLED_BACK) throw thrown;
+  }
+}
+
+const CAIRO = 'Africa/Cairo';
+const NOW = new Date('2026-11-10T12:00:00Z');
+const PAGE_SIZE = 2;
+
+const monitor = createPaymentsMonitorService({
+  settings: {
+    read: async (key, schema) => {
+      if (key !== 'admin_list_page_size') throw new Error(`unexpected setting ${key}`);
+      return schema.parse(PAGE_SIZE);
+    },
+  },
+  now: () => NOW,
+});
+
+/** A teacher, two students named after the probe's token, and orders in every state the monitor shows. */
+async function world(tx: Transaction) {
+  const token = randomUUID().slice(0, 8);
+  async function person(displayName: string): Promise<string> {
+    const { id } = await tx.user.create({
+      data: {
+        email: `probe-${randomUUID()}@example.invalid`,
+        gender: 'female',
+        dateOfBirth: new Date('2010-01-01T00:00:00Z'),
+        displayName,
+        preferredLanguage: 'ar',
+        timezone: CAIRO,
+        accountStatus: 'active',
+      },
+      select: { id: true },
+    });
+    return id;
+  }
+  const teacher = await person(`المعلمة ${token}`);
+  await tx.teacherProfile.create({
+    data: {
+      userId: teacher,
+      bio: 'Probe',
+      qualificationSummary: 'Probe',
+      verificationStatus: 'approved',
+      payoutVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+    },
+  });
+  const subject = await tx.subject.create({
+    data: { nameAr: 'تجويد', nameEn: 'Tajweed', isActive: true },
+    select: { id: true, nameAr: true, nameEn: true },
+  });
+  const { id: packageId } = await tx.package.create({
+    data: {
+      teacherUserId: teacher,
+      subjectId: subject.id,
+      sessionCount: 4,
+      sessionDurationMinutes: 60,
+      pricePiasters: 100_000n,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const { id: slotId } = await tx.availabilitySlot.create({
+    data: {
+      teacherUserId: teacher,
+      dayOfWeek: 2,
+      startTimeLocal: new Date('1970-01-01T14:00:00Z'),
+      durationMinutes: 60,
+      timezone: CAIRO,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  async function enrollment(
+    student: string,
+    status: 'pending_payment' | 'confirmed' | 'cancelled',
+  ): Promise<string> {
+    const { id } = await tx.enrollment.create({
+      data: {
+        studentUserId: student,
+        teacherUserId: teacher,
+        packageId,
+        slotId,
+        snapshotPricePiasters: 100_000n,
+        snapshotSessionCount: 4,
+        snapshotDurationMinutes: 60,
+        snapshotSubjectId: subject.id,
+        snapshotSlotTimezone: CAIRO,
+        snapshotTrack: 'recitation',
+        status,
+        cancellationReason: status === 'cancelled' ? 'slot_unavailable' : null,
+        confirmedAt: status === 'confirmed' ? new Date('2026-11-01T00:00:00Z') : null,
+        purchasedAt: new Date('2026-11-01T00:00:00Z'),
+        quotedFirstSessionLocalDate: new Date('2026-11-03T00:00:00Z'),
+      },
+      select: { id: true },
+    });
+    return id;
+  }
+  async function order(
+    enrollmentId: string,
+    status: 'created' | 'paid' | 'failed' | 'expired' | 'refunded',
+  ): Promise<{ readonly id: string; readonly reference: string }> {
+    const reference = `probe-order-${randomUUID()}`;
+    const [row] = await tx.$queryRaw<{ id: string }[]>`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, updated_at)
+      VALUES (${enrollmentId}::uuid, 'fake', ${reference}, 100000, 'EGP',
+              ${status}::payment_status, ${NOW}, now())
+      RETURNING id::text AS id`;
+    if (row === undefined) throw new Error('no order written');
+    return { id: row.id, reference };
+  }
+  async function event(paymentId: string, type: 'paid' | 'failed', receivedAt: Date) {
+    await tx.$executeRaw`
+      INSERT INTO payment_events (payment_id, provider_event_id, event_type, signature_verified_at,
+                                  payload_hash, received_at)
+      VALUES (${paymentId}::uuid, ${`fake_evt_${randomUUID()}`}, ${type}::payment_event_type,
+              ${receivedAt}, 'probe-hash', ${receivedAt})`;
+  }
+  async function session(enrollmentId: string, student: string, n: number, startsAt: string) {
+    const start = new Date(startsAt);
+    await tx.session.create({
+      data: {
+        enrollmentId,
+        teacherUserId: teacher,
+        studentUserId: student,
+        sequenceNumber: n,
+        scheduledDateLocal: dateColumnOf(startsAt.slice(0, 10)),
+        scheduledStartTimeLocal: timeColumnOf(startsAt.slice(11, 19)),
+        timezone: CAIRO,
+        scheduledStartAt: start,
+        scheduledEndAt: new Date(addMinutes(start, 60)),
+        status: n === 1 ? 'done' : 'scheduled',
+      },
+    });
+  }
+
+  const yusra = await person(`يُسْرى-${token}`);
+  const huda = await person(`هدى-${token}`);
+  // Yusra's enrollment: a failed order, a Retry paid, then a second payment (a compensation case).
+  const yusras = await enrollment(yusra, 'confirmed');
+  const failed = await order(yusras, 'failed');
+  const paid = await order(yusras, 'paid');
+  const second = await order(yusras, 'paid');
+  await event(failed.id, 'failed', new Date('2026-11-01T10:01:00Z'));
+  await event(paid.id, 'paid', new Date('2026-11-01T10:06:00Z'));
+  await event(second.id, 'paid', new Date('2026-11-01T11:00:00Z'));
+  await tx.enrollmentEvent.createMany({
+    data: [
+      {
+        enrollmentId: yusras,
+        kind: 'order_failed',
+        paymentId: failed.id,
+        occurredAt: new Date('2026-11-01T10:01:00Z'),
+      },
+      {
+        enrollmentId: yusras,
+        kind: 'confirmed',
+        paymentId: paid.id,
+        occurredAt: new Date('2026-11-01T10:06:00Z'),
+      },
+    ],
+  });
+  await session(yusras, yusra, 1, '2026-11-03T12:00:00.000Z');
+  await session(yusras, yusra, 2, '2026-11-17T12:00:00.000Z');
+  // Huda's: paid, then refused at confirmation (`slot_unavailable`).
+  const hudas = await enrollment(huda, 'cancelled');
+  const refused = await order(hudas, 'paid');
+  const created = await order(await enrollment(huda, 'pending_payment'), 'created');
+  return { token, subject, yusras, failed, paid, second, refused, created };
+}
+
+describe('payments.list over the real tables', () => {
+  it('pages a student’s orders newest first, keyset by id, a cursor only while more follow', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const first = await monitor.list(tx, { search: `يسرى-${w.token}` });
+      expect(first.items.map(({ paymentId }) => paymentId)).toEqual([w.second.id, w.paid.id]);
+      expect(first.nextCursor).toBe(w.paid.id);
+      const rest = await monitor.list(tx, {
+        search: `يسرى-${w.token}`,
+        ...(first.nextCursor === undefined ? {} : { cursor: first.nextCursor }),
+      });
+      expect(rest.items.map(({ paymentId }) => paymentId)).toEqual([w.failed.id]);
+      expect(rest).not.toHaveProperty('nextCursor');
+      expect(first.items[0]).toMatchObject({
+        gatewayOrderId: w.second.reference,
+        student: { displayName: `يُسْرى-${w.token}` },
+        status: 'paid',
+        enrollmentCancelled: false,
+      });
+    });
+  });
+
+  it('folds the typed name as the stored one (R-203), and matches no other student', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const huda = await monitor.list(tx, { search: `هدى-${w.token.toUpperCase()}` });
+      expect(huda.items.map(({ paymentId }) => paymentId)).toEqual([w.created.id, w.refused.id]);
+    });
+  });
+
+  it('filters by status, and says a paid order’s enrollment was cancelled', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const paid = await monitor.list(tx, { status: 'paid', search: `هدى-${w.token}` });
+      expect(paid.items).toEqual([
+        expect.objectContaining({ paymentId: w.refused.id, enrollmentCancelled: true }),
+      ]);
+      const failed = await monitor.list(tx, { status: 'failed', search: `يسرى-${w.token}` });
+      expect(failed.items.map(({ paymentId }) => paymentId)).toEqual([w.failed.id]);
+    });
+  });
+
+  it('matches an order reference exactly, and a part of one matches nothing', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const exact = await monitor.list(tx, { search: w.refused.reference });
+      expect(exact.items.map(({ paymentId }) => paymentId)).toEqual([w.refused.id]);
+      const part = await monitor.list(tx, { search: w.refused.reference.slice(0, -1) });
+      expect(part.items).toEqual([]);
+    });
+  });
+});
+
+describe('payments.get over the real tables', () => {
+  it('answers the enrollment’s package and progress, the events, this order’s outcomes and every paid order', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const detail = await monitor.get(tx, w.paid.id);
+      expect(detail).toMatchObject({
+        paymentId: w.paid.id,
+        gatewayOrderId: w.paid.reference,
+        status: 'paid',
+        currency: 'EGP',
+        student: { displayName: `يُسْرى-${w.token}` },
+        enrollment: {
+          enrollmentId: w.yusras,
+          summary: { subject: w.subject, track: 'recitation', sessionCount: 4 },
+          teacher: { displayName: `المعلمة ${w.token}` },
+          status: 'confirmed',
+          completed: 1,
+          total: 4,
+        },
+        events: [{ eventType: 'paid', receivedAt: '2026-11-01T10:06:00.000Z' }],
+        outcomes: [{ kind: 'confirmed', occurredAt: '2026-11-01T10:06:00.000Z' }],
+      });
+      expect(detail.paidOrders.map(({ paymentId }) => paymentId)).toEqual([w.paid.id, w.second.id]);
+      const failed = await monitor.get(tx, w.failed.id);
+      expect(failed.outcomes).toEqual([
+        { kind: 'order_failed', occurredAt: '2026-11-01T10:01:00.000Z' },
+      ]);
+      expect(failed.events).toEqual([
+        { eventType: 'failed', receivedAt: '2026-11-01T10:01:00.000Z' },
+      ]);
+    });
+  });
+
+  it('answers NOT_FOUND for an id no order holds', async () => {
+    await rolledBack(async (tx) => {
+      await expect(monitor.get(tx, randomUUID())).rejects.toEqual(new DomainError('NOT_FOUND'));
+    });
+  });
+});
+
+describe('no monitor procedure writes beyond its audit entry (FR-401)', () => {
+  const log = createLogger({ level: 'info', destination: { write: () => undefined } });
+  const callerFor = createAdminCallerFactory(createAdminRouter({ payments: paymentsAdminRouter }));
+  const ADMIN = randomUUID();
+
+  /** Rows the transaction inserted, updated and deleted so far, every table summed. */
+  async function writesOf(tx: Transaction): Promise<bigint> {
+    const [row] = await tx.$queryRaw<{ writes: bigint }[]>`
+      SELECT COALESCE(SUM(n_tup_ins + n_tup_upd + n_tup_del), 0)::bigint AS writes
+      FROM pg_stat_xact_user_tables`;
+    return row?.writes ?? 0n;
+  }
+
+  it('payments.list and payments.get write no row, and each describes exactly its one entry', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const written: AuditRecord[] = [];
+      const services = new Proxy(unusedAdminServices, {
+        get: (target, name, receiver) =>
+          name === 'payments' ? monitor : Reflect.get(target, name, receiver),
+      }) as AdminSurfaceServices;
+      const caller = callerFor(
+        createAdminContext({
+          session: { adminId: ADMIN, sessionId: ADMIN, mfaVerified: true },
+          log,
+          administration: {
+            // The call runs on the probe's transaction, so its writes are counted there.
+            transactions: { run: (work) => work(tx) },
+            auditWriter: {
+              write: async (_tx, record) => {
+                written.push(record);
+              },
+            },
+          },
+          services,
+          rateLimiter: {
+            check: async () => {
+              throw new DomainError('INTERNAL');
+            },
+          } as unknown as RateLimiter,
+          clientAddress: '203.0.113.9',
+        }),
+      );
+      const before = await writesOf(tx);
+      await caller.payments.list({ search: `يسرى-${w.token}` });
+      await caller.payments.list({ status: 'paid', search: w.refused.reference });
+      await caller.payments.get({ paymentId: w.paid.id });
+      expect(await writesOf(tx)).toBe(before);
+      expect(written).toEqual([
+        { adminId: ADMIN, action: 'payments.listed', targetType: 'admin', targetId: ADMIN },
+        { adminId: ADMIN, action: 'payments.listed', targetType: 'admin', targetId: ADMIN },
+        { adminId: ADMIN, action: 'payments.viewed', targetType: 'payment', targetId: w.paid.id },
+      ]);
+    });
+  });
+});

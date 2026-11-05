@@ -329,6 +329,31 @@ describe('AdminAudit (FR-175)', () => {
     await waitFor(() => expect(currentPath()).toBe(`/credentials?credential=${CREDENTIAL}`));
   });
 
+  // T052, T053: the monitor's `payments.viewed` names the order it opened, linked to the monitor.
+  it('names a payment order’s view and links it to the payments monitor', async () => {
+    const ORDER = '0193a6f0-0000-7000-8000-0000000000f1';
+    const api = fakeApi();
+    api.audit.list.query.mockResolvedValue({
+      rows: [
+        {
+          entryId: '0193a6f0-0000-7000-8000-0000000000e9',
+          occurredAt: '2026-11-04T10:00:00.000Z',
+          adminName: 'سارة عادل',
+          action: 'payments.viewed',
+          targetLabel: `طلب دفع · ${ORDER}`,
+          targetType: 'payment',
+          targetId: ORDER,
+        },
+      ],
+      total: 1,
+      pageSize: 25,
+    });
+    open(api);
+    expect(await screen.findByText(ar('admin.audit.actions.paymentsViewed'))).toBeTruthy();
+    fireEvent.click(screen.getByRole('link', { name: ar('admin.audit.targets.payment') }));
+    await waitFor(() => expect(currentPath()).toBe(`/payments?payment=${ORDER}`));
+  });
+
   it('says an empty period, an empty log, and a log that could not be read', async () => {
     const api = fakeApi();
     api.audit.list.query.mockResolvedValue({ rows: [], total: 0, pageSize: 25 });

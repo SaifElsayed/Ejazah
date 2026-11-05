@@ -1,6 +1,6 @@
 # Ijazah — System Architecture
 
-_Version 3.2 · Companion to SRS v1.4, ERD v1.13, Constitution 2.4.4 · September 2026_
+_Version 3.2 · Companion to SRS v1.4, ERD v1.14, Constitution 2.4.5 · September 2026_
 _Adds ports-and-adapters for external capabilities. Supersedes v3.0. Amended by [ADR 0007](adr/0007-direct-gateway-checkout.md): direct gateway checkout with 0% commission and zero custody, payment port and payments module, post-approval payout gate; by [ADR 0005](adr/0005-phase-0-document-amendments.md): eleven modules with unified table ownership, worker as a second process of the API, `surfaces/` router directory, per-path coverage floor, `develop` as the integration branch; by [ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md): a session's local time is the schedule and its UTC instants are recomputed when time zone rules change; and by [ADR 0010](adr/0010-database-refuses-double-booking.md): the database refuses double booking, the slot hold outlives the gateway order, and the payment port can cancel an unpaid order._
 _Amended 2026-10-18 by the Phase 1 ERD pass and document pass (batch B3, [PR #78](https://github.com/SaifElsayed/Ejazah/pull/78), `specs/002-identity/`, tasks T014 and T015): §3.2 gains the sign-in port and §3.4 counts seven ports; §4 lists the six Phase 1 tables under their modules; §7.2 states the caller kinds Phase 1 adds; §12 says what `/ready` checks today; §14 names the secret nets that exist._
 
@@ -84,7 +84,7 @@ apps/api/src/platform/ports/
 ├── ports.module.ts                   selects every adapter by config
 ├── payment/
 │   ├── payment.port.ts               the interface — THE contract
-│   ├── gateway.adapter.ts            the selected gateway (OPEN-11), Phase 2
+│   ├── paymob.adapter.ts             Paymob, the gateway (OPEN-11), Phase 2 (T056)
 │   └── fake.adapter.ts               recording stand-in; can be told to fail
 ├── storage/
 │   ├── storage.port.ts               the interface — THE contract
@@ -167,6 +167,24 @@ Each module has a service (all rules), a repository (all queries), a router (thi
 
 Discovery is not a module: a module owning no tables would have to read another module's tables to do anything, which R-API-6 forbids. The visibility predicate reads only `users` and `teacher_profiles`, so it lives in `identity`'s repository, which also orders and pages the visible teachers; `catalog` filters its own tables by the ids it returns and builds the cards; the discovery router lives in `booking`, whose holds and enrollments give each card its nearest free slot (amended 2026-11-01, the owner's approval of the Phase 2 analysis, C2; `specs/003-booking/` R-201, R-204, R-205). Session generation is triggered by `booking` when an enrollment is marked paid, but the rows are written by `sessions` through its public entry — `booking` never touches the `sessions` table. Certification reads the isnad chain through `catalog`'s public entry. `payments` is the only module with an HTTP endpoint outside tRPC: the gateway's webhook is a plain POST whose raw body must reach the signature check untouched (§8).
 
+**The module graph** (amended 2026-11-04 by Phase 2's document pass, T055 of `specs/003-booking/tasks.md`; the Structure Decisions of `specs/002-identity/plan.md` and `specs/003-booking/plan.md`, research R-207, R-208 and R-219). Whose `index.ts` each module imports, as the code stands at the end of Phase 2:
+
+| Module                                      | Imports                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| identity                                    | none                                                                           |
+| verification                                | identity, catalog                                                              |
+| catalog                                     | identity                                                                       |
+| booking                                     | identity, catalog, sessions                                                    |
+| payments                                    | identity, booking                                                              |
+| sessions                                    | none                                                                           |
+| moderation                                  | none                                                                           |
+| chat, certification, reviews, notifications | none (no code before Phases 3 and 4)                                           |
+| admin                                       | any (today identity, verification, catalog, payments); no module imports admin |
+
+The jobs (`apps/api/src/jobs/`, run by the worker) are not a module: each reaches the modules it needs through their entries. `confirm-enrollment` goes through booking, catalog, identity, moderation, payments and sessions; `expire-pending-payments` through booking, moderation and payments; `expire-holds` through booking and payments; `reresolve-session-instants` through booking and sessions. So the compensation case a refused confirmation opens reaches `moderation` from the job, and `modules/payments` imports no moderation (research R-208 lists that edge; the job carries it).
+
+Three dependencies run against these arrows. Each is handed in as a function by a caller above both modules, so no import cycle exists: catalog's `CatalogUse` port (whether a slot or a package is in use) is bound to booking's `createCatalogUse` in `main.ts` (R-207); identity's `AccountConsequences` registry is subscribed to in `main.ts` by verification's document erasure and booking's `terminationSubscriber` (Phase 1's R-121, R-219); and booking's hold functions take payments' `orderStandingsOf` from their callers (payments' checkout, the jobs, the termination subscriber's binding), so booking reads no `payments` row and imports nothing of payments (R-208). An edge that would close a cycle is a design question for the rules below, never an import.
+
 **Configuration the clients read (ADR 0021 D4).** `SUPPORT_EMAIL` is a required key of `env.schema.ts` with no default, a valid address, validated at startup like every other key. It is not a row of `settings` (§3.14 of the SRS) and not a string in either catalogue: no admin edits it from the panel, so a taken-over admin account cannot point users at another mailbox; a change of address is a configuration change, not a release. The kernel serves it through `platform.publicConfig`, a `publicProcedure` with a declared rate limit (T170) and an `.output(schema)`, returning `{ supportEmail }`; the phone app and the public pages read it at start-up, cache the last value and never block start-up on it. The admin panel has no support link. The key enters `.env.example` with the Phase 2 task that declares it in `env.schema.ts`, since `config.spec.ts` keeps the two equal.
 
 Lint-enforced dependency rules:
@@ -205,6 +223,8 @@ ijazah/
 │   │                           evaluate-session · send-reminder · render-certificate
 │   │                           purge-chat · deliver-notification · reencrypt-columns
 │   │                           purge-otp-codes · purge-stale-push-tokens · purge-expired-sessions (Phase 1)
+│   │                           deliver-admin-invite · purge-unreferenced-documents · erase-deleted-files (Phase 1)
+│   │                           reresolve-session-instants (Phase 2)
 │   ├── mobile/             §6
 │   └── admin/              §6.5
 │

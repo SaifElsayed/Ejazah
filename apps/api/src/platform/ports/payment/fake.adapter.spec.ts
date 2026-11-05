@@ -124,6 +124,22 @@ describe('the payment stand-in: signed events (T117, FR-074, R-MONEY-8, R-MONEY-
     } satisfies Record<keyof Extract<GatewayEvent, { type: 'paid' }>, unknown>);
   });
 
+  it('reports no fee and no net when told the gateway reports none, as Paymob does (T056)', async () => {
+    const payments = gateway();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(500), 'EGP', PAY_BY);
+    const { rawBody, headers } = payments.orderEvent(gatewayOrderId, 'paid', {
+      gateway_fee_piasters: null,
+      net_piasters: null,
+    });
+
+    await expect(payments.verifyAndParseEvent(rawBody, headers)).resolves.toMatchObject({
+      type: 'paid',
+      gross_piasters: 500,
+      gateway_fee_piasters: null,
+      net_piasters: null,
+    });
+  });
+
   it.each(['failed', 'expired', 'refunded'] as const)(
     'parses a correctly signed %s event naming its order',
     async (type) => {

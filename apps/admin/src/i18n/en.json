@@ -158,6 +158,8 @@
         "dismissReport": "Dismiss report",
         "documentView": "View a document",
         "issueIjazahOnRequest": "Issue ijazah on teacher's request",
+        "paymentsListed": "View payments",
+        "paymentsViewed": "View a payment order",
         "recordVerificationCall": "Record verification call",
         "rejectApplication": "Reject application",
         "removeReviewComment": "Remove review comment",
@@ -233,6 +235,7 @@
         "admin": "Administrator",
         "credential": "Ijazah",
         "document": "Document",
+        "payment": "Payment order",
         "setting": "Setting",
         "teacherApplication": "Application",
         "user": "User",
@@ -1471,12 +1474,13 @@
       "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
       "columns": {
         "fee": "Fee",
-        "gross": "Gross (EGP)",
+        "gross": "Gross",
         "net": "Net",
         "order": "Order",
         "status": "Status",
         "student": "Student"
       },
+      "dash": "—",
       "detail": {
         "a11y": "Order details",
         "a11yEvents": "Order events",
@@ -1486,8 +1490,14 @@
         "events": {
           "confirmed": "Enrollment confirmed and its eight sessions created",
           "created": "Order created",
+          "enrollmentCancelled": "The enrollment was cancelled · {reason}",
+          "enrollmentConfirmed": "The enrollment was confirmed and its sessions created",
+          "expired": "The gateway reported the order expired",
+          "failed": "The gateway reported the payment failed",
           "notified": "Notification reached the student and the teacher",
+          "orderFailed": "The failed order was recorded on the enrollment",
           "paid": "Gateway reported the payment succeeded",
+          "refunded": "The gateway reported a refund",
           "transaction": "Transaction number {id}"
         },
         "eventsTitle": "What happened to the order",
@@ -1496,6 +1506,8 @@
         "gross": "Gross",
         "netToTeacher": "Net to teacher",
         "orderNo": "Order number",
+        "paidOrdersNote": "A compensation case covers every paid order of this enrollment.",
+        "paidOrdersTitle": "Paid orders of this enrollment",
         "referencesTitle": "References",
         "subtitle": "{student} · {subject} · {sessions} with {teacher}",
         "transactionNo": "Transaction number"
@@ -1506,12 +1518,27 @@
       },
       "enrollmentCancelled": "Enrollment cancelled",
       "lede": "The order record as reported by the payment gateway. Amounts in Egyptian pounds.",
+      "pagerPage": "Page {page} · newest first",
       "pagerSummary": "{shown} of {total} · newest first",
       "search": {
         "label": "Search",
         "placeholder": "Order number or student name"
       },
-      "title": "Payments"
+      "title": "Payments",
+      "emptyAll": {
+        "text": "Every order created on the payment gateway appears here.",
+        "title": "No payments yet"
+      },
+      "cancellationReasons": {
+        "accountDeleted": "Account deleted",
+        "admin": "Administration's decision",
+        "checkoutAbandoned": "The student started a new checkout",
+        "genderCorrection": "Gender correction",
+        "paymentExpired": "Payment time ran out",
+        "paymentFailed": "Payment failed",
+        "slotUnavailable": "Slot unavailable after payment",
+        "teacherSuspended": "Teacher suspended"
+      }
     },
     "reports": {
       "columns": {

@@ -24,7 +24,8 @@ export type AuditTargetType =
   | 'document'
   | 'verification_request'
   | 'admin'
-  | 'setting';
+  | 'setting'
+  | 'payment';
 
 /** The kind word of each target type: the label is this word, the separator and the identifier. */
 export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
@@ -35,6 +36,8 @@ export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
   verification_request: 'طلب إثبات هوية',
   admin: 'مشرف',
   setting: 'إعداد',
+  // T052: a gateway order the payments monitor opened (`payments.viewed`).
+  payment: 'طلب دفع',
 };
 
 /** Between the kind word and the identifier (ERD §12). */

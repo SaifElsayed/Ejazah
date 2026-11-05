@@ -15,6 +15,12 @@
 //   and re-renders every reader of the catalogue; nothing is reloaded and the session is kept.
 // - The browser's own `Intl` carries Arabic's six plural categories, so the panel needs no
 //   plural-rules polyfill (the phone's Hermes does).
+// - 002:T153, its first part, done with T053 (the owner's decision of 2026-11-04): every value a
+//   template interpolates, a plural's `#` included, is wrapped in a first-strong isolate (U+2068 …
+//   U+2069), as the phone's `t` does since T109, so a Latin name, an order reference or a number
+//   placed in an Arabic sentence (or an Arabic name in an English one) keeps the sentence's order;
+//   a select or a plural chooses on the bare value. The page's direction is the document's `dir`,
+//   not its first strong letter, so the phone's right-to-left mark (T123) is not needed here.
 import { IntlMessageFormat } from 'intl-messageformat';
 import { useCallback, useSyncExternalStore } from 'react';
 
@@ -129,13 +135,52 @@ export function translate(locale: Locale, key: MessageKey, values?: MessageValue
   const cacheKey = `${locale}:${key}`;
   let format = compiled.get(cacheKey);
   if (format === undefined) {
-    format = new IntlMessageFormat(messageOf(locale, key), formattingTag(locale));
+    const parsed = new IntlMessageFormat(messageOf(locale, key), formattingTag(locale));
+    format = new IntlMessageFormat(isolated(parsed.getAst()), formattingTag(locale));
     compiled.set(cacheKey, format);
   }
   const text = format.format(values);
   // The catalogue holds no rich-text tag, so a template always formats to a string.
   if (typeof text !== 'string') throw new TypeError(`i18n: "${key}" did not format to text`);
   return text;
+}
+
+type Element = ReturnType<IntlMessageFormat['getAst']>[number];
+
+/**
+ * The parser's element kinds (`TYPE` of `@formatjs/icu-messageformat-parser`, which
+ * `intl-messageformat` does not re-export): a literal, and the values a template interpolates.
+ */
+const LITERAL = 0;
+const VALUES: ReadonlySet<number> = new Set([
+  1, // argument, `{name}`
+  2, // number
+  3, // date
+  4, // time
+  7, // pound, a plural's `#`
+]);
+const FIRST_STRONG_ISOLATE = '⁨';
+const POP_DIRECTIONAL_ISOLATE = '⁩';
+
+/** The template with every value between isolates, through the branches of a select or plural. */
+function isolated(elements: readonly Element[]): Element[] {
+  return elements.flatMap((element): Element[] => {
+    if (VALUES.has(element.type)) {
+      return [literal(FIRST_STRONG_ISOLATE), element, literal(POP_DIRECTIONAL_ISOLATE)];
+    }
+    if (!('options' in element)) return [element];
+    const options = Object.fromEntries(
+      Object.entries(element.options).map(([name, option]) => [
+        name,
+        { ...option, value: isolated(option.value) },
+      ]),
+    );
+    return [{ ...element, options } as Element];
+  });
+}
+
+function literal(value: string): Element {
+  return { type: LITERAL, value } as Element;
 }
 
 function messageOf(locale: Locale, key: string): string {

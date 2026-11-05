@@ -127,6 +127,8 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.home'), '/'],
       [translate('ar', 'admin.nav.items.applications'), '/applications'],
       [translate('ar', 'admin.nav.items.credentials'), '/credentials'],
+      // T053: the payments monitor, before the settings as the board orders the group.
+      [translate('ar', 'admin.nav.items.payments'), '/payments'],
       [translate('ar', 'admin.nav.items.settings'), '/settings/admins'],
       [translate('ar', 'admin.nav.items.audit'), '/audit'],
     ]);

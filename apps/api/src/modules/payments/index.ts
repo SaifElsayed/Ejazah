@@ -1,6 +1,7 @@
 // PUBLIC ENTRY of the payments module (ADR 0007 D4). Other modules import this file and nothing below it (R-API-3).
-// Owns payments and payment_events; hosts the raw-body webhook endpoint outside tRPC; runs confirm-enrollment
-// and expire-pending-payments. Confirms an enrollment through booking's public entry; never writes enrollments itself.
+// Owns payments and payment_events; hosts the raw-body webhook endpoint outside tRPC. The jobs
+// confirm-enrollment and expire-pending-payments (`apps/api/src/jobs/`) read and move its orders through this
+// entry, and the confirm job confirms the enrollment through booking's entry; payments never writes enrollments.
 //
 // Phase 1 (T077): the webhook route alone, which records a signed payout-recipient event and hands
 // its verdict to the identity module's entries (payments imports identity, never the reverse; R-121).
@@ -39,6 +40,7 @@ import type { PaymentGateway } from './checkout.repository.js';
 import { type CheckoutStudent, CheckoutService, checkoutStepsOver } from './checkout.service.js';
 import { type ConfirmationQueue, OrderEventsService } from './order-events.service.js';
 import { checkoutAddresses } from './payments.repository.js';
+import { PaymentsMonitorService } from './payments-monitor.service.js';
 import { RecipientEventsService } from './recipient-events.service.js';
 import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.js';
 
@@ -69,7 +71,7 @@ export function createPaymentWebhookRoute({
 }): NodeHandler {
   const reporting = report === undefined ? {} : { report };
   return paymentWebhookRoute({
-    verify: (rawBody, headers) => payment.verifyAndParseEvent(rawBody, headers),
+    verify: (rawBody, headers, query) => payment.verifyAndParseEvent(rawBody, headers, query),
     events: {
       recipients: new RecipientEventsService({
         database,
@@ -179,4 +181,20 @@ export function createCheckoutServices({
     continue: (student, input) => service.continue(student, input),
     status: (student, input) => service.status(student, input),
   };
+}
+
+/**
+ * The admin's payments monitor (T052, FR-400 to FR-402, R-220): `paymentsAdminRouter` is mounted
+ * under `payments` by `admin.router.ts`, and its two reads are composed into the admin module's
+ * services, which `main.ts` binds to the administrator surface. Nothing in it writes (FR-401).
+ */
+export { paymentsAdminRouter } from './payments-admin.router.js';
+export { type PaymentsMonitorStore, paymentsMonitorStore } from './payments-monitor.service.js';
+
+/** The monitor over the module's queries and the owners' entries, its page size from settings. */
+export function createPaymentsMonitorService(dependencies: {
+  readonly settings: SettingsReader;
+  readonly now?: () => Date;
+}): Pick<PaymentsMonitorService, 'list' | 'get'> {
+  return new PaymentsMonitorService(dependencies);
 }

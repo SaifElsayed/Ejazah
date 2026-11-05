@@ -86,8 +86,28 @@ On the phone, as an approved teacher whose payout is **not** verified:
 9. «اشتراكاتي» and the home show the sessions in both zones; «طلابي» on the teacher's phone finds the student by a
    spelling variant of the name.
 
-If the gateway's written answers arrived before the last batch, steps 3 to 5 are repeated on the gateway's sandbox
-(SC-301); otherwise that run is FR-371's numbered task.
+Steps 3 to 5 are repeated on Paymob's test account (SC-301, T056; the owner's decision of 2026-11-03): the API runs
+with `PAYMENT_GATEWAY=paymob` and `PUBLIC_WEBHOOK_ORIGIN` set to a cloudflared quick tunnel's origin, opened for this
+run only and closed as soon as it ends; the dashboard's «Transaction processed callback» is
+`<tunnel>/webhooks/payment`; the teacher is already payout-verified. Pay opens `eg.checkout.paymob.com`; the test card
+pays. Step 5 waits for a documented way to a declined payment in test mode (test mode accepted a wrong expiry on
+2026-11-04; OPEN-11, the note under T056). With Paymob:
+
+- Step 7: Paymob has no way to cancel an intention, so the adapter answers `unsupported` and FR-BOOK-12 refuses a new
+  checkout while the earlier order lives. The intention is created with an expiry equal to the hold's, so it dies with
+  the hold, and the student continues from CheckoutPrevious (the owner's decision of 2026-11-04).
+- One more step: start a checkout, let the hold expire, then open the payment page again: Paymob refuses the payment.
+- The billing name and phone are sent as `"NA"` and the email as the platform's `SUPPORT_EMAIL` (Paymob refuses `"NA"`
+  there; the port carries nothing about the student). If Paymob refuses them, the run stops and the owner decides:
+  sending a student's email or phone is a personal-data decision (PDPL).
+- **Every tunnel goes through a proxy, never to the API itself** (required): the API runs in development with
+  `SIGN_IN_PROVIDER=fake`, so anyone holding the tunnel's address could sign in as anyone. The proxy passes only
+  `POST /webhooks/payment`, with the raw body and the query unchanged (Paymob's hmac is in the query), refuses a body over
+  64 KB and answers 404 to everything else. Before the dashboard is given the address, check from outside: `GET /health`
+  through the tunnel answers 404, and an unsigned `POST /webhooks/payment` is refused by the API itself.
+- Last step: close the tunnel, the proxy, the API and the worker, check nothing still runs with `PAYMENT_GATEWAY=paymob`,
+  and set the dashboard's «Transaction processed callback» (Webhook URL) back to its default,
+  `https://accept.paymobsolutions.com/api/acceptance/post_pay`.
 
 ## 5. The admin's monitor (US5)
 

@@ -116,8 +116,9 @@ describe('the messages', () => {
 
   it('chooses Arabic plural forms and writes Latin digits, as the boards draw', () => {
     expect(translate('ar', 'admin.admins.detail.auditEntriesCount', { count: 2 })).toBe('قيدان');
+    // The count is isolated (002:T153), the branch chosen on the bare value.
     expect(translate('ar', 'admin.admins.detail.auditEntriesCount', { count: 12 })).toBe(
-      '12 قيدًا',
+      '\u206812\u2069 قيدًا',
     );
     expect(formattingTag('ar')).toBe('ar-u-ca-gregory-nu-latn');
   });
@@ -139,6 +140,37 @@ describe('the messages', () => {
   it('names the direction of each language', () => {
     expect(directionOf('ar')).toBe('rtl');
     expect(directionOf('en')).toBe('ltr');
+  });
+});
+
+// 002:T153's first part, done with T053 (the owner's decision of 2026-11-04): every value `t` places
+// in a sentence sits between a first-strong isolate and its pop (U+2068 … U+2069), so a Latin name,
+// an order reference or a number keeps the sentence's order in either direction. A select or a
+// plural chooses on the bare value; the isolates wrap only what is shown.
+describe('t: every value in a sentence is isolated (002:T153)', () => {
+  it('isolates a name and a reference inside an Arabic sentence', () => {
+    expect(
+      translate('ar', 'admin.payments.detail.subtitle', {
+        student: 'Amal Ali',
+        subject: 'تجويد',
+        sessions: '8 جلسات',
+        teacher: 'Sara',
+      }),
+    ).toBe('\u2068Amal Ali\u2069 · \u2068تجويد\u2069 · \u20688 جلسات\u2069 مع \u2068Sara\u2069');
+  });
+
+  it('isolates a number and a plural count, and chooses the branch on the bare value', () => {
+    expect(translate('ar', 'admin.admins.detail.auditEntriesCount', { count: 12 })).toBe(
+      '\u206812\u2069 قيدًا',
+    );
+    expect(translate('ar', 'admin.admins.detail.auditEntriesCount', { count: 2 })).toBe('قيدان');
+    expect(translate('en', 'admin.common.amount', { amount: '150.00' })).toBe(
+      en.admin.common.amount.replace('{amount}', '\u2068150.00\u2069'),
+    );
+  });
+
+  it('adds nothing to a message with no value', () => {
+    expect(t('admin.signIn.title')).toBe('دخول الإدارة');
   });
 });
 

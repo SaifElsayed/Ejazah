@@ -134,7 +134,7 @@
         "recipient_verified",
         "refunded"
       ],
-      "PaymentGateway": ["fake"],
+      "PaymentGateway": ["fake", "paymob"],
       "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "RemedyKind": ["makeup", "refund"],
       "RemedyStatus": ["awaiting_choice", "booked", "counter_proposed", "proposed", "refund_case"],
@@ -449,6 +449,7 @@
               "admin",
               "credential",
               "document",
+              "payment",
               "setting",
               "teacher_application",
               "user",
@@ -470,6 +471,7 @@
               "admin",
               "credential",
               "document",
+              "payment",
               "setting",
               "teacher_application",
               "user",
@@ -500,6 +502,7 @@
               "admin",
               "credential",
               "document",
+              "payment",
               "setting",
               "teacher_application",
               "user",
@@ -772,6 +775,7 @@
               "admin",
               "credential",
               "document",
+              "payment",
               "setting",
               "teacher_application",
               "user",
@@ -787,6 +791,148 @@
           "$.queues.credentials.addedSubjects": { "required": true, "type": "integer" },
           "$.queues.credentials.oldestAgeHours": { "type": "integer" },
           "$.queues.credentials.open": { "required": true, "type": "integer" }
+        }
+      },
+      "payments.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.paymentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.createdAt": { "required": true, "type": "string" },
+          "$.currency": { "required": true, "type": "string" },
+          "$.enrollment": { "type": "object" },
+          "$.enrollment.cancellationReason": {
+            "type": "string",
+            "values": [
+              "account_deleted",
+              "admin",
+              "checkout_abandoned",
+              "gender_correction",
+              "payment_expired",
+              "payment_failed",
+              "slot_unavailable",
+              "teacher_suspended"
+            ]
+          },
+          "$.enrollment.completed": { "required": true, "type": "integer" },
+          "$.enrollment.enrollmentId": { "required": true, "type": "string" },
+          "$.enrollment.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.enrollment.summary": { "required": true, "type": "object" },
+          "$.enrollment.summary.sessionCount": { "required": true, "type": "integer" },
+          "$.enrollment.summary.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.enrollment.summary.subject": { "required": true, "type": "object" },
+          "$.enrollment.summary.subject.id": { "required": true, "type": "string" },
+          "$.enrollment.summary.subject.nameAr": { "required": true, "type": "string" },
+          "$.enrollment.summary.subject.nameEn": { "required": true, "type": "string" },
+          "$.enrollment.summary.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.enrollment.teacher": { "required": true, "type": "object" },
+          "$.enrollment.teacher.displayName": { "required": true, "type": "string" },
+          "$.enrollment.total": { "required": true, "type": "integer" },
+          "$.events": { "required": true, "type": "array" },
+          "$.events[]": { "type": "object" },
+          "$.events[].eventType": {
+            "required": true,
+            "type": "string",
+            "values": ["expired", "failed", "paid", "refunded"]
+          },
+          "$.events[].receivedAt": { "required": true, "type": "string" },
+          "$.gatewayFee_piasters": { "type": "integer" },
+          "$.gatewayOrderId": { "required": true, "type": "string" },
+          "$.gatewayTransactionId": { "type": "string" },
+          "$.gross_piasters": { "required": true, "type": "integer" },
+          "$.net_piasters": { "type": "integer" },
+          "$.outcomes": { "required": true, "type": "array" },
+          "$.outcomes[]": { "type": "object" },
+          "$.outcomes[].cancellationReason": {
+            "type": "string",
+            "values": [
+              "account_deleted",
+              "admin",
+              "checkout_abandoned",
+              "gender_correction",
+              "payment_expired",
+              "payment_failed",
+              "slot_unavailable",
+              "teacher_suspended"
+            ]
+          },
+          "$.outcomes[].kind": {
+            "required": true,
+            "type": "string",
+            "values": ["cancelled", "confirmed", "order_failed"]
+          },
+          "$.outcomes[].occurredAt": { "required": true, "type": "string" },
+          "$.paidOrders": { "required": true, "type": "array" },
+          "$.paidOrders[]": { "type": "object" },
+          "$.paidOrders[].createdAt": { "required": true, "type": "string" },
+          "$.paidOrders[].gatewayOrderId": { "required": true, "type": "string" },
+          "$.paidOrders[].paymentId": { "required": true, "type": "string" },
+          "$.paidOrders[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          },
+          "$.paymentId": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          },
+          "$.student": { "required": true, "type": "object" },
+          "$.student.displayName": { "required": true, "type": "string" }
+        }
+      },
+      "payments.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.search": { "type": "string" },
+          "$.status": {
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].createdAt": { "required": true, "type": "string" },
+          "$.items[].enrollmentCancelled": { "required": true, "type": "boolean" },
+          "$.items[].gatewayFee_piasters": { "type": "integer" },
+          "$.items[].gatewayOrderId": { "required": true, "type": "string" },
+          "$.items[].gross_piasters": { "required": true, "type": "integer" },
+          "$.items[].net_piasters": { "type": "integer" },
+          "$.items[].paymentId": { "required": true, "type": "string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.displayName": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
         }
       },
       "teachers.ban": {

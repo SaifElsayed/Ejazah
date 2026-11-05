@@ -13,10 +13,16 @@
 // Unset, the stand-in answers an address nobody serves, as local storage keeps a relative link
 // (T095). `standInCheckoutOf` hands the page the stand-in's order operations, and nothing for any
 // other gateway, so `platform/web/stand-in-checkout.ts` mounts the page only with the stand-in.
+//
+// T056: `paymob` serves Paymob (`paymob.adapter.ts`) from its keys; every intention names the webhook
+// on `PUBLIC_WEBHOOK_ORIGIN` as its callback address, and `SUPPORT_EMAIL` as its billing email (the
+// platform's address, never a student's). The configuration refuses `paymob` without them (T056),
+// and this entry refuses again, naming the key, so no caller can build it half-set.
 import type { Config } from '../../config/config.module.js';
 import { deriveStandInSecret } from '../inbound-event.js';
 import { FakePaymentAdapter, type StandInCheckout } from './fake.adapter.js';
 import type { PaymentPort } from './payment.port.js';
+import { PaymobPaymentAdapter } from './paymob.adapter.js';
 
 export {
   STAND_IN_ACTIONS,
@@ -28,8 +34,21 @@ export {
 
 export type PaymentConfig = Pick<
   Config,
-  'PAYMENT_GATEWAY' | 'PAYMENT_GATEWAY_WEBHOOK_SECRET' | 'ENCRYPTION_KEY' | 'API_PUBLIC_ORIGIN'
->;
+  | 'PAYMENT_GATEWAY'
+  | 'PAYMENT_GATEWAY_WEBHOOK_SECRET'
+  | 'ENCRYPTION_KEY'
+  | 'API_PUBLIC_ORIGIN'
+  | 'PAYMENT_GATEWAY_SECRET_KEY'
+  | 'PAYMENT_GATEWAY_PUBLIC_KEY'
+  | 'PAYMENT_GATEWAY_INTEGRATION_ID'
+  | 'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID'
+  | 'PUBLIC_WEBHOOK_ORIGIN'
+> &
+  Partial<Pick<Config, 'SUPPORT_EMAIL'>>;
+
+// The payments module's `PAYMENT_WEBHOOK_PATH` (T077), written out as the stand-in writes it: the
+// kernel imports no module.
+const WEBHOOK_PATH = '/webhooks/payment';
 
 const STAND_IN_SECRET_LABEL = 'ijazah:payment-stand-in-webhook:v1';
 
@@ -54,7 +73,32 @@ export function createPaymentPort(config: PaymentConfig): PaymentPort {
         webhookSecret: standInWebhookSecret(config),
         ...(config.API_PUBLIC_ORIGIN === undefined ? {} : { origin: config.API_PUBLIC_ORIGIN }),
       });
+    case 'paymob':
+      return paymobFrom(config);
   }
+}
+
+function required<T>(value: T | undefined, key: keyof PaymentConfig): T {
+  if (value === undefined) throw new Error(`PAYMENT_GATEWAY=paymob needs ${key}.`);
+  return value;
+}
+
+function paymobFrom(config: PaymentConfig): PaymobPaymentAdapter {
+  const origin = required(config.PUBLIC_WEBHOOK_ORIGIN, 'PUBLIC_WEBHOOK_ORIGIN');
+  return new PaymobPaymentAdapter({
+    secretKey: required(config.PAYMENT_GATEWAY_SECRET_KEY, 'PAYMENT_GATEWAY_SECRET_KEY'),
+    publicKey: required(config.PAYMENT_GATEWAY_PUBLIC_KEY, 'PAYMENT_GATEWAY_PUBLIC_KEY'),
+    hmacSecret: required(config.PAYMENT_GATEWAY_WEBHOOK_SECRET, 'PAYMENT_GATEWAY_WEBHOOK_SECRET'),
+    integrationId: required(
+      config.PAYMENT_GATEWAY_INTEGRATION_ID,
+      'PAYMENT_GATEWAY_INTEGRATION_ID',
+    ),
+    ...(config.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID === undefined
+      ? {}
+      : { splitIntegrationId: config.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID }),
+    notificationUrl: new URL(WEBHOOK_PATH, origin).toString(),
+    billingEmail: required(config.SUPPORT_EMAIL, 'SUPPORT_EMAIL'),
+  });
 }
 
 /**

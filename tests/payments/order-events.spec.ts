@@ -47,6 +47,7 @@ import {
   gatewayStandIn,
   type GatewayStandIn,
   type StandInEvent,
+  UNREPORTED_AMOUNTS,
 } from '../support/gateway-stand-in';
 
 const ENCRYPTION_KEY = randomBytes(32).toString('base64');
@@ -148,11 +149,17 @@ interface Order {
   readonly holdId: string;
 }
 
+/**
+ * The order's amount: the one the stand-in's order is created for and the one its `payments` row
+ * holds, so the paid event the stand-in reports always matches the row (T056).
+ */
+const order_piasters = piasters(25_000);
+
 /** An order the stand-in created, its `payments` row `created` with an address, and its active hold. */
 async function plantOrder(): Promise<Order> {
   const { gatewayOrderId } = await payment.createCheckout(
     randomUUID(),
-    piasters(25_000),
+    order_piasters,
     'EGP',
     PAY_BY,
   );
@@ -173,15 +180,17 @@ async function plantOrder(): Promise<Order> {
     enrollment_id: enrollmentId,
     expires_at: PAY_BY,
   });
-  const paymentId = await insertRow(db, 'payments', {
-    enrollment_id: enrollmentId,
-    gateway: 'fake',
-    gateway_order_id: gatewayOrderId,
-    currency: 'EGP',
-    status: 'created',
-    expires_at: PAY_BY,
-    checkout_url_encrypted: ADDRESS,
-  });
+  // Written by SQL, as `confirmation-world.ts` writes it: the amount column is named only in
+  // payments (R-MONEY-6).
+  const { rows: written } = await db.query<{ id: string }>(
+    `INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                           status, expires_at, checkout_url_encrypted, updated_at)
+     VALUES ($1, 'fake', $2, $3, 'EGP', 'created', $4, $5, now())
+     RETURNING id::text AS id`,
+    [enrollmentId, gatewayOrderId, order_piasters, PAY_BY, ADDRESS],
+  );
+  const paymentId = written[0]?.id;
+  if (paymentId === undefined) throw new Error('no order written');
   return { gatewayOrderId, paymentId, enrollmentId, holdId };
 }
 
@@ -292,6 +301,21 @@ describe('a paid event (FR-360, FR-367, R-214)', () => {
     expect(reported).toEqual([]);
   });
 
+  it('reporting no fee and no net, as Paymob’s callback does, records both as NULL and still enqueues confirmation (T056, R-MONEY-5)', async () => {
+    const order = await plantOrder();
+    const event = stand.paid(order.gatewayOrderId, UNREPORTED_AMOUNTS);
+
+    expect(await stand.deliver(event)).toBe(200);
+
+    const { rows } = await db.query<{ status: string; fee: string | null; net: string | null }>(
+      `SELECT status::text AS status, gateway_fee_piasters AS fee, net_piasters AS net
+         FROM payments WHERE id = $1`,
+      [order.paymentId],
+    );
+    expect(rows).toEqual([{ status: 'paid', fee: null, net: null }]);
+    expect(enqueued).toEqual([{ paymentId: order.paymentId, committedStatus: 'paid' }]);
+  });
+
   it('delivered twice: one row and nothing changed by the second, but confirmation enqueued again (M2)', async () => {
     const order = await plantOrder();
     const event = stand.paid(order.gatewayOrderId);
@@ -363,6 +387,54 @@ describe('a paid event (FR-360, FR-367, R-214)', () => {
     expect(await eventsOf(order.paymentId)).toHaveLength(1);
     expect(enqueued).toEqual([{ paymentId: order.paymentId, committedStatus: 'paid' }]);
   });
+});
+
+// T056 (the owner's decision of 2026-11-04): a paid event whose amount or currency is not its
+// order's moves nothing and is refused, and the difference is reported for a refund from the
+// gateway's dashboard, with no personal data.
+describe('a paid event that does not match its order (T056)', () => {
+  /** Plants an order, then changes its row's amount or currency by SQL, the stand-in's left as created. */
+  async function mismatchedOrder(change: 'amount' | 'currency'): Promise<Order> {
+    const order = await plantOrder();
+    await db.query(
+      change === 'amount'
+        ? 'UPDATE payments SET gross_piasters = gross_piasters + 1 WHERE id = $1'
+        : "UPDATE payments SET currency = 'USD' WHERE id = $1",
+      [order.paymentId],
+    );
+    return order;
+  }
+
+  it.each([
+    ['amount', { order: 25_001, currency: 'EGP' }],
+    ['currency', { order: 25_000, currency: 'USD' }],
+  ] as const)(
+    'whose %s differs: refused, the order unchanged and nothing recorded or enqueued, the difference reported',
+    async (change, ours) => {
+      const order = await mismatchedOrder(change);
+      const event = stand.paid(order.gatewayOrderId);
+      const sent = JSON.parse(event.rawBody.toString('utf8')) as { transaction: string };
+
+      expect(await stand.deliver(event)).toBe(400);
+
+      expect(await orderOf(order.paymentId)).toEqual({
+        status: 'created',
+        transaction: null,
+        address: ADDRESS,
+        as_reported: null,
+      });
+      expect(await eventsOf(order.paymentId)).toEqual([]);
+      expect(enqueued).toEqual([]);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]?.name).toBe('PaidAmountMismatchError');
+      expect((reported[0] as Error & { details?: unknown }).details).toEqual({
+        gatewayOrderId: order.gatewayOrderId,
+        gatewayTransactionId: sent.transaction,
+        callback: { amount: 25_000, currency: 'EGP' },
+        order: { amount: ours.order, currency: ours.currency },
+      });
+    },
+  );
 });
 
 describe('a failed event (FR-365, R-214)', () => {

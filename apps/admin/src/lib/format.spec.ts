@@ -44,16 +44,17 @@ describe('the home and the audit (B14d)', () => {
 });
 
 describe('formatPounds (T009, R-212)', () => {
+  // The amount is placed in the price template between isolates (002:T153).
   it('prints every amount to two decimals, whole pounds included', () => {
-    expect(formatPounds(piasters(15_000), 'ar')).toBe('150.00 ج.م');
-    expect(formatPounds(piasters(15_000), 'en')).toBe('EGP 150.00');
-    expect(formatPounds(piasters(15_050), 'ar')).toBe('150.50 ج.م');
-    expect(formatPounds(piasters(1), 'en')).toBe('EGP 0.01');
-    expect(formatPounds(piasters(0), 'ar')).toBe('0.00 ج.م');
+    expect(formatPounds(piasters(15_000), 'ar')).toBe('\u2068150.00\u2069 ج.م');
+    expect(formatPounds(piasters(15_000), 'en')).toBe('EGP \u2068150.00\u2069');
+    expect(formatPounds(piasters(15_050), 'ar')).toBe('\u2068150.50\u2069 ج.م');
+    expect(formatPounds(piasters(1), 'en')).toBe('EGP \u20680.01\u2069');
+    expect(formatPounds(piasters(0), 'ar')).toBe('\u20680.00\u2069 ج.م');
   });
 
   it('groups thousands with Latin digits', () => {
-    expect(formatPounds(piasters(123_456_789), 'ar')).toBe('1,234,567.89 ج.م');
-    expect(formatPounds(piasters(123_456_700), 'en')).toBe('EGP 1,234,567.00');
+    expect(formatPounds(piasters(123_456_789), 'ar')).toBe('\u20681,234,567.89\u2069 ج.م');
+    expect(formatPounds(piasters(123_456_700), 'en')).toBe('EGP \u20681,234,567.00\u2069');
   });
 });

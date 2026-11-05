@@ -5,10 +5,26 @@
 // neither for an administrator who already set a password. Over the real database, in a
 // transaction rolled back, with the queue a recorder. The pipeline's database is migrated, not
 // seeded, so each case plants the seeded administrator's row itself, in the state it needs.
+//
+// T097: with `--email` and `--name` it invites a new administrator instead, through `admins.add`'s
+// input contract, invited by nobody (`invited_by_admin_id` NULL), with a secret bound to the row, and
+// queues the invite; an address another administrator holds is refused and nothing is queued. Inside
+// a rolled-back transaction, as above. No spec can hold both the script and `AdminsService.add`
+// (R-API-4 keeps the admin module from tests, R-API-6 raw SQL from `apps/api`), so the column guard
+// below fails when `admin_users` gains a column, and `admins.service.spec.ts` pins the same values
+// for the service's row that these cases pin for the script's.
+import { randomBytes } from 'node:crypto';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption';
 import { ADMINISTRATOR } from '../../prisma/seed';
-import { inviteSeededAdministrator, refusalOf } from '../../scripts/dev/admin-invite';
+import {
+  inviteNewAdministrator,
+  inviteSeededAdministrator,
+  newAdministratorOf,
+  refusalOf,
+} from '../../scripts/dev/admin-invite';
 import { connectAsApplication, type Db, inRollback } from '../db-integrity/harness';
 
 const DEVELOPMENT = {
@@ -94,6 +110,151 @@ describe('the invite', { tags: ['database'] }, () => {
       expect(
         await inviteSeededAdministrator(db, { add: async (...args) => queued.push(args) }),
       ).toBe(false);
+    });
+    expect(queued).toEqual([]);
+  });
+});
+
+describe('a new administrator’s arguments (T097)', () => {
+  it('answers null without --email and --name, so the seeded administrator’s invite runs', () => {
+    expect(newAdministratorOf([])).toBeNull();
+  });
+
+  it('reads --email and --name through admins.add’s input contract', () => {
+    expect(newAdministratorOf(['--email', 'new@ijazah.test', '--name', 'New Admin'])).toEqual({
+      email: 'new@ijazah.test',
+      displayName: 'New Admin',
+    });
+  });
+
+  it('refuses an address the contract refuses, and either value without the other', () => {
+    expect(() => newAdministratorOf(['--email', 'not-an-address', '--name', 'X'])).toThrow();
+    expect(() => newAdministratorOf(['--email', 'new@ijazah.test'])).toThrow();
+    expect(() => newAdministratorOf(['--name', 'New Admin'])).toThrow();
+  });
+});
+
+// T124: skipped unless IJAZAH_DB_SPECS=1.
+describe('a new administrator’s invite (T097)', { tags: ['database'] }, () => {
+  let db: Db;
+  const cipher = new ColumnCipher(randomBytes(32).toString('base64'));
+  const unique = () => `t097-${randomBytes(6).toString('hex')}@ijazah.test`;
+  beforeAll(async () => {
+    db = await connectAsApplication();
+  });
+  afterAll(async () => {
+    await db.end();
+  });
+
+  // The column guard (T097): the script writes the row `AdminsService.add` writes, with SQL, since
+  // R-API-4 and R-API-6 keep a spec from holding both. Every column of `admin_users` is one the script
+  // writes or one it leaves to its default or NULL, exactly; a column added to the table fails here
+  // until both writers are read again.
+  it('knows every column of admin_users: the ones it writes and the ones it leaves', async () => {
+    const written = [
+      'id',
+      'email',
+      'password_hash',
+      'mfa_secret_encrypted',
+      'display_name',
+      'is_active',
+      'invited_by_admin_id',
+      'invited_at',
+      'created_at',
+      'updated_at',
+    ];
+    const left = [
+      'disabled_at',
+      'failed_sign_in_count',
+      'last_sign_in_at',
+      'locked_until_at',
+      'mfa_enrolled_at',
+      'mfa_last_accepted_step',
+      'password_set_at',
+    ];
+    const { rows } = await db.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'admin_users'`,
+    );
+    expect(
+      rows.map((row) => row.column_name).sort(),
+      'review scripts/dev/admin-invite.ts and AdminsService.add together',
+    ).toEqual([...written, ...left].sort());
+  });
+
+  it('writes the administrator invited by nobody, unenrolled, without a password, and queues the invite', async () => {
+    const queued: unknown[][] = [];
+    const email = unique();
+    await inRollback(db, async () => {
+      const invited = await inviteNewAdministrator(
+        db,
+        cipher,
+        { add: async (...args) => queued.push(args) },
+        { email: ` ${email.toUpperCase()} `, displayName: 'Dev Admin' },
+      );
+      expect(invited).not.toBeNull();
+      const adminId = invited?.adminId ?? '';
+      const { rows } = await db.query<Record<string, unknown>>(
+        `SELECT email, display_name, password_hash, password_set_at, mfa_enrolled_at, is_active,
+                invited_by_admin_id, invited_at = now() AS invited_now, mfa_secret_encrypted
+           FROM admin_users WHERE id = $1`,
+        [adminId],
+      );
+      expect(rows[0]).toMatchObject({
+        email,
+        display_name: 'Dev Admin',
+        password_hash: null,
+        password_set_at: null,
+        mfa_enrolled_at: null,
+        is_active: true,
+        invited_by_admin_id: null,
+        invited_now: true,
+      });
+      // The secret is bound to the row: it decrypts under this id and is a base32 TOTP secret.
+      expect(
+        cipher.decrypt(
+          rows[0]?.['mfa_secret_encrypted'] as Buffer,
+          'admin_users.mfa_secret_encrypted',
+          adminId,
+        ),
+      ).toMatch(/^[A-Z2-7]{32}$/);
+      expect(queued).toEqual([['deliver-admin-invite', { adminId }]]);
+    });
+  });
+
+  it('refuses an address another administrator holds, writing and queueing nothing', async () => {
+    const email = unique();
+    const queued: unknown[][] = [];
+    await inRollback(db, async () => {
+      expect(
+        await inviteNewAdministrator(
+          db,
+          cipher,
+          { add: async () => undefined },
+          {
+            email,
+            displayName: 'First',
+          },
+        ),
+      ).not.toBeNull();
+      await db.query('SAVEPOINT taken');
+      expect(
+        await inviteNewAdministrator(
+          db,
+          cipher,
+          { add: async (...args) => queued.push(args) },
+          {
+            email: email.toUpperCase(),
+            displayName: 'Second',
+          },
+        ),
+      ).toBeNull();
+      await db.query('ROLLBACK TO SAVEPOINT taken');
+      const { rows } = await db.query<{ n: string }>(
+        'SELECT count(*) AS n FROM admin_users WHERE email = $1',
+        [email],
+      );
+      expect(rows[0]?.n).toBe('1');
     });
     expect(queued).toEqual([]);
   });

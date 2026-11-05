@@ -24,6 +24,19 @@ export class EventSignatureError extends Error {
 }
 
 /**
+ * A correctly signed event that reports a state which is not final (T056; the owner's decision of
+ * 2026-11-04): the provider sends another event once it is. The webhook acknowledges it with 200
+ * and records nothing. Only a holder of the signing secret can reach it: the signature is checked
+ * first.
+ */
+export class NonFinalEventError extends Error {
+  constructor() {
+    super('The event is signed but reports a state that is not final.');
+    this.name = 'NonFinalEventError';
+  }
+}
+
+/**
  * A correctly signed event the port cannot read: the provider sent a shape this port does not know.
  * Only a holder of the signing secret can reach it. The webhook answers 400.
  */

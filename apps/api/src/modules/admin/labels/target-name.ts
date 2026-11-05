@@ -92,6 +92,7 @@ export async function resolveTargetName(
     case 'document':
     case 'verification_request':
     case 'setting':
+    case 'payment':
       return null;
   }
 }

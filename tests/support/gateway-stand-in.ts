@@ -23,6 +23,7 @@ export {
   type GatewayStandIn,
   type ReportedAmounts,
   type StandInEvent,
+  UNREPORTED_AMOUNTS,
 } from '../../apps/api/src/platform/ports/payment/gateway-stand-in.fixtures';
 
 /** The harness for the API listening on `origin`, its payment port built from `config`. */

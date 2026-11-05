@@ -81,6 +81,9 @@ import type {
   auditListInput,
   auditListOutput,
   homeSummaryOutput,
+  paymentsGetOutput,
+  paymentsListInput,
+  paymentsListOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -383,6 +386,17 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof documentsRequestAnotherInput>,
     ): Promise<{ readonly requestId: string; readonly documentId: string }>;
+  };
+  /**
+   * The payments monitor (FR-400 to FR-402; T052), the payments module's: two reads on the call's
+   * transaction, and nothing written but the call's audit entry (FR-401).
+   */
+  readonly payments: {
+    list(
+      tx: Transaction,
+      query: z.output<typeof paymentsListInput>,
+    ): Answer<typeof paymentsListOutput>;
+    get(tx: Transaction, paymentId: string): Answer<typeof paymentsGetOutput>;
   };
   /** An approved teacher's standing (FR-165; T068), the identity module's. */
   readonly teachers: {

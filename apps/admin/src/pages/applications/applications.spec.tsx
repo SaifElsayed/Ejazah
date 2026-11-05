@@ -344,7 +344,10 @@ describe('AdminApplications (FR-160)', () => {
     const api = fakeApi();
     api.applications.list.query.mockRejectedValue(refusal('INTERNAL'));
     open(api);
-    expect(await screen.findByText('Teacher applications could not be loaded')).toBeTruthy();
+    // The page's name is a value of the sentence, isolated (002:T153).
+    expect(
+      await screen.findByText('\u2068Teacher applications\u2069 could not be loaded'),
+    ).toBeTruthy();
   });
 });
 

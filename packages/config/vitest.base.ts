@@ -13,6 +13,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // spec imports would otherwise escape its floor instead of counting at 0%.
 // 002-identity T086: the identity, verification, catalog and admin modules join (FR-213).
 // 002-identity T141: the payments module joins, real code since B15 (Phase 2's B31).
+// 003-booking T054: booking, sessions and moderation join, Phase 2's modules (SC-308).
 const coveredPaths = [
   'packages/money/src/**',
   'packages/time/src/**',
@@ -23,6 +24,9 @@ const coveredPaths = [
   'apps/api/src/modules/catalog/**',
   'apps/api/src/modules/admin/**',
   'apps/api/src/modules/payments/**',
+  'apps/api/src/modules/booking/**',
+  'apps/api/src/modules/sessions/**',
+  'apps/api/src/modules/moderation/**',
 ];
 
 // What the specs share is test code, not a module's rules: counted, a fixture the specs run end to
@@ -38,6 +42,9 @@ const notMeasured = ['**/__fixtures__/**', '**/*.fixtures.ts', '**/*.md'];
 // lines): identity 92.4/87.5/92.4/95.5, verification 93.0/83.9/93.1/95.1, catalog 92.2/84.2/91.8/95.0,
 // admin 91.8/87.6/88.0/93.6. Measured before payments joined (002-identity T141; the specs that load
 // the module, by `vitest related`, fixtures left out): payments 90.2/82.6/86.1/92.7.
+// Measured before booking, sessions and moderation joined (003-booking T054; full suite on
+// `develop` at 6f39641, fixtures left out): booking 93.98/87.56/95.24/96.80, sessions
+// 98.25/89.74/100/100, moderation 96.55/92.59/100/100.
 const floor = { statements: 80, branches: 80, functions: 80, lines: 80 };
 
 export default defineConfig({

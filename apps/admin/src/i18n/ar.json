@@ -158,6 +158,8 @@
         "dismissReport": "رفض بلاغ",
         "documentView": "عرض وثيقة",
         "issueIjazahOnRequest": "إصدار إجازة بطلب المعلم",
+        "paymentsListed": "عرض المدفوعات",
+        "paymentsViewed": "عرض طلب دفع",
         "recordVerificationCall": "تسجيل مكالمة التحقق",
         "rejectApplication": "رفض طلب انضمام",
         "removeReviewComment": "إزالة تعليق تقييم",
@@ -233,6 +235,7 @@
         "admin": "مشرف",
         "credential": "إجازة",
         "document": "وثيقة",
+        "payment": "طلب دفع",
         "setting": "إعداد",
         "teacherApplication": "طلب انضمام",
         "user": "مستخدم",
@@ -1471,12 +1474,13 @@
       "banner": "عرض فقط. لا يحرّك أي إجراء في هذه الصفحة المال ولا يحجزه ولا يردّه. يُنفَّذ أي تعويض خارج المنصة، ويظهر هنا حين تُبلغ به البوابة.",
       "columns": {
         "fee": "الرسوم",
-        "gross": "الإجمالي (ج.م)",
+        "gross": "الإجمالي",
         "net": "الصافي",
         "order": "الطلب",
         "status": "الحالة",
         "student": "الطالب"
       },
+      "dash": "—",
       "detail": {
         "a11y": "تفاصيل الطلب",
         "a11yEvents": "أحداث الطلب",
@@ -1486,8 +1490,14 @@
         "events": {
           "confirmed": "تأكّد الاشتراك وأُنشئت جلساته الثماني",
           "created": "أُنشئ الطلب",
+          "enrollmentCancelled": "أُلغي الاشتراك · {reason}",
+          "enrollmentConfirmed": "تأكّد الاشتراك وأُنشئت جلساته",
+          "expired": "أبلغت البوابة بانتهاء مهلة الطلب",
+          "failed": "أبلغت البوابة بفشل الدفع",
           "notified": "وصل الإشعار إلى الطالب والمعلم",
+          "orderFailed": "سُجّل فشل الطلب على الاشتراك",
           "paid": "أبلغت البوابة بنجاح الدفع",
+          "refunded": "أبلغت البوابة بالاسترداد",
           "transaction": "رقم المعاملة {id}"
         },
         "eventsTitle": "ما حدث للطلب",
@@ -1496,6 +1506,8 @@
         "gross": "الإجمالي",
         "netToTeacher": "الصافي للمعلم",
         "orderNo": "رقم الطلب",
+        "paidOrdersNote": "تشمل قضية التعويض كل طلب مدفوع لهذا الاشتراك.",
+        "paidOrdersTitle": "طلبات الاشتراك المدفوعة",
         "referencesTitle": "المراجع",
         "subtitle": "{student} · {subject} · {sessions} مع {teacher}",
         "transactionNo": "رقم المعاملة"
@@ -1506,12 +1518,27 @@
       },
       "enrollmentCancelled": "الاشتراك ملغى",
       "lede": "سجل الطلبات كما أبلغت به بوابة الدفع. المبالغ بالجنيه المصري.",
+      "pagerPage": "الصفحة {page} · الأحدث أولًا",
       "pagerSummary": "{shown} من {total} · الأحدث أولًا",
       "search": {
         "label": "بحث",
         "placeholder": "رقم الطلب أو اسم الطالب"
       },
-      "title": "المدفوعات"
+      "title": "المدفوعات",
+      "emptyAll": {
+        "text": "يظهر هنا كل طلب تنشئه بوابة الدفع.",
+        "title": "لا مدفوعات بعد"
+      },
+      "cancellationReasons": {
+        "accountDeleted": "حُذف الحساب",
+        "admin": "قرار الإدارة",
+        "checkoutAbandoned": "بدأ الطالب دفعًا جديدًا",
+        "genderCorrection": "تصحيح الجنس",
+        "paymentExpired": "انتهت مهلة الدفع",
+        "paymentFailed": "فشل الدفع",
+        "slotUnavailable": "تعذّر حجز الموعد بعد الدفع",
+        "teacherSuspended": "إيقاف المعلم"
+      }
     },
     "reports": {
       "columns": {
