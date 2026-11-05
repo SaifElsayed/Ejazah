@@ -209,7 +209,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** run a session end to end and settle its outcome from evidence, not from the client.
 
-**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…4, FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages these requirements need; the owner's decision of 2026-11-05)
+**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…6, FR-ADMIN-5 (the student's part), FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages and the student's standing these requirements need; the owner's decision of 2026-11-05)
 
 **What this phase delivers**
 
@@ -251,7 +251,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** grant, verify the certificate that is the product.
 
-**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, §3.14
+**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, FR-GENDER-3…7, FR-ADMIN-8 (gender disputes, with user reports; the owner's decision of 2026-11-05), §3.14
 
 **What this phase delivers**
 
