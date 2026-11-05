@@ -274,6 +274,19 @@ membership in the owner role.
 (`PAYMENT_GATEWAY`). The platform never holds money; it creates gateway orders
 and confirms enrollments from signed webhooks (ADR 0007).
 
+**Open a webhook tunnel for a device run** — a cloudflared quick tunnel to a
+proxy, never to the API: the API runs with `SIGN_IN_PROVIDER=fake` in
+development, so anyone holding the tunnel's address could sign in as anyone.
+The proxy passes only `POST /webhooks/payment` and, from Phase 3,
+`POST /webhooks/video`, with the raw body and query unchanged, refuses a body
+over 64 KB and answers 404 to everything else. Before giving a dashboard the
+address, check from outside that `GET /health` answers 404 and that an
+unsigned POST to each path is refused by the API itself. Afterwards close the
+tunnel, the proxy, the API and the worker, set the gateway's callback back to
+its default and delete the video provider's webhook
+(`specs/003-booking/quickstart.md`, `specs/004-sessions/quickstart.md`
+prerequisites; amended 2026-11-05).
+
 **Branches** — cut every task branch from `develop` and name it
 `Ejazah_app/<phase>/<task>`, for example `Ejazah_app/001-foundations/T001`
 (a range: `Ejazah_app/001-foundations/T001-T005`). Open the pull request into
@@ -416,10 +429,15 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   secret changes, an event signed with the old one is refused with 401; replay
   it from the gateway's dashboard. A replay is safe, because
   `payment_events.provider_event_id` is unique (R-MONEY-8).
-- **`DAILY_API_KEY`** and **`DAILY_WEBHOOK_SECRET`**. Issued in the video
-  provider's dashboard; the stand-in serves the port until the phase that
-  calls it adds the provider. Replaying an attendance webhook is safe for the
-  same reason (`session_participant_events.provider_event_id`).
+- **`LIVEKIT_API_KEY`** and **`LIVEKIT_API_SECRET`**, with `LIVEKIT_URL` (not a
+  secret). Until Phase 3's adapter task renames them they are `DAILY_API_KEY`
+  and `DAILY_WEBHOOK_SECRET` in `.env.example` (ADR 0003, Consequences;
+  amended 2026-11-05). Issued in the LiveKit Cloud project's settings:
+  create a new key pair, install both values, restart the API and the worker,
+  then delete the old pair. LiveKit has no separate webhook secret: the API secret signs the
+  tokens and verifies the webhooks (`specs/004-sessions/research.md` R-302).
+  Replaying an attendance webhook is safe
+  (`session_participant_events.provider_event_id` is unique).
 - **`SMS_PROVIDER_KEY`** and **`EXPO_ACCESS_TOKEN`**. Issued by the SMS provider
   (not chosen yet) and in the Expo account's access tokens.
 - **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage
@@ -503,8 +521,12 @@ hand — there is exactly one write path (R-HONEST-1).
 missed. Replay it; `provider_event_id` is unique, so a duplicate replay cannot
 double-insert, and the evaluate-session job re-runs safely.
 
-**Room does not open** — check `DAILY_API_KEY` and the session status. A
-completed session never re-issues a token.
+**Room does not open** — check `VIDEO_PROVIDER`, `LIVEKIT_URL`,
+`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` (the `DAILY_*` keys until Phase 3's
+adapter task renames them), and the session status and its join period: a
+token is issued only for a scheduled session, from the early-join lead before
+its start until its scheduled end, and a settled or cancelled session never
+re-issues one (amended 2026-11-05).
 
 **Certificate render failed** — re-enqueue `render-certificate` for the grant.
 The grant is the source of truth; the PDF is derived and disposable.

@@ -223,7 +223,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Chat retention and purge job
 - Attendance webhooks into participant events
 - Idempotent webhook handling
-- Evaluation job at scheduled end plus two minutes
+- Evaluation job at scheduled end plus the configured evaluation delay (a setting, default two minutes; R-SESS-2 as amended on 2026-11-05, the owner's decision)
 - Full session state machine
 - Simultaneous time accumulated across reconnections
 - All four no-show outcomes

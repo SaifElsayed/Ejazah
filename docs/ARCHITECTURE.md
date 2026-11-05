@@ -1,8 +1,9 @@
 # Ijazah — System Architecture
 
-_Version 3.2 · Companion to SRS v1.4, ERD v1.14, Constitution 2.4.5 · September 2026_
+_Version 3.2 · Companion to SRS v1.4, ERD v1.15, Constitution 2.5.0 · September 2026_
 _Adds ports-and-adapters for external capabilities. Supersedes v3.0. Amended by [ADR 0007](adr/0007-direct-gateway-checkout.md): direct gateway checkout with 0% commission and zero custody, payment port and payments module, post-approval payout gate; by [ADR 0005](adr/0005-phase-0-document-amendments.md): eleven modules with unified table ownership, worker as a second process of the API, `surfaces/` router directory, per-path coverage floor, `develop` as the integration branch; by [ADR 0009](adr/0009-reresolve-sessions-on-tzdata-change.md): a session's local time is the schedule and its UTC instants are recomputed when time zone rules change; and by [ADR 0010](adr/0010-database-refuses-double-booking.md): the database refuses double booking, the slot hold outlives the gateway order, and the payment port can cancel an unpaid order._
 _Amended 2026-10-18 by the Phase 1 ERD pass and document pass (batch B3, [PR #78](https://github.com/SaifElsayed/Ejazah/pull/78), `specs/002-identity/`, tasks T014 and T015): §3.2 gains the sign-in port and §3.4 counts seven ports; §4 lists the six Phase 1 tables under their modules; §7.2 states the caller kinds Phase 1 adds; §12 says what `/ready` checks today; §14 names the secret nets that exist._
+_Amended 2026-11-05 by Phase 3's plan (`specs/004-sessions/`, T106 of `specs/003-booking/tasks.md`; the owner's approval of 2026-11-05): §3.4 shows the video port as it stands and names the LiveKit adapter Phase 3 writes (ADR 0003 D2); §4 gives `sessions` its two new tables and states the module graph Phase 3 builds, with the `EnrollmentSide` port; §11 makes the evaluation delay a setting (R-SESS-2 as amended)._
 
 ## 0. How to use this document
 
@@ -91,7 +92,7 @@ apps/api/src/platform/ports/
 │   ├── local.adapter.ts              development
 │   ├── s3.adapter.ts                 deployed environments
 │   └── in-memory.adapter.ts          stand-in for tests
-├── video/    video.port.ts · daily.adapter.ts · fake.adapter.ts
+├── video/    video.port.ts · livekit.adapter.ts (Phase 3, ADR 0003 D2) · fake.adapter.ts
 ├── push/     push.port.ts · expo.adapter.ts · fake.adapter.ts
 ├── email/    email.port.ts · provider.adapter.ts · fake.adapter.ts   (Phase 1, ADR 0012)
 ├── sign-in/  sign-in.port.ts · live.adapter.ts · fake.adapter.ts      (Phase 1, ADR 0012 D2)
@@ -126,16 +127,21 @@ export interface PaymentPort {
 }
 
 export interface VideoPort {
-  createRoom(sessionId: string): Promise<RoomRef>;
-  createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken>;
-  recordParticipantEvent(event: ProviderParticipantEvent): Promise<void>;
-  endRoom(sessionId: string): Promise<void>;
+  createRoom(sessionId: string): Promise<string>; // the provider's room reference
+  createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken>; // Phase 3 adds { validUntil }, the scheduled end
+  verifyAndParseParticipantEvent(
+    rawBody: Buffer,
+    headers: Readonly<Record<string, string | undefined>>,
+  ): Promise<ParticipantEvent>; // throws on a bad signature, before any handler (R-SESS-7)
+  endRoom(sessionId: string): Promise<void>; // ending an ended room is not an error
 }
 ```
 
+The video port as it stands in `platform/ports/video/video.port.ts` (amended 2026-11-05): there is no `recordParticipantEvent`. The port verifies and reads an attendance event; recording it is the `sessions` module's write, under the unique provider event id (R-SESS-1). Phase 3 widens the event with `room_ended` and the connection, and adds the LiveKit adapter beside the stand-in (`specs/004-sessions/contracts/video.md`).
+
 Three rules that keep ports honest:
 
-1. Every module depends on the port token, never on a concrete adapter. Importing `DailyAdapter` outside `platform/ports/video/` is a lint error.
+1. Every module depends on the port token, never on a concrete adapter. Importing `LiveKitAdapter` outside `platform/ports/video/` is a lint error.
 2. The port interface speaks your domain, not the vendor's. `video.createSessionToken(sessionId, userId)` — not `daily.createMeetingToken()`. If vendor concepts leak into the interface, swapping vendors changes every caller, and the port has failed at its only job.
 3. Every port has a fake adapter for tests. `InMemoryStorageAdapter`, `FakePaymentAdapter`. This is half the value: your test suite never touches a network.
 
@@ -156,7 +162,7 @@ Each module has a service (all rules), a repository (all queries), a router (thi
 | catalog       | subjects, packages, availability, teacher credentials and the isnad chain under them (ADR 0017), signatures; the discovery cards (search and browse over its own tables, filtered by identity's visible ids; amended 2026-11-01) | `subjects` `teacher_subjects` `packages` `availability_slots` `isnad_entries` `teacher_signatures` `teacher_credentials` |
 | booking       | slot holds, enrollments, enrollment confirmation (called by `payments` on a paid event), the outcomes kept for notifications, the discovery router (a card's nearest slot needs holds and enrollments; amended 2026-11-01) | `slot_holds` `enrollments` `enrollment_events` |
 | payments      | gateway orders, signed-webhook ingestion (raw-body HTTP endpoint outside tRPC), payout recipient onboarding, the `confirm-enrollment` and `expire-pending-payments` jobs | `payments` `payment_events`                                                                        |
-| sessions      | session generation, live lifecycle, attendance evidence, mutual cancellation, completion, remedies for a session not consumed (ADR 0018)                                  | `sessions` `session_participant_events` `cancellation_requests` `session_remedies`                 |
+| sessions      | session generation, live lifecycle, attendance evidence, mutual cancellation, completion, remedies for a session not consumed (ADR 0018), the outage windows and the durable session events (Phase 3, amended 2026-11-05) | `sessions` `session_participant_events` `cancellation_requests` `session_remedies` `session_events` `provider_outages` |
 | chat          | in-session messaging, retention, moderation access                                                                                                                       | `chat_messages`                                                                                    |
 | certification | ijazah granting, PDF, public verification, bars                                                                                                                          | `ijazahs` `ijazah_bars`                                                                            |
 | reviews       | ratings, aggregates, moderation                                                                                                                                          | `reviews`                                                                                          |
@@ -184,6 +190,8 @@ Discovery is not a module: a module owning no tables would have to read another 
 The jobs (`apps/api/src/jobs/`, run by the worker) are not a module: each reaches the modules it needs through their entries. `confirm-enrollment` goes through booking, catalog, identity, moderation, payments and sessions; `expire-pending-payments` through booking, moderation and payments; `expire-holds` through booking and payments; `reresolve-session-instants` through booking and sessions. So the compensation case a refused confirmation opens reaches `moderation` from the job, and `modules/payments` imports no moderation (research R-208 lists that edge; the job carries it).
 
 Three dependencies run against these arrows. Each is handed in as a function by a caller above both modules, so no import cycle exists: catalog's `CatalogUse` port (whether a slot or a package is in use) is bound to booking's `createCatalogUse` in `main.ts` (R-207); identity's `AccountConsequences` registry is subscribed to in `main.ts` by verification's document erasure and booking's `terminationSubscriber` (Phase 1's R-121, R-219); and booking's hold functions take payments' `orderStandingsOf` from their callers (payments' checkout, the jobs, the termination subscriber's binding), so booking reads no `payments` row and imports nothing of payments (R-208). An edge that would close a cycle is a design question for the rules below, never an import.
+
+**The graph Phase 3 builds** (amended 2026-11-05, the owner's approval of 2026-11-05; `specs/004-sessions/research.md` R-301). `sessions` imports identity, moderation and catalog; booking adds moderation; chat imports booking and moderation; moderation still imports none. No new edge closes a cycle. Sessions needs booking's enrollments while booking imports sessions, so sessions declares an `EnrollmentSide` port and `main.ts` binds it to booking's `createEnrollmentSide()`, the fourth dependency handed in against the arrows, as catalog's `CatalogUse` is. `sessions` gains the second raw-body route outside tRPC, `POST /webhooks/video`, verified before any handler (R-SESS-7). The table above is updated from the code at Phase 3's close.
 
 **Configuration the clients read (ADR 0021 D4).** `SUPPORT_EMAIL` is a required key of `env.schema.ts` with no default, a valid address, validated at startup like every other key. It is not a row of `settings` (§3.14 of the SRS) and not a string in either catalogue: no admin edits it from the panel, so a taken-over admin account cannot point users at another mailbox; a change of address is a configuration change, not a release. The kernel serves it through `platform.publicConfig`, a `publicProcedure` with a declared rate limit (T170) and an `.output(schema)`, returning `{ supportEmail }`; the phone app and the public pages read it at start-up, cache the last value and never block start-up on it. The admin panel has no support link. The key enters `.env.example` with the Phase 2 task that declares it in `env.schema.ts`, since `config.spec.ts` keeps the two equal.
 
@@ -487,7 +495,7 @@ Attendance comes from provider webhooks written to `SessionParticipantEvent` —
 
 Simultaneous time accumulates across reconnections, so a dropped 4G connection costs nobody their session.
 
-Evaluation is a scheduled job at `scheduled_end + 2m`, not a webhook reaction — so a session is always evaluated even if the final webhook never arrives.
+Evaluation is a scheduled job at `scheduled_end` plus the configured evaluation delay (a setting, default 2 minutes; R-SESS-2 as amended 2026-11-05, SRS §3.14), not a webhook reaction — so a session is always evaluated even if the final webhook never arrives.
 
 ## 12. Observability
 
