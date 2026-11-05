@@ -337,6 +337,49 @@ identity procedure that verifies: sign-in, the one-time-code check and password
 reset. A verifying procedure without its limit lets one client take a whole
 process.
 
+**Reverse proxy and the live channel** (added 2026-11-05, the owner's decision;
+`specs/004-sessions/research.md` R-324; PLAN.md, Phase 6, carries the same
+notes for choosing the host). `GET /trpc/live.events` is a Server-Sent Events
+stream that stays open while the app is in the foreground. The API sends a
+ping comment every 25 s; the phone restarts a stream it hears nothing on for
+60 s. A proxy in front of the API must therefore not buffer it, not compress
+it, and not time it out between two reads in less than the ping.
+
+- nginx (`proxy_http_version` defaults to 1.0 before nginx 1.29.7, so set it):
+
+  ```nginx
+  location /trpc/ {
+      proxy_pass http://api:3000;
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";
+      proxy_buffering off;          # tRPC also sends X-Accel-Buffering: no
+      proxy_cache off;
+      proxy_read_timeout 120s;      # between two reads; must exceed the 25 s ping (default 60 s)
+      proxy_send_timeout 120s;
+      gzip off;                     # never compress text/event-stream
+  }
+  events { worker_connections 8192; }   # Debian and Ubuntu ship 768; each stream holds two
+  worker_rlimit_nofile 16384;
+  ```
+
+- Caddy: `reverse_proxy api:3000` flushes `text/event-stream` at once and has
+  no read timeout by default; do not apply `encode` to `text/event-stream`.
+- Cloudflare in front, if ever: its 100 s idle limit is met by the 25 s ping.
+- Serve the phone over HTTP/2 at the proxy, so the stream and the calls share
+  one connection.
+- Docker: `ulimits: nofile: 65536` on the proxy and the API services. Node
+  needs no timeout change.
+- A deploy's SIGTERM ends every live stream before the server closes (the
+  owner's hard condition, `onShutdown` in `apps/api/src/main.ts`), so the
+  deploy never waits on one; phones come back within 1 to 15 s.
+- One API process only, until Redis pub/sub between processes lands (Not
+  scheduled in `specs/004-sessions/tasks.md`): a second API process would miss
+  the other's events. Scaling the API by adding processes waits for it.
+- Memory: assumed at most 100 KB per stream in Node and 10 to 30 KB at the
+  proxy. **Measured:** not yet; the live channel's server task (T063 of
+  `specs/004-sessions/tasks.md`) opens 500 streams locally and writes the RSS
+  before and after here.
+
 ## Leaked credential
 
 **Rotate first, investigate second (R-SEC-10, FR-067).** A credential is
