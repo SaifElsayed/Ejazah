@@ -83,6 +83,11 @@ Expected:
   the seed plants the four rows, the default at 160 per 60 s (research R-325); a subject's first refusal in a window writes one log record with only its allowed
   fields (a user or administrator by id and the procedure; any other subject by the procedure and its keyed digest,
   never the raw subject; a budget by the procedure and its key), and a second refusal in that window writes none.
+- The manual case (FR-493): `cases.openManual` opens a case on an enrollment in each state, joins the open one of the
+  same party, hands an open remedy to the student's case (both reserved times released, one `remedy_handed_to_case`
+  row) and refuses a remedy no longer open, a missing enrollment, a reused key with another input and a call over its
+  limit, each writing nothing; a manual case, open and then closed, on an enrollment waiting for payment leaves its paid
+  order's confirmation and late branch as with no case, and opens no `duplicate_payment` case (research R-326).
 
 ## 2. A session on the stand-in, end to end (US1, US2)
 
@@ -153,7 +158,9 @@ case holding what it owes); on `/sessions`, see an enrollment with five Teacher-
 and on `/users` the teacher's record listing it; restore the ended enrollment (its sessions back from the nearest week
 at least 24 hours away, its remedies offered again, its case closed «restored») and try a restore after the window
 (`RESTORE_REFUSED`, `window_closed`), and one after moving the slot to another hour while the enrollment was
-closed (`slot_changed`). The audit log shows one entry per action with its reason.
+closed (`slot_changed`). Open a case manually from `/cases` on a completed enrollment for the teacher, and from
+`/sessions` on an enrollment with an open make-up, handing that remedy to the student's case (the make-up's reserved
+time free again in booking). The audit log shows one entry per action with its reason.
 
 ## 7. Chat (US7)
 

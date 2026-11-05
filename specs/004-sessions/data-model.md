@@ -24,7 +24,7 @@ analysis"), on the third (plan.md, "Decisions on the third analysis") and on the
 | `session_remedies` | sessions | the `advance-remedies` sweep (offer, windows ending); an accepted cancellation request (the offer, decision 5); a suspended student's case closed as cleared (the offer, decision 1); `sessions.remedy.*`; an administrator's termination on a complaint, an account's end or a suspended student's fault confirmed (handed to a case); an administrator's restore (a `refund_case` remedy its closing's case held offered again, R-322); a student's suspension (frozen) and deletion (lapsed), through booking's subscriber and the sessions entry; a `frozen` remedy offered again by `advance-remedies`' first run after the reinstatement, never on the reinstatement's transaction (R-311) |
 | `session_events` (new) | sessions | every transaction that produces an event FR-495 names (R-315) |
 | `provider_outages` (new) | sessions | `sessions.outages.record` (admin) |
-| `disputes` | moderation | `openCompensationCase` (the new reasons, R-312); `openSessionDispute`; `openAbsenceComplaint` (a student's complaint, R-322); `closeCase`, `resolveSessionDispute` (the admin's resolutions and a complaint's decision, FR-422; a restore's closing note) |
+| `disputes` | moderation | `openCompensationCase` (the new reasons, R-312; an administrator's manual case, `cases.openManual`, R-326); `openSessionDispute`; `openAbsenceComplaint` (a student's complaint, R-322); `closeCase`, `resolveSessionDispute` (the admin's resolutions and a complaint's decision, FR-422; a restore's closing note) |
 | `enrollments` | booking | `EnrollmentSide.terminateNoShow` (an administrator's decision on a complaint), `.restore` (an administrator's restore), `.complete` and `.cancel` (`admin`, a suspended student's fault confirmed), bound to booking (R-301, R-322); the termination subscriber (`account_deleted`, `teacher_suspended`, and `admin` for a student's ban) |
 | `enrollment_events` | booking | the same transactions (`completed`, `terminated_no_show`, `cancelled`, `restored`) |
 | `chat_messages` | chat | `chat.send`, `POST /uploads/chat`, the purge job |
@@ -95,10 +95,11 @@ nothing owed and no case: the owner's decisions of 2026-11-05 on the analysis),
 `(status = 'refund_case') = (case_id IS NOT NULL)`, so a `lapsed` remedy has no case; `choice_closes_at > offered_at`;
 `snapshot_answer_window_hours > 0` and `snapshot_first_session_lead_hours >= 0`. `status = 'refund_case'` means
 "handed to a compensation case": a refund choice, an unanswered counter, an administrator's termination on a complaint,
-an account's end, or a suspended student's fault confirmed (R-309, R-313, R-322); an administrator's restore offers again
+an account's end, a suspended student's fault confirmed (R-309, R-313, R-322), or an administrator's hand-off to a
+manual case (R-326); an administrator's restore offers again
 each `refund_case` remedy of kind `makeup` its closing's case held, as a new offer, `case_id` and `decided_at` cleared
 (R-322, ADR 0023); the case's `reason` says which (`kind` is `refund` only for a
-refund choice or an unanswered counter, and stays `makeup` for a remedy handed over by an enrollment's end).
+refund choice or an unanswered counter, and stays `makeup` for a remedy handed over by an enrollment's end or by an administrator's hand-off, R-326).
 
 ### 2.4 `session_events` — new, owned by `sessions` (R-315)
 
@@ -159,8 +160,10 @@ on `(session_id) WHERE status = 'pending'` (FR-456); `(status IN ('accepted', 'd
 ### 2.7 `disputes`
 
 `kind` gains `absence_complaint` and `resolution` gains `enrollment_ended` (the decision of no automatic termination,
-R-322); no column. `reason` keeps the closed list of `COMPENSATION_REASONS` for a compensation case (nine new values, R-312; `student_fault_confirmed` the second analysis's C1;
-`absence_termination` replaces `teacher_no_show_threshold`, R-322) and the participant's text for a session dispute and
+R-322); no column. `reason` keeps the closed list of `COMPENSATION_REASONS` for a compensation case (eleven new values: nine, R-312; `student_fault_confirmed` the second analysis's C1;
+`absence_termination` replaces `teacher_no_show_threshold`, R-322; and `admin_opened_for_student` and
+`admin_opened_for_teacher`, an administrator's manual case, its party being its reason, the owner's decision of
+2026-11-05, R-326) and the participant's text for a session dispute and
 for a student's complaint of the teacher's absence (`absence_complaint`: the student as `raised_by_user_id`, no session). Rule 46: one open session dispute per session, a partial unique
 index `disputes_one_open_per_session_key` on `(session_id) WHERE kind = 'session_dispute' AND status = 'open'`
 (FR-473); `(kind = 'session_dispute') = (session_id IS NOT NULL)`; `(status = 'open') = (resolved_at IS NULL)`;
@@ -169,7 +172,12 @@ enrollment, a partial unique index `disputes_one_open_complaint_per_enrollment_k
 'absence_complaint' AND status = 'open'` (FR-452); `kind <> 'absence_complaint' OR raised_by_user_id IS NOT NULL`;
 `resolution IS DISTINCT FROM 'enrollment_ended' OR kind = 'absence_complaint'`. A complaint closes `resolved`
 (`enrollment_ended` or `party_suspended`) or `dismissed`; a restore closes its closing's case `dismissed` with the note
-`restored` (R-322). Every existing row is an open
+`restored` (R-322). Phase 2's covering rule (`caseInstantsAmong` in
+`modules/moderation/compensation-case.repository.ts`, `caseInstantsOf` through it; FR-362 of `specs/003-booking/spec.md`)
+reads only Phase 2's three reasons, `slot_unavailable`, `party_restricted` and `duplicate_payment`, never one this
+phase adds, so a manual case on an enrollment waiting for payment changes nothing of its order's confirmation or late
+branch (the owner's decision of 2026-11-05; R-326). A manual case's written reason is its audit entry's
+(`case.opened_manually`); no column is added. Every existing row is an open
 compensation case with no session, which the checks admit (to be counted on `ijazah` before the migration, as B26's
 were).
 
@@ -246,6 +254,7 @@ yet frozen (the owner's decision of 2026-11-05 on the third analysis, F1).
 | `awaiting_choice` · `proposed` · `counter_proposed` | `frozen` | the student's suspension: a pending counter-proposal withdrawn and its time released, the proposal's time released (the owner's decision of 2026-11-05 on the analysis, C3) |
 | `frozen` | `awaiting_choice` · `proposed` | `advance-remedies`' first run after the student's reinstatement: a new offer, `offered_at`, a full `choice_closes_at`, the two snapshots read again, a new proposal under H1 |
 | any open (`frozen` included) | `refund_case` | an administrator's termination on a complaint, a teacher's end, a student's ban, or a suspended student's fault confirmed |
+| any open (`frozen` included) | `refund_case` (`kind` unchanged) | an administrator's hand-off to the student's manual case, `cases.openManual` with `remedyId`: a pending counter withdrawn, both reserved times released, one `remedy_handed_to_case` row (the owner's decision of 2026-11-05; R-326) |
 | `refund_case` (kind `makeup`, its `case_id` the closing's case) | `awaiting_choice` · `proposed` | an administrator's restore of the enrollment: a new offer, as a frozen remedy's at reinstatement, `case_id` and `decided_at` cleared (FR-455, R-322, ADR 0023) |
 | any open (`frozen` included) | `lapsed` | the student's deletion: nothing owed, no case; a remedy already `refund_case` keeps its case (C2) |
 
@@ -328,7 +337,10 @@ resolution's order, with no account (contracts/kernel.md). On the decision of no
 complaint's raising locks the student's `users` row, then the enrollment; ending the enrollment on it takes a confirmed
 fault's order (`enrollments`, `sessions`, `session_remedies`, `disputes`); suspending the teacher, a `party_suspended`
 resolution's; closing it, `enrollments` then `disputes`; a restore, `users` (both), `lockKey('teacher-slots', …)`, the
-enrollment's `availability_slots` row, `enrollments`, `sessions`, `session_remedies`, `disputes`.
+enrollment's `availability_slots` row, `enrollments`, `sessions`, `session_remedies`, `disputes`. On the decisions
+answering the administrator's control inventory (R-326): an administrator's manual case takes `enrollments` then
+`disputes`; with a remedy handed to it, the refund hand-off's order, `users` (both), `lockKey('teacher-slots', …)`,
+`enrollments`, `sessions`, `session_remedies`, `disputes`.
 
 ## 6. The migration
 
@@ -379,3 +391,6 @@ batch's migration, which builds them.
     changelog rows 23 and 24): `rate_limit_signed_in_default` at 160 per 60 s (research R-325); `chat_retention_days`
     30; a deleted person's photo and document keys kept while an open dispute, case or complaint holds them (§2.11,
     R-327).
+14. On the same decisions (the ERD's changelog row 25): `disputes.reason`'s `admin_opened_for_student` and
+    `admin_opened_for_teacher`; `session_remedies.status`'s `refund_case` also by an administrator's hand-off; Phase 2's
+    covering rule reading Phase 2's three reasons only (§2.7, R-326).

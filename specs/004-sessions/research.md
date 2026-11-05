@@ -473,7 +473,9 @@ the remedy row: both replaced by the owner's rule of 2026-11-05.
 case an administrator's termination on a complaint opens, R-322; it replaces `teacher_no_show_threshold`, removed with the
 threshold on 2026-11-05), `admin_cancellation`, `teacher_ended` (a teacher's suspension, revocation, ban or deletion), `student_suspended`,
 `student_banned`, `student_fault_confirmed` (the remedies still owed when a suspended student's fault is confirmed,
-R-313; the second analysis, C1), `refund_choice`, `counter_unanswered` and `makeup_refused`. One open case per enrollment and reason
+R-313; the second analysis, C1), `refund_choice`, `counter_unanswered` and `makeup_refused`; and, on the decisions of
+2026-11-05 answering the administrator's control inventory, `admin_opened_for_student` and `admin_opened_for_teacher`,
+an administrator's manual case (R-326), Phase 2's covering rule reading none of the eleven (R-326). One open case per enrollment and reason
 stays the rule, so two refunds on one enrollment join one case; which sessions a case covers is the remedies whose
 `case_id` names it, plus the sessions its opening action cancelled (the `cancelled_by_admin` rows of `session_events`
 whose `case_id` names it, C4), plus, for the case an enrollment's end opened (`absence_termination`,
@@ -612,7 +614,8 @@ the teacher's absence raised or decided (R-322); a
 `cancelled_by_admin` row carries the case its action opened or joined, C4; a `dispute_revised` row the dispute revised
 and the outcome before and after, R-308; a `complaint_raised` or `complaint_decided` row, with no session, the complaint,
 R-322); `enrollment_events` (booking's) gains the kinds
-`completed`, `terminated_no_show` and `restored` (R-322). Phase 4's notifications read both and change nothing here; the names they give these events are SRS FR-NOTIF-1's, amended by the owner on 2026-11-05 with fourteen Phase 3 names (plan.md, «Decisions of 2026-11-05, the administrator's control and the rate limits», item 6). The screens are the
+`completed`, `terminated_no_show` and `restored` (R-322). Phase 4's notifications read both and change nothing here; the names they give these events are SRS FR-NOTIF-1's, amended by the owner on 2026-11-05 with fourteen Phase 3 names (plan.md, «Decisions of 2026-11-05, the administrator's control and the rate limits», item 6); `compensation_case_opened` is read
+from the manual case's `disputes` row and its audit entry `case.opened_manually` (R-326). The screens are the
 notice in this phase (FR-495, clarification 1). A `counter_proposed` row also carries the counter-proposal's slot,
 local date, local start and zone, because `session_remedies` keeps only the pending one: the history of every
 counter-proposal is in `session_events` (the owner's decision 9). **Decided** (the owner, 2026-11-05, plan.md
@@ -972,7 +975,7 @@ happened, when and why, and the panel page and procedure that show it), a **fix*
 contracts/admin-surface.md and of the earlier phases as they stand; the pages are the panel's (R-318; `/payments` and
 `/audit` exist, the second listing every administrator's audit entry with its reason through `audit.list/get`). A cell
 that has nothing is a **GAP**, numbered and answered after the table; **M** is the manual compensation case of FR-471
-(c) (proposed, not yet a task), and **M only** marks a row where it is the one restore-the-right path. This inventory
+(c), `cases.openManual` (R-326, spec FR-493; designed on 2026-11-05, its task in the tasks pass to come), and **M only** marks a row where it is the one restore-the-right path. This inventory
 writes no task.
 
 | # | Action and its trigger | Evidence (what, when, why; the panel) | Fix while it can change | Restore the right | Erased automatically |
@@ -1142,6 +1145,74 @@ refusal becomes four counted calls; retrying only an error with no API code (a n
 screen that adds a poll during the build has this arithmetic redone before its batch merges.
 
 **Window rule (R-320).** Nothing here offers a time.
+
+## R-326 — The manual compensation case, and an open remedy handed to it
+
+**Decided**, the owner, 2026-11-05 (SRS FR-ADMIN-20 (c); spec FR-471 (c) and FR-493; R-323's M and GAP-5).
+
+**Decision.** `cases.openManual`, an `adminProcedure` in the `cases` namespace of sessions' admin router (R-318):
+
+- **Input** `{ enrollmentId, party: 'student' | 'teacher', reason: string (1 to 500 characters, not blank),
+  idempotencyKey, remedyId? }`; **output** `{ caseId, enrollmentId, party, status: 'open', joined: boolean,
+  handedRemedy?: { remedyId, sessionId } }`.
+- **Any enrollment, in any state** (`pending_payment`, `confirmed`, `completed`, `terminated_no_show`, `cancelled`).
+  The enrollment is read through `EnrollmentSide` (sessions reads no booking table, R-301).
+- **The case.** Moderation's `openCompensationCase(tx, enrollmentId, reason)` with one of two new
+  `COMPENSATION_REASONS`, `admin_opened_for_student` or `admin_opened_for_teacher`, by `party`: the party is the
+  reason, so no column is added. One open case per enrollment and reason stays the rule, so a second opening for the same
+  party while that case is open joins it (`joined: true`, no row written). The administrator's written reason is the
+  audit entry's, `case.opened_manually` (the case as target, with `party`, `joined` and the remedy handed), as a
+  revision's is (R-308): `disputes.reason` holds the closed list, and `resolution_notes` is the closing's note.
+- **Refusals**, each writing nothing: `NOT_FOUND` (no such enrollment; a `remedyId` that is no remedy of it);
+  `RATE_LIMITED` (`rate_limit_manual_compensation_case`, 10 per 60 s, `subject: 'caller'`, the administrator, checked
+  before the transaction, apart from the key, R-321); `CONFLICT` (the same `idempotencyKey` with another input); and,
+  for a hand-off only, `REMEDY_NOT_OPEN` (the remedy `booked`, `refund_case` or `lapsed`). A `remedyId` with `party:
+  'teacher'` is refused by the input schema: a remedy is owed to the student.
+- **Idempotent**: `IdempotencyService.run` (`platform/idempotency`, ADR 0008), the scope `cases.openManual` added to
+  `packages/contracts/src/idempotent-procedures.ts`, the actor the administrator; a repeat with the same key returns the
+  first answer and writes nothing, as `sessions.restore` does (R-322).
+- **Locks** (T005). Without a remedy: `enrollments` (the case's own lock, `lockCasesOf`), then `disputes` (the insert or
+  the join). With `remedyId`: the refund hand-off's order, as `sessions.remedy.choose`'s (contracts/kernel.md): the
+  enrollment's parties read with no lock (they never change), then `users` (both, one call),
+  `lockKey('teacher-slots', teacher)`, `enrollments`, `sessions`, `session_remedies` (the remedy read again: open, of
+  this enrollment), `disputes`.
+
+*An open remedy handed to the case* (GAP-5; the simpler of the two shapes: one procedure, one limit, one key scope, one
+audit action, instead of a sibling `handToCase`). With `remedyId`, in the same transaction, the remedy, open
+(`awaiting_choice`, `proposed`, `counter_proposed` or `frozen`), becomes `refund_case` with `case_id` the student's
+manual case and `decided_at` now, its `kind` unchanged (the case decides what is owed, as at an enrollment's end, R-313);
+a pending counter-proposal's five `counter_*` columns are cleared (rule 42) and its time released, and the proposal's
+reservation (H3) ends with the open state, so both times return to booking at once; one `session_events` row
+`remedy_handed_to_case`, which ends the counter-proposal's history (§2.4) and is what Phase 4's `makeup_handed_to_case`
+reads. A remedy so handed is no longer owed by the enrollment (FR-449), and a restore offers again only the remedies its
+closing's case holds (R-322), never one a manual case holds.
+
+*Phase 2's covering rule reads Phase 2's three reasons only.* `caseInstantsAmong`
+(`apps/api/src/modules/moderation/compensation-case.repository.ts`), and `caseInstantsOf` through it, today groups every
+`compensation_case` row of an enrollment. It is narrowed to `reason IN ('slot_unavailable', 'party_restricted',
+'duplicate_payment')`, the three `COMPENSATION_REASONS` of Phase 2 (FR-362 and FR-375 of `specs/003-booking/spec.md`),
+named once as a constant beside `COMPENSATION_REASONS` in `compensation-case.service.ts`. Covering is about paid
+orders; Phase 3's reasons (R-312's nine and the two above) are about sessions. Without it, a manual case on an
+enrollment waiting for payment would change the late-payment rule: open, it would cover the on-time paid order, so
+`confirm-enrollment` would do nothing for it (its step 1) and `expire-pending-payments` would not hand it on; closed, it
+would make the enrollment's next paid order open a `duplicate_payment` case (step 3) instead of confirming it. One more
+effect, intended: a second paid order on a confirmed enrollment whose only open case is a Phase 3 one now opens a
+`duplicate_payment` case (FR-375) instead of joining a case about sessions. **Test** (`jobs/confirm-enrollment.spec.ts`,
+`jobs/expire-pending-payments.spec.ts`, and a db-integrity spec over `caseInstantsAmong`): with a manual case open, and
+again closed, on an enrollment awaiting payment, its paid order is confirmed (hold active) or takes the late branch as
+with no case, the sweep hands an unconfirmed paid order on, and no `duplicate_payment` case opens; Phase 2's specs keep
+their Phase 2 reasons, R-312's «one resolved and one dismissed case, the later closing winning» among them.
+
+*The panel.* A dialog to open a case on `/cases` (the queue's action, its enrollment entered or taken from a case's
+page) and on an enrollment in `/sessions` (pre-filled with it); beside each open remedy on `/sessions` (GAP-4), an action
+to hand it to a case opens the same dialog with the remedy and `party: 'student'`. The dialog asks for the party and
+the reason and sends an `idempotencyKey` minted when it opens, so a resent request joins the first answer.
+
+*The notification's record.* The case's `disputes` row (its reason naming the party, its `created_at` the instant) and
+the audit entry `case.opened_manually` are the durable record SRS FR-NOTIF-1's `compensation_case_opened` is read from;
+a joined opening writes no row, so it tells nobody again.
+
+**Window rule (R-320).** Nothing here offers a time: the hand-off releases the reserved times and books none.
 
 ## R-327 — A deleted account's files wait for its open disputes and cases
 

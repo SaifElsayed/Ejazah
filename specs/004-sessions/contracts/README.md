@@ -8,8 +8,8 @@ provider's boundary, and what changes in the kernel. As in Phases 1 and 2: every
 decision of 2026-10-10), and, where it can be flooded, its rate limit (this phase: `chat.send`'s `rate_limit_chat_message`,
 the chat upload's `rate_limit_upload` and `sessions.complaint.raise`'s `rate_limit_absence_complaint`, each with the
 user as subject; the complaint's with a test that a call over it is refused, SC-415; on the administrator surface
-`disputes.revise`'s `rate_limit_dispute_revision` and `sessions.restore`'s `rate_limit_enrollment_restore`, the
-administrator as subject, checked before the kind's transaction; every signed-in procedure that declares none is counted
+`disputes.revise`'s `rate_limit_dispute_revision`, `sessions.restore`'s `rate_limit_enrollment_restore` and
+`cases.openManual`'s `rate_limit_manual_compensation_case`, the administrator as subject, checked before the kind's transaction; every signed-in procedure that declares none is counted
 by `rate_limit_signed_in_default`, 160 per 60 s per research R-325 (the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), failing open, while every declared limit fails closed:
 spec FR-470, kernel.md "Rate limits"); every output is exactly its schema's fields
 (R-HONEST-4); every non-public user-surface procedure has a refusal test naming it (`pnpm check:authz`); every change
@@ -31,7 +31,7 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   active, who is one of the two people of the session or enrollment named; anyone else answers `NOT_FOUND` with the
   shape a nonexistent id gets (R-GENDER-2, FR-432). A restricted account is `ACCOUNT_RESTRICTED` before the service.
 - **Ids in inputs.** `sessionId`, `enrollmentId`, `requestId`, `slotId`, `messageId`, `disputeId`, `caseId`,
-  `userId` (admin only): never `gender` or `role`, and a user procedure never takes a `userId` (R-GENDER-4).
+  `remedyId` and `userId` (admin only): never `gender` or `role`, and a user procedure never takes a `userId` (R-GENDER-4).
 - **Errors.** Added: `JOIN_NOT_OPEN` (with `opensAt` in details), `JOIN_CLOSED`, `SESSION_NOT_SCHEDULED`,
   `CANCELLATION_PENDING` (the other party's request is open; with `requestId`), `CANCELLATION_EXPIRED`,
   `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `NOT_DISPUTABLE` (any cancelled session, by
@@ -47,7 +47,8 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `COMPLAINT_OPEN` on the user surface (a complaint of the teacher's absence is already open on the enrollment) and
   `RESTORE_REFUSED` on the administrator surface (`details.cause`: `not_restorable`, `window_closed`, `case_closed`,
   `party_restricted`, `slot_inactive`, `slot_changed` (the slot's day, local start or zone changed since the enrollment's
-  sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken`). Every
+  sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken`); on the decisions answering the administrator's control inventory (2026-11-05),
+  `REMEDY_NOT_OPEN` also on the administrator surface (`cases.openManual` naming a remedy no longer open). Every
   refusal writes nothing.
 - **Time.** Instants as ISO-8601 UTC strings; a session as its local date, local start and zone plus its instants,
   shown twice by the client (ADR 0009 D5, FR-494); nothing client-supplied is an instant (R-TIME-6): the outage window
