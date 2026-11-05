@@ -37,7 +37,7 @@ iPhone run is Phase 6's).
 ```text
 pnpm typecheck && pnpm lint                       # no-money-vocabulary over sessions and chat; R-TIME-1; R-GENDER-4/5
 pnpm test                                         # unit, contract, the double-run specs of the four new jobs
-pnpm test:db-integrity                            # rules 40–47, the lock paths, the make-up and hold races
+pnpm test:db-integrity                            # rules 40–48, the lock paths, the make-up and hold races
 pnpm test:adversarial                             # every Phase 3 procedure, both directions, token replay
 pnpm contract:snapshot --check --base origin/develop
 pnpm check:authz && pnpm check:i18n
@@ -88,6 +88,12 @@ Expected:
   row) and refuses a remedy no longer open, a missing enrollment, a reused key with another input and a call over its
   limit, each writing nothing; a manual case, open and then closed, on an enrollment waiting for payment leaves its paid
   order's confirmation and late branch as with no case, and opens no `duplicate_payment` case (research R-326).
+- The administrator's control inventory (research R-323): `sessions.review.revise` corrects an undisputed outcome
+  inside its window with one `outcome_corrected` row and refuses each other case (`RULING_FINAL`, `DISPUTE_OPEN`,
+  `CONFLICT` `ruled` or `not_settled`, `SESSION_UNDER_REVIEW`, a reused key, the limit), writing nothing; every release
+  and conversion of a hold writes its `release_reason`; a time zone data change writes one `instants_reresolved` row
+  per session moved or kept back, and a refused commit none; `sessions.monitor.get` answers the enrollment's timeline
+  and each session's remedy, a refused booking with its `bookingRetriedUntil`.
 
 ## 2. A session on the stand-in, end to end (US1, US2)
 
@@ -158,7 +164,9 @@ case holding what it owes); on `/sessions`, see an enrollment with five Teacher-
 and on `/users` the teacher's record listing it; restore the ended enrollment (its sessions back from the nearest week
 at least 24 hours away, its remedies offered again, its case closed «restored») and try a restore after the window
 (`RESTORE_REFUSED`, `window_closed`), and one after moving the slot to another hour while the enrollment was
-closed (`slot_changed`). Open a case manually from `/cases` on a completed enrollment for the teacher, and from
+closed (`slot_changed`). On `/sessions`, read an enrollment's timeline and a settled session's telemetry, and correct an undisputed outcome
+inside its window (its remedy offered only after the window). Open a case manually from `/cases` on a completed
+enrollment for the teacher, and from
 `/sessions` on an enrollment with an open make-up, handing that remedy to the student's case (the make-up's reserved
 time free again in booking). The audit log shows one entry per action with its reason.
 

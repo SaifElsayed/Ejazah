@@ -48,7 +48,8 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `RESTORE_REFUSED` on the administrator surface (`details.cause`: `not_restorable`, `window_closed`, `case_closed`,
   `party_restricted`, `slot_inactive`, `slot_changed` (the slot's day, local start or zone changed since the enrollment's
   sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken`); on the decisions answering the administrator's control inventory (2026-11-05),
-  `REMEDY_NOT_OPEN` also on the administrator surface (`cases.openManual` naming a remedy no longer open). Every
+  `REMEDY_NOT_OPEN` also on the administrator surface (`cases.openManual` naming a remedy no longer open), and
+  `CONFLICT` with `details.cause` `ruled` or `not_settled` (`sessions.review.revise`, `sessions.review.get`). Every
   refusal writes nothing.
 - **Time.** Instants as ISO-8601 UTC strings; a session as its local date, local start and zone plus its instants,
   shown twice by the client (ADR 0009 D5, FR-494); nothing client-supplied is an instant (R-TIME-6): the outage window

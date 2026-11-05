@@ -528,5 +528,19 @@ token is issued only for a scheduled session, from the early-join lead before
 its start until its scheduled end, and a settled or cancelled session never
 re-issues one (amended 2026-11-05).
 
+**A video event refused or not attributed** — nothing reaches the database
+for either, so look in two places (`specs/004-sessions/research.md` R-323,
+GAP-10; added 2026-11-05, the owner's decision). A refused event (no or wrong
+signature: 401; a signed body the port cannot read: 400) is one API log line
+at warn with its code, the video webhook's counterpart of `Payment webhook
+refused`, counted by the webhook signature alert (ARCHITECTURE §12); its body
+and header are never logged. Many of them: check that `LIVEKIT_API_KEY` and
+`LIVEKIT_API_SECRET` match the project that sends the webhook, and that the
+tunnel's proxy passes the body unchanged. An event that names no session, or
+a participant who is not one of its two, is answered 200, written nowhere and
+reported to error tracking; compare the room's name with the session's id.
+Attendance missing because of either: «Attendance missing for a finished
+session» above.
+
 **Certificate render failed** — re-enqueue `render-certificate` for the grant.
 The grant is the source of truth; the PDF is derived and disposable.

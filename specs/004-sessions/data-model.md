@@ -6,8 +6,10 @@ Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through
 `sessions.makeup_for_session_id` and `session_remedies` as columns only; Phase 2 wrote `sessions` (generation and
 re-resolution), `disputes` (compensation cases) and `enrollment_events`. This phase writes `sessions`' whole machine,
 `session_participant_events`, `cancellation_requests`, `session_remedies`, session disputes and `chat_messages` for the
-first time. The pass below is what it adds: two tables, eleven columns, one nullability change, eight enum values, eight
-integrity rules, fourteen settings rows and one settings row removed, in one forward migration in the first batch. The ERD was amended on 2026-11-05 with the owner's decisions,
+first time. The pass below is what it adds: two tables, thirteen columns, one nullability change, eight enum values and one new
+enum, nine integrity rules, fifteen settings rows, one settings row removed and one default changed, in one forward
+migration in the first batch (the two columns, the enum, rule 48, `rate_limit_outcome_correction` and the changed
+default since the owner's decisions of 2026-11-05 answering the administrator's control inventory). The ERD was amended on 2026-11-05 with the owner's decisions,
 ahead of that batch (changelog v1.14 → v1.15, 44 tables; §7), and again the same day with the owner's decisions on the
 analysis (plan.md, "Decisions on the analysis"), on the second analysis (plan.md, "Decisions on the second
 analysis"), on the third (plan.md, "Decisions on the third analysis") and on the decision of no automatic termination
@@ -22,7 +24,8 @@ analysis"), on the third (plan.md, "Decisions on the third analysis") and on the
 | `session_participant_events` | sessions | the video webhook only (R-SESS-1) |
 | `cancellation_requests` | sessions | `sessions.cancellation.request/answer`; the expiry sweep |
 | `session_remedies` | sessions | the `advance-remedies` sweep (offer, windows ending); an accepted cancellation request (the offer, decision 5); a suspended student's case closed as cleared (the offer, decision 1); `sessions.remedy.*`; an administrator's termination on a complaint, an account's end or a suspended student's fault confirmed (handed to a case); an administrator's restore (a `refund_case` remedy its closing's case held offered again, R-322); a student's suspension (frozen) and deletion (lapsed), through booking's subscriber and the sessions entry; a `frozen` remedy offered again by `advance-remedies`' first run after the reinstatement, never on the reinstatement's transaction (R-311) |
-| `session_events` (new) | sessions | every transaction that produces an event FR-495 names (R-315) |
+| `session_events` (new) | sessions | every transaction that produces an event FR-495 names (R-315); an administrator's correction (`outcome_corrected`) and `reresolve-session-instants` through sessions' `reresolveScheduledSessions` (`instants_reresolved`) (R-323, GAP-3 and GAP-6) |
+| `slot_holds` | booking | every release and the conversion, `release_reason` with `released_at` (§2.12; R-323, GAP-8) |
 | `provider_outages` (new) | sessions | `sessions.outages.record` (admin) |
 | `disputes` | moderation | `openCompensationCase` (the new reasons, R-312; an administrator's manual case, `cases.openManual`, R-326); `openSessionDispute`; `openAbsenceComplaint` (a student's complaint, R-322); `closeCase`, `resolveSessionDispute` (the admin's resolutions and a complaint's decision, FR-422; a restore's closing note) |
 | `enrollments` | booking | `EnrollmentSide.terminateNoShow` (an administrator's decision on a complaint), `.restore` (an administrator's restore), `.complete` and `.cancel` (`admin`, a suspended student's fault confirmed), bound to booking (R-301, R-322); the termination subscriber (`account_deleted`, `teacher_suspended`, and `admin` for a student's ban) |
@@ -110,12 +113,13 @@ Append-only record of each event a later notification needs (FR-495).
 | `id` | uuid | PK |
 | `enrollment_id` | FK → enrollments | Plain index (FR-035 of Phase 0) |
 | `session_id` | FK → sessions, nullable | NULL exactly on the two complaint kinds, enrollment-wide (rule 43); plain index |
-| `kind` | enum `session_event_kind` | `settled` · `cancellation_requested` · `cancellation_accepted` · `cancellation_declined` · `cancellation_expired` · `cancelled_by_admin` · `remedy_offered` · `counter_proposed` · `counter_accepted` · `counter_declined` · `counter_withdrawn` · `remedy_frozen` · `makeup_booked` · `remedy_handed_to_case` · `remedy_lapsed` · `dispute_raised` · `dispute_resolved` · `dispute_revised` · `review_resolved` · `outage_reclassified` · `complaint_raised` · `complaint_decided` (twenty-two; `dispute_revised` the owner's decision of 2026-11-05 on the third analysis; the two complaint kinds, rows with no session, the decision of no automatic termination, R-322) |
+| `kind` | enum `session_event_kind` | `settled` · `cancellation_requested` · `cancellation_accepted` · `cancellation_declined` · `cancellation_expired` · `cancelled_by_admin` · `remedy_offered` · `counter_proposed` · `counter_accepted` · `counter_declined` · `counter_withdrawn` · `remedy_frozen` · `makeup_booked` · `remedy_handed_to_case` · `remedy_lapsed` · `dispute_raised` · `dispute_resolved` · `dispute_revised` · `review_resolved` · `outage_reclassified` · `complaint_raised` · `complaint_decided` · `outcome_corrected` · `instants_reresolved` (twenty-four; `dispute_revised` the owner's decision of 2026-11-05 on the third analysis; the two complaint kinds, rows with no session, the decision of no automatic termination, R-322; `outcome_corrected`, an administrator's correction of an outcome nobody disputed, and `instants_reresolved`, a session's instants recomputed or kept back by `reresolve-session-instants`, the decisions answering the administrator's control inventory, R-323 GAP-3 and GAP-6) |
 | `case_id` | FK → disputes, nullable | On a `cancelled_by_admin` row only: the compensation case the cancelling action opened or joined (an administrator's cancellation, an administrator's termination on a complaint, a teacher's end, a student's suspension or ban; a suspended student's fault confirmed, whose make-ups name the new
 `student_fault_confirmed` case, the second analysis's C1); NULL for a student's deletion, which opens none. `cases.get`'s `covers` and a cleared suspension read it (the owner's decision of 2026-11-05 on the analysis, C4). On a `dispute_revised` row: the session dispute whose ruling it revises, always set (the third analysis). On a `complaint_raised` or `complaint_decided` row: the complaint, always set (R-322); plain index |
 | `counter_slot_id` | FK → `availability_slots`, nullable | The counter-proposal's slot, on a `counter_proposed` row only; plain index |
 | `counter_date` / `counter_start_time_local` / `counter_timezone` | date / time / text (IANA), nullable | The counter-proposal's local date, start and zone, on a `counter_proposed` row only (R-TIME-3: the zone beside the `_local` column) |
-| `outcome_before` / `outcome_after` | `session_status`, nullable | On a `dispute_revised` row only, both set: the outcome the revision replaced and the one it wrote, each `done`, `student_no_show`, `teacher_no_show` or `both_no_show` (SRS FR-DISPUTE-7; research R-308 gives the storage's reasons against the R-DB rules) |
+| `outcome_before` / `outcome_after` | `session_status`, nullable | On a `dispute_revised` or an `outcome_corrected` row only, both set: the outcome the revision or the correction replaced and the one it wrote, each `done`, `student_no_show`, `teacher_no_show` or `both_no_show` (SRS FR-DISPUTE-7; research R-308 gives the storage's reasons against the R-DB rules; the correction, R-323 GAP-3) |
+| `previous_start_at` | timestamptz, nullable | On an `instants_reresolved` row only, set: for a session the run moved, its `scheduled_start_at` before the run (the session's row holds the new one); for a session kept back, the start it keeps (R-323, GAP-6; the owner's decision of 2026-11-05) |
 | `occurred_at` | timestamptz | The transaction's instant |
 | `created_at` | timestamptz | |
 
@@ -125,8 +129,10 @@ zone, and its end is the next `counter_accepted`, `counter_declined`, `counter_w
 of the same session. Rule 43 adds the check that the four `counter_*` columns are all set exactly when
 `kind = 'counter_proposed'`; `case_id IS NULL OR kind IN ('cancelled_by_admin', 'dispute_revised', 'complaint_raised', 'complaint_decided')`,
 `case_id` set on every `dispute_revised`, `complaint_raised` and `complaint_decided` row; `session_id` NULL exactly on
-the two complaint kinds; and `outcome_before` and `outcome_after` both set exactly when `kind = 'dispute_revised'`,
-each one of the four outcomes above.
+the two complaint kinds; `outcome_before` and `outcome_after` both set exactly when `kind IN ('dispute_revised',
+'outcome_corrected')`, each one of the four outcomes above; and `previous_start_at` set exactly when `kind =
+'instants_reresolved'` (both widenings the owner's decisions of 2026-11-05 answering R-323). An `outcome_corrected` or
+`instants_reresolved` row has a session and no `case_id`.
 
 **A ruling's revision lives here too** (the owner's decision of 2026-11-05 on the third analysis; SRS FR-DISPUTE-7):
 the dispute's `resolution`, `resolution_notes`, `resolved_by_admin_id` and `resolved_at` keep the ruling and are never
@@ -210,6 +216,16 @@ across a table (R-API-6). The deletion's after-commit removal asks it through id
 `erase-deleted-files` job skips a held owner's files and removes them on its first run after the last matter closes.
 Rule 34 is unchanged: a key is never held without `erased_at`.
 
+### 2.12 `slot_holds.release_reason` (booking's; research R-323, GAP-8)
+
+| Column | Type | Notes |
+|---|---|---|
+| `release_reason` | enum `hold_release_reason`, nullable | Why the hold was released, written with `released_at` by every path that writes it: `converted` (the confirmation's `convertHoldOf`, `modules/booking/confirmation.repository.ts`); and, through booking's one release (`markReleased` under `releaseHolds`, `releaseExpiredHolds` or `reholdEnrollment`, `modules/booking/holds.service.ts`), its `ReleaseReason`: `expired`, `checkout_abandoned`, `slot_unavailable`, `admin`, `teacher_suspended`, `account_deleted`. Check (rule 48): `release_reason IS NULL OR released_at IS NOT NULL`; a hold released before the migration keeps NULL («not recorded»). No index (R-DB-9) |
+
+The owner's decision of 2026-11-05. Not a derived value: `expires_at` against `released_at` tells an expiry only
+roughly, and nothing else tells a new checkout from an account's end for a hold with no enrollment. Phase 2's
+`payments.get` lists the enrollment's holds with it (contracts/admin-surface.md).
+
 ## 3. State machines
 
 ### Session (`sessions.status`)
@@ -224,6 +240,7 @@ Rule 34 is unchanged: a key is never held without `erased_at`.
 | `disputed` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` | the administrator's resolution (R-308) | `settled_by_admin_id`, `admin_settled_at`; the dispute closed; events |
 | `under_threshold` · `provider_outage` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` | the review resolution only (R-SESS-6) | the same |
 | `done` · `*_no_show` (its last dispute resolved, inside the dispute window, no remedy) | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` | an administrator's revision of the ruling (SRS FR-DISPUTE-7; R-308) | `settled_by_admin_id`, `admin_settled_at`; the dispute's ruling left as written; `session_events(dispute_revised)` with `outcome_before` and `outcome_after` |
+| `done` · `*_no_show` (inside the dispute window, never disputed, no remedy) | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` | an administrator's correction of an outcome nobody disputed (spec FR-439; R-323, GAP-3) | `settled_by_admin_id`, `admin_settled_at`; `session_events(outcome_corrected)` with `outcome_before` and `outcome_after` |
 | `done` · `*_no_show` · `under_threshold` (inside the dispute window, not disputed, an administrator's resolution or revision included: no remedy offered yet, G1) | `provider_outage` | an outage window recorded over it (FR-445) | events |
 
 No automatic transition leaves `under_threshold`, `provider_outage` or `disputed` (R-SESS-6, FR-474). A `scheduled`
@@ -296,7 +313,8 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `rate_limit_signed_in_default` | `{ limit: 160, window_seconds: 60 }` per research R-325 (the owner's decision of 2026-11-05; the rule its reason: the larger of 120 and the heaviest normal minute × 2–3, never a number above 200, R-321 item 5) | FR-470's default limit on every signed-in procedure that declares none, the user or administrator as subject (R-321) |
 | `rate_limit_dispute_revision` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 on the administrator's control) | `disputes.revise`'s own limit, the administrator as subject (FR-470) |
 | `rate_limit_enrollment_restore` | `{ limit: 10, window_seconds: 60 }` (the same) | `sessions.restore`'s own limit, the administrator as subject (FR-470) |
-| `rate_limit_manual_compensation_case` | `{ limit: 10, window_seconds: 60 }` (the same) | the manual compensation case's own limit (FR-471 (c)), seeded now; its procedure waits for the owner's approval |
+| `rate_limit_manual_compensation_case` | `{ limit: 10, window_seconds: 60 }` (the same) | `cases.openManual`'s own limit (FR-471 (c), FR-493; R-326), the administrator as subject |
+| `rate_limit_outcome_correction` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 answering R-323) | `sessions.review.revise`'s own limit (FR-439; R-323, GAP-3), the administrator as subject |
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
@@ -314,7 +332,8 @@ Existing keys this phase reads: `first_session_lead_hours` (fixed on each remedy
 
 New ERD §15 rules: 40 (`sessions`' two checks), 41 (`session_participant_events`' two checks), 42
 (`session_remedies`' checks), 43 (`session_events` append-only, and its counter-proposal columns set exactly on `counter_proposed` rows), 44 (`provider_outages`' check and revokes), 45
-(`cancellation_requests`), 46 (`disputes`), 47 (`chat_messages`' attachment checks).
+(`cancellation_requests`), 46 (`disputes`), 47 (`chat_messages`' attachment checks), 48 (`slot_holds.release_reason`
+only on a released hold; R-323, GAP-8).
 
 T005's lock order, widened (`platform/db/row-lock.ts`, contracts/kernel.md): `users` → `teacher_profiles` →
 `lockKey('teacher-slots', …)` → `availability_slots` → `slot_holds` → `enrollments` → `sessions` → `session_remedies` →
@@ -338,15 +357,16 @@ complaint's raising locks the student's `users` row, then the enrollment; ending
 fault's order (`enrollments`, `sessions`, `session_remedies`, `disputes`); suspending the teacher, a `party_suspended`
 resolution's; closing it, `enrollments` then `disputes`; a restore, `users` (both), `lockKey('teacher-slots', …)`, the
 enrollment's `availability_slots` row, `enrollments`, `sessions`, `session_remedies`, `disputes`. On the decisions
-answering the administrator's control inventory (R-326): an administrator's manual case takes `enrollments` then
-`disputes`; with a remedy handed to it, the refund hand-off's order, `users` (both), `lockKey('teacher-slots', …)`,
+answering the administrator's control inventory (R-323, R-326): an administrator's correction of an outcome nobody
+disputed takes `enrollments`, `sessions`, reading the session's disputes and remedy under them; a manual case takes
+`enrollments` then `disputes`; with a remedy handed to it, the refund hand-off's order, `users` (both), `lockKey('teacher-slots', …)`,
 `enrollments`, `sessions`, `session_remedies`, `disputes`.
 
 ## 6. The migration
 
 One forward, additive migration in the first batch, `20261108120000_sessions_pass`: §2.1 to §2.9, the enum values, the
-two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the fourteen settings rows in the seed, and the deletion of the `teacher_no_show_threshold` row. Probes in
-`tests/db-integrity` for rules 40 to 47. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
+two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the fifteen settings rows in the seed (and `chat_retention_days`' new default, §4), and the deletion of the `teacher_no_show_threshold` row; §2.12's enum and column on booking's `slot_holds` and rule 48. Probes in
+`tests/db-integrity` for rules 40 to 48. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
 that rule 46 would refuse, and `session_participant_events` rows (none expected).
 
 ## 7. ERD amendments (v1.14 → v1.15)
@@ -394,3 +414,6 @@ batch's migration, which builds them.
 14. On the same decisions (the ERD's changelog row 25): `disputes.reason`'s `admin_opened_for_student` and
     `admin_opened_for_teacher`; `session_remedies.status`'s `refund_case` also by an administrator's hand-off; Phase 2's
     covering rule reading Phase 2's three reasons only (§2.7, R-326).
+15. On the same decisions (the ERD's changelog row 26): `session_events`' kinds `outcome_corrected` and
+    `instants_reresolved`, the column `previous_start_at`, rule 43 widened (§2.4); `slot_holds.release_reason` and rule
+    48 (§2.12); `rate_limit_outcome_correction` (§4).
