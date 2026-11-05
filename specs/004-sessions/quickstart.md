@@ -80,7 +80,9 @@ Expected:
   a procedure with its own limit is not counted by the default; with the counter failing, the default lets the call
   through and its breaker skips counting, while a declared limit refuses; the default's settings row missing refuses
   the call; `disputes.revise` and `sessions.restore` over their own limit are refused with no transaction opened;
-  the seed plants the four rows.
+  the seed plants the four rows; a subject's first refusal in a window writes one log record with only its allowed
+  fields (a user or administrator by id and the procedure; any other subject by the procedure and its keyed digest,
+  never the raw subject; a budget by the procedure and its key), and a second refusal in that window writes none.
 
 ## 2. A session on the stand-in, end to end (US1, US2)
 

@@ -650,7 +650,7 @@ its row deleted by the first batch's migration and no longer seeded; `repeated_a
 `enrollment_restore_window_days` 7 are added, and `rate_limit_absence_complaint` `{ limit: 5, window_seconds: 3600 }`,
 the limit the owner's decision and its default this cycle's reading; each an SRS §3.14 row. On the decisions of the
 administrator's control and the rate limits (**Decided**, the owner, 2026-11-05; R-321): `rate_limit_signed_in_default`
-`{ limit: 120, window_seconds: 60 }` («provisional, set by research R-325 before B36»), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
+`{ limit: 120, window_seconds: 60 }` (seeded at 120 until T062 confirms the final value before B36: the larger of 120 and research R-325's heaviest normal minute × 2–3, never a number above 200 (R-321, item 5)), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
 `rate_limit_manual_compensation_case`, `{ limit: 10, window_seconds: 60 }` each; each an SRS §3.14 row (NFR-SEC-12).
 
 ## R-318 — The administrator's surfaces
@@ -744,7 +744,7 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    by `throttle` after `requireAdministrator` and the input schema and before the `.use` that opens the transaction, so a
    refused call opens none and writes nothing; `AdminMeta.rateLimit` stamps its key, as the anonymous kind's does.
    `disputes.revise` declares `rate_limit_dispute_revision` and `sessions.restore` `rate_limit_enrollment_restore`,
-   each with `subjectOf: ({ ctx }) => ctx.administrator.adminId`, apart from the `idempotencyKey`: a repeat with the
+   each with `subject: 'caller'`, which the administrator kind fills with `ctx.administrator.adminId` (item 6), apart from the `idempotencyKey`: a repeat with the
    same key is counted as a call, a refusal by the limit claims no key.
 2. **The default limit.** Every signed-in kind (`studentProcedure`, `userProcedure`, `teacherProcedure`,
    `adminProcedure`) that is given no `rateLimit` applies a second middleware, `throttleDefault`, at the same place
@@ -770,16 +770,54 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    no subject), so a Redis outage logs one line per 10 s, not one per request. The first count after the 10 s closes it
    or opens it again. The declared limits keep the first client and fail closed, as now (lines 41 and 42): the counter's
    failure is the internal error.
-5. **The numbers.** The default's limit is its setting, 120 per 60 s, «provisional, set by research R-325 before B36»; 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
+5. **The numbers.** The default's limit is its setting. Its value follows the owner's rule of 2026-11-05: the larger of
+   120 per 60 s and research R-325's result, the heaviest minute of normal use times 2 to 3, so that a normal user is
+   never refused (R-325's number when it is above 120; 120 when it is below). A result above **200** sets no number:
+   the screen that calls that often goes back to the owner to be fixed, and the limit is not raised. The seed plants 120
+   per 60 s; T062 records R-325's result here and confirms the final value under this rule before B36, the seed and
+   SRS §3.14 changed with it if it differs (R-325 is not yet written). 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
    owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
    retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
    magic-number gate governs `modules/`, where every operational number is a setting).
-6. **Tests** (`platform/guards/rate-limit.spec.ts`, `surfaces/procedures.spec.ts`, `surfaces/admin-procedure.spec.ts`): a procedure with no limit refused `RATE_LIMITED` after
+6. **The first refusal logged** (**Decided**, the owner, 2026-11-05, for every limit: sign-in, the one-time code, search,
+   payment initiation, chat, uploads, the complaint, the administrator's actions and the default; SRS NFR-SEC-12; it
+   replaces R-323's GAP-9 proposal of a line per refusal). `RateLimiter.check` already has the count (`hit` answers how
+   many calls the window holds, this one included) and refuses past the limit; it logs exactly when
+   `count === limit + 1`, the first refusal of that subject in that window, and nothing at limit + 2 and after, so a
+   flood writes one record per subject per window. How `check` learns what to log without the subject leaking:
+   - **The subject's kind comes from the caller kind, never from the endpoint.** `check`'s second argument becomes a
+     `RateLimitSubject`: `{ kind: 'user', userId }`, `{ kind: 'administrator', adminId }`, `{ kind: 'identifier', value }`
+     or `{ kind: 'budget' }`, counted under `user:<userId>`, `admin:<adminId>`, the value and `*`, each hashed into the
+     counter's key as today. A declaration names its subject either as `subject: 'caller'`, accepted by the signed-in
+     kinds only, which fill it from the context they authenticated (`ctx.caller.userId`, `ctx.administrator.adminId`),
+     or as `subjectOf`, whose string is always an `identifier`. An endpoint therefore cannot have a phone number logged
+     as a user id: the `user` and `administrator` kinds are reached only through the kind's own context. The per-user
+     declarations that exist move to `subject: 'caller'` (`booking.slots` in `modules/booking/booking.router.ts`, the
+     three in `modules/booking/discovery.router.ts`, `modules/identity/account.router.ts`'s and
+     `modules/payments/checkout.router.ts`'s); the default (item 2) passes the caller kind's subject; a budget passes
+     `{ kind: 'budget' }`; the upload route passes its authenticated uploader as a `user`.
+   - **The procedure's name.** `check`'s third argument, `procedure: string`, required, so the compiler finds every
+     caller. `throttle` and `throttleDefault` pass tRPC's `path`, which every middleware receives (the procedure's
+     dotted name, e.g. `sessions.complaint.raise`); the three callers outside tRPC pass their route's fixed name:
+     `platform/guards/upload.middleware.ts` (line 231), `platform/web/route.ts` (line 252) and
+     `modules/identity/web/delete-account.controller.ts` (lines 366 to 379).
+   - **The record.** One `warn` line, message `rate limit refused`, through a logger the limiter is now given
+     (`RateLimiterDependencies.log`; `createRateLimiter` already holds one), its fields exactly `{ procedure, userId }`
+     for a user, `{ procedure, adminId }` for an administrator, `{ procedure, subjectDigest }` for an identifier
+     (`subjectDigest` the HMAC-SHA256 hex `counterKey` already computes for the counter's key, never the value) and
+     `{ procedure, budget }` for a budget (its key). Nothing else: not a per-subject limit's key, the limit, the count,
+     an address or the input; the identifier's value never reaches the logging branch, which reads only the kind's own
+     fields. No database row: a flood would write a flood. The default limit's breaker keeps its own one warning per
+     period (item 4), which names the key and no subject.
+7. **Tests** (`platform/guards/rate-limit.spec.ts`, `surfaces/procedures.spec.ts`, `surfaces/admin-procedure.spec.ts`): a procedure with no limit refused `RATE_LIMITED` after
    the default's limit as its setting holds it; a procedure with its own limit not counted by the default; the default letting the call
    through when the counter rejects and when it never answers within 100 ms, and the breaker skipping the counter until
    10 s have passed with one warning; a declared limit refusing the call when the counter rejects; the default's missing
    row refusing the call, never letting it through; the administrator kind refusing over its declared limit with no
-   transaction opened and nothing written; and `tests/seed/seed.spec.ts` asserting the seed plants the four rows.
+   transaction opened and nothing written; and `tests/seed/seed.spec.ts` asserting the seed plants the four rows. For item 6, for each kind of subject
+   (user, administrator, identifier, budget): the first refusal writes exactly one record whose fields are exactly the
+   allowed ones; a second refusal in the same window writes nothing; a call within the limit writes nothing; and an
+   identifier's record, serialised, never contains the raw subject (a phone number and an email address as subjects).
 
 **Window rule (R-320).** None of this offers a time.
 
@@ -816,8 +854,8 @@ the status, the resolution, the note, the administrator and the closing instant 
 One open per enrollment, held by the database: the partial unique `disputes_one_open_complaint_per_enrollment_key`
 (rule 46), so two raised at once leave one, and the second answers `COMPLAINT_OPEN` (`isUniqueViolation` names the
 key). `sessions.complaint.raise` (the student kind, `{ enrollmentId, reason }`) declares `rateLimit: { key:
-'rate_limit_absence_complaint', subjectOf: ({ ctx }) => ctx.caller.userId }`, the per-user form of `booking.slots`
-(`modules/booking/booking.router.ts`) and `checkout.*` (`modules/payments/checkout.router.ts`), applied by the kind
+'rate_limit_absence_complaint', subject: 'caller' }`, the per-user form `booking.slots`
+(`modules/booking/booking.router.ts`) and `checkout.*` (`modules/payments/checkout.router.ts`) take in T062 (R-321, item 6), applied by the kind
 after the input is validated (`surfaces/procedures.ts`), so a call over the limit is refused `RATE_LIMITED` before any
 transaction; the limit is apart from the one-open rule, which the database holds. Moderation gains
 `openAbsenceComplaint(tx, enrollmentId, studentUserId, reason)`; the raising locks the student's `users` row (the row
@@ -970,7 +1008,7 @@ writes no task.
 | P3-25 | The restore window ends (no job: `restorableUntil` passes) | Derived, never stored (R-DB-4): the closing case's `created_at` plus `enrollment_restore_window_days`; panel: `sessions.monitor.get`'s `restorableUntil` | None: the restore is refused `window_closed` | The closing's case, still open | Nothing |
 | P3-26 | `purge-chat` (daily): an ended enrollment's messages after the last session's end + `dispute_window_hours` + `chat_retention_days`, nothing open | `chat_messages.purged_at` on each row kept; panel: none needed (the chat is read only while a dispute is open) | None: the rule waits for every open dispute and case (FR-492) | Nothing is owed | The message bodies, the attachment fields and the stored files (FR-492, ERD §15 rule 8) |
 | P3-27 | A video webhook refused (no or wrong signature, 401) or unattributable (no such session, not a participant: 200, written nowhere) | **GAP-10**: no row; a refusal logged at warn with its code, an unattributable event reported to error tracking; panel: none | None needed | Nothing is owed | The body and the header are never stored or logged |
-| P3-28 | A call refused by a rate limit (`RATE_LIMITED`), and the default limit's breaker opening (R-321) | **GAP-9**: no durable record; the Redis counter expires with its window; the breaker's one warning per period in the logs; panel: none | The caller's next window | Nothing is owed | The counters, by each limit's `window_seconds`; the breaker's state in process memory after 10 s |
+| P3-28 | A call refused by a rate limit (`RATE_LIMITED`), and the default limit's breaker opening (R-321) | **GAP-9**: no durable record; the first refusal of a subject in a window logged (R-321, item 6: a user or administrator by id and the procedure, any other subject by the procedure and its keyed digest, a budget by the procedure and its key); the Redis counter expires with its window; the breaker's one warning per period in the logs; panel: none | The caller's next window | Nothing is owed | The counters, by each limit's `window_seconds`; the breaker's state in process memory after 10 s |
 
 **The gaps and their proposed solutions** (each for the owner; none is a task).
 
@@ -999,8 +1037,10 @@ writes no task.
 8. **GAP-8, a hold's release has no reason and no page** (P2-1). `slot_holds.release_reason` (`converted`, `expired`,
    `superseded`, `new_checkout`, `account_ended`, `refused`), written with `released_at` by booking's one release; the
    enrollment's holds listed on `payments.get`'s enrollment summary.
-9. **GAP-9, a rate-limit refusal leaves no record** (P3-28). One structured log line per refusal with the key and the
-   caller kind, never the subject; no database row, since a flood would write a flood.
+9. **GAP-9, a rate-limit refusal leaves no record** (P3-28). Answered by the owner's decision of 2026-11-05 (R-321,
+   item 6; T062): the first refusal of a subject in a window is logged, a user or administrator by id and the procedure
+   only, any other subject by the procedure and at most its keyed digest, a budget by the procedure and its key; no
+   database row, since a flood would write a flood. What stays open: no panel page reads the logs.
 10. **GAP-10, a refused or unattributable video event** (P3-27). Error tracking and the warn log stay its evidence; the
     RUNBOOK's video entry names where to look. No row, since a forger could fill a table.
 

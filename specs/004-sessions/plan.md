@@ -567,10 +567,13 @@ R-321, R-322, R-323), the data model, the contracts, the quickstart and `tasks.m
    it opens its transaction; (b) `disputes.revise` and `sessions.restore` declare `rate_limit_dispute_revision` and
    `rate_limit_enrollment_restore` (10 per 60 s each, the administrator as subject), apart from the
    `idempotencyKey`; (c) every signed-in procedure that declares none is counted by `rate_limit_signed_in_default`
-   (120 per 60 s, «provisional, set by research R-325 before B36»), the user or administrator as subject, its value held in the process for up to 60 s, its counter
+   (120 per 60 s seeded; its value the larger of 120 and research R-325's heaviest normal minute × 2–3, so a normal user is never refused, and above 200 no number but the screen that calls too often sent back to the owner to be fixed; T062 confirms it before B36), the user or administrator as subject, its value held in the process for up to 60 s, its counter
    on a client of its own bounded at 100 ms, failing open behind a 10 s breaker with one warning per period, while every
    declared limit stays fail-closed and a missing row refuses; (d) T062 in B36 builds (a) and (c), T059 and T061 declare
-   (b). (R-321; spec FR-470.)
+   (b); (e) every rate limit, Phases 1 and 2's included, logs only a subject's first refusal in a window (the count
+   exactly the limit plus one): a user or administrator by id and the procedure only, any other subject by the procedure
+   and at most the counter's keyed digest, a budget by the procedure and its key; T062 builds it. (R-321, items 5 and 6;
+   spec FR-470; SRS NFR-SEC-12.)
 4. **All control in our hands** (SRS FR-ADMIN-20, spec FR-471): every automatic or final action leaves the
    administrator its evidence in the panel, a fix while the state can change, and a path to restore the right once it
    cannot, among them a manual compensation case on any enrollment, in any state, at any time, for either party, with a
@@ -631,7 +634,7 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | ADR 0023 (new) | No automatic termination, the complaint, the restore and its two exits from a final state | 5 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 17 to 20 | 1, 2, 3, 5 |
 | `PLAN.md` | Phase 3's SRS list gains FR-DISPUTE-7 and FR-CANCEL-8; the definition of done gains the line on no automatic termination | 1, 6 |
-| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value «provisional, set by research R-325 before B36»), an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
+| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value by NFR-SEC-12's rule, confirmed by T062 from research R-325 before B36), NFR-SEC-12's first-refusal logging, an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 21, the four rate-limit settings, no column for `slot_changed` | 2, 3 |
 
 ## Phase Outputs

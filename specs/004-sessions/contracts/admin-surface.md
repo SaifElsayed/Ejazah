@@ -6,7 +6,7 @@ non-personal label (ADR 0021 D2), the instant and, for every action, the mandato
 monitor does. Every procedure declares `.output(schema)`. Nothing here computes, stores or moves an amount, or confirms
 an enrollment (SC-413): `sessions.restore` returns an enrollment's status to `confirmed` and never writes `confirmed_at`
 (FR-455, R-HONEST-1). Every procedure here is rate-limited (spec FR-470): `disputes.revise` and `sessions.restore` by
-their own declared key, every other one by `rate_limit_signed_in_default` («provisional, set by research R-325 before B36»), the administrator as subject (kernel.md,
+their own declared key, every other one by `rate_limit_signed_in_default` (seeded at 120 until T062 confirms the final value before B36: the larger of 120 and research R-325's heaviest normal minute × 2–3, never a number above 200 (R-321, item 5)), the administrator as subject (kernel.md,
 "Rate limits").
 
 ## `sessions` — the monitor, the review queue, cancellation, outages (sessions module)
