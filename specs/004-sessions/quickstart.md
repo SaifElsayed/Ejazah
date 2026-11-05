@@ -115,7 +115,11 @@ refund.
 
 ## 6. The administrator (US5, US6)
 
-In the panel: raise a dispute from the phone and resolve it each way; resolve an Under-Threshold session and a
+In the panel: raise a dispute from the phone and resolve it each way; resolve one before its dispute window closes
+(no remedy until the window has closed), raise a second dispute on it and resolve that, revise the ruling with a
+reason (the session's outcome moved, the earlier ruling still on the dispute, one `dispute_revised` event, the answer
+naming a suspension or ban the ruling made and left in place) and try to revise once the window has closed
+(`RULING_FINAL`); resolve an Under-Threshold session and a
 Provider-Outage one; record an outage window over a settled session (it moves to the review queue); cancel a session
 (one case); resolve and dismiss a case (its closing instant is the database's); suspend a student (sessions cancelled, the enrollment still
 confirmed, a case at the head of `/cases`, an open remedy frozen with its pending counter withdrawn), reinstate them

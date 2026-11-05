@@ -204,7 +204,7 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 | D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens | US1 on the phone; the first device check of joining |
 | D19 Tue 11/10 | B37 | Cancellation requests and their expiry sweep; the administrator's cancellation and the monitor; the user record's request counts; raising a dispute | US3's API, US5's first half |
 | D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance, counter options and counter-proposals again after a decline (R-320, decision 9); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
-| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1) | US5's administrator side |
+| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1); a ruling's revision (SRS FR-DISPUTE-7, the third analysis) | US5's administrator side |
 | D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read | US7's API |
 | D21 Thu 11/12 | B41 | The phone: cancellation and dispute on both roles; the remedy sheets (choice, proposal, counter, the teacher's answer); chat on both roles; the ended tab's new statuses | US3, US4, US5 and US7 on the phone |
 | D22 Sun 11/15 | B42 | The panel: `/sessions` with cancellation; `/review` and `/outages`; `/disputes` with the chat; `/cases`; a student's standing dialogs; `/users`, FR-ADMIN-4's directory with `users.list` and `users.get`, the request counts and a student's standing actions | The administrator's pages |
@@ -231,7 +231,10 @@ otherwise.
    `admin` at once, and the `student_banned` case owes nothing unless the administrator decides otherwise. A
    reinstatement restores the account only. Spec FR-486 and SRS FR-ADMIN-5 say so. (R-313) *Changed by the decisions
    on the analysis, items 2 and 12: a cleared student on recitation chooses a make-up or a refund, and a remedy
-   already offered is frozen during the suspension.*
+   already offered is frozen during the suspension. Changed by the second analysis, C1 (item 2 there): the fault
+   confirmed is an enrollment's end, its make-ups still scheduled cancelled and every remedy still owed handed to a new
+   `student_fault_confirmed` case; and by the third analysis, items 4 and 5: a make-up the suspension cancelled stays
+   owed, and on an enrollment that ended another way the case decides only the sessions the suspension cancelled.*
 2. **How a make-up proposal and a counter-proposal are reserved.** *Decided:* (a), in code: every placing path reads
    the reservations under both accounts' locks, and the database's exclusions guard the real sessions. (R-311)
 3. **`sessions.simultaneous_connected_seconds` and R-DB-4.** *Decided:* (a), written once at evaluation as the figure
@@ -403,6 +406,78 @@ quickstart, tasks, SRS, ERD and PLAN.md were brought into line the same day.
 
 No path that offers a time is new or changed by these answers: R-320's window rule stands as decided.
 
+## Decisions on the third analysis (the owner's answers of 2026-11-05)
+
+A third `/speckit-analyze` found the points below (their ids are its own); the owner answered them on 2026-11-05.
+Where an answer changes a decision above, the answer governs, and the spec, research, data model, contracts,
+quickstart, tasks, SRS, ERD, ADR 0018 and the note under `003:T005` were brought into line the same day.
+
+1. **Confirmed as written.** The reason `student_fault_confirmed`; the make-ups a confirmed fault cancels carry the new
+   case's id; Both-No-Show and Cancelled-By-Agreement are inside «every remedy still owed». Only the text that
+   disagreed was changed (I1 below).
+2. **G1, the offer waits for the dispute window.** A remedy is offered only once the session's dispute window
+   (`dispute_window_hours`, 72) has closed, even when an administrator resolved its dispute earlier; a dispute raised
+   inside the window, a second one included, holds the offer until it is resolved; so the remedy is offered at the
+   latest of the window's end, the last dispute's resolution and the last revision (item 8). A second dispute inside
+   the window stays allowed, and an outage window may reclassify a resolved session still inside its dispute window
+   (T016): no remedy has been offered then, so none is withdrawn and FR-462 holds. R-307's claim, false before for a
+   resolved dispute, is now true. `advance-remedies` (T028) offers once the window has closed and no dispute is open;
+   no resolution offers a remedy in its own transaction. (SRS FR-MAKEUP-1, FR-DISPUTE-1; spec FR-462, FR-473; R-307,
+   R-311; data model §2.3, §3; T016, T026, T028.)
+3. **A2.** A review or dispute resolution never offers a remedy in its own transaction: `advance-remedies` offers it
+   when item 2's time comes. (T033, T034.)
+4. **U1.** On a confirmed fault the ordinary sessions the suspension cancelled are owed nothing, but every remedy owed
+   for a cause that is not the student's fault goes to the new `student_fault_confirmed` case, a make-up session the
+   suspension cancelled included (it was owed for the session it made up). (SRS FR-ADMIN-5; spec FR-486; R-312,
+   R-313; `cases.get`'s `covers`; T035, T036.)
+5. **U2.** If the enrollment ends another way (a ban, a teacher's end) while its `student_suspended`
+   case is open, there is no second end: the case decides only the sessions the suspension cancelled. Cleared, they
+   join the first end's case, owed as refunds; the fault confirmed, they are owed nothing and the case closes with no
+   further effect. (SRS FR-ADMIN-5; spec FR-486; R-313; `cases.resolve` and `cases.dismiss`; T036.)
+6. **The other findings.** L-A (a dispute resolved `party_banned` against a teacher takes `teacher_profiles` after
+   `users` and before the slots' key, as `StandingService.ban`'s `lockApplication` does), L-B (`chat.send` and `POST
+   /uploads/chat` lock the sender's `users` row, then the enrollment), L-C (`sessions.cancel`'s row: `enrollments`,
+   `sessions`, `disputes`); contracts/kernel.md, R-308, R-314, T023, T034, T037, T038 and a note under `003:T005`.
+   A1 (the cleared suspension's refund only on a recitation enrollment: T028, T031, `canChooseRefund`). F1 («open
+   remedy» defined once in data model §3: `awaiting_choice`, `proposed`, `counter_proposed` or `frozen`; the ban, a
+   teacher's end and a confirmed fault hand over every open remedy, `frozen` included: T005, T006; T015's text is
+   left to the pass that removes the no-show threshold). C2 (`session_remedies_counter_slot_id_idx`, the new foreign key's plain index, in T001). U3 (`EnrollmentSide`
+   gains `enrollmentPage`, which the monitor's list reads: T008, T024; R-API-6). I1 (`covers` counts a
+   Cancelled-By-Agreement session never offered a remedy beside the two no-shows: R-312, T035, `cases.get`). I2 (SRS
+   FR-DISPUTE-5 names a student's ban, a confirmed fault, a counter left unanswered and a refused make-up; spec
+   FR-478 too). S1 (decision 1 above and the spec's line marked as changed by C1). S2 (ADR 0018's amendment names
+   the second analysis's C1). A3 (a refused make-up, below). S3 (T021's locks point at the kernel's row).
+7. **A3, a refused make-up.** An acceptance of a counter-proposal that the database refuses releases the counter as a
+   decline does (`counter_withdrawn`): the remedy `proposed` while the choice window is open, the proposal booked once
+   it has closed. A booking of the system's proposal that the rules decided (H5, a decline after the choice window, a
+   refused counter after it) and that the database refused is tried again by `advance-remedies` only while the
+   occurrence starts at least L after the attempt's instant and overlaps no open hold or reservation of either party,
+   both read again under the booking's locks; past that, the remedy goes to a `makeup_refused` case. (SRS FR-MAKEUP-4,
+   FR-DISPUTE-5; spec FR-468; R-311, R-320; T029, T032.)
+8. **A ruling's revision («مراجعة الحكم»), new.** An administrator may revise their ruling on a dispute while the
+   session's dispute window is open and no remedy has been offered for it; afterwards `RULING_FINAL`. A reason is
+   mandatory and audit-logged (`dispute.revised`). The revision changes the session's outcome only (upheld, consumed
+   or not, whom the absence is on): never a suspension or a ban, never an enrollment the ruling ended; the response's
+   `notUndone` names what the earlier ruling did that stays. The ruling's columns on `disputes` are never rewritten;
+   the revision is one `session_events` row `dispute_revised` carrying `outcome_before` and `outcome_after`, its
+   `case_id` naming the dispute, beside the audit entry that holds the reason and the administrator. Stored so
+   because: the outcome the ruling produced is otherwise lost (the resolution clears `outcome_under_dispute`, and
+   `upheld` names no status), so `outcome_before` is a fact no other row holds, not a derived value (R-DB-4); the row
+   is append-only (R-DB-3, rule 43) with its checks in the database (R-DB-5, rule 43); it needs no index (R-DB-9) and
+   references no account; and it is the durable event Phase 4's notifications read (FR-495), so one row is both the
+   history and the notice, where a forty-fifth table would repeat `session_events`' pattern and the audit entry's
+   reason. A revision counts as a resolution for item 2's timing. It is idempotent under an `idempotencyKey`, through
+   the kernel's `IdempotencyService.run` as `teacher.slots.create` and `checkout.pay` are keyed (`platform/idempotency`,
+   ADR 0008; the scope `disputes.revise` joins `idempotent-procedures.ts`, the actor the administrator's id): a repeat
+   with the same key returns the first result and writes nothing new (the owner's decision of 2026-11-05, added to
+   item 8). Its locks are a resolution's (kernel.md); it
+   calls no `StandingService`. `disputes.revise` (admin-surface.md), T059 in B39, and the panel's button in T049.
+   (SRS FR-DISPUTE-7; spec FR-472, FR-495; R-308; ERD changelog rows 15 and 16.)
+
+The window rule (R-320) gains two applications: the offer itself waits for the dispute window, any dispute raised in
+it and any revision (item 2), and a refused proposal is retried only while it starts at least L after the attempt
+(item 7).
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -439,12 +514,16 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | Constitution, ADR 0022 | 2.5.1: R-DB-4 cites ADR 0022 | 5 |
 | `docs/ARCHITECTURE.md` | §4's Phase 3 graph: `verification` → `sessions`, the `DisputeChat` port; the header names 2.5.1 | 7, 16 |
 | ADR 0018 | The amendment paragraph names the analysis's changes to FR-ADMIN-5 and FR-MAKEUP-3 | 2, 12, 13 |
+| `docs/SRS.md` | On the third analysis: FR-MAKEUP-1 (the offer after the dispute window, even after a resolution), FR-DISPUTE-1 (a second dispute inside the window), FR-DISPUTE-7 (new: a ruling's revision), FR-DISPUTE-5 (four more cases), FR-MAKEUP-4 (a refused booking), FR-ADMIN-5 (U1, U2), an amendment line | Decisions on the third analysis 2, 4, 5, 6 (I2), 7, 8 |
+| `docs/ERD.md` | v1.15 amended in place again: `session_remedies_counter_slot_id_idx`; `offered_at` after the window; `session_events`' `dispute_revised` with `outcome_before` and `outcome_after`, rule 43; `disputes.resolution` never rewritten (changelog rows 14 to 16) | 2, 4, 5, 6 (C2), 8 |
+| ADR 0018 | The amendment paragraph names the second analysis's C1 (D5's «nothing owed» narrower) | 6 (S2) |
+| `specs/003-booking/tasks.md` | A note under T005: L-A, L-B, L-C and the revision's locks | 6, 8 |
 
 ## Phase Outputs
 
 - **Phase 0 — Research**: [research.md](./research.md). Twenty-one decisions, R-301 to R-321; the owner answered
-  its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, and the second analysis's
-  findings the same day.
+  its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, and the second and third
+  analyses' findings the same day.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 

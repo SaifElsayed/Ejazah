@@ -32,9 +32,12 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   agreement or by an administrator; a Cancelled-By-Agreement one is final at acceptance), `REMEDY_NOT_OPEN`, `COUNTER_PENDING` (a counter-proposal is
   already waiting for the teacher's answer), `CHOICE_NOT_ALLOWED` (a refund
   where only a make-up is owed), `SLOT_NOT_OFFERED` (a counter outside the options), `MAKEUP_REFUSED` (the database
-  refused the booking; the remedy stays open), `ATTACHMENT_REFUSED` (an image, or a type the chat does not take),
-  `CHAT_CLOSED`, and on the administrator surface `STUDENT_SUSPENDED` (a suspended student's case closed as cleared
-  before the account is reinstated). Every refusal writes nothing.
+  refused the booking; the remedy stays open; a teacher's refused acceptance then releases the counter-proposal in its
+  own transaction, as a decline does: the third analysis, A3), `ATTACHMENT_REFUSED` (an image, or a type the chat does
+  not take), `CHAT_CLOSED`, and on the administrator surface `STUDENT_SUSPENDED` (a suspended student's case closed as
+  cleared before the account is reinstated), `RULING_FINAL` (a ruling's revision after the session's dispute window
+  closed or once a remedy exists; `details.cause`) and `RULING_SUPERSEDED` (a revision of a ruling a later dispute's
+  resolution replaced), both on the third analysis. Every refusal writes nothing.
 - **Time.** Instants as ISO-8601 UTC strings; a session as its local date, local start and zone plus its instants,
   shown twice by the client (ADR 0009 D5, FR-494); nothing client-supplied is an instant (R-TIME-6): the outage window
   is local date, time and zone.
