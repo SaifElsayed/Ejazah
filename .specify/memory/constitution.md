@@ -1,4 +1,15 @@
 <!--
+SYNC IMPACT REPORT (2.5.1, 2026-11-05)
+=====================================
+Version change: 2.5.0 -> 2.5.1 (PATCH: a reference; no prohibition changed).
+
+Modified rules: R-DB-4 (its `sessions.simultaneous_connected_seconds` clause cites
+ADR 0022, the ADR the rule's last clause asks for). The 2.5.0 history row says the
+ADR was written the same day. Templates: none changed. Companion documents: ERD v1.15
+and ARCHITECTURE v3.2 name this version.
+Source: Phase 3's analysis, the owner's decision of 2026-11-05
+(`specs/004-sessions/plan.md`, "Decisions on the analysis", item 5).
+
 SYNC IMPACT REPORT (2.5.0, 2026-11-05)
 =====================================
 Version change: 2.4.5 -> 2.5.0 (MINOR: a new rule, R-SESS-7).
@@ -50,7 +61,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.5.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
+Version 2.5.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md) and [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -185,7 +196,7 @@ encrypted at rest.
 | R-DB-1 | **Never** edit a migration after it merges. Fix forward with a new migration. | `CI` - migration checksum verification |
 | R-DB-2 | **Never** hand-edit a local schema. A diverged database is reset from migrations, not patched. | `REVIEW`, plus the team runbook |
 | R-DB-3 | **Never** hard-delete: audit logs, ijazahs, sessions, enrollments, users. Terminal states are statuses; the first four carry `deleted_at`, the audit log has no removal path at all. | `DB` - DELETE revoked on those tables for the app role |
-| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`; `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)); `sessions.teacher_user_id` / `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions ([ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md)); and `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the session's outcome was decided on and never recomputed (amended 2026-11-05, the owner's decision; `specs/004-sessions/plan.md`, decision 3) - and never add another without an ADR. | `CI` - the schema gate refuses a column named for an aggregate outside the declared caches, and a declared cache missing; `REVIEW` - whether any other value is derived; the ERD is the registry |
+| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`; `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)); `sessions.teacher_user_id` / `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions ([ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md)); and `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the session's outcome was decided on and never recomputed ([ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md); amended 2026-11-05, the owner's decision; `specs/004-sessions/plan.md`, decision 3) - and never add another without an ADR. | `CI` - the schema gate refuses a column named for an aggregate outside the declared caches, and a declared cache missing; `REVIEW` - whether any other value is derived; the ERD is the registry |
 | R-DB-5 | **Never** enforce a cross-field invariant only in code when a check constraint can hold it (self-enrollment, phone-or-email, rating range, body-or-attachment). | `DB` check constraints per ERD section 15 |
 | R-DB-6 | **Never** issue a sequential or guessable identifier for anything public: certificate numbers, verification tokens. Crypto-random. | `RT` - generation utility in `platform/`; `Math.random` banned by `LINT` |
 | R-DB-7 | **Never** store an OTP code, token, or password in plain text. Hashed, always. *(Reversible secrets: R-DB-8.)* | `CI` - `*_hash` column naming check; `REVIEW` |
@@ -395,7 +406,8 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
-| 2.5.0 | 2026-11-05 | MINOR (T107 of `specs/003-booking/tasks.md` and `specs/004-sessions/plan.md`, "Changes to other documents" P1 to P3; the owner's decisions of 2026-11-05): a new rule, R-SESS-7, requires the video provider's webhook signature to be verified on the raw body before any handler, held by the kernel's webhook signature guard (`RT`) and a CI test that lands with the video webhook in Phase 3; R-MONEY-9's parenthesis pointed video webhooks at R-SEC-12, which is about Dependabot, and now points at R-SESS-7. R-SESS-2's evaluation at `scheduled_end + 2m` becomes the configured evaluation delay, a setting of default 2 minutes (R-MONEY-12; SRS §3.14 gains the row). R-DB-4 names `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the outcome was decided on, beside the declared caches; the owner's decision stands in place of the ADR the rule's last clause asks. The header names ERD v1.15, the Phase 3 pass. The enforcement map's runtime-guard row and Phase 3's CI row gain R-SESS-7. No prohibition removed or weakened. Follows 2.4.5. |
+| 2.5.1 | 2026-11-05 | PATCH (Phase 3's analysis, the owner's decision of 2026-11-05; `specs/004-sessions/plan.md`, "Decisions on the analysis", item 5): R-DB-4's clause for `sessions.simultaneous_connected_seconds` cites [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md), which records the owner's decision 3 as the rule's last clause asks; the 2.5.0 row says so. A reference only; R-DB-4 already admitted a cache through an ADR, so no prohibition changed. Follows 2.5.0. |
+| 2.5.0 | 2026-11-05 | MINOR (T107 of `specs/003-booking/tasks.md` and `specs/004-sessions/plan.md`, "Changes to other documents" P1 to P3; the owner's decisions of 2026-11-05): a new rule, R-SESS-7, requires the video provider's webhook signature to be verified on the raw body before any handler, held by the kernel's webhook signature guard (`RT`) and a CI test that lands with the video webhook in Phase 3; R-MONEY-9's parenthesis pointed video webhooks at R-SEC-12, which is about Dependabot, and now points at R-SESS-7. R-SESS-2's evaluation at `scheduled_end + 2m` becomes the configured evaluation delay, a setting of default 2 minutes (R-MONEY-12; SRS §3.14 gains the row). R-DB-4 names `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the outcome was decided on, beside the declared caches, on the owner's decision; the ADR the rule's last clause asks for is ADR 0022, written the same day (2.5.1). The header names ERD v1.15, the Phase 3 pass. The enforcement map's runtime-guard row and Phase 3's CI row gain R-SESS-7. No prohibition removed or weakened. Follows 2.4.5. |
 | 2.4.5 | 2026-11-04 | PATCH (T056 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-04): the header names ERD v1.14, which adds the gateway's member `paymob` to `payment_gateway`. A companion version only; no rule changed. Follows 2.4.4. |
 | 2.4.4 | 2026-11-03 | PATCH (T036 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-03): the header names ERD v1.13, which adds `slot_holds.package_id` and `session_count`. A companion version only; no rule changed. Follows 2.4.3. |
 | 2.4.3 | 2026-11-01 | PATCH (T004 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-01): the header names ERD v1.12, which adds `enrollment_events` (42 tables) and ERD §15 rule 39 with the Phase 2 pass. A companion version only; no rule changed. Follows 2.4.2. |
@@ -421,4 +433,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.5.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-05
+**Version**: 2.5.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-05
