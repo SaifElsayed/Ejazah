@@ -10,24 +10,29 @@ What the kernel and the composition root gain. Raw SQL stays in `apps/api/src/pl
 | `isUniqueViolation`, `isExclusionViolation` | `db-errors.ts` | The closed union gains `cancellation_requests_one_pending_key`, `disputes_one_open_per_session_key`, `session_remedies_session_id_key`, `session_participant_events_provider_event_id_key`, and the session exclusions already named (for a make-up) |
 | `clockTimestamp(tx)` | `db-clock.ts` (new) | `SELECT clock_timestamp()`, for the instant a case or dispute closes (FR-422), never the transaction's `now()` |
 
-T005's rules, with this phase's paths (Saif reviews each lock and FK-insert path against them):
+T005's rules, with this phase's paths (Saif reviews each lock and FK-insert path against them). Beside F3 and F4's
+rows below, one more rule (the owner's decision of 2026-11-05 on the second analysis, L1): a path that takes more than
+one teacher's `lockKey('teacher-slots', …)` takes the keys in ascending teacher id order, as rows of one table are
+taken in id order; the rows marked **(L1)** are those paths. A make-up's booking takes both slots it touches in one
+call in id order (L2).
 
 | Path | Locks, in order | Inserts referencing an account |
 |---|---|---|
 | `sessions.join` | `users` (both, one call) | none |
-| evaluation, a review or dispute resolution | `enrollments`, `sessions` | none (`session_events`, a case: enrollment and session only) |
-| a dispute resolved `party_suspended` or `party_banned` (the owner's decision of 2026-11-05 on the analysis, F3) | `users` (the party, first, `lockAccount`), `lockKey('teacher-slots')`, `enrollments` (the dispute's and the party's confirmed ones, one call), `sessions`, `session_remedies`, `disputes`; `StandingService` and its consequences run on these locks | none (the case and the events reference no account) |
+| evaluation, a review or dispute resolution | `enrollments`, `sessions`, then, when T015's count reaches the threshold, `session_remedies` (the open ones handed to its case) and `disputes` (its case opened); a dispute resolution also `disputes` (the dispute closed, `resolved_at` by `clockTimestamp`) (the second analysis, L3) | none (`session_events`, a case: enrollment and session only) |
+| a dispute resolved `party_suspended` or `party_banned` (the owner's decision of 2026-11-05 on the analysis, F3) | `users` (the party, first, `lockAccount`), `lockKey('teacher-slots')` (a student party: each of their teachers' keys, ascending teacher id, **(L1)**), `enrollments` (the dispute's and the party's confirmed ones, one call), `sessions`, `session_remedies`, `disputes`; `StandingService` and its consequences run on these locks | none (the case and the events reference no account) |
 | threshold termination | (held) `enrollments`, `sessions` (remaining, one call), `session_remedies` | none |
 | cancellation request, a decline | `sessions`, `cancellation_requests` | the request references the requester: `users` (both parties) locked first |
 | cancellation accepted (the make-up offered at once, the owner's decision 5) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `cancellation_requests` | the request's accounts locked first |
 | dispute raised | `users` (the raiser), `enrollments`, `sessions` | the dispute references the raiser, locked first |
 | remedy offer, a `frozen` remedy's new offer after the reinstatement included; a counter-proposal, its decline, its withdrawal (the student accepts the proposal while it is pending) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies` | none (`session_events` reference the enrollment and the session) |
-| make-up booking | `users` (both), `lockKey('teacher-slots')`, `availability_slots` (the slot), `enrollments`, `sessions`, `session_remedies` | the session references both accounts, locked first |
+| `sessions.remedy.choose` (a make-up: `proposed`; a refund: handed to the enrollment's `refund_choice` case through T030), and a counter left unanswered handed to a `counter_unanswered` case by the sweep (T030, T032) (the second analysis, L3) | `users` (both, one call), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, then for a hand-off `disputes` (the case opened or joined, `openCompensationCase`) | none (the case references the enrollment only; `session_events` the enrollment and the session) |
+| make-up booking | `users` (both), `lockKey('teacher-slots')`, `availability_slots` (both slots it touches, the enrollment's own and, for a counter, the counter's, one call, id order; one when they are the same: L2), `enrollments`, `sessions`, `session_remedies` | the session references both accounts, locked first |
 | a hold (Phase 2) reading reservations | unchanged (both accounts first), then reads `reservedTimesOf` | unchanged |
 | the confirmation's new hold for a released one (FR-PAYG-19's late payment) reading reservations (the analysis, F5's question) | unchanged (both accounts in one call first, the slot, the holds, the enrollments), then reads `reservedTimesOf`; an overlap takes the refusal branch | unchanged |
 | closing a case or dispute | `enrollments`, then the conditional update of `disputes` | none |
-| a `student_suspended` case closed: cleared (remedies offered: on recitation a make-up or a refund, on the ijazah track a make-up) or the fault confirmed (the enrollment cancelled) | cleared: `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `disputes`; confirmed: `enrollments`, `session_remedies`, `disputes` | none |
-| an account's end (booking's subscriber), a student's suspension freezing remedies and deletion lapsing them included | (held) the account; `lockKey('teacher-slots')`; `enrollments`; `sessions`; `session_remedies` | none |
+| a `student_suspended` case closed: cleared (remedies offered: on recitation a make-up or a refund, on the ijazah track a make-up) or the fault confirmed (the enrollment cancelled, its make-ups still scheduled cancelled, every remedy still owed handed to a new `student_fault_confirmed` case; the second analysis, C1) | cleared: `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `disputes`; confirmed: `enrollments`, `sessions` (its make-ups still scheduled, one call), `session_remedies`, `disputes` (the case dismissed, the new case opened) | none (the new case and the events reference the enrollment and the sessions only) |
+| an account's end (booking's subscriber), a student's suspension freezing remedies and deletion lapsing them included | (held) the account; `lockKey('teacher-slots')` (a student's end: each of their teachers' keys, ascending teacher id, **(L1)**); `enrollments`; `sessions`; `session_remedies` | none |
 | outage record (the analysis, F4) | `enrollments` (of the overlapped sessions, one call), then `sessions` (the overlapped, one call) | none |
 
 ## The composition root

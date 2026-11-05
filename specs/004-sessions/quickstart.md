@@ -57,7 +57,8 @@ Expected:
 - The image corpus (`tests/fixtures/chat-corpus/`: every image type the sniffer names, an image renamed `.pdf` or
   `.txt`, a PDF renamed `.png`, a text file with a binary byte) is refused; PDFs and UTF-8 text are accepted (SC-408).
 - The boundary and schema gates find no price, payment or amount in `modules/sessions` or `modules/chat` (SC-409).
-- Every unconsumed outcome owes one remedy; every refund opens one case with no amount; every booked make-up extends the
+- Every unconsumed outcome owes one remedy; every refund is handed to one case with no amount, the enrollment's open
+  case of its reason or a new one; every booked make-up extends the
   enrollment's end and its slot's release (SC-410). No proposal, counter option or reserved time starts before the
   window it waits on, nor within the first-session lead of the moment it is decided; no proposal overlaps an open
   payment window of either party; a settings change after an offer moves none of that remedy's bounds (research R-320).
@@ -119,8 +120,9 @@ Provider-Outage one; record an outage window over a settled session (it moves to
 (one case); resolve and dismiss a case (its closing instant is the database's); suspend a student (sessions cancelled, the enrollment still
 confirmed, a case at the head of `/cases`, an open remedy frozen with its pending counter withdrawn), reinstate them
 (the frozen remedy offered again with a full choice window) and resolve the case (on a recitation enrollment the
-choice of a make-up or a refund, on the ijazah track a make-up), suspend another and dismiss its case (the enrollment
-cancelled); ban a student (sessions and enrollments cancelled, a case); delete a student's account with a make-up
+choice of a make-up or a refund, on the ijazah track a make-up), suspend another, reinstate them, accept a make-up, and dismiss
+the case (the enrollment cancelled, the make-up cancelled, every remedy still owed in a new `student_fault_confirmed`
+case and none in the case dismissed); ban a student (sessions and enrollments cancelled, a case); delete a student's account with a make-up
 remedy open (lapsed, no case) and one whose refund was chosen (its case kept); on `/users`, search a user by name and
 open their record (FR-ADMIN-4's fields and the cancellation-request counts; a student's suspend, ban and reinstate);
 read a dispute's chat (one `chat.read` audit entry per read). The audit log shows one entry per action with its reason.

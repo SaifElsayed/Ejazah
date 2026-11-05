@@ -37,7 +37,7 @@ The technical approach, from [research.md](./research.md), rests on seven decisi
    them with no change here (R-315).
 
 Scope is the SRS ids PLAN.md lists for Phase 3, FR-420 to FR-499 and SC-401 to SC-414 of the spec, the carried tasks
-(T059, `002:T144`, T090, T107, the notes under T026 and T082), and nothing else. Reviews, reports, notifications,
+(T059, `002:T144`, T090, the notes under T026 and T082; T107 was done in this cycle, `9c710e3`), and nothing else. Reviews, reports, notifications,
 reminders, certificates and gender disputes are Phase 4's; T104 and T105 are out of scope and nothing is added for them.
 
 ## Technical Context
@@ -74,7 +74,7 @@ suspension and ban through `StandingService` (FR-421); T005's lock rules for eve
 window rule of 2026-11-05 (R-320); requirements from the SRS, not the boards; seven working days for one person,
 overflow stated when it happens and sent to the descope ladder, whose Phase 3 rung is in-session file sharing.
 
-**Scale/Scope**: FR-420 to FR-499, SC-401 to SC-414; 1 migration, 2 new tables, 12 columns, 8 integrity rules, 7
+**Scale/Scope**: FR-420 to FR-499, SC-401 to SC-414; 1 migration, 2 new tables, 11 columns, 8 integrity rules, 7
 settings rows; 13 user-surface procedures and an upload route, 21 administrator procedures
 ([contracts/](./contracts/)); 4 jobs; one webhook; the pre-session and room screens, the session, cancellation, remedy,
 dispute and chat states on both roles' enrollment screens, and six panel pages.
@@ -90,7 +90,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 | R-GENDER | The join checks gender from the server's records under the accounts' locks; a token bound to one session and one participant (`bindJoinToken`); every refusal to a non-participant is `NOT_FOUND` | R-GENDER-7's CI gate: token replay and cross-gender cases (FR-496, SC-407) | **PASS** |
 | R-MOBILE | Every screen from its board as decided; strings from the catalogue with T123's marks; later phases' controls absent (no review, no report); the components render what the server decided (R-320's windows are the server's) | None new | **PASS** |
 | R-API | Thin routers; services decide; one inverted port (R-301); every procedure with both schemas; additive snapshot; the port speaks the domain (`createSessionToken`, `endRoom`) | The widened lock union and refusal names (contracts/kernel.md) | **PASS** |
-| R-DB | One forward migration; two append-only tables with their revokes; checks for every cross-field rule (rules 40 to 47); no stored count; no speculative index | Rules 40 to 47 | **PASS**, with decision 3 (`simultaneous_connected_seconds` and R-DB-4, recorded by ADR 0022, constitution 2.5.1) |
+| R-DB | One forward migration; two append-only tables with their revokes; checks for every cross-field rule (rules 40 to 47); no stored count and no stored derived instant (a counter-proposal's answer deadline is computed when read, `counter_proposed_at` + the remedy's snapshot; `choice_closes_at` is the fact that fixes the choice window, not a derived value); no speculative index | Rules 40 to 47 | **PASS**, with decision 3 (`simultaneous_connected_seconds` and R-DB-4, recorded by ADR 0022, constitution 2.5.1) and the second analysis's D1 (no `counter_answer_closes_at`) |
 | R-SEC | The webhook verifies before any handler; chat documents by content, images refused by content and extension; signed expiring links; chat under a rate limit; no token, secret or body logged | The `chat` upload kind; the image corpus test (R-SEC-5) | **PASS** |
 | R-SESS | Attendance from webhooks only (1); evaluation by a sweep after end + delay (2, 3); reconnection sums (4); restricted teacher refused (5); no automatic exit from review (6); the video webhook's signature on the raw body (7, T107) | The enforcement map's Phase 3 CI tests for R-SESS-2, 4, 5 and 7 | **PASS**; R-SESS-2's "+ 2m" became a setting of default 2 (P2, constitution 2.5.0) |
 | R-HONEST | No session shown done unless the job or an administrator settled it; the teacher sees none of the student's private fields; nothing implies the platform refunds (the case is Platform Administration's) | None new | **PASS** |
@@ -111,7 +111,7 @@ specs/004-sessions/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification, approved 2026-11-05
 ├── research.md          # Phase 0 output — 21 decisions (R-301 to R-321)
-├── data-model.md        # Phase 1 output — 2 tables, 12 columns, rules 40–47, 7 settings rows, 1 migration
+├── data-model.md        # Phase 1 output — 2 tables, 11 columns, rules 40–47, 7 settings rows, 1 migration
 ├── quickstart.md        # Phase 1 output — validation guide, the device runs marked as the owner's
 ├── contracts/
 │   ├── README.md
@@ -173,9 +173,10 @@ tests/
 `identity`, `moderation` and `catalog`; `booking` of `moderation`; `chat` of `booking` and `moderation`;
 `verification` of `sessions` (the user directory's cancellation-request counts, FR-481); `moderation`
 still imports none, so a case's page, which names sessions and remedies, is served by sessions' admin router.
-Sessions' need of booking's enrollments is a port bound in `main.ts` (`EnrollmentSide`), the third inverted dependency
-after R-207's `CatalogUse` and R-219's subscriber; the dispute's chat read is a second port sessions declares,
-`DisputeChat`, which chat implements and `main.ts` binds, since sessions importing chat would close the cycle chat →
+Sessions' need of booking's enrollments is a port bound in `main.ts` (`EnrollmentSide`), the fourth dependency handed
+in against the arrows, after the three ARCHITECTURE §4 counts (R-207's `CatalogUse`, the `AccountConsequences`
+subscribers of R-121 and R-219, R-208's `orderStandingsOf`); the dispute's chat read is the fifth, a second port
+sessions declares, `DisputeChat`, which chat implements and `main.ts` binds, since sessions importing chat would close the cycle chat →
 booking → sessions (the owner's decision of 2026-11-05 on the analysis, C5). The video webhook is sessions' raw-body route, as the gateway's is
 payments'.
 
@@ -184,7 +185,7 @@ payments'.
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |---|---|---|
 | Two new tables (`session_events`, `provider_outages`) against ERD §0's "a table that isn't here is out of spec" | The spec names the outage window as new (FR-445); FR-495 asks a durable record of every event with its session, which `enrollment_events` (booking's, no session column) cannot hold without sessions writing booking's table | Widening `enrollment_events` through the port (decision 6); a window held in settings (an operational number, not evidence) |
-| A third inverted dependency (`EnrollmentSide`), and a fourth (`DisputeChat`) | Sessions must read the snapshot and write two enrollment statuses, and serve a dispute's chat; booking already imports sessions, and chat imports booking | A thirteenth orchestration module; moving the machine into booking against ARCHITECTURE §4; serving `disputes.chat` from chat's own admin router (the `disputes` namespace is sessions') |
+| A fourth inverted dependency (`EnrollmentSide`), and a fifth (`DisputeChat`), after the three of ARCHITECTURE §4 | Sessions must read the snapshot and write two enrollment statuses, and serve a dispute's chat; booking already imports sessions, and chat imports booking | A thirteenth orchestration module; moving the machine into booking against ARCHITECTURE §4; serving `disputes.chat` from chat's own admin router (the `disputes` namespace is sessions') |
 | Reservations held in code under locks, not by the database | FR-466 reserves a proposal and a counter for days; a database guard would need a reserved session row or a new instant cache (an ADR, R-DB-4) | A provisional session row (decision 2): database-enforced but visible in every list and numbering |
 | `connection_ref` and a nullable `user_id` on an append-only table | LiveKit gives no ordering guarantee and may replace a connection under one identity; the room-ended event has no participant (FR-443) | Pairing by identity in arrival order: wrong under replacement and reordering |
 
@@ -358,6 +359,50 @@ fixed then; C = `choice_closes_at`):
     `advance-remedies` (T028) also offers a remedy for a Cancelled-By-Agreement session of a confirmed enrollment that
     has none, so the gap closes itself when B38 lands.
 
+## Decisions on the second analysis (the owner's answers of 2026-11-05)
+
+A second `/speckit-analyze` found the points below (their ids are its own); the owner answered them on 2026-11-05.
+Where an answer changes a decision above, the answer governs, and the spec, research, data model, contracts,
+quickstart, tasks, SRS, ERD and PLAN.md were brought into line the same day.
+
+1. **D1, I1.** `session_remedies.counter_answer_closes_at` is not added: it was a stored derived value with no ADR
+   (R-DB-4). A counter-proposal's answer window closes at `counter_proposed_at` + `snapshot_answer_window_hours`,
+   computed when read through `packages/time`; the API returns it computed under the field the contracts name
+   (`RemedyView.counter.answerClosesAt`), and `answerCounter` and `advance-remedies` compare with the same computation.
+   `choice_closes_at` stays a column: it is what fixes the choice window, and no column holds the window's days.
+   (Data model §2.3; ERD changelog row 12; R-311; T001, T031, T032.)
+2. **C1, one rule.** A suspended student's fault confirmed (the `student_suspended` case dismissed) is an enrollment's
+   end, beside the threshold termination, a teacher's end, a student's ban and a student's deletion. In the same
+   transaction: (a) every make-up still scheduled on the enrollment is cancelled `cancelled_by_admin`, its event
+   carrying the new case's `case_id`; (b) every remedy owed on the enrollment, other than for the sessions the
+   suspension cancelled, the cancelled make-ups' included, goes to a new compensation case opened then, never to the
+   case dismissed; (c) that case's `covers` lists every owed remedy, offered or not. The sessions the suspension
+   cancelled are owed nothing. The new case's reason, `student_fault_confirmed`, is this cycle's reading: a case
+   needs a reason of the closed list, and `student_suspended` would make it a second suspension case, which clearing
+   would read. (SRS FR-ADMIN-5; spec FR-462, FR-486; R-312, R-313; contracts/kernel.md and admin-surface.md; T035,
+   T036.)
+3. **I5.** SRS FR-PAYG-19: where the hold was released, the confirmation also takes its refusal branch when a
+   generated session overlaps a make-up's reservation (FR-MAKEUP-3), as item 9 of the analysis decided. (T027.)
+4. **L1.** A path that locks more than one teacher's `lockKey('teacher-slots', …)` takes the keys in ascending teacher
+   id order: a student's deletion, suspension or ban (booking's subscriber) and a dispute resolved `party_suspended` or
+   `party_banned` against a student. (Contracts/kernel.md, data model §5, R-308, R-313, R-321; T002, T004, T005,
+   T034; a note under `003:T005`.)
+5. **L2.** A make-up's booking locks both slots it touches, the enrollment's own and, for a counter, the counter's, in
+   one call in id order. (R-311; T029.)
+6. **L3.** Contracts/kernel.md gains the row of `sessions.remedy.choose` and of a counter's hand-off to a case; the
+   resolution row names the dispute's close and the threshold's hand-off of the open remedies.
+7. **The other findings, as text.** I2 (R-311: a cleared suspension's session may be refunded too), I3 (T028: such a
+   session is offered `awaiting_choice` on recitation), I4 (a refund opens or joins the enrollment's open case of its
+   reason: FR-467, US4 acceptance 6, SC-410, quickstart §1), S1 and S2 (data model §3 and §1), S3 (R-315's list of
+   kinds), S4 (T107 done, not carried), S5 (R-305 cites ADR 0022), S6 (`EnrollmentSide` and `DisputeChat` are the
+   fourth and fifth dependencies against the arrows, ARCHITECTURE §4 counting three), S7 (the spec's scope list as
+   PLAN.md's), U1 (FR-473's refusal of a session under review), U2 (T023's event carries its case), U3 (SRS
+   FR-MAKEUP-3 names the open holds).
+8. **S8.** PLAN.md's «39 for Phase 3» stays, as the history of how the days were split; a note beside it says
+   FR-ADMIN-4 was added on 2026-11-05 and the days did not change.
+
+No path that offers a time is new or changed by these answers: R-320's window rule stands as decided.
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -387,6 +432,10 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/SRS.md` | On the analysis: FR-DISPUTE-1 (any cancelled session), FR-MAKEUP-3 (the lead after the decision; the two windows fixed at the offer), FR-ADMIN-5 (a cleared student's remedy as for a Teacher-No-Show; a remedy frozen during a suspension), §3.14's two video timeouts, an amendment line | Decisions on the analysis 2, 4, 6, 12, 13, 14 |
 | `PLAN.md` | Phase 3's SRS list gains FR-ADMIN-4 | Decision on the analysis 7 |
 | `docs/ERD.md` | v1.15 amended in place: the remedy's two snapshots, `frozen`, `lapsed`, `session_events.case_id`, two settings, ADR 0022 cited | 6, 8, 12, 14, 5 |
+| `docs/SRS.md` | On the second analysis: FR-PAYG-19 (a late payment refused over a make-up's reservation), FR-MAKEUP-3 (the open holds named), FR-ADMIN-5 (a confirmed fault's make-ups cancelled and its owed remedies in a new case), an amendment line | Decisions on the second analysis 2, 3, 7 (U3) |
+| `docs/ERD.md` | v1.15 amended in place again: no `counter_answer_closes_at`, rule 42's five `counter_*` columns; `disputes.reason`'s `student_fault_confirmed` (changelog rows 12 and 13) | 1, 2 |
+| `PLAN.md` | A note beside «39 for Phase 3»: FR-ADMIN-4 added, the days unchanged | 8 |
+| `specs/003-booking/tasks.md` | A note under T005: several teachers' slots' keys in ascending teacher id order | 4 |
 | Constitution, ADR 0022 | 2.5.1: R-DB-4 cites ADR 0022 | 5 |
 | `docs/ARCHITECTURE.md` | §4's Phase 3 graph: `verification` → `sessions`, the `DisputeChat` port; the header names 2.5.1 | 7, 16 |
 | ADR 0018 | The amendment paragraph names the analysis's changes to FR-ADMIN-5 and FR-MAKEUP-3 | 2, 12, 13 |
@@ -394,7 +443,8 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 ## Phase Outputs
 
 - **Phase 0 — Research**: [research.md](./research.md). Twenty-one decisions, R-301 to R-321; the owner answered
-  its fourteen points on 2026-11-05 (above), and the analysis's seventeen the same day.
+  its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, and the second analysis's
+  findings the same day.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 
