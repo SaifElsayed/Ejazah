@@ -152,7 +152,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** let a student find a teacher and buy a package with correctly scheduled sessions.
 
-**Phase 2 closed on 2026-11-05** (B32, T057 in `specs/003-booking/tasks.md`), on its fifth working day of eight (day 16). Proved on the payment port's stand-in and, for the gateway, on Paymob's test account (T056); on one device, the owner's Android phone. Left open by the owner's decisions: `002:T123`'s last key (no rated teacher before Phase 3) and Paymob's documented decline in test mode (OPEN-11). T057's note lists what the device could not reach; those parts stay with the specs.
+**Phase 2 closed on 2026-11-05** (B32, T057 in `specs/003-booking/tasks.md`), on its fifth working day of eight (day 16). Proved on the payment port's stand-in and, for the gateway, on Paymob's test account (T056); on one device, the owner's Android phone. Left open by the owner's decisions: `002:T123`'s last key (no rated teacher before Phase 4) and Paymob's documented decline in test mode (OPEN-11). T057's note lists what the device could not reach; those parts stay with the specs.
 
 **SRS:** FR-PROFILE-1…10, FR-DISC-1…5, FR-BOOK-1…11, FR-PAYG-1…11, NFR-COMP-1
 
@@ -192,7 +192,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - **The visibility predicate reads the account's standing** (T143, the owner's decision of 2026-10-29): discovery leaves out a teacher whose account is suspended or banned, so a `verification_required` teacher stays visible as FR-VERIFY-10 allows; booking and token issuance require an active account. SRS §3.7.1, ADR 0006 and ADR 0007 say so.
 - **The real gateway adapter waits for the gateway's written answers** (the owner's decision of 2026-10-31). Cause: SRS §10's "Payment gateway" row requires the gateway's capabilities confirmed in writing before it is selected, and OPEN-11's answers have not arrived. The phase is built and proved on the payment port's stand-in, which behaves as a real gateway at the boundary: signed events through the same webhook and signature check, a wrong signature refused, events delivered twice, out of order and after the hold has expired, for `paid`, `failed`, `expired` and `recipient_verified` (`specs/003-booking/spec.md`, FR-371 to FR-374). If the answers arrive before the phase's last batch, that batch builds the adapter and the owner runs the purchase on the gateway's sandbox; if not, the phase closes on the stand-in, and the adapter with its sandbox run becomes a numbered task in `specs/003-booking/tasks.md`, timed before Phase 6. *Replaced on 2026-11-03 (the owner's decision): the adapter was built in the phase's last batch and tried on Paymob's test account, OPEN-11's written answers being needed only for production and contracting (`specs/003-booking/tasks.md`, T056).*
 - **The screens are the notice of a payment's outcome** (the owner's decision of 2026-10-31, as Phase 1 decided for FR-VERIFY-6): no notification row and no push is written in this phase; the Confirming state clears by the app reading the enrollment again on return from the hosted checkout, on returning to the foreground and on a bounded schedule (FR-383, FR-384); every confirmation, failure, expiry and refused confirmation is kept as a durable record for Phase 4 (FR-385).
-- **One first-wave follow-up stays open into Phase 3** (the owner's decision of 2026-11-04): `002:T123` (an Arabic template made only of values reads right to left on Android) has its code and specs done and its device check passed on every key drawn so far, but `card.ratingCount` is drawn only for a teacher with a rating, which no teacher has before Phase 3's reviews; Phase 2's close (`specs/003-booking/tasks.md`, T057) records it open instead of checking it.
+- **One first-wave follow-up stays open into Phase 4** (the owner's decision of 2026-11-04): `002:T123` (an Arabic template made only of values reads right to left on Android) has its code and specs done and its device check passed on every key drawn so far, but `card.ratingCount` is drawn only for a teacher with a rating, which no teacher has before Phase 4's reviews (corrected on 2026-11-05: reviews are Phase 4's); Phase 2's close (`specs/003-booking/tasks.md`, T057) records it open instead of checking it.
 
 **Definition of done**
 
@@ -209,7 +209,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** run a session end to end and settle its outcome from evidence, not from the client.
 
-**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…4
+**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…4, FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages these requirements need; the owner's decision of 2026-11-05)
 
 **What this phase delivers**
 
