@@ -1,5 +1,19 @@
 <!--
-SYNC IMPACT REPORT
+SYNC IMPACT REPORT (2.5.0, 2026-11-05)
+=====================================
+Version change: 2.4.5 -> 2.5.0 (MINOR: a new rule, R-SESS-7).
+
+Modified rules: R-MONEY-9 (its parenthesis points at R-SESS-7, not R-SEC-12);
+R-SESS-2 (the evaluation delay is a setting); R-DB-4 (names
+`sessions.simultaneous_connected_seconds`).
+Added rules: R-SESS-7 (the video provider's webhook signature on the raw body).
+Enforcement map: the runtime-guard row and Phase 3's CI row gain R-SESS-7.
+Templates: none changed. Companion documents: ERD v1.15 (2026-11-05);
+ARCHITECTURE v3.2 names this version in the same cycle.
+Source: T107 of `specs/003-booking/tasks.md` and `specs/004-sessions/plan.md`
+("Changes to other documents", P1 to P3), the owner's decisions of 2026-11-05.
+
+SYNC IMPACT REPORT (initial ratification)
 ==================
 Version change: (unratified template) -> 1.1.0
 
@@ -36,7 +50,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.4.5. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.14. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
+Version 2.5.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md) and [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -71,7 +85,7 @@ Rules 8 and 9 are reinstated for gateway events.
 | R-MONEY-6 | **Never** introduce a wallet, balance, escrow, ledger or platform-held-funds concept anywhere. Money-carrying records (gateway order, gross, fee, net) live only in `payments`; every other module speaks to the `PaymentPort` or to `payments`' public entry and never reads a money amount. *(Redefined by ADR 0007.)* | `LINT` boundary rule `boundaries/no-money-vocabulary` outside `modules/payments` and `platform/ports/payment` |
 | R-MONEY-7 | *Superseded (ADR 0005).* Was: never disburse during the dispute window. Nothing is disbursed. | — |
 | R-MONEY-8 | **Never** act on a gateway event without a provider event id that is unique and NOT NULL. A replayed event is acknowledged and ignored. *(Reinstated by ADR 0007. Jobs generally: R-API-14.)* | `DB` - `payment_events.provider_event_id` unique, NOT NULL |
-| R-MONEY-9 | **Never** process a gateway webhook without verifying its signature first, on the raw body, before any handler runs. *(Reinstated by ADR 0007. Video-provider webhooks: R-SEC-12.)* | `RT` guard - unsigned or invalid requests rejected before any handler; `CI` test |
+| R-MONEY-9 | **Never** process a gateway webhook without verifying its signature first, on the raw body, before any handler runs. *(Reinstated by ADR 0007. Video-provider webhooks: R-SESS-7; amended 2026-11-05, the owner's decision, T107: was R-SEC-12, which is about Dependabot.)* | `RT` guard - unsigned or invalid requests rejected before any handler; `CI` test |
 | R-MONEY-10 | *Superseded (ADR 0005).* Was: row lock on the Enrollment for money moves. | — |
 | R-MONEY-11 | *Superseded (ADR 0005).* Was: per-session shares sum to net. There are no shares. | — |
 | R-MONEY-12 | **Never** **read** a threshold, window, offset or limit from a constant. Every operational number is read from `settings`. *(Writing settings: R-PROC-11.)* | `CI` - magic-number grep gate over `apps/api/src/modules/`; `REVIEW` |
@@ -171,7 +185,7 @@ encrypted at rest.
 | R-DB-1 | **Never** edit a migration after it merges. Fix forward with a new migration. | `CI` - migration checksum verification |
 | R-DB-2 | **Never** hand-edit a local schema. A diverged database is reset from migrations, not patched. | `REVIEW`, plus the team runbook |
 | R-DB-3 | **Never** hard-delete: audit logs, ijazahs, sessions, enrollments, users. Terminal states are statuses; the first four carry `deleted_at`, the audit log has no removal path at all. | `DB` - DELETE revoked on those tables for the app role |
-| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`; `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)); and `sessions.teacher_user_id` / `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions ([ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md)) - and never add another without an ADR. | `CI` - the schema gate refuses a column named for an aggregate outside the declared caches, and a declared cache missing; `REVIEW` - whether any other value is derived; the ERD is the registry |
+| R-DB-4 | **Never** store a derived value, except the declared caches: `average_rating` and `review_count`; `sessions.scheduled_start_at` / `scheduled_end_at`, derived from the session's local time and zone ([ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md)); `sessions.teacher_user_id` / `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions ([ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md)); and `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the session's outcome was decided on and never recomputed (amended 2026-11-05, the owner's decision; `specs/004-sessions/plan.md`, decision 3) - and never add another without an ADR. | `CI` - the schema gate refuses a column named for an aggregate outside the declared caches, and a declared cache missing; `REVIEW` - whether any other value is derived; the ERD is the registry |
 | R-DB-5 | **Never** enforce a cross-field invariant only in code when a check constraint can hold it (self-enrollment, phone-or-email, rating range, body-or-attachment). | `DB` check constraints per ERD section 15 |
 | R-DB-6 | **Never** issue a sequential or guessable identifier for anything public: certificate numbers, verification tokens. Crypto-random. | `RT` - generation utility in `platform/`; `Math.random` banned by `LINT` |
 | R-DB-7 | **Never** store an OTP code, token, or password in plain text. Hashed, always. *(Reversible secrets: R-DB-8.)* | `CI` - `*_hash` column naming check; `REVIEW` |
@@ -210,11 +224,12 @@ count and dispute downstream depends on this being true.
 | ID | Rule | Enforced |
 |---|---|---|
 | R-SESS-1 | **Never** derive attendance from the client. Provider webhooks into `session_participant_events` only. | `TYPE` - no client-writable attendance field exists; `DB` - `provider_event_id` unique |
-| R-SESS-2 | **Never** evaluate a session as a webhook reaction. Scheduled job at `scheduled_end + 2m`, so evaluation happens even when the final webhook never arrives. | `CI` - test: a session with a missing end-webhook still settles |
+| R-SESS-2 | **Never** evaluate a session as a webhook reaction. Scheduled job at `scheduled_end` plus the configured evaluation delay (a setting, default 2 minutes, R-MONEY-12), so evaluation happens even when the final webhook never arrives. *(Amended 2026-11-05, the owner's decision: was `scheduled_end + 2m`.)* | `CI` - test: a session with a missing end-webhook still settles |
 | R-SESS-3 | **Never** settle a session before its scheduled end has passed. | `RT` guard in the evaluation job |
 | R-SESS-4 | **Never** penalize a reconnection. Simultaneous time accumulates across drops. | `CI` - the reconnection test case is mandatory |
 | R-SESS-5 | **Never** let a suspended, revoked, or banned teacher join any session. | `RT` guard at token issuance, plus a `CI` test |
 | R-SESS-6 | **Never** auto-resolve an `under_threshold` or `provider_outage` session. Admin review only; the outcome stays frozen. | `RT` - no automatic transition exists from those states |
+| R-SESS-7 | **Never** process a video provider's webhook without verifying its signature first, on the raw body, before any handler runs. *(Added 2026-11-05, the owner's decision, T107. Gateway webhooks: R-MONEY-9.)* | `RT` guard - the kernel's webhook signature guard rejects unsigned or invalid requests before any handler; `CI` test with the video webhook (Phase 3) |
 
 ### IX. Product Honesty (R-HONEST)
 
@@ -283,9 +298,9 @@ Who holds which rules. This is also the build list for Phase 0
 | **The internal rule plugin `eslint-plugin-ijazah`** (`packages/config`), including the six `boundaries/*` wall rules, whose wall data lives in `packages/config/eslint.boundaries.js` | Phase 0, workstream 1 | R-MONEY-1/2/5/6, R-TIME-1/6, R-GENDER-4/5, R-MOBILE-1/2/4/5/6/7/8/9/10/11, R-API-1/2/3/4/6/10/15, R-DB-6, R-SEC-2/11, R-PROC-7/8/10/11 |
 | **TypeScript** (branded types, schemas, separate routers) | Throughout | R-MONEY-1, R-GENDER-6, R-API-7/11, R-SEC-8, R-SESS-1, R-HONEST-4/5 |
 | **Postgres** (constraints, uniques, revoked privileges) | Phase 0, workstream 2 | R-MONEY-8, R-DB-3/5, R-SESS-1, ERD section 15 |
-| **Runtime guards** (`platform/`, the caller kinds, jobs) | Phase 0, workstream 3, then per module | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6 |
+| **Runtime guards** (`platform/`, the caller kinds, jobs) | Phase 0, workstream 3, then per module | R-MONEY-9, R-GENDER-7, R-API-8/12, R-DB-6, R-SEC-3/4/5/6/9, R-SESS-3/5/6/7 |
 | **CI gates** | Phase 0, workstream 1 | R-MONEY-1/9/12, R-TIME-2/3/4/5/7, R-GENDER-1/2/3, R-MOBILE-7, R-API-9/11/14, R-DB-1/4/7/8, R-SEC-1/4/6/12, R-PROC-1/4/5/7/9 |
-| **CI gates** | With the code they hold: Phase 1, R-GENDER-6, R-MOBILE-13, R-HONEST-4; Phase 2, R-HONEST-1; Phase 3, R-GENDER-7, R-SEC-5, R-SESS-2/4/5; Phase 4, R-API-13, R-HONEST-2/3/6 | The rules named in the previous column |
+| **CI gates** | With the code they hold: Phase 1, R-GENDER-6, R-MOBILE-13, R-HONEST-4; Phase 2, R-HONEST-1; Phase 3, R-GENDER-7, R-SEC-5, R-SESS-2/4/5/7; Phase 4, R-API-13, R-HONEST-2/3/6 | The rules named in the previous column |
 | **PR checklist** | Phase 0 | The twelve rules below: eleven `REVIEW`-only, and R-DB-4, whose declared caches the schema gate checks while whether any other value is derived stays review's |
 
 Roughly 88% of the active rules are held by machines (five R-MONEY rules are superseded and hold nothing). The checklist below is twelve
@@ -380,6 +395,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.5.0 | 2026-11-05 | MINOR (T107 of `specs/003-booking/tasks.md` and `specs/004-sessions/plan.md`, "Changes to other documents" P1 to P3; the owner's decisions of 2026-11-05): a new rule, R-SESS-7, requires the video provider's webhook signature to be verified on the raw body before any handler, held by the kernel's webhook signature guard (`RT`) and a CI test that lands with the video webhook in Phase 3; R-MONEY-9's parenthesis pointed video webhooks at R-SEC-12, which is about Dependabot, and now points at R-SESS-7. R-SESS-2's evaluation at `scheduled_end + 2m` becomes the configured evaluation delay, a setting of default 2 minutes (R-MONEY-12; SRS §3.14 gains the row). R-DB-4 names `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the outcome was decided on, beside the declared caches; the owner's decision stands in place of the ADR the rule's last clause asks. The header names ERD v1.15, the Phase 3 pass. The enforcement map's runtime-guard row and Phase 3's CI row gain R-SESS-7. No prohibition removed or weakened. Follows 2.4.5. |
 | 2.4.5 | 2026-11-04 | PATCH (T056 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-04): the header names ERD v1.14, which adds the gateway's member `paymob` to `payment_gateway`. A companion version only; no rule changed. Follows 2.4.4. |
 | 2.4.4 | 2026-11-03 | PATCH (T036 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-03): the header names ERD v1.13, which adds `slot_holds.package_id` and `session_count`. A companion version only; no rule changed. Follows 2.4.3. |
 | 2.4.3 | 2026-11-01 | PATCH (T004 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-01): the header names ERD v1.12, which adds `enrollment_events` (42 tables) and ERD §15 rule 39 with the Phase 2 pass. A companion version only; no rule changed. Follows 2.4.2. |
@@ -405,4 +421,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.4.5 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-04
+**Version**: 2.5.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-05

@@ -91,10 +91,10 @@ signed body the port cannot read 400, anything recorded or acknowledged 200, a f
 retries). Nothing of the body, the header or the event is logged (R-SEC-2); a refusal is logged at warn with its code,
 which the video signature alert of ARCHITECTURE §12 counts.
 
-This lands after T107 (`specs/003-booking/tasks.md`), which points the constitution's video-webhook reference at a
-rule that requires the signature (plan.md, "Proposed changes").
+The rule is R-SESS-7 (constitution 2.5.0, T107 of `specs/003-booking/tasks.md`, done in this cycle on 2026-11-05),
+to which R-MONEY-9's parenthesis now points.
 
-**Rationale.** FR-440, R-SESS-1, the R-MONEY-9 pattern. One guard core for both providers.
+**Rationale.** FR-440, R-SESS-1, R-SESS-7, the R-MONEY-9 pattern. One guard core for both providers.
 
 **Alternatives considered.** Parsing JSON through the framework first: the signature covers the exact bytes.
 

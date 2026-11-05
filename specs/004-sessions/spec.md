@@ -187,7 +187,7 @@ threshold.
 
 **Acceptance Scenarios**:
 
-1. **Given** a provider webhook, **When** its signature does not verify on the raw body, **Then** it is refused before any handler runs and nothing is written (R-SESS-1; the constitution's R-MONEY-9 pattern, as ARCHITECTURE §12's video signature alert assumes).
+1. **Given** a provider webhook, **When** its signature does not verify on the raw body, **Then** it is refused before any handler runs and nothing is written (R-SESS-1, R-SESS-7; the constitution's R-MONEY-9 pattern, as ARCHITECTURE §12's video signature alert assumes).
 2. **Given** a participant event delivered twice, **When** both deliveries are handled, **Then** one event is recorded and the accumulated time is unchanged by the second (ERD §15 rule 4, R-API-14).
 3. **Given** a session whose scheduled end has passed by the configured evaluation delay, **When** the job runs, **Then** it settles the session by SRS §3.7.5's table from the recorded events alone, even when the final leave event never arrived; run twice, it equals one run (FR-SESS-10, R-SESS-2, R-SESS-3, R-API-14).
 4. **Given** both participants connected together for at least the attendance threshold of the scheduled length, counted across reconnections, **When** the session is evaluated, **Then** it is Done and consumed, and the enrollment's remaining count is one less, derived and never stored (FR-SESS-11, FR-SESS-12, FR-SESS-18, R-DB-4).
@@ -412,7 +412,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 
 **Attendance evidence and evaluation**
 
-- **FR-440**: Attendance MUST come only from the video provider's webhooks: each webhook MUST have its signature verified on the raw body before any handler runs, and each join and leave MUST be recorded once under the provider's unique, non-null event id with the provider's instant, append-only; a replay MUST be acknowledged with no effect; no client value MAY reach attendance (FR-SESS-9, R-SESS-1, R-TIME-6, ERD §15 rules 4 and 21).
+- **FR-440**: Attendance MUST come only from the video provider's webhooks: each webhook MUST have its signature verified on the raw body before any handler runs, and each join and leave MUST be recorded once under the provider's unique, non-null event id with the provider's instant, append-only; a replay MUST be acknowledged with no effect; no client value MAY reach attendance (FR-SESS-9, R-SESS-1, R-SESS-7, R-TIME-6, ERD §15 rules 4 and 21).
 - **FR-441**: A session MUST be evaluated by a scheduled job only once its scheduled end has passed by the configured evaluation delay (a §3.14 setting since 2026-11-05, "Session evaluation delay after scheduled end (minutes)", default 2, the constitution's R-SESS-2), never as a webhook reaction, and MUST be evaluated even when no final webhook arrived; the job MUST be idempotent (FR-SESS-10, R-SESS-2, R-SESS-3, R-API-14).
 - **FR-442**: A participant MUST count as joined when they have a connection that began no later than the configured join window after the scheduled start (§3.14 "Join window (minutes after start)") and accumulated at least the configured minimum connection duration (§3.14 "Minimum connection duration (seconds)") of connected time between the early-join lead and the scheduled end (FR-SESS-17).
 - **FR-443**: Simultaneous connected time MUST be accumulated across every reconnection, only between the scheduled start and the scheduled end, and a connection whose leave was never reported MUST count until the provider's room-ended event or the scheduled end, whichever is first (FR-SESS-18, R-SESS-4).
