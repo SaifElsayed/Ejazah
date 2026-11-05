@@ -585,6 +585,10 @@ R-321, R-322, R-323), the data model, the contracts, the quickstart and `tasks.m
    T014, T024, T034, T035, T039, T042, T047, T049, T050, T052 and T058 take the decision's parts; T060 (the complaint's
    API) and T061 (the restore's) are new in B40, T062 (the signed-in rate limits) in B36. The batches: B33 6, B34 6,
    B35 6, B36 5, B37 6, B38 6, B39 5, B40 6, B41 6, B42 6, B43 5; none above six.
+6. **Notification names** (the owner's item 12): SRS FR-NOTIF-1 and ERD §11's `notifications.type` name, by name only,
+   fourteen Phase 3 events a party is told of: `enrollment_restored`, `dispute_ruling_revised`, `absence_complaint_decided`, `dispute_raised`, `cancellation_request_expired`, `makeup_counter_declined`, `makeup_frozen`, `makeup_lapsed`, `makeup_offered_again`, `makeup_handed_to_case`, `session_outage_reclassified`, `enrollment_completed`, `enrollment_cancelled`, `compensation_case_opened`. Their migration stays in Phase 4's notifications pass, as
+   for the rest of the list; Phase 3 writes the durable record each is read from (research R-315), except
+   `compensation_case_opened`, whose manual case waits for the owner. No task here.
 
 The window rule (R-320): nothing here offers a time. A restore's `slot_changed` refusal is not a time-offering path, and
 the restore's recreated sessions and re-offered remedies keep R-320's two rows of the decision of no automatic

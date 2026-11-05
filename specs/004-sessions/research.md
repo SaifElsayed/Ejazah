@@ -612,7 +612,7 @@ the teacher's absence raised or decided (R-322); a
 `cancelled_by_admin` row carries the case its action opened or joined, C4; a `dispute_revised` row the dispute revised
 and the outcome before and after, R-308; a `complaint_raised` or `complaint_decided` row, with no session, the complaint,
 R-322); `enrollment_events` (booking's) gains the kinds
-`completed`, `terminated_no_show` and `restored` (R-322). Phase 4's notifications read both and change nothing here. The screens are the
+`completed`, `terminated_no_show` and `restored` (R-322). Phase 4's notifications read both and change nothing here; the names they give these events are SRS FR-NOTIF-1's, amended by the owner on 2026-11-05 with fourteen Phase 3 names (plan.md, «Decisions of 2026-11-05, the administrator's control and the rate limits», item 6). The screens are the
 notice in this phase (FR-495, clarification 1). A `counter_proposed` row also carries the counter-proposal's slot,
 local date, local start and zone, because `session_remedies` keeps only the pending one: the history of every
 counter-proposal is in `session_events` (the owner's decision 9). **Decided** (the owner, 2026-11-05, plan.md
