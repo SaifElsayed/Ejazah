@@ -37,6 +37,12 @@ field (R-GENDER-2). The adversarial suite covers each procedure in both directio
 |---|---|---|---|---|
 | `sessions.dispute.raise` | participant, idempotent | `{ sessionId, reason, idempotencyKey }` | `{ disputeId, status: 'open' }` | From `endsAt`, before the evaluation too, until `dispute_window_hours` after it (`DISPUTE_WINDOW_CLOSED`); one open per session (`DISPUTE_OPEN`); `SESSION_UNDER_REVIEW` for `under_threshold`/`provider_outage`; `NOT_DISPUTABLE` for any cancelled session, by agreement or by an administrator (the owner's decision 5; SRS FR-DISPUTE-1 as amended on the analysis); the session becomes `disputed`. A session whose earlier dispute an administrator resolved may be disputed again inside its window, no remedy existing before the window closes (the third analysis, G1) |
 
+## `sessions.complaint` — FR-452 (the student; the owner's decision of 2026-11-05, no automatic termination)
+
+| Procedure | Kind | Input | Output | Notes |
+|---|---|---|---|---|
+| `sessions.complaint.raise` | participant (student), `rate_limit_absence_complaint` | `{ enrollmentId, reason }` | `{ complaintId, status: 'open' }` | SRS FR-NOSHOW-4, research R-322. A `confirmed` enrollment of the caller's; `reason` 1 to 500 characters, mandatory; one open per enrollment, held by `disputes_one_open_complaint_per_enrollment_key` (`COMPLAINT_OPEN`, the open one's id in `details`); one `session_events` row `complaint_raised`. **Rate limit**, as this file's README asks of whatever can be flooded: `rateLimit: { key: 'rate_limit_absence_complaint', subjectOf: ({ ctx }) => ctx.caller.userId }`, the per-user form of `booking.slots` and `checkout.*`, applied by the kind after the input is validated and before any transaction, so a call over the limit is refused `RATE_LIMITED` with nothing written; apart from the one-open rule. Locks: kernel.md's complaint row. The administrator decides it (`cases.decideComplaint`, admin-surface.md) |
+
 ## `chat` — chat module (FR-488 to FR-492)
 
 | Procedure | Kind | Input | Output | Notes |
@@ -53,7 +59,9 @@ field (R-GENDER-2). The adversarial suite covers each procedure in both directio
 reviews as a widening of the output, not a removal — **to confirm** in B34 against `pnpm contract:snapshot`, else a new
 `displayNameOrNull` field and the old one deprecated); per session `sessionId` (if absent), `pendingCancellation:
 boolean`, `remedyStatus?`, `disputed: boolean`; per enrollment its `status` with `completed` and `terminated_no_show`,
-which the enum already holds. The tabs place `completed`, `terminated_no_show` and the new `cancelled` reasons in the
+which the enum already holds, and, on `enrollments.get`, `complaintOpen: boolean`, so the student's complaint button
+reads «شكوتك قيد المراجعة» while their complaint is open (FR-452; booking reads it through moderation's entry). A
+restored enrollment (FR-455) is `confirmed` again and returns to the active tab. The tabs place `completed`, `terminated_no_show` and the new `cancelled` reasons in the
 ended tab.
 
 ## The public configuration

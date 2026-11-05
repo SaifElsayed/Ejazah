@@ -209,7 +209,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** run a session end to end and settle its outcome from evidence, not from the client.
 
-**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…6, FR-ADMIN-4 (the user directory, which no phase owned; the owner's decision of 2026-11-05 on Phase 3's analysis), FR-ADMIN-5 (the student's part), FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages and the student's standing these requirements need; the owner's decision of 2026-11-05)
+**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…8 (FR-CANCEL-8, an administrator's restore of an enrollment, added on 2026-11-05, the owner's decision of no automatic termination), FR-MAKEUP-1…6, FR-DISPUTE-1…7 (FR-DISPUTE-7, a ruling's revision, added on Phase 3's third analysis, 2026-11-05), FR-ADMIN-4 (the user directory, which no phase owned; the owner's decision of 2026-11-05 on Phase 3's analysis), FR-ADMIN-5 (the student's part), FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages and the student's standing these requirements need; the owner's decision of 2026-11-05)
 
 **What this phase delivers**
 
@@ -243,6 +243,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Attendance evaluates correctly across a mid-session disconnect
 - A session evaluates even when the final webhook never arrives
 - All four no-show outcomes are reachable
+- No count of a teacher's absences ends an enrollment: an enrollment ends for a teacher's absence only by an administrator's decision on the student's complaint, which may be restored within the restore window, and the repeated-absence mark is shown to administrators only, computed when read *(added 2026-11-05, the owner's decision; [ADR 0023](docs/adr/0023-no-automatic-termination-complaint-and-restore.md))*
 - The sessions module never references a price, a payment record or any payment concept
 
 ---

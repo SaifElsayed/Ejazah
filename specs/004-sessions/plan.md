@@ -9,7 +9,8 @@
 Let a student and a teacher meet in a one-to-one room on their phones, with a token only the server mints, only for
 them, only inside the join period; record who was connected from the provider's signed webhooks alone; settle every
 session after its end by a scheduled job into one of SRS §3.7.5's outcomes; and carry what follows — the teacher's
-absences and the termination at the threshold, cancellation by agreement, a make-up or a refund case for a session not
+absences, marked for administrators past a configured count and never ending an enrollment by themselves, a student's
+complaint an administrator decides, an administrator's restore of an enrollment it closed, cancellation by agreement, a make-up or a refund case for a session not
 consumed, disputes, the administrator's queues, the consequences of an account's end, and the chat — with no path that
 computes, holds or moves an amount. One person, seven working days from D17 (2026-11-08) to D23 (2026-11-16), reviewed
 by Saif's review session; the first batch lands T059 (T107 was done in this cycle, `9c710e3`).
@@ -26,8 +27,8 @@ The technical approach, from [research.md](./research.md), rests on seven decisi
    (R-303, R-304).
 4. **A sweep settles, every minute, from the events.** Attendance is computed at evaluation by interval operations in
    `packages/time` and written once; the outage windows an administrator records take precedence (R-305 to R-307).
-5. **A dispute freezes the outcome beside the `disputed` status** (R-308); the threshold and completion are checked by
-   every path that settles (R-309).
+5. **A dispute freezes the outcome beside the `disputed` status** (R-308); completion is checked by every path that
+   settles, and no path counts absences toward an end (R-309, R-322).
 6. **A remedy exists only once it is owed for good.** It is offered when the outcome is final (a
    Cancelled-By-Agreement session at its acceptance), its proposal and a pending counter-proposal are reserved in code
    under the accounts' locks, and no time is offered that starts before the matter could still be decided, nor within
@@ -141,8 +142,8 @@ apps/
 ├── admin/src/pages/sessions · review · outages · disputes · cases · users  # users: FR-ADMIN-4's directory
 └── api/src/
     ├── modules/
-    │   ├── sessions/   join, session read, video-webhook.controller, attendance.rules, evaluation, termination,
-    │   │               completion, cancellation, remedies (offer, proposal, counter, booking), disputes, outages,
+    │   ├── sessions/   join, session read, video-webhook.controller, attendance.rules, evaluation,
+    │   │               completion, the repeated-absence count, complaints and their decision, the restore, cancellation, remedies (offer, proposal, counter, booking), disputes, outages,
     │   │               session-events, enrollment-side.port, dispute-chat.port, the cancellation-request counts,
     │   │               the admin routers (monitor, review, outages, disputes, cases)
     │   ├── chat/       messages, the upload handler, attachment links, purge store, `createDisputeChat` (the port's side)
@@ -200,7 +201,7 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 |---|---|---|---|
 | D17 Sun 11/8 | B33 | T079/T080 (decision 10); the sessions pass migration and seed (ERD v1.15, amended on 2026-11-05), the schema gate's declared caches gaining `sessions.simultaneous_connected_seconds` (R-DB-4, constitution 2.5.0); the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons | The carried tasks the spec puts first (FR-420; T107, the constitution before the webhook, done on 2026-11-05 in this cycle), and the foundations every later batch reads |
 | D17 Sun 11/8 | B34 | `002:T144` (a student's suspension, ban and reinstatement through `StandingService`, FR-486); a teacher's end (FR-483); T090 (FR-426); the `EnrollmentSide` port; the LiveKit adapter with the Daily rename and the port's widening (FR-425, quickstart §3); the video stand-in harness | Every account's end before any session can be joined; the provider behind the port |
-| D18 Mon 11/9 | B35 | `sessions.get` and `sessions.join` with their adversarial cases; `POST /webhooks/video`; the attendance rules and `evaluate-sessions`; the threshold, completion and event rows; the outage windows; the R-SESS CI tests | US1's API and US2 whole (SC-402 to SC-407) |
+| D18 Mon 11/9 | B35 | `sessions.get` and `sessions.join` with their adversarial cases; `POST /webhooks/video`; the attendance rules and `evaluate-sessions`; completion and the event rows; the outage windows; the R-SESS CI tests | US1's API and US2 whole (SC-402 to SC-407) |
 | D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens | US1 on the phone; the first device check of joining |
 | D19 Tue 11/10 | B37 | Cancellation requests and their expiry sweep; the administrator's cancellation and the monitor; the user record's request counts; raising a dispute | US3's API, US5's first half |
 | D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance, counter options and counter-proposals again after a decline (R-320, decision 9); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
@@ -245,7 +246,8 @@ otherwise.
    waits for the dispute window. Spec FR-462 and FR-473, SRS FR-CANCEL-2, FR-DISPUTE-1 and FR-MAKEUP-1 say so. (R-311)
 6. **Where the event rows live.** *Decided:* (a), a new `session_events` table, sessions'. (R-315)
 7. **Does a disputed Teacher-No-Show count toward the threshold?** *Decided:* (a), no, until resolved; the resolution
-   re-checks. (R-308)
+   re-checks. (R-308) *Removed by the decisions of 2026-11-05, no automatic termination (item 1 there): there is no
+   threshold, and this decision served only it; the repeated-absence mark reads a session by its final status (R-322).*
 8. **Numbers the spec does not fix.** *Decided:* the proposed numbers, all admin settings: the chat message rate
    limit 30 messages per 60 s, the chat page size 50, the cancellation requests' «recent period» 30 days. SRS §3.14
    gains them as rows, beside the evaluation delay's. (R-317)
@@ -336,7 +338,8 @@ fixed then; C = `choice_closes_at`):
    check, the database's exclusions being its only guard, and a reservation is no session row; so that branch must
    read the reservations and take its refusal branch when a generated session would overlap one (T027).
 10. **C1.** A remedy is offered only on a `confirmed` enrollment; a session owed on an enrollment that ended (the
-    threshold termination, a teacher's end, a student's ban) is covered by the case that ending opened, which `covers`
+    threshold termination, since 2026-11-05 an administrator's termination on a complaint; a teacher's end, a student's
+    ban) is covered by the case that ending opened, which `covers`
     lists; a student's deletion opens none, and item 8 applies (spec FR-448, FR-462, FR-478; T015, T028, T035).
 11. **F3, F4.** One lock order, `users` → `enrollments` → `sessions`: a `party_suspended` or `party_banned` resolution
     locks the party's account first; an outage record locks the overlapped sessions' enrollments before the sessions
@@ -375,7 +378,7 @@ quickstart, tasks, SRS, ERD and PLAN.md were brought into line the same day.
    `choice_closes_at` stays a column: it is what fixes the choice window, and no column holds the window's days.
    (Data model §2.3; ERD changelog row 12; R-311; T001, T031, T032.)
 2. **C1, one rule.** A suspended student's fault confirmed (the `student_suspended` case dismissed) is an enrollment's
-   end, beside the threshold termination, a teacher's end, a student's ban and a student's deletion. In the same
+   end, beside the threshold termination (since 2026-11-05 an administrator's termination on a complaint), a teacher's end, a student's ban and a student's deletion. In the same
    transaction: (a) every make-up still scheduled on the enrollment is cancelled `cancelled_by_admin`, its event
    carrying the new case's `case_id`; (b) every remedy owed on the enrollment, other than for the sessions the
    suspension cancelled, the cancelled make-ups' included, goes to a new compensation case opened then, never to the
@@ -393,7 +396,8 @@ quickstart, tasks, SRS, ERD and PLAN.md were brought into line the same day.
 5. **L2.** A make-up's booking locks both slots it touches, the enrollment's own and, for a counter, the counter's, in
    one call in id order. (R-311; T029.)
 6. **L3.** Contracts/kernel.md gains the row of `sessions.remedy.choose` and of a counter's hand-off to a case; the
-   resolution row names the dispute's close and the threshold's hand-off of the open remedies.
+   resolution row names the dispute's close and the threshold's hand-off of the open remedies (the hand-off moved to the
+   complaint's decision on 2026-11-05: kernel.md's complaint rows).
 7. **The other findings, as text.** I2 (R-311: a cleared suspension's session may be refunded too), I3 (T028: such a
    session is offered `awaiting_choice` on recitation), I4 (a refund opens or joins the enrollment's open case of its
    reason: FR-467, US4 acceptance 6, SC-410, quickstart §1), S1 and S2 (data model §3 and §1), S3 (R-315's list of
@@ -441,7 +445,8 @@ quickstart, tasks, SRS, ERD, ADR 0018 and the note under `003:T005` were brought
    A1 (the cleared suspension's refund only on a recitation enrollment: T028, T031, `canChooseRefund`). F1 («open
    remedy» defined once in data model §3: `awaiting_choice`, `proposed`, `counter_proposed` or `frozen`; the ban, a
    teacher's end and a confirmed fault hand over every open remedy, `frozen` included: T005, T006; T015's text is
-   left to the pass that removes the no-show threshold). C2 (`session_remedies_counter_slot_id_idx`, the new foreign key's plain index, in T001). U3 (`EnrollmentSide`
+   left to the pass that removes the no-show threshold: that pass is the decisions of 2026-11-05 below, where F1 applies
+   to the complaint's end, and T015's rewrite is in its task proposal). C2 (`session_remedies_counter_slot_id_idx`, the new foreign key's plain index, in T001). U3 (`EnrollmentSide`
    gains `enrollmentPage`, which the monitor's list reads: T008, T024; R-API-6). I1 (`covers` counts a
    Cancelled-By-Agreement session never offered a remedy beside the two no-shows: R-312, T035, `cases.get`). I2 (SRS
    FR-DISPUTE-5 names a student's ban, a confirmed fault, a counter left unanswered and a refused make-up; spec
@@ -477,6 +482,69 @@ quickstart, tasks, SRS, ERD, ADR 0018 and the note under `003:T005` were brought
 The window rule (R-320) gains two applications: the offer itself waits for the dispute window, any dispute raised in
 it and any revision (item 2), and a refused proposal is retried only while it starts at least L after the attempt
 (item 7).
+
+## Decisions of 2026-11-05, no automatic termination
+
+The owner decided on 2026-11-05 that no count of a teacher's absences ends an enrollment
+([ADR 0023](../../docs/adr/0023-no-automatic-termination-complaint-and-restore.md)). Where an answer changes a decision
+above, the answer governs, and the spec, research (R-322), data model, contracts, quickstart, SRS, ERD and PLAN.md were
+brought into line the same day. `tasks.md` is not changed by this pass: the tasks it adds, removes or reshapes, and any
+batch it would take past six, wait for the owner's approval.
+
+1. **No automatic termination.** Each Teacher-No-Show gets its remedy (FR-NOSHOW-2) and the enrollment continues; an
+   enrollment or its sessions end only by an administrator's decision. Removed: the setting
+   `teacher_no_show_threshold` (SRS §3.14's row; the seed's row, which the first batch's migration deletes), the
+   threshold check in every path that settles (`termination.service.ts` is not written), every automatic path to
+   `terminated_no_show`, the check on a dispute's resolution, and decision 7 above, which served only the threshold.
+   (SRS FR-NOSHOW-3, FR-NOSHOW-4; spec FR-448; R-309, R-322.)
+2. **A repeated-absence mark, per enrollment, for administrators only.** At `repeated_absence_flag_count` (a new §3.14
+   row, default 5) Teacher-No-Shows on one enrollment since it began, the enrollment is shown marked with its count on
+   the monitor, the cases and the disputes; the teacher's record in the user directory (FR-ADMIN-4, T058's `/users`)
+   lists the marked enrollments. The count is read, never stored (R-DB-4), each session by its final status: no
+   Both-No-Show, no Cancelled-By-Agreement, no absence a dispute's resolution or a ruling's revision removed, and a
+   session under dispute once resolved. Nothing happens automatically because of the mark. (SRS FR-NOSHOW-3,
+   FR-ADMIN-4; spec FR-451, FR-481; R-322.)
+3. **The student's complaint.** A complaint button on a confirmed enrollment takes a mandatory written reason and opens
+   a case in the administrator's queue: a `disputes` row of a new kind, `absence_complaint` (a compensation case's
+   reason is a closed list, and Phase 2's covering rule reads `compensation_case` rows only). One open per enrollment,
+   held by a partial unique; a second answers `COMPLAINT_OPEN`, and the button reads «شكوتك قيد المراجعة» from
+   `enrollments.get`'s `complaintOpen`. `sessions.complaint.raise` declares `rate_limit_absence_complaint` with the
+   student as subject, as `booking.router` and `checkout.router` declare theirs, apart from the one-open rule and
+   tested over its limit; its default, 5 per 3600 s, is this cycle's reading, the limit itself the owner's decision.
+   The administrator decides (`cases.decideComplaint`), each with a mandatory note, audited: (a) end the enrollment,
+   `terminated_no_show` with the old termination's effects, its remaining sessions Cancelled-By-Admin and a new
+   compensation case `absence_termination` (the reason that replaces `teacher_no_show_threshold`) holding every remedy
+   still owed, as C1 of the second analysis decided; (b) suspend the teacher through `StandingService`; (c) close it
+   with the note. Locks per `003:T005` and contracts/kernel.md's three complaint rows: the raising `users` (the
+   student) then `enrollments`; (a) a confirmed fault's order; (b) a `party_suspended` resolution's (no
+   `teacher_profiles` row: `StandingService.suspend` locks the account only); (c) `enrollments` then `disputes`.
+   (SRS FR-NOSHOW-4, FR-DISPUTE-5; spec FR-452, FR-453; R-322.)
+4. **A ruling's revision has no threshold.** It changes the session's outcome only; the mark, being read, follows it;
+   nothing re-checks a count. (SRS FR-DISPUTE-7; spec FR-472; R-308.)
+5. **The restore.** An administrator may restore, within `enrollment_restore_window_days` (a new §3.14 row, default 7)
+   of its closing, an enrollment an administrator's decision closed: `terminated_no_show` on a complaint, or
+   `cancelled` (`admin`) on a confirmed fault (`student_fault_confirmed`). Not one closed by a ban, a deletion or a
+   teacher's end, nor a completed one. Both accounts active; the closing's case still open (resolved with compensation,
+   or dismissed, refuses); the slot not taken by another student (a session or an open hold) in any week it would fill.
+   The sessions still owed are created anew from the nearest occurrence at least the first-session lead after the
+   restore, the cancelled ones kept as they are; the remedies the case held are offered again with a new choice
+   window, as a frozen remedy after reinstatement (H1 with F5 and F6); the case closes «restored». A mandatory reason,
+   an audit entry, an `enrollment_events` row `restored` for Phase 4's notice, idempotent under an `idempotencyKey`
+   through the kernel's `IdempotencyService` (the scope `sessions.restore` joins `idempotent-procedures.ts` in the
+   design; no code here). Locks: `sessions.cancel`'s order widened by both accounts, the teacher's slots' key and the
+   slot before it, and `session_remedies` within it. The owner's «the admin's cancellation (FR-CANCEL-6)» is read as
+   naming no closing: FR-CANCEL-6 cancels one session and leaves its enrollment `confirmed`, so nothing it does is
+   restored. The state machine: the enrollment leaves a terminal state for `confirmed`, and a `refund_case` remedy
+   leaves a final state; no database rule forbids either, ADR 0010 D5's late confirmation is the one earlier exit and
+   was an ADR, so ADR 0023 records these. (SRS FR-CANCEL-8; spec FR-454, FR-455; R-322; ADR 0023.)
+6. **Where it is written.** The SRS first (FR-NOSHOW-3/4/5, FR-CANCEL-8, FR-DISPUTE-5, FR-DISPUTE-7, FR-ADMIN-4,
+   §3.14, §7, §8, UC-4, DEC-61, an amendment line); FR-ADMIN-5 names no threshold and is not edited; the constitution
+   names no threshold (R-SESS's «no-show count» stays true) and is not edited. The termination was in the spec's User
+   Story 2, not User Story 7 (the chat); US2 and US5 change.
+
+The window rule (R-320) gains two applications: a restore's recreated sessions (none before the restore plus the
+first-session lead, none over an open hold, a reservation or a session of either party) and a remedy a restore offers
+again (H1 with F5 and the lead, after the recreated sessions). The complaint offers no time.
 
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
@@ -518,12 +586,16 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/ERD.md` | v1.15 amended in place again: `session_remedies_counter_slot_id_idx`; `offered_at` after the window; `session_events`' `dispute_revised` with `outcome_before` and `outcome_after`, rule 43; `disputes.resolution` never rewritten (changelog rows 14 to 16) | 2, 4, 5, 6 (C2), 8 |
 | ADR 0018 | The amendment paragraph names the second analysis's C1 (D5's «nothing owed» narrower) | 6 (S2) |
 | `specs/003-booking/tasks.md` | A note under T005: L-A, L-B, L-C and the revision's locks | 6, 8 |
+| `docs/SRS.md` | No automatic termination: FR-NOSHOW-3/4/5 rewritten, FR-CANCEL-8 (new), FR-DISPUTE-5, FR-DISPUTE-7, FR-ADMIN-4, §3.14 (the threshold row removed; the flag count, the restore window and the complaint rate limit added), §7, §8, UC-4, DEC-61, an amendment line | Decisions of 2026-11-05, no automatic termination, 1 to 6 |
+| ADR 0023 (new) | No automatic termination, the complaint, the restore and its two exits from a final state | 5 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog rows 17 to 20 | 1, 2, 3, 5 |
+| `PLAN.md` | Phase 3's SRS list gains FR-DISPUTE-7 and FR-CANCEL-8; the definition of done gains the line on no automatic termination | 1, 6 |
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Twenty-one decisions, R-301 to R-321; the owner answered
-  its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, and the second and third
-  analyses' findings the same day.
+- **Phase 0 — Research**: [research.md](./research.md). Twenty-two decisions, R-301 to R-322; the owner answered
+  its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, the second and third
+  analyses' findings the same day, and R-322 on the decisions of no automatic termination.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 

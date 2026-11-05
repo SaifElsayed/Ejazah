@@ -7,7 +7,7 @@ What the kernel and the composition root gain. Raw SQL stays in `apps/api/src/pl
 | Export | File | Contract |
 |---|---|---|
 | `lockRows(tx, table, ids)` | `row-lock.ts` | `LockedTable` widens to `sessions`, `session_remedies`, `cancellation_requests`, `disputes`, listed in the one order: `users`, `teacher_profiles`, `availability_slots` (after `lockKey('teacher-slots', …)`), `slot_holds`, `enrollments`, `sessions`, `session_remedies`, `cancellation_requests`, `disputes`, `payments`. `FOR UPDATE`, id order, as T005 decided. A row-lock spec per new table, as the application role |
-| `isUniqueViolation`, `isExclusionViolation` | `db-errors.ts` | The closed union gains `cancellation_requests_one_pending_key`, `disputes_one_open_per_session_key`, `session_remedies_session_id_key`, `session_participant_events_provider_event_id_key`, and the session exclusions already named (for a make-up) |
+| `isUniqueViolation`, `isExclusionViolation` | `db-errors.ts` | The closed union gains `cancellation_requests_one_pending_key`, `disputes_one_open_per_session_key`, `session_remedies_session_id_key`, `session_participant_events_provider_event_id_key`, `disputes_one_open_complaint_per_enrollment_key` (a second open complaint, `COMPLAINT_OPEN`; R-322), and the session exclusions already named (for a make-up and a restore's sessions) |
 | `clockTimestamp(tx)` | `db-clock.ts` (new) | `SELECT clock_timestamp()`, for the instant a case or dispute closes (FR-422), never the transaction's `now()` |
 
 T005's rules, with this phase's paths (Saif reviews each lock and FK-insert path against them). Beside F3 and F4's
@@ -19,10 +19,14 @@ call in id order (L2).
 | Path | Locks, in order | Inserts referencing an account |
 |---|---|---|
 | `sessions.join` | `users` (both, one call) | none |
-| evaluation, a review or dispute resolution | `enrollments`, `sessions`, then, when T015's count reaches the threshold, `session_remedies` (the open ones handed to its case) and `disputes` (its case opened); a dispute resolution also `disputes` (the dispute closed, `resolved_at` by `clockTimestamp`) (the second analysis, L3) | none (`session_events`, a case: enrollment and session only) |
+| evaluation, a review or dispute resolution | `enrollments`, `sessions`; a dispute resolution also `disputes` (the dispute closed, `resolved_at` by `clockTimestamp`) (the second analysis, L3). No count is checked: no settlement ends an enrollment (the owner's decision of 2026-11-05, no automatic termination; R-322) | none (`session_events`, a case: enrollment and session only) |
 | an administrator's revision of a dispute's ruling (SRS FR-DISPUTE-7; the owner's decision of 2026-11-05 on the third analysis) | a resolution's order: `enrollments`, `sessions`, then `disputes` (the dispute revised, read again; never written); no `StandingService`, so no account | none (`session_events` reference the enrollment, the session and the dispute) |
 | a dispute resolved `party_suspended` or `party_banned` (the owner's decision of 2026-11-05 on the analysis, F3) | `users` (the party, first, `lockAccount`), `teacher_profiles` (a teacher party banned: `StandingService.ban`'s `lockApplication`, after the account and before the slots' key; the third analysis, L-A), `lockKey('teacher-slots')` (a student party: each of their teachers' keys, ascending teacher id, **(L1)**), `enrollments` (the dispute's and the party's confirmed ones, one call), `sessions`, `session_remedies`, `disputes`; `StandingService` and its consequences run on these locks | none (the case and the events reference no account) |
-| threshold termination | (held) `enrollments`, `sessions` (remaining, one call), `session_remedies` | none |
+| a student's complaint raised, `sessions.complaint.raise` (R-322) | `users` (the student, `lockRows`), `enrollments` (read again: `confirmed`, the caller its student); the insert under `disputes_one_open_complaint_per_enrollment_key` | the complaint references the student, locked first |
+| a complaint decided (a), the enrollment ended (R-322; the threshold termination's row, removed, had these locks) | `enrollments`, `sessions` (remaining, one call), `session_remedies`, `disputes` (the complaint closed, the `absence_termination` case opened), a confirmed fault's order | none (the case and the events reference the enrollment and the sessions only) |
+| a complaint decided (b), the teacher suspended (R-322) | a `party_suspended` resolution's against a teacher: `users` (the teacher, first, `lockAccount`), `lockKey('teacher-slots')`, `enrollments` (the complaint's and the teacher's confirmed ones, one call), `sessions`, `session_remedies`, `disputes`; no `teacher_profiles` row, `StandingService.suspend` locking the account only (L-A is a ban's) | none |
+| a complaint decided (c), closed (R-322) | `enrollments`, then `disputes` (closing a case or dispute) | none |
+| an administrator's restore, `sessions.restore` (R-322) | `sessions.cancel`'s order widened: `users` (both, one call), `lockKey('teacher-slots')`, `availability_slots` (the enrollment's slot), `enrollments`, `sessions`, `session_remedies` (the remedies offered again), `disputes` (the closing's case closed, `restored`); the reservations and open holds read under them | the sessions it inserts reference both accounts, locked first |
 | cancellation request, a decline | `sessions`, `cancellation_requests` | the request references the requester: `users` (both parties) locked first |
 | cancellation accepted (the make-up offered at once, the owner's decision 5) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `cancellation_requests` | the request's accounts locked first |
 | dispute raised | `users` (the raiser), `enrollments`, `sessions` | the dispute references the raiser, locked first |
@@ -43,12 +47,12 @@ call in id order (L2).
 `AppServices` gains `sessions` (join, the session read, cancellation, remedies, disputes) and `chat`;
 `AdminSurfaceServices` gains `sessionsAdmin`, `disputes`, `cases`, `students`. `main.ts` binds:
 
-- sessions' `EnrollmentSide` port to booking's `createEnrollmentSide()` (R-301);
+- sessions' `EnrollmentSide` port to booking's `createEnrollmentSide()` (R-301), with `restore(tx, id)` for an administrator's restore (R-322);
 - booking's `terminationSubscriber` widened with sessions' `cancelRemainingSessions` and moderation's cases (R-313);
 - sessions' `DisputeChat` port to chat's `createDisputeChat()` (R-301, R-314; the owner's decision of 2026-11-05 on the
   analysis, C5): `disputes.chat` asks it once the dispute is checked open, so sessions imports no chat;
 - verification's `users.get` reads the cancellation-request counts from sessions' entry (an import, R-301);
-- `StandingService` into sessions' dispute resolution (FR-421);
+- `StandingService` into sessions' dispute resolution and a complaint's decision (b) (FR-421, R-322);
 - the video port into sessions; the `POST /webhooks/video` route beside the payment webhook.
 
 The worker binds the same port for the sweeps.
@@ -57,7 +61,7 @@ The worker binds the same port for the sweeps.
 
 | Job | Schedule | Payload | Double-run spec |
 |---|---|---|---|
-| `evaluate-sessions` | every minute | `{}` | twice = once: one outcome, one event row, one termination at most, rooms of cancelled sessions ended (idempotent) |
+| `evaluate-sessions` | every minute | `{}` | twice = once: one outcome, one event row, no enrollment ended (no count is checked, R-322), rooms of cancelled sessions ended (idempotent) |
 | `advance-remedies` | every minute | `{}` | twice = once: one remedy per session, one booking, one case; no offer on an enrollment not `confirmed` or to a suspended student, none to a `frozen` remedy |
 | `expire-cancellation-requests` | every minute | `{}` | twice = once |
 | `purge-chat` | daily | `{}` | twice = once: the same rows purged, each file removed once (a missing file is not an error) |

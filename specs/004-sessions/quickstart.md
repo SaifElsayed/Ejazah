@@ -17,7 +17,8 @@ iPhone run is Phase 6's).
   a spec that writes to a database runs only with `IJAZAH_DB_SPECS=1` beside the two `ijazah_integrity` URLs (T124, the
   owner's decisions of 2026-11-01). The database is migrated and seeded fresh, not reset (B19d).
 - Before the first batch's migration runs on `ijazah`, the rows data-model §6 names are counted, then `pnpm db:migrate`
-  and `pnpm db:seed` (the seven new settings; the panel and the jobs fail closed on a missing one).
+  and `pnpm db:seed` (the ten new settings, and the `teacher_no_show_threshold` row deleted by the migration; the panel and the
+  jobs fail closed on a missing one).
 - `VIDEO_PROVIDER=fake` for every automated run: no provider credential in the suite (as SC-302 was for the gateway).
 - For the device runs: a LiveKit Cloud project on the **free Build plan** (a hard cap: requests fail, nothing is billed;
   ADR 0003), its `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` in `.env` only (R-SEC-1); the development
@@ -31,7 +32,7 @@ iPhone run is Phase 6's).
 
 ---
 
-## 1. The machines first (SC-403 to SC-413)
+## 1. The machines first (SC-403 to SC-413, SC-415, SC-416)
 
 ```text
 pnpm typecheck && pnpm lint                       # no-money-vocabulary over sessions and chat; R-TIME-1; R-GENDER-4/5
@@ -47,8 +48,9 @@ Expected:
 
 - With the video stand-in harness ([contracts/video.md](./contracts/video.md)): each row of SRS §3.7.5's table reached
   from signed events alone; a mid-session disconnect and reconnection sums its overlaps (SC-402); a session with no
-  final leave settles within the evaluation delay plus one minute (SC-403); the threshold termination at the second
-  Teacher-No-Show cancels the rest and opens one case (SC-404); an event delivered 100 times leaves one row and the same
+  final leave settles within the evaluation delay plus one minute (SC-403); five Teacher-No-Shows on one enrollment
+  leave it `confirmed`, each absence owed its remedy, and only mark it for administrators, the count read and never
+  stored (SC-404, FR-448, FR-451); an event delivered 100 times leaves one row and the same
   outcome, and the job run twice leaves the same records (SC-405); a wrong or missing signature, or a body changed after
   signing, is refused with nothing written (SC-406).
 - The adversarial suite refuses a token for the other gender, a non-participant, another session's id, a teacher
@@ -67,6 +69,12 @@ Expected:
   remaining sessions cancelled with their cases, in one transaction (SC-412).
 - Every administrator action writes one audit entry with its reason; none writes a payment, an amount or a
   confirmation (SC-413).
+- A second complaint on an enrollment with one open is refused `COMPLAINT_OPEN`, two at once leave one; a student over
+  `rate_limit_absence_complaint` is refused `RATE_LIMITED` with nothing written; each of the three decisions writes its
+  audit entry and event (SC-415).
+- A restore inside the window recreates exactly the sessions still owed, the first no earlier than the first-session
+  lead after it, and offers again the remedies its case held under the window rule; every refusal cause writes
+  nothing; a repeated key returns the first answer; `confirmed_at` is never written (SC-416, SC-413).
 
 ## 2. A session on the stand-in, end to end (US1, US2)
 
@@ -129,7 +137,13 @@ the case (the enrollment cancelled, the make-up cancelled, every remedy still ow
 case and none in the case dismissed); ban a student (sessions and enrollments cancelled, a case); delete a student's account with a make-up
 remedy open (lapsed, no case) and one whose refund was chosen (its case kept); on `/users`, search a user by name and
 open their record (FR-ADMIN-4's fields and the cancellation-request counts; a student's suspend, ban and reinstate);
-read a dispute's chat (one `chat.read` audit entry per read). The audit log shows one entry per action with its reason.
+read a dispute's chat (one `chat.read` audit entry per read). On a confirmed enrollment, complain of the teacher's
+absence from the phone (the button then reads «شكوتك قيد المراجعة» and a second complaint is refused); in `/cases`,
+close one complaint, suspend the teacher on another, and end the enrollment on a third (its sessions cancelled, a new
+case holding what it owes); on `/sessions`, see an enrollment with five Teacher-No-Shows marked and still confirmed,
+and on `/users` the teacher's record listing it; restore the ended enrollment (its sessions back from the nearest week
+at least 24 hours away, its remedies offered again, its case closed «restored») and try a restore after the window
+(`RESTORE_REFUSED`, `window_closed`). The audit log shows one entry per action with its reason.
 
 ## 7. Chat (US7)
 
