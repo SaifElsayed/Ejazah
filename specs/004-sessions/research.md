@@ -7,8 +7,8 @@ citation never collides with Phase 0's R-1…, Phase 1's R-101… or Phase 2's R
 against the code as it stands on `Ejazah_app/003-booking/T106` at `da35d59` (`develop` `8e3614e` plus the spec and
 clarify commits, read on 2026-11-05); where it names existing code, the path is given. Versions were read from the npm
 registry on 2026-11-05 and each one pinned is at least fourteen days old on that date (seventeen on D17, when the
-first batch installs it). Decisions that only the owner can take are marked **Owner** and listed in plan.md,
-"Decisions for the owner"; the plan is written on the recommendation, which a different answer changes where named.
+first batch installs it). Decisions that only the owner could take were put to the owner, who answered them on 2026-11-05
+(plan.md, "Decisions recorded"); each is marked **Decided** with the answer, and the text below follows it.
 
 ---
 
@@ -34,7 +34,8 @@ Sessions needs booking's enrollments (the snapshot's track, zone, length and cou
 write an enrollment's `completed` and `terminated_no_show`, but booking imports sessions. As Phase 2 did for catalog
 (R-207), sessions declares the port it needs, `EnrollmentSide` (`sessions/enrollment-side.port.ts`), and `main.ts`
 binds it to booking's `createEnrollmentSide()`: `enrollmentFor(tx, id)`, `lockEnrollments(tx, ids)`,
-`terminateNoShow(tx, id)`, `complete(tx, id)`, `slotWeekTaken(tx, slotId, localDate)` (held, or occupied by another
+`terminateNoShow(tx, id)`, `complete(tx, id)`, `cancel(tx, id, 'admin')` (a suspended student's fault confirmed,
+R-313), `slotWeekTaken(tx, slotId, localDate)` (held, or occupied by another
 enrollment under R-205's release). Every function takes the caller's transaction and takes no lock it does not name.
 
 **Rationale.** ARCHITECTURE §4 gives sessions these tables and says "Circular dependency needed? The logic belongs in
@@ -157,7 +158,7 @@ events' order or on a duplicate; a reconnection never lowers simultaneous time; 
 end. SC-402 is the spec that a disconnect and reconnection yields the sum of the overlaps.
 
 The result is written once, by the evaluation, to `sessions.simultaneous_connected_seconds` as the figure the outcome
-was decided on (**Owner**, R-DB-4: plan.md decision 3).
+was decided on (**Decided**, the owner, 2026-11-05, plan.md decision 3; R-DB-4 names it, constitution 2.5.0).
 
 **Rationale.** FR-SESS-9, FR-SESS-11, FR-SESS-17, FR-SESS-18. Computing at evaluation, not accumulating per webhook,
 keeps the webhook a pure recorder (R-SESS-2) and makes order irrelevant.
@@ -212,7 +213,7 @@ evaluation (the spec's edge case) leaves it NULL and the evaluation writes the a
 into `status`. What counts while frozen reads `outcome_under_dispute`: progress counts it consumed when it is `done` or
 `student_no_show` (`sessions/progress.ts` widens its `CONSUMED` read); no remedy is offered for it (R-311). The
 threshold counts only settled `teacher_no_show` sessions, so a disputed absence never terminates an enrollment until
-it is resolved (**Owner**, plan.md decision 7). Resolution writes the final status, clears the column, writes
+it is resolved (**Decided**, the owner, 2026-11-05, plan.md decision 7). Resolution writes the final status, clears the column, writes
 `settled_by_admin_id` and `admin_settled_at`, and the dispute's `resolution`, `resolution_notes`, `resolved_by_admin_id`
 and `resolved_at` (the database's `clock_timestamp()`, FR-422's rule).
 
@@ -228,8 +229,10 @@ The resolution maps to the session's final status:
 
 A dispute is raised over a session whose status is `done`, `student_no_show`, `teacher_no_show` or `both_no_show`, or
 still `scheduled` past its end and unevaluated; one under review (`under_threshold`, `provider_outage`) is already
-frozen for an administrator and answers `SESSION_UNDER_REVIEW`. At most one open dispute per session (a partial unique,
-data-model §4).
+frozen for an administrator and answers `SESSION_UNDER_REVIEW`; a cancelled session answers `NOT_DISPUTABLE`, a
+Cancelled-By-Agreement one being final at its acceptance (**Decided**, the owner, 2026-11-05, plan.md decision 5). A
+dispute may be raised from the scheduled end, before the evaluation too (SRS FR-DISPUTE-1 as amended on 2026-11-05).
+At most one open dispute per session (a partial unique, data-model §2.7).
 
 **Rationale.** FR-DISPUTE-3, FR-DISPUTE-4, FR-473 to FR-476. The ERD's status enum keeps `disputed`; without a column
 the frozen outcome would be lost.
@@ -248,7 +251,8 @@ one compensation case `teacher_no_show_threshold` (FR-448).
 
 Completion (FR-449) is checked by the same paths and by the remedy sweep (R-311): an enrollment is `completed` when
 every session is settled and not frozen, no remedy is owed (none awaiting its offer, none open), and the last session's
-dispute window has closed (**Owner**, plan.md decision 4: otherwise a dispute could reopen what a completed enrollment
+dispute window has closed, and no `student_suspended` case is open on it (FR-486) (**Decided**, the owner, 2026-11-05,
+plan.md decisions 4 and 1: otherwise a dispute could reopen what a completed enrollment
 owes). Booking's occupancy then frees its slot from the week after the final session plus `slot_release_buffer_weeks`
 (FR-423): R-205's rule reads `confirmed` only, so T026's nit 6 is fixed by counting `completed` with the same release
 rule.
@@ -264,50 +268,70 @@ session's lock (rule 1). At most one pending request per session: a partial uniq
 expired from the scheduled start whatever its row says; an answer at or after the start is refused
 `CANCELLATION_EXPIRED` and changes nothing (FR-458, SC-411); a sweep `expire-cancellation-requests` (every minute,
 idempotent) writes `expired` for the record. Acceptance sets the session `cancelled_by_agreement` (frees both parties'
-time, ERD §15 rule 19), records nothing against either party, and the session owes a make-up (R-311). Each request,
+time, ERD §15 rule 19), records nothing against either party, and offers the make-up in the same transaction: the session is final at
+acceptance and cannot be disputed (R-311; **Decided**, the owner, 2026-11-05, plan.md decision 5). Each request,
 answer and expiry writes a `session_events` row. The user's admin record shows the count of requests made, in total
-and over the last `cancellation_requests_recent_days` (**Owner**, a number the spec does not name, plan.md decision 8).
+and over the last `cancellation_requests_recent_days` (**Decided**, the owner, 2026-11-05, plan.md decision 8: 30 days,
+an admin setting).
 
 ## R-311 — Remedies: offered when final, placed by agreement, reserved in code
 
 **Decision.**
 
 *Offering.* A sweep `advance-remedies` (every minute) offers a remedy for each session whose final status owes one
-(`teacher_no_show`, `both_no_show`, `cancelled_by_agreement`), that has no remedy yet, is not disputed, and whose
-outcome is final: its dispute window (`dispute_window_hours` after the scheduled end) has closed with no dispute, or an
-administrator resolved its dispute (FR-462). The `session_remedies` row is inserted at that moment (unique on
-`session_id`, so "recorded once"), with `offered_at` and `choice_closes_at = offered_at + makeup_choice_window_days`
-fixed then, so a later change to the setting applies prospectively (§3.14). Because no row exists before the offer,
-nothing is ever offered and withdrawn. Whether a Cancelled-By-Agreement session is final at acceptance is **Owner**
-(plan.md decision 5); the plan waits for the dispute window, the literal reading.
+(`teacher_no_show`, `both_no_show`), that has no remedy yet, is not disputed, and whose outcome is final: its dispute
+window (`dispute_window_hours` after the scheduled end) has closed with no dispute, or an administrator resolved its
+dispute (FR-462). A Cancelled-By-Agreement session is final at its acceptance and cannot be disputed, so its remedy is
+offered in the acceptance's own transaction, not by the sweep: the one exception to the wait for the dispute window
+(**Decided**, the owner, 2026-11-05, plan.md decision 5). The sessions a student's suspension cancelled are offered
+theirs when the administrator closes the `student_suspended` case as cleared, in that transaction (R-313). The
+`session_remedies` row is inserted at that moment (unique on `session_id`, so "recorded once"), with `offered_at` and
+`choice_closes_at = offered_at + makeup_choice_window_days` fixed then, so a later change to the setting applies
+prospectively (§3.14). Because no row exists before the offer, nothing is ever offered and withdrawn.
 
 *The proposal* (FR-464, FR-466): the enrollment's weekly slot, in the snapshot's zone, in the first week after its last
-session (make-ups and reservations included) whose occurrence starts after `choice_closes_at` (the owner's rule of
-2026-11-05, R-320), is not held or occupied by another enrollment (`EnrollmentSide.slotWeekTaken`), and overlaps no
-session or reservation of the teacher or the student. Resolved per occurrence by `packages/time` (R-TIME-2).
-Recitation after a Teacher-No-Show: `status = 'awaiting_choice'`, the proposal shown with the refund; otherwise
-`proposed`.
+session (make-ups and reservations included) whose occurrence starts no earlier than `choice_closes_at` +
+`makeup_counter_answer_hours` (H1 of the owner's rule of 2026-11-05, R-320: a counter-proposal sent at the choice
+window's last moment keeps the matter open until then), is not held or occupied by another enrollment
+(`EnrollmentSide.slotWeekTaken`), and overlaps no session or reservation of the teacher or the student. Resolved per
+occurrence by `packages/time` (R-TIME-2). Fixed at the offer and never moved: no counter-proposal's answer window ends
+after it. Recitation after a Teacher-No-Show: `status = 'awaiting_choice'`, the proposal shown with the refund;
+otherwise `proposed`.
 
-*The student* (within `choice_closes_at`): accepts → the make-up is booked; chooses a refund (recitation, Teacher-No-Show
-only) → `refund_case`; counter-proposes one of the teacher's active slots of the session's length on a date offered by
-`sessions.remedy.counterOptions`, which lists only occurrences starting after both `choice_closes_at` and now +
-`makeup_counter_answer_hours` (the owner's rule of 2026-11-05, R-320) and free for both parties → `counter_proposed`,
-`counter_proposed_at`, `counter_answer_closes_at` fixed; the system's proposal moves, if needed, to the first free week
-starting after `counter_answer_closes_at`.
+*The student* (before `choice_closes_at`): accepts the proposal → it is booked, and a counter-proposal still pending is
+withdrawn and its time released (the owner's approval of 2026-11-05); chooses a refund (recitation, Teacher-No-Show
+only, and only from `awaiting_choice`) → `refund_case`; counter-proposes one of the teacher's active slots of the
+session's length on a date offered by `sessions.remedy.counterOptions`, which lists only occurrences starting no
+earlier than the later of now + `makeup_counter_answer_hours` and `choice_closes_at` (H2; decision 14 (i)) and free for
+both parties → `counter_proposed`, the `counter_*` columns and `counter_answer_closes_at` = now + the answer window
+fixed. One counter-proposal pending at a time (`COUNTER_PENDING`); a counter-proposal is the student's choice of a
+make-up, so after a decline the remedy is `proposed`, not `awaiting_choice`.
 
-*The teacher* (within `counter_answer_closes_at`): accepts → the counter is booked; declines → the system's proposal is
-booked at once (**Owner**, plan.md decision 9: or the student keeps the rest of the choice window).
+*The teacher* (before `counter_answer_closes_at`): accepts → the counter is booked; declines → while the choice window
+is still open, the remedy returns to `proposed`, the counter's time is released and the student may accept the
+proposal or counter-propose again, from options read again under H2 (H4); once the choice window has closed, the
+system's proposal is booked at once (**Decided**, the owner's rule of 2026-11-05, plan.md decision 9, which replaces
+both earlier options).
 
-*Windows ending* (`advance-remedies`): `proposed` or `awaiting_choice` past `choice_closes_at` → the proposal is booked;
-`counter_proposed` past `counter_answer_closes_at` → refund on either track: one compensation case
-`counter_unanswered` with no amount (FR-465, FR-467).
+*Windows ending* (`advance-remedies`): `proposed` or `awaiting_choice` past `choice_closes_at`, with no counter-proposal
+pending → the proposal is booked (H5, FR-MAKEUP-4); `counter_proposed` past `counter_answer_closes_at`, whether the
+choice window is open or closed → refund on either track: one compensation case `counter_unanswered` with no amount
+(FR-465, FR-467). A `counter_proposed` remedy past `choice_closes_at` waits for its answer window; the worst case is the
+choice window plus one answer window (7 days + 72 hours).
 
-*Reservation* (FR-466). No row reserves a time: the proposal and a pending counter are read as occupied by every path
-that places a session or a hold — `checkout.hold` and `booking.slots` (booking's one overlap check), the make-up
+*History.* `session_remedies` holds the current pending counter-proposal only: the `counter_*` columns are set exactly
+while `status = 'counter_proposed'` and cleared at the decline, the withdrawal or the hand-off to a case. Every
+counter-proposal, with its slot, date, time and zone, is kept on its `session_events` row (`counter_proposed`), and its
+end on another (`counter_accepted`, `counter_declined`, `counter_withdrawn`, `remedy_handed_to_case`) (R-315).
+
+*Reservation* (FR-466, H3). No row reserves a time: the system's proposal, from the offer until the remedy settles
+(booked, or handed to a case), and a pending counter-proposal, during its answer window, are read as occupied by every
+path that places a session or a hold — `checkout.hold` and `booking.slots` (booking's one overlap check), the make-up
 proposal and counter options, and a make-up's booking — through `sessions`' `reservedTimesOf(tx, userIds, window)`,
 each path holding both accounts' locks first (T005 rule 2), so a reservation and a hold of the same people serialise.
-The database's exclusion constraints remain the second line for every real session (FR-468). **Owner** (plan.md
-decision 2): the alternative is to reserve with a session row.
+A counter's time is released at its decline, its withdrawal or its window's end. The database's exclusion constraints
+remain the second line for every real session (FR-468). **Decided** (the owner, 2026-11-05, plan.md decision 2): in
+code, not with a session row.
 
 *Booking a make-up* (FR-469, FR-423): lock both accounts, the teacher's slots' key, the slot, the enrollment, the
 session and the remedy (in that order), read again, insert one session `scheduled` with `sequence_number` = last + 1,
@@ -316,11 +340,13 @@ remedy `booked`, `decided_at`. An exclusion refusal (`isExclusionViolation`) rol
 reports it; the sweep tries again on its next run and, past the window, the remedy waits for an administrator in the
 compensation queue (`makeup_refused`, a reason the case list shows).
 
-**Rationale.** FR-462 to FR-469, ADR 0018 D2 to D4, the clarifications of 2026-11-05.
+**Rationale.** FR-462 to FR-469, ADR 0018 D2 to D4, the clarifications and the owner's decisions of 2026-11-05.
 
 **Alternatives considered.** A remedy row at settlement with an "awaiting offer" state: needs a withdrawal when a
 dispute removes the debt, which FR-462 forbids. Reserving with session rows: database-enforced, but a provisional
-session in every list, a sequence number that may be abandoned, and a new session status.
+session in every list, a sequence number that may be abandoned, and a new session status. Booking the proposal at once
+on a decline while the choice window is open (ADR 0018 D3's first "falls back"), and keeping each counter-proposal on
+the remedy row: both replaced by the owner's rule of 2026-11-05.
 
 ## R-312 — Compensation cases: the new reasons, and closing one
 
@@ -333,7 +359,9 @@ stays the rule, so two refunds on one enrollment join one case; which sessions a
 the enrollment's row first (`lockRows`), then one conditional update `WHERE status = 'open'` writing `status`,
 `resolution` (`compensation_ordered` for resolved), `resolution_notes`, `resolved_by_admin_id` and `resolved_at =
 clock_timestamp()` together (FR-422, the note under T082), with the specs that note asks for: a race with a paid event,
-and one resolved and one dismissed case on one enrollment, the later closing winning in `caseInstantsAmong`.
+and one resolved and one dismissed case on one enrollment, the later closing winning in `caseInstantsAmong`. A
+`student_suspended` case's closing carries its effect on the same transaction (R-313, plan.md decision 1): resolved is
+the student cleared (the make-ups offered), dismissed is the fault confirmed (the enrollment cancelled `admin`).
 
 ## R-313 — When an account ends: T059, a teacher's end and a student's (002:T144)
 
@@ -345,19 +373,31 @@ confirmed part, on the action's transaction, after the account's lock the action
 | `account_deleted` | student | remaining `cancelled_by_admin` | `cancelled`, `account_deleted` | none (T059) |
 | `account_deleted` | teacher | remaining `cancelled_by_admin` | `cancelled`, `account_deleted` | one per enrollment, `teacher_ended` (T059) |
 | `suspended`, `approval_revoked`, `banned` | teacher | remaining `cancelled_by_admin` | `cancelled`, `teacher_suspended` | one per enrollment, `teacher_ended` (FR-483) |
-| `suspended` | student | upcoming `cancelled_by_admin` | `cancelled`, `admin` (**Owner**, plan.md decision 1) | one per enrollment, `student_suspended` (FR-486) |
-| `banned` | student | upcoming `cancelled_by_admin` | `cancelled`, `admin` | one per enrollment, `student_banned`, nothing owed by default (FR-486) |
+| `suspended` | student | upcoming `cancelled_by_admin` | stay `confirmed`, keep their slot, cannot complete while the case is open (**Decided**, the owner, 2026-11-05, plan.md decision 1 (b)) | one per enrollment, `student_suspended` (FR-486) |
+| `banned` | student | upcoming `cancelled_by_admin` | `cancelled`, `admin`, at once (**Decided**, plan.md decision 1 (a)) | one per enrollment, `student_banned`, nothing owed by default (FR-486) |
 
-Open remedies of those enrollments are handed to the case. Sessions are cancelled through the sessions entry
+Open remedies of the enrollments cancelled are handed to the case. Sessions are cancelled through the sessions entry
 (`cancelRemainingSessions(tx, enrollmentIds, now)`), never booking's own write. Lock order: the account (held), the
 teacher's slots' key, the enrollments in id order, their sessions, their remedies; no row referencing an account is
 written (the case's `raised_by_user_id` is NULL, `session_events` reference the enrollment and the session).
 
-A student's suspension and ban are new `StandingService` methods, `suspendStudent`, `banStudent` (and `reinstateStudent`,
-**Owner**, plan.md decision 1), behind admin procedures `students.suspend/ban/reinstate`, each ending the account's
-sign-in sessions and calling the one consequences entry, as the teacher's do (002:T144, FR-421). A dispute's
-`party_suspended`/`party_banned` calls the same methods (`suspend` for a teacher, `suspendStudent` for a student) on the
-resolution's transaction.
+A suspended student's enrollment stays `confirmed`. A remedy already open on it at the suspension (offered before it,
+its choice window still running) is rare and is not decided here; it is listed for the owner. The `student_suspended`
+case is closed by the administrator one of two ways, under FR-422's lock rule:
+
+- **Cleared** (`cases.resolve`): allowed only once the student's account is active again (`students.reinstate`), since
+  a suspended account answers no remedy; in the same transaction each session the suspension cancelled is offered the
+  remedy FR-MAKEUP-2 gives. Read exactly, none of them is a Teacher-No-Show, so on either track it is a make-up
+  session (`proposed`), placed as R-311 places every make-up, a counter-proposal left unanswered becoming a refund.
+- **Fault confirmed** (`cases.dismiss`): the enrollment is cancelled with the reason `admin` through
+  `EnrollmentSide.cancel(tx, id, 'admin')` (an `enrollment_events` row `cancelled`), its open remedies handed to the
+  case, and booking's occupancy frees its slot.
+
+A student's suspension and ban are new `StandingService` methods, `suspendStudent`, `banStudent` and
+`reinstateStudent` (a reinstatement restores the account only; nothing cancelled is restored, the case deciding),
+behind admin procedures `students.suspend/ban/reinstate`, each ending the account's sign-in sessions and calling the one
+consequences entry, as the teacher's do (002:T144, FR-421). A dispute's `party_suspended`/`party_banned` calls the same
+methods (`suspend` for a teacher, `suspendStudent` for a student) on the resolution's transaction.
 
 FR-482's removal from a room: the token is refused from the commit (the join reads the standing under the accounts'
 locks, R-302's join, so it waits for an action in flight); the session, cancelled, admits no new token; and the
@@ -374,14 +414,15 @@ would make it immediate but changes identity's contract for one call; the minute
 idempotent), and the document upload as a third use of the upload route (`surfaces/upload-route.ts`), kind `chat`,
 `POST /uploads/chat`, fields `enrollmentId` and `filename`, under `rate_limit_upload` and `upload_max_bytes`. Both
 parties of a `confirmed` enrollment, and only they, from confirmation (FR-488); after the enrollment ends, reading stays
-until the purge, sending stops (**Owner**, plan.md decision 11).
+until the purge, sending stops (**Decided**, the owner, 2026-11-05, plan.md decision 11).
 
 The `chat` kind's types are decided by content, the declaration discarded (R-SEC-4): **refused** whenever
 `sniffContentType` names any image type (the head of every upload, R-SEC-5) whatever the extension; **accepted**
 `application/pdf` (`%PDF-`); **accepted** `text/plain` when no signature matches and the whole stream, checked as it
 streams, decodes as UTF-8 with no WHATWG "binary data byte" (0x00–0x08, 0x0B, 0x0E–0x1A, 0x1C–0x1F) — every other file
 refused. A filename whose extension is an image's is refused too (FR-490 "by its extension"), after the content check.
-Office documents (ZIP containers that can carry images) are not admitted (**Owner**, plan.md decision 12). RISK-02
+Office documents (ZIP containers that can carry images and macros) are not admitted (**Decided**, the owner,
+2026-11-05, plan.md decision 12; SRS FR-SESS-7 records it: Office files can carry macros, and may be added later). RISK-02
 (an image inside a PDF) stays accepted. The key is private; `chat.attachmentLink` answers a link valid
 `document_link_ttl_seconds` (R-SEC-3).
 
@@ -398,11 +439,13 @@ sniffer (`platform/guards/upload.middleware.ts`, T104).
 
 **Decision.** A new append-only table `session_events` (sessions', data-model §2.4) records each session-level event
 FR-495 names (settled, no-show recorded, cancellation requested, accepted, declined, expired, cancelled by an
-administrator, remedy offered, counter-proposed, counter accepted or declined, make-up booked, handed to a case,
+administrator, remedy offered, counter-proposed, counter accepted, declined or withdrawn, make-up booked, handed to a case,
 dispute raised, dispute resolved, review resolved, outage reclassified); `enrollment_events` (booking's) gains the kinds
 `completed` and `terminated_no_show`. Phase 4's notifications read both and change nothing here. The screens are the
-notice in this phase (FR-495, clarification 1). **Owner** (plan.md decision 6): the alternative widens
-`enrollment_events` with a `session_id`.
+notice in this phase (FR-495, clarification 1). A `counter_proposed` row also carries the counter-proposal's slot,
+local date, local start and zone, because `session_remedies` keeps only the pending one: the history of every
+counter-proposal is in `session_events` (the owner's decision 9). **Decided** (the owner, 2026-11-05, plan.md
+decision 6); the rejected alternative widened `enrollment_events` with a `session_id`.
 
 ## R-316 — The phone: a development build with LiveKit's React Native SDK
 
@@ -426,9 +469,9 @@ npm registry for every version and peer range above.
 
 **Decision.** Seeded by `prisma/seed.ts` at their defaults, read on every use (R-MONEY-12), written only by the panel
 (R-PROC-11): `session_evaluation_delay_minutes` 2 (FR-441), `rate_limit_chat_message` `{ limit, window_seconds }`
-(FR-491; default **Owner**, plan.md decision 8, proposed 30 per 60 s), `makeup_counter_answer_hours` 72 (SRS §3.14,
-2026-11-05), and two the spec does not name but the design needs, each **Owner**: `chat_page_size` (proposed 50) and
-`cancellation_requests_recent_days` (proposed 30). The rest exist (seed lines 89–147).
+(FR-491; 30 per 60 s), `makeup_counter_answer_hours` 72 (SRS §3.14, 2026-11-05), and two the spec does not name but
+the design needs: `chat_page_size` 50 and `cancellation_requests_recent_days` 30 (**Decided**, the owner, 2026-11-05,
+plan.md decision 8: every one an admin setting, SRS §3.14 rows). The rest exist (seed lines 89–147).
 
 ## R-318 — The administrator's surfaces
 
@@ -448,25 +491,27 @@ verification module's `users.get` gains the cancellation-request counts (FR-459)
 the video webhook (B35). T090 lands in B34: a deleted party answers `displayName: null` with `deleted: true`
 additively (R-API-9) on Phase 2's lists and every Phase 3 output naming a party, and the phone shows the stand-in key
 (FR-426). The notes under T026 land with the make-up booking (R-311) and completion (R-309); the note under T082 with
-`closeCase` (R-312). T079 and T080: one timeout for the `db-integrity` project, decided in the first batch (**Owner**,
-plan.md decision 10). The rest of the Not-scheduled row stays where it is: none of its tasks is a precondition of a
+`closeCase` (R-312). T079 and T080 land in the first batch, B33 (**Decided**, the owner, 2026-11-05,
+plan.md decision 10): one `testTimeout` and `hookTimeout` of 30 s for `tests/db-integrity`, the `node` project at 5 s
+with file-level timeouts for its three heavy specs, and a per-run prefix on each adversarial world's names. The rest of the Not-scheduled row stays where it is: none of its tasks is a precondition of a
 Phase 3 requirement; T099 (the booking sheet's empty-state cause) and T093 (a link to no enrollment) touch screens this
 phase edits and are listed for the owner, not timed.
 
-## R-320 — No time is offered that starts before the window it waits on can end
+## R-320 — No time is offered that starts before the matter could still be decided
 
 **Decision.** The owner's rule of 2026-11-05: wherever a choice waits on a window, no time is shown or offered that
 starts before that window can end, as booking hides a slot whose first session falls within
-`first_session_lead_hours`. Applied by the server (the screens render what it answers, R-MOBILE-12), with a spec each:
+`first_session_lead_hours`; for a make-up, neither the system's proposal nor any counter-proposal may start before the
+matter could still be decided (the owner's decision 9, H1 to H5, plan.md). Applied by the server (the screens render
+what it answers, R-MOBILE-12), with a spec each:
 
 | Where | Window (setting, default) | Hidden |
 |---|---|---|
-| The system's make-up proposal | the choice window, `makeup_choice_window_days`, 7 | any week whose occurrence starts at or before `choice_closes_at` |
-| The proposal while a counter is pending | the teacher's answer window, `makeup_counter_answer_hours`, 72 | any week starting at or before `counter_answer_closes_at`; the proposal moves past it |
-| The counter-proposal's options | the answer window, `makeup_counter_answer_hours`, 72, and the choice window | any occurrence starting at or before now + 72 h or before `choice_closes_at` |
+| The system's make-up proposal (H1) | the choice window, `makeup_choice_window_days`, 7, plus one answer window, `makeup_counter_answer_hours`, 72 | any week whose occurrence starts before `choice_closes_at` + 72 h; the proposal is fixed at the offer and never moves |
+| The counter-proposal's options (H2), read again after each decline (H4) | the answer window, 72 h from now, and the choice window | any occurrence starting before the later of now + 72 h and `choice_closes_at` |
 | A refund-or-make-up choice (recitation) | the choice window, 7 days | the proposal shown beside the refund obeys the first row |
-| A cancellation request | until the scheduled start (FR-CANCEL-4) | no request on a session already started; the request shows its expiry at the start |
-| A reserved proposal or counter, to others | the choice or answer window | the reserved occurrences are hidden from `booking.slots` and refused by `checkout.hold` for the same teacher or student |
+| A cancellation request | until the scheduled start (FR-CANCEL-4) | no request on a session already started; the request shows its expiry at the start; no minimum notice (decision 14 (ii)) |
+| A reserved proposal or counter, to others (H3) | the proposal from the offer until the remedy settles; a pending counter during its answer window, released at decline, withdrawal or the window's end | the reserved occurrences are hidden from `booking.slots` and refused by `checkout.hold` for the same teacher or student |
 
 ## R-321 — Locks, contracts and gates
 

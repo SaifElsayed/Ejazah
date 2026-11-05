@@ -28,10 +28,13 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `userId` (admin only): never `gender` or `role`, and a user procedure never takes a `userId` (R-GENDER-4).
 - **Errors.** Added: `JOIN_NOT_OPEN` (with `opensAt` in details), `JOIN_CLOSED`, `SESSION_NOT_SCHEDULED`,
   `CANCELLATION_PENDING` (the other party's request is open; with `requestId`), `CANCELLATION_EXPIRED`,
-  `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `REMEDY_NOT_OPEN`, `CHOICE_NOT_ALLOWED` (a refund
+  `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `NOT_DISPUTABLE` (a cancelled session; a
+  Cancelled-By-Agreement one is final at acceptance), `REMEDY_NOT_OPEN`, `COUNTER_PENDING` (a counter-proposal is
+  already waiting for the teacher's answer), `CHOICE_NOT_ALLOWED` (a refund
   where only a make-up is owed), `SLOT_NOT_OFFERED` (a counter outside the options), `MAKEUP_REFUSED` (the database
   refused the booking; the remedy stays open), `ATTACHMENT_REFUSED` (an image, or a type the chat does not take),
-  `CHAT_CLOSED`. Every refusal writes nothing.
+  `CHAT_CLOSED`, and on the administrator surface `STUDENT_SUSPENDED` (a suspended student's case closed as cleared
+  before the account is reinstated). Every refusal writes nothing.
 - **Time.** Instants as ISO-8601 UTC strings; a session as its local date, local start and zone plus its instants,
   shown twice by the client (ADR 0009 D5, FR-494); nothing client-supplied is an instant (R-TIME-6): the outage window
   is local date, time and zone.

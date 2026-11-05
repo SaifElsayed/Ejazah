@@ -7,8 +7,8 @@ Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through
 re-resolution), `disputes` (compensation cases) and `enrollment_events`. This phase writes `sessions`' whole machine,
 `session_participant_events`, `cancellation_requests`, `session_remedies`, session disputes and `chat_messages` for the
 first time. The pass below is what it adds: two tables, ten columns, one nullability change, three enum values, eight
-integrity rules and five settings rows, in one forward migration in the first batch. The ERD is amended in the same batch (changelog
-v1.14 → v1.15, 44 tables), as each earlier phase did. Nothing here carries an amount (FR-497, ADR 0007).
+integrity rules and five settings rows, in one forward migration in the first batch. The ERD was amended on 2026-11-05 with the owner's decisions,
+ahead of that batch (changelog v1.14 → v1.15, 44 tables; §7). Nothing here carries an amount (FR-497, ADR 0007).
 
 ## 1. Who writes what
 
@@ -17,11 +17,11 @@ v1.14 → v1.15, 44 tables), as each earlier phase did. Nothing here carries an 
 | `sessions` | sessions | the evaluation sweep (outcome, simultaneous seconds, `evaluated_at`); a review, dispute or outage resolution (`settled_by_admin_id`, `admin_settled_at`); a cancellation (accepted request, admin, termination, an account's end); a dispute's raising (`disputed`, `outcome_under_dispute`); a make-up's booking (insert); the join (`provider_room_id`) |
 | `session_participant_events` | sessions | the video webhook only (R-SESS-1) |
 | `cancellation_requests` | sessions | `sessions.cancellation.request/answer`; the expiry sweep |
-| `session_remedies` | sessions | the `advance-remedies` sweep (offer, windows ending); `sessions.remedy.*`; a termination or an account's end (handed to a case) |
+| `session_remedies` | sessions | the `advance-remedies` sweep (offer, windows ending); an accepted cancellation request (the offer, decision 5); a suspended student's case closed as cleared (the offer, decision 1); `sessions.remedy.*`; a termination or an account's end (handed to a case) |
 | `session_events` (new) | sessions | every transaction that produces an event FR-495 names (R-315) |
 | `provider_outages` (new) | sessions | `sessions.outages.record` (admin) |
 | `disputes` | moderation | `openCompensationCase` (the new reasons, R-312); `openSessionDispute`; `closeCase`, `resolveSessionDispute` (the admin's resolutions, FR-422) |
-| `enrollments` | booking | `EnrollmentSide.terminateNoShow` and `.complete` (bound to booking, R-301); the termination subscriber (`account_deleted`, `teacher_suspended`, `admin`) |
+| `enrollments` | booking | `EnrollmentSide.terminateNoShow`, `.complete` and `.cancel` (`admin`, a suspended student's fault confirmed), bound to booking (R-301); the termination subscriber (`account_deleted`, `teacher_suspended`, and `admin` for a student's ban) |
 | `enrollment_events` | booking | the same transactions (`completed`, `terminated_no_show`, `cancelled`) |
 | `chat_messages` | chat | `chat.send`, `POST /uploads/chat`, the purge job |
 | `audit_logs` | admin | every administrator action and read of this phase (FR-480) |
@@ -37,7 +37,8 @@ v1.14 → v1.15, 44 tables), as each earlier phase did. Nothing here carries an 
 | `admin_settled_at` | timestamptz, nullable | When an administrator settled it (a review, dispute or outage resolution), beside the existing `settled_by_admin_id` (FR-450). Check (rule 40): both NULL or both set |
 
 Existing columns this phase writes for the first time: `status` (the whole machine, §3), `simultaneous_connected_seconds`
-(written once by the evaluation, the figure its outcome was decided on, R-305; **owner decision 3** on R-DB-4),
+(written once by the evaluation, the figure its outcome was decided on, R-305; the owner's decision 3 of 2026-11-05,
+which R-DB-4 names),
 `evaluated_at` (the evaluation's instant), `settled_by_admin_id`, `provider_room_id` (the session's id: the room is
 named for it), `makeup_for_session_id` (a make-up's original, FR-469).
 
@@ -59,20 +60,27 @@ The table holds no row (Phase 1 created it; nothing has written it), so the NOT 
 
 | Column | Type | Notes |
 |---|---|---|
-| `offered_at` | timestamptz, NOT NULL | The moment the outcome became final and the remedy was offered (FR-462); the row is inserted then (R-311) |
+| `offered_at` | timestamptz, NOT NULL | The moment the outcome became final and the remedy was offered (FR-462): the dispute window's close or a dispute's resolution; a Cancelled-By-Agreement session's acceptance (decision 5); a suspended student's case closed as cleared (decision 1). The row is inserted then (R-311) |
 | `choice_closes_at` | timestamptz, NOT NULL | `offered_at` + `makeup_choice_window_days`, fixed at the offer so a later change of the setting is prospective (§3.14) |
-| `counter_slot_id` | FK → `availability_slots`, nullable | The teacher's active slot the student counter-proposed (FR-465). A reference only: sessions reads the slot through catalog's entry |
+| `counter_slot_id` | FK → `availability_slots`, nullable | The teacher's active slot of the pending counter-proposal (FR-465). A reference only: sessions reads the slot through catalog's entry |
 | `counter_start_time_local` | time, nullable | The counter-proposal's time of day, the slot's `start_time_local` when proposed (the ERD's "Phase 3's pass to add") |
 | `counter_timezone` | text (IANA), nullable | The zone of `counter_date` and `counter_start_time_local`: the slot's own zone, which may differ from the enrollment's (T077); R-TIME-3's gate asks a zone beside a `_local` column |
-| `counter_proposed_at` | timestamptz, nullable | When the student counter-proposed |
+| `counter_proposed_at` | timestamptz, nullable | When the student made the pending counter-proposal |
 | `counter_answer_closes_at` | timestamptz, nullable | `counter_proposed_at` + `makeup_counter_answer_hours`, fixed then (FR-465) |
+
+The row holds **the current pending counter-proposal only** (the owner's decision 9 of 2026-11-05): a student may
+counter-propose again after a decline while the choice window is open, one pending at a time, so the `counter_*` columns
+are set when a counter-proposal is made and cleared at its decline, its withdrawal (the student accepts the system's
+proposal) or its hand-off to a case. The history of every counter-proposal, with its slot, date, time and zone, is in
+`session_events` (§2.4).
 
 Existing columns: `kind` (`makeup`, or `refund` once a refund is chosen or a counter goes unanswered), `status` (§3),
 `proposed_date` (the system's proposal, a date in the enrollment's snapshot zone at the enrollment's slot's local start),
-`counter_date`, `decided_at` (booked, or handed to a case), `case_id`. Checks (rule 42): the five `counter_*` columns
-all NULL or all set, and set whenever `status = 'counter_proposed'`; `(status = 'refund_case') = (case_id IS NOT NULL)`;
-`choice_closes_at > offered_at`. `status = 'refund_case'` means "handed to a compensation case": a refund choice, an
-unanswered counter, a termination, or an account's end (R-309, R-313); `kind` says which.
+`counter_date`, `decided_at` (booked, or handed to a case), `case_id`. Checks (rule 42): the six `counter_*` columns
+(`counter_date` and the five above) all NULL or all set, and set exactly when `status = 'counter_proposed'`;
+`(status = 'refund_case') = (case_id IS NOT NULL)`; `choice_closes_at > offered_at`. `status = 'refund_case'` means "handed to a compensation case": a refund choice, an
+unanswered counter, a termination, an account's end, or a suspended student's fault confirmed (R-309, R-313); `kind`
+says which.
 
 ### 2.4 `session_events` — new, owned by `sessions` (R-315)
 
@@ -83,12 +91,20 @@ Append-only record of each event a later notification needs (FR-495).
 | `id` | uuid | PK |
 | `enrollment_id` | FK → enrollments | Plain index (FR-035 of Phase 0) |
 | `session_id` | FK → sessions, nullable | NULL for none of today's kinds but kept nullable for an enrollment-wide one; plain index |
-| `kind` | enum `session_event_kind` | `settled` · `cancellation_requested` · `cancellation_accepted` · `cancellation_declined` · `cancellation_expired` · `cancelled_by_admin` · `remedy_offered` · `counter_proposed` · `counter_accepted` · `counter_declined` · `makeup_booked` · `remedy_handed_to_case` · `dispute_raised` · `dispute_resolved` · `review_resolved` · `outage_reclassified` |
+| `kind` | enum `session_event_kind` | `settled` · `cancellation_requested` · `cancellation_accepted` · `cancellation_declined` · `cancellation_expired` · `cancelled_by_admin` · `remedy_offered` · `counter_proposed` · `counter_accepted` · `counter_declined` · `counter_withdrawn` · `makeup_booked` · `remedy_handed_to_case` · `dispute_raised` · `dispute_resolved` · `review_resolved` · `outage_reclassified` |
+| `counter_slot_id` | FK → `availability_slots`, nullable | The counter-proposal's slot, on a `counter_proposed` row only; plain index |
+| `counter_date` / `counter_start_time_local` / `counter_timezone` | date / time / text (IANA), nullable | The counter-proposal's local date, start and zone, on a `counter_proposed` row only (R-TIME-3: the zone beside the `_local` column) |
 | `occurred_at` | timestamptz | The transaction's instant |
 | `created_at` | timestamptz | |
 
-The details (who requested, which outcome) are read from the rows the event names, so the row holds no personal field
-and references no account (T005 rule 2's last clause holds for every termination path that writes one). Rule 43:
+**The history of counter-proposals lives here** (the owner's decision 9 of 2026-11-05): `session_remedies` keeps only
+the pending counter-proposal (§2.3), so each `counter_proposed` row copies the counter-proposal's slot, date, start and
+zone, and its end is the next `counter_accepted`, `counter_declined`, `counter_withdrawn` or `remedy_handed_to_case` row
+of the same session. Rule 43 adds the check that the four `counter_*` columns are all set exactly when
+`kind = 'counter_proposed'`.
+
+Every other detail (who requested, which outcome) is read from the rows the event names, so the row holds no personal
+field and references no account (T005 rule 2's last clause holds for every termination path that writes one). Rule 43:
 UPDATE, DELETE and TRUNCATE revoked from the application role, foreign keys `ON UPDATE RESTRICT` (rule 21's pattern).
 `packages/config/module-tables.json` gives it to `sessions`.
 
@@ -145,9 +161,9 @@ of the two new tables (R-DB-9).
 | From | To | By | Writes |
 |---|---|---|---|
 | `scheduled` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` · `under_threshold` · `provider_outage` | `evaluate-sessions` only, after end + delay (R-SESS-2, R-SESS-3) | `simultaneous_connected_seconds`, `evaluated_at`; `session_events(settled)`; threshold and completion checks |
-| `scheduled` | `cancelled_by_agreement` | an accepted request, before the start | the request `accepted`; events |
-| `scheduled` | `cancelled_by_admin` | an admin's cancellation (FR-460), a threshold termination (FR-448), an account's end (FR-483, FR-484, FR-486) | events; a case per R-312 |
-| `scheduled` (past its end, unevaluated) · `done` · `*_no_show` | `disputed` | a participant's dispute, inside the window | `outcome_under_dispute`; the dispute; events |
+| `scheduled` | `cancelled_by_agreement` | an accepted request, before the start | the request `accepted`; the remedy offered at once (final at acceptance, never disputed, decision 5); events |
+| `scheduled` | `cancelled_by_admin` | an admin's cancellation (FR-460), a threshold termination (FR-448), an account's end (FR-483, FR-484, FR-486) | events; a case per R-312; for a student's suspension, a make-up offered later if the case clears the student (decision 1) |
+| `scheduled` (past its end, unevaluated) · `done` · `*_no_show` | `disputed` | a participant's dispute, from the scheduled end to the window's close; never a cancelled session | `outcome_under_dispute`; the dispute; events |
 | `disputed` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` | the administrator's resolution (R-308) | `settled_by_admin_id`, `admin_settled_at`; the dispute closed; events |
 | `under_threshold` · `provider_outage` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` | the review resolution only (R-SESS-6) | the same |
 | `done` · `*_no_show` · `under_threshold` (inside the dispute window, not disputed) | `provider_outage` | an outage window recorded over it (FR-445) | events |
@@ -157,15 +173,20 @@ session is never moved to another time (FR-461); a make-up is a new row.
 
 ### Remedy (`session_remedies.status`)
 
+The owner's decision 9 of 2026-11-05 (plan.md): re-proposals while the choice window is open, one pending at a time,
+each answered within its own answer window.
+
 | From | To | By |
 |---|---|---|
-| — | `awaiting_choice` (recitation, Teacher-No-Show) · `proposed` | `advance-remedies`, when the outcome is final (FR-462) |
+| — | `awaiting_choice` (recitation, Teacher-No-Show) · `proposed` | the offer, when the outcome is final (FR-462): `advance-remedies`; an accepted cancellation request (decision 5); a suspended student's case closed as cleared (decision 1) |
 | `awaiting_choice` | `proposed` · `refund_case` (kind `refund`) | the student's choice |
-| `awaiting_choice` · `proposed` | `booked` | the student's acceptance, or `choice_closes_at` passing (FR-466) |
-| `awaiting_choice` · `proposed` | `counter_proposed` | the student's counter-proposal, before `choice_closes_at` |
-| `counter_proposed` | `booked` (the counter) · `booked` (the proposal, **owner decision 9**) | the teacher's acceptance or decline |
-| `counter_proposed` | `refund_case` (kind `refund`) | `counter_answer_closes_at` passing (FR-465) |
-| any open | `refund_case` | a threshold termination or an account's end |
+| `awaiting_choice` · `proposed` | `booked` (the proposal) | the student's acceptance, or `choice_closes_at` passing with no counter-proposal pending (FR-466, H5) |
+| `awaiting_choice` · `proposed` | `counter_proposed` | the student's counter-proposal, before `choice_closes_at` (a counter-proposal is the choice of a make-up) |
+| `counter_proposed` | `booked` (the counter) | the teacher's acceptance, before `counter_answer_closes_at` |
+| `counter_proposed` | `proposed` | the teacher's decline while the choice window is open: the counter's time released; the student may accept or counter-propose again (H4) |
+| `counter_proposed` | `booked` (the proposal) | the teacher's decline once the choice window has closed; or the student's acceptance of the proposal, which withdraws the pending counter-proposal and releases its time (the owner's approval of 2026-11-05) |
+| `counter_proposed` | `refund_case` (kind `refund`) | `counter_answer_closes_at` passing with no answer, on either track (FR-465) |
+| any open | `refund_case` | a threshold termination, an account's end, or a suspended student's fault confirmed |
 
 ### Cancellation request
 
@@ -177,23 +198,24 @@ written by the sweep).
 | From | To | By |
 |---|---|---|
 | `confirmed` | `terminated_no_show` | the threshold (FR-448) |
-| `confirmed` | `completed` | FR-449, after the last dispute window (**owner decision 4**) |
-| `confirmed` | `cancelled` (`account_deleted` · `teacher_suspended` · `admin`) | an account's end (R-313) |
+| `confirmed` | `completed` | FR-449, after the last dispute window (the owner's decision 4), and never while a `student_suspended` case is open on it (decision 1) |
+| `confirmed` | `cancelled` (`account_deleted` · `teacher_suspended` · `admin`) | an account's end (R-313): `admin` for a student's ban, at once (decision 1 (a)); a student's suspension leaves the enrollment `confirmed` (decision 1 (b)) |
+| `confirmed` | `cancelled` (`admin`) | a suspended student's `student_suspended` case dismissed, the fault confirmed (decision 1) |
 
 ### Dispute and case (`disputes.status`)
 
 `open → resolved | dismissed`, by an administrator, the enrollment's row locked first and `resolved_at =
 clock_timestamp()` in the same update (FR-422).
 
-## 4. Settings rows (seeded by `prisma/seed.ts`; SRS §3.14 gains them in the document pass)
+## 4. Settings rows (seeded by `prisma/seed.ts`; SRS §3.14 rows since 2026-11-05, the owner's decision 8)
 
 | Key | Default | Governs |
 |---|---|---|
 | `session_evaluation_delay_minutes` | 2 | FR-441 (the spec's new row) |
-| `rate_limit_chat_message` | `{ limit: 30, window_seconds: 60 }` (proposed; **owner decision 8**) | FR-491 (the spec's new row) |
+| `rate_limit_chat_message` | `{ limit: 30, window_seconds: 60 }` (the owner's decision 8) | FR-491 (the spec's new row) |
 | `makeup_counter_answer_hours` | 72 | FR-465 (SRS §3.14, 2026-11-05) |
-| `chat_page_size` | 50 (proposed; **owner decision 8**) | FR-488's list |
-| `cancellation_requests_recent_days` | 30 (proposed; **owner decision 8**) | FR-459's "recent period" |
+| `chat_page_size` | 50 (the owner's decision 8) | FR-488's list |
+| `cancellation_requests_recent_days` | 30 (the owner's decision 8) | FR-459's "recent period" |
 
 Existing keys this phase reads: `early_join_lead_minutes`, `join_window_minutes`, `minimum_connection_seconds`,
 `attendance_threshold_pct`, `teacher_no_show_threshold`, `dispute_window_hours`, `makeup_choice_window_days`,
@@ -203,7 +225,7 @@ Existing keys this phase reads: `early_join_lead_minutes`, `join_window_minutes`
 ## 5. Integrity rules and the lock order
 
 New ERD §15 rules: 40 (`sessions`' two checks), 41 (`session_participant_events`' two checks), 42
-(`session_remedies`' checks), 43 (`session_events` append-only), 44 (`provider_outages`' check and revokes), 45
+(`session_remedies`' checks), 43 (`session_events` append-only, and its counter-proposal columns set exactly on `counter_proposed` rows), 44 (`provider_outages`' check and revokes), 45
 (`cancellation_requests`), 46 (`disputes`), 47 (`chat_messages`' attachment checks).
 
 T005's lock order, widened (`platform/db/row-lock.ts`, contracts/kernel.md): `users` → `teacher_profiles` →
@@ -221,12 +243,17 @@ that rule 46 would refuse, and `session_participant_events` rows (none expected)
 
 ## 7. ERD amendments (v1.14 → v1.15)
 
+Applied to `docs/ERD.md` on 2026-11-05 with the owner's decisions (plan.md, "Decisions recorded"), ahead of the first
+batch's migration, which builds them.
+
+
 1. `sessions`: `outcome_under_dispute`, `admin_settled_at` (§2.1); the note on `simultaneous_connected_seconds` as the
-   evaluation's recorded figure (**owner decision 3**).
+   evaluation's recorded figure (the owner's decision 3; R-DB-4 names it).
 2. `session_participant_events`: `room_ended`, nullable `user_id`, `connection_ref` (§2.2).
-3. `session_remedies`: the offer state (`offered_at`, `choice_closes_at`), the counter-proposal's slot, time of day,
-   zone, instant and answer deadline (§2.3); the meaning of `refund_case`.
-4. `session_events` (§2.4) and `provider_outages` (§2.5): two tables, 44 in all; the domain map, §13.2's diagram and
+3. `session_remedies`: the offer state (`offered_at`, `choice_closes_at`), the pending counter-proposal's slot, time of
+   day, zone, instant and answer deadline, cleared when it ends (§2.3, the owner's decision 9); the meaning of
+   `refund_case`.
+4. `session_events` (§2.4, with the counter-proposals' history) and `provider_outages` (§2.5): two tables, 44 in all; the domain map, §13.2's diagram and
    `module-tables.json`.
 5. `enrollment_events.kind`: `completed`, `terminated_no_show` (§2.8).
 6. `disputes`: the compensation reasons, the frozen outcome's place, `resolved_at` by `clock_timestamp()` (§2.7, R-312).

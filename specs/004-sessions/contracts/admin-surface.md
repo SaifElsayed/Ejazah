@@ -36,16 +36,16 @@ an enrollment (SC-413).
 |---|---|---|---|---|
 | `cases.list` | `{ status?: 'open' \| 'resolved' \| 'dismissed', cursor? }` | `{ items: [{ caseId, enrollmentId, reason, status, openedAt, closedAt? }], nextCursor? }` | `cases.listed` | Every reason, Phase 2's included |
 | `cases.get` | `{ caseId }` | `{ case, enrollment: { enrollmentId, student: Party, teacher: Party, status, track }, covers: [{ sessionId, sequenceNumber, status, remedy? }], paymentsLink: { enrollmentId } }` | `case.viewed` | No amount anywhere; the orders are on `/payments` (FR-467, R-MONEY-6) |
-| `cases.resolve` | `{ caseId, note }` | `{ caseId, status: 'resolved' }` | `case.resolved` | `resolution = compensation_ordered`; the note says what Platform Administration did outside the platform |
-| `cases.dismiss` | `{ caseId, note }` | `{ caseId, status: 'dismissed' }` | `case.dismissed` | |
+| `cases.resolve` | `{ caseId, note }` | `{ caseId, status: 'resolved' }` | `case.resolved` | `resolution = compensation_ordered`; the note says what Platform Administration did outside the platform. A `student_suspended` case resolved is the student cleared: each session the suspension cancelled is offered its make-up in the same transaction (FR-486; the owner's decision 1), refused `STUDENT_SUSPENDED` until the account is reinstated |
+| `cases.dismiss` | `{ caseId, note }` | `{ caseId, status: 'dismissed' }` | `case.dismissed` | A `student_suspended` case dismissed is the fault confirmed: the enrollment cancelled `admin`, its slot freed (the owner's decision 1) |
 
 ## `students` — a student's standing (identity module, R-313, 002:T144)
 
 | Procedure | Input | Output | Audit | Notes |
 |---|---|---|---|---|
-| `students.suspend` | `{ userId, reason }` | `void` | `student.suspend` | `StandingService.suspendStudent`: sessions ended, consequences (FR-486) |
-| `students.ban` | `{ userId, reason }` | `void` | `student.ban` | `StandingService.banStudent` |
-| `students.reinstate` | `{ userId, reason }` | `void` | `student.reinstate` | Owner decision 1; restores the account only, nothing cancelled is restored |
+| `students.suspend` | `{ userId, reason }` | `void` | `student.suspend` | `StandingService.suspendStudent`: sign-in sessions ended, upcoming sessions cancelled, the confirmed enrollments left `confirmed` with one `student_suspended` case each (FR-486, the owner's decision 1) |
+| `students.ban` | `{ userId, reason }` | `void` | `student.ban` | `StandingService.banStudent`: upcoming sessions cancelled, the confirmed enrollments cancelled `admin` at once, one `student_banned` case each (the owner's decision 1) |
+| `students.reinstate` | `{ userId, reason }` | `void` | `student.reinstate` | Restores the account only; nothing cancelled is restored, the case deciding (the owner's decision 1) |
 
 `users.get` (verification module) gains `cancellationRequests: { total, recent }` (FR-459). `Party` =
 `{ userId, displayName \| null, deleted }`.

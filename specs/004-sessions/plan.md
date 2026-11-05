@@ -28,9 +28,10 @@ The technical approach, from [research.md](./research.md), rests on seven decisi
    `packages/time` and written once; the outage windows an administrator records take precedence (R-305 to R-307).
 5. **A dispute freezes the outcome beside the `disputed` status** (R-308); the threshold and completion are checked by
    every path that settles (R-309).
-6. **A remedy exists only once it is owed for good.** It is offered when the outcome is final, its proposal and a
-   counter-proposal are reserved in code under the accounts' locks, and no time is offered that starts before the
-   window it waits on (R-311, R-320, the owner's rule of 2026-11-05).
+6. **A remedy exists only once it is owed for good.** It is offered when the outcome is final (a
+   Cancelled-By-Agreement session at its acceptance), its proposal and a pending counter-proposal are reserved in code
+   under the accounts' locks, and no time is offered that starts before the matter could still be decided (R-311,
+   R-320, the owner's rules of 2026-11-05).
 7. **Every event is a row.** `session_events` and two new kinds of `enrollment_events`, so Phase 4's notifications read
    them with no change here (R-315).
 
@@ -92,10 +93,10 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 | R-SEC | The webhook verifies before any handler; chat documents by content, images refused by content and extension; signed expiring links; chat under a rate limit; no token, secret or body logged | The `chat` upload kind; the image corpus test (R-SEC-5) | **PASS** |
 | R-SESS | Attendance from webhooks only (1); evaluation by a sweep after end + delay (2, 3); reconnection sums (4); restricted teacher refused (5); no automatic exit from review (6) | The enforcement map's Phase 3 CI tests for R-SESS-2, 4 and 5 | **PASS**; R-SESS-2's "+ 2m" becomes a setting of default 2 (proposal P2) |
 | R-HONEST | No session shown done unless the job or an administrator settled it; the teacher sees none of the student's private fields; nothing implies the platform refunds (the case is Platform Administration's) | None new | **PASS** |
-| R-PROC | Spec, clarification and plan precede code; every rule the spec left open is an owner decision below, not a keyboard rule (R-PROC-3) | The coverage floor widened to `modules/chat` | **PASS** |
+| R-PROC | Spec, clarification and plan precede code; every rule the spec left open was put to the owner and answered on 2026-11-05 ("Decisions recorded"), not a keyboard rule (R-PROC-3) | The coverage floor widened to `modules/chat` | **PASS** |
 
 **Review-only tier.** Live in this phase: R-API-5 (the port's widening, R-302), R-DB-4 (decision 3), R-DB-9 (two
-partial uniques that are integrity rules, no other index), R-PROC-3 (the owner decisions below), R-MOBILE-3 (whether the
+partial uniques that are integrity rules, no other index), R-PROC-3 (the owner's decisions recorded below), R-MOBILE-3 (whether the
 chat and room screens are shared between the roles), R-MOBILE-12 and R-MOBILE-14 (the new screens).
 
 **Gate result: PASS.** No unjustified violation; four structural costs are in Complexity Tracking.
@@ -190,92 +191,124 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 
 | Day | Batch | Items | What |
 |---|---|---|---|
-| D17 Sun 11/8 | B33 | T107; T079/T080 (decision 10); the sessions pass migration, seed and ERD v1.15; the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons | The carried tasks the spec puts first (FR-420; the constitution before the webhook), and the foundations every later batch reads |
+| D17 Sun 11/8 | B33 | T107; T079/T080 (decision 10); the sessions pass migration and seed (ERD v1.15, amended on 2026-11-05); the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons | The carried tasks the spec puts first (FR-420; the constitution before the webhook), and the foundations every later batch reads |
 | D17 Sun 11/8 | B34 | `002:T144` (a student's suspension, ban and reinstatement through `StandingService`, FR-486); a teacher's end (FR-483); T090 (FR-426); the `EnrollmentSide` port; the LiveKit adapter with the Daily rename and the port's widening (FR-425, quickstart §3); the video stand-in harness | Every account's end before any session can be joined; the provider behind the port |
 | D18 Mon 11/9 | B35 | `sessions.get` and `sessions.join` with their adversarial cases; `POST /webhooks/video`; the attendance rules and `evaluate-sessions`; the threshold, completion and event rows; the outage windows; the R-SESS CI tests | US1's API and US2 whole (SC-402 to SC-407) |
 | D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens | US1 on the phone; the first device check of joining |
 | D19 Tue 11/10 | B37 | Cancellation requests and their expiry sweep; the administrator's cancellation and the monitor; the user record's request counts; raising a dispute | US3's API, US5's first half |
-| D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance and counter options (R-320); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
-| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082) | US5's administrator side |
+| D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance, counter options and counter-proposals again after a decline (R-320, decision 9); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
+| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1) | US5's administrator side |
 | D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read | US7's API |
 | D21 Thu 11/12 | B41 | The phone: cancellation and dispute on both roles; the remedy sheets (choice, proposal, counter, the teacher's answer); chat on both roles; the ended tab's new statuses | US3, US4, US5 and US7 on the phone |
 | D22 Sun 11/15 | B42 | The panel: `/sessions` with cancellation; `/review` and `/outages`; `/disputes` with the chat; `/cases`; a student's standing and the request counts | The administrator's pages |
-| D23 Mon 11/16 | B43 | The adversarial suite's completeness and the gates (FR-496, FR-497); the coverage floor; the document pass (ERD, SRS §3.14, ARCHITECTURE, RUNBOOK, jobs README); quickstart §1 to §7; the owner's device run (SC-401, SC-414); the close | The proofs; the same day, Phase 4's Spec Kit cycle (PLAN.md's rule) |
+| D23 Mon 11/16 | B43 | The adversarial suite's completeness and the gates (FR-496, FR-497); the coverage floor; the document pass (what the build changed beyond the documents amended on 2026-11-05: the RUNBOOK's room setting from B34's check, PLAN.md's close date); quickstart §1 to §7; the owner's device run (SC-401, SC-414); the close | The proofs; the same day, Phase 4's Spec Kit cycle (PLAN.md's rule) |
 
-The Not-scheduled row of `specs/003-booking/tasks.md` was reviewed (research R-319): it stays as it is; T079 and T080
-are timed by decision 10.
+The Not-scheduled row of `specs/003-booking/tasks.md` was reviewed (research R-319): it stays as it is, except T079 and
+T080, timed in B33 by decision 10 (the row says so).
 
-## Decisions for the owner
+## Decisions recorded (the owner's answers of 2026-11-05)
 
-Ranked by how much of the plan they move. The plan is written on each recommendation; a different answer changes the
-named research decision and data-model section only.
+The fourteen points this plan left to the owner, answered on 2026-11-05. Each research decision and data-model section
+named below was brought into line with the answer the same day, and so were the spec's requirements where they read
+otherwise.
 
-1. **A student's suspension or ban: the confirmed enrollments, and reinstatement.** FR-486 cancels the sessions and
-   opens a case but says nothing of the enrollment, and FR-ADMIN-5 says "suspend or reinstate". Left `confirmed` with
-   every session cancelled, the enrollment would become `completed` (FR-449). *Recommend:* (a) enrollments `cancelled`
-   with the reason `admin`, a reinstatement restoring the account only, the case deciding what a cleared student gets.
-   (b) Enrollments left `confirmed` and excluded from completion while a `student_suspended` case is open. (c) No
-   reinstatement of a student in this phase. (R-313)
-2. **How a make-up proposal and a counter-proposal are reserved.** *Recommend:* (a) in code, every placing path reading
-   the reservations under both accounts' locks, the database's exclusions guarding real sessions. (b) A provisional
-   session row (a new status) that the exclusions guard: database-enforced, but visible in every list and numbered.
-   (R-311)
-3. **`sessions.simultaneous_connected_seconds` and R-DB-4.** The ERD has the column; R-DB-4 lists no such cache.
-   *Recommend:* (a) write it once, at evaluation, as the figure the outcome was decided on, and say so in the ERD and
-   R-DB-4. (b) Store nothing; compute on every read (the admin's figure then moves with late events). (R-305)
-4. **When an enrollment completes.** *Recommend:* (a) after the last session's dispute window has closed, so a dispute
-   cannot reopen what a completed enrollment owes. (b) At the last settlement, as FR-449 reads literally, a later
-   dispute owing a remedy on a completed enrollment. (R-309)
-5. **Is a Cancelled-By-Agreement session final at acceptance?** FR-462 offers a remedy once the dispute window closes.
-   *Recommend:* (a) yes: both agreed, nothing can be disputed, the make-up is offered at once. (b) The literal reading:
-   the make-up waits until the scheduled end plus 72 hours (the plan's current text). (R-311)
-6. **Where the event rows live.** *Recommend:* (a) a new `session_events` table, sessions'. (b) `enrollment_events`
-   widened with a `session_id` and the kinds, written by sessions through the port. (R-315)
-7. **Does a disputed Teacher-No-Show count toward the threshold?** *Recommend:* (a) no, until resolved; the resolution
-   re-checks. (b) Yes, as frozen (a termination a later resolution cannot undo). (R-308)
-8. **Numbers the spec does not fix.** The chat message rate limit's default (FR-491 names the row), the chat page size,
-   and FR-459's "recent period". *Recommend:* 30 messages per 60 s, 50 messages a page, 30 days. Options: other values;
-   for the page size, reuse `admin_list_page_size`. (R-317)
-9. **A declined counter-proposal.** *Recommend:* (a) the system's proposal is booked at once (ADR 0018 D3 "falls back").
-   (b) The student keeps the rest of the choice window to accept or counter again. (R-311)
-10. **T079 and T080.** *Recommend:* (a) `tests/db-integrity` takes one `testTimeout` and `hookTimeout` of 30 s (the
-    `rule-sets.spec.ts` precedent), the `node` project keeps 5 s with file-level timeouts for its three heavy specs, and
-    each adversarial world's names carry a per-run prefix so worlds never match each other's excluded names (T079's
-    first cause). (b) The timeout only. (c) Leave both Not scheduled. (R-319)
-11. **Chat after the enrollment ends.** *Recommend:* (a) read-only until the purge. (b) Sending allowed until the purge
-    (FR-SESS-6 "until the chat retention expires"). (R-314)
-12. **Chat document types.** *Recommend:* (a) PDF and UTF-8 text only. (b) Also Office files, with a check that the
-    container holds no image. (R-314)
-13. **A dispute's resolution is one value.** `disputes.resolution` holds one of six; an administrator who wants to
-    re-mark and suspend does the second from the user's page. *Recommend:* (a) as the ERD has it. (b) A resolution
-    with an optional party action beside the outcome (a schema change). (R-308)
-14. **The window rule, two readings** (the owner's rule of 2026-11-05, R-320): (i) may a make-up start before the
-    choice window ends when the teacher accepts a counter early? *Recommend:* no (FR-466's text); option: yes, from the
-    teacher's answer. (ii) A cancellation request just before the start: *recommend* no minimum notice (the SRS has
-    none; the request shows that it expires at the start); option: a new setting refusing requests within it.
+1. **A student's suspension or ban: the confirmed enrollments, and reinstatement.** *Decided, mixed.* A
+   **suspension** is (b): every upcoming session is still cancelled at the moment of suspension (FR-ADMIN-5), but the
+   confirmed enrollment stays `confirmed`, keeps its slot, and cannot complete while its `student_suspended` case is
+   open. The administrator closes that case one of two ways. The student cleared (`cases.resolve`, allowed once the
+   account is active again): each session the suspension cancelled is owed the remedy FR-MAKEUP-2 gives, in the same
+   enrollment; read exactly, none of them is a Teacher-No-Show, so on either track it is a make-up session, placed as
+   FR-MAKEUP-3 and FR-MAKEUP-4 place every make-up, with FR-MAKEUP-2's one exception (a counter-proposal left
+   unanswered becomes a refund). The fault confirmed (`cases.dismiss`): the enrollment is cancelled with the reason
+   `admin` and its slot returns to booking. A **ban** is (a): the confirmed enrollments are cancelled with the reason
+   `admin` at once, and the `student_banned` case owes nothing unless the administrator decides otherwise. A
+   reinstatement restores the account only. Spec FR-486 and SRS FR-ADMIN-5 say so. (R-313)
+2. **How a make-up proposal and a counter-proposal are reserved.** *Decided:* (a), in code: every placing path reads
+   the reservations under both accounts' locks, and the database's exclusions guard the real sessions. (R-311)
+3. **`sessions.simultaneous_connected_seconds` and R-DB-4.** *Decided:* (a), written once at evaluation as the figure
+   the outcome was decided on; the ERD (v1.15) and R-DB-4 (constitution 2.5.0) say so. (R-305)
+4. **When an enrollment completes.** *Decided:* (a), after the last session's dispute window has closed. (R-309)
+5. **Is a Cancelled-By-Agreement session final at acceptance?** *Decided:* (a), yes. The make-up is offered at once,
+   in the acceptance's transaction, and that session cannot be disputed: the one exception to the rule that a remedy
+   waits for the dispute window. Spec FR-462 and FR-473, SRS FR-CANCEL-2, FR-DISPUTE-1 and FR-MAKEUP-1 say so. (R-311)
+6. **Where the event rows live.** *Decided:* (a), a new `session_events` table, sessions'. (R-315)
+7. **Does a disputed Teacher-No-Show count toward the threshold?** *Decided:* (a), no, until resolved; the resolution
+   re-checks. (R-308)
+8. **Numbers the spec does not fix.** *Decided:* the proposed numbers, all admin settings: the chat message rate
+   limit 30 messages per 60 s, the chat page size 50, the cancellation requests' «recent period» 30 days. SRS §3.14
+   gains them as rows, beside the evaluation delay's. (R-317)
+9. **A declined counter-proposal.** *Decided:* the owner's own rule, replacing both options:
+   - **Re-proposals.** If the teacher declines a counter-proposal, the student may counter-propose again while the
+     choice window is still open, with only one pending counter-proposal at a time.
+   - **The answer window.** Each counter-proposal gives the teacher `makeup_counter_answer_hours` (72) from that
+     counter-proposal; silence makes it a refund case with no amount, on either track.
+   - **Accepting the proposal while a counter is pending.** The student may accept the system's proposal while a
+     counter-proposal is pending; the pending counter-proposal is withdrawn and its time released (the owner's
+     approval of this reading, 2026-11-05).
+   - **The choice window closing without agreement.** If the window closes while a counter-proposal is pending, the
+     teacher's answer decides: an acceptance books the counter, a decline books the system's proposal at once, and
+     silence makes a refund when the answer window ends. The worst case is the choice window plus one answer window
+     (7 days + 72 hours).
+   - **The hide rule.** Neither the system's proposal nor any counter-proposal may start before the matter could
+     still be decided:
+     - (H1) The system's proposal never starts before `choice_closes_at` + the answer window, since a counter-proposal
+       sent at the window's last moment can keep the matter open until then; a week before that moves to the first
+       free week after it.
+     - (H2) The counter-proposal options leave out every teacher occurrence starting before the later of now + the
+       answer window and `choice_closes_at` (decision 14 (i) kept).
+     - (H3) The system's proposal stays reserved from the offer until the remedy settles (booked, or handed to a
+       case); a pending counter-proposal's time stays reserved during its answer window and is released at its
+       decline, its withdrawal or the window's end. Both are hidden from `booking.slots` and refused by
+       `checkout.hold`.
+     - (H4) After a decline, the next counter-proposal's options are read again under H2.
+     - (H5) If the choice window ends with no counter-proposal pending and no acceptance, FR-MAKEUP-4's outcome
+       applies: the proposal is booked.
 
-## Proposed changes to other documents (not applied in this step)
+   SRS FR-MAKEUP-3 and FR-MAKEUP-4, ADR 0018's amendment of 2026-11-05 and spec FR-464 to FR-467 say so;
+   `session_remedies` holds the current pending counter-proposal, and `session_events` the history of every one
+   (data-model §2.3, §2.4). (R-311, R-320)
+10. **T079 and T080.** *Decided:* (a): one `testTimeout` and `hookTimeout` of 30 s for `tests/db-integrity`, the
+    `node` project at 5 s with file-level timeouts for its three heavy specs, and a per-run prefix on each adversarial
+    world's names. Timed in B33; the Not-scheduled row of `specs/003-booking/tasks.md` says so. (R-319)
+11. **Chat after the enrollment ends.** *Decided:* (a), read-only until the purge. (R-314)
+12. **Chat document types.** *Decided:* (a), PDF and UTF-8 text only. This is narrower than SRS FR-SESS-7's
+    «document/text files», which records it: Office files can carry macros, and may be added later. (R-314)
+13. **A dispute's resolution is one value.** *Decided:* (a), as the ERD has it. (R-308)
+14. **The window rule, two readings.** *Decided, both as recommended:* (i) no make-up starts before the choice window
+    ends, even when the teacher accepts a counter-proposal early; (ii) no minimum notice for a cancellation request.
+    (R-320)
+
+## Changes to other documents (approved on 2026-11-05, applied in this cycle)
+
+The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
+fixed two minutes, FR-DISPUTE-1 against spec FR-473), and they were applied on `Ejazah_app/003-booking/T106` after the
+decisions above. Two parts wait for what the build finds: whether a room must be kept from being created on join
+(B34's check, quickstart §3; the RUNBOOK records the setting then), and PLAN.md's close date (the phase's close).
 
 | Document | Change | Reason |
 |---|---|---|
-| Constitution | **P1 (T107):** a rule requiring the video provider's webhook signature on the raw body before any handler — a new R-SESS-7, R-MONEY-9's parenthesis pointing at it; version 2.4.5 → 2.5.0 | R-MONEY-9 points at R-SEC-12, which is about Dependabot (T107) |
+| Constitution | **P1 (T107):** a new R-SESS-7 requiring the video provider's webhook signature on the raw body before any handler, R-MONEY-9's parenthesis pointing at it; version 2.4.5 → 2.5.0 | R-MONEY-9 pointed at R-SEC-12, which is about Dependabot (T107) |
 | Constitution | **P2:** R-SESS-2 "scheduled job at `scheduled_end` plus the configured evaluation delay (default 2 minutes)" | FR-441 makes the delay a setting; R-MONEY-12 |
-| Constitution | **P3** (if decision 3 is (a)): R-DB-4 names `sessions.simultaneous_connected_seconds` as the evaluation's recorded figure | R-DB-4 lists the declared caches |
-| `docs/ERD.md` | v1.15: data-model §7's seven amendments, 44 tables | The design |
-| `docs/SRS.md` | §3.14 rows: "Session evaluation delay after scheduled end (minutes)" 2; "Chat message rate limit (per subject, per window)"; the chat page size and the recent period of decision 8 | FR-441, FR-491, R-MONEY-12 |
-| `docs/SRS.md` | FR-SESS-6 "from purchase" → "from confirmation" | Spec FR-488 and US7 say confirmation |
-| `docs/SRS.md` | FR-ADMIN-5: what a student's suspension does to the confirmed enrollments | Decision 1 |
-| `docs/SRS.md` | FR-DISPUTE-1: a dispute may be raised from the scheduled end, before the evaluation | Spec FR-473 says "a settled session" while its edge case allows one before the evaluation |
-| `docs/ARCHITECTURE.md` | §3.4 the video port as built (no `recordParticipantEvent`), `livekit.adapter.ts`; §4 the module graph's new edges and `EnrollmentSide`; §11 the delay as a setting | R-301, R-302 |
-| `docs/RUNBOOK.md` | LiveKit keys (leaked-credential entry), "Room does not open", the tunnel's second path, the room auto-creation setting | ADR 0003's rename list |
-| `PLAN.md` | Phase 3: "Evaluation job at scheduled end plus the configured delay"; the close date at the end | R-SESS-2's setting |
-| ADR 0003 | Amended note: the rename done, LiveKit's versions | Its Consequences |
-| `apps/api/src/jobs/README.md` | `send-reminder` moves to Phase 4 | Spec Assumptions |
+| Constitution | **P3** (decision 3): R-DB-4 names `sessions.simultaneous_connected_seconds` as the evaluation's recorded figure | R-DB-4 lists the declared caches |
+| `docs/ERD.md` | v1.15: data-model §7's amendments, as the decisions above shape them, 44 tables | The design |
+| `docs/SRS.md` | §3.14 rows: "Session evaluation delay after scheduled end (minutes)" 2; "Chat message rate limit (per subject, per window)" 30 per 60 s; "Chat page size (messages)" 50; "Cancellation requests recent period (days)" 30 | FR-441, FR-491, decision 8, R-MONEY-12 |
+| `docs/SRS.md` | FR-SESS-6 "from purchase" → "from confirmation", read-only once the Enrollment has ended (decision 11) | Spec FR-488 and US7 say confirmation |
+| `docs/SRS.md` | FR-SESS-7: PDF and UTF-8 text only, Office files later | Decision 12 |
+| `docs/SRS.md` | FR-ADMIN-5: what a student's suspension and ban do to the confirmed enrollments | Decision 1 |
+| `docs/SRS.md` | FR-CANCEL-2, FR-MAKEUP-1: a Cancelled-By-Agreement session is final at acceptance | Decision 5 |
+| `docs/SRS.md` | FR-DISPUTE-1: a dispute may be raised from the scheduled end, before the evaluation; never over a Cancelled-By-Agreement session | Spec FR-473 said "a settled session" while its edge case allows one before the evaluation; decision 5 |
+| `docs/SRS.md` | FR-MAKEUP-3, FR-MAKEUP-4 and an amendment line | Decision 9 |
+| ADR 0018 | The amendment of 2026-11-05: D3's decline and D5's slot for a suspension | Decisions 1 and 9 |
+| `docs/ARCHITECTURE.md` | §3.4 the video port as it stands (no `recordParticipantEvent`), `livekit.adapter.ts`; §4 the module graph's new edges and `EnrollmentSide`; §11 the delay as a setting | R-301, R-302 |
+| `docs/RUNBOOK.md` | LiveKit keys (leaked-credential entry), "Room does not open", the tunnel's second path | ADR 0003's rename list |
+| `PLAN.md` | Phase 3: "Evaluation job at scheduled end plus the configured delay" | R-SESS-2's setting |
+| ADR 0003 | Amended note: the rename timed in B34, LiveKit's versions | Its Consequences |
+| `apps/api/src/jobs/README.md` | Phase 3's four jobs; `send-reminder` moves to Phase 4 | Spec Assumptions, contracts/kernel.md |
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Twenty-one decisions, R-301 to R-321; fourteen points await
-  the owner (above).
+- **Phase 0 — Research**: [research.md](./research.md). Twenty-one decisions, R-301 to R-321; the owner answered
+  its fourteen points on 2026-11-05 (above).
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 

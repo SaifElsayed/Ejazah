@@ -17,12 +17,14 @@ T005's rules, with this phase's paths (Saif reviews each lock and FK-insert path
 | `sessions.join` | `users` (both, one call) | none |
 | evaluation, a review or dispute resolution | `enrollments`, `sessions` | none (`session_events`, a case: enrollment and session only) |
 | threshold termination | (held) `enrollments`, `sessions` (remaining, one call), `session_remedies` | none |
-| cancellation request, answer | `sessions`, `cancellation_requests` | the request references the requester: `users` (both parties) locked first |
+| cancellation request, a decline | `sessions`, `cancellation_requests` | the request references the requester: `users` (both parties) locked first |
+| cancellation accepted (the make-up offered at once, the owner's decision 5) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `cancellation_requests` | the request's accounts locked first |
 | dispute raised | `users` (the raiser), `enrollments`, `sessions` | the dispute references the raiser, locked first |
-| remedy offer | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies` | none |
+| remedy offer; a counter-proposal, its decline, its withdrawal (the student accepts the proposal while it is pending) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies` | none (`session_events` reference the enrollment and the session) |
 | make-up booking | `users` (both), `lockKey('teacher-slots')`, `availability_slots` (the slot), `enrollments`, `sessions`, `session_remedies` | the session references both accounts, locked first |
 | a hold (Phase 2) reading reservations | unchanged (both accounts first), then reads `reservedTimesOf` | unchanged |
 | closing a case or dispute | `enrollments`, then the conditional update of `disputes` | none |
+| a `student_suspended` case closed: cleared (make-ups offered) or the fault confirmed (the enrollment cancelled) | cleared: `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `disputes`; confirmed: `enrollments`, `session_remedies`, `disputes` | none |
 | an account's end (booking's subscriber) | (held) the account; `lockKey('teacher-slots')`; `enrollments`; `sessions`; `session_remedies` | none |
 | outage record | `sessions` (the overlapped, one call) | none |
 

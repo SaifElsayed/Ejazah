@@ -100,17 +100,22 @@ On the vivo and the realme, Etisalat mobile data, the development build:
 ## 5. Cancellation and make-ups (US3, US4)
 
 On the phones, against the stand-in's sessions: request a cancellation from each side; accept, decline and let one
-expire at the start. After the accepted one's dispute window (or at once, owner decision 5): the make-up's proposal,
-in a week after the choice window; counter-propose one of the teacher's slots (none offered within 72 hours); the
-teacher accepts one and declines another; let a choice window pass (booked) and an answer window pass (a refund case
-with no amount). On a recitation enrollment after a Teacher-No-Show: choose a refund.
+expire at the start. At the acceptance (the owner's decision 5; the session cannot be disputed): the make-up's
+proposal, in a week starting no earlier than the choice window plus 72 hours; counter-propose one of the teacher's
+slots (none offered before the later of now + 72 hours and the choice window's end); the teacher declines it,
+counter-propose again (a second one refused while the first is pending), and the teacher accepts; on another remedy,
+accept the proposal while a counter-proposal is pending (the counter withdrawn, its time offered to others again); let
+a choice window pass with nothing pending (the proposal booked), and an answer window pass (a refund case with no
+amount), once inside the choice window and once after it. On a recitation enrollment after a Teacher-No-Show: choose a
+refund.
 
 ## 6. The administrator (US5, US6)
 
 In the panel: raise a dispute from the phone and resolve it each way; resolve an Under-Threshold session and a
 Provider-Outage one; record an outage window over a settled session (it moves to the review queue); cancel a session
-(one case); resolve and dismiss a case (its closing instant is the database's); suspend and ban a student (sessions
-cancelled, a case); open a user's record (the cancellation-request counts); read a dispute's chat (one `chat.read`
+(one case); resolve and dismiss a case (its closing instant is the database's); suspend a student (sessions cancelled, the enrollment still
+confirmed, a case), reinstate them and resolve the case (the make-ups offered), suspend another and dismiss its case
+(the enrollment cancelled); ban a student (sessions and enrollments cancelled, a case); open a user's record (the cancellation-request counts); read a dispute's chat (one `chat.read`
 audit entry per read). The audit log shows one entry per action with its reason.
 
 ## 7. Chat (US7)
