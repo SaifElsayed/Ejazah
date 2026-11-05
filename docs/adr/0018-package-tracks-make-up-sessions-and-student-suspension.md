@@ -2,6 +2,8 @@
 
 **Status:** accepted · **Date:** 2026-10-15 · **Decided by:** the owner, 2026-10-15 · **Amends:** SRS FR-PROFILE-2, FR-IJAZAH-1, §3.8 (FR-CANCEL-2, FR-NOSHOW-2, FR-NOSHOW-6, FR-DISPUTE-5; adds §3.8.5 FR-MAKEUP-1..6), FR-ADMIN-5, FR-AUTH-11, FR-NOTIF-1, §3.14, §6, §7, OPEN-11 (adds DEC-58); ERD packages, enrollments, sessions, settings
 
+**Amended 2026-11-05 (Phase 3's clarify, T106 of `specs/003-booking/tasks.md`; the owner's decision).** SRS FR-MAKEUP-2 and FR-MAKEUP-3 were amended, with FR-MAKEUP-1 and FR-MAKEUP-4 beside them: the remedy is offered once the session's outcome is final; the Student's counter-proposal is one of the Teacher's active availability slots; the Teacher answers it within 72 hours, and one left unanswered becomes a refund on either track. The text of the decisions below is unchanged; `docs/SRS.md` §3.8.5 and its amendment of 2026-11-05 govern.
+
 ## Context
 
 The SRS says that some sessions are not consumed: a teacher's absence, a cancellation both parties agreed to, and
