@@ -78,16 +78,6 @@ no money: no amount is computed, stored or moved by this phase, no commission
 belongs to a later phase is absent from this phase's screens, never shown
 disabled (R-MOBILE-13).
 
-**The way kept open for T105.** The owner's target model releases a teacher's
-share session by session, for the sessions that took place and whose dispute
-window passed with no dispute (T105, not built here, and not decided: it
-changes ADR 0007, FR-PAYG-10, FR-DISPUTE-6 and R-MONEY-6 first). This phase
-does not build it and adds no money concept for it. It records each session's
-outcome so that a later release could read it without recomputing anything:
-the outcome, who settled it and when, the attendance evidence it rests on, the
-instant its dispute window closes as fixed when it was settled, and whether a
-dispute was raised in that window and how it was resolved (FR-450 to FR-455).
-
 **Provenance.** Every requirement traces to a line in PLAN.md's Phase 3
 deliverables, definition of done or decisions carried out there, to an SRS id,
 to ADR 0003, ADR 0007, ADR 0009, ADR 0010, ADR 0015 or ADR 0018, to a table or
@@ -164,14 +154,14 @@ session state machine", "Simultaneous time accumulated across reconnections",
 "All four no-show outcomes"._
 
 **Why this priority**: It is the second half of the phase's objective, and the
-evidence every remedy, dispute and later release reads (R-SESS-1, T105).
+evidence every remedy and dispute reads (R-SESS-1).
 
 **Independent Test**: With the video port's stand-in, deliver signed
 participant events for each row of SRS §3.7.5's table — including a mid-session
 disconnect and reconnection, an event delivered twice, events out of order, a
 missing final leave event and a bad signature — let the evaluation job run, run
-it again, and check each outcome, the no-show count, the termination at the
-threshold and the settlement record.
+it again, and check each outcome, the no-show count and the termination at the
+threshold.
 
 **Acceptance Scenarios**:
 
@@ -182,7 +172,6 @@ threshold and the settlement record.
 5. **Given** the teacher joined and the student did not, **When** evaluated, **Then** it is Student-No-Show and consumed; **given** the student joined and the teacher did not, **Then** it is Teacher-No-Show, not consumed, and counted against the teacher; **given** neither joined, **Then** it is Both-No-Show, not consumed, with no count against either (FR-NOSHOW-1, FR-NOSHOW-2, FR-NOSHOW-6).
 6. **Given** both joined but together for less than the threshold, or a provider outage recorded over the session, **When** evaluated, **Then** it is Under-Threshold or Provider-Outage, its outcome is frozen and it waits in the administrator's review queue; nothing settles it automatically (FR-SESS-19, R-SESS-6).
 7. **Given** an enrollment whose teacher's absences reach the configured threshold, **When** the last of them is settled, **Then** in one transaction its remaining sessions are cancelled by admin, the enrollment is Terminated-No-Show and one compensation case opens on it (FR-NOSHOW-3, FR-NOSHOW-4, FR-DISPUTE-5).
-8. **Given** a settled session, **When** anyone reads it later, **Then** its outcome, the instant and the settler (the job or a named administrator), its accumulated simultaneous time, its dispute window's closing instant and any dispute's resolution are there as recorded, unchanged by any later change of settings (FR-450 to FR-455, §3.14).
 
 ---
 
@@ -351,7 +340,7 @@ instant and not while a dispute is open.
 - The make-up proposal's week falls before the choice window would end (the unconsumed session was among the last): see FR-466; the proposal never starts before the student could still answer it.
 - A teacher's absence that reaches the threshold leaves make-up sessions booked or proposed: they are cancelled with the rest and their remedies are named in the termination's compensation case (FR-NOSHOW-4).
 - A dispute is raised between the scheduled end and the evaluation: the evaluation still records the automatic outcome, frozen under the dispute (FR-DISPUTE-4).
-- A setting changes while a session is in its dispute window: the window's closing instant fixed when the session was settled stands; settings apply prospectively only (§3.14).
+- A setting changes after sessions were settled: the change applies prospectively only and never re-evaluates a settled session (§3.14).
 - The time zone data changes between the token and the session: the session's instants are recomputed by Phase 2's job (FR-SESS-20), and the join period and the evaluation read the recomputed instants.
 - A student's gender is corrected by an administrator while a session is scheduled: the server's check at token issuance refuses the cross-gender pairing; the enrollment consequences of FR-GENDER-6/7 are outside this phase (Assumptions).
 - An open dispute or compensation case on an ended enrollment: its chat is kept until resolution (FR-SESS-13, FR-AUTH-14).
@@ -396,14 +385,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-448**: When an enrollment's Teacher-No-Show count reaches the configured threshold (§3.14 "Teacher no-show termination threshold (count)"), its remaining scheduled sessions, make-ups included, MUST be Cancelled-By-Admin, the enrollment set Terminated-No-Show, and one compensation case opened on it naming the remedies left open, in one transaction (FR-NOSHOW-3, FR-NOSHOW-4, FR-DISPUTE-5).
 - **FR-449**: An enrollment MUST become completed when every one of its sessions, make-ups included, has a settled outcome that is not frozen, and no remedy is owed on it (no make-up awaiting a choice, proposed, counter-proposed or booked and not yet settled; a refund handed to its compensation case is no longer owed by the enrollment, the case deciding it) (ERD `enrollments.status`; SRS §3.8.5).
 
-**The settlement record (the way kept open for T105)**
-
-- **FR-450**: Each session's settlement MUST record its outcome, the instant it was settled, and who settled it: the evaluation job, or the administrator who resolved it (ERD `sessions.evaluated_at`, `settled_by_admin_id`).
-- **FR-451**: The evidence a settlement rests on MUST stay readable for as long as the session exists: every recorded join and leave, and the accumulated simultaneous time; it is never rewritten (ERD §15 rules 10 and 21).
-- **FR-452**: At settlement, the session's dispute window MUST be fixed as an instant, the scheduled end plus the configured dispute window (§3.14 "Dispute window (hours)") read at that moment, and recorded with the session, so that a later change of the setting does not move it (FR-DISPUTE-1, §3.14 "apply prospectively only").
-- **FR-453**: Whether a dispute was raised within that window, and its resolution with its instant, MUST be readable per session; an outcome changed by a dispute's or a review's resolution MUST keep the automatic outcome it replaced beside the final one (FR-DISPUTE-3, FR-DISPUTE-4).
-- **FR-454**: From these records alone, without reading a setting or recomputing attendance, a later reader MUST be able to list an enrollment's sessions that were consumed and whose dispute window closed with no dispute or with a dispute resolved, with the instant each became final. This phase builds no such reader and no amount: it keeps the facts a release session by session would need (T105, not built; the owner's decision of 2026-11-05).
-- **FR-455**: No record of this phase MAY hold or derive a price, a share, a commission or any amount; T104 and T105 change ADR 0007 first (R-MONEY-6, ADR 0007, FR-MAKEUP-6).
+- **FR-450**: A session's settlement MUST record when it was settled and, for an administrator's resolution, which administrator settled it (ERD `sessions.evaluated_at`, `settled_by_admin_id`; FR-SESS-19).
 
 **Cancellation by agreement and by an administrator**
 
@@ -427,8 +409,8 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 
 **Disputes, the session review queue and compensation cases**
 
-- **FR-473**: Either participant MUST be able to raise a dispute over a settled session of theirs, with a reason, from its scheduled end until its dispute window's closing instant (FR-452), and never after; a session MUST have at most one open dispute (FR-DISPUTE-1).
-- **FR-474**: Raising a dispute MUST mark the session Disputed and freeze its outcome — consumed or not, and any no-show attribution — until resolution, the automatic outcome kept beside the mark (FR-DISPUTE-4, FR-453).
+- **FR-473**: Either participant MUST be able to raise a dispute over a settled session of theirs, with a reason, within the configured dispute window after that session's scheduled end (§3.14 "Dispute window (hours)", default 72), and never after the window closes; a session MUST have at most one open dispute (FR-DISPUTE-1).
+- **FR-474**: Raising a dispute MUST mark the session Disputed and freeze its outcome — consumed or not, and any no-show attribution — until resolution, even if the dispute window would otherwise have elapsed (FR-DISPUTE-4).
 - **FR-475**: The administrator MUST have a disputes queue showing each open dispute with the session's schedule, every recorded join and leave, the accumulated simultaneous time and the outcome under dispute, and the enrollment's chat only while a dispute (or, from Phase 4, a report) on that enrollment is open, each opening of the chat audit-logged (FR-DISPUTE-2, FR-SESS-13, FR-ADMIN-7, FR-ADMIN-17).
 - **FR-476**: The administrator MUST be able to resolve a dispute bindingly — uphold the automatic outcome, re-mark the session consumed or not consumed, record a no-show against either party, order compensation, or suspend or ban a party — with a mandatory reason recorded in the audit log; a re-mark or a recorded no-show MUST bring what that outcome brings (the count toward FR-448, a remedy under FR-462); ordering compensation MUST record the decision and move no money; a suspension or a ban MUST go through `StandingService` (FR-DISPUTE-3, FR-DISPUTE-6, FR-421) [NEEDS CLARIFICATION: `StandingService` today suspends and bans teachers only, and SRS FR-ADMIN-5 and ADR 0018 D5 say what suspending or banning a student does to their sessions; PLAN.md assigns FR-ADMIN-5's student part to no phase. Does this phase add a student's suspension and ban to `StandingService`, with ADR 0018 D5's consequences on sessions and a compensation case, or does a dispute's resolution suspend or ban only a teacher here, the student's part recorded for later?].
 - **FR-477**: The administrator MUST have a session review queue of Under-Threshold and Provider-Outage sessions with full attendance telemetry, and MUST resolve each by choosing its outcome among Done, Student-No-Show, Teacher-No-Show and Both-No-Show with a mandatory reason, audit-logged; the chosen outcome brings what it brings, and no outcome is set automatically (FR-SESS-19, FR-ADMIN-14, R-SESS-6).
@@ -465,7 +447,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 All exist in `docs/ERD.md` unless marked new; this phase writes most of them for
 the first time, and the plan names any column or check it adds.
 
-- **Session** (`sessions`): one occurrence of an enrollment, with its status in the full machine, its accumulated simultaneous time, its settlement instant and settler, the session a make-up makes up, and (to add) the dispute window's closing instant and the automatic outcome a resolution replaced.
+- **Session** (`sessions`): one occurrence of an enrollment, with its status in the full machine, its accumulated simultaneous time, its settlement instant and settler, and the session a make-up makes up.
 - **Participant event** (`session_participant_events`): one join or leave from a signed provider webhook, append-only, unique by provider event id.
 - **Cancellation request** (`cancellation_requests`): a request by either participant, pending, accepted, declined or expired.
 - **Session remedy** (`session_remedies`): what a session not consumed is owed — a make-up or a refund case — and where its choice stands; the counter-proposal's time of day is to add.
@@ -486,13 +468,12 @@ the first time, and the plan names any column or check it adds.
 - **SC-406**: In CI, a provider webhook with a wrong or missing signature, or a body changed after signing, is refused in 100% of attempts with nothing written.
 - **SC-407**: The adversarial suite refuses a token in 100% of attempts for an opposite-gender account, a non-participant, another session's id, a teacher suspended, revoked or banned, and outside the join period, in both directions, and blocks the merge when a case fails.
 - **SC-408**: Every image in a test corpus — by extension, by content, renamed to a document's extension, and a document given an image's content — is refused, and every allowed document is accepted.
-- **SC-409**: For every session the suite settles, the settlement record exists — outcome, instant, settler, simultaneous time, the dispute window's closing instant, and any dispute's resolution — and a query over those records alone lists the sessions consumed and final, unchanged after the dispute window setting is changed (T105's way).
-- **SC-410**: No code of the sessions module references a price or a payment, and no amount is stored by this phase, proved by the boundary and schema gates (PLAN.md definition of done).
-- **SC-411**: Every unconsumed outcome in the suite owes exactly one remedy; every refund choice opens exactly one compensation case with no amount; every make-up booked extends its enrollment's end and slot release.
-- **SC-412**: No cancellation request is pending after its session's scheduled start, and no answer given at or after the start changes the session, in 100% of CI runs.
-- **SC-413**: A teacher's suspension, revocation, ban or deletion, and a student's deletion, leave no token issuable and every remaining session cancelled with its cases, in one transaction, in 100% of CI runs.
-- **SC-414**: Every administrator action of this phase writes one audit entry with its reason, and no administrator action of this phase writes a payment, an amount or an enrollment's confirmation.
-- **SC-415**: On the owner's phones over 4G, a participant pressing join is in the room within ten seconds in at least nine of ten attempts, and the owner judges the audio fit for correcting recitation (ADR 0003's observation, FR-SESS-4).
+- **SC-409**: No code of the sessions module references a price or a payment, and no amount is stored by this phase, proved by the boundary and schema gates (PLAN.md definition of done).
+- **SC-410**: Every unconsumed outcome in the suite owes exactly one remedy; every refund choice opens exactly one compensation case with no amount; every make-up booked extends its enrollment's end and slot release.
+- **SC-411**: No cancellation request is pending after its session's scheduled start, and no answer given at or after the start changes the session, in 100% of CI runs.
+- **SC-412**: A teacher's suspension, revocation, ban or deletion, and a student's deletion, leave no token issuable and every remaining session cancelled with its cases, in one transaction, in 100% of CI runs.
+- **SC-413**: Every administrator action of this phase writes one audit entry with its reason, and no administrator action of this phase writes a payment, an amount or an enrollment's confirmation.
+- **SC-414**: On the owner's phones over 4G, a participant pressing join is in the room within ten seconds in at least nine of ten attempts, and the owner judges the audio fit for correcting recitation (ADR 0003's observation, FR-SESS-4).
 
 ## Assumptions
 
@@ -509,4 +490,4 @@ the first time, and the plan names any column or check it adds.
 - Gender disputes and their consequences on enrollments (FR-GENDER-3 to FR-GENDER-7, FR-ADMIN-8) are not in PLAN.md's list for this phase and are not specified here; the token check of FR-432 already refuses a pairing an administrator's correction made cross-gender. Where they land is a question for the owner.
 - The allowed chat document types are PDF and plain text unless the plan, from the SRS's "document/text files", names more; RISK-02 (images inside a PDF) stays accepted.
 - No setting is written from code; the two new rows are seeded at their defaults and changed in the admin panel (R-PROC-11).
-- Saif's review session reviews every batch under the review rules in force; the owner runs SC-401 and SC-415 on the phones.
+- Saif's review session reviews every batch under the review rules in force; the owner runs SC-401 and SC-414 on the phones.
