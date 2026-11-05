@@ -594,6 +594,39 @@ The window rule (R-320): nothing here offers a time. A restore's `slot_changed` 
 the restore's recreated sessions and re-offered remedies keep R-320's two rows of the decision of no automatic
 termination.
 
+## Decisions of 2026-11-05, the administrator's control inventory answered
+
+The owner approved, the same day, the number research R-325 computed, an answer to each of R-323's ten gaps, the manual
+compensation case's design, and three more points. Where an answer changes a decision above, the answer governs (the
+default's value in item 3 (c) above; item 4's «proposed, not written here»; item 6's «except
+`compensation_case_opened`»). `tasks.md` is not changed here: the task changes come in one later pass.
+
+1. **The signed-in default limit is 160 per 60 s**, per R-325 (a teacher's heaviest normal minute, 52 calls, × 3, rounded
+   up to ten); the rule max(120, H × 2–3) with no number above 200 stays its reason; the panel's 45 × 3 = 135 needs no
+   value of its own. Written in SRS §3.14 and NFR-SEC-12, ERD §12, the spec, research R-317 and R-321, the data model,
+   the contracts and the quickstart.
+2. **R-323's gaps answered** (research R-323): the monitor's timeline through `EnrollmentSide.eventsOf` (GAP-1);
+   `sessions.review.get` for any session no longer scheduled (GAP-2); `sessions.review.revise`, its own procedure, with
+   `rate_limit_outcome_correction` (10 per 60 s, a new §3.14 row) and the kind `outcome_corrected` (GAP-3, spec
+   FR-439); each session's remedy on the monitor with «booking refused, retried until …» derived (GAP-4); an open
+   remedy handed to a case through the manual case (GAP-5); the kind `instants_reresolved` with `previous_start_at`
+   (GAP-6); one log line per `endRoom` and `removeParticipant` (GAP-7); `slot_holds.release_reason` with the code's
+   seven reasons, and the holds on `payments.get` (GAP-8); no page for rate-limit refusals, Not scheduled (GAP-9); the
+   RUNBOOK's entry for a refused or unattributable video event (GAP-10).
+3. **The chat's retention after the dispute window is 30 days** (was 0), still a panel setting (SRS §3.14,
+   FR-SESS-13).
+4. **A deleted account's files wait** while it is a party to an enrollment with an open dispute, case or complaint, and
+   are removed by `erase-deleted-files` after the last closes (SRS FR-AUTH-14, ADR 0015's amendment; research R-327;
+   spec FR-487).
+5. **The manual compensation case**, `cases.openManual` (research R-326, spec FR-493): any enrollment, either party,
+   the reasons `admin_opened_for_student` and `admin_opened_for_teacher`, joined while open, idempotent, its own limit;
+   with `remedyId` it hands an open remedy to the student's case. Phase 2's covering rule (`caseInstantsAmong`) reads
+   Phase 2's three reasons only. Its record is `compensation_case_opened`'s source (SRS FR-NOTIF-1).
+6. **The complaint's outcome is told to both parties** (`absence_complaint_decided`; SRS FR-NOTIF-1, FR-NOSHOW-5).
+
+The window rule (R-320): nothing here offers a time. The hand-off releases the reserved times and books none; the
+correction leaves the remedy to FR-462's moment.
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -640,13 +673,20 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `PLAN.md` | Phase 3's SRS list gains FR-DISPUTE-7 and FR-CANCEL-8; the definition of done gains the line on no automatic termination | 1, 6 |
 | `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value by NFR-SEC-12's rule, confirmed by T062 from research R-325 before B36), NFR-SEC-12's first-refusal logging, an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 21, the four rate-limit settings, no column for `slot_changed` | 2, 3 |
+| `docs/SRS.md` | The control inventory answered: §3.14 (the default 160 per 60 s, chat retention 30, «Outcome correction rate limit»), NFR-SEC-12, FR-SESS-13, FR-AUTH-14, FR-NOTIF-1 (`compensation_case_opened`'s record, `absence_complaint_decided` to both parties), four amendment lines | Decisions of 2026-11-05, the administrator's control inventory answered, 1 to 6 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog rows 23 to 27 (the default's value, chat retention, the deleted files held, the manual reasons and the covering rule, `outcome_corrected`, `instants_reresolved`, `previous_start_at`, `slot_holds.release_reason`, rule 48, the new setting, §11) | 1 to 6 |
+| ADR 0015 | An amendment paragraph: a deleted account's files wait for its open disputes and cases | 4 |
+| `docs/RUNBOOK.md` | «A video event refused or not attributed» | 2 (GAP-10) |
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Twenty-three decisions, R-301 to R-323; the owner answered
+- **Phase 0 — Research**: [research.md](./research.md). Twenty-six decisions, R-301 to R-323 and R-325 to R-327 (R-324
+  not yet written); the owner answered
   its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, the second and third
   analyses' findings the same day, R-322 on the decisions of no automatic termination, and R-323, the administrator's
-  control inventory, on the decisions of the administrator's control and the rate limits.
+  control inventory, on the decisions of the administrator's control and the rate limits; R-323's gaps, R-325 (the
+  default limit's value), R-326 (the manual case) and R-327 (a deleted account's files) on the decisions answering that
+  inventory.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 
