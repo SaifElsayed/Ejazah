@@ -65,9 +65,14 @@ The owner's decision of 2026-11-05 (spec FR-470, research R-321; T062):
   analysis, C5): `disputes.chat` asks it once the dispute is checked open, so sessions imports no chat;
 - verification's `users.get` reads the cancellation-request counts from sessions' entry (an import, R-301);
 - `StandingService` into sessions' dispute resolution and a complaint's decision (b) (FR-421, R-322);
-- the video port into sessions; the `POST /webhooks/video` route beside the payment webhook.
+- the video port into sessions; the `POST /webhooks/video` route beside the payment webhook;
+- identity's `FileHold` port (`filesHeld(userId)`, a new optional member of the deletion's dependencies) to booking's
+  `heldFileOwnersAmong`, which reads its `enrollments` and asks moderation's `enrollmentsWithOpenMatterAmong`, so a
+  deleted person's files wait while an enrollment of theirs has an open dispute, case or complaint (spec FR-487,
+  research R-327; the owner's decision of 2026-11-05).
 
-The worker binds the same port for the sweeps.
+The worker binds the same port for the sweeps, and hands `erase-deleted-files` the same `heldFileOwnersAmong` as its
+`held` option.
 
 ## Jobs (`apps/api/src/jobs/`, registered in `worker.ts`)
 
@@ -77,6 +82,7 @@ The worker binds the same port for the sweeps.
 | `advance-remedies` | every minute | `{}` | twice = once: one remedy per session, one booking, one case; no offer on an enrollment not `confirmed` or to a suspended student, none to a `frozen` remedy |
 | `expire-cancellation-requests` | every minute | `{}` | twice = once |
 | `purge-chat` | daily | `{}` | twice = once: the same rows purged, each file removed once (a missing file is not an error) |
+| `erase-deleted-files` (Phase 1's, changed) | hourly, unchanged | `{}` | twice = once, unchanged; a held owner's files (`held`, R-327) neither removed nor reported, and removed by the first run after the owner's last open dispute, case or complaint closes (spec FR-487) |
 
 `jobs/README.md`'s list loses `send-reminder` from Phase 3 (Phase 4's, spec Assumptions).
 

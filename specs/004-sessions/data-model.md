@@ -191,6 +191,17 @@ derived; nor a counter-proposal's answer deadline, computed when read (§2.3). N
 of the two new tables, and `session_remedies_counter_slot_id_idx`, the plain index of the new foreign key
 `session_remedies.counter_slot_id` that ERD §14 requires of every foreign key (R-DB-9; the third analysis, C2).
 
+### 2.11 A deleted account's files (no column; research R-327)
+
+The owner's decision of 2026-11-05 (SRS FR-AUTH-14 as amended, ADR 0015's amendment): a deleted person's
+`users.photo_key` and the keys of their `verification_documents` (marked `erased_at` at the deletion, as now) are kept,
+and their files with them, while the person is the `student_user_id` or the `teacher_user_id` of an enrollment with an
+open `disputes` row of any kind (a session dispute, a compensation case, a complaint). Read through booking's entry
+(`heldFileOwnersAmong`, over `enrollments`) and moderation's (`enrollmentsWithOpenMatterAmong`, over `disputes`), never
+across a table (R-API-6). The deletion's after-commit removal asks it through identity's `FileHold` port; the
+`erase-deleted-files` job skips a held owner's files and removes them on its first run after the last matter closes.
+Rule 34 is unchanged: a key is never held without `erased_at`.
+
 ## 3. State machines
 
 ### Session (`sessions.status`)
@@ -280,9 +291,14 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
+Changed: `chat_retention_days` defaults to **30** (was 0; the owner's decision of 2026-11-05; SRS §3.14, FR-SESS-13),
+still an administrator's setting (FR-492). The seed inserts a row only where it is absent, so the new default reaches a
+new database; a database already seeded keeps its row until an administrator changes it in the panel (R-PROC-11,
+research R-317).
+
 Existing keys this phase reads: `first_session_lead_hours` (fixed on each remedy at its offer), `early_join_lead_minutes`, `join_window_minutes`, `minimum_connection_seconds`,
 `attendance_threshold_pct`, `dispute_window_hours`, `makeup_choice_window_days`,
-`slot_release_buffer_weeks`, `chat_retention_days`, `upload_max_bytes`, `rate_limit_upload`,
+`slot_release_buffer_weeks`, `chat_retention_days` (its default changed, above), `upload_max_bytes`, `rate_limit_upload`,
 `document_link_ttl_seconds`, `admin_list_page_size`.
 
 ## 5. Integrity rules and the lock order
@@ -359,3 +375,7 @@ batch's migration, which builds them.
 12. On the decisions of the administrator's control and the rate limits (the owner's decision of 2026-11-05; the ERD's
     changelog row 21): four rate-limit settings (§4); no column for a restore's `slot_changed`, which compares the
     slot's row with the enrollment's own generated sessions (R-322).
+13. On the decisions answering the administrator's control inventory (the owner's decisions of 2026-11-05; the ERD's
+    changelog rows 23 and 24): `rate_limit_signed_in_default` at 160 per 60 s (research R-325); `chat_retention_days`
+    30; a deleted person's photo and document keys kept while an open dispute, case or complaint holds them (§2.11,
+    R-327).

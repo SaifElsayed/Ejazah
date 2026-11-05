@@ -593,8 +593,8 @@ Office documents (ZIP containers that can carry images and macros) are not admit
 `document_link_ttl_seconds` (R-SEC-3).
 
 `jobs/purge-chat.ts` (daily, idempotent): for an enrollment `completed`, `terminated_no_show` or `cancelled` whose last
-session's scheduled end + `dispute_window_hours` + `chat_retention_days` has passed, with no open dispute, compensation
-case or (from Phase 4) report, null each message's body and attachment fields, set `purged_at`, and remove the stored
+session's scheduled end + `dispute_window_hours` + `chat_retention_days` (30 days by default, the owner's decision of
+2026-11-05: was 0; an administrator's setting) has passed, with no open dispute, compensation case or (from Phase 4) report, null each message's body and attachment fields, set `purged_at`, and remove the stored
 files after the commit (a failed removal retried, as `erase-deleted-files` does). An administrator reads the chat only
 through `disputes.chat` while that dispute is open, each read audit-logged (FR-475): sessions' admin router checks the
 dispute and asks the `DisputeChat` port, which chat implements and `main.ts` binds (R-301, C5).
@@ -652,6 +652,10 @@ the limit the owner's decision and its default this cycle's reading; each an SRS
 administrator's control and the rate limits (**Decided**, the owner, 2026-11-05; R-321): `rate_limit_signed_in_default`
 `{ limit: 160, window_seconds: 60 }` per R-325 (the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
 `rate_limit_manual_compensation_case`, `{ limit: 10, window_seconds: 60 }` each; each an SRS §3.14 row (NFR-SEC-12).
+An existing row changes its default (**Decided**, the owner, 2026-11-05): `chat_retention_days` 30 (was 0; SRS §3.14,
+FR-SESS-13), still editable in the panel. The seed inserts a row only where it is absent (`prisma/seed.ts`), so the
+seed's new default reaches a new database; a database already seeded keeps its row until an administrator changes it in
+the panel (R-PROC-11).
 
 ## R-318 — The administrator's surfaces
 
@@ -996,7 +1000,7 @@ writes no task.
 | P3-13 | A suspended student's fault confirmed (`cases.dismiss` of a `student_suspended` case): the enrollment `cancelled` `admin`, a new `student_fault_confirmed` case | `enrollment_events` `cancelled` (`admin`), the make-ups' `cancelled_by_admin` rows naming the new case, the remedies handed to it, audit `case.dismissed`; panel: `/cases`, `/sessions` (`restorableUntil`) | `sessions.restore` within `enrollment_restore_window_days` (7) | The new case | The chat, by P3-26's rule, once the case closes |
 | P3-14 | A student's ban (`students.ban`): enrollments `cancelled` `admin` at once, one `student_banned` case each | `enrollment_events`, `session_events` `cancelled_by_admin`, the cases, audit `student.ban`; panel: `/cases`, `/sessions`, `/users`, `/audit` | None for the enrollments: not restorable (FR-454) | The `student_banned` case | Sign-in sessions ended; the chat by P3-26's rule |
 | P3-15 | A teacher's end: suspension, revocation or ban (`teachers.*`), a complaint's decision (b), a dispute's `party_suspended` or `party_banned`: confirmed enrollments `cancelled` `teacher_suspended`, one `teacher_ended` case each | `enrollment_events`, `session_events` `cancelled_by_admin` naming the case, the cases, audit (`teacher.suspend` and the rest, `complaint.decided`, `dispute.resolved`); panel: `/cases`, `/sessions`, `/users`, `/audit` | The account's reinstatement (`teachers.reinstate`) restores the account only; the enrollments are not restorable (FR-454) | For the student, the `teacher_ended` case; for the teacher, **M only** | Sign-in sessions ended; the chat by P3-26's rule |
-| P3-16 | A student's deletion: sessions cancelled, enrollments `cancelled` `account_deleted` with no case, open remedies `lapsed` (FR-484) | `enrollment_events`, `session_events` `cancelled_by_admin` (no case) and `remedy_lapsed`; panel: `/sessions` and `/users` with the stand-in (FR-426) | None: final | A refund already chosen keeps its case; otherwise, for the teacher, **M only** | The person's files at once and by `erase-deleted-files` (ADR 0015 D3); sign-in sessions; the chat by P3-26's rule |
+| P3-16 | A student's deletion: sessions cancelled, enrollments `cancelled` `account_deleted` with no case, open remedies `lapsed` (FR-484) | `enrollment_events`, `session_events` `cancelled_by_admin` (no case) and `remedy_lapsed`; panel: `/sessions` and `/users` with the stand-in (FR-426) | None: final | A refund already chosen keeps its case; otherwise, for the teacher, **M only** | The person's files at once and by `erase-deleted-files` (ADR 0015 D3), never while the person is a party to an enrollment with an open dispute, case or complaint (R-327); sign-in sessions; the chat by P3-26's rule |
 | P3-17 | A teacher's deletion: as P3-15, with one `teacher_ended` case per enrollment (T004) | As P3-15 | None: final | The `teacher_ended` case | As P3-16 |
 | P3-18 | A complaint decided (a), the enrollment ended (`cases.decideComplaint`): `terminated_no_show`, an `absence_termination` case | The complaint `resolved` `enrollment_ended` with its note, one `session_events` row `complaint_decided`, `enrollment_events` `terminated_no_show`, the case, audit `complaint.decided`; panel: `/cases`, `/sessions` (`restorableUntil`) | `sessions.restore` within the restore window | The `absence_termination` case | The chat by P3-26's rule, once the case closes |
 | P3-19 | A complaint closed (c) (`cases.decideComplaint`, `close`) | The complaint `dismissed` with its note, `complaint_decided`, audit; panel: `/cases` | None: final; the student may complain again, one open at a time | **M only** | Nothing |
@@ -1050,7 +1054,8 @@ complaint), P3-20 and P3-21 (a ruling past its window), P3-24 (a closed case), a
 covers).
 
 **What is erased automatically, and by what** (the last column, gathered): the chat's bodies, attachment fields and
-files, by `purge-chat` daily, after the last session's end + `dispute_window_hours` (72) + `chat_retention_days` (0),
+files, by `purge-chat` daily, after the last session's end + `dispute_window_hours` (72) + `chat_retention_days` (30,
+the owner's decision of 2026-11-05: was 0),
 never while a dispute or a case (from Phase 4, a report) is open (FR-492); idempotency rows, the stored answers of
 `disputes.revise` and `sessions.restore` and the time zone marker included, by `expire-idempotency-keys` hourly after
 `idempotency_key_ttl_hours` (24) (ADR 0008 D2); the rate-limit counters in Redis, each at its limit's `window_seconds`,
@@ -1059,7 +1064,7 @@ and failed ones beyond the last 1000 (`jobs/queue.ts`' `defaultJobOptions`, T171
 once and revoked ones after `session_purge_after_days` (30), by `purge-expired-sessions` hourly; one-time codes after
 `otp_purge_after_hours` (24); push tokens unused for `push_token_stale_days` (90); uploads no submission points at after
 `document_unreferenced_purge_after_hours` (72); a deleted person's files at the deletion and by `erase-deleted-files`
-hourly (ADR 0015 D3); the order's encrypted checkout address once the order leaves `created` (ERD §7); webhook bodies,
+hourly (ADR 0015 D3), held while the person is a party to an enrollment with an open dispute, case or complaint (R-327); the order's encrypted checkout address once the order leaves `created` (ERD §7); webhook bodies,
 never stored (a payment event keeps its hash only); the video room's state at the provider, ended
 `video_empty_timeout_seconds` (300) after the last leave or by `endRoom`, with no recording made and the join token
 valid only until the scheduled end and never stored; logs and error-tracking reports, by the hosting's retention, which
@@ -1135,5 +1140,57 @@ left within a second, and a cancelled read already counted is started again; one
 fixes it; (3) `retry: 3` on a refusal: the phone retries every failed query three times, `RATE_LIMITED` included, so one
 refusal becomes four counted calls; retrying only an error with no API code (a network failure) fixes it. A Phase 3
 screen that adds a poll during the build has this arithmetic redone before its batch merges.
+
+**Window rule (R-320).** Nothing here offers a time.
+
+## R-327 — A deleted account's files wait for its open disputes and cases
+
+**Decided**, the owner, 2026-11-05 (SRS FR-AUTH-14 as amended; ADR 0015's amendment of 2026-11-05; ERD changelog row
+24).
+
+**Decision.** A deleted person's stored files, the profile photo (`users.photo_key`) and the verification documents
+(`verification_documents`, identity and credential documents), are not removed while the person is a party (the
+`student_user_id` or the `teacher_user_id`) to an enrollment with an open `disputes` row: a session dispute, a
+compensation case or a complaint of a teacher's absence, the same three the chat's purge waits for (R-314, T039).
+Everything else the deletion does at once is unchanged (ADR 0015 D3, FR-141 of `specs/002-identity/spec.md`): the
+personal fields erased, every document marked `erased_at` in the deletion's transaction and unreadable from then on
+(`readDocument` answers an erased document as none), the deleted row read by no ordinary query. Only the files and
+their keys wait; rule 34 (a key never without `erased_at`) holds throughout.
+
+*The condition, read without breaking R-API-6.* `disputes` is moderation's and `enrollments` booking's, and booking
+imports moderation (ARCHITECTURE §4, Phase 3's graph). Booking's entry gains `heldFileOwnersAmong(tx, userIds)`: of
+`userIds`, those who are a party to an enrollment (its own table) that moderation's entry, through a new
+`enrollmentsWithOpenMatterAmong(tx, enrollmentIds)` (one read of `disputes` with `status = 'open'`, any kind), names. No
+lock: the hold covers every matter open when a removal is attempted; a matter opened after a file was removed does not
+bring the file back.
+
+*The two places that remove a file ask it first.*
+
+1. The deletion's own removal after its commit (`modules/identity/deletion.service.ts`, `#afterCommit`: the photo and
+   each `FileErasure.eraseFilesOf`). Identity imports neither booking nor moderation, so it declares a port, `FileHold`
+   (`filesHeld(userId): Promise<boolean>`, a new optional `DeletionDependencies` member), which `main.ts` binds to
+   booking's `heldFileOwnersAmong`, as `EnrollmentSide` is bound (R-301). Held, the after-commit removes no file and
+   clears no key; the Apple token's revocation and the mail go on as now. A teacher's deletion opens its
+   `teacher_ended` cases in the deletion's own transaction (FR-483), so those already hold the files.
+2. `apps/api/src/jobs/erase-deleted-files.ts` (hourly). `ErasedFile` gains `ownerUserId` (a document's `user_id`, the
+   photo's user), and `EraseDeletedFilesOptions` gains `held(userIds): Promise<ReadonlySet<string>>`, which `worker.ts`
+   builds from booking's entry: for each page, the owners held are asked once, and a held owner's files are skipped,
+   neither removed nor reported (a hold is not an error); the page goes on in id order, so a held file never stalls
+   the run.
+
+*When the matters close.* No hook on the closing: the job's first run after the last open dispute, case or complaint of
+the person's enrollments closes finds the owner no longer held and removes the files and clears the keys, as for a
+removal that failed (within the hour). A closing that opens another matter (a dismissed `student_suspended` case opening
+`student_fault_confirmed`, R-313) keeps the hold.
+
+**Tests.** `jobs/erase-deleted-files.spec.ts`: a held owner's files are neither removed nor reported, the next page's
+are; once `held` answers none, the next run removes them; the double-run spec unchanged (twice = once).
+`modules/identity/deletion.service.spec.ts`: a held deletion removes nothing after its commit and still revokes and
+mails; a deletion not held removes at once, as now. A db-integrity spec over the two entries: a deleted student with an
+open `refund_choice` case, a deleted teacher whose deletion opened `teacher_ended` cases, a session dispute and a
+complaint each hold; a closed case does not.
+
+**Risk.** A held file outlives the account by as long as its matter stays open: the retention policy (NFR-COMP-2,
+OPEN-05) and the privacy policy must say so, with counsel, as ADR 0015's amendment notes.
 
 **Window rule (R-320).** Nothing here offers a time.

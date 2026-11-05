@@ -2,6 +2,8 @@
 
 **Status:** accepted · **Date:** 2026-10-14 · **Decided by:** the owner, 2026-10-14 · **Amends:** SRS FR-AUTH (adds FR-AUTH-14 and FR-AUTH-15), §4.1, NFR-COMP-3, §8, adds DEC-55 and RISK-12; ERD `users`, `enrollments.cancellation_reason`
 
+**Amended 2026-11-05 (Phase 3's design, `specs/004-sessions/research.md` R-327; the owner's decision).** D3's «stored files» and «records of open cases» together: a deleted account's stored files (its photo and its verification documents) are not removed while the account is a party to an enrollment with an open dispute, compensation case or complaint of a teacher's absence. Everything else D3 does at once still happens at once (the personal fields erased, the documents marked erased and unreadable); only the files and their keys wait, until the last of those matters closes, and the `erase-deleted-files` job removes them on its first run after that, as the chat waits for its own purge. SRS FR-AUTH-14 says so. How long a held file may wait is the retention policy's (NFR-COMP-2, OPEN-05), with counsel.
+
 ## Context
 
 The App Store and Google Play both require an app that lets people create an

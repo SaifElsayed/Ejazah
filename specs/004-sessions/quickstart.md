@@ -143,7 +143,8 @@ confirmed, a case at the head of `/cases`, an open remedy frozen with its pendin
 choice of a make-up or a refund, on the ijazah track a make-up), suspend another, reinstate them, accept a make-up, and dismiss
 the case (the enrollment cancelled, the make-up cancelled, every remedy still owed in a new `student_fault_confirmed`
 case and none in the case dismissed); ban a student (sessions and enrollments cancelled, a case); delete a student's account with a make-up
-remedy open (lapsed, no case) and one whose refund was chosen (its case kept); on `/users`, search a user by name and
+remedy open (lapsed, no case) and one whose refund was chosen (its case kept, and the deleted student's photo and
+documents kept in storage until that case is closed, then removed by `erase-deleted-files`' next run: FR-487); on `/users`, search a user by name and
 open their record (FR-ADMIN-4's fields and the cancellation-request counts; a student's suspend, ban and reinstate);
 read a dispute's chat (one `chat.read` audit entry per read). On a confirmed enrollment, complain of the teacher's
 absence from the phone (the button then reads «شكوتك قيد المراجعة» and a second complaint is refused); in `/cases`,
@@ -158,7 +159,7 @@ closed (`slot_changed`). The audit log shows one entry per action with its reaso
 
 Send text, a PDF, a text file, a photo, a photo renamed `.pdf`, and a PDF renamed `.jpg`: only the documents arrive; an
 attachment opens through a link that stops working after `document_link_ttl_seconds`. With the clock of a test
-enrollment past its last dispute window plus the retention, `purge-chat` empties the messages and keeps the rows; with
+enrollment past its last dispute window plus the retention (`chat_retention_days`, 30 by default), `purge-chat` empties the messages and keeps the rows; with
 a dispute open it keeps them.
 
 ## 8. The register and the close
