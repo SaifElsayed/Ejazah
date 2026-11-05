@@ -10,7 +10,7 @@ the chat upload's `rate_limit_upload` and `sessions.complaint.raise`'s `rate_lim
 user as subject; the complaint's with a test that a call over it is refused, SC-415; on the administrator surface
 `disputes.revise`'s `rate_limit_dispute_revision` and `sessions.restore`'s `rate_limit_enrollment_restore`, the
 administrator as subject, checked before the kind's transaction; every signed-in procedure that declares none is counted
-by `rate_limit_signed_in_default`, 120 per 60 s (seeded at 120 until T062 confirms the final value before B36: the larger of 120 and research R-325's heaviest normal minute × 2–3, never a number above 200 (R-321, item 5)), failing open, while every declared limit fails closed:
+by `rate_limit_signed_in_default`, 160 per 60 s per research R-325 (the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), failing open, while every declared limit fails closed:
 spec FR-470, kernel.md "Rate limits"); every output is exactly its schema's fields
 (R-HONEST-4); every non-public user-surface procedure has a refusal test naming it (`pnpm check:authz`); every change
 passes `pnpm contract:snapshot --check --base origin/develop`.

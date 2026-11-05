@@ -273,7 +273,7 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `repeated_absence_flag_count` | 5 (the owner's decision of no automatic termination) | FR-451's mark (R-322) |
 | `enrollment_restore_window_days` | 7 (the same) | FR-454's window (R-322) |
 | `rate_limit_absence_complaint` | `{ limit: 5, window_seconds: 3600 }` (the limit the same decision; its default this cycle's reading) | FR-452's rate limit, the student as subject (R-322) |
-| `rate_limit_signed_in_default` | `{ limit: 120, window_seconds: 60 }` (seeded at 120 until T062 confirms the final value before B36: the larger of 120 and research R-325's heaviest normal minute × 2–3, never a number above 200 (R-321, item 5)) | FR-470's default limit on every signed-in procedure that declares none, the user or administrator as subject (R-321) |
+| `rate_limit_signed_in_default` | `{ limit: 160, window_seconds: 60 }` per research R-325 (the owner's decision of 2026-11-05; the rule its reason: the larger of 120 and the heaviest normal minute × 2–3, never a number above 200, R-321 item 5) | FR-470's default limit on every signed-in procedure that declares none, the user or administrator as subject (R-321) |
 | `rate_limit_dispute_revision` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 on the administrator's control) | `disputes.revise`'s own limit, the administrator as subject (FR-470) |
 | `rate_limit_enrollment_restore` | `{ limit: 10, window_seconds: 60 }` (the same) | `sessions.restore`'s own limit, the administrator as subject (FR-470) |
 | `rate_limit_manual_compensation_case` | `{ limit: 10, window_seconds: 60 }` (the same) | the manual compensation case's own limit (FR-471 (c)), seeded now; its procedure waits for the owner's approval |

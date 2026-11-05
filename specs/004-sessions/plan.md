@@ -567,7 +567,7 @@ R-321, R-322, R-323), the data model, the contracts, the quickstart and `tasks.m
    it opens its transaction; (b) `disputes.revise` and `sessions.restore` declare `rate_limit_dispute_revision` and
    `rate_limit_enrollment_restore` (10 per 60 s each, the administrator as subject), apart from the
    `idempotencyKey`; (c) every signed-in procedure that declares none is counted by `rate_limit_signed_in_default`
-   (120 per 60 s seeded; its value the larger of 120 and research R-325's heaviest normal minute × 2–3, so a normal user is never refused, and above 200 no number but the screen that calls too often sent back to the owner to be fixed; T062 confirms it before B36), the user or administrator as subject, its value held in the process for up to 60 s, its counter
+   (160 per 60 s per research R-325, the owner's decision of 2026-11-05; the reason, the larger of 120 and the heaviest normal minute × 2–3, so a normal user is never refused, and above 200 no number but the screen that calls too often sent back to the owner to be fixed), the user or administrator as subject, its value held in the process for up to 60 s, its counter
    on a client of its own bounded at 100 ms, failing open behind a 10 s breaker with one warning per period, while every
    declared limit stays fail-closed and a missing row refuses; (d) T062 in B36 builds (a) and (c), T059 and T061 declare
    (b); (e) every rate limit, Phases 1 and 2's included, logs only a subject's first refusal in a window (the count

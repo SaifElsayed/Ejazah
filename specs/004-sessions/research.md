@@ -2,7 +2,7 @@
 
 **Date**: 2026-11-05 · **Spec**: [spec.md](./spec.md) · **Plan**: [plan.md](./plan.md)
 
-Each decision below resolves a question the specification leaves to the plan. Numbered R-301 to R-323 so that a
+Each decision below resolves a question the specification leaves to the plan. Numbered R-301 to R-323 and R-325 to R-327 (R-324 not yet written) so that a
 citation never collides with Phase 0's R-1…, Phase 1's R-101… or Phase 2's R-201 to R-222. Every decision was taken
 against the code as it stands on `Ejazah_app/003-booking/T106` at `da35d59` (`develop` `8e3614e` plus the spec and
 clarify commits, read on 2026-11-05); where it names existing code, the path is given. Versions were read from the npm
@@ -650,7 +650,7 @@ its row deleted by the first batch's migration and no longer seeded; `repeated_a
 `enrollment_restore_window_days` 7 are added, and `rate_limit_absence_complaint` `{ limit: 5, window_seconds: 3600 }`,
 the limit the owner's decision and its default this cycle's reading; each an SRS §3.14 row. On the decisions of the
 administrator's control and the rate limits (**Decided**, the owner, 2026-11-05; R-321): `rate_limit_signed_in_default`
-`{ limit: 120, window_seconds: 60 }` (seeded at 120 until T062 confirms the final value before B36: the larger of 120 and research R-325's heaviest normal minute × 2–3, never a number above 200 (R-321, item 5)), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
+`{ limit: 160, window_seconds: 60 }` per R-325 (the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
 `rate_limit_manual_compensation_case`, `{ limit: 10, window_seconds: 60 }` each; each an SRS §3.14 row (NFR-SEC-12).
 
 ## R-318 — The administrator's surfaces
@@ -770,12 +770,12 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    no subject), so a Redis outage logs one line per 10 s, not one per request. The first count after the 10 s closes it
    or opens it again. The declared limits keep the first client and fail closed, as now (lines 41 and 42): the counter's
    failure is the internal error.
-5. **The numbers.** The default's limit is its setting. Its value follows the owner's rule of 2026-11-05: the larger of
-   120 per 60 s and research R-325's result, the heaviest minute of normal use times 2 to 3, so that a normal user is
-   never refused (R-325's number when it is above 120; 120 when it is below). A result above **200** sets no number:
-   the screen that calls that often goes back to the owner to be fixed, and the limit is not raised. The seed plants 120
-   per 60 s; T062 records R-325's result here and confirms the final value under this rule before B36, the seed and
-   SRS §3.14 changed with it if it differs (R-325 is not yet written). 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
+5. **The numbers.** The default's limit is its setting, **160 per 60 s** per R-325 (the owner's decision of
+   2026-11-05). The reason is the owner's rule of 2026-11-05: the larger of 120 per 60 s and the heaviest minute of
+   normal use times 2 to 3, so that a normal user is never refused; a result above **200** sets no number, the screen
+   that calls that often going back to the owner to be fixed instead of the limit being raised. R-325 found 52 calls (a
+   teacher's minute), × 3 = 156, so 160; the panel's heaviest minute (45 × 3 = 135) needs no value of its own. The
+   seed plants 160 per 60 s and SRS §3.14 says so. 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
    owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
    retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
    magic-number gate governs `modules/`, where every operational number is a setting).
@@ -1068,3 +1068,72 @@ no setting here governs. No job deletes an audit entry, an `enrollment_events`, 
 
 **Window rule (R-320).** Nothing here offers a time; GAP-3's correction leaves the remedy to T028's offer after the
 window, and GAP-5's hand-off offers none.
+
+## R-325 — The signed-in default rate limit's value
+
+**Decided**, the owner, 2026-11-05: `rate_limit_signed_in_default` = `{ limit: 160, window_seconds: 60 }`, by the
+owner's rule (SRS NFR-SEC-12, R-321 item 5): the larger of 120 per 60 s and the heaviest normal minute H times 2 to 3,
+and no number at all when that product is above 200 (the screen that calls too often is fixed instead).
+
+**Method.** Only the calls the default counts (FR-470: a procedure with its own key is counted by that key only). Not
+counted: `discovery.browse/filters/teacher` and `booking.slots` (`rate_limit_search`), `checkout.hold/pay/retry`
+(`rate_limit_payment_initiation`), `chat.send` (`rate_limit_chat_message`), `sessions.complaint.raise`
+(`rate_limit_absence_complaint`), the uploads (`rate_limit_upload`) and the public kinds. Counted, for example:
+`account.me`, `enrollments.list/get`, `checkout.status/current/continue`, `teacher.today`, `teacher.students.list/get`,
+`teacher.slots.*`, `teacher.packages.*`, Phase 3's `sessions.*` but the complaint, `chat.list`, `chat.attachmentLink`,
+and every administrator procedure but those with their own keys (subject `admin:<id>`, apart from the users'). The
+phone as it reads today: one `QueryClient` with TanStack's defaults (`apps/mobile/src/app/_layout.tsx`), so `staleTime`
+0 (every mount of a screen reads again) and `retry: 3`; every mounted query reads again on the return to the foreground
+(`lib/focus.ts`) and when the connection returns (`lib/online.ts`); tabs stay mounted, stack screens mount again on each
+visit; searches settle 300 ms (`features/teacher/students/search.ts`, `features/student/discovery/search.ts`); a
+Confirming payment is polled every `checkout_confirming_poll_seconds` (30). Phase 3's screens read what
+contracts/app-surface.md lists. The panel (`apps/admin/src/App.tsx`): `retry: 1`, `refetchOnWindowFocus: false`; list
+pages fresh for 30 s (`FRESH_MS`), searches settled 300 ms (`SEARCH_SETTLE_MS`).
+
+**The student's heaviest normal minute** (a session about to start; the student moves between home, the enrollment,
+the pre-session screen and the chat while the teacher's connection flaps; an older enrollment still Confirming):
+
+| Category | Calls | Arithmetic |
+|---|---|---|
+| Screen opens and refreshes | 10 | foreground: `account.me`, `enrollments.list`, `checkout.status` 3; `enrollments.get` 1; `sessions.get` 1; `chat.list` 2; `chat.attachmentLink` 1; a cancellation request and its re-read 2 |
+| Fast switching between screens | 12 | 12 stack screens mounted again, one read each |
+| Polling (30 s) | 6 | `enrollments.list` 2, `checkout.status` 2, `enrollments.get` 2 |
+| Re-reads after a change on the other side | 8 | 3 changes of the session (joined, left, joined) × (`sessions.get` + `enrollments.get`) 6; the cancellation's answer 2; incoming chat messages 0 (carried to the screen, not read again) |
+| Connection restarts (Wi-Fi ↔ mobile data) | 6 | 2 × (`chat.list`, `sessions.get`, `enrollments.get`) |
+| **Total** | **42** | 48 if a restart and the returning connection both read again (+6) |
+
+**The teacher's heaviest normal minute** (between sessions: searching the students list, opening enrollments,
+answering a cancellation request and a counter-proposal, chatting, waiting on a pre-session screen while the student's
+connection flaps):
+
+| Category | Calls | Arithmetic |
+|---|---|---|
+| Screen opens and refreshes | 12 | foreground: `account.me`, `teacher.today`, `teacher.students.list` 3; `teacher.students.get` 1; `sessions.get` 1; `chat.list` 2; `chat.attachmentLink` 1; the cancellation's answer and its re-read 2; `sessions.remedy.answerCounter` and its re-read 2 |
+| Searching and paging the students list | 14 | 3 names × 4 settled reads, and 2 more pages |
+| Fast switching between screens | 12 | 12 mounts, one read each |
+| Polling | 0 | no teacher screen polls |
+| Re-reads after a change on the other side | 8 | 3 changes of the session × (`sessions.get` + `teacher.students.get`) 6; a cancellation request arriving 2 |
+| Connection restarts | 6 | 2 × 3 |
+| **Total** | **52** | Editing availability instead: 10 × (`teacher.slots.create` + the list's re-read) + 3 = 23 |
+
+**The administrator's heaviest normal minute**: scanning the audit log, a page every 1.5 s, 40 `audit.list` + 5
+`audit.get` = **45** (the directory: 5 settled searches, 15 pages, 6 `users.get`, 2 `home.summary`, 1 `auth.me` = 29;
+dispute triage, 3 disputes × 8 + 2 = 26).
+
+**The result.** H = max(42–48, 52) = 52; H × 2 = 104, H × 3 = 156, both at most 200, so a number is used: H × 3
+rounded up to ten, **160 per 60 s**, above 120, so 160. The factor 3 rather than 2: a flap on mobile data reads twice;
+the default fails open on a Redis failure (R-321, item 4), so its work is to stop a runaway client (a render loop or a
+retry storm calls hundreds of times a minute, which 160 stops as surely as 120), not to be tight; and the fixed window
+already lets up to twice the limit through at a window's edge (`platform/guards/rate-limit.guard.ts`'s header). The
+panel needs no value of its own: 45 × 3 = 135 < 160, on a counter apart from the users' (R-321, item 2); the three
+administrator write limits (10 per 60 s each) are unchanged. Two devices of one account share a counter: 2 × 52 = 104.
+
+**What would push it above 200** (none does in the design as written; each named with its fix): (1) the chat read
+again for every incoming message instead of the message carried to the screen: up to `rate_limit_chat_message` (30)
+more a minute, H → 82, × 3 = 246; (2) re-reads after a change not coalesced: a flapping connection can report joined and
+left within a second, and a cancelled read already counted is started again; one re-read per query key per second
+fixes it; (3) `retry: 3` on a refusal: the phone retries every failed query three times, `RATE_LIMITED` included, so one
+refusal becomes four counted calls; retrying only an error with no API code (a network failure) fixes it. A Phase 3
+screen that adds a poll during the build has this arithmetic redone before its batch merges.
+
+**Window rule (R-320).** Nothing here offers a time.
