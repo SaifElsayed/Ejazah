@@ -17,7 +17,7 @@ iPhone run is Phase 6's).
   a spec that writes to a database runs only with `IJAZAH_DB_SPECS=1` beside the two `ijazah_integrity` URLs (T124, the
   owner's decisions of 2026-11-01). The database is migrated and seeded fresh, not reset (B19d).
 - Before the first batch's migration runs on `ijazah`, the rows data-model §6 names are counted, then `pnpm db:migrate`
-  and `pnpm db:seed` (the five new settings; the panel and the jobs fail closed on a missing one).
+  and `pnpm db:seed` (the seven new settings; the panel and the jobs fail closed on a missing one).
 - `VIDEO_PROVIDER=fake` for every automated run: no provider credential in the suite (as SC-302 was for the gateway).
 - For the device runs: a LiveKit Cloud project on the **free Build plan** (a hard cap: requests fail, nothing is billed;
   ADR 0003), its `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` in `.env` only (R-SEC-1); the development
@@ -59,7 +59,8 @@ Expected:
 - The boundary and schema gates find no price, payment or amount in `modules/sessions` or `modules/chat` (SC-409).
 - Every unconsumed outcome owes one remedy; every refund opens one case with no amount; every booked make-up extends the
   enrollment's end and its slot's release (SC-410). No proposal, counter option or reserved time starts before the
-  window it waits on (research R-320).
+  window it waits on, nor within the first-session lead of the moment it is decided; no proposal overlaps an open
+  payment window of either party; a settings change after an offer moves none of that remedy's bounds (research R-320).
 - No request is pending after the start, and an answer at or after it changes nothing (SC-411).
 - A teacher's suspension, revocation, ban or deletion and a student's deletion leave no token issuable and the
   remaining sessions cancelled with their cases, in one transaction (SC-412).
@@ -81,7 +82,8 @@ With `VIDEO_PROVIDER=fake`, a confirmed enrollment from Phase 2's quickstart §4
 With `VIDEO_PROVIDER=livekit` and the free project: `sessions.join` creates the room (`maxParticipants: 2`); a third
 token is refused by the provider; the webhook through the tunnel records `participant_joined` and `participant_left`
 with their connection; a forged POST is refused. **Check and record** whether a token minted before `endRoom` can
-re-create the room (research R-313); and that webhooks are delivered on the free plan (not stated in LiveKit's pricing).
+re-create the room (research R-313), and if it can and no setting turns that off, that `removeParticipant` removes a
+restricted participant from it; and that webhooks are delivered on the free plan (not stated in LiveKit's pricing).
 
 ## 4. On two phones over mobile data (SC-401, SC-414) — the owner's run
 
@@ -101,8 +103,9 @@ On the vivo and the realme, Etisalat mobile data, the development build:
 
 On the phones, against the stand-in's sessions: request a cancellation from each side; accept, decline and let one
 expire at the start. At the acceptance (the owner's decision 5; the session cannot be disputed): the make-up's
-proposal, in a week starting no earlier than the choice window plus 72 hours; counter-propose one of the teacher's
-slots (none offered before the later of now + 72 hours and the choice window's end); the teacher declines it,
+proposal, in a week starting no earlier than the choice window's close plus 72 hours plus the 24-hour lead and
+overlapping no payment window either party has open; counter-propose one of the teacher's slots (none offered
+before the later of now + 72 + 24 hours and the choice window's end); the teacher declines it,
 counter-propose again (a second one refused while the first is pending), and the teacher accepts; on another remedy,
 accept the proposal while a counter-proposal is pending (the counter withdrawn, its time offered to others again); let
 a choice window pass with nothing pending (the proposal booked), and an answer window pass (a refund case with no
@@ -114,9 +117,13 @@ refund.
 In the panel: raise a dispute from the phone and resolve it each way; resolve an Under-Threshold session and a
 Provider-Outage one; record an outage window over a settled session (it moves to the review queue); cancel a session
 (one case); resolve and dismiss a case (its closing instant is the database's); suspend a student (sessions cancelled, the enrollment still
-confirmed, a case), reinstate them and resolve the case (the make-ups offered), suspend another and dismiss its case
-(the enrollment cancelled); ban a student (sessions and enrollments cancelled, a case); open a user's record (the cancellation-request counts); read a dispute's chat (one `chat.read`
-audit entry per read). The audit log shows one entry per action with its reason.
+confirmed, a case at the head of `/cases`, an open remedy frozen with its pending counter withdrawn), reinstate them
+(the frozen remedy offered again with a full choice window) and resolve the case (on a recitation enrollment the
+choice of a make-up or a refund, on the ijazah track a make-up), suspend another and dismiss its case (the enrollment
+cancelled); ban a student (sessions and enrollments cancelled, a case); delete a student's account with a make-up
+remedy open (lapsed, no case) and one whose refund was chosen (its case kept); on `/users`, search a user by name and
+open their record (FR-ADMIN-4's fields and the cancellation-request counts; a student's suspend, ban and reinstate);
+read a dispute's chat (one `chat.read` audit entry per read). The audit log shows one entry per action with its reason.
 
 ## 7. Chat (US7)
 
@@ -128,5 +135,6 @@ a dispute open it keeps them.
 ## 8. The register and the close
 
 Each batch records its run in its tasks' notes, with the outputs kept (the owner's rule of 2026-11-01). The phase
-closes with a run of §1 to §7 on the last batch's commit, the carried tasks checked (T059, `002:T144`, T090, T107, the
-notes under T026 and T082), and PLAN.md's Phase 3 section given its close date.
+closes with a run of §1 to §7 on the last batch's commit, the carried tasks checked (T059, `002:T144`, T090, the
+notes under T026 and T082; T107 was done in the cycle, `9c710e3`), and PLAN.md's Phase 3 section given its
+close date.

@@ -6,9 +6,10 @@
 
 | Operation | Called by | When |
 |---|---|---|
-| `createRoom(sessionId)` → room reference | `sessions.join` | After the join's transaction commits, before minting; idempotent |
+| `createRoom(sessionId, { emptyTimeoutSeconds, departureTimeoutSeconds })` → room reference (widened) | `sessions.join` | After the join's transaction commits, before minting; idempotent; the two timeouts from the settings `video_empty_timeout_seconds` and `video_departure_timeout_seconds` (R-302; the owner's decision of 2026-11-05 on the analysis, K2) |
 | `createSessionToken(sessionId, participantUserId, { validUntil })` → `JoinToken` | `sessions.join` | After `createRoom`; `validUntil` = the session's `scheduled_end_at`; the token is bound to one session and one participant by `bindJoinToken` (R-GENDER-7) |
 | `endRoom(sessionId)` | the `evaluate-sessions` sweep, for a cancelled session inside its join period (FR-482) | Idempotent |
+| `removeParticipant(sessionId, userId)` (only if T009 finds that room creation on join cannot be turned off) | the same sweep, for each restricted participant of such a session, before `endRoom` (FR-482; research R-313; the analysis, K3) | Idempotent: an absent participant or room is not an error; LiveKit's `RoomServiceClient.removeParticipant`, a server-API call |
 | `verifyAndParseParticipantEvent(rawBody, headers)` → `ParticipantEvent` | `POST /webhooks/video` | Before any handler; `EventSignatureError` → 401, `MalformedEventError` → 400 |
 
 `ParticipantEvent` widens to `{ providerEventId, sessionId, type: 'joined' | 'left' | 'room_ended', participantUserId?,
@@ -33,7 +34,7 @@ proxy, with the raw body unchanged, a body limit of 64 KB, and 404 for everythin
 ## The LiveKit adapter (`livekit.adapter.ts`)
 
 `livekit-server-sdk` 2.19.2. Configuration: `VIDEO_PROVIDER=livekit`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`,
-`LIVEKIT_API_SECRET` (secrets: never logged, Gitleaks-scanned, R-SEC-1). Room: name = session id, `maxParticipants: 2`.
+`LIVEKIT_API_SECRET` (secrets: never logged, Gitleaks-scanned, R-SEC-1). Room: name = session id, `maxParticipants: 2`, `emptyTimeout` and `departureTimeout` from the two settings.
 Token: identity = the user's id, `ttl` to `validUntil`, grant `roomJoin`, `room`, `canPublish`, `canSubscribe`, no
 data, no create, no admin. Event mapping: research R-304. Its spec runs against recorded LiveKit payloads signed with a
 test key, never the network (ARCHITECTURE §13, "Ports").

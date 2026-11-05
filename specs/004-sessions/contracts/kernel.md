@@ -16,17 +16,19 @@ T005's rules, with this phase's paths (Saif reviews each lock and FK-insert path
 |---|---|---|
 | `sessions.join` | `users` (both, one call) | none |
 | evaluation, a review or dispute resolution | `enrollments`, `sessions` | none (`session_events`, a case: enrollment and session only) |
+| a dispute resolved `party_suspended` or `party_banned` (the owner's decision of 2026-11-05 on the analysis, F3) | `users` (the party, first, `lockAccount`), `lockKey('teacher-slots')`, `enrollments` (the dispute's and the party's confirmed ones, one call), `sessions`, `session_remedies`, `disputes`; `StandingService` and its consequences run on these locks | none (the case and the events reference no account) |
 | threshold termination | (held) `enrollments`, `sessions` (remaining, one call), `session_remedies` | none |
 | cancellation request, a decline | `sessions`, `cancellation_requests` | the request references the requester: `users` (both parties) locked first |
 | cancellation accepted (the make-up offered at once, the owner's decision 5) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `cancellation_requests` | the request's accounts locked first |
 | dispute raised | `users` (the raiser), `enrollments`, `sessions` | the dispute references the raiser, locked first |
-| remedy offer; a counter-proposal, its decline, its withdrawal (the student accepts the proposal while it is pending) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies` | none (`session_events` reference the enrollment and the session) |
+| remedy offer, a `frozen` remedy's new offer after the reinstatement included; a counter-proposal, its decline, its withdrawal (the student accepts the proposal while it is pending) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies` | none (`session_events` reference the enrollment and the session) |
 | make-up booking | `users` (both), `lockKey('teacher-slots')`, `availability_slots` (the slot), `enrollments`, `sessions`, `session_remedies` | the session references both accounts, locked first |
 | a hold (Phase 2) reading reservations | unchanged (both accounts first), then reads `reservedTimesOf` | unchanged |
+| the confirmation's new hold for a released one (FR-PAYG-19's late payment) reading reservations (the analysis, F5's question) | unchanged (both accounts in one call first, the slot, the holds, the enrollments), then reads `reservedTimesOf`; an overlap takes the refusal branch | unchanged |
 | closing a case or dispute | `enrollments`, then the conditional update of `disputes` | none |
-| a `student_suspended` case closed: cleared (make-ups offered) or the fault confirmed (the enrollment cancelled) | cleared: `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `disputes`; confirmed: `enrollments`, `session_remedies`, `disputes` | none |
-| an account's end (booking's subscriber) | (held) the account; `lockKey('teacher-slots')`; `enrollments`; `sessions`; `session_remedies` | none |
-| outage record | `sessions` (the overlapped, one call) | none |
+| a `student_suspended` case closed: cleared (remedies offered: on recitation a make-up or a refund, on the ijazah track a make-up) or the fault confirmed (the enrollment cancelled) | cleared: `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `disputes`; confirmed: `enrollments`, `session_remedies`, `disputes` | none |
+| an account's end (booking's subscriber), a student's suspension freezing remedies and deletion lapsing them included | (held) the account; `lockKey('teacher-slots')`; `enrollments`; `sessions`; `session_remedies` | none |
+| outage record (the analysis, F4) | `enrollments` (of the overlapped sessions, one call), then `sessions` (the overlapped, one call) | none |
 
 ## The composition root
 
@@ -35,6 +37,9 @@ T005's rules, with this phase's paths (Saif reviews each lock and FK-insert path
 
 - sessions' `EnrollmentSide` port to booking's `createEnrollmentSide()` (R-301);
 - booking's `terminationSubscriber` widened with sessions' `cancelRemainingSessions` and moderation's cases (R-313);
+- sessions' `DisputeChat` port to chat's `createDisputeChat()` (R-301, R-314; the owner's decision of 2026-11-05 on the
+  analysis, C5): `disputes.chat` asks it once the dispute is checked open, so sessions imports no chat;
+- verification's `users.get` reads the cancellation-request counts from sessions' entry (an import, R-301);
 - `StandingService` into sessions' dispute resolution (FR-421);
 - the video port into sessions; the `POST /webhooks/video` route beside the payment webhook.
 
@@ -45,7 +50,7 @@ The worker binds the same port for the sweeps.
 | Job | Schedule | Payload | Double-run spec |
 |---|---|---|---|
 | `evaluate-sessions` | every minute | `{}` | twice = once: one outcome, one event row, one termination at most, rooms of cancelled sessions ended (idempotent) |
-| `advance-remedies` | every minute | `{}` | twice = once: one remedy per session, one booking, one case |
+| `advance-remedies` | every minute | `{}` | twice = once: one remedy per session, one booking, one case; no offer on an enrollment not `confirmed` or to a suspended student, none to a `frozen` remedy |
 | `expire-cancellation-requests` | every minute | `{}` | twice = once |
 | `purge-chat` | daily | `{}` | twice = once: the same rows purged, each file removed once (a missing file is not an error) |
 

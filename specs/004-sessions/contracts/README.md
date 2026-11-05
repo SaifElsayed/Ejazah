@@ -12,7 +12,7 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
 | Document | Contract |
 |---|---|
 | [app-surface.md](./app-surface.md) | The user surface: a session, its join, cancellation, remedies, disputes; chat; Phase 2's lists' additive fields |
-| [admin-surface.md](./admin-surface.md) | The administrator surface: the monitor, the review queue, outages, disputes, cases, a student's standing |
+| [admin-surface.md](./admin-surface.md) | The administrator surface: the monitor, the review queue, outages, disputes, cases, a student's standing, the user directory |
 | [video.md](./video.md) | The video port as this phase calls it, the webhook, the LiveKit adapter, the stand-in and its harness |
 | [kernel.md](./kernel.md) | Locks, database refusals, the composition root, the jobs, the gates |
 
@@ -20,7 +20,7 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
 
 - **Names.** `namespace.verb` in camelCase. New namespaces on the user surface: `sessions` (with `cancellation`,
   `remedy`, `dispute`), `chat`. On the administrator surface: `sessions` (with `monitor`, `review`, `outages`),
-  `disputes`, `cases`, `students`.
+  `disputes`, `cases`, `students`; and two new reads, `list` and `get`, in Phase 1's `users` (the user directory).
 - **Callers.** "participant" is the user kind admitting an active student, or an approved teacher whose account is
   active, who is one of the two people of the session or enrollment named; anyone else answers `NOT_FOUND` with the
   shape a nonexistent id gets (R-GENDER-2, FR-432). A restricted account is `ACCOUNT_RESTRICTED` before the service.
@@ -28,8 +28,8 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `userId` (admin only): never `gender` or `role`, and a user procedure never takes a `userId` (R-GENDER-4).
 - **Errors.** Added: `JOIN_NOT_OPEN` (with `opensAt` in details), `JOIN_CLOSED`, `SESSION_NOT_SCHEDULED`,
   `CANCELLATION_PENDING` (the other party's request is open; with `requestId`), `CANCELLATION_EXPIRED`,
-  `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `NOT_DISPUTABLE` (a cancelled session; a
-  Cancelled-By-Agreement one is final at acceptance), `REMEDY_NOT_OPEN`, `COUNTER_PENDING` (a counter-proposal is
+  `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `NOT_DISPUTABLE` (any cancelled session, by
+  agreement or by an administrator; a Cancelled-By-Agreement one is final at acceptance), `REMEDY_NOT_OPEN`, `COUNTER_PENDING` (a counter-proposal is
   already waiting for the teacher's answer), `CHOICE_NOT_ALLOWED` (a refund
   where only a make-up is owed), `SLOT_NOT_OFFERED` (a counter outside the options), `MAKEUP_REFUSED` (the database
   refused the booking; the remedy stays open), `ATTACHMENT_REFUSED` (an image, or a type the chat does not take),

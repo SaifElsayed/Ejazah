@@ -17,7 +17,7 @@ an enrollment (SC-413).
 | `sessions.review.get` | `{ sessionId }` | `Telemetry` | `sessions.review.viewed` | |
 | `sessions.review.resolve` | `{ sessionId, outcome: 'done' \| 'student_no_show' \| 'teacher_no_show' \| 'both_no_show', reason }` | `{ sessionId, status }` | `session.review_resolved` | Brings what the outcome brings (the count, R-309; a remedy when final, R-311) |
 | `sessions.outages.list` | `{ cursor? }` | `{ items: [{ outageId, startsAt, endsAt, reason, recordedBy }], nextCursor? }` | `provider_outages.listed` | |
-| `sessions.outages.record` | `{ start: { localDate, localTime }, end: { localDate, localTime }, timezone, reason }` | `{ outageId, startsAt, endsAt, reclassified: number }` | `provider_outage.recorded` | FR-445; resolved by `packages/time`; reclassifies settled sessions inside their dispute window (R-307) |
+| `sessions.outages.record` | `{ start: { localDate, localTime }, end: { localDate, localTime }, timezone, reason }` | `{ outageId, startsAt, endsAt, reclassified: number }` | `provider_outage.recorded` | FR-445; resolved by `packages/time`; reclassifies settled sessions inside their dispute window (R-307), their enrollments locked before them (kernel.md, F4) |
 
 `Telemetry` = `{ sessionId, schedule: { localDate, startTimeLocal, timezone, startsAt, endsAt }, status, events: [{ party: 'student' \| 'teacher' \| 'room', type: 'joined' \| 'left' \| 'room_ended', occurredAt, connectionRef? }], intervals: { student, teacher, together }, simultaneousSeconds, joined: { student, teacher }, outages: [...] }` (FR-SESS-9).
 
@@ -27,25 +27,35 @@ an enrollment (SC-413).
 |---|---|---|---|---|
 | `disputes.list` | `{ cursor? }` | `{ items: [{ disputeId, sessionId, raisedBy: 'student' \| 'teacher', raisedAt, outcomeUnderDispute? }], nextCursor? }` | `disputes.listed` | Open first |
 | `disputes.get` | `{ disputeId }` | `{ dispute, telemetry: Telemetry, chatAvailable }` | `dispute.viewed` | |
-| `disputes.chat` | `{ disputeId, cursor? }` | the chat page, as `chat.list` with the sender's role | `chat.read`, target the enrollment | Only while the dispute is open (FR-475, FR-SESS-13); chat module's read |
-| `disputes.resolve` | `{ disputeId, resolution: 'upheld' \| 're_marked' \| 'no_show_recorded' \| 'compensation_ordered' \| 'party_suspended' \| 'party_banned', consumed?: boolean, against?: 'student' \| 'teacher', party?: 'student' \| 'teacher', reason }` | `{ disputeId, sessionStatus }` | `dispute.resolved` | R-308's mapping; `party_*` through `StandingService` (FR-421); `resolved_at` by the database's clock |
+| `disputes.chat` | `{ disputeId, cursor? }` | the chat page, as `chat.list` with the sender's role | `chat.read`, target the enrollment | Only while the dispute is open (FR-475, FR-SESS-13); the chat module's read through the `DisputeChat` port sessions declares and `main.ts` binds (R-301, C5) |
+| `disputes.resolve` | `{ disputeId, resolution: 'upheld' \| 're_marked' \| 'no_show_recorded' \| 'compensation_ordered' \| 'party_suspended' \| 'party_banned', consumed?: boolean, against?: 'student' \| 'teacher', party?: 'student' \| 'teacher', reason }` | `{ disputeId, sessionStatus }` | `dispute.resolved` | R-308's mapping; `party_*` through `StandingService` (FR-421), the party's account locked first (kernel.md, F3); `resolved_at` by the database's clock |
 
 ## `cases` — the compensation-case queue (FR-478, FR-422)
 
 | Procedure | Input | Output | Audit | Notes |
 |---|---|---|---|---|
-| `cases.list` | `{ status?: 'open' \| 'resolved' \| 'dismissed', cursor? }` | `{ items: [{ caseId, enrollmentId, reason, status, openedAt, closedAt? }], nextCursor? }` | `cases.listed` | Every reason, Phase 2's included |
-| `cases.get` | `{ caseId }` | `{ case, enrollment: { enrollmentId, student: Party, teacher: Party, status, track }, covers: [{ sessionId, sequenceNumber, status, remedy? }], paymentsLink: { enrollmentId } }` | `case.viewed` | No amount anywhere; the orders are on `/payments` (FR-467, R-MONEY-6) |
-| `cases.resolve` | `{ caseId, note }` | `{ caseId, status: 'resolved' }` | `case.resolved` | `resolution = compensation_ordered`; the note says what Platform Administration did outside the platform. A `student_suspended` case resolved is the student cleared: each session the suspension cancelled is offered its make-up in the same transaction (FR-486; the owner's decision 1), refused `STUDENT_SUSPENDED` until the account is reinstated |
+| `cases.list` | `{ status?: 'open' \| 'resolved' \| 'dismissed', cursor? }` | `{ items: [{ caseId, enrollmentId, reason, status, openedAt, closedAt? }], nextCursor? }` | `cases.listed` | Every reason, Phase 2's included; the open `student_suspended` cases first, then the rest by their opening (the owner's decision of 2026-11-05 on the analysis) |
+| `cases.get` | `{ caseId }` | `{ case, enrollment: { enrollmentId, student: Party, teacher: Party, status, track }, covers: [{ sessionId, sequenceNumber, status, remedy? }], paymentsLink: { enrollmentId } }` | `case.viewed` | No amount anywhere; the orders are on `/payments` (FR-467, R-MONEY-6). `covers`: the remedies whose `case_id` names the case; the sessions whose `cancelled_by_admin` event names it (`session_events.case_id`, C4); and, for the case an enrollment's end opened (`teacher_no_show_threshold`, `teacher_ended`, `student_banned`), every session of that enrollment owed a remedy never offered (C1; research R-312) |
+| `cases.resolve` | `{ caseId, note }` | `{ caseId, status: 'resolved' }` | `case.resolved` | `resolution = compensation_ordered`; the note says what Platform Administration did outside the platform. A `student_suspended` case resolved is the student cleared: each session the suspension cancelled is offered in the same transaction what a Teacher-No-Show owes, on recitation a make-up or a refund (`awaiting_choice`), on the ijazah track a make-up (`proposed`) (FR-486; the owner's decision 1 as changed on the analysis), refused `STUDENT_SUSPENDED` until the account is reinstated |
 | `cases.dismiss` | `{ caseId, note }` | `{ caseId, status: 'dismissed' }` | `case.dismissed` | A `student_suspended` case dismissed is the fault confirmed: the enrollment cancelled `admin`, its slot freed (the owner's decision 1) |
 
 ## `students` — a student's standing (identity module, R-313, 002:T144)
 
 | Procedure | Input | Output | Audit | Notes |
 |---|---|---|---|---|
-| `students.suspend` | `{ userId, reason }` | `void` | `student.suspend` | `StandingService.suspendStudent`: sign-in sessions ended, upcoming sessions cancelled, the confirmed enrollments left `confirmed` with one `student_suspended` case each (FR-486, the owner's decision 1) |
+| `students.suspend` | `{ userId, reason }` | `void` | `student.suspend` | `StandingService.suspendStudent`: sign-in sessions ended, upcoming sessions cancelled, the confirmed enrollments left `confirmed` with one `student_suspended` case each, open remedies `frozen` (a pending counter withdrawn, both times released) (FR-486, the owner's decision 1 and the analysis's C3) |
 | `students.ban` | `{ userId, reason }` | `void` | `student.ban` | `StandingService.banStudent`: upcoming sessions cancelled, the confirmed enrollments cancelled `admin` at once, one `student_banned` case each (the owner's decision 1) |
-| `students.reinstate` | `{ userId, reason }` | `void` | `student.reinstate` | Restores the account only; nothing cancelled is restored, the case deciding (the owner's decision 1) |
+| `students.reinstate` | `{ userId, reason }` | `void` | `student.reinstate` | Restores the account only; nothing cancelled is restored, the case deciding (the owner's decision 1); the `frozen` remedies are offered again, each with a new full choice window, by `advance-remedies`' next run (C3) |
 
-`users.get` (verification module) gains `cancellationRequests: { total, recent }` (FR-459). `Party` =
-`{ userId, displayName \| null, deleted }`.
+## `users` — the user directory (verification module, FR-481, FR-ADMIN-4)
+
+Two new reads in Phase 1's `users` namespace, beside `requireIdentity` (the owner's decision of 2026-11-05 on the
+analysis; research R-318). The verification module serves them, reading identity's entry and its own rows, and
+sessions' entry for the counts.
+
+| Procedure | Input | Output | Audit | Notes |
+|---|---|---|---|---|
+| `users.list` | `{ name?: string, cursor? }` | `{ items: [{ userId, displayName \| null, deleted, role, accountStatus }], nextCursor? }` | `users.listed` | All users; the name searched by the folded prefix (`idsWithFoldedNamePrefix`, R-203); pages of `admin_list_page_size` |
+| `users.get` | `{ userId }` | `{ userId, profile: { displayName \| null, email \| null, joinedAt, deleted, teacher?: { bio, qualification } }, role, gender, isMinor, verificationStatus, accountStatus, cancellationRequests: { total, recent } }` | `user.viewed` | FR-ADMIN-4's fields exactly: profile details (read here as the account's name, email and sign-up instant, and a teacher's bio and qualification; no document, photo or date of birth), role, gender declaration, the minor flag (derived, R-DB-4), verification status, account status; the counts of FR-459, `recent` over `cancellation_requests_recent_days`, derived |
+
+`Party` = `{ userId, displayName \| null, deleted }`.
