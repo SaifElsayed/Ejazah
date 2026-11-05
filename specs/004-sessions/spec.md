@@ -60,7 +60,7 @@ before text chat (PLAN.md, "Descope ladder").
 written, and the notes under T026 (PR #117's review, nits 5 and 6) say what a
 make-up and a completed enrollment do to a slot. Those tasks keep their ids and
 their text there; this specification requires their outcome where a
-requirement here depends on it (FR-420 to FR-425). The rest of the
+requirement here depends on it (FR-420 to FR-426). The rest of the
 "Not scheduled" row of `specs/003-booking/tasks.md` is reviewed by this cycle
 and stays where it is unless the plan times it.
 
@@ -94,6 +94,17 @@ given, never re-specified.
 SC-301; Phase 2's requirements run to FR-414. This specification numbers its
 requirements from FR-420 and its success criteria from SC-401, so that no
 citation collides with Phase 2's FR-400 to FR-414.
+
+## Clarifications
+
+### Session 2026-11-05
+
+- Q: Before Phase 4's notifications exist, are the screens the notice for this phase's events? → A: Yes. The screens are the notice, and every event is kept as a durable record that Phase 4's notifications read with no change to this phase's code, as Phase 2 decided for payments (FR-495).
+- Q: Does this phase add a student's suspension and ban to `StandingService`? → A: Yes, exactly as FR-ADMIN-5 states: suspending a student cancels every upcoming session and opens a compensation case pending the review; banning a student cancels all upcoming sessions and owes nothing unless the administrator decides otherwise in the case. All of it goes through `StandingService` (FR-421, FR-486).
+- Q: How is a video provider outage recorded, so that a session can be settled Provider-Outage? → A: An administrator records the outage window in the panel, audit-logged; the evaluation job reads it; sessions it overlaps that were already settled and are still inside their dispute window move to the session review queue (FR-445).
+- Q: Do gender disputes and their consequences on enrollments (FR-GENDER-3 to FR-GENDER-7, FR-ADMIN-8) land in this phase? → A: No. They land in Phase 4, with user reports; Phase 2's two sentences that gave them to Phase 3 are corrected.
+- Q: How is a make-up placed when the student does not answer or counter-proposes? → A: The proposed time is reserved for the whole choice window and never starts before the window ends (a week that falls inside it moves to the first week after it in which the slot is free); the student's counter-proposal is limited to the teacher's active availability slots; a teacher who does not answer within the choice window counts as declining, and the system's proposal stands. SRS FR-MAKEUP-3 is amended to say so (FR-464 to FR-466).
+- Also decided on 2026-11-05: T090 (a deleted party's name) lands in this phase (FR-426); a teacher's deletion cancels their enrollments `account_deleted`, and a suspension, revocation or ban `teacher_suspended` (FR-483, FR-484).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -212,8 +223,8 @@ student is owed the session back. On a recitation enrollment after the
 teacher's absence the student chooses a make-up session or a refund; in every
 other case the remedy is a make-up. The system proposes the enrollment's weekly
 slot in the week after its last session, or the first later week it is free;
-the student accepts or proposes another date and time, which the teacher
-accepts or declines; with no answer by the end of the choice window, the
+the student accepts or counter-proposes one of the teacher's available
+slots, which the teacher accepts or declines (no answer counts as declining); with no answer by the end of the choice window, the
 proposal is booked. A refund opens a compensation case with no amount.
 
 _Covers PLAN.md: "Make-up sessions: a session not consumed is made up or
@@ -233,7 +244,7 @@ release, and the refund case's lack of any amount.
 
 1. **Given** a session settled Teacher-No-Show on a recitation enrollment, **When** the student opens it, **Then** they choose a make-up session or a refund; on an ijazah-track enrollment, and for Cancelled-By-Agreement and Both-No-Show on any track, the remedy is a make-up session with no choice; Student-No-Show owes nothing (FR-MAKEUP-1, FR-MAKEUP-2, ADR 0018 D2).
 2. **Given** a make-up is owed, **When** it is proposed, **Then** the proposal is the enrollment's weekly slot in the week after its last session, or the first later week in which that slot is free for the teacher and the student, in the enrollment's snapshot zone (FR-MAKEUP-3, R-TIME-2).
-3. **Given** a proposal, **When** the student proposes another date and time, **Then** the teacher accepts it, and it is booked, or declines it, and the system's proposal stands (FR-MAKEUP-3).
+3. **Given** a proposal, **When** the student counter-proposes one of the teacher's active availability slots, **Then** the teacher accepts it, and it is booked, or declines it or does not answer within the choice window, and the system's proposal stands (FR-MAKEUP-3 as amended).
 4. **Given** a proposal with no answer from the student, **When** the configured choice window ends, **Then** the proposed make-up session is booked (FR-MAKEUP-4).
 5. **Given** a make-up session booked, **Then** it is an ordinary session of the enrollment, numbered after its last session, recording the session it makes up, extending the enrollment's end and its slot's release, and the original session keeps its outcome (FR-MAKEUP-5, ADR 0018 D3).
 6. **Given** the student chooses a refund, **Then** one compensation case opens on the enrollment for that session, carrying no amount, and nothing in the platform computes a share of a price (FR-MAKEUP-6, ADR 0018 D4, ADR 0007).
@@ -278,7 +289,10 @@ When a teacher is suspended, revoked or banned, or deletes their account, they
 can no longer join any session, their remaining sessions are cancelled and each
 affected enrollment gets a compensation case. When a student deletes their
 account, their remaining sessions and confirmed enrollments are cancelled with
-no case. Every suspension and ban goes through `StandingService`.
+no case. When a student is suspended, their upcoming sessions are cancelled and
+a compensation case waits for the review; when banned, they are cancelled and
+nothing is owed unless the administrator decides otherwise. Every suspension
+and ban goes through `StandingService`.
 
 _Covers PLAN.md's decisions: FR-AUTH-14's confirmed part (T059) and
 `StandingService` (T144)._
@@ -299,6 +313,7 @@ own transaction.
 1. **Given** a teacher suspended, revoked or banned, **When** they ask to join any session, scheduled or in progress, **Then** no token is issued and they are removed from a room they are in (FR-SESS-16, R-SESS-5).
 2. **Given** that action, **Then** in the same transaction every remaining scheduled session of theirs is Cancelled-By-Admin, freeing both parties' time, and one compensation case opens per affected enrollment (FR-SESS-16, FR-DISPUTE-5, ADR 0010).
 3. **Given** a student who deletes their account, **Then** their remaining sessions are Cancelled-By-Admin and their confirmed enrollments cancelled with `account_deleted`, with no compensation case; **given** a teacher who deletes theirs, **Then** FR-SESS-16's effect applies, compensation cases included (FR-AUTH-14, ADR 0015, T059).
+4. **Given** a student suspended, **Then** every upcoming session of theirs is Cancelled-By-Admin at that moment and one compensation case opens pending the review; **given** a student banned, **Then** all their upcoming sessions are cancelled and nothing is owed unless the administrator decides otherwise in the case; both go through `StandingService` (FR-ADMIN-5, ADR 0018 D5).
 
 ---
 
@@ -337,12 +352,12 @@ instant and not while a dispute is open.
 - A participant connects in the early-join lead before the start: connected time before the scheduled start counts toward having joined but not toward the simultaneous time, which is counted only between the scheduled start and end (FR-SESS-14, FR-SESS-17, FR-SESS-11).
 - A cancellation request is pending when the other party also requests: there is at most one pending request per session; the second party answers the first instead (FR-CANCEL-1).
 - A cancellation request is accepted in the same moment the start passes: the start decides; a request answered at or after the scheduled start is expired and the session stands (FR-CANCEL-4).
-- The make-up proposal's week falls before the choice window would end (the unconsumed session was among the last): see FR-466; the proposal never starts before the student could still answer it.
+- The make-up proposal's week falls before the choice window would end (the unconsumed session was among the last): the proposal moves to the first week after the window in which the slot is free (FR-466); it never starts before the student could still answer it.
 - A teacher's absence that reaches the threshold leaves make-up sessions booked or proposed: they are cancelled with the rest and their remedies are named in the termination's compensation case (FR-NOSHOW-4).
 - A dispute is raised between the scheduled end and the evaluation: the evaluation still records the automatic outcome, frozen under the dispute (FR-DISPUTE-4).
 - A setting changes after sessions were settled: the change applies prospectively only and never re-evaluates a settled session (§3.14).
 - The time zone data changes between the token and the session: the session's instants are recomputed by Phase 2's job (FR-SESS-20), and the join period and the evaluation read the recomputed instants.
-- A student's gender is corrected by an administrator while a session is scheduled: the server's check at token issuance refuses the cross-gender pairing; the enrollment consequences of FR-GENDER-6/7 are outside this phase (Assumptions).
+- A student's gender is corrected by an administrator while a session is scheduled: the server's check at token issuance refuses the cross-gender pairing; the enrollment consequences of FR-GENDER-6/7 are Phase 4's (Assumptions).
 - An open dispute or compensation case on an ended enrollment: its chat is kept until resolution (FR-SESS-13, FR-AUTH-14).
 
 ## Requirements _(mandatory)_
@@ -356,11 +371,12 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 **Carried into this phase**
 
 - **FR-420**: The phase's first batch MUST land T059 of `specs/003-booking/tasks.md`, FR-AUTH-14's confirmed part: a student's deletion cancels their remaining sessions `cancelled_by_admin` and their confirmed enrollments `account_deleted`, with no compensation case; a teacher's deletion has FR-SESS-16's effect (FR-483), compensation cases included (PLAN.md, Phase 3; the owner's decision of 2026-11-01).
-- **FR-421**: Every suspension and ban this phase writes, the ones a dispute's resolution orders included, MUST go through `StandingService` (T144 of `specs/002-identity/tasks.md`), so that the account's sessions end and the one consequences entry runs on the action's transaction; this phase's session consequences MUST be subscribed to that entry, never called by identity directly (PLAN.md, Phase 3).
+- **FR-421**: Every suspension and ban this phase writes, of a teacher or of a student, the ones a dispute's resolution orders included, MUST go through `StandingService` (T144 of `specs/002-identity/tasks.md`), so that the account's sessions end and the one consequences entry runs on the action's transaction; this phase's session consequences MUST be subscribed to that entry, never called by identity directly (PLAN.md, Phase 3).
 - **FR-422**: Closing a compensation case, resolved or dismissed, MUST lock the enrollment's row first and write the case's closing instant with the database's own clock in the same update that closes it, as the note under T082 of `specs/003-booking/tasks.md` states, so that Phase 2's cover rule (FR-362 of `specs/003-booking/spec.md`) reads it.
 - **FR-423**: A path that adds or moves an enrollment's final session (a make-up, FR-469) MUST take its slot's lock as Phase 2's `slotInUse` does, and an enrollment that becomes completed MUST free its slot only from the week after its final session plus the configured slot release buffer (FR-BOOK-10, §3.14 "Slot release buffer (weeks)"; the notes under T026 of `specs/003-booking/tasks.md`, PR #117's review, nits 5 and 6).
 - **FR-424**: The session code MUST read an enrollment's number and length of sessions from the enrollment's snapshot, never from the package, and nothing in it MAY assume that all of an enrollment's sessions were generated at once (PLAN.md, "After the MVP", the note for Phase 3's cycle).
 - **FR-425**: The video adapter MUST be LiveKit's, behind the video port, with the port's stand-in for tests; the places that still name Daily are renamed together in the adapter's task, as ADR 0003's Consequences list them (ADR 0003 D2).
+- **FR-426**: Where a participant's account was deleted, every screen of this phase that names them, and the lists Phase 2 built, MUST show a stand-in text instead of an empty name (T090 of `specs/003-booking/tasks.md`; the owner's decision of 2026-11-05).
 
 **Join and the room**
 
@@ -379,7 +395,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-442**: A participant MUST count as joined when they have a connection that began no later than the configured join window after the scheduled start (§3.14 "Join window (minutes after start)") and accumulated at least the configured minimum connection duration (§3.14 "Minimum connection duration (seconds)") of connected time between the early-join lead and the scheduled end (FR-SESS-17).
 - **FR-443**: Simultaneous connected time MUST be accumulated across every reconnection, only between the scheduled start and the scheduled end, and a connection whose leave was never reported MUST count until the provider's room-ended event or the scheduled end, whichever is first (FR-SESS-18, R-SESS-4).
 - **FR-444**: The evaluation MUST settle each session by SRS §3.7.5's table, a recorded provider outage overlapping the session taking precedence over every other row: Done where simultaneous time is at least the configured attendance threshold of the scheduled length (§3.14 "Attendance threshold (%)"); Student-No-Show, Teacher-No-Show and Both-No-Show by who joined; Under-Threshold where both joined below the threshold; Provider-Outage where FR-445 applies (FR-SESS-11, FR-NOSHOW-1, FR-NOSHOW-2, FR-NOSHOW-6).
-- **FR-445**: A session overlapping a provider outage MUST be settled Provider-Outage with no no-show counted against either party [NEEDS CLARIFICATION: SRS §3.7.5 says "the video provider reported an outage", but LiveKit Cloud sends no outage webhook (ADR 0003); how is an outage recorded — an administrator records its window in the panel, audit-logged, and the job reads it; or the adapter infers it from the provider's signals; or there is no automatic Provider-Outage and an administrator moves a session into the review queue?].
+- **FR-445**: A session overlapping a provider outage MUST be settled Provider-Outage with no no-show counted against either party. LiveKit Cloud sends no outage webhook (ADR 0003), so an outage is recorded by an administrator signed in with the second factor, who enters its window in the panel with a reason, audit-logged; the evaluation job reads the recorded windows; a session the window overlaps that was already settled and is still inside its dispute window moves to the session review queue (SRS §3.7.5; the owner's decision of 2026-11-05).
 - **FR-446**: Under-Threshold and Provider-Outage sessions MUST stay frozen in the administrator's session review queue, with no automatic transition out, until an administrator resolves them (FR-SESS-19, R-SESS-6).
 - **FR-447**: Done and Student-No-Show MUST consume the session; Teacher-No-Show, Both-No-Show and the two cancellations MUST NOT; the enrollment's remaining and completed sessions and its teacher no-show count MUST be derived from its sessions' outcomes, never stored (FR-SESS-12, FR-NOSHOW-1, FR-NOSHOW-2, FR-NOSHOW-6, R-DB-4).
 - **FR-448**: When an enrollment's Teacher-No-Show count reaches the configured threshold (§3.14 "Teacher no-show termination threshold (count)"), its remaining scheduled sessions, make-ups included, MUST be Cancelled-By-Admin, the enrollment set Terminated-No-Show, and one compensation case opened on it naming the remedies left open, in one transaction (FR-NOSHOW-3, FR-NOSHOW-4, FR-DISPUTE-5).
@@ -401,8 +417,8 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-462**: A session settled Teacher-No-Show, Cancelled-By-Agreement or Both-No-Show MUST owe one remedy to the student, recorded once per session; Student-No-Show and Done owe nothing; Cancelled-By-Admin owes nothing here, its enrollment's case deciding (FR-MAKEUP-1, FR-CANCEL-6, ERD `session_remedies`).
 - **FR-463**: On a recitation enrollment after a Teacher-No-Show the student MUST choose a make-up session or a refund; in every other case of FR-462, and in every case on an ijazah-track enrollment, the remedy MUST be a make-up session (FR-MAKEUP-2, ADR 0018 D2, the enrollment's `snapshot_track`).
 - **FR-464**: The make-up proposal MUST be the enrollment's weekly slot, in the enrollment's snapshot zone, in the week after its last session, or the first later week in which the slot is neither held nor occupied by another enrollment and the occurrence overlaps no session of the teacher or of the student (FR-MAKEUP-3, FR-BOOK-5, R-TIME-2).
-- **FR-465**: The student MUST be able to accept the proposal or propose another date and time of the session's length; the teacher MUST be able to accept or decline a counter-proposal, a declined one falling back to the system's proposal; the counter-proposal's time of day is recorded with its date (FR-MAKEUP-3, ERD `session_remedies` note).
-- **FR-466**: Where the student has not answered within the configured choice window (§3.14 "Make-up choice window (days)"), counted from the proposal, the proposed make-up MUST be booked; the proposed time MUST stay reserved for the enrollment while the choice is open, and a proposal MUST NOT start before its choice window ends (FR-MAKEUP-4).
+- **FR-465**: The student MUST be able to accept the proposal or counter-propose one of the teacher's active availability slots, on a date that is free for both parties, of the session's length; the teacher MUST be able to accept or decline a counter-proposal within the configured choice window counted from the counter-proposal, a teacher who does not answer within it counting as declining; a declined counter-proposal MUST fall back to the system's proposal; the counter-proposal's time of day is recorded with its date (FR-MAKEUP-3 as amended on 2026-11-05, ERD `session_remedies` note).
+- **FR-466**: Where the student has not answered within the configured choice window (§3.14 "Make-up choice window (days)"), counted from the proposal, the proposed make-up MUST be booked; the proposed time MUST stay reserved for the enrollment for the whole choice window, and a proposal MUST NOT start before its choice window ends: a week that falls inside the window moves to the first week after it in which the slot is free (FR-MAKEUP-3 as amended on 2026-11-05, FR-MAKEUP-4).
 - **FR-467**: A refund choice MUST open one compensation case on the enrollment for that session, carrying no amount; the case's page names the session and the enrollment and links to the enrollment's orders in the payments monitor, and nothing of this phase computes a session's share of a price (FR-MAKEUP-6, ADR 0018 D4, R-MONEY-5, R-MONEY-6).
 - **FR-468**: The database MUST refuse a make-up session that overlaps another session of the same teacher or the same student, and a refused booking MUST leave the remedy open and create nothing (FR-BOOK-5, ERD §15 rule 19).
 - **FR-469**: A booked make-up MUST be an ordinary session of the enrollment: numbered after its last session, recording the session it makes up, its local date, local start and zone as the fact and its instants derived by `packages/time`, extending the enrollment's end and its slot's release; the original session MUST keep its outcome (FR-MAKEUP-5, ADR 0009 D1, ADR 0018 D3).
@@ -412,7 +428,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-473**: Either participant MUST be able to raise a dispute over a settled session of theirs, with a reason, within the configured dispute window after that session's scheduled end (§3.14 "Dispute window (hours)", default 72), and never after the window closes; a session MUST have at most one open dispute (FR-DISPUTE-1).
 - **FR-474**: Raising a dispute MUST mark the session Disputed and freeze its outcome — consumed or not, and any no-show attribution — until resolution, even if the dispute window would otherwise have elapsed (FR-DISPUTE-4).
 - **FR-475**: The administrator MUST have a disputes queue showing each open dispute with the session's schedule, every recorded join and leave, the accumulated simultaneous time and the outcome under dispute, and the enrollment's chat only while a dispute (or, from Phase 4, a report) on that enrollment is open, each opening of the chat audit-logged (FR-DISPUTE-2, FR-SESS-13, FR-ADMIN-7, FR-ADMIN-17).
-- **FR-476**: The administrator MUST be able to resolve a dispute bindingly — uphold the automatic outcome, re-mark the session consumed or not consumed, record a no-show against either party, order compensation, or suspend or ban a party — with a mandatory reason recorded in the audit log; a re-mark or a recorded no-show MUST bring what that outcome brings (the count toward FR-448, a remedy under FR-462); ordering compensation MUST record the decision and move no money; a suspension or a ban MUST go through `StandingService` (FR-DISPUTE-3, FR-DISPUTE-6, FR-421) [NEEDS CLARIFICATION: `StandingService` today suspends and bans teachers only, and SRS FR-ADMIN-5 and ADR 0018 D5 say what suspending or banning a student does to their sessions; PLAN.md assigns FR-ADMIN-5's student part to no phase. Does this phase add a student's suspension and ban to `StandingService`, with ADR 0018 D5's consequences on sessions and a compensation case, or does a dispute's resolution suspend or ban only a teacher here, the student's part recorded for later?].
+- **FR-476**: The administrator MUST be able to resolve a dispute bindingly — uphold the automatic outcome, re-mark the session consumed or not consumed, record a no-show against either party, order compensation, or suspend or ban a party — with a mandatory reason recorded in the audit log; a re-mark or a recorded no-show MUST bring what that outcome brings (the count toward FR-448, a remedy under FR-462); ordering compensation MUST record the decision and move no money; a suspension or a ban MUST go through `StandingService` (FR-DISPUTE-3, FR-DISPUTE-6, FR-421), a student's suspension or ban having FR-486's effect.
 - **FR-477**: The administrator MUST have a session review queue of Under-Threshold and Provider-Outage sessions with full attendance telemetry, and MUST resolve each by choosing its outcome among Done, Student-No-Show, Teacher-No-Show and Both-No-Show with a mandatory reason, audit-logged; the chosen outcome brings what it brings, and no outcome is set automatically (FR-SESS-19, FR-ADMIN-14, R-SESS-6).
 - **FR-478**: The administrator MUST have a compensation-case queue of every case FR-DISPUTE-5 opens — Phase 2's late and duplicate payments, and this phase's terminations, cancellations and refund choices — each naming its enrollment, its reason and the sessions or remedies it covers, and MUST resolve it (compensation ordered) or dismiss it with a mandatory note of what Platform Administration did outside the platform, audit-logged, under FR-422; a case carries no amount, and the payment's refund is recorded only when the gateway reports it (FR-DISPUTE-5, FR-DISPUTE-6, FR-ADMIN-7, FR-PAYG-7).
 - **FR-479**: The administrator MUST have an enrollment and session monitor: enrollments with their status and schedule and each session's status, searchable and filterable by student, teacher or date, read-only except for FR-460's cancellation; payment status is shown only as the payments monitor reports it, through its own page (FR-ADMIN-6, R-MONEY-6).
@@ -424,6 +440,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-483**: In the same transaction as that action, every remaining scheduled session of that teacher MUST be Cancelled-By-Admin, their confirmed enrollments cancelled with `teacher_suspended`, and one compensation case opened per affected enrollment, through the consequences entry (FR-SESS-16, FR-DISPUTE-5, FR-VERIFY-8, ERD `enrollments.cancellation_reason`).
 - **FR-484**: A student's deletion MUST cancel their remaining sessions Cancelled-By-Admin and their confirmed enrollments `account_deleted`, with no compensation case; a teacher's deletion MUST have FR-483's effect, its enrollments cancelled `account_deleted` (FR-AUTH-14, ADR 0015 D4, T059).
 - **FR-485**: Every cancellation of this group MUST free both parties' time at once and MUST NOT count a no-show against either party (ADR 0010, ERD §15 rule 19).
+- **FR-486**: Suspending a student MUST cancel every upcoming session of theirs at the moment of suspension (Cancelled-By-Admin; a suspension has no end date, so no session is left to become a no-show) and open a compensation case pending the review: a cleared student is owed make-up sessions or a refund under FR-MAKEUP-2, and a confirmed fault owes nothing. Banning a student MUST cancel all their upcoming sessions and owe nothing unless the administrator decides otherwise in the case. The teacher is told through the screens (FR-495), and the freed slots return to booking. Both go through `StandingService` on the action's transaction (FR-ADMIN-5, ADR 0018 D5, ADR 0016, FR-421; the owner's decision of 2026-11-05).
 
 **Chat**
 
@@ -436,7 +453,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 **Screens, notices, proofs and confinement**
 
 - **FR-494**: Every session time shown by this phase MUST appear twice, in the session's own zone and in the viewer's (ADR 0009 D5, FR-393 of `specs/003-booking/spec.md`).
-- **FR-495**: The enrollment screens of both participants MUST show each session's status after settlement, a pending cancellation request with its answer, a remedy waiting for the student's choice or the teacher's answer with its deadline, a dispute's state, and the enrollment's termination; these screens are the notice of each event this phase produces, and every such event MUST also be kept as a durable record naming its enrollment, its session where it has one, its kind and its instant, readable by Phase 4's notifications with no change to this phase's code (FR-SESS-12, FR-NOSHOW-5, FR-CANCEL-1, FR-SESS-16) [NEEDS CLARIFICATION: these requirements say the counterparty or both parties are "notified", and FR-NOTIF-1 lists `cancellation_requested`, `makeup_proposed`, `no_show_recorded` and others, but push and the notification centre are Phase 4's. Are the screens the notice in this phase with a durable record for Phase 4, as Phase 2 decided for payments (FR-385 of `specs/003-booking/spec.md`), or does this phase write notification rows, or send push for the time-bound events (a cancellation request, a make-up proposal)?].
+- **FR-495**: The enrollment screens of both participants MUST show each session's status after settlement, a pending cancellation request with its answer, a remedy waiting for the student's choice or the teacher's answer with its deadline, a dispute's state, and the enrollment's termination; these screens are the notice of each event this phase produces, and every such event MUST also be kept as a durable record naming its enrollment, its session where it has one, its kind and its instant, readable by Phase 4's notifications with no change to this phase's code (FR-SESS-12, FR-NOSHOW-5, FR-CANCEL-1, FR-SESS-16).
 - **FR-496**: The adversarial gender suite MUST gain cases for every procedure of this phase that issues a token or reads a session, its chat or its counterparty — by direct call, forged and guessed session ids, another session's token, a token replayed by the other participant, a tampered access token and a client-supplied gender, in both directions, and after an administrator's gender correction — and MUST stay blocking on every commit (R-GENDER-1, R-GENDER-7, NFR-COMP-1).
 - **FR-497**: The sessions module MUST NOT reference a price, a payment record or any payment concept, and no wallet, ledger, escrow, balance, share or commission MAY exist; the boundary gate MUST prove it (PLAN.md definition of done, R-MONEY-6).
 - **FR-498**: Every operational number of this phase MUST be read from settings (R-MONEY-12): the early-join lead, the join window, the minimum connection duration, the attendance threshold, the evaluation delay, the teacher no-show threshold, the dispute window, the make-up choice window, the slot release buffer, the chat retention, the upload size and rate limits, the signed link validity, the chat message rate limit and the admin list page size; the plan adds the two new rows (FR-441, FR-491) beside §3.14's.
@@ -454,7 +471,7 @@ the first time, and the plan names any column or check it adds.
 - **Dispute and compensation case** (`disputes`): a session dispute raised by a participant, or a compensation case opened by the system, each with its resolution, its note and its closing instant; never an amount.
 - **Chat message** (`chat_messages`): a text or a document of one enrollment, purged by the retention job.
 - **Enrollment** (`enrollments`): its status reaches completed, terminated by no-show or cancelled here.
-- **Provider outage** (new, only if FR-445 is answered so): a window during which the video provider was out, recorded by an administrator.
+- **Provider outage** (new): a window during which the video provider was out, recorded by an administrator with a reason (FR-445).
 
 ## Success Criteria _(mandatory)_
 
@@ -487,7 +504,7 @@ the first time, and the plan names any column or check it adds.
 - A teacher's suspension, revocation or ban cancels their confirmed enrollments with `teacher_suspended`, the reason the ERD already holds; a teacher reinstated later does not get them back, the compensation case deciding what is owed.
 - Session reminders (FR-BOOK-8) and their rescheduling are Phase 4's, with notifications; this phase writes no reminder.
 - User reports (FR-SESS-15) and the report queue are Phase 4's (PLAN.md, Phase 4); the chat's retention already honours an open report once reports exist (FR-492).
-- Gender disputes and their consequences on enrollments (FR-GENDER-3 to FR-GENDER-7, FR-ADMIN-8) are not in PLAN.md's list for this phase and are not specified here; the token check of FR-432 already refuses a pairing an administrator's correction made cross-gender. Where they land is a question for the owner.
+- Gender disputes and their consequences on enrollments (FR-GENDER-3 to FR-GENDER-7, FR-ADMIN-8) land in Phase 4, with user reports (the owner's decision of 2026-11-05), and are not specified here; the token check of FR-432 already refuses a pairing an administrator's correction made cross-gender.
 - The allowed chat document types are PDF and plain text unless the plan, from the SRS's "document/text files", names more; RISK-02 (images inside a PDF) stays accepted.
 - No setting is written from code; the two new rows are seeded at their defaults and changed in the admin panel (R-PROC-11).
 - Saif's review session reviews every batch under the review rules in force; the owner runs SC-401 and SC-414 on the phones.

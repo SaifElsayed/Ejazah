@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — three remain for the owner, at the limit of three: FR-445 (how a provider outage is recorded), FR-476 (a student's suspension and ban through `StandingService` in this phase) and FR-495 (the screens as the notice, or notification rows or push, before Phase 4)
+- [x] No [NEEDS CLARIFICATION] markers remain — the three (FR-445, FR-476, FR-495) were answered at `/speckit-clarify` on 2026-11-05
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
