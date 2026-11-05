@@ -152,6 +152,8 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** let a student find a teacher and buy a package with correctly scheduled sessions.
 
+**Phase 2 closed on 2026-11-05** (B32, T057 in `specs/003-booking/tasks.md`), on its fifth working day of eight (day 16). Proved on the payment port's stand-in and, for the gateway, on Paymob's test account (T056); on one device, the owner's Android phone. Left open by the owner's decisions: `002:T123`'s last key (no rated teacher before Phase 3) and Paymob's documented decline in test mode (OPEN-11). T057's note lists what the device could not reach; those parts stay with the specs.
+
 **SRS:** FR-PROFILE-1…10, FR-DISC-1…5, FR-BOOK-1…11, FR-PAYG-1…11, NFR-COMP-1
 
 **What this phase delivers**
