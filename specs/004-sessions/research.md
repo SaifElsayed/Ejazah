@@ -774,7 +774,7 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
    retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
    magic-number gate governs `modules/`, where every operational number is a setting).
-6. **Tests** (`rate-limit.guard.spec.ts`, `procedures.spec.ts`): a procedure with no limit refused `RATE_LIMITED` after
+6. **Tests** (`platform/guards/rate-limit.spec.ts`, `surfaces/procedures.spec.ts`, `surfaces/admin-procedure.spec.ts`): a procedure with no limit refused `RATE_LIMITED` after
    the default's limit as its setting holds it; a procedure with its own limit not counted by the default; the default letting the call
    through when the counter rejects and when it never answers within 100 ms, and the breaker skipping the counter until
    10 s have passed with one warning; a declared limit refusing the call when the counter rejects; the default's missing
