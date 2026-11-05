@@ -378,6 +378,18 @@ export const envSchema = envObject.superRefine((env, ctx) => {
         });
       }
     }
+    // PR #125's review, round 1, M1 (the owner's decision of 2026-11-05): no checkout names its
+    // payee yet, so with live keys every payment would settle whole into the platform's own account,
+    // the custody R-MONEY-6 and FR-PAYG-1 forbid. Refused outside development and test until
+    // contracting, as the stand-in is; T101 gives the checkout its payee and lifts this.
+    if (!standInsAllowed) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PAYMENT_GATEWAY'],
+        message:
+          'Paymob is refused outside development and test until contracting: no checkout names its payee yet (R-MONEY-6, T101)',
+      });
+    }
     if (!standInsAllowed) {
       for (const [key, mark] of Object.entries(paymobLiveMarks) as [
         keyof typeof paymobLiveMarks,

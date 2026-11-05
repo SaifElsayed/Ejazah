@@ -683,7 +683,6 @@ describe('the gateway (T056)', () => {
 
     expect(failure.offendingKeys).toContain('PAYMENT_GATEWAY_SECRET_KEY');
     expect(failure.offendingKeys).toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
-    expect(failure.offendingKeys).not.toContain('PAYMENT_GATEWAY');
     expect(failure.message).toMatch(/PAYMENT_GATEWAY_SECRET_KEY \(the gateway's test mode/);
     expect(failure.message).not.toContain('placeholder');
 
@@ -697,11 +696,21 @@ describe('the gateway (T056)', () => {
     expect(unmarked.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
   });
 
-  it('takes live keys outside development and test, and test keys in development and test', () => {
-    const live = refusal({ ...paymobLive, ...productionBase });
-    expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY');
-    expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
-    expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
+  // PR #125's review, round 1, M1: no checkout names its payee before contracting (T101).
+  it('refuses the gateway outside development and test until contracting, live keys and a split integration too, naming the gateway and never a value; takes test keys in development and test', () => {
+    for (const env of [
+      { ...paymobLive, ...productionBase },
+      { ...paymobLive, ...productionBase, PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: '1000002' },
+    ]) {
+      const live = refusal(env);
+      expect(live.offendingKeys).toContain('PAYMENT_GATEWAY');
+      expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
+      expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
+      expect(live.message).toMatch(
+        /PAYMENT_GATEWAY \(Paymob is refused outside development and test until contracting/,
+      );
+      expect(live.message).not.toContain('placeholder');
+    }
 
     for (const nodeEnv of ['development', 'test']) {
       expect(loadConfig({ ...paymobTest, NODE_ENV: nodeEnv }).PAYMENT_GATEWAY).toBe('paymob');
