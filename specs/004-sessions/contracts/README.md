@@ -6,8 +6,8 @@ The procedures that run, settle, cancel, make up and dispute a session, the chat
 provider's boundary, and what changes in the kernel. As in Phases 1 and 2: every procedure is additive-only once merged
 (R-API-9), declared through a caller kind with its input and its **output** schema (`.output(schema)`, the owner's
 decision of 2026-10-10), and, where it can be flooded, its rate limit (this phase: `chat.send`'s `rate_limit_chat_message`,
-the chat upload's `rate_limit_upload` and `sessions.complaint.raise`'s `rate_limit_absence_complaint`, each with the
-user as subject; the complaint's with a test that a call over it is refused, SC-415; on the administrator surface
+the chat upload's `rate_limit_upload`, `sessions.complaint.raise`'s `rate_limit_absence_complaint` and the live
+channel's opening, `live.events`' `rate_limit_live_channel` (10 per 60 s; research R-324), each with the user as subject; the complaint's with a test that a call over it is refused, SC-415; on the administrator surface
 `disputes.revise`'s `rate_limit_dispute_revision`, `sessions.restore`'s `rate_limit_enrollment_restore` and
 `cases.openManual`'s `rate_limit_manual_compensation_case`, the administrator as subject, checked before the kind's transaction; every signed-in procedure that declares none is counted
 by `rate_limit_signed_in_default`, 160 per 60 s per research R-325 (the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), failing open, while every declared limit fails closed:
@@ -17,15 +17,15 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
 
 | Document | Contract |
 |---|---|
-| [app-surface.md](./app-surface.md) | The user surface: a session, its join, cancellation, remedies, disputes; a complaint of the teacher's absence; chat; Phase 2's lists' additive fields |
+| [app-surface.md](./app-surface.md) | The user surface: a session, its join, cancellation, remedies, disputes; a complaint of the teacher's absence; chat; the live channel (`live.events`, a subscription over Server-Sent Events); Phase 2's lists' additive fields |
 | [admin-surface.md](./admin-surface.md) | The administrator surface: the monitor and an enrollment's restore, the review queue, outages, disputes, cases and a complaint's decision, a student's standing, the user directory |
 | [video.md](./video.md) | The video port as this phase calls it, the webhook, the LiveKit adapter, the stand-in and its harness |
-| [kernel.md](./kernel.md) | Locks, database refusals, the composition root, the jobs, the gates |
+| [kernel.md](./kernel.md) | Locks, database refusals, the rate limits, the live channel (its registry, bus and after-commit publisher, the shutdown order), the composition root, the jobs, the gates |
 
 ## Conventions
 
 - **Names.** `namespace.verb` in camelCase. New namespaces on the user surface: `sessions` (with `cancellation`,
-  `remedy`, `dispute`, `complaint`), `chat`. On the administrator surface: `sessions` (with `monitor`, `review`, `outages`),
+  `remedy`, `dispute`, `complaint`), `chat`, `live` (one subscription, `live.events`). On the administrator surface: `sessions` (with `monitor`, `review`, `outages`),
   `disputes`, `cases`, `students`; and two new reads, `list` and `get`, in Phase 1's `users` (the user directory).
 - **Callers.** "participant" is the user kind admitting an active student, or an approved teacher whose account is
   active, who is one of the two people of the session or enrollment named; anyone else answers `NOT_FOUND` with the

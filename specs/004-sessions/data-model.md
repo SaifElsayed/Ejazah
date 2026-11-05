@@ -7,9 +7,10 @@ Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through
 re-resolution), `disputes` (compensation cases) and `enrollment_events`. This phase writes `sessions`' whole machine,
 `session_participant_events`, `cancellation_requests`, `session_remedies`, session disputes and `chat_messages` for the
 first time. The pass below is what it adds: two tables, thirteen columns, one nullability change, eight enum values and one new
-enum, nine integrity rules, fifteen settings rows, one settings row removed and one default changed, in one forward
+enum, nine integrity rules, seventeen settings rows, one settings row removed and one default changed, in one forward
 migration in the first batch (the two columns, the enum, rule 48, `rate_limit_outcome_correction` and the changed
-default since the owner's decisions of 2026-11-05 answering the administrator's control inventory). The ERD was amended on 2026-11-05 with the owner's decisions,
+default since the owner's decisions of 2026-11-05 answering the administrator's control inventory; the live channel's
+two settings since the owner's decision of 2026-11-05 on research R-324). The ERD was amended on 2026-11-05 with the owner's decisions,
 ahead of that batch (changelog v1.14 → v1.15, 44 tables; §7), and again the same day with the owner's decisions on the
 analysis (plan.md, "Decisions on the analysis"), on the second analysis (plan.md, "Decisions on the second
 analysis"), on the third (plan.md, "Decisions on the third analysis") and on the decision of no automatic termination
@@ -315,6 +316,8 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `rate_limit_enrollment_restore` | `{ limit: 10, window_seconds: 60 }` (the same) | `sessions.restore`'s own limit, the administrator as subject (FR-470) |
 | `rate_limit_manual_compensation_case` | `{ limit: 10, window_seconds: 60 }` (the same) | `cases.openManual`'s own limit (FR-471 (c), FR-493; R-326), the administrator as subject |
 | `rate_limit_outcome_correction` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 answering R-323) | `sessions.review.revise`'s own limit (FR-439; R-323, GAP-3), the administrator as subject |
+| `rate_limit_live_channel` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 on research R-324) | `live.events`' own limit on opening the live channel, the user as subject, failing closed (FR-428) |
+| `live_channel_max_connections_per_user` | 3 (the same) | the most live streams one account holds, the oldest ended when one more opens (FR-428; R-324) |
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
@@ -365,7 +368,7 @@ disputed takes `enrollments`, `sessions`, reading the session's disputes and rem
 ## 6. The migration
 
 One forward, additive migration in the first batch, `20261108120000_sessions_pass`: §2.1 to §2.9, the enum values, the
-two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the fifteen settings rows in the seed (and `chat_retention_days`' new default, §4), and the deletion of the `teacher_no_show_threshold` row; §2.12's enum and column on booking's `slot_holds` and rule 48. Probes in
+two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the seventeen settings rows in the seed (and `chat_retention_days`' new default, §4), and the deletion of the `teacher_no_show_threshold` row; §2.12's enum and column on booking's `slot_holds` and rule 48. Probes in
 `tests/db-integrity` for rules 40 to 48. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
 that rule 46 would refuse, and `session_participant_events` rows (none expected).
 
@@ -417,3 +420,6 @@ batch's migration, which builds them.
 15. On the same decisions (the ERD's changelog row 26): `session_events`' kinds `outcome_corrected` and
     `instants_reresolved`, the column `previous_start_at`, rule 43 widened (§2.4); `slot_holds.release_reason` and rule
     48 (§2.12); `rate_limit_outcome_correction` (§4).
+16. On the decision of the live channel (the owner's decision of 2026-11-05, research R-324; the ERD's changelog row
+    28): `rate_limit_live_channel` (10 per 60 s, per user) and `live_channel_max_connections_per_user` (3) (§4). No
+    table: the live channel keeps nothing in the database.

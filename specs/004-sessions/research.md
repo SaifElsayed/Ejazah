@@ -2,7 +2,7 @@
 
 **Date**: 2026-11-05 · **Spec**: [spec.md](./spec.md) · **Plan**: [plan.md](./plan.md)
 
-Each decision below resolves a question the specification leaves to the plan. Numbered R-301 to R-323 and R-325 to R-327 (R-324 not yet written) so that a
+Each decision below resolves a question the specification leaves to the plan. Numbered R-301 to R-327 so that a
 citation never collides with Phase 0's R-1…, Phase 1's R-101… or Phase 2's R-201 to R-222. Every decision was taken
 against the code as it stands on `Ejazah_app/003-booking/T106` at `da35d59` (`develop` `8e3614e` plus the spec and
 clarify commits, read on 2026-11-05); where it names existing code, the path is given. Versions were read from the npm
@@ -665,7 +665,9 @@ On the decisions answering the administrator's control inventory (**Decided**, t
 GAP-3), an SRS §3.14 row. An existing row changes its default (the same decisions): `chat_retention_days` 30 (was 0; SRS §3.14,
 FR-SESS-13), still editable in the panel. The seed inserts a row only where it is absent (`prisma/seed.ts`), so the
 seed's new default reaches a new database; a database already seeded keeps its row until an administrator changes it in
-the panel (R-PROC-11).
+the panel (R-PROC-11). On the live channel (**Decided**, the owner, 2026-11-05; R-324): `rate_limit_live_channel`
+`{ limit: 10, window_seconds: 60 }`, the user as subject, and `live_channel_max_connections_per_user` 3; each an SRS
+§3.14 row.
 
 ## R-318 — The administrator's surfaces
 
@@ -1129,6 +1131,126 @@ no setting here governs. No job deletes an audit entry, an `enrollment_events`, 
 
 **Window rule (R-320).** Nothing here offers a time; GAP-3's correction leaves the remedy to T028's offer after the
 window, and GAP-5's hand-off offers none.
+
+## R-324 — The live channel
+
+**Decided**, the owner, 2026-11-05 (spec FR-427 to FR-429, FR-437 and FR-438; SRS §3.14, NFR-SEC-12 and §4.4 as
+amended). Read against this branch at `9159cec`; the versions in the repository: `@trpc/server` and `@trpc/client`
+11.19.0, `@nestjs/platform-express` 12.1.2, `expo` 58.0.14, `react-native` 0.88.0, `ioredis` 5.11.1.
+
+1. **Transport: Server-Sent Events through tRPC 11.19's subscriptions; no WebSocket server.** A subscription is an
+   ordinary `GET /trpc/live.events` through the existing `createHTTPHandler` mounts (`apps/api/src/app.module.ts`,
+   `surfaceHandler`), so the same context, bearer resolution, standing read, caller kind, limiter, security headers,
+   CORS and logging apply, and nothing new is mounted. tRPC serves a `subscription` on GET as SSE by default, with
+   `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`
+   (`@trpc/server`'s `http/resolveResponse.ts` and `stream/sse.ts`). `refusalOf` keeps refusing `connectionParams`
+   (`app.module.ts`), so the bearer token travels in the `Authorization` header and never in a URL. tRPC recommends SSE,
+   "easier to setup and doesn't require setting up a WebSocket server" (https://trpc.io/docs/server/subscriptions). A
+   WebSocket server would need an upgrade path outside every Express middleware, a second context factory reading
+   `connectionParams` and a context built once per connection, so a suspension would be invisible to it until closed
+   (https://trpc.io/docs/server/websockets, https://trpc.io/docs/client/links/wsLink).
+2. **The phone's EventSource is ours.** React Native has none; the ponyfills tRPC names are unmaintained or XHR-based,
+   and those "fail to reconnect after the app has been in the background"
+   (https://trpc.io/docs/client/links/httpSubscriptionLink); the maintained `eventsource` needs `Event`, `MessageEvent`
+   and `EventTarget`, which Hermes does not expose (https://github.com/facebook/react-native/issues/38004,
+   https://github.com/cloudflare/partykit/issues/401, https://github.com/EventSource/eventsource). So a small EventSource
+   in the app, tRPC's `EventSourceLike`, over `expo/fetch`, which streams response bodies on Android and iOS
+   (https://docs.expo.dev/versions/v58.0.0/sdk/expo/), and `eventsource-parser` 4.1.2 (2026-10-12, a pure parser, no
+   globals). It never goes through `timed()` in `apps/mobile/src/lib/client.ts`, which reads the whole body and aborts
+   after `CALL_TIMEOUT_MS`. It never reconnects by itself: the channel's wrapper reopens it, so a reopening always
+   reads the current token. A refusal at the open arrives inside the stream as a serialized error; on `UNAUTHENTICATED`
+   the phone calls `account.me` once through the normal client, which refreshes or signs out as it does today, and
+   then reopens.
+3. **One channel per signed-in device**, `live.events`, a user-kind subscription with no input: the client chooses no
+   topic, and there is no per-enrollment subscription to check (no forged-topic surface). It declares its own limit,
+   `rate_limit_live_channel` (10 per 60 s, the user as subject, failing closed as every declared limit does; a backoff
+   of 1, 2, 4, 8, 16, 30 s is six opens a minute), and an account holds at most `live_channel_max_connections_per_user`
+   (3) streams, the **oldest** ended when one more opens, since a half-open connection left by a network switch would
+   otherwise lock the phone out for minutes. tRPC's `.output()` does not validate what a subscription yields ("you have
+   to go through the iterator to validate the output", https://trpc.io/docs/server/subscriptions), so every yielded
+   event is parsed by the event schema, and `scripts/contract-snapshot.ts` learns to record a subscription's event
+   schema, so R-API-9's gate covers it.
+4. **Four events** (`packages/contracts/src/live.ts`), a discriminated union on `type`:
+   - `session { sessionId, enrollmentId }`: something about this session changed; read it again;
+   - `enrollment { enrollmentId }`: read the enrollment's screens again;
+   - `chat { enrollmentId, message }`: the message in `chat.list`'s item shape, `mine` computed for each recipient.
+     Carried rather than signalled: a signal per message would cost a `chat.list` per incoming message, up to
+     `rate_limit_chat_message` a minute, which alone would lift R-325's heaviest minute past 200;
+   - `account`: read `account.me` again; the server then ends the stream.
+
+   A signal carries nothing else: the app reads through the normal procedures, and they decide.
+5. **Addressed by the server, sent after commit.** Each event is addressed to user ids read from the rows of the
+   transaction that produced it (the chat send's parties under L-B's locks, a session's two participants), and sent
+   only after that transaction commits, through the kernel's `LivePublisher`: the administrator kind and the user
+   kinds' transactional services keep an after-commit list the kind flushes (the shape of `deletion.service.ts`'s
+   `#afterCommit`); a rolled-back transaction sends nothing. A failed publish loses a hint only: logged at warn, never
+   retried. No event's payload and no token is ever logged (R-SEC-2).
+6. **What publishes**, every producer in the API process:
+
+   | Trigger, after its commit | Event | To |
+   |---|---|---|
+   | `chat.send`, `POST /uploads/chat` | `chat` | both parties, the sender's other devices too |
+   | the video webhook's `participant_joined`, `participant_left`, `participant_connection_aborted` and `room_finished` recorded (R-304) | `session` | the other participant; `room_finished` both |
+   | a cancellation request; its answer | `session` | the counterparty; the requester |
+   | an administrator's `sessions.cancel` | `session` | both |
+   | an enrollment closed (a complaint's decision (a), a confirmed fault) or restored (`sessions.restore`); sessions cancelled by an account's end (`cancelRemainingSessions`) | `enrollment` | both; the other party |
+   | `StandingService` (suspension, ban, revocation), a student's standing (`002:T144`), a deletion, a sign-out | `account`, then the streams ended | the person; a sign-out, that sign-in session's streams |
+
+   `sessions.get` gains `counterpartyInRoom`, read from the recorded participant events by R-304's per-connection rule
+   (a `joined` with no later `left` for its `connection_ref`, and no `room_ended` after it), so out-of-order or
+   duplicate events do not mislead it; a hint only, LiveKit giving "no guarantees around delivery"
+   (https://docs.livekit.io/home/server/webhooks/), and no provider call per read.
+7. **Not live: read when the screen opens** (and on T015's foreground re-read): remedies, disputes, complaints,
+   outcomes and every administrator screen; **an enrollment's completion and a cancellation request's expiry**, both
+   produced by the worker (the owner's decision: read on open); Phase 2's payment confirmation, still polled every
+   `checkout_confirming_poll_seconds` (30). The phone's «expired» on a pending request, derived from its `expiresAt`, is
+   display only: the server decides (SRS FR-CANCEL-4, spec FR-458), and an answer it refuses makes the screen read
+   again.
+8. **Resilience.** The server pings every 25 s (`sse.ping`), under nginx's 60 s default read timeout and Cloudflare's
+   100 s; the client restarts a stream silent for 60 s (`sse.client.reconnectAfterInactivityMs`; tRPC refuses a ping
+   above it), which catches a half-open connection after a network switch. A reopening backs off from 1 s, doubling to
+   a 30 s cap, each delay × a random 0.5–1.5. The stream closes when the app leaves the foreground and reopens when it
+   returns, with one re-read of the open screens and of the chat's first page; re-reads are coalesced to at most one
+   per screen per second (LiveKit can report joined, left, joined within a second). No `tracked()` replay: there is no
+   per-user ordered log to replay from, and every signal means «read again». Each stream has a bounded queue, and a
+   slow reader's stream is ended. Every stream ends when the access token it opened with expires (at most
+   `session_access_ttl_minutes`, 15), so a lost `account` publish never leaves a revoked device streaming, with no
+   periodic re-check per stream; the resolved session exposes the token's expiry, additively
+   (`modules/identity/session.service.ts`' `resolveUserSession` parses it and does not return it today).
+9. **Shutdown, the owner's hard condition.** The API ends every live stream **before** `application.close()` in
+   `onShutdown` (`apps/api/src/main.ts`): Node's `server.close()` waits for a connection still waiting for a response
+   (https://nodejs.org/api/http.html#serverclosecallback), so one open stream would hold a deploy until Docker kills
+   it. A test proves shutdown never waits on an open stream. Phones reconnect after a uniform random 1 to 15 s delay,
+   so 1000 phones return at about 70 a second.
+10. **One process; no Redis pub/sub now.** The bus is in-process behind a `LiveBus` interface, exact while the API is
+    one process and every producer runs in it. **Redis pub/sub between processes is Not scheduled** and must land
+    before any of: a second API process; any worker event made live; payment confirmation made live. Forgotten, events
+    from one process miss another's streams; screens still read on open, so the result is late, never wrong.
+
+**Cost.** Assumed at most 100 KB per stream in Node and 10 to 30 KB at the proxy, not measured: the server task opens
+500 streams locally and records the RSS before and after in `docs/RUNBOOK.md`. 1000 streams send 40 pings a second; an
+open costs one session resolve, as any call; nothing polls per stream. The proxy, Docker and RAM notes are in PLAN.md's
+Phase 6 and the RUNBOOK's «Reverse proxy and the live channel».
+
+**Rejected.** A WebSocket server (item 1); a subscription per enrollment (a party check per subscription and a topic
+to forge); `tracked()` replay (nothing to replay from); a periodic standing re-check per stream (the token's expiry and
+the `account` event bound it); a third-party EventSource (item 2); live completion, request expiry and payment
+confirmation (worker events, which need the bus); presence by a LiveKit call per read.
+
+**For Phase 4 (T057's cycle).** The cancellation request is the first thing that needs push: it expires at the
+session's start, so a counterparty whose app is closed never learns of it in time.
+
+**Window rule (R-320).** Nothing here offers a time.
+
+**Sources** (read 2026-11-05): https://trpc.io/docs/server/subscriptions ;
+https://trpc.io/docs/client/links/httpSubscriptionLink ; https://trpc.io/docs/client/links/wsLink ;
+https://trpc.io/docs/server/websockets ; the installed `@trpc/server` 11.19.0 (`stream/sse.ts`,
+`http/resolveResponse.ts`, `middleware.ts`) and `@trpc/client` (`links/httpSubscriptionLink.ts`);
+https://docs.expo.dev/versions/v58.0.0/sdk/expo/ ; https://github.com/facebook/react-native/issues/38004 ;
+https://github.com/cloudflare/partykit/issues/401 ; https://github.com/EventSource/eventsource ;
+https://docs.livekit.io/home/server/webhooks/ ; https://nginx.org/en/docs/http/ngx_http_proxy_module.html ;
+https://caddyserver.com/docs/caddyfile/directives/reverse_proxy ; https://nodejs.org/api/http.html#serverclosecallback ;
+the npm registry (`npm view <package> time`).
 
 ## R-325 — The signed-in default rate limit's value
 

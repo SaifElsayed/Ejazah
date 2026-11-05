@@ -47,7 +47,7 @@ reminders, certificates and gender disputes are Phase 4's; T104 and T105 are out
 
 **Primary Dependencies**: Everything Phases 0 to 2 chose. New on the API: `livekit-server-sdk` 2.19.2 (R-302). New on
 the phone: `@livekit/react-native` 3.1.0, `@livekit/react-native-webrtc` 150.1.0, `livekit-client` 2.23.0,
-`@livekit/react-native-expo-plugin` 1.1.0, `@config-plugins/react-native-webrtc` 15.0.2 (R-316). Each pinned exactly by
+`@livekit/react-native-expo-plugin` 1.1.0, `@config-plugins/react-native-webrtc` 15.0.2 (R-316), and `eventsource-parser` 4.1.2 for the live channel (R-324). Each pinned exactly by
 the task that installs it, at least fourteen days old on 2026-11-05. No paid service: LiveKit Cloud's free Build plan.
 
 **Storage**: PostgreSQL 18; forty-four tables after this phase (two new: `session_events`, `provider_outages`), one
@@ -202,11 +202,12 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 | D17 Sun 11/8 | B33 | T079/T080 (decision 10); the sessions pass migration and seed (ERD v1.15, amended on 2026-11-05), the schema gate's declared caches gaining `sessions.simultaneous_connected_seconds` (R-DB-4, constitution 2.5.0); the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons | The carried tasks the spec puts first (FR-420; T107, the constitution before the webhook, done on 2026-11-05 in this cycle), and the foundations every later batch reads |
 | D17 Sun 11/8 | B34 | `002:T144` (a student's suspension, ban and reinstatement through `StandingService`, FR-486); a teacher's end (FR-483); T090 (FR-426); the `EnrollmentSide` port; the LiveKit adapter with the Daily rename and the port's widening (FR-425, quickstart §3); the video stand-in harness | Every account's end before any session can be joined; the provider behind the port |
 | D18 Mon 11/9 | B35 | `sessions.get` and `sessions.join` with their adversarial cases; `POST /webhooks/video`; the attendance rules and `evaluate-sessions`; completion and the event rows; the outage windows; the R-SESS CI tests | US1's API and US2 whole (SC-402 to SC-407) |
-| D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens; the signed-in rate limits, the administrator kind's declaration and the default limit (T062, the decisions of 2026-11-05 on the administrator's control) | US1 on the phone; the first device check of joining |
+| D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens; the signed-in rate limits, the administrator kind's declaration and the default limit (T062, the decisions of 2026-11-05 on the administrator's control); the live channel's server side (T063: `live.events`, the registry, the in-process bus and the after-commit publisher, the shutdown order; research R-324) | US1 on the phone; the first device check of joining; the live channel's API |
 | D19 Tue 11/10 | B37 | Cancellation requests and their expiry sweep; the administrator's cancellation and the monitor; the user record's request counts; raising a dispute | US3's API, US5's first half |
 | D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance, counter options and counter-proposals again after a decline (R-320, decision 9); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
-| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1); a ruling's revision (SRS FR-DISPUTE-7, the third analysis) | US5's administrator side |
+| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1); a ruling's revision (SRS FR-DISPUTE-7, the third analysis); the manual compensation case (T064, `cases.openManual`, research R-326) | US5's administrator side |
 | D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read; the student's complaint of the teacher's absence and its decision (T060); an administrator's restore (T061) | US7's API |
+| D20 Wed 11/11 | B40a | The live channel on the phone and the pre-join presence (T065); the remaining producers: cancellation, an administrator's cancel, an enrollment closed or restored, an account's end, chat (T066) (research R-324, the owner's decision of 2026-11-05) | Live updates while the app is open (FR-427 to FR-429, FR-437, FR-438) |
 | D21 Thu 11/12 | B41 | The phone: cancellation and dispute on both roles; the remedy sheets (choice, proposal, counter, the teacher's answer); chat on both roles; the ended tab's new statuses | US3, US4, US5 and US7 on the phone |
 | D22 Sun 11/15 | B42 | The panel: `/sessions` with cancellation; `/review` and `/outages`; `/disputes` with the chat; `/cases`; a student's standing dialogs; `/users`, FR-ADMIN-4's directory with `users.list` and `users.get`, the request counts and a student's standing actions | The administrator's pages |
 | D23 Mon 11/16 | B43 | The adversarial suite's completeness and the gates (FR-496, FR-497); the coverage floor; the document pass (what the build changed beyond the documents amended on 2026-11-05: the RUNBOOK's room setting from B34's check, PLAN.md's close date); quickstart §1 to §7; the owner's device run (SC-401, SC-414); the close | The proofs; the same day, Phase 4's Spec Kit cycle (PLAN.md's rule) |
@@ -627,6 +628,34 @@ default's value in item 3 (c) above; item 4's «proposed, not written here»; it
 The window rule (R-320): nothing here offers a time. The hand-off releases the reserved times and books none; the
 correction leaves the remedy to FR-462's moment.
 
+## Decisions of 2026-11-05, the live channel
+
+The owner approved research R-324 the same day. Where it touches a decision above, it adds to it and changes none.
+
+1. **Server-Sent Events through tRPC 11.19's subscriptions**, on the existing mounts; no WebSocket server. On the
+   phone, an EventSource of our own over `expo/fetch` and `eventsource-parser` 4.1.2, outside `timed()`; the token
+   in the `Authorization` header only; on `UNAUTHENTICATED`, `account.me` once, then the stream reopened.
+2. **One channel per signed-in device**, `live.events`, no input, its own limit `rate_limit_live_channel` (10 per
+   60 s) and at most `live_channel_max_connections_per_user` (3) streams, the oldest ended; four events (`session`,
+   `enrollment`, `chat`, `account`), each parsed by its schema and recorded by the contract snapshot, addressed by
+   the server from the producing transaction's rows and sent after it commits (spec FR-427, FR-428).
+3. **Live:** chat, the counterparty's presence before joining (`sessions.get`'s `counterpartyInRoom`, a hint), a
+   cancellation request and its answer, an administrator's cancellation, an enrollment closed or restored, an
+   account's end and standing. **Read on open:** remedies, disputes, complaints, outcomes, the administrator's
+   screens, an enrollment's completion and a request's expiry (the worker's), the payment confirmation (still polled);
+   the phone's «expired» is display only, and a refused answer reads the screen again (spec FR-437, FR-438).
+4. **Resilience:** a ping every 25 s, a restart after 60 s of silence, backoff from 1 s to 30 s with jitter, closed in
+   the background and reopened with one re-read, re-reads coalesced, a bounded queue, every stream ended at its
+   token's expiry.
+5. **The hard condition:** the API ends every live stream before `application.close()` on shutdown, with a test that
+   shutdown never waits on one; phones come back after 1 to 15 s (spec FR-429).
+6. **No Redis pub/sub now:** Not scheduled, required before a second API process, any worker event made live or the
+   payment confirmation made live. Also Not scheduled: the live payment confirmation (after the bus), and for T057's
+   Phase 4 cycle, that the cancellation request is the first thing that needs push.
+
+The tasks: T063 (the server side, B36), T065 (the phone and the presence) and T066 (the remaining producers), both in a
+new batch B40a on D20, and one clause in T045 (`tasks.md`). The window rule (R-320): nothing here offers a time.
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -677,16 +706,20 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 23 to 27 (the default's value, chat retention, the deleted files held, the manual reasons and the covering rule, `outcome_corrected`, `instants_reresolved`, `previous_start_at`, `slot_holds.release_reason`, rule 48, the new setting, §11) | 1 to 6 |
 | ADR 0015 | An amendment paragraph: a deleted account's files wait for its open disputes and cases | 4 |
 | `docs/RUNBOOK.md` | «A video event refused or not attributed» | 2 (GAP-10) |
+| `docs/SRS.md` | The live channel: §3.14's two rows, NFR-SEC-12, an amendment line naming §4.4 | Decisions of 2026-11-05, the live channel, 2 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog row 28, the two settings | 2 |
+| `docs/ARCHITECTURE.md` | §3.2's chat row: Server-Sent Events through tRPC subscriptions; §4: the live channel in the kernel, no module edge | 1, 2 |
+| `docs/RUNBOOK.md` | «Reverse proxy and the live channel» | 4, 5 |
+| `PLAN.md` | Phase 3: the live channel; Phase 6: the proxy, Docker and RAM notes | 1, 5 |
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Twenty-six decisions, R-301 to R-323 and R-325 to R-327 (R-324
-  not yet written); the owner answered
+- **Phase 0 — Research**: [research.md](./research.md). Twenty-seven decisions, R-301 to R-327; the owner answered
   its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, the second and third
   analyses' findings the same day, R-322 on the decisions of no automatic termination, and R-323, the administrator's
   control inventory, on the decisions of the administrator's control and the rate limits; R-323's gaps, R-325 (the
   default limit's value), R-326 (the manual case) and R-327 (a deleted account's files) on the decisions answering that
-  inventory.
+  inventory; R-324, the live channel, on its own decision the same day.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 

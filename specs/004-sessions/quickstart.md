@@ -17,8 +17,10 @@ iPhone run is Phase 6's).
   a spec that writes to a database runs only with `IJAZAH_DB_SPECS=1` beside the two `ijazah_integrity` URLs (T124, the
   owner's decisions of 2026-11-01). The database is migrated and seeded fresh, not reset (B19d).
 - Before the first batch's migration runs on `ijazah`, the rows data-model §6 names are counted, then `pnpm db:migrate`
-  and `pnpm db:seed` (the ten new settings, and the `teacher_no_show_threshold` row deleted by the migration; the panel and the
-  jobs fail closed on a missing one).
+  and `pnpm db:seed` (the seventeen new settings rows of data-model §4, and the `teacher_no_show_threshold` row deleted
+  by the migration; the panel and the jobs fail closed on a missing one). The seed inserts only the rows that are
+  missing, so on a database already seeded `chat_retention_days` keeps its old value, 0, until an administrator changes
+  it to 30 in the panel: no code writes a setting (R-PROC-11; data-model §4).
 - `VIDEO_PROVIDER=fake` for every automated run: no provider credential in the suite (as SC-302 was for the gateway).
 - For the device runs: a LiveKit Cloud project on the **free Build plan** (a hard cap: requests fail, nothing is billed;
   ADR 0003), its `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` in `.env` only (R-SEC-1); the development
@@ -94,6 +96,12 @@ Expected:
   and conversion of a hold writes its `release_reason`; a time zone data change writes one `instants_reresolved` row
   per session moved or kept back, and a refused commit none; `sessions.monitor.get` answers the enrollment's timeline
   and each session's remedy, a refused booking with its `bookingRetriedUntil`.
+- The live channel (research R-324; FR-427 to FR-429): `live.events` refuses an anonymous caller and a restricted
+  standing, and an open over `rate_limit_live_channel`; a fourth stream of one account ends the oldest; a chat between
+  A and B and a cancellation on their session reach A and B and never C; nothing is sent when the producing
+  transaction rolls back; a suspension ends the person's streams after its `account` event; a stream ends at its access
+  token's expiry; **shutdown with streams open completes and never waits on one** (the owner's hard condition); the
+  contract snapshot records `live.events`' event schema; the RUNBOOK holds the RSS measured with 500 streams.
 
 ## 2. A session on the stand-in, end to end (US1, US2)
 
@@ -118,7 +126,9 @@ restricted participant from it; and that webhooks are delivered on the free plan
 On the vivo and the realme, Etisalat mobile data, the development build:
 
 1. As the teacher and the student, open the session inside the lead: the pre-session screen names the other person,
-   the length, the start in both zones, the microphone and camera state, camera off (FR-434).
+   the length, the start in both zones, the microphone and camera state, camera off (FR-434). When the first joins,
+   the other's still-open pre-session screen says so within seconds without a reload, and a chat message sent from one
+   phone appears on the other's open chat (the live channel, FR-427).
 2. Join; recite and correct; turn each camera on and off; share a screen from one phone.
 3. Switch one phone from Wi-Fi to mobile data and back mid-session; close the app on one phone and reopen it: back in
    the same room (FR-435).

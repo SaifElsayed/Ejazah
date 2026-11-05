@@ -57,6 +57,28 @@ The owner's decision of 2026-11-05 (spec FR-470, research R-321; T062):
 | `RateLimitDeclaration` | `rate-limit.guard.ts` | `{ key, budget?, subject: 'caller' }` or `{ key, budget?, subjectOf }`: `'caller'` accepted by the signed-in kinds only and filled from the context they authenticated, as a `user` or `administrator` subject; a `subjectOf` string always an `identifier`. `throttle` and `throttleDefault` pass tRPC's `path` as the procedure; the upload, public page and account-deletion routes pass their route's fixed name |
 | `createRateLimiter` | `rate-limit.guard.ts` | Builds both clients from the one `REDIS_URL`; the header's «every limit read on every check» gains the default key's exception |
 
+`live.events` (app-surface.md, `live`) declares its own, `rate_limit_live_channel` (10 per 60 s), `subject: 'caller'`,
+through the user kind's existing `rateLimit`, failing closed (the owner's decision of 2026-11-05, research R-324).
+
+## The live channel (`apps/api/src/platform/live/`; research R-324, the owner's decision of 2026-11-05)
+
+| Export | Contract |
+|---|---|
+| `LiveRegistry` | The open streams of this process, by user id and by sign-in session id: at most `live_channel_max_connections_per_user` per user (a setting, read at each open), the oldest ended when one more opens; a bounded queue per stream (a kernel constant), a stream that falls behind ended; `endUser(userId)`, `endSession(sessionId)` and `endAll()` |
+| `LiveBus` | `publish({ to: userIds, event })` and `subscribe`; in-process only (`InProcessLiveBus`). Exact while the API is one process and every producer runs in it. A Redis bus between processes is Not scheduled, required before a second API process, any worker event made live or payment confirmation made live |
+| `LivePublisher` | What a context carries: `afterCommit(to, event)` adds to the transaction's after-commit list, which the user kinds and the administrator kind flush once their transaction has committed, and drop on a rollback (the shape of `deletion.service.ts`' `#afterCommit`); a publish that fails is logged at warn, without its payload, and never retried |
+| the user instance's SSE options | `procedures.ts`' user `initTRPC`: `sse.ping` every 25 s and `sse.client.reconnectAfterInactivityMs` 60 s, kernel constants as the limiter's are (R-321, item 5); every yielded event parsed by `liveEvent`; the stream ended at the access token's expiry, which `ResolvedUserSession` exposes additively (`modules/identity/session.service.ts`) |
+
+**Addressing.** No event is addressed by a topic the client chose: each producer names the user ids it read in its own
+transaction (a chat send's two parties under L-B's locks; a session's two participants; an enrollment's two parties;
+the person whose standing changed). **`account`.** `StandingService`, a student's standing, a deletion and a sign-out
+publish `account` after commit and end the person's streams (a sign-out, that sign-in session's).
+
+**Shutdown order (the owner's hard condition).** `onShutdown` in `apps/api/src/main.ts`: `live.endAll()` →
+`application.close()` → the queue → the database. Every live stream ends before `application.close()`, whose
+`server.close()` would otherwise wait on it; a spec proves shutdown completes with streams open and never waits on one.
+Clients reconnect after a random 1 to 15 s delay.
+
 ## The composition root
 
 `AppServices` gains `sessions` (join, the session read, cancellation, remedies, disputes) and `chat`;
@@ -74,8 +96,12 @@ The owner's decision of 2026-11-05 (spec FR-470, research R-321; T062):
   deleted person's files wait while an enrollment of theirs has an open dispute, case or complaint (spec FR-487,
   research R-327; the owner's decision of 2026-11-05).
 
+- the live channel's registry, in-process bus and publisher into the user and administrator contexts, the publisher
+  into sessions, chat and identity's `StandingService`, deletion and sign-out, and `live.endAll()` first in
+  `onShutdown` (R-324).
+
 The worker binds the same port for the sweeps, and hands `erase-deleted-files` the same `heldFileOwnersAmong` as its
-`held` option.
+`held` option. The worker publishes nothing live (R-324).
 
 ## Jobs (`apps/api/src/jobs/`, registered in `worker.ts`)
 
@@ -102,4 +128,6 @@ The worker binds the same port for the sweeps, and hands `erase-deleted-files` t
 - The adversarial suite's procedure harness gains every procedure of this phase that issues a token or reads a
   session, its chat or its counterparty (FR-496).
 - The coverage floor widens to `modules/chat`; `modules/sessions` and `modules/moderation` already on it.
-- `pnpm contract:snapshot --check --base origin/develop` before a batch with contract changes is pushed.
+- `pnpm contract:snapshot --check --base origin/develop` before a batch with contract changes is pushed;
+  `scripts/contract-snapshot.ts` records a subscription's event schema (`live.events`' `liveEvent`), since its
+  `_def.output` does not describe what it yields (R-324).
