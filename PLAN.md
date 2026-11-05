@@ -209,7 +209,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** run a session end to end and settle its outcome from evidence, not from the client.
 
-**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…6, FR-ADMIN-5 (the student's part), FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages and the student's standing these requirements need; the owner's decision of 2026-11-05)
+**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…6, FR-ADMIN-4 (the user directory, which no phase owned; the owner's decision of 2026-11-05 on Phase 3's analysis), FR-ADMIN-5 (the student's part), FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages and the student's standing these requirements need; the owner's decision of 2026-11-05)
 
 **What this phase delivers**
 
