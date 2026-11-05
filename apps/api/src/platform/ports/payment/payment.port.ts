@@ -23,10 +23,6 @@ export interface Checkout {
 }
 
 /**
- * What `cancelCheckout` found. `cancelled` also when the order was already cancelled or expired;
- * `paid` and `in_progress` refuse a new checkout and write nothing (ADR 0010 D6).
- */
-/**
  * Whom the order's net settles to, where the gateway splits at checkout (T056, OPEN-11): the
  * teacher's recipient reference as `registerPayoutRecipient` answered it. The whole net is theirs
  * (0% commission, ADR 0007); no share is computed here.
@@ -35,6 +31,10 @@ export interface CheckoutPayee {
   readonly recipientRef: string;
 }
 
+/**
+ * What `cancelCheckout` found. `cancelled` also when the order was already cancelled or expired;
+ * `paid` and `in_progress` refuse a new checkout and write nothing (ADR 0010 D6).
+ */
 export type CancelOutcome = 'cancelled' | 'paid' | 'in_progress' | 'unsupported';
 
 export type RecipientStatus = 'pending' | 'verified' | 'rejected';

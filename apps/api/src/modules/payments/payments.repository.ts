@@ -127,7 +127,6 @@ export class PaymentsRepository {
     return count === 1;
   }
 
-  /** The order's status, read under `lockOrder`. */
   /** The amount and currency the order was created for (T056). */
   async chargeOf(paymentId: string): Promise<OrderCharge> {
     const { grossPiasters, currency } = await this.#tx.payment.findUniqueOrThrow({
@@ -137,6 +136,7 @@ export class PaymentsRepository {
     return { gross_piasters: piasters(Number(grossPiasters)), currency };
   }
 
+  /** The order's status, read under `lockOrder`. */
   async statusOf(paymentId: string): Promise<OrderStatus> {
     const { status } = await this.#tx.payment.findUniqueOrThrow({
       where: { id: paymentId },
