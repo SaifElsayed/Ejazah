@@ -2,7 +2,7 @@
 
 **Date**: 2026-11-05 · **Spec**: [spec.md](./spec.md) · **Plan**: [plan.md](./plan.md)
 
-Each decision below resolves a question the specification leaves to the plan. Numbered R-301 to R-322 so that a
+Each decision below resolves a question the specification leaves to the plan. Numbered R-301 to R-323 so that a
 citation never collides with Phase 0's R-1…, Phase 1's R-101… or Phase 2's R-201 to R-222. Every decision was taken
 against the code as it stands on `Ejazah_app/003-booking/T106` at `da35d59` (`develop` `8e3614e` plus the spec and
 clarify commits, read on 2026-11-05); where it names existing code, the path is given. Versions were read from the npm
@@ -286,7 +286,9 @@ revision run and its answer stored in one transaction, a repeat with the same ke
 writing nothing new, a reuse with another input refused `CONFLICT`; the scope `disputes.revise` joins
 `packages/contracts/src/idempotent-procedures.ts`, the first administrator procedure there, its actor the
 administrator's id (the owner's decision of 2026-11-05). Its locks are a resolution's (contracts/kernel.md), with no account's, since it
-calls no `StandingService`.
+calls no `StandingService`. It declares its own rate limit, `rate_limit_dispute_revision` (10 per 60 s), the administrator as
+subject, apart from the key and checked before the kind's transaction opens (R-321, the owner's decision of 2026-11-05 on
+the administrator's control and the rate limits).
 
 **Rationale.** FR-DISPUTE-3, FR-DISPUTE-4, FR-473 to FR-476. The ERD's status enum keeps `disputed`; without a column
 the frozen outcome would be lost.
@@ -646,7 +648,10 @@ exist (seed lines 89–147), `first_session_lead_hours` among them, which the re
 no automatic termination (**Decided**, the owner, 2026-11-05; ADR 0023, R-322): `teacher_no_show_threshold` is removed,
 its row deleted by the first batch's migration and no longer seeded; `repeated_absence_flag_count` 5 and
 `enrollment_restore_window_days` 7 are added, and `rate_limit_absence_complaint` `{ limit: 5, window_seconds: 3600 }`,
-the limit the owner's decision and its default this cycle's reading; each an SRS §3.14 row.
+the limit the owner's decision and its default this cycle's reading; each an SRS §3.14 row. On the decisions of the
+administrator's control and the rate limits (**Decided**, the owner, 2026-11-05; R-321): `rate_limit_signed_in_default`
+`{ limit: 120, window_seconds: 60 }` («provisional, set by research R-325 before B36»), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
+`rate_limit_manual_compensation_case`, `{ limit: 10, window_seconds: 60 }` each; each an SRS §3.14 row (NFR-SEC-12).
 
 ## R-318 — The administrator's surfaces
 
@@ -726,6 +731,57 @@ and R-SESS-5's CI tests land with the code they hold (the constitution's enforce
 widens to `modules/chat`. The adversarial suite gains every procedure of this phase that issues a token or reads a
 session, its chat or its counterparty (FR-496), and the video stand-in harness is the only producer of video events in
 the suite, as the gateway's is (contracts/video.md).
+
+*The signed-in rate limits* (**Decided**, the owner, 2026-11-05: «Decisions of 2026-11-05, the administrator's control
+and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProcedure`
+(`apps/api/src/surfaces/procedures.ts`, line 508) takes `{ input, output }` only and opens its transaction at line 527
+(`transactions.run`); the user kinds accept an optional `rateLimit` and apply `throttle` after the input
+(`signedIn`, `teacherProcedure`); a signed-in procedure that declares none is not counted
+(`platform/guards/rate-limit.guard.ts`, lines 19 and 20). The design:
+
+1. **The administrator kind's declaration.** `adminProcedure` gains an optional `rateLimit`, a `RateLimitDeclaration` over the administrator's context
+   once `requireAdministrator` has admitted the caller (so `ctx.administrator.adminId` can be the subject), applied
+   by `throttle` after `requireAdministrator` and the input schema and before the `.use` that opens the transaction, so a
+   refused call opens none and writes nothing; `AdminMeta.rateLimit` stamps its key, as the anonymous kind's does.
+   `disputes.revise` declares `rate_limit_dispute_revision` and `sessions.restore` `rate_limit_enrollment_restore`,
+   each with `subjectOf: ({ ctx }) => ctx.administrator.adminId`, apart from the `idempotencyKey`: a repeat with the
+   same key is counted as a call, a refusal by the limit claims no key.
+2. **The default limit.** Every signed-in kind (`studentProcedure`, `userProcedure`, `teacherProcedure`,
+   `adminProcedure`) that is given no `rateLimit` applies a second middleware, `throttleDefault`, at the same place
+   (after the input; for the administrator kind before the transaction): one key, `rate_limit_signed_in_default`, the
+   subject `user:<userId>` for a user kind and `admin:<adminId>` for the administrator kind, so the two principals' ids
+   never share a counter. A procedure that declares a limit is counted by it only. The public and administrator-public
+   kinds are unchanged (each already declares its own).
+3. **Its setting, held for 60 s.** The limiter reads `rate_limit_signed_in_default` through the `SettingsReader` and keeps
+   the parsed value in process memory for up to 60 s, re-reading it once that has passed; a read that throws
+   (`SettingError`: the row missing or invalid) is never kept and refuses the call, the internal error, as FR-034 says.
+   No other key is held: every other limit and every other setting is read on every use, as the guard's header
+   (lines 5 and 6) and `settings-reader.ts` say, and the header gains the one exception.
+4. **Fast failure.** `createRateLimiter`'s client (line 223: `lazyConnect: true`, `maxRetriesPerRequest: 1`) waits out
+   a reconnection before a count fails, which is right for a limit that refuses on failure and too slow for one that
+   lets the call through. The default limit counts on a **second client** of its own, built beside the first in
+   `createRateLimiter`: `new Redis(redisUrl, { enableOfflineQueue: false, maxRetriesPerRequest: 0, commandTimeout: 100 })`
+   (ioredis 5.11.1's options: a command sent while the connection is down fails at once instead of queueing, none is
+   retried, and none waits more than 100 ms), connected when the limiter is built, since every process that builds one
+   serves signed-in calls. The guard also races its `hit` against a 100 ms timer it clears, so the bound holds for any
+   `RateLimitCounter` (the spec's fake that never answers included). On a failure or a timeout the call goes through
+   uncounted and the limiter opens a **breaker**: until 10 s have passed on the process's monotonic clock no count is
+   attempted for the default key, every call goes through, and one warning is logged when the breaker opens (the key,
+   no subject), so a Redis outage logs one line per 10 s, not one per request. The first count after the 10 s closes it
+   or opens it again. The declared limits keep the first client and fail closed, as now (lines 41 and 42): the counter's
+   failure is the internal error.
+5. **The numbers.** The default's limit is its setting, 120 per 60 s, «provisional, set by research R-325 before B36»; 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
+   owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
+   retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
+   magic-number gate governs `modules/`, where every operational number is a setting).
+6. **Tests** (`rate-limit.guard.spec.ts`, `procedures.spec.ts`): a procedure with no limit refused `RATE_LIMITED` after
+   the default's limit as its setting holds it; a procedure with its own limit not counted by the default; the default letting the call
+   through when the counter rejects and when it never answers within 100 ms, and the breaker skipping the counter until
+   10 s have passed with one warning; a declared limit refusing the call when the counter rejects; the default's missing
+   row refusing the call, never letting it through; the administrator kind refusing over its declared limit with no
+   transaction opened and nothing written; and `tests/seed/seed.spec.ts` asserting the seed plants the four rows.
+
+**Window rule (R-320).** None of this offers a time.
 
 ## R-322 — No automatic termination: the repeated-absence mark, the student's complaint, an administrator's restore
 
@@ -822,8 +878,24 @@ FR-423), `enrollments`, `sessions`, `session_remedies`, `disputes`. Under them, 
    the slot held by another student's open hold, or occupied by another enrollment (`EnrollmentSide.slotWeekTaken`), is
    `slot_taken`; an occurrence overlapping a session, an open hold (`EnrollmentSide.heldTimesOf`) or a reservation
    (`reservedTimesOf`, R-311) of either party is `time_taken`.
+6. **The slot unchanged** (the owner's decision of 2026-11-05: an eighth cause; rejected: recreating at the slot's new
+   time). Checked before step 5's weeks, under the slot's lock. The student enrolled on the old time, so the restore is
+   refused `slot_changed` when the slot's `day_of_week`, `start_time_local` or `timezone` differ from the enrollment's
+   own: the weekday of `scheduled_date_local`, the `scheduled_start_time_local` and the `timezone` of its lowest-numbered
+   session that is not a make-up (`makeup_for_session_id` NULL), and `snapshot_slot_timezone` for the zone. Those
+   columns are what the ERD keeps of the slot as it was: each generated session holds the local date, start and zone it
+   was asked for, never where a DST gap moved it (ERD §5, ADR 0009 D1), and the slot keeps no history of its own
+   (`availability_slots` has no earlier values, ERD §4; its `updated_at` would also move on a deactivation and a
+   reactivation, which change no time). A slot cannot change while its enrollment holds it in use (`SLOT_IN_USE`, Phase
+   2's R-207), so a difference arose between the closing and the restore. A slot cannot be deleted (no path does, and
+   the enrollment's foreign key would refuse it), so a removed slot is a deactivated one, `slot_inactive` (step 5).
+   Today the slot's zone never changes (`modules/catalog/slots.service.ts`: an update never writes it); the check holds
+   should it ever. A length change alone is not `slot_changed`: the recreated sessions take the snapshot's length, and
+   their overlap is step 5's.
 
-Every refusal writes nothing. Then, in the same transaction: `EnrollmentSide.restore(tx, id)` (`confirmed`,
+The restore declares its own rate limit, `rate_limit_enrollment_restore` (10 per 60 s), the administrator as subject,
+apart from the key and checked before the transaction opens (R-321). Every refusal writes nothing. Then, in the same
+transaction: `EnrollmentSide.restore(tx, id)` (`confirmed`,
 `cancellation_reason` NULL, `confirmed_at` untouched, one `enrollment_events` row `restored`); the K sessions inserted
 by the generation service widened additively with a count and a first sequence number (numbered after the last, FR-424:
 nothing assumes every session was generated at once; the database's exclusions the second line, an exclusion refusal
@@ -847,3 +919,112 @@ Phase 2's covering rule would read it. A stored no-show count or closing instant
 Recreating the package count less the consumed sessions without the owed ones: a session owed through a remedy offered
 again would be owed twice. Skipping a week blocked by a hold or a reservation, as the make-up proposal does: the owner's
 rule refuses a restore over a taken slot, and a refusal tells the administrator why.
+
+## R-323 — Admin control inventory
+
+**Decided**, the owner, 2026-11-05 (plan.md, «Decisions of 2026-11-05, the administrator's control and the rate limits»,
+items 7 and 8; SRS FR-ADMIN-20; spec FR-471). Every automatic or final action of Phase 3, and of Phase 2 where one
+exists, is listed below with what the administrator has of it: **evidence** (the table, row and event that record what
+happened, when and why, and the panel page and procedure that show it), a **fix** while the state can still change, a
+**restore-the-right** path once it cannot, and the **evidence erased automatically**. The procedures named are those of
+contracts/admin-surface.md and of the earlier phases as they stand; the pages are the panel's (R-318; `/payments` and
+`/audit` exist, the second listing every administrator's audit entry with its reason through `audit.list/get`). A cell
+that has nothing is a **GAP**, numbered and answered after the table; **M** is the manual compensation case of FR-471
+(c) (proposed, not yet a task), and **M only** marks a row where it is the one restore-the-right path. This inventory
+writes no task.
+
+| # | Action and its trigger | Evidence (what, when, why; the panel) | Fix while it can change | Restore the right | Erased automatically |
+|---|---|---|---|---|---|
+| P2-1 | A hold released without conversion: past its expiry by `expire-holds` (every minute, no enrollment yet), or before a new hold on the same slot or by the same student (ADR 0010 D3) | `slot_holds.released_at` (when); why: **GAP-8** (no reason is kept, read only from `expires_at` against `released_at`); panel: **GAP-8** (no procedure reads holds) | None needed: a release is final at once, and the student checks out again (FR-BOOK-12) | Nothing was paid; nothing is owed | Nothing (the row stays) |
+| P2-2 | A pending payment's window ends (`expire-pending-payments`, every minute): the hold released, the enrollment `cancelled` `payment_expired` (FR-PAYG-6) | `enrollments.status`, `cancellation_reason`; one `enrollment_events` row `cancelled` with its reason and `occurred_at`; `payments.status` from the gateway's `expired` event; panel: `/payments` (`payments.get`: the order, its event timeline, its enrollment), `/sessions` (`sessions.monitor.list/get`: the status); the `enrollment_events` rows: **GAP-1** | Automatic: a paid event that still arrives is confirmed by the late branch (ADR 0010 D5) or opens a case (FR-PAYG-19, P2-5); no administrator path | The late branch or its case (P2-5); with nothing paid, nothing is owed | `payments.checkout_url_encrypted` set NULL once the order leaves `created` (ERD §7); the `checkout.*` idempotency rows after `idempotency_key_ttl_hours` (24 h) |
+| P2-3 | A gateway webhook moves an order (`POST /webhooks/payment`): `paid`, `failed` (one `order_failed` outcome), `expired`, `refunded` | `payment_events` (provider event id, type, `signature_verified_at`, `payload_hash`, `received_at`), `payments.status`, `enrollment_events` `order_failed`; panel: `/payments` (`payments.list/get`) | None: the gateway's signed record, written by no administrator (FR-ADMIN-18) | Through the case it opens where one applies (P2-5, P2-6); otherwise **M only** | The body is never stored, only its hash (R-SEC-2); a forged or unsigned event is written nowhere and logged at warn |
+| P2-4 | `confirm-enrollment` confirms an enrollment on a paid event, or confirms a `cancelled` one by the late branch (ADR 0010 D5); a lost enqueue recovered by `expire-pending-payments` after `checkout_confirmation_timeout_seconds` | `enrollments.confirmed_at` (R-HONEST-1), one `enrollment_events` row `confirmed` with its `payment_id`; the generated `sessions` rows; panel: `/sessions` (the status and the sessions), `/payments`; the outcome rows: **GAP-1** | `sessions.cancel` per session not yet settled (FR-460); no path reverses a confirmation (R-HONEST-1) | Not needed: the paid sessions are delivered; **M** if an administrator finds otherwise | The `idempotency_keys` rows of the checkout after 24 h |
+| P2-5 | The refusal branch: the database refuses a paid order's confirmation, or a party is restricted (`slot_unavailable`, `party_restricted`; FR-362) | The hold released, `enrollment_events` `cancelled` (`slot_unavailable`), one compensation case (`disputes`: `reason`, `created_at`); panel: `/cases` (`cases.list/get`), `/payments` | The case, open: `cases.resolve` or `cases.dismiss` with a note | The case | Nothing |
+| P2-6 | A second paid order on a confirmed enrollment (`duplicate_payment`, FR-375) | One `duplicate_payment` case, joined while open; the orders on `/payments`; panel: `/cases` | The case | The case | Nothing |
+| P2-7 | A pending enrollment cancelled by the student's own new checkout (`checkout_abandoned`, FR-BOOK-12) or by an account's end (R-219: `admin`, `teacher_suspended`, `account_deleted`) | `enrollment_events` `cancelled` with its reason, `slot_holds.released_at`; panel: `/sessions` (the status); the outcome row: **GAP-1** | None: final at once | A paid event after it takes the refusal branch and opens a case (FR-362); with nothing paid, nothing is owed | Nothing |
+| P2-8 | `reresolve-session-instants` (at the worker's start and daily): every scheduled session's cached instants recomputed after a time zone data change; a moved session that would overlap kept at its old instants and reported | **GAP-6**: `scheduled_start_at` and `scheduled_end_at` are overwritten with no earlier value and no event; the kept-back sessions go to error tracking only; panel: the new instants on `/sessions`, the change itself nowhere | `sessions.cancel` of a moved session (FR-460); nothing re-places one | The `admin_cancellation` case `sessions.cancel` opens | The run's `tzdata-reresolve` marker (an `idempotency_keys` row) after 24 h |
+| P3-1 | `evaluate-sessions` settles a session (every minute, from `scheduled_end_at` + `session_evaluation_delay_minutes`): Done, Student-, Teacher- or Both-No-Show, Under-Threshold, Provider-Outage | `sessions.status`, `evaluated_at`, `simultaneous_connected_seconds` (the figure decided on, ADR 0022); one `session_events` row `settled`; the inputs kept: `session_participant_events` (append-only) and `provider_outages`; the settings it read are not on the row, their values at that instant recoverable from the settings' audit entries (ERD §12: changes audit-logged); panel: the status on `sessions.monitor.get`; the telemetry only through `sessions.review.get` (Under-Threshold, Provider-Outage) and `disputes.get` (a disputed session): for an undisputed Done or No-Show, **GAP-2** | Inside the dispute window: a participant's dispute (T026), then `disputes.resolve` and `disputes.revise`; an outage window (`sessions.outages.record`) sends it to the review queue; an administrator's own correction of an outcome nobody disputed: **GAP-3** | A no-show's remedy (T028); otherwise, after the window, **M only** | No database row; the provider's room state (no recording is made): the room ends `video_empty_timeout_seconds` (300 s) after the last leave or at `endRoom` |
+| P3-2 | The evaluation's run ends the room of a cancelled session still inside its join period (`endRoom`; `removeParticipant` first where T009's fallback exists) | The cancellation's own rows (P3-10, P3-12 to P3-16); the room's end only as the provider's `room_ended` participant event, when delivered: the platform's own call writes nothing, **GAP-7**; panel: the telemetry where P3-1 shows it | None needed: the session is already cancelled | The cancellation's case | The provider's room state; the join token was valid only until the scheduled end and is never stored or logged (R-SEC-2) |
+| P3-3 | A remedy offered once the dispute window has closed (`advance-remedies`, every minute; in an accepted cancellation's transaction; a `frozen` remedy offered again after a reinstatement) | `session_remedies` (`offered_at`, `choice_closes_at`, the two snapshots, the proposal), one `session_events` row `remedy_offered`; panel: `cases.get`'s `covers` once a case names the remedy; an open remedy on `/sessions`: **GAP-4** | The parties' own paths (choose, accept, counter, answer); an administrator's: **GAP-5** | The remedy itself; a case after its windows (P3-4 to P3-7) | Nothing |
+| P3-4 | A counter-proposal's answer window ends unanswered: a refund case `counter_unanswered` (`advance-remedies`) | The remedy `refund_case` with `case_id` and `decided_at`, one `session_events` row `remedy_handed_to_case`, the case; panel: `/cases` (`cases.get`'s `covers`) | The case (`cases.resolve`, `cases.dismiss`) | The case | Nothing |
+| P3-5 | The choice window ends with no counter pending and no acceptance, or a counter is declined after it: the system's proposal booked (H5) | The new `sessions` row with `makeup_for_session_id`, the remedy `booked` with `decided_at`, one `session_events` row `makeup_booked`; panel: the make-up on `sessions.monitor.get` (`makeupFor`); the remedy's history: **GAP-4** | `sessions.cancel` of the make-up while not settled (FR-460) | The `admin_cancellation` case it opens | Nothing |
+| P3-6 | A booking of the proposal the database refused, retried each run while it starts at least L ahead, then handed to a `makeup_refused` case (A3) | The final hand-off: the remedy `refund_case`, `remedy_handed_to_case`, the case; each refused attempt is reported to error tracking only, its state derivable (`proposed` past `choice_closes_at`): **GAP-4** shows it | The case; while retrying, **GAP-5** | The case | Nothing |
+| P3-7 | The student's refund choice: a `refund_choice` case (T030) | The remedy `refund_case`, `remedy_handed_to_case`, the case; panel: `/cases` | The case | The case | Nothing |
+| P3-8 | A cancellation request expires at the session's start (`expire-cancellation-requests`, every minute) | `cancellation_requests.status = 'expired'`, one `session_events` row `cancellation_expired`; panel: `sessions.monitor.get`'s `cancellationRequests` | None needed: the session stands; `sessions.cancel` while not settled | Nothing is lost: the session stands | Nothing |
+| P3-9 | A cancellation accepted: Cancelled-By-Agreement, final at acceptance (FR-CANCEL-2) | The request `accepted` with `responded_at`, the session's status, one `session_events` row `cancellation_accepted`, its remedy (P3-3); panel: `sessions.monitor.get` | None: final, the parties' agreement | The make-up or refund it owes (T028) | Nothing |
+| P3-10 | An administrator's session cancellation (`sessions.cancel`, FR-460) | The status, one `session_events` row `cancelled_by_admin` naming its case, the `admin_cancellation` case, audit `session.cancelled` with the reason; panel: `/sessions`, `/cases`, `/audit` | None: final | The `admin_cancellation` case | Nothing |
+| P3-11 | Completion (`advance-remedies`): every session settled and not frozen, the last window closed, nothing owed | `enrollments.status = 'completed'`, one `enrollment_events` row `completed`; panel: the status on `/sessions`; the outcome row: **GAP-1** | None: final, and not restorable (FR-454) | **M only** | The chat, by P3-26's rule |
+| P3-12 | A student's suspension (`students.suspend`): upcoming sessions cancelled, open remedies frozen, one `student_suspended` case per confirmed enrollment | `session_events` `cancelled_by_admin` (naming the case), `remedy_frozen`, `counter_withdrawn`; the cases; `users.account_status`; audit `student.suspend`; panel: `/cases` (first in the queue), `/sessions`, `/users`, `/audit` | `students.reinstate`, then `cases.resolve` (cleared: the cancelled sessions owed as a Teacher-No-Show) or `cases.dismiss` (P3-13) | The case cleared | The student's sign-in sessions ended, then deleted by `purge-expired-sessions` after `session_purge_after_days` (30) |
+| P3-13 | A suspended student's fault confirmed (`cases.dismiss` of a `student_suspended` case): the enrollment `cancelled` `admin`, a new `student_fault_confirmed` case | `enrollment_events` `cancelled` (`admin`), the make-ups' `cancelled_by_admin` rows naming the new case, the remedies handed to it, audit `case.dismissed`; panel: `/cases`, `/sessions` (`restorableUntil`) | `sessions.restore` within `enrollment_restore_window_days` (7) | The new case | The chat, by P3-26's rule, once the case closes |
+| P3-14 | A student's ban (`students.ban`): enrollments `cancelled` `admin` at once, one `student_banned` case each | `enrollment_events`, `session_events` `cancelled_by_admin`, the cases, audit `student.ban`; panel: `/cases`, `/sessions`, `/users`, `/audit` | None for the enrollments: not restorable (FR-454) | The `student_banned` case | Sign-in sessions ended; the chat by P3-26's rule |
+| P3-15 | A teacher's end: suspension, revocation or ban (`teachers.*`), a complaint's decision (b), a dispute's `party_suspended` or `party_banned`: confirmed enrollments `cancelled` `teacher_suspended`, one `teacher_ended` case each | `enrollment_events`, `session_events` `cancelled_by_admin` naming the case, the cases, audit (`teacher.suspend` and the rest, `complaint.decided`, `dispute.resolved`); panel: `/cases`, `/sessions`, `/users`, `/audit` | The account's reinstatement (`teachers.reinstate`) restores the account only; the enrollments are not restorable (FR-454) | For the student, the `teacher_ended` case; for the teacher, **M only** | Sign-in sessions ended; the chat by P3-26's rule |
+| P3-16 | A student's deletion: sessions cancelled, enrollments `cancelled` `account_deleted` with no case, open remedies `lapsed` (FR-484) | `enrollment_events`, `session_events` `cancelled_by_admin` (no case) and `remedy_lapsed`; panel: `/sessions` and `/users` with the stand-in (FR-426) | None: final | A refund already chosen keeps its case; otherwise, for the teacher, **M only** | The person's files at once and by `erase-deleted-files` (ADR 0015 D3); sign-in sessions; the chat by P3-26's rule |
+| P3-17 | A teacher's deletion: as P3-15, with one `teacher_ended` case per enrollment (T004) | As P3-15 | None: final | The `teacher_ended` case | As P3-16 |
+| P3-18 | A complaint decided (a), the enrollment ended (`cases.decideComplaint`): `terminated_no_show`, an `absence_termination` case | The complaint `resolved` `enrollment_ended` with its note, one `session_events` row `complaint_decided`, `enrollment_events` `terminated_no_show`, the case, audit `complaint.decided`; panel: `/cases`, `/sessions` (`restorableUntil`) | `sessions.restore` within the restore window | The `absence_termination` case | The chat by P3-26's rule, once the case closes |
+| P3-19 | A complaint closed (c) (`cases.decideComplaint`, `close`) | The complaint `dismissed` with its note, `complaint_decided`, audit; panel: `/cases` | None: final; the student may complain again, one open at a time | **M only** | Nothing |
+| P3-20 | A dispute resolved (`disputes.resolve`) | The dispute's `resolution`, `resolution_notes`, `resolved_by_admin_id`, `resolved_at`; the session's status, `settled_by_admin_id`, `admin_settled_at`; `dispute_resolved`; audit `dispute.resolved`; panel: `/disputes`, `/audit` | `disputes.revise` while the window is open and no remedy exists (FR-472) | The remedy the final outcome owes; otherwise **M only** | Nothing |
+| P3-21 | A ruling revised (`disputes.revise`) | `dispute_revised` with `outcome_before` and `outcome_after`, audit `dispute.revised`; panel: `disputes.get`'s `revisions`, `/audit` | Another revision under the same conditions | The remedy the revised outcome owes; otherwise **M only** | The stored idempotent answer after 24 h (the event and the audit entry stay) |
+| P3-22 | A review resolved (`sessions.review.resolve`): an Under-Threshold or Provider-Outage outcome chosen | The status, `settled_by_admin_id`, `admin_settled_at`, `review_resolved`, audit `session.review_resolved`; panel: `/review`, `/audit` | A participant's dispute inside the window; an administrator's own: **GAP-3** | The remedy it owes; otherwise **M only** | Nothing |
+| P3-23 | An outage window recorded (`sessions.outages.record`): settled sessions inside their dispute window reclassified | The `provider_outages` row (never edited), `outage_reclassified` per session, audit `provider_outage.recorded`; panel: `/outages`, `/review` | `sessions.review.resolve` of each reclassified session | The remedy each resolution owes | Nothing |
+| P3-24 | A compensation case closed (`cases.resolve`, `cases.dismiss`; a restore's closing `restored`) | `disputes.status`, `resolution`, `resolution_notes`, `resolved_by_admin_id`, `resolved_at` (`clock_timestamp()`), audit `case.resolved`, `case.dismissed`; panel: `/cases`, `/audit` | None: a closed case is never reopened | **M only** | The chat by P3-26's rule, once nothing is open |
+| P3-25 | The restore window ends (no job: `restorableUntil` passes) | Derived, never stored (R-DB-4): the closing case's `created_at` plus `enrollment_restore_window_days`; panel: `sessions.monitor.get`'s `restorableUntil` | None: the restore is refused `window_closed` | The closing's case, still open | Nothing |
+| P3-26 | `purge-chat` (daily): an ended enrollment's messages after the last session's end + `dispute_window_hours` + `chat_retention_days`, nothing open | `chat_messages.purged_at` on each row kept; panel: none needed (the chat is read only while a dispute is open) | None: the rule waits for every open dispute and case (FR-492) | Nothing is owed | The message bodies, the attachment fields and the stored files (FR-492, ERD §15 rule 8) |
+| P3-27 | A video webhook refused (no or wrong signature, 401) or unattributable (no such session, not a participant: 200, written nowhere) | **GAP-10**: no row; a refusal logged at warn with its code, an unattributable event reported to error tracking; panel: none | None needed | Nothing is owed | The body and the header are never stored or logged |
+| P3-28 | A call refused by a rate limit (`RATE_LIMITED`), and the default limit's breaker opening (R-321) | **GAP-9**: no durable record; the Redis counter expires with its window; the breaker's one warning per period in the logs; panel: none | The caller's next window | Nothing is owed | The counters, by each limit's `window_seconds`; the breaker's state in process memory after 10 s |
+
+**The gaps and their proposed solutions** (each for the owner; none is a task).
+
+1. **GAP-1, the outcome rows not in the panel** (P2-2, P2-4, P2-7, P3-11). `sessions.monitor.get` gains `events`: the
+   enrollment's `enrollment_events` (through `EnrollmentSide`, a new `eventsOf(tx, enrollmentId)`, since sessions never
+   reads booking's table) and its `session_events`, each with its kind, session, case and instant, newest first, shown as
+   a timeline on `/sessions`.
+2. **GAP-2, the telemetry of an undisputed settled session** (P3-1, P3-2). `sessions.review.get` admits any settled
+   session, not only the two review statuses, and each session on `/sessions` links to it (audit `sessions.review.viewed`).
+3. **GAP-3, no administrator correction of an outcome nobody disputed** (P3-1, P3-22). `sessions.review.revise`
+   `{ sessionId, outcome, reason, idempotencyKey }`, with `disputes.revise`'s conditions (the window open, no remedy, no
+   dispute open), its own `rateLimit` (10 per 60 s, a setting) and a new `session_events` kind `outcome_corrected` with
+   `outcome_before` and `outcome_after` (rule 43 widened); the remedy a corrected no-show owes offered by T028 after the
+   window, as for a revision (R-320's offer row); a button on `/sessions` and `/review`.
+4. **GAP-4, an open remedy not in the panel** (P3-3, P3-5, P3-6). Each session of `sessions.monitor.get` gains its
+   remedy: status, `offeredAt`, `choiceClosesAt`, the proposal, a pending counter with its answer deadline, `caseId`,
+   and «booking refused, retried until …» for a `proposed` remedy past `choice_closes_at` (A3), derived.
+5. **GAP-5, no administrator path on an open remedy** (P3-3, P3-6). `sessions.remedies.handToCase`
+   `{ sessionId, reason, idempotencyKey }`: an open or `frozen` remedy handed to the enrollment's case through T030, a new
+   compensation reason (`admin_handed`), audited, its own `rateLimit`; or, if the owner prefers no new path, M covers it.
+6. **GAP-6, the time zone re-resolution leaves no record** (P2-8). One `session_events` row per moved session, a new kind
+   `instants_reresolved` with the previous start in a new nullable column, and one per session kept back; shown by
+   GAP-1's timeline.
+7. **GAP-7, the sweep's room end writes nothing of its own** (P3-2). One structured log line per `endRoom` and
+   `removeParticipant` (the session, never a token); the provider's `room_ended` event stays the durable record. No row.
+8. **GAP-8, a hold's release has no reason and no page** (P2-1). `slot_holds.release_reason` (`converted`, `expired`,
+   `superseded`, `new_checkout`, `account_ended`, `refused`), written with `released_at` by booking's one release; the
+   enrollment's holds listed on `payments.get`'s enrollment summary.
+9. **GAP-9, a rate-limit refusal leaves no record** (P3-28). One structured log line per refusal with the key and the
+   caller kind, never the subject; no database row, since a flood would write a flood.
+10. **GAP-10, a refused or unattributable video event** (P3-27). Error tracking and the warn log stay its evidence; the
+    RUNBOOK's video entry names where to look. No row, since a forger could fill a table.
+
+**The rows M alone answers:** P3-1 and P3-22 (an outcome past its window, until GAP-3), P3-11 (a completion), P3-15
+(the teacher's side of a teacher's end), P3-16 (the teacher's side of a student's deletion), P3-19 (a closed
+complaint), P3-20 and P3-21 (a ruling past its window), P3-24 (a closed case), and P2-3 (an order event no case
+covers).
+
+**What is erased automatically, and by what** (the last column, gathered): the chat's bodies, attachment fields and
+files, by `purge-chat` daily, after the last session's end + `dispute_window_hours` (72) + `chat_retention_days` (0),
+never while a dispute or a case (from Phase 4, a report) is open (FR-492); idempotency rows, the stored answers of
+`disputes.revise` and `sessions.restore` and the time zone marker included, by `expire-idempotency-keys` hourly after
+`idempotency_key_ttl_hours` (24) (ADR 0008 D2); the rate-limit counters in Redis, each at its limit's `window_seconds`,
+and the default limit's cached setting (60 s) and breaker (10 s) in process memory (R-321); finished queue jobs at once
+and failed ones beyond the last 1000 (`jobs/queue.ts`' `defaultJobOptions`, T171); sign-in sessions, expired ones at
+once and revoked ones after `session_purge_after_days` (30), by `purge-expired-sessions` hourly; one-time codes after
+`otp_purge_after_hours` (24); push tokens unused for `push_token_stale_days` (90); uploads no submission points at after
+`document_unreferenced_purge_after_hours` (72); a deleted person's files at the deletion and by `erase-deleted-files`
+hourly (ADR 0015 D3); the order's encrypted checkout address once the order leaves `created` (ERD §7); webhook bodies,
+never stored (a payment event keeps its hash only); the video room's state at the provider, ended
+`video_empty_timeout_seconds` (300) after the last leave or by `endRoom`, with no recording made and the join token
+valid only until the scheduled end and never stored; logs and error-tracking reports, by the hosting's retention, which
+no setting here governs. No job deletes an audit entry, an `enrollment_events`, `session_events`, `payment_events` or
+`session_participant_events` row, a dispute or case, a session or an enrollment (ERD §15 rules 10 and 21; the same revokes on `enrollment_events` and `session_events`, Phase 2's R-216 and data-model §2.4).
+
+**Window rule (R-320).** Nothing here offers a time; GAP-3's correction leaves the remedy to T028's offer after the
+window, and GAP-5's hand-off offers none.

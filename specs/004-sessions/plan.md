@@ -202,11 +202,11 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 | D17 Sun 11/8 | B33 | T079/T080 (decision 10); the sessions pass migration and seed (ERD v1.15, amended on 2026-11-05), the schema gate's declared caches gaining `sessions.simultaneous_connected_seconds` (R-DB-4, constitution 2.5.0); the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons | The carried tasks the spec puts first (FR-420; T107, the constitution before the webhook, done on 2026-11-05 in this cycle), and the foundations every later batch reads |
 | D17 Sun 11/8 | B34 | `002:T144` (a student's suspension, ban and reinstatement through `StandingService`, FR-486); a teacher's end (FR-483); T090 (FR-426); the `EnrollmentSide` port; the LiveKit adapter with the Daily rename and the port's widening (FR-425, quickstart §3); the video stand-in harness | Every account's end before any session can be joined; the provider behind the port |
 | D18 Mon 11/9 | B35 | `sessions.get` and `sessions.join` with their adversarial cases; `POST /webhooks/video`; the attendance rules and `evaluate-sessions`; completion and the event rows; the outage windows; the R-SESS CI tests | US1's API and US2 whole (SC-402 to SC-407) |
-| D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens | US1 on the phone; the first device check of joining |
+| D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens; the signed-in rate limits, the administrator kind's declaration and the default limit (T062, the decisions of 2026-11-05 on the administrator's control) | US1 on the phone; the first device check of joining |
 | D19 Tue 11/10 | B37 | Cancellation requests and their expiry sweep; the administrator's cancellation and the monitor; the user record's request counts; raising a dispute | US3's API, US5's first half |
 | D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance, counter options and counter-proposals again after a decline (R-320, decision 9); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
 | D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1); a ruling's revision (SRS FR-DISPUTE-7, the third analysis) | US5's administrator side |
-| D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read | US7's API |
+| D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read; the student's complaint of the teacher's absence and its decision (T060); an administrator's restore (T061) | US7's API |
 | D21 Thu 11/12 | B41 | The phone: cancellation and dispute on both roles; the remedy sheets (choice, proposal, counter, the teacher's answer); chat on both roles; the ended tab's new statuses | US3, US4, US5 and US7 on the phone |
 | D22 Sun 11/15 | B42 | The panel: `/sessions` with cancellation; `/review` and `/outages`; `/disputes` with the chat; `/cases`; a student's standing dialogs; `/users`, FR-ADMIN-4's directory with `users.list` and `users.get`, the request counts and a student's standing actions | The administrator's pages |
 | D23 Mon 11/16 | B43 | The adversarial suite's completeness and the gates (FR-496, FR-497); the coverage floor; the document pass (what the build changed beyond the documents amended on 2026-11-05: the RUNBOOK's room setting from B34's check, PLAN.md's close date); quickstart §1 to §7; the owner's device run (SC-401, SC-414); the close | The proofs; the same day, Phase 4's Spec Kit cycle (PLAN.md's rule) |
@@ -546,6 +546,47 @@ The window rule (R-320) gains two applications: a restore's recreated sessions (
 first-session lead, none over an open hold, a reservation or a session of either party) and a remedy a restore offers
 again (H1 with F5 and the lead, after the recreated sessions). The complaint offers no time.
 
+## Decisions of 2026-11-05, the administrator's control and the rate limits
+
+The owner approved the task proposal of the decision of no automatic termination and decided four more points the same
+day. Where an answer changes a decision above, the answer governs; the SRS (FR-CANCEL-8 as amended, NFR-SEC-12,
+FR-ADMIN-20, §3.14), the ERD (changelog row 21), the spec (FR-454, FR-470, FR-471, FR-472), research (R-308, R-317,
+R-321, R-322, R-323), the data model, the contracts, the quickstart and `tasks.md` were brought into line.
+
+1. **The readings approved.** Only a termination on a complaint and a confirmed fault are restorable (FR-CANCEL-6
+   cancels one session); the complaint's limit is 5 per 3600 s; a restore creates the snapshot's count less the sessions
+   consumed and less those owed or settling; a restored confirmed fault recreates the sessions the suspension
+   cancelled, which that count already includes; a disputed absence counts toward the mark once resolved. The text
+   already said each; nothing was changed for them.
+2. **A restore's eighth refusal, `slot_changed`** (rejected: recreating at the slot's new time). The enrollment's weekly
+   slot changed its day, its local start or its zone between the closing and the restore: the student enrolled on the
+   old time. Detected from what the ERD keeps: the enrollment's own generated sessions hold the local date, start and
+   zone they were asked for (ADR 0009 D1), compared with the slot's row under its lock; no column is added. A removed
+   slot is a deactivated one, `slot_inactive`, since no path deletes a slot. (R-322 step 6; spec FR-454; T061.)
+3. **Rate limits on every signed-in procedure.** (a) `adminProcedure` gains an optional `rateLimit`, checked before
+   it opens its transaction; (b) `disputes.revise` and `sessions.restore` declare `rate_limit_dispute_revision` and
+   `rate_limit_enrollment_restore` (10 per 60 s each, the administrator as subject), apart from the
+   `idempotencyKey`; (c) every signed-in procedure that declares none is counted by `rate_limit_signed_in_default`
+   (120 per 60 s, «provisional, set by research R-325 before B36»), the user or administrator as subject, its value held in the process for up to 60 s, its counter
+   on a client of its own bounded at 100 ms, failing open behind a 10 s breaker with one warning per period, while every
+   declared limit stays fail-closed and a missing row refuses; (d) T062 in B36 builds (a) and (c), T059 and T061 declare
+   (b). (R-321; spec FR-470.)
+4. **All control in our hands** (SRS FR-ADMIN-20, spec FR-471): every automatic or final action leaves the
+   administrator its evidence in the panel, a fix while the state can change, and a path to restore the right once it
+   cannot, among them a manual compensation case on any enrollment, in any state, at any time, for either party, with a
+   mandatory reason, audit, an `idempotencyKey` and its own limit (`rate_limit_manual_compensation_case`, 10 per 60 s,
+   seeded in B33). The procedure, its contract and its task are proposed to the owner and not written here. R-323 lists
+   every such action of Phases 2 and 3 with its evidence, its fix, its restore path and the evidence erased
+   automatically, and ten gaps, each with a proposed solution and no task.
+5. **The task changes** (`tasks.md`): T015 becomes completion and the repeated-absence count; T001, T002, T004, T008,
+   T014, T024, T034, T035, T039, T042, T047, T049, T050, T052 and T058 take the decision's parts; T060 (the complaint's
+   API) and T061 (the restore's) are new in B40, T062 (the signed-in rate limits) in B36. The batches: B33 6, B34 6,
+   B35 6, B36 5, B37 6, B38 6, B39 5, B40 6, B41 6, B42 6, B43 5; none above six.
+
+The window rule (R-320): nothing here offers a time. A restore's `slot_changed` refusal is not a time-offering path, and
+the restore's recreated sessions and re-offered remedies keep R-320's two rows of the decision of no automatic
+termination.
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -590,12 +631,15 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | ADR 0023 (new) | No automatic termination, the complaint, the restore and its two exits from a final state | 5 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 17 to 20 | 1, 2, 3, 5 |
 | `PLAN.md` | Phase 3's SRS list gains FR-DISPUTE-7 and FR-CANCEL-8; the definition of done gains the line on no automatic termination | 1, 6 |
+| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value «provisional, set by research R-325 before B36»), an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog row 21, the four rate-limit settings, no column for `slot_changed` | 2, 3 |
 
 ## Phase Outputs
 
-- **Phase 0 — Research**: [research.md](./research.md). Twenty-two decisions, R-301 to R-322; the owner answered
+- **Phase 0 — Research**: [research.md](./research.md). Twenty-three decisions, R-301 to R-323; the owner answered
   its fourteen points on 2026-11-05 (above), the analysis's seventeen the same day, the second and third
-  analyses' findings the same day, and R-322 on the decisions of no automatic termination.
+  analyses' findings the same day, R-322 on the decisions of no automatic termination, and R-323, the administrator's
+  control inventory, on the decisions of the administrator's control and the rate limits.
 - **Phase 1 — Design**: [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md).
 - **Phase 2 — Tasks**: `tasks.md`, written by `/speckit-tasks`.
 

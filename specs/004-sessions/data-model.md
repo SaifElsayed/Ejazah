@@ -7,7 +7,7 @@ Phase 0 modelled every table this phase writes (ERD v1.3 and its addenda through
 re-resolution), `disputes` (compensation cases) and `enrollment_events`. This phase writes `sessions`' whole machine,
 `session_participant_events`, `cancellation_requests`, `session_remedies`, session disputes and `chat_messages` for the
 first time. The pass below is what it adds: two tables, eleven columns, one nullability change, eight enum values, eight
-integrity rules, ten settings rows and one settings row removed, in one forward migration in the first batch. The ERD was amended on 2026-11-05 with the owner's decisions,
+integrity rules, fourteen settings rows and one settings row removed, in one forward migration in the first batch. The ERD was amended on 2026-11-05 with the owner's decisions,
 ahead of that batch (changelog v1.14 → v1.15, 44 tables; §7), and again the same day with the owner's decisions on the
 analysis (plan.md, "Decisions on the analysis"), on the second analysis (plan.md, "Decisions on the second
 analysis"), on the third (plan.md, "Decisions on the third analysis") and on the decision of no automatic termination
@@ -273,6 +273,10 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `repeated_absence_flag_count` | 5 (the owner's decision of no automatic termination) | FR-451's mark (R-322) |
 | `enrollment_restore_window_days` | 7 (the same) | FR-454's window (R-322) |
 | `rate_limit_absence_complaint` | `{ limit: 5, window_seconds: 3600 }` (the limit the same decision; its default this cycle's reading) | FR-452's rate limit, the student as subject (R-322) |
+| `rate_limit_signed_in_default` | `{ limit: 120, window_seconds: 60 }` («provisional, set by research R-325 before B36») | FR-470's default limit on every signed-in procedure that declares none, the user or administrator as subject (R-321) |
+| `rate_limit_dispute_revision` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 on the administrator's control) | `disputes.revise`'s own limit, the administrator as subject (FR-470) |
+| `rate_limit_enrollment_restore` | `{ limit: 10, window_seconds: 60 }` (the same) | `sessions.restore`'s own limit, the administrator as subject (FR-470) |
+| `rate_limit_manual_compensation_case` | `{ limit: 10, window_seconds: 60 }` (the same) | the manual compensation case's own limit (FR-471 (c)), seeded now; its procedure waits for the owner's approval |
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
@@ -313,7 +317,7 @@ enrollment's `availability_slots` row, `enrollments`, `sessions`, `session_remed
 ## 6. The migration
 
 One forward, additive migration in the first batch, `20261108120000_sessions_pass`: §2.1 to §2.9, the enum values, the
-two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the ten settings rows in the seed, and the deletion of the `teacher_no_show_threshold` row. Probes in
+two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the fourteen settings rows in the seed, and the deletion of the `teacher_no_show_threshold` row. Probes in
 `tests/db-integrity` for rules 40 to 47. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
 that rule 46 would refuse, and `session_participant_events` rows (none expected).
 
@@ -352,3 +356,6 @@ batch's migration, which builds them.
     `session_events`' `complaint_raised` and `complaint_decided`, rule 43; `disputes.kind`'s `absence_complaint`,
     `resolution`'s `enrollment_ended`, the reason `absence_termination` for `teacher_no_show_threshold`, rule 46's partial
     unique and two checks, §14; the settings.
+12. On the decisions of the administrator's control and the rate limits (the owner's decision of 2026-11-05; the ERD's
+    changelog row 21): four rate-limit settings (§4); no column for a restore's `slot_changed`, which compares the
+    slot's row with the enrollment's own generated sessions (R-322).

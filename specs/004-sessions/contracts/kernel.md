@@ -42,6 +42,17 @@ call in id order (L2).
 | an account's end (booking's subscriber), a student's suspension freezing remedies and deletion lapsing them included | (held) the account; `lockKey('teacher-slots')` (a student's end: each of their teachers' keys, ascending teacher id, **(L1)**); `enrollments`; `sessions`; `session_remedies` | none |
 | outage record (the analysis, F4) | `enrollments` (of the overlapped sessions, one call), then `sessions` (the overlapped, one call) | none |
 
+## Rate limits (`apps/api/src/platform/guards/rate-limit.guard.ts`, `apps/api/src/surfaces/procedures.ts`)
+
+The owner's decision of 2026-11-05 (spec FR-470, research R-321; T062):
+
+| Export | File | Contract |
+|---|---|---|
+| `adminProcedure({ input, output, rateLimit? })` | `procedures.ts` | An optional `RateLimitDeclaration` over the administrator's context, applied by `throttle` after `requireAdministrator` and the input schema and before the `.use` that opens the transaction, so a refused call opens none; `AdminMeta.rateLimit` stamps the key. `disputes.revise` (`rate_limit_dispute_revision`) and `sessions.restore` (`rate_limit_enrollment_restore`) declare one, `subjectOf` the administrator's id |
+| `throttleDefault` | `rate-limit.guard.ts` | Applied by every signed-in kind (student, user, teacher, administrator) given no `rateLimit`, where `throttle` would be: the key `rate_limit_signed_in_default` (120 per 60 s, «provisional, set by research R-325 before B36»), the subject `user:<userId>` or `admin:<adminId>`. A procedure with its own limit is counted by it only |
+| `RateLimiter` | `rate-limit.guard.ts` | The default key's setting held in process memory for up to 60 s (the one setting so held; a `SettingError` never held, the call refused); its count on a second Redis client (`enableOfflineQueue: false`, `maxRetriesPerRequest: 0`, `commandTimeout: 100`) raced against a 100 ms timer; a failure or a timeout lets the call through and opens a 10 s breaker with one warning; every declared key keeps the first client (`lazyConnect: true`, `maxRetriesPerRequest: 1`) and fails closed, as today |
+| `createRateLimiter` | `rate-limit.guard.ts` | Builds both clients from the one `REDIS_URL`; the header's «every limit read on every check» gains the default key's exception |
+
 ## The composition root
 
 `AppServices` gains `sessions` (join, the session read, cancellation, remedies, disputes) and `chat`;

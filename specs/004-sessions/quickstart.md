@@ -74,7 +74,13 @@ Expected:
   audit entry and event (SC-415).
 - A restore inside the window recreates exactly the sessions still owed, the first no earlier than the first-session
   lead after it, and offers again the remedies its case held under the window rule; every refusal cause writes
-  nothing; a repeated key returns the first answer; `confirmed_at` is never written (SC-416, SC-413).
+  nothing, `slot_changed` among them (the slot moved while the enrollment was closed); a repeated key returns the first
+  answer; `confirmed_at` is never written (SC-416, SC-413).
+- The rate limits (FR-470): a signed-in procedure that declares no limit is refused `RATE_LIMITED` past the default;
+  a procedure with its own limit is not counted by the default; with the counter failing, the default lets the call
+  through and its breaker skips counting, while a declared limit refuses; the default's settings row missing refuses
+  the call; `disputes.revise` and `sessions.restore` over their own limit are refused with no transaction opened;
+  the seed plants the four rows.
 
 ## 2. A session on the stand-in, end to end (US1, US2)
 
@@ -143,7 +149,8 @@ close one complaint, suspend the teacher on another, and end the enrollment on a
 case holding what it owes); on `/sessions`, see an enrollment with five Teacher-No-Shows marked and still confirmed,
 and on `/users` the teacher's record listing it; restore the ended enrollment (its sessions back from the nearest week
 at least 24 hours away, its remedies offered again, its case closed «restored») and try a restore after the window
-(`RESTORE_REFUSED`, `window_closed`). The audit log shows one entry per action with its reason.
+(`RESTORE_REFUSED`, `window_closed`), and one after moving the slot to another hour while the enrollment was
+closed (`slot_changed`). The audit log shows one entry per action with its reason.
 
 ## 7. Chat (US7)
 
