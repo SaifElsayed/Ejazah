@@ -216,7 +216,7 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 | D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read; the student's complaint of the teacher's absence and its decision (T060); an administrator's restore (T061) | US7's API |
 | D20 Wed 11/11 | B40a | The live channel on the phone and the pre-join presence (T065); the remaining producers: cancellation, an administrator's cancel, an enrollment closed or restored, an account's end, chat (T066) (research R-324, the owner's decision of 2026-11-05) | Live updates while the app is open (FR-427 to FR-429, FR-437, FR-438) |
 | D21 Thu 11/12 | B41 | The phone: cancellation and dispute on both roles; the remedy sheets (choice, proposal, counter, the teacher's answer); chat on both roles; the ended tab's new statuses | US3, US4, US5 and US7 on the phone |
-| D22 Sun 11/15 | B42 | The panel: `/sessions` with cancellation; `/review` and `/outages`; `/disputes` with the chat; `/cases`; a student's standing dialogs; `/users`, FR-ADMIN-4's directory with `users.list` and `users.get`, the request counts and a student's standing actions | The administrator's pages |
+| D22 Sun 11/15 | B42 | The panel: `/sessions` with cancellation; `/review` and `/outages`; `/disputes` with the chat; `/cases`; a student's standing dialogs; `/users`, FR-ADMIN-4's directory with `users.list` and `users.get`, the request counts and a student's standing actions; the panel's `RATE_LIMITED` message on every page (T058 last) | The administrator's pages |
 | D23 Mon 11/16 | B43 | The adversarial suite's completeness and the gates (FR-496, FR-497); the coverage floor; the document pass (what the build changed beyond the documents amended on 2026-11-05: the RUNBOOK's room setting from B34's check, PLAN.md's close date); quickstart §1 to §7; the owner's device run (SC-401, SC-414); the close | The proofs; the same day, Phase 4's Spec Kit cycle (PLAN.md's rule) |
 
 The Not-scheduled row of `specs/003-booking/tasks.md` was reviewed (research R-319): it stays as it is, except T079 and
@@ -741,6 +741,11 @@ Where an answer changes a decision above, the answer governs. No task is added a
    adds `common.state.rateLimited` in both catalogues and `genericErrorKey` in `apps/mobile/src/lib/error-message.ts`,
    which every generic-error path uses, the screens that exist before B40a listed by file in T065, and B41's six
    tasks (T041 to T046) noting that theirs use it.
+7. **The `RATE_LIMITED` message in the panel** (the owner's addition). No page maps the code today; T058 (B42) adds
+   `admin.common.rateLimited` in both catalogues and `errorMessageKey` in `apps/admin/src/lib/error-message.ts` over
+   `errorCodeOf`, applied by name to every page with a rate-limited button or search, Phase 3's and the older pages
+   (the sign-in, the password and the second factor under `rate_limit_admin_authentication`, the rest under T062's
+   default). T058 now runs last in B42, after the five lanes T047 to T051, each of which notes it; B42 stays at six.
 
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
