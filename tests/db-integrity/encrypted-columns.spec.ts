@@ -230,16 +230,44 @@ function columnsOver(tx: Transaction) {
   return [...identityColumns(tx), ...verificationColumns(tx), ...paymentsColumns(tx)];
 }
 
-/** Every row of a column, page by page, as the sweep reads it. */
-async function readAll(
-  column: ReturnType<typeof columnsOver>[number],
-): Promise<{ id: string; value: Uint8Array }[]> {
-  const rows: { id: string; value: Uint8Array }[] = [];
-  for (;;) {
-    const page = await column.page(rows.at(-1)?.id, 2);
-    rows.push(...page);
-    if (page.length < 2) return rows;
+type Column = ReturnType<typeof columnsOver>[number];
+type Row = { id: string; value: Uint8Array };
+
+const PAGE_SIZE = 2;
+
+/** The uuid one below `id`: no row's id lies between the two. */
+function idBelow(id: string): string {
+  const hex = (BigInt(`0x${id.replaceAll('-', '')}`) - 1n).toString(16).padStart(32, '0');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Up to `pages` pages of the column, as the sweep reads them, the first given the id just below
+ * `from` and each later one the last row of the page before. Since no id lies between the two,
+ * the row `from` is the first row read if the column pages it at all. Bounded (T080): the database
+ * holds every row other specs committed, and reading them all outgrew the case's time.
+ */
+async function readPages(
+  column: Column,
+  from: string,
+  pages: number,
+): Promise<{ after: string; rows: readonly Row[] }[]> {
+  const read: { after: string; rows: readonly Row[] }[] = [];
+  let after = idBelow(from);
+  while (read.length < pages) {
+    const rows = await column.page(after, PAGE_SIZE);
+    read.push({ after, rows });
+    const last = rows.at(-1);
+    if (last === undefined || rows.length < PAGE_SIZE) break;
+    after = last.id;
   }
+  return read;
+}
+
+/** The first row the column pages from `from` on: `from`'s own row if it is paged. */
+async function firstFrom(column: Column, from: string): Promise<Row | undefined> {
+  const [first] = await readPages(column, from, 1);
+  return first?.rows[0];
 }
 
 describe('the encrypted columns, through their owning modules (T155)', () => {
@@ -259,13 +287,21 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
     await inClientRollback(async (tx) => {
       const planted = await plant(tx);
       for (const column of columnsOver(tx)) {
-        const rows = await readAll(column);
-        const ids = rows.map(({ id }) => id);
-        expect(ids).toEqual([...ids].sort());
-        expect(new Set(ids).size).toBe(ids.length);
         const mine = planted.get(column.column);
-        const found = rows.find(({ id }) => id === mine?.id);
-        expect(Buffer.from(found?.value ?? []).equals(Buffer.from(mine?.value ?? [1]))).toBe(true);
+        if (mine === undefined) throw new Error(`nothing planted in ${column.column}`);
+        const pages = await readPages(column, mine.id, 3);
+        for (const { after, rows } of pages) {
+          const ids = rows.map(({ id }) => id);
+          expect(ids, `${column.column}: in id order`).toEqual([...ids].sort());
+          expect(
+            ids.every((id) => id > after),
+            `${column.column}: after the row given`,
+          ).toBe(true);
+        }
+        const rows = pages.flatMap((page) => page.rows);
+        expect(new Set(rows.map(({ id }) => id)).size).toBe(rows.length);
+        expect(rows[0]?.id, `${column.column}: the planted row`).toBe(mine.id);
+        expect(Buffer.from(rows[0]?.value ?? []).equals(Buffer.from(mine.value))).toBe(true);
       }
     });
   });
@@ -281,8 +317,8 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
       const refreshTokens = columnsOver(tx).find(
         ({ column }) => column === 'auth_identities.provider_refresh_token_encrypted',
       );
-      const rows = refreshTokens === undefined ? [] : await readAll(refreshTokens);
-      expect(rows.map(({ id }) => id)).not.toContain(google.id);
+      if (refreshTokens === undefined) throw new Error('no refresh token column');
+      expect((await firstFrom(refreshTokens, google.id))?.id).not.toBe(google.id);
     });
   });
 
@@ -301,8 +337,8 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
       const payout = columnsOver(tx).find(
         ({ column }) => column === 'teacher_profiles.payout_account_ref_encrypted',
       );
-      const rows = payout === undefined ? [] : await readAll(payout);
-      expect(rows.map(({ id }) => id)).not.toContain(unset.id);
+      if (payout === undefined) throw new Error('no payout reference column');
+      expect((await firstFrom(payout, unset.id))?.id).not.toBe(unset.id);
     });
   });
 
@@ -315,8 +351,8 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
       const addresses = columnsOver(tx).find(
         ({ column }) => column === 'payments.checkout_url_encrypted',
       );
-      const rows = addresses === undefined ? [] : await readAll(addresses);
-      expect(rows.map(({ id }) => id)).not.toContain(cleared);
+      if (addresses === undefined) throw new Error('no checkout address column');
+      expect((await firstFrom(addresses, cleared))?.id).not.toBe(cleared);
     });
   });
 
@@ -334,8 +370,9 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
         expect(await column.replace(mine.id, mine.value, next)).toBe(false);
         expect(await column.replace(randomUUID(), mine.value, next)).toBe(false);
 
-        const rows = await readAll(column);
-        const held = rows.find(({ id }) => id === mine.id)?.value ?? new Uint8Array();
+        const first = await firstFrom(column, mine.id);
+        expect(first?.id, `${column.column}: the planted row`).toBe(mine.id);
+        const held = first?.value ?? new Uint8Array();
         expect(Buffer.from(held).equals(next)).toBe(true);
         expect(NEW.decrypt(held, column.column, mine.id)).toBe(`secret for ${column.column}`);
       }
