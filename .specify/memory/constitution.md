@@ -1,4 +1,16 @@
 <!--
+SYNC IMPACT REPORT (2.6.2, 2026-11-06)
+=====================================
+Version change: 2.6.1 -> 2.6.2 (PATCH: an enforcement cell reworded; no rule
+changed).
+
+Modified enforcement text: R-TIME-3 and R-TIME-5. The schema gate accepts a
+`_local` column beside a `timezone` column, or beside `<p>_timezone` when the
+`_local` column's name starts with `<p>_` (`session_remedies.counter_start_time_local`
+beside `counter_timezone`, ERD v1.15). Templates: none changed. Companion documents
+naming the current version updated. Source: the owner's decision of 2026-11-06 on
+B33, T001 of `specs/004-sessions/tasks.md`.
+
 SYNC IMPACT REPORT (2.6.1, 2026-11-06)
 =====================================
 Version change: 2.6.0 -> 2.6.1 (PATCH: the exception's list completed; its reach
@@ -95,7 +107,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.6.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md) and [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md).
+Version 2.6.2. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md) and [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -146,9 +158,9 @@ a date nobody was testing.
 |---|---|---|
 | R-TIME-1 | **Never** construct or resolve a session datetime outside `packages/time`. *(Display formatting is R-MOBILE-9.)* | `LINT` - `Date` arithmetic and datetime libraries banned outside the package |
 | R-TIME-2 | **Never** generate recurrence by adding `7 x 24h`. Each occurrence is resolved independently: that week's local date plus the slot's local time, in the teacher's zone. | `CI` - unit tests against real Cairo DST transition dates must pass |
-| R-TIME-3 | **Never** store an availability slot's time as UTC. Slots are local wall-clock plus IANA zone; only *sessions* hold UTC instants. | `CI` - the schema gate refuses an `_local` column that is not a date or a time, or has no `timezone` beside it; `REVIEW` |
+| R-TIME-3 | **Never** store an availability slot's time as UTC. Slots are local wall-clock plus IANA zone; only *sessions* hold UTC instants. | `CI` - the schema gate refuses an `_local` column that is not a date or a time, or has beside it neither a `timezone` column, or `<p>_timezone` when the `_local` column's name starts with `<p>_`; `REVIEW` |
 | R-TIME-4 | **Never** use a timestamp column without timezone. `timestamptz` always. | `CI` - schema check script |
-| R-TIME-5 | **Never** name a timestamp without `_at` (UTC) or `_local` (with an adjacent `timezone` column). | `CI` schema check |
+| R-TIME-5 | **Never** name a timestamp without `_at` (UTC) or `_local` (with an adjacent `timezone` column). | `CI` schema check: an `_local` column has beside it a `timezone` column, or `<p>_timezone` when the `_local` column's name starts with `<p>_` |
 | R-TIME-6 | **Never** trust a client-supplied timestamp for anything that matters - attendance, ordering, expiry. Server clock only. | `LINT` - `time/no-client-timestamp` refuses a server-event timestamp or an absolute instant in an input schema of `packages/contracts`; `REVIEW` |
 | R-TIME-7 | **Never** leave DST gap (nonexistent time) and ambiguity (repeated time) unhandled - shift forward, take first, and test both. | `CI` - the two edge-case tests are mandatory in `packages/time` |
 
@@ -440,6 +452,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.6.2 | 2026-11-06 | PATCH (the owner's decision of 2026-11-06 on B33, T001 of `specs/004-sessions/tasks.md`): the gate's wording for a prefixed zone column (`counter_timezone`). R-TIME-3's and R-TIME-5's enforcement cells say the schema gate accepts an `_local` column beside a `timezone` column, or `<p>_timezone` when the `_local` column's name starts with `<p>_`, as `scripts/schema-check.ts` does since T001. No rule changed. Follows 2.6.1. |
 | 2.6.1 | 2026-11-06 | PATCH (Phase 3's fifth analysis, C3 and C4, the owner's decision of 2026-11-06; `specs/004-sessions/plan.md`, "Decisions on the fifth analysis", item 3): R-MONEY-12's exception names four more numbers it already reached, each with its reason: the live channel's inactivity restart (60 s), its per-stream queue bound, the phone's coalescing of live re-reads (1 per second) and the phone's wait after `RATE_LIMITED` (60 s); the live channel's ping and inactivity restart named in `apps/api/src/platform/live/`, inside the kernel the exception names. PATCH: the exception's reach is unchanged. Follows 2.6.0. |
 | 2.6.0 | 2026-11-06 | MINOR (Phase 3's fourth analysis, C1, the owner's decision of 2026-11-06; `specs/004-sessions/plan.md`, "Decisions on the fourth analysis", item 6): R-MONEY-12 gains an exception that changes its bounds: the transport and protection operating numbers in the kernel (`apps/api/src/platform/**`) and on the phone (the rate limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker, the live channel's 25 s ping, the phone's reconnect backoff) are named constants, each with its reason beside it, while the work's own windows and limits stay settings; its enforcement cell adds `REVIEW` of the exception. MINOR rather than PATCH under the versioning policy: a semantic change to a rule's reach (the owner's decision). Follows 2.5.1. |
 | 2.5.1 | 2026-11-05 | PATCH (Phase 3's analysis, the owner's decision of 2026-11-05; `specs/004-sessions/plan.md`, "Decisions on the analysis", item 5): R-DB-4's clause for `sessions.simultaneous_connected_seconds` cites [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md), which records the owner's decision 3 as the rule's last clause asks; the 2.5.0 row says so. A reference only; R-DB-4 already admitted a cache through an ADR, so no prohibition changed. Follows 2.5.0. |
@@ -469,4 +482,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.6.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-06
+**Version**: 2.6.2 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-06

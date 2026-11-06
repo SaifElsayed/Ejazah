@@ -143,10 +143,30 @@ function holdsPhrase(name: string, phrase: readonly string[]): boolean {
   return all.some((_, start) => phrase.every((word, offset) => all[start + offset] === word));
 }
 
-function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): void {
-  const tablesWithZone = new Set(
-    columns.filter((row) => row.column_name === 'timezone').map((row) => row.table_name),
+/** Each table's zone columns: `timezone`, and every `<p>_timezone`. */
+function zoneColumnsByTable(columns: readonly ColumnRow[]): Map<string, string[]> {
+  const zones = new Map<string, string[]>();
+  for (const { table_name: table, column_name: column } of columns) {
+    if (column !== 'timezone' && !column.endsWith('_timezone')) continue;
+    zones.set(table, [...(zones.get(table) ?? []), column]);
+  }
+  return zones;
+}
+
+/**
+ * Whether a `_local` column has a zone beside it (R-TIME-3, R-TIME-5 as constitution 2.6.2 words
+ * them, the owner's decision of 2026-11-06 on Phase 3's T001): a `timezone` column, or a
+ * `<p>_timezone` column when the `_local` column's name starts with `<p>_`, as
+ * `counter_start_time_local` beside `counter_timezone`. A zone of another prefix does not count.
+ */
+function isZoned(column: string, zones: readonly string[]): boolean {
+  return zones.some(
+    (zone) => zone === 'timezone' || column.startsWith(zone.slice(0, -'timezone'.length)),
   );
+}
+
+function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): void {
+  const zonesByTable = zoneColumnsByTable(columns);
   for (const row of columns) {
     const { table_name: table, column_name: column, type_name: type } = row;
     const at = (rule: string, detail: string): void => {
@@ -166,7 +186,9 @@ function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): v
     }
     if (column.endsWith('_local')) {
       if (type !== 'date' && type !== 'time') at('local-time', `a local value of ${row.formatted}`);
-      else if (!tablesWithZone.has(table)) at('local-time', 'no timezone column beside it');
+      else if (!isZoned(column, zonesByTable.get(table) ?? [])) {
+        at('local-time', 'no timezone column beside it');
+      }
     }
     const secured = column.endsWith('_hash') || column.endsWith('_encrypted');
     if (
