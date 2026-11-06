@@ -111,10 +111,14 @@ async function waitsOn(
   try {
     await seenWaiting(await b.pid);
   } finally {
+    // Logged before the first commits: the database frees the row at that commit, so the second
+    // can take it before the client hears the commit returned, and `first ended` has no fixed place.
+    log.push('first released');
     a.release();
   }
   await Promise.all([a.ended, b.ended]);
-  expect(log).toEqual(['first ended', 'second took']);
+  expect(log.filter((entry) => entry !== 'first ended')).toEqual(['first released', 'second took']);
+  expect(log).toContain('first ended');
 }
 
 /** B ends while A still holds. */
