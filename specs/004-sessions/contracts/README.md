@@ -38,7 +38,7 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   agreement or by an administrator; a Cancelled-By-Agreement one is final at acceptance), `REMEDY_NOT_OPEN`, `COUNTER_PENDING` (a counter-proposal is
   already waiting for the teacher's answer), `CHOICE_NOT_ALLOWED` (a refund
   where only a make-up is owed), `SLOT_NOT_OFFERED` (a counter outside the options), `MAKEUP_REFUSED` (the database
-  refused the booking; the remedy stays open; a teacher's refused acceptance then releases the counter-proposal in its
+  refused the booking, by an overlap, or by a deadlock on the retry too (the sixth analysis, L5: retried once); the remedy stays open; a teacher's refused acceptance then releases the counter-proposal in its
   own transaction, as a decline does: the third analysis, A3), `ATTACHMENT_REFUSED` (an image, or a type the chat does
   not take), `CHAT_CLOSED`, and on the administrator surface `STUDENT_SUSPENDED` (a suspended student's case closed as
   cleared before the account is reinstated), `RULING_FINAL` (a ruling's revision after the session's dispute window
@@ -47,7 +47,7 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `COMPLAINT_OPEN` on the user surface (a complaint of the teacher's absence is already open on the enrollment) and
   `RESTORE_REFUSED` on the administrator surface (`details.cause`: `not_restorable`, `window_closed`, `case_closed`,
   `party_restricted`, `slot_inactive`, `slot_changed` (the slot's day, local start or zone changed since the enrollment's
-  sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken`); on the decisions answering the administrator's control inventory (2026-11-05),
+  sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken` (an overlap, or a deadlock on the retry too: the sixth analysis, L5)); on the decisions answering the administrator's control inventory (2026-11-05),
   `REMEDY_NOT_OPEN` also on the administrator surface (`cases.openManual` naming a remedy no longer open), and
   `CONFLICT` with `details.cause` `ruled` or `not_settled` (`sessions.review.revise`, `sessions.review.get`). Every
   refusal writes nothing.

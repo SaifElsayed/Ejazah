@@ -788,6 +788,12 @@ batches; B33 stays at six.
 5. **The text fixes.** L2: the counter's `counter_slot_id` key-share on `availability_slots` is stated safe in
    contracts/kernel.md and data-model §5 (every path that locks a slot `FOR UPDATE` takes its teacher's `users` row
    first, which the counter's path holds). L3: T002 writes the reworded general rule into `row-lock.ts`' header.
+   L5, changed by the owner: `reresolve-session-instants` defers the overlap exclusions, so its commit can raise
+   `40P01` against T029's make-up booking or T061's restore, whose victim would answer a generic 500. The transaction
+   is retried once; a second deadlock answers a clear refusal, `MAKEUP_REFUSED` (T029) and `RESTORE_REFUSED` with
+   `details.cause` `time_taken` (T061). T002 (B33, still six tasks) adds `isDeadlock` to `db-errors.ts` and
+   `runRetryingDeadlockOnce` to `transaction.repository.ts`, run as that file runs every transaction; T029 and T061
+   use it, each with a spec forcing the deadlock (research R-321, contracts/kernel.md and README).
 
 The window rule (R-320): nothing here offers a time.
 

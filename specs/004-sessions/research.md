@@ -766,7 +766,24 @@ deadlock with it; it takes no enrollment, since it inserts no `session_events` r
 takes nothing before its insert (contracts/kernel.md; T012, with a probe against both paths). A counter-proposal's
 `counter_slot_id` key-shares its `availability_slots` row while its path holds the session, safely: every path that
 locks an `availability_slots` row `FOR UPDATE` takes the slot's teacher's `users` row first, which that path already
-holds (L2). Every procedure declares
+holds (L2).
+
+*The deferred overlap check and a deadlock* (**Decided**, the owner, 2026-11-06, the sixth analysis's L5). The two
+overlap exclusions, `sessions_teacher_no_overlap` and `sessions_student_no_overlap`, are `DEFERRABLE INITIALLY
+IMMEDIATE` (`prisma/migrations/20261007000400_booking_overlap/migration.sql`); only `reresolve-session-instants` defers
+them (`withDeferredSessionConstraints`, `apps/api/src/platform/db/deferred-constraints.ts`), so its commit checks every
+session it moved at once and can wait on another transaction's uncommitted insert of an overlapping session. A make-up's
+booking (T029) and an administrator's restore (T061) insert sessions, so either can meet that commit in a deadlock,
+and Postgres refuses one of the two with `40P01`. The job's side is unchanged: its comment
+(`apps/api/src/jobs/reresolve-session-instants.ts:119`) leaves such a refusal to the queue's retry. On the other side
+the victim would answer a generic 500 today, since nothing in `apps/api/src/platform/db/` recognises `40P01`
+(`row-lock.ts`, `transaction.repository.ts`, `db-errors.ts`). T002 adds `isDeadlock` to `db-errors.ts` and
+`runRetryingDeadlockOnce` to `transaction.repository.ts` (contracts/kernel.md): the transaction is retried once; a
+second deadlock answers a clear refusal, `MAKEUP_REFUSED` for T029 (the remedy left open, as an exclusion refusal
+leaves it) and `RESTORE_REFUSED` with `details.cause` `time_taken` for T061 (the cause an exclusion refusal of its
+recreated sessions already answers), each with a spec forcing the deadlock. B33 stays at six tasks.
+
+Every procedure declares
 `.output(schema)`; the contract snapshot is additive and passes `pnpm contract:snapshot --check --base origin/develop`
 (R-API-9). The boundary rule `boundaries/no-money-vocabulary` already covers `modules/sessions` and is extended to
 `modules/chat`; a CI test proves no `_piasters`, price or payment reference in either (FR-497, SC-409). R-SESS-2, R-SESS-4
