@@ -178,7 +178,10 @@ Sessions' need of booking's enrollments is a port bound in `main.ts` (`Enrollmen
 in against the arrows, after the three ARCHITECTURE §4 counts (R-207's `CatalogUse`, the `AccountConsequences`
 subscribers of R-121 and R-219, R-208's `orderStandingsOf`); the dispute's chat read is the fifth, a second port
 sessions declares, `DisputeChat`, which chat implements and `main.ts` binds, since sessions importing chat would close the cycle chat →
-booking → sessions (the owner's decision of 2026-11-05 on the analysis, C5). The video webhook is sessions' raw-body route, as the gateway's is
+booking → sessions (the owner's decision of 2026-11-05 on the analysis, C5). The sixth is `DisputeHeldFiles`, a third
+port sessions declares, which verification implements and `main.ts` binds, since sessions importing verification would
+close the cycle verification → sessions (a deleted party's held files read inside an open matter; the owner's decision
+of 2026-11-06, research R-327). The video webhook is sessions' raw-body route, as the gateway's is
 payments'.
 
 ## Complexity Tracking
@@ -677,6 +680,15 @@ changes a decision above, the answer governs. No task is added and no task moves
 4. **An outcome's correction told.** SRS FR-NOTIF-1 and ERD §11 name a fifteenth Phase 3 event,
    `session_outcome_corrected`, to both parties, read from `outcome_corrected` (spec FR-439; ERD changelog row 30;
    T059). Its migration stays in Phase 4's notifications pass.
+5. **A deleted account's held files, read inside an open matter** (amending item 4 of «Decisions of 2026-11-05, the
+   administrator's control inventory answered»): while held, the photo and the verification documents are readable by
+   an administrator only inside an open dispute, case or complaint of that enrollment, all `disputes` rows, keyed by
+   the open `disputeId` as `disputes.chat` is: `disputes.heldFiles` (metadata, no link) and `disputes.heldFileLink`
+   (one signed link per press, `document_link_ttl_seconds`, audited `held_file.view`); a link minted just before the
+   close may live 300 s after it, accepted; `readDocument` unchanged, verification and identity each gaining a reader
+   of their own held file; sessions' `DisputeHeldFiles` port bound in `main.ts` to verification, so no cycle forms.
+   The API in T040 (B40 stays at six), the panel's «held files» section in T049 and T050 (research R-327, «The
+   administrator's read»; spec FR-487; SRS FR-AUTH-14; ADR 0015's amendment).
 
 The window rule (R-320): nothing here offers a time.
 
@@ -737,6 +749,9 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `PLAN.md` | Phase 3: the live channel; Phase 6: the proxy, Docker and RAM notes | 1, 5 |
 | `docs/SRS.md` | On the fourth analysis: FR-NOTIF-1's `session_outcome_corrected`, an amendment line | Decisions on the fourth analysis, 4 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 29 (`counter_booking_refused`) and 30 (§11's `session_outcome_corrected`) | 3, 4 |
+| `docs/SRS.md` | FR-AUTH-14: a held file read by an administrator inside an open matter only; an amendment line | 5 |
+| ADR 0015 | Its amendment paragraph: the administrator's read of a held file | 5 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog row 31, the notes on `users.photo_key` and `verification_documents.erased_at` | 5 |
 
 ## Phase Outputs
 

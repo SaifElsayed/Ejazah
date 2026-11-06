@@ -170,7 +170,11 @@ choice of a make-up or a refund, on the ijazah track a make-up), suspend another
 the case (the enrollment cancelled, the make-up cancelled, every remedy still owed in a new `student_fault_confirmed`
 case and none in the case dismissed); ban a student (sessions and enrollments cancelled, a case); delete a student's account with a make-up
 remedy open (lapsed, no case) and one whose refund was chosen (its case kept, and the deleted student's photo and
-documents kept in storage until that case is closed, then removed by `erase-deleted-files`' next run: FR-487); on `/users`, search a user by name and
+documents kept in storage until that case is closed, then removed by `erase-deleted-files`' next run: FR-487); while
+that case is open, open it on `/cases`: its «held files» section lists the photo and the documents with no link, and
+each view press opens one link that stops working after `document_link_ttl_seconds` and writes one `held_file.view`
+audit entry; once the case is closed the section is refused, and after the job's next run a link asked for the file
+answers `NOT_FOUND`; on `/users`, search a user by name and
 open their record (FR-ADMIN-4's fields and the cancellation-request counts; a student's suspend, ban and reinstate);
 read a dispute's chat (one `chat.read` audit entry per read). On a confirmed enrollment, complain of the teacher's
 absence from the phone (the button then reads «شكوتك قيد المراجعة» and a second complaint is refused); in `/cases`,

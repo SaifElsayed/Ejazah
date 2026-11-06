@@ -97,6 +97,12 @@ Clients reconnect after a random 1 to 15 s delay.
 - booking's `terminationSubscriber` widened with sessions' `cancelRemainingSessions` and moderation's cases (R-313);
 - sessions' `DisputeChat` port to chat's `createDisputeChat()` (R-301, R-314; the owner's decision of 2026-11-05 on the
   analysis, C5): `disputes.chat` asks it once the dispute is checked open, so sessions imports no chat;
+- sessions' `DisputeHeldFiles` port (`heldFilesOf(tx, userIds)`, `heldFileLink(tx, userIds, fileRef)`) to verification's
+  `createDisputeHeldFiles()`, which reads verification's own erased documents whose keys are still held through a reader
+  of its own (`readDocument` unchanged) and identity's entry for a deleted person's held photo: `disputes.heldFiles` and
+  `disputes.heldFileLink` ask it once the dispute is checked open, with the enrollment's two parties, so sessions imports
+  no verification (verification → sessions, R-301, would close a cycle) (spec FR-487, research R-327; the owner's
+  decision of 2026-11-06);
 - verification's `users.get` reads the cancellation-request counts from sessions' entry (an import, R-301);
 - `StandingService` into sessions' dispute resolution and a complaint's decision (b) (FR-421, R-322);
 - the video port into sessions; the `POST /webhooks/video` route beside the payment webhook;

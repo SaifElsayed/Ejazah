@@ -1021,7 +1021,7 @@ control inventory answered»): each answer is under the table, and the table's c
 | P3-13 | A suspended student's fault confirmed (`cases.dismiss` of a `student_suspended` case): the enrollment `cancelled` `admin`, a new `student_fault_confirmed` case | `enrollment_events` `cancelled` (`admin`), the make-ups' `cancelled_by_admin` rows naming the new case, the remedies handed to it, audit `case.dismissed`; panel: `/cases`, `/sessions` (`restorableUntil`) | `sessions.restore` within `enrollment_restore_window_days` (7) | The new case | The chat, by P3-26's rule, once the case closes |
 | P3-14 | A student's ban (`students.ban`): enrollments `cancelled` `admin` at once, one `student_banned` case each | `enrollment_events`, `session_events` `cancelled_by_admin`, the cases, audit `student.ban`; panel: `/cases`, `/sessions`, `/users`, `/audit` | None for the enrollments: not restorable (FR-454) | The `student_banned` case | Sign-in sessions ended; the chat by P3-26's rule |
 | P3-15 | A teacher's end: suspension, revocation or ban (`teachers.*`), a complaint's decision (b), a dispute's `party_suspended` or `party_banned`: confirmed enrollments `cancelled` `teacher_suspended`, one `teacher_ended` case each | `enrollment_events`, `session_events` `cancelled_by_admin` naming the case, the cases, audit (`teacher.suspend` and the rest, `complaint.decided`, `dispute.resolved`); panel: `/cases`, `/sessions`, `/users`, `/audit` | The account's reinstatement (`teachers.reinstate`) restores the account only; the enrollments are not restorable (FR-454) | For the student, the `teacher_ended` case; for the teacher, **M only** | Sign-in sessions ended; the chat by P3-26's rule |
-| P3-16 | A student's deletion: sessions cancelled, enrollments `cancelled` `account_deleted` with no case, open remedies `lapsed` (FR-484) | `enrollment_events`, `session_events` `cancelled_by_admin` (no case) and `remedy_lapsed`; panel: `/sessions` and `/users` with the stand-in (FR-426) | None: final | A refund already chosen keeps its case; otherwise, for the teacher, **M only** | The person's files at once and by `erase-deleted-files` (ADR 0015 D3), never while the person is a party to an enrollment with an open dispute, case or complaint (R-327); sign-in sessions; the chat by P3-26's rule |
+| P3-16 | A student's deletion: sessions cancelled, enrollments `cancelled` `account_deleted` with no case, open remedies `lapsed` (FR-484) | `enrollment_events`, `session_events` `cancelled_by_admin` (no case) and `remedy_lapsed`; panel: `/sessions` and `/users` with the stand-in (FR-426); the deleted person's held files (R-327), readable by an administrator only inside an open dispute, case or complaint of that enrollment, on `/disputes` and `/cases` (`disputes.heldFiles`, metadata; `disputes.heldFileLink`, a signed link per press for `document_link_ttl_seconds`, each audited `held_file.view`; the owner's decision of 2026-11-06) | None: final | A refund already chosen keeps its case; otherwise, for the teacher, **M only** | The person's files at once and by `erase-deleted-files` (ADR 0015 D3), never while the person is a party to an enrollment with an open dispute, case or complaint (R-327); sign-in sessions; the chat by P3-26's rule |
 | P3-17 | A teacher's deletion: as P3-15, with one `teacher_ended` case per enrollment (T004) | As P3-15 | None: final | The `teacher_ended` case | As P3-16 |
 | P3-18 | A complaint decided (a), the enrollment ended (`cases.decideComplaint`): `terminated_no_show`, an `absence_termination` case | The complaint `resolved` `enrollment_ended` with its note, one `session_events` row `complaint_decided`, `enrollment_events` `terminated_no_show`, the case, audit `complaint.decided`; panel: `/cases`, `/sessions` (`restorableUntil`) | `sessions.restore` within the restore window | The `absence_termination` case | The chat by P3-26's rule, once the case closes |
 | P3-19 | A complaint closed (c) (`cases.decideComplaint`, `close`) | The complaint `dismissed` with its note, `complaint_decided`, audit; panel: `/cases` | None: final; the student may complain again, one open at a time | **M only** | Nothing |
@@ -1409,7 +1409,9 @@ compensation case or a complaint of a teacher's absence, the same three the chat
 Everything else the deletion does at once is unchanged (ADR 0015 D3, FR-141 of `specs/002-identity/spec.md`): the
 personal fields erased, every document marked `erased_at` in the deletion's transaction and unreadable from then on
 (`readDocument` answers an erased document as none), the deleted row read by no ordinary query. Only the files and
-their keys wait; rule 34 (a key never without `erased_at`) holds throughout.
+their keys wait; rule 34 (a key never without `erased_at`) holds throughout. A held file is readable by one path only,
+an administrator's inside an open matter of that enrollment (*The administrator's read*, below; **Decided**, the
+owner, 2026-11-06).
 
 *The condition, read without breaking R-API-6.* `disputes` is moderation's and `enrollments` booking's, and booking
 imports moderation (ARCHITECTURE §4, Phase 3's graph). Booking's entry gains `heldFileOwnersAmong(tx, userIds)`: of
@@ -1437,12 +1439,48 @@ the person's enrollments closes finds the owner no longer held and removes the f
 removal that failed (within the hour). A closing that opens another matter (a dismissed `student_suspended` case opening
 `student_fault_confirmed`, R-313) keeps the hold.
 
+*The administrator's read* (**Decided**, the owner, 2026-11-06, amending the decision of 2026-11-05: SRS FR-AUTH-14,
+ADR 0015's amendment, spec FR-487). Holding files nobody can read keeps personal data that serves as no evidence, so a
+held file is readable by an administrator only inside an open matter of the enrollment that holds it, as the chat is
+(`disputes.chat`, R-314), through a short signed link, each opening audited. Read against the code at `f905062`:
+
+1. **One table, one key.** A session dispute, a compensation case and a complaint of a teacher's absence are all
+   `disputes` rows, so the read is keyed by a `disputeId` of any kind whose `status = 'open'`, checked as
+   `disputes.chat` checks it.
+2. **Two administrator procedures** in sessions' admin router, beside `disputes.chat` (contracts/admin-surface.md):
+   `disputes.heldFiles { disputeId }` answers metadata only, no link: per file its kind (the photo, or the document's
+   `document_type`), its owner's role in the enrollment (student or teacher), its upload date where one is recorded
+   (a document's `uploaded_at`; the photo records none) and an opaque `fileRef`; only the files of a party of that
+   dispute's enrollment who is deleted and whose keys are still held. A live party's documents are read through the
+   existing `documents.link`. `disputes.heldFileLink { disputeId, fileRef }` mints one signed link per press, valid
+   `document_link_ttl_seconds` (300, the existing setting, `prisma/seed.ts`; no new one), and is audited per press:
+   the action `held_file.view`, the dispute as target, the `fileRef` in `after`, as `documents.link` records
+   `document.view` (`modules/verification/documents.router.ts`). Both refuse once the dispute is not open; the link
+   refuses a `fileRef` not held or not of that enrollment's deleted party (`NOT_FOUND`).
+3. **The link's lifetime.** A link minted just before the matter closes lives at most `document_link_ttl_seconds`
+   (300 s) after the close. Accepted: it is one administrator's audited press, and the file is removed by the
+   `erase-deleted-files` run after the close (a link to a removed file answers nothing).
+4. **The read, `readDocument` untouched.** `readDocument` (`modules/verification/verification.repository.ts`) stays as
+   it is, so every other path still answers an erased document as none. Verification gains a separate reader for an
+   erased document whose key is still held, used only by this path; identity's entry gains the same for a deleted
+   person's held photo, over the repository the erase sweep already reads (`DeletedPhotosRepository`).
+5. **A port, no new edge.** Sessions declares `DisputeHeldFiles` (`heldFilesOf(tx, userIds)`, `heldFileLink(tx,
+   userIds, fileRef)`), bound in `main.ts` to verification's `createDisputeHeldFiles()`, which reads its own
+   documents and identity's entry for the photo, as `DisputeChat` is bound to chat's (R-301, contracts/kernel.md "The
+   composition root"). Sessions imports neither verification nor a table of another module (R-API-6); verification
+   already imports identity (its entry) and, in this phase, sessions (R-301), and sessions imports neither, so no
+   cycle forms. Sessions reads the dispute through moderation's entry and the enrollment's two parties through
+   `EnrollmentSide`, and asks the port with those two ids; the port answers only a deleted owner's held files.
+
 **Tests.** `jobs/erase-deleted-files.spec.ts`: a held owner's files are neither removed nor reported, the next page's
 are; once `held` answers none, the next run removes them; the double-run spec unchanged (twice = once).
 `modules/identity/deletion.service.spec.ts`: a held deletion removes nothing after its commit and still revokes and
 mails; a deletion not held removes at once, as now. A db-integrity spec over the two entries: a deleted student with an
 open `refund_choice` case, a deleted teacher whose deletion opened `teacher_ended` cases, a session dispute and a
-complaint each hold; a closed case does not.
+complaint each hold; a closed case does not. The administrator's read (T040): `disputes.heldFiles` and
+`disputes.heldFileLink` refused once the dispute is closed; a live party's file and another enrollment's refused;
+one audit entry `held_file.view` per link; the metadata answers no link; the erase job's first run after the close
+removes the file, and a link asked for it then answers `NOT_FOUND`.
 
 **Risk.** A held file outlives the account by as long as its matter stays open: the retention policy (NFR-COMP-2,
 OPEN-05) and the privacy policy must say so, with counsel, as ADR 0015's amendment notes.

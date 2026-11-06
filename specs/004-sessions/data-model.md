@@ -219,7 +219,9 @@ open `disputes` row of any kind (a session dispute, a compensation case, a compl
 (`heldFileOwnersAmong`, over `enrollments`) and moderation's (`enrollmentsWithOpenMatterAmong`, over `disputes`), never
 across a table (R-API-6). The deletion's after-commit removal asks it through identity's `FileHold` port; the
 `erase-deleted-files` job skips a held owner's files and removes them on its first run after the last matter closes.
-Rule 34 is unchanged: a key is never held without `erased_at`.
+Rule 34 is unchanged: a key is never held without `erased_at`. While held, a file is readable by an administrator
+only inside an open `disputes` row of that enrollment (`disputes.heldFiles`, `disputes.heldFileLink`; the owner's
+decision of 2026-11-06, research R-327, «The administrator's read»); no column is added.
 
 ### 2.12 `slot_holds.release_reason` (booking's; research R-323, GAP-8)
 
