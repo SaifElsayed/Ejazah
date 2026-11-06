@@ -8,7 +8,9 @@
 //
 // T082: what the covering rule (`jobs/case-cover.ts`) reads of an enrollment's cases, through
 // `caseInstantsOf` and `caseInstantsAmong`: whether one is open, the latest opening, and the latest
-// closing (`resolved_at`), with two cases, a case closed with no closing recorded, and none.
+// closing (`resolved_at`), with two cases and with none. A case closed with no closing recorded
+// was a case here until Phase 3's T001: ERD §15 rule 46 now refuses it, so the case proves the
+// refusal and that the case stays open (the follow-up under T001 of specs/004-sessions/tasks.md).
 //
 // The race: `disputes` has no unique index that keeps one open case per enrollment and reason, so
 // the function locks the enrollment's row (T005's `lockRows`) and only then reads the open case.
@@ -239,15 +241,17 @@ describe('the cases the covering rule reads (T082, `jobs/case-cover.ts`)', () =>
     });
   });
 
-  it('a closed case with no recorded closing: not open, no closing', async () => {
+  it('a case closed with no recorded closing is refused by the database (ERD §15 rule 46), and stays open', async () => {
     const { enrollmentId } = await makeEnrollment(db);
     const { caseId } = await open(enrollmentId, 'slot_unavailable');
-    await db.query(`UPDATE disputes SET status = 'dismissed', updated_at = now() WHERE id = $1`, [
-      caseId,
-    ]);
+    await expect(
+      db.query(`UPDATE disputes SET status = 'dismissed', updated_at = now() WHERE id = $1`, [
+        caseId,
+      ]),
+    ).rejects.toMatchObject({ code: '23514' });
     const { openedAt } = await instantsOf(caseId);
     expect(await caseInstantsOf(database, enrollmentId)).toEqual({
-      open: false,
+      open: true,
       lastOpenedAt: openedAt,
       lastClosedAt: null,
     });

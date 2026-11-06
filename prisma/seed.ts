@@ -84,13 +84,19 @@ const SUBJECTS = [
  *
  * Phase 2 (T002, specs/003-booking/data-model.md §4, FR-412): the five rows booking, checkout and
  * discovery read, from `first_session_lead_hours` on, listed in SRS §3.14.
+ *
+ * Phase 3 (T001, specs/004-sessions/data-model.md §4): the seventeen rows the sessions, chat, live
+ * channel and administrator flows read, from `session_evaluation_delay_minutes` on, in that table's
+ * order. `teacher_no_show_threshold` is no longer written (the threshold is removed, R-322, ADR 0023;
+ * the migration `20261108120000_sessions_pass` deletes its row), and `chat_retention_days` defaults
+ * to 30 (the owner's decision of 2026-11-05): a database already seeded keeps its row, since the
+ * seed inserts only what is missing (R-PROC-11).
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
   ['join_window_minutes', 10],
   ['minimum_connection_seconds', 60],
   ['early_join_lead_minutes', 15],
-  ['teacher_no_show_threshold', 2],
   ['dispute_window_hours', 72],
   ['slot_hold_ttl_minutes', 10],
   ['slot_hold_grace_minutes', 5],
@@ -98,7 +104,7 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['idempotency_key_ttl_hours', 24],
   ['slot_release_buffer_weeks', 0],
   ['reminder_offsets_minutes', [1440, 15]],
-  ['chat_retention_days', 0],
+  ['chat_retention_days', 30],
   ['rate_limit_authentication', { limit: 10, window_seconds: 900 }],
   ['rate_limit_one_time_code', { limit: 5, window_seconds: 600 }],
   ['rate_limit_search', { limit: 60, window_seconds: 60 }],
@@ -145,6 +151,24 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['checkout_confirming_poll_seconds', 30],
   ['checkout_confirming_poll_window_minutes', 10],
   ['discovery_page_size', 20],
+  // T001 (Phase 3, specs/004-sessions/data-model.md §4).
+  ['session_evaluation_delay_minutes', 2],
+  ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],
+  ['makeup_counter_answer_hours', 72],
+  ['chat_page_size', 50],
+  ['cancellation_requests_recent_days', 30],
+  ['video_empty_timeout_seconds', 300],
+  ['video_departure_timeout_seconds', 20],
+  ['repeated_absence_flag_count', 5],
+  ['enrollment_restore_window_days', 7],
+  ['rate_limit_absence_complaint', { limit: 5, window_seconds: 3600 }],
+  ['rate_limit_signed_in_default', { limit: 150, window_seconds: 60 }],
+  ['rate_limit_dispute_revision', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_enrollment_restore', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_manual_compensation_case', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_outcome_correction', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_live_channel', { limit: 10, window_seconds: 60 }],
+  ['live_channel_max_connections_per_user', 3],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

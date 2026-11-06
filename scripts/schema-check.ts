@@ -110,8 +110,10 @@ const AGGREGATE_NAMES_ALLOWED: ReadonlyMap<string, string> = new Map([
 // Prisma's own bookkeeping table: its columns are Prisma's, not this schema's.
 const TABLES_NOT_CHECKED_FOR_AGGREGATES: ReadonlySet<string> = new Set(['_prisma_migrations']);
 
-// The six caches R-DB-4 declares (data-model.md §3), with the type each must keep. The four on
-// `sessions` cannot be recognised by name, so the check asserts they exist as declared.
+// The caches R-DB-4 declares (data-model.md §3), with the type each must keep: the six of Phase 0,
+// and `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure its
+// outcome was decided on (R-DB-4 as constitution 2.5.0 amends it, ADR 0022; Phase 3's T001). The
+// five on `sessions` cannot be recognised by name, so the check asserts they exist as declared.
 const DECLARED_CACHES: ReadonlyMap<string, string> = new Map([
   ['teacher_profiles.average_rating', 'numeric(3,2)'],
   ['teacher_profiles.review_count', 'integer'],
@@ -119,6 +121,7 @@ const DECLARED_CACHES: ReadonlyMap<string, string> = new Map([
   ['sessions.scheduled_end_at', 'timestamp(6) with time zone'],
   ['sessions.teacher_user_id', 'uuid'],
   ['sessions.student_user_id', 'uuid'],
+  ['sessions.simultaneous_connected_seconds', 'integer'],
 ]);
 
 const INTEGER_TYPES: ReadonlySet<string> = new Set(['int2', 'int4', 'int8']);

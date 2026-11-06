@@ -3,7 +3,10 @@
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
 //
 // The body-or-attachment check (ERD section 15.8) cannot be said in the schema language; it lives in
-// the initial migration (T064), which must also accept a row the retention job purged.
+// the initial migration (T064), which must also accept a row the retention job purged. Phase 3
+// (T001, specs/004-sessions/data-model.md §2.9): ERD §15 rule 47, an attachment's type is
+// `application/pdf` or `text/plain` and its three columns are all set or all NULL unless purged, is
+// in migration `20261108120000_sessions_pass`.
 
 // Scoped to the enrollment (FR-SESS-6). Admin-readable only under an open dispute or report;
 // purged by the retention job (FR-SESS-13).

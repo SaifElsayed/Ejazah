@@ -26,7 +26,7 @@ export interface OrderEnrollmentRow {
 
 /** One `enrollment_events` row as the monitor's timeline reads it. */
 export interface OutcomeRow {
-  readonly kind: 'confirmed' | 'order_failed' | 'cancelled';
+  readonly kind: (typeof OUTCOME_KINDS)[number];
   readonly cancellationReason: EnrollmentCancellationReason | null;
   /** The order a confirmation or a failure names; null for a cancellation. */
   readonly paymentId: string | null;
@@ -55,14 +55,28 @@ export function enrollmentsAmong(
   });
 }
 
+/**
+ * The kinds the monitor's timeline shows (`enrollmentOutcomeKind`). Phase 3's `completed`,
+ * `terminated_no_show` and `restored` (T001 of specs/004-sessions) are not among them until a task
+ * widens the contract, so the read leaves them out rather than fail the output's parse.
+ */
+const OUTCOME_KINDS = ['confirmed', 'order_failed', 'cancelled'] as const;
+
+function isOutcome<Row extends { readonly kind: string }>(
+  row: Row,
+): row is Row & { readonly kind: OutcomeRow['kind'] } {
+  return (OUTCOME_KINDS as readonly string[]).includes(row.kind);
+}
+
 /** The enrollment's outcomes, oldest first, the id breaking a tie of one transaction's instant. */
-export function outcomesOf(
+export async function outcomesOf(
   tx: Pick<Transaction, 'enrollmentEvent'>,
   enrollmentId: string,
 ): Promise<OutcomeRow[]> {
-  return tx.enrollmentEvent.findMany({
-    where: { enrollmentId },
+  const rows = await tx.enrollmentEvent.findMany({
+    where: { enrollmentId, kind: { in: [...OUTCOME_KINDS] } },
     orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
     select: { kind: true, cancellationReason: true, paymentId: true, occurredAt: true },
   });
+  return rows.filter(isOutcome);
 }

@@ -94,6 +94,10 @@ describe('the check names every kind of violation (T070)', () => {
         'CREATE UNIQUE INDEX probe_reviews_enrollment ON reviews (enrollment_id) WHERE moderated_by_admin_id IS NULL',
       );
       await db.query('ALTER TABLE teacher_profiles ALTER COLUMN review_count TYPE bigint');
+      // Phase 3's T001: the recorded figure R-DB-4 names since constitution 2.5.0 (ADR 0022).
+      await db.query(
+        'ALTER TABLE sessions ALTER COLUMN simultaneous_connected_seconds TYPE bigint',
+      );
       return named(await checkSchema(db, { applicationRole }));
     });
 
@@ -117,8 +121,9 @@ describe('the check names every kind of violation (T070)', () => {
         'users-partial-index users.email',
         'reviews-enrollment-unique reviews.enrollment_id',
         'declared-cache teacher_profiles.review_count',
+        'declared-cache sessions.simultaneous_connected_seconds',
       ]),
     );
-    expect(found).toHaveLength(18);
+    expect(found).toHaveLength(19);
   });
 });

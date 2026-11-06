@@ -238,12 +238,33 @@ enum CancellationReason {
   @@map("cancellation_reason")
 }
 
+// Phase 3 (T001, specs/004-sessions/data-model.md §2.12, R-323 GAP-8): why a hold was released,
+// written with `released_at` by every path that writes it; NULL while active and on a hold released
+// before the column existed (ERD §15 rule 48).
+enum HoldReleaseReason {
+  converted
+  expired
+  checkout_abandoned
+  slot_unavailable
+  admin
+  teacher_suspended
+  account_deleted
+
+  @@map("hold_release_reason")
+}
+
 // Phase 2 (T004, specs/003-booking/data-model.md §2.5, R-216): the outcome an `enrollment_events`
 // row records for a later notification (FR-385).
 enum EnrollmentEventKind {
   confirmed
   order_failed
   cancelled
+  // Phase 3 (T001, data-model.md §2.8): an enrollment completed (FR-449), ended by an
+  // administrator's decision on a student's complaint (FR-453), and restored by an administrator
+  // (FR-454, R-322, ADR 0023).
+  completed
+  terminated_no_show
+  restored
 
   @@map("enrollment_event_kind")
 }
@@ -272,6 +293,11 @@ enum RemedyStatus {
   counter_proposed
   booked
   refund_case
+  // Phase 3 (T001, specs/004-sessions/data-model.md §2.3): a suspended student's open remedy, which
+  // nothing advances until the reinstatement, and a deleted student's open remedy, closed with
+  // nothing owed and no case.
+  frozen
+  lapsed
 
   @@map("remedy_status")
 }
@@ -297,6 +323,9 @@ enum SessionStatus {
 enum ParticipantEventType {
   joined
   left
+  // Phase 3 (T001, data-model.md §2.2): the provider's room-ended event, with no participant, which
+  // closes every connection still open (FR-443, R-304).
+  room_ended
 
   @@map("participant_event_type")
 }
@@ -308,6 +337,40 @@ enum CancellationRequestStatus {
   expired
 
   @@map("cancellation_request_status")
+}
+
+// Phase 3 (T001, data-model.md §2.4, R-315): what a `session_events` row records for a later
+// notification (FR-495), twenty-five kinds. `complaint_raised` and `complaint_decided` are
+// enrollment-wide rows with no session (R-322); `counter_booking_refused` is a teacher's acceptance
+// of a counter-proposal that the database refused, never written as `counter_withdrawn` (A1).
+enum SessionEventKind {
+  settled
+  cancellation_requested
+  cancellation_accepted
+  cancellation_declined
+  cancellation_expired
+  cancelled_by_admin
+  remedy_offered
+  counter_proposed
+  counter_accepted
+  counter_declined
+  counter_withdrawn
+  remedy_frozen
+  makeup_booked
+  remedy_handed_to_case
+  remedy_lapsed
+  dispute_raised
+  dispute_resolved
+  dispute_revised
+  review_resolved
+  outage_reclassified
+  complaint_raised
+  complaint_decided
+  outcome_corrected
+  instants_reresolved
+  counter_booking_refused
+
+  @@map("session_event_kind")
 }
 
 // payments (ERD section 7, ADR 0007)
@@ -360,6 +423,9 @@ enum IjazahMode {
 enum DisputeKind {
   session_dispute
   compensation_case
+  // Phase 3 (T001, data-model.md §2.7, R-322, ADR 0023): a student's complaint of the teacher's
+  // absence, raised by the student, with no session; one open per enrollment (ERD §15 rule 46).
+  absence_complaint
 
   @@map("dispute_kind")
 }
@@ -380,6 +446,8 @@ enum DisputeResolution {
   compensation_ordered
   party_suspended
   party_banned
+  // Phase 3 (T001, R-322): an `absence_complaint` on which the administrator ended the enrollment.
+  enrollment_ended
 
   @@map("dispute_resolution")
 }

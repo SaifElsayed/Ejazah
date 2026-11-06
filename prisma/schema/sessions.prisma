@@ -10,43 +10,56 @@
 //
 // Phase 1 (T012, ADR 0018): `sessions.makeup_for_session_id` and `session_remedies` land as columns
 // only; no code of this phase writes them (data-model.md §1).
+//
+// Phase 3 (T001, specs/004-sessions/data-model.md §2.1 to §2.5, migration
+// `20261108120000_sessions_pass`): the frozen outcome and the administrator's settling instant on
+// `sessions`; the room-ended event and the connection's reference on `session_participant_events`;
+// the offer, its two snapshots and the pending counter-proposal on `session_remedies`; and two new
+// tables, the append-only `session_events` and `provider_outages`. Rules 40 to 45 of ERD §15, the
+// revoked privileges and the partial unique on a pending request live in the migration.
 
 // One scheduled occurrence. The local date, local start time and zone are the schedule; the UTC
 // instants are derived from them (ADR 0009).
 model Session {
-  id                           String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  enrollmentId                 String        @map("enrollment_id") @db.Uuid
+  id                           String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId                 String         @map("enrollment_id") @db.Uuid
   // Cached exception #3 with `student_user_id` (ADR 0010 D2, R-DB-4): copied from the enrollment
   // at generation, never changed, so the database can refuse overlapping sessions (T141).
-  teacherUserId                String        @map("teacher_user_id") @db.Uuid
-  studentUserId                String        @map("student_user_id") @db.Uuid
+  teacherUserId                String         @map("teacher_user_id") @db.Uuid
+  studentUserId                String         @map("student_user_id") @db.Uuid
   // 1 and up.
-  sequenceNumber               Int           @map("sequence_number")
+  sequenceNumber               Int            @map("sequence_number")
   // What was asked for, never where a DST gap moved it (ADR 0009 D1).
-  scheduledDateLocal           DateTime      @map("scheduled_date_local") @db.Date
+  scheduledDateLocal           DateTime       @map("scheduled_date_local") @db.Date
   // The slot's `start_time_local`, `HH:MM:SS`.
-  scheduledStartTimeLocal      DateTime      @map("scheduled_start_time_local") @db.Time(0)
+  scheduledStartTimeLocal      DateTime       @map("scheduled_start_time_local") @db.Time(0)
   // IANA zone of the local fields: the enrollment's `snapshot_slot_timezone`.
   timezone                     String
   // Cached exception #2 (ADR 0009 D2, R-DB-4): recomputed when the time zone data changes.
-  scheduledStartAt             DateTime      @map("scheduled_start_at") @db.Timestamptz(6)
-  scheduledEndAt               DateTime      @map("scheduled_end_at") @db.Timestamptz(6)
+  scheduledStartAt             DateTime       @map("scheduled_start_at") @db.Timestamptz(6)
+  scheduledEndAt               DateTime       @map("scheduled_end_at") @db.Timestamptz(6)
   // The full machine, SRS sections 3.7.5 and 3.8.
   status                       SessionStatus
+  // The outcome frozen while `status = 'disputed'` (FR-DISPUTE-4), cleared by the resolution
+  // (Phase 3, T001; ERD §15 rule 40).
+  outcomeUnderDispute          SessionStatus? @map("outcome_under_dispute")
   // Accumulated across reconnections from provider events (FR-SESS-18).
-  simultaneousConnectedSeconds Int           @default(0) @map("simultaneous_connected_seconds")
+  simultaneousConnectedSeconds Int            @default(0) @map("simultaneous_connected_seconds")
   // The video provider's reference.
-  providerRoomId               String?       @map("provider_room_id")
+  providerRoomId               String?        @map("provider_room_id")
   // When the worker settled it.
-  evaluatedAt                  DateTime?     @map("evaluated_at") @db.Timestamptz(6)
+  evaluatedAt                  DateTime?      @map("evaluated_at") @db.Timestamptz(6)
   // For review-queue resolutions (FR-SESS-19).
-  settledByAdminId             String?       @map("settled_by_admin_id") @db.Uuid
+  settledByAdminId             String?        @map("settled_by_admin_id") @db.Uuid
+  // When an administrator settled it; set exactly with `settled_by_admin_id` (Phase 3, T001; ERD
+  // §15 rule 40).
+  adminSettledAt               DateTime?      @map("admin_settled_at") @db.Timestamptz(6)
   // The session this one makes up for (ADR 0018 D3; Phase 1, T012).
-  makeupForSessionId           String?       @map("makeup_for_session_id") @db.Uuid
+  makeupForSessionId           String?        @map("makeup_for_session_id") @db.Uuid
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
-  deletedAt                    DateTime?     @map("deleted_at") @db.Timestamptz(6)
-  createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                    DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  createdAt                    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   enrollment       Enrollment @relation(fields: [enrollmentId], references: [id])
   teacher          User       @relation("SessionTeacher", fields: [teacherUserId], references: [id])
@@ -60,6 +73,7 @@ model Session {
   disputes             Dispute[]
   userReports          UserReport[]
   remedy               SessionRemedy?
+  events               SessionEvent[]
 
   // Ordered session lists (ERD section 14).
   @@unique([enrollmentId, sequenceNumber])
@@ -74,21 +88,40 @@ model Session {
 // per such session; `proposed_date` and `counter_date` are calendar dates (the slot's time is the
 // package's); a refund case points at its dispute. Owned by sessions; written by Phase 3.
 model SessionRemedy {
-  id           String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sessionId    String       @unique @map("session_id") @db.Uuid
-  kind         RemedyKind
-  status       RemedyStatus
-  proposedDate DateTime?    @map("proposed_date") @db.Date
-  counterDate  DateTime?    @map("counter_date") @db.Date
-  decidedAt    DateTime?    @map("decided_at") @db.Timestamptz(6)
-  caseId       String?      @map("case_id") @db.Uuid
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                            String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sessionId                     String       @unique @map("session_id") @db.Uuid
+  kind                          RemedyKind
+  status                        RemedyStatus
+  proposedDate                  DateTime?    @map("proposed_date") @db.Date
+  counterDate                   DateTime?    @map("counter_date") @db.Date
+  decidedAt                     DateTime?    @map("decided_at") @db.Timestamptz(6)
+  caseId                        String?      @map("case_id") @db.Uuid
+  // Phase 3 (T001, data-model.md §2.3; ERD §15 rule 42). When the outcome became final and the
+  // remedy was offered, and the choice window's close fixed then (`makeup_choice_window_days`).
+  offeredAt                     DateTime     @map("offered_at") @db.Timestamptz(6)
+  choiceClosesAt                DateTime     @map("choice_closes_at") @db.Timestamptz(6)
+  // `makeup_counter_answer_hours` and `first_session_lead_hours` at the offer, so a later change of
+  // either setting is prospective.
+  snapshotAnswerWindowHours     Int          @map("snapshot_answer_window_hours")
+  snapshotFirstSessionLeadHours Int          @map("snapshot_first_session_lead_hours")
+  // The pending counter-proposal only, set exactly while `status = 'counter_proposed'`; its answer
+  // deadline is `counter_proposed_at` + `snapshot_answer_window_hours`, computed when read and never
+  // stored (D1). Its history is in `session_events`.
+  counterSlotId                 String?      @map("counter_slot_id") @db.Uuid
+  // The slot's `start_time_local`, in `counter_timezone`, the slot's own zone (`counter_date` too).
+  counterStartTimeLocal         DateTime?    @map("counter_start_time_local") @db.Time(0)
+  counterTimezone               String?      @map("counter_timezone")
+  counterProposedAt             DateTime?    @map("counter_proposed_at") @db.Timestamptz(6)
+  createdAt                     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  session Session  @relation(fields: [sessionId], references: [id])
-  case    Dispute? @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  session     Session           @relation(fields: [sessionId], references: [id])
+  case        Dispute?          @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  counterSlot AvailabilitySlot? @relation(fields: [counterSlotId], references: [id], onDelete: Restrict)
 
   @@index([caseId])
+  // The new foreign key's plain index (ERD §14, FR-035; the third analysis, C2).
+  @@index([counterSlotId])
   @@map("session_remedies")
 }
 
@@ -96,8 +129,12 @@ model SessionRemedy {
 model SessionParticipantEvent {
   id              String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sessionId       String               @map("session_id") @db.Uuid
-  userId          String               @map("user_id") @db.Uuid
+  // NULL exactly for `room_ended` (Phase 3, T001; ERD §15 rule 41).
+  userId          String?              @map("user_id") @db.Uuid
   eventType       ParticipantEventType @map("event_type")
+  // The provider's id of one connection, so a reconnection is its own interval; NULL exactly for
+  // `room_ended` (Phase 3, T001; R-304; ERD §15 rule 41).
+  connectionRef   String?              @map("connection_ref")
   occurredAt      DateTime             @map("occurred_at") @db.Timestamptz(6)
   // A replayed webhook cannot double-insert (ERD section 15.4).
   providerEventId String               @unique @map("provider_event_id")
@@ -105,7 +142,7 @@ model SessionParticipantEvent {
 
   // RESTRICT on update: a cascade would rewrite the row past the revoked UPDATE (T135).
   session Session @relation(fields: [sessionId], references: [id], onUpdate: Restrict)
-  user    User    @relation(fields: [userId], references: [id], onUpdate: Restrict)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([sessionId])
   @@index([userId])
@@ -131,4 +168,61 @@ model CancellationRequest {
   @@index([sessionId])
   @@index([requestedByUserId])
   @@map("cancellation_requests")
+}
+
+// Phase 3 (T001, data-model.md §2.4, R-315): the append-only record of each session event a later
+// notification needs (FR-495). The row references no account: every other detail is read from the
+// rows it names. Its kind checks (ERD §15 rule 43) and the revoked UPDATE, DELETE and TRUNCATE are
+// SQL in the migration. RESTRICT on update as on delete, rule 21's pattern.
+model SessionEvent {
+  id                    String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId          String           @map("enrollment_id") @db.Uuid
+  // NULL exactly on `complaint_raised` and `complaint_decided`, enrollment-wide (R-322).
+  sessionId             String?          @map("session_id") @db.Uuid
+  kind                  SessionEventKind
+  // On `cancelled_by_admin` (the case the cancelling action opened or joined, NULL where it opened
+  // none), and always on `dispute_revised`, `complaint_raised` and `complaint_decided`.
+  caseId                String?          @map("case_id") @db.Uuid
+  // The counter-proposal's slot, local date, start and zone, on a `counter_proposed` row only.
+  counterSlotId         String?          @map("counter_slot_id") @db.Uuid
+  counterDate           DateTime?        @map("counter_date") @db.Date
+  counterStartTimeLocal DateTime?        @map("counter_start_time_local") @db.Time(0)
+  counterTimezone       String?          @map("counter_timezone")
+  // The outcome replaced and the one written, on `dispute_revised` and `outcome_corrected` only.
+  outcomeBefore         SessionStatus?   @map("outcome_before")
+  outcomeAfter          SessionStatus?   @map("outcome_after")
+  // On `instants_reresolved` only: the start before the run, or the start a session kept back keeps.
+  previousStartAt       DateTime?        @map("previous_start_at") @db.Timestamptz(6)
+  // The transaction's instant.
+  occurredAt            DateTime         @map("occurred_at") @db.Timestamptz(6)
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  enrollment  Enrollment        @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  session     Session?          @relation(fields: [sessionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  case        Dispute?          @relation(fields: [caseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  counterSlot AvailabilitySlot? @relation(fields: [counterSlotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([enrollmentId])
+  @@index([sessionId])
+  @@index([caseId])
+  @@index([counterSlotId])
+  @@map("session_events")
+}
+
+// Phase 3 (T001, data-model.md §2.5, R-307): a window during which the video provider was out,
+// recorded by an administrator (FR-445). Evidence: `ends_at > starts_at` (ERD §15 rule 44) and the
+// revoked UPDATE, DELETE and TRUNCATE are SQL in the migration.
+model ProviderOutage {
+  id                String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  // Resolved on the server from the administrator's local date, time and zone (R-TIME-6).
+  startsAt          DateTime @map("starts_at") @db.Timestamptz(6)
+  endsAt            DateTime @map("ends_at") @db.Timestamptz(6)
+  reason            String
+  recordedByAdminId String   @map("recorded_by_admin_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  recordedByAdmin AdminUser @relation(fields: [recordedByAdminId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([recordedByAdminId])
+  @@map("provider_outages")
 }

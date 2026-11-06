@@ -86,8 +86,11 @@ model AvailabilitySlot {
 
   teacher User @relation(fields: [teacherUserId], references: [id])
 
-  slotHolds   SlotHold[]
-  enrollments Enrollment[]
+  slotHolds       SlotHold[]
+  enrollments     Enrollment[]
+  // Phase 3 (T001): the slot a pending counter-proposal names, and its history (sessions' own).
+  counterRemedies SessionRemedy[]
+  counterEvents   SessionEvent[]
 
   @@index([teacherUserId])
   @@map("availability_slots")
