@@ -301,7 +301,7 @@ describe('two transactions (T142)', () => {
 
   /**
    * Resolves once the backend `pid` is waiting on a lock; fails after about two seconds, inside
-   * vitest's five-second test timeout, so a missing guard is reported as "never waited" rather
+   * the project's 30-second test timeout, so a missing guard is reported as "never waited" rather
    * than as a timeout. The watcher can read `wait_event_type` of `second` only because both are
    * the same role: PostgreSQL hides those columns of another role's session from a non-superuser,
    * so making either connection the owner would make every race fail here.
