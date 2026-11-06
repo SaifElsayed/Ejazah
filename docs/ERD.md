@@ -1,12 +1,12 @@
 # Ijazah — Entity-Relationship Design
 
-*Version 1.14 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.4.5 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog; v1.13 on 2026-11-03, a hold's package and session count (T036 of `specs/003-booking/tasks.md`), in the "v1.12 → v1.13" changelog; v1.14 on 2026-11-04, the gateway's member `paymob` (T056 of `specs/003-booking/tasks.md`), in the "v1.13 → v1.14" changelog*
+*Version 1.15 · Companion to SRS v1.4, ARCHITECTURE v3.2 and Constitution 2.6.1 · September 2026; v1.4 on 2026-10-18, the Phase 1 ERD pass (`specs/002-identity/data-model.md`, PR #77): six tables and the columns of Phase 1, listed in the "v1.3 → v1.4" changelog at the end; v1.5 on 2026-10-20, `user_session_retired_tokens` (T094), in the "v1.4 → v1.5" changelog; v1.6 on 2026-10-20, `users.timezone_overridden_at` (T049), in the "v1.5 → v1.6" changelog; v1.8 on 2026-10-22, the verification call's day and outcome (T068), in the "v1.7 → v1.8" changelog; v1.7 on 2026-10-21, `verification_documents.size_bytes` and the meaning of `application_decided_at` (T057, T056), in the "v1.6 → v1.7" changelog; v1.9 on 2026-10-26, a deleted person's documents (B16, T082), in the "v1.8 → v1.9" changelog; v1.10 on 2026-10-26, `banned_identifiers` (T097), in the "v1.9 → v1.10" changelog; v1.11 on 2026-11-01, the column checks and the retired-hash index (T140), in the "v1.10 → v1.11" changelog; v1.12 on 2026-11-01, the Phase 2 pass (T004 of `specs/003-booking/tasks.md`): `enrollment_events`, three columns and the name fold, in the "v1.11 → v1.12" changelog; v1.13 on 2026-11-03, a hold's package and session count (T036 of `specs/003-booking/tasks.md`), in the "v1.12 → v1.13" changelog; v1.14 on 2026-11-04, the gateway's member `paymob` (T056 of `specs/003-booking/tasks.md`), in the "v1.13 → v1.14" changelog; v1.15 on 2026-11-05, the Phase 3 pass (T106 of `specs/003-booking/tasks.md`, `specs/004-sessions/data-model.md` §7, with the owner's decisions of 2026-11-05): `session_events`, `provider_outages`, eleven columns and rules 40 to 47, amended the same day on Phase 3's analysis, on its second analysis, on its third analysis and on the owner's decision of no automatic termination ([ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)), then on the decisions of the administrator's control, the control inventory answered and the live channel (thirteen columns and rules 40 to 48 since, superseding «eleven columns and rules 40 to 47»), and on 2026-11-06 on its fourth analysis, in the "v1.14 → v1.15" changelog*
 
 ## 0. How to read this
 
-This is the complete data model for the MVP — 42 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
+This is the complete data model for the MVP — 44 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
-> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. v1.12 adds `enrollment_events` (Phase 2's T004) and defines **42**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
+> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. v1.12 adds `enrollment_events` (Phase 2's T004) and defines **42**. v1.15 adds `session_events` and `provider_outages` (Phase 3's pass) and defines **44**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
 Conventions, binding on every table:
 
@@ -20,7 +20,8 @@ Conventions, binding on every table:
 - Where hard deletion is forbidden, the table carries `deleted_at` and removal is a soft deletion. This covers `users`, `sessions`, `enrollments` and `ijazahs`. One table is excepted and has no removal path whatsoever: `audit_logs`, which is strictly append-only.
 - A soft-deleted row is excluded from every ordinary read, count and facet. Where a unique constraint covers a value a deleted row still holds, the constraint says explicitly whether the row keeps occupying it — see §15.11.
 - Every table carries `created_at`; mutable tables carry `updated_at`.
-- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored. The only deliberate cached exceptions are `teacher_profiles.average_rating` with `review_count`; `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009); and `sessions.teacher_user_id` with `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions (ADR 0010). Another requires an ADR before it exists (R-DB-4).
+- Derived values — sessions remaining, minor status, bar status, no-show counts, average ratings — are computed, not stored. The only deliberate cached exceptions are `teacher_profiles.average_rating` with `review_count`; `sessions.scheduled_start_at` with `scheduled_end_at`, derived from the session's stored local time and zone (ADR 0009); and `sessions.teacher_user_id` with `student_user_id`, copied from the enrollment so the database can refuse overlapping sessions (ADR 0010). Another requires an ADR before it exists (R-DB-4). `sessions.simultaneous_connected_seconds` is written once, by the evaluation, as the figure its outcome was decided on, and never recomputed (R-DB-4 names it, [ADR 0022](adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md); the owner's decision of 2026-11-05, decision 3 of `specs/004-sessions/plan.md`).
+- A deleted person is named in the apps by a stand-in text, never by a stored value (T090 of `specs/003-booking/tasks.md`, FR-426 of `specs/004-sessions/spec.md`; the owner's decision of 2026-11-05).
 - Secrets are never plaintext. What must be *verified* is hashed (`*_hash`); what must be *recovered or presented to a third party* is encrypted in the column (`*_encrypted`, bytea).
 
 ## 1. Domain map
@@ -34,7 +35,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
 | BOOKING | `booking` | `slot_holds` · `enrollments` · `enrollment_events` |
 | PAYMENTS | `payments` | `payments` · `payment_events` |
-| SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` |
+| SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` · `session_events` · `provider_outages` |
 | CHAT | `chat` | `chat_messages` |
 | CERTIFICATION | `certification` | `ijazahs` · `ijazah_bars` |
 | REVIEWS | `reviews` | `reviews` |
@@ -43,7 +44,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | ADMIN | `admin` | `admin_users` · `audit_logs` · `settings` · `admin_sessions` · `admin_recovery_codes` |
 | PLATFORM | `platform` (kernel, not a module) | `idempotency_keys` |
 
-Forty-two tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`), `banned_identifiers` of T097 (migration `20261026000100`), and `enrollment_events` of Phase 2's T004 (migration `20261101120000`). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
+Forty-four tables: the thirty-three of Phase 0, the six of the Phase 1 ERD pass (`user_sessions`, `auth_identities`, `admin_sessions`, `admin_recovery_codes`, `teacher_credentials`, `session_remedies`; migrations `20261018000000` to `20261018000300`), `user_session_retired_tokens` of Phase 1's T094 (migration `20261020000000`), `banned_identifiers` of T097 (migration `20261026000100`), `enrollment_events` of Phase 2's T004 (migration `20261101120000`), and `session_events` and `provider_outages` of Phase 3's pass (migration `20261108120000_sessions_pass` (B33)). One database, one schema. The grouping above maps 1:1 to the multi-file Prisma layout (`prisma/schema/<module>.prisma`), to backend module ownership, and to `packages/config/module-tables.json`: the owning module is the only module whose repository touches these tables (R-API-6). Discovery is a service inside `catalog` and owns nothing. Session generation is requested by `booking` but the rows are written by `sessions` through its public entry. `payments` confirms an enrollment through `booking`'s public entry and records payout readiness through `identity`'s.
 
 ## 2. Identity
 
@@ -61,7 +62,7 @@ The root identity. One row per human, with exactly one role (ADR 0016).
 | date_of_birth | date, nullable | FR-AUTH-4. Nullable only for a deleted row, so the deletion transaction can erase it; §15 rule 32 keeps it NOT NULL while the row is live (Phase 1 pass, migration `20261018000000`) |
 | display_name | text, nullable | Nullable only for a deleted row, as `date_of_birth` (rule 32) |
 | certificate_name | text, nullable | The full name printed on certificates; asked once at the first ijazah request (ADR 0019, landed by the Phase 1 pass). Erased on deletion; the names a certificate prints are snapshotted onto `ijazahs` at issue (ADR 0015 D3, ADR 0019 D1) |
-| photo_key | text, nullable | The profile photo of either role (decision 46), a storage key served by a signed link; on deletion it is cleared once its file is removed, and a key still held is retried by the `erase-deleted-files` job (v1.9). `teacher_profiles.photo_key` is unused since (Phase 1 pass) |
+| photo_key | text, nullable | The profile photo of either role (decision 46), a storage key served by a signed link; on deletion it is cleared once its file is removed, and a key still held is retried by the `erase-deleted-files` job (v1.9). While the deleted person is a party to an enrollment with an open `disputes` row (a session dispute, a compensation case or a complaint), the file and its key are kept, and removed by that job's first run after the last one closes (SRS FR-AUTH-14 as amended on 2026-11-05; v1.15, changelog row 24); while kept, read only by an administrator inside an open `disputes` row of that enrollment, a signed link per opening, each audited (SRS FR-AUTH-14 as amended on 2026-11-06; changelog row 31). `teacher_profiles.photo_key` is unused since (Phase 1 pass) |
 | preferred_language | enum ar · en | |
 | timezone | text (IANA) | Device-reported, manual override allowed (FR-AUTH-10) |
 | timezone_overridden_at | timestamptz, nullable | When the person chose the zone by hand; while null, the device's report replaces `timezone` (FR-AUTH-10, v1.6) |
@@ -233,7 +234,7 @@ Uploaded identity and credential documents (FR-VERIFY-1). Admin: view only, neve
 | storage_key_encrypted | bytea, nullable | Identity-document reference, encrypted in the column itself (R-DB-8). Signed-URL access only (NFR-SEC-2/3). Null only once the file is removed after its person's deletion, never before `erased_at` (§15 rule 34; v1.9) |
 | size_bytes | int, nullable | The PDF's size as the upload accepted it; null for a document uploaded before it was recorded. The file's name is never stored (it may carry the person's name) (v1.7) |
 | uploaded_at | timestamptz | |
-| erased_at | timestamptz, nullable | Set in the account deletion's transaction of the person who uploaded it (ADR 0015 D3); the document is no longer readable from then on, and its key is cleared after the commit once the file is removed. A key still held is retried by the `erase-deleted-files` job (v1.9) |
+| erased_at | timestamptz, nullable | Set in the account deletion's transaction of the person who uploaded it (ADR 0015 D3); the document is no longer readable from then on, and its key is cleared after the commit once the file is removed. A key still held is retried by the `erase-deleted-files` job (v1.9). While the person is a party to an enrollment with an open `disputes` row (a session dispute, a compensation case or a complaint), the file and its key are kept, the document unreadable by every ordinary path, and removed by that job's first run after the last one closes (SRS FR-AUTH-14 as amended on 2026-11-05; v1.15, changelog row 24); while kept, an administrator may read it only inside an open `disputes` row of that enrollment, through a short signed link per opening, each audited (SRS FR-AUTH-14 as amended on 2026-11-06; changelog row 31) |
 
 ### `verification_requests`
 
@@ -357,6 +358,7 @@ Checkout reservation with TTL (FR-BOOK-9). Enforced against double-booking toget
 | enrollment_id | FK → enrollments, nullable | Set in the transaction that creates the enrollment at Pay; NULL while the student is in checkout before Pay. Conversion, release, the late-payment branch and a new checkout find the hold through it (ADR 0010 D2) |
 | expires_at | timestamptz | Gateway checkout TTL plus the hold grace, counted from placement (defaults 10 + 5 min, admin-configurable; FR-BOOK-9, ADR 0010 D4) |
 | released_at | timestamptz, nullable | Set on conversion, on expiry (by the expiry jobs, or before a new hold on the same slot or by the same student, ADR 0010 D3), by the student's own new checkout (FR-BOOK-12, ADR 0010 D6), or by the refusal branch of FR-PAYG-19. A failed gateway event does not set it (ADR 0010 D4). A release without conversion cancels the linked enrollment in the same transaction (ADR 0010 D7). NULL means active: §15.17–18 count the row even past `expires_at` |
+| release_reason | enum hold_release_reason (converted · expired · checkout_abandoned · slot_unavailable · admin · teacher_suspended · account_deleted), nullable | Why the hold was released, written with `released_at` by every path that writes it: `converted` by the confirmation, the rest by booking's one release under its reason (an expiry, the student's own new checkout, the refusal branch of FR-PAYG-19, an account's end). NULL while active, and on a hold released before the column existed (§15 rule 48). Shown on the payments monitor's order page with the enrollment's holds (SRS FR-ADMIN-20 (a); v1.15, the owner's decision of 2026-11-05; changelog row 26) |
 
 ### `enrollments`
 
@@ -375,16 +377,16 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_subject_id | FK → subjects | |
 | snapshot_slot_timezone | text | Zone frozen at purchase — DST maths uses this |
 | snapshot_track | enum recitation · ijazah_track | The package's track at purchase (ADR 0018 D1, DEC-24; Phase 1 pass, migration `20261018000300`, default `recitation` as `packages.track`'s) |
-| status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5); `cancelled` when its hold is released without conversion (FR-PAYG-6, ADR 0010 D7), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` at the teacher no-show threshold (FR-NOSHOW-4) |
+| status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5), and, for an enrollment that job confirmed and an administrator's decision later closed, by an administrator's restore (below); `cancelled` when its hold is released without conversion (FR-PAYG-6, ADR 0010 D7), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` only by an administrator's decision on a student's complaint of the teacher's absence (FR-NOSHOW-4 as rewritten on 2026-11-05, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md); was: at the teacher no-show threshold, removed); `completed` when every session is settled and not frozen, no remedy is owed, the last session's dispute window has closed and no `student_suspended` compensation case is open on it (FR-449 of `specs/004-sessions/spec.md`; the owner's decision of 2026-11-05). A student's suspension leaves it `confirmed` (SRS FR-ADMIN-5 as amended on 2026-11-05). An administrator's restore (SRS FR-CANCEL-8, ADR 0023) returns to `confirmed`, within `enrollment_restore_window_days` of its closing, a `terminated_no_show` enrollment ended on a complaint or one `cancelled` (`admin`) on a suspended student's confirmed fault: the second exit from a terminal state beside ADR 0010 D5's; nothing in the database forbids either, and it writes no `confirmed_at` |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
-| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`) |
+| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`). `admin` also for a student's ban (at once) and for a suspended student's fault confirmed (SRS FR-ADMIN-5 as amended on 2026-11-05, the owner's decision of 2026-11-05). Returned to NULL by an administrator's restore, as by ADR 0010 D5's late confirmation (SRS FR-CANCEL-8, ADR 0023) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | purchased_at | timestamptz | |
 | quoted_first_session_local_date | date | The first session's local date the checkout showed, computed at Pay; compared with session 1 to say the first session moved (FR-368, FR-386; `specs/003-booking/` R-209, v1.12). A local calendar date in the zone the row already holds, `snapshot_slot_timezone` |
 
 `sessions_remaining` is derived: `snapshot_session_count − count(sessions where status is terminal-delivered)`. Never stored.
 
-The teacher no-show count toward the FR-NOSHOW-3/4 threshold is likewise derived — `count(sessions where status = 'teacher_no_show')` — not a stored counter. The only cached values in this model are `teacher_profiles.average_rating` and `review_count`, `sessions.scheduled_start_at` and `scheduled_end_at` (ADR 0009), and `sessions.teacher_user_id` and `student_user_id` (ADR 0010); nothing about no-shows is among them (R-DB-4).
+The teacher no-show count that marks an enrollment for repeated absence (FR-NOSHOW-3 as rewritten on 2026-11-05, `repeated_absence_flag_count`; no count ends an enrollment, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)) is likewise derived — `count(sessions where status = 'teacher_no_show')`, each session by its final status — not a stored counter. The only cached values in this model are `teacher_profiles.average_rating` and `review_count`, `sessions.scheduled_start_at` and `scheduled_end_at` (ADR 0009), and `sessions.teacher_user_id` and `student_user_id` (ADR 0010); nothing about no-shows is among them (R-DB-4).
 
 ### `enrollment_events`
 
@@ -394,7 +396,7 @@ Append-only record of each outcome a later notification needs: an enrollment con
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | Plain index (§14) |
-| kind | enum confirmed · order_failed · cancelled | |
+| kind | enum confirmed · order_failed · cancelled · completed · terminated_no_show · restored | `completed` and `terminated_no_show` written by Phase 3 (v1.15, `specs/004-sessions/data-model.md` §2.8); `restored`, an administrator's restore of an enrollment an administrator's decision closed, with no reason and no payment (SRS FR-CANCEL-8; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)) |
 | cancellation_reason | enum `cancellation_reason`, nullable | Set exactly when `kind = 'cancelled'` (§15 rule 39) |
 | payment_id | FK → payments, nullable | The order that failed (`order_failed`) or that confirmed the enrollment (`confirmed`), so a later paid order is told apart from a replay (FR-375); set exactly for those two kinds (§15 rule 39). A reference only: `booking` never reads a `payments` row (R-API-6) |
 | occurred_at | timestamptz | The instant of the transaction that recorded the outcome |
@@ -417,27 +419,35 @@ One scheduled occurrence. Its local date, local start time and zone are the sche
 | scheduled_start_time_local | time | The start time the teacher chose, as requested (the slot's `start_time_local`) |
 | timezone | text (IANA) | Zone of the local fields (the enrollment's `snapshot_slot_timezone`) |
 | scheduled_start_at / scheduled_end_at | timestamptz | Cached exception #2 (ADR 0009 D2, R-DB-4): the local start resolved in `timezone`, and that instant plus `snapshot_duration_minutes`. Recomputed when the time zone data changes |
-| status | enum scheduled · done · student_no_show · teacher_no_show · both_no_show · under_threshold · provider_outage · cancelled_by_agreement · cancelled_by_admin · disputed | Full machine, SRS §3.7.5 + §3.8 |
-| simultaneous_connected_seconds | int, default 0 | Accumulated across reconnections (FR-SESS-18) |
-| provider_room_id | text, nullable | Video provider reference |
+| status | enum scheduled · done · student_no_show · teacher_no_show · both_no_show · under_threshold · provider_outage · cancelled_by_agreement · cancelled_by_admin · disputed | Full machine, SRS §3.7.5 + §3.8 (`specs/004-sessions/data-model.md` §3). A `cancelled_by_agreement` session is final at acceptance and never disputed (SRS FR-CANCEL-2 as amended on 2026-11-05) |
+| outcome_under_dispute | enum `session_status`, nullable | The outcome frozen while `status = 'disputed'` (FR-DISPUTE-4); cleared by the resolution, which writes the final `status` (v1.15; §15 rule 40) |
+| simultaneous_connected_seconds | int, default 0 | Accumulated across reconnections (FR-SESS-18), from the recorded events, and written once by the evaluation as the figure its outcome was decided on; never recomputed (R-DB-4, [ADR 0022](adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md); v1.15, the owner's decision of 2026-11-05) |
+| provider_room_id | text, nullable | Video provider reference. Unused: the video room is named for the session's `id`, so nothing writes this column and it stays NULL; its removal is Not scheduled (`specs/004-sessions/tasks.md`) (v1.15, the owner's decision of 2026-11-06 on Phase 3's sixth analysis) |
 | evaluated_at | timestamptz, nullable | When the worker settled it |
-| settled_by_admin_id | FK → admin_users, nullable | For review-queue resolutions (FR-SESS-19) |
+| settled_by_admin_id | FK → admin_users, nullable | For review-queue resolutions (FR-SESS-19) and dispute resolutions |
+| admin_settled_at | timestamptz, nullable | When an administrator settled it; both NULL or both set with `settled_by_admin_id` (v1.15; §15 rule 40) |
 | makeup_for_session_id | FK → sessions, nullable | The session this one makes up for (ADR 0018 D3; Phase 1 pass, migration `20261018000300`) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 
 ### `session_remedies`
 
-What a session not consumed is owed (ADR 0018 D2 to D5, FR-MAKEUP-1..6). Added by the Phase 1 pass (migration `20261018000300`), columns only; no code of Phase 1 writes it, Phase 3 does. Owned by `sessions`.
+What a session not consumed is owed (ADR 0018 D2 to D5, FR-MAKEUP-1..6). Added by the Phase 1 pass (migration `20261018000300`), columns only; no code of Phase 1 writes it, Phase 3 does. Owned by `sessions`. The row is inserted when the remedy is offered, once the session's outcome is final (FR-MAKEUP-1: its dispute window closed and no dispute on it open, even when an administrator resolved a dispute earlier; the owner's decision of 2026-11-05 on Phase 3's third analysis) and only on a `confirmed` enrollment, so no remedy is offered and then withdrawn; a session owed on an enrollment that ended is covered by the compensation case that ending opened instead (the owner's decision of 2026-11-05 on Phase 3's analysis); it holds the current pending counter-proposal only, and the history of every counter-proposal is in `session_events` (v1.15, the owner's decision of 2026-11-05).
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | session_id | FK → sessions, unique | One row per session not consumed |
 | kind | enum makeup · refund | |
-| status | enum awaiting_choice · proposed · counter_proposed · booked · refund_case | |
-| proposed_date / counter_date | date, nullable | Calendar dates in the enrollment's `snapshot_slot_timezone`; the counter's time of day (ADR 0018 D3 lets the student propose a date and time) is Phase 3's pass to add |
+| status | enum awaiting_choice · proposed · counter_proposed · frozen · booked · refund_case · lapsed | `refund_case` means handed to a compensation case: a refund choice, a counter-proposal left unanswered, an administrator's termination on a complaint, an account's end, a suspended student's fault confirmed, or an administrator's hand-off of an open remedy to the student's manual case (SRS FR-ADMIN-20 (c); v1.15, the owner's decision of 2026-11-05, changelog row 25) (the case's `reason` says which; `kind` is `refund` only for a refund choice or a counter-proposal left unanswered). `frozen`: the student's account is suspended, so nothing advances; a pending counter-proposal was withdrawn and the proposal's reserved time released; at reinstatement the remedy is offered again with a new choice window and a new proposal (SRS FR-ADMIN-5 as amended on 2026-11-05). `lapsed`: the student deleted their account with the remedy open, so it closes with nothing owed and no case (FR-AUTH-14). `booked`, `refund_case` and `lapsed` are final (`frozen` and `lapsed`: v1.15, the owner's decisions of 2026-11-05 on Phase 3's analysis), except that an administrator's restore of the enrollment (SRS FR-CANCEL-8) offers again, as a new offer with its `case_id` cleared, each `refund_case` remedy of kind `makeup` its closing's case held ([ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)) |
+| offered_at | timestamptz | When the outcome became final and the remedy was offered: the dispute window's close, or the resolution of a dispute still open at the close (never before the close, even after an earlier resolution or revision: Phase 3's third analysis), a cancellation's acceptance, or a suspended student's case cleared; written again when a `frozen` remedy is offered again at the student's reinstatement (v1.15) |
+| choice_closes_at | timestamptz | `offered_at` + the make-up choice window, fixed at the offer (§3.14 prospective) (v1.15) |
+| snapshot_answer_window_hours / snapshot_first_session_lead_hours | int | The counter-proposal answer window and the first-session lead in force when the system's proposal is offered, fixed then, so every counter-proposal of the remedy is answered and placed by the values its proposal was placed by and no answer window runs past the proposal's start (SRS FR-MAKEUP-3 as amended on 2026-11-05; v1.15, the owner's decision of 2026-11-05 on Phase 3's analysis) |
+| proposed_date / counter_date | date, nullable | `proposed_date` in the enrollment's `snapshot_slot_timezone`; `counter_date` in `counter_timezone` (v1.15) |
+| counter_slot_id | FK → availability_slots, nullable | The teacher's active slot of the pending counter-proposal (v1.15). Plain index `session_remedies_counter_slot_id_idx`, as every foreign key (§14, FR-035; the owner's decision of 2026-11-05 on Phase 3's third analysis) |
+| counter_start_time_local / counter_timezone | time / text (IANA), nullable | The pending counter-proposal's time of day and zone, the slot's own (v1.15) |
+| counter_proposed_at | timestamptz, nullable | When the pending counter-proposal was made (v1.15). Its answer window closes at `counter_proposed_at` + `snapshot_answer_window_hours`, computed when read through `packages/time` and never stored, so no derived instant is kept (R-DB-4; the owner's decision of 2026-11-05 on Phase 3's second analysis). The five `counter_*` columns are set exactly while `status = 'counter_proposed'` and cleared at the counter-proposal's decline, withdrawal or hand-off to a case (§15 rule 42) |
 | decided_at | timestamptz, nullable | |
-| case_id | FK → disputes, nullable | The refund case |
+| case_id | FK → disputes, nullable | The compensation case the remedy was handed to; NULL for a `lapsed` one |
 | created_at / updated_at | timestamptz | |
 
 ### `session_participant_events`
@@ -448,9 +458,10 @@ Raw attendance evidence, from provider webhooks only — never the client (Archi
 |---|---|---|
 | id | uuid | PK |
 | session_id | FK → sessions | |
-| user_id | FK → users | |
-| event_type | enum joined · left | |
-| occurred_at | timestamptz | |
+| user_id | FK → users, nullable | NULL exactly for `room_ended` (v1.15; §15 rule 41) |
+| event_type | enum joined · left · room_ended | `room_ended`: the provider's room-ended event, which closes every connection still open (v1.15) |
+| connection_ref | text, nullable | The provider's id of one connection, so a reconnection or a replaced identity is its own interval; NULL exactly for `room_ended` (v1.15; §15 rule 41) |
+| occurred_at | timestamptz | The provider's instant |
 | provider_event_id | text, unique | Idempotency — a replayed webhook cannot double-insert |
 
 ### `cancellation_requests`
@@ -463,8 +474,42 @@ Mutual-agreement flow (FR-CANCEL-1…5), either direction.
 | session_id | FK → sessions | |
 | requested_by_user_id | FK → users | Student or teacher |
 | reason | text | |
-| status | enum pending · accepted · declined · expired | Auto-expires at scheduled start (FR-CANCEL-4) |
-| responded_at | timestamptz, nullable | |
+| status | enum pending · accepted · declined · expired | Auto-expires at scheduled start (FR-CANCEL-4); one pending per session (§15 rule 45) |
+| responded_at | timestamptz, nullable | Set exactly for `accepted` and `declined` (§15 rule 45) |
+
+### `session_events`
+
+Append-only record of each session-level event a later notification needs (FR-495 of `specs/004-sessions/spec.md`): settled, cancellation requested, accepted, declined or expired, cancelled by an administrator, remedy offered, counter-proposed, counter accepted, declined or withdrawn, remedy frozen, make-up booked, handed to a case, lapsed, dispute raised, resolved or its ruling revised, review resolved, outage reclassified, a complaint of the teacher's absence raised or decided, an administrator's correction of an outcome nobody disputed, a session's instants re-resolved. Owned by `sessions`. Added by migration `20261108120000_sessions_pass` (B33) (v1.15; the owner's decision of 2026-11-05, decision 6).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| enrollment_id | FK → enrollments | Plain index |
+| session_id | FK → sessions, nullable | Plain index |
+| kind | enum `session_event_kind` | settled · cancellation_requested · cancellation_accepted · cancellation_declined · cancellation_expired · cancelled_by_admin · remedy_offered · counter_proposed · counter_accepted · counter_declined · counter_withdrawn · remedy_frozen · makeup_booked · remedy_handed_to_case · remedy_lapsed · dispute_raised · dispute_resolved · dispute_revised · review_resolved · outage_reclassified · complaint_raised · complaint_decided · outcome_corrected · instants_reresolved · counter_booking_refused (`counter_booking_refused`: a Teacher's acceptance of a counter-proposal that the database refused, the counter released as at a decline, never written as `counter_withdrawn`, which is the Student's acceptance of the proposal while a counter is pending: the owner's decision of 2026-11-06 on Phase 3's fourth analysis, changelog row 29; `dispute_revised`: the owner's decision of 2026-11-05 on Phase 3's third analysis, SRS FR-DISPUTE-7; `complaint_raised` and `complaint_decided`, enrollment-wide rows with no session: [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md), SRS FR-NOSHOW-4; `outcome_corrected`, an administrator's correction of an outcome nobody disputed, and `instants_reresolved`, written by `reresolve-session-instants` for a session it moved or kept back: SRS FR-ADMIN-20, the owner's decision of 2026-11-05, changelog row 26; twenty-five kinds) |
+| case_id | FK → disputes, nullable | On a `cancelled_by_admin` row only: the compensation case the cancelling action opened or joined (an administrator's cancellation, an administrator's termination on a complaint, a teacher's end, a student's suspension or ban, and a suspended student's fault confirmed, whose make-ups name the new `student_fault_confirmed` case); NULL where the action opens no case (a student's deletion). On a `dispute_revised` row: the session dispute whose ruling the revision revises, set on every such row. On a `complaint_raised` or `complaint_decided` row: the complaint, set on every such row (ADR 0023). Plain index (v1.15, the owner's decisions of 2026-11-05 on Phase 3's analysis, second analysis and third analysis) |
+| counter_slot_id | FK → availability_slots, nullable | The counter-proposal's slot, on a `counter_proposed` row only; plain index |
+| counter_date / counter_start_time_local / counter_timezone | date / time / text (IANA), nullable | The counter-proposal's local date, start and zone, on a `counter_proposed` row only: the history of every counter-proposal, `session_remedies` keeping only the pending one |
+| outcome_before / outcome_after | enum `session_status`, nullable | On a `dispute_revised` or an `outcome_corrected` row only, both set: the session's outcome the revision or the correction replaced and the one it wrote, each one of `done`, `student_no_show`, `teacher_no_show`, `both_no_show`. The ruling it revises stays as written on its `disputes` row, so this row is the revision's record beside it; the reason and the administrator are in the revision's or the correction's audit entry (SRS FR-DISPUTE-7; v1.15, the owner's decision of 2026-11-05 on Phase 3's third analysis; `outcome_corrected` the owner's decision of 2026-11-05, changelog row 26) |
+| previous_start_at | timestamptz, nullable | On an `instants_reresolved` row only, set: for a session the run moved, its start before the run (the session's row holds the new one); for a session kept back, the start it keeps, so the two are told apart by whether the session still starts there (v1.15, the owner's decision of 2026-11-05; changelog row 26) |
+| occurred_at | timestamptz | The transaction's instant |
+| created_at | timestamptz | |
+
+Every other detail is read from the rows the event names; the row references no account. A `cancelled_by_admin` row's `case_id` is how a case's page finds the sessions the case covers; a `dispute_revised` row's names the dispute revised. No UPDATE, DELETE or TRUNCATE for the application role, foreign keys `ON UPDATE RESTRICT` (§15 rule 43).
+
+### `provider_outages`
+
+A window during which the video provider was out, recorded by an administrator signed in with the second factor (LiveKit sends no outage event, ADR 0003); the evaluation reads it, and a session it overlaps settles Provider-Outage (SRS §3.7.5; FR-445 of `specs/004-sessions/spec.md`). Owned by `sessions`. Added by migration `20261108120000_sessions_pass` (B33) (v1.15).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| starts_at / ends_at | timestamptz | Resolved on the server from the administrator's local date, time and zone (R-TIME-6); `ends_at > starts_at` (§15 rule 44) |
+| reason | text | Mandatory |
+| recorded_by_admin_id | FK → admin_users | Plain index |
+| created_at | timestamptz | |
+
+A window is evidence: no UPDATE, DELETE or TRUNCATE for the application role (§15 rule 44).
 
 ## 6. Chat
 
@@ -480,7 +525,7 @@ Scoped to the enrollment (FR-SESS-6). Persisted; admin-readable only under open 
 | body | text, nullable | Text message |
 | attachment_key | text, nullable | PDF/document only; images rejected by content sniffing (FR-SESS-8) |
 | attachment_filename | text, nullable | |
-| attachment_mime | text, nullable | Verified server-side, not trusted from client |
+| attachment_mime | text, nullable | Verified server-side, not trusted from client; `application/pdf` or `text/plain` only (§15 rule 47; SRS FR-SESS-7 as amended on 2026-11-05) |
 | sent_at | timestamptz | |
 | purged_at | timestamptz, nullable | Retention marker; body/attachment nulled, row kept for counts |
 
@@ -589,14 +634,14 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | Every case belongs to one enrollment |
 | session_id | FK → sessions, nullable | Set for a session dispute; NULL for an enrollment-level compensation case (FR-DISPUTE-5) |
-| kind | enum session_dispute · compensation_case | `compensation_case` rows are opened automatically by termination flows (FR-DISPUTE-5) |
-| raised_by_user_id | FK → users, nullable | Within the dispute window only (FR-DISPUTE-1); NULL when opened by the system |
-| reason | text | |
-| status | enum open · resolved · dismissed | An open session dispute freezes the session's outcome (FR-DISPUTE-4) |
-| resolution | enum upheld · re_marked · no_show_recorded · compensation_ordered · party_suspended · party_banned, nullable | `compensation_ordered` records the decision only; execution is by Platform Administration outside the code path and the outcome lands on `payments` when the gateway reports it (FR-DISPUTE-6) |
+| kind | enum session_dispute · compensation_case · absence_complaint | `compensation_case` rows are opened automatically by termination flows (FR-DISPUTE-5), or manually by an administrator on any enrollment, for either party (SRS FR-ADMIN-20 (c); v1.15, the owner's decision of 2026-11-05); `absence_complaint`, a student's complaint of the teacher's absence on a confirmed enrollment, raised by the student, with no session, one open per enrollment (§15 rule 46; SRS FR-NOSHOW-4; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)). Phase 2's covering rule reads `compensation_case` rows only, and of them only Phase 2's three reasons, `slot_unavailable`, `party_restricted` and `duplicate_payment`, so no case Phase 3 opens, a manual one included, moves a paid order's confirmation (v1.15, the owner's decision of 2026-11-05; `specs/004-sessions/research.md` R-326) |
+| raised_by_user_id | FK → users, nullable | Within the dispute window only (FR-DISPUTE-1); NULL when opened by the system; the student on every `absence_complaint` (rule 46) |
+| reason | text | A compensation case: one of the closed list of compensation reasons (Phase 3 adds `absence_termination` (the case an administrator's termination on a complaint opens; it replaces `teacher_no_show_threshold`, removed with the threshold on 2026-11-05, ADR 0023), `admin_cancellation`, `teacher_ended`, `student_suspended`, `student_banned`, `student_fault_confirmed`, `refund_choice`, `counter_unanswered`, `makeup_refused`, and `admin_opened_for_student` and `admin_opened_for_teacher`, an administrator's manual case, whose party its reason names and whose written reason is its audit entry's); a session dispute or an `absence_complaint`: the participant's text (v1.15; `student_fault_confirmed` the owner's decision of 2026-11-05 on Phase 3's second analysis; the two manual reasons the owner's decision of 2026-11-05, changelog row 25) |
+| status | enum open · resolved · dismissed | An open session dispute freezes the session's outcome (FR-DISPUTE-4), kept in `sessions.outcome_under_dispute`; one open session dispute per session (§15 rule 46). A `student_suspended` case resolved clears the student, dismissed confirms the fault: in that transaction the enrollment is cancelled `admin`, every make-up still scheduled on it is cancelled, and every remedy owed on it, but none for the ordinary sessions the suspension cancelled (a make-up session it cancelled stays owed), is handed to a new `student_fault_confirmed` case, never to the case dismissed; on an enrollment that ended another way while the case was open, the case decides only the sessions the suspension cancelled, which join the first end's case if the student is cleared (SRS FR-ADMIN-5 as amended on 2026-11-05, three times). An `absence_complaint` closes `resolved` when the administrator ends the enrollment (`enrollment_ended`) or suspends the teacher (`party_suspended`), `dismissed` when they close it; an administrator's restore closes the case its enrollment's closing opened (`absence_termination` or `student_fault_confirmed`) `dismissed`, with the note `restored` (SRS FR-NOSHOW-4, FR-CANCEL-8; ADR 0023) |
+| resolution | enum upheld · re_marked · no_show_recorded · compensation_ordered · party_suspended · party_banned · enrollment_ended, nullable | `enrollment_ended` on an `absence_complaint` only, the administrator having ended the enrollment on it (rule 46; ADR 0023). `compensation_ordered` records the decision only; execution is by Platform Administration outside the code path and the outcome lands on `payments` when the gateway reports it (FR-DISPUTE-6). Written once, with `resolution_notes`, `resolved_by_admin_id` and `resolved_at`, and never rewritten: an administrator's revision of the ruling (SRS FR-DISPUTE-7) is a `session_events` row `dispute_revised` beside it (v1.15, the owner's decision of 2026-11-05 on Phase 3's third analysis) |
 | resolution_notes | text, nullable | Mandatory on resolve |
 | resolved_by_admin_id | FK → admin_users, nullable | |
-| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
+| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution, by the database's `clock_timestamp()` in the update that closes the row, the enrollment's row locked first (note under T082 of `specs/003-booking/tasks.md`; v1.15) |
 
 ### `gender_flags`
 
@@ -636,7 +681,7 @@ Backs both push delivery and the notification centre (FR-NOTIF-1/2).
 |---|---|---|
 | id | uuid | PK |
 | user_id | FK → users | |
-| type | enum teacher_application_status_changed · new_booking · session_reminder · no_show_recorded · cancellation_requested · cancellation_request_accepted · cancellation_request_declined · payment_confirmed · payment_failed · payment_expired · payout_account_verified · dispute_resolved · gender_flag_resolved · ijazah_granted · ijazah_revoked · new_review | One member per FR-NOTIF-1 event, in the order the SRS states them (DEC-13c). Twelve members are appended by ADR 0021, below |
+| type | enum teacher_application_status_changed · new_booking · session_reminder · no_show_recorded · cancellation_requested · cancellation_request_accepted · cancellation_request_declined · payment_confirmed · payment_failed · payment_expired · payout_account_verified · dispute_resolved · gender_flag_resolved · ijazah_granted · ijazah_revoked · new_review | One member per FR-NOTIF-1 event, in the order the SRS states them (DEC-13c). Twelve members are appended by ADR 0021, and fourteen Phase 3 names on 2026-11-05, below |
 | title_key / body_key | text | i18n keys — rendered in the user's language at display time (FR-NOTIF-3) |
 | payload | jsonb | Deep-link data (enrollment_id, session_id, …) |
 | read_at | timestamptz, nullable | Unread state for the centre |
@@ -644,6 +689,8 @@ Backs both push delivery and the notification centre (FR-NOTIF-1/2).
 | created_at | timestamptz | |
 
 **Amended by ADR 0021 (Phase 2 notifications pass, forward migration).** `type` gains the twelve members the accepted ADRs imply and the design draws, appended in this order after `new_review`: `makeup_proposed`, `makeup_counter_proposed`, `makeup_booked` (ADR 0018 D3), `certificate_name_requested` (ADR 0019 D1), `enrollment_terminated` (FR-NOSHOW-4), `session_cancelled_by_admin` (FR-CANCEL-6), `session_outcome_confirmed` (FR-SESS-19), `ijazah_request_rejected` and `credential_reviewed` (ADR 0017 D1/D3), `payout_account_rejected` (FR-PAYG-15; `recipient_rejected` is a webhook event, not a notification), `account_suspended` and `account_reinstated` (FR-ADMIN-5, ADR 0018 D5). The existing members stay in place; `teacher_application_status_changed` keeps covering approval, rejection, ban and the request for another document, with the status in `payload`. FR-NOTIF-1 lists the same members by name, so the requirement and this enum say one list (ADR 0021 D3).
+
+**Amended 2026-11-05 (v1.15, the owner's decision; SRS FR-NOTIF-1).** `type` gains, by name only, fourteen Phase 3 members appended after `account_reinstated`, in this order: `enrollment_restored`, `dispute_ruling_revised`, `absence_complaint_decided`, `dispute_raised`, `cancellation_request_expired`, `makeup_counter_declined`, `makeup_frozen`, `makeup_lapsed`, `makeup_offered_again`, `makeup_handed_to_case`, `session_outage_reclassified`, `enrollment_completed`, `enrollment_cancelled`, `compensation_case_opened` (their recipients in FR-NOTIF-1; `absence_complaint_decided` is told to both parties, the student and the teacher, as SRS FR-NOSHOW-5 says: the owner's decision of 2026-11-05, changelog row 27). Phase 4 reads each from the durable record Phase 3 writes: `enrollment_events` `restored`, `completed` and `cancelled` (with its `cancellation_reason`, for `enrollment_cancelled`); `session_events` `dispute_revised`, `complaint_decided`, `dispute_raised`, `cancellation_expired`, `counter_declined`, `remedy_frozen`, `remedy_lapsed`, `remedy_offered` (a session's second or later, for `makeup_offered_again`), `remedy_handed_to_case` and `outage_reclassified`. `compensation_case_opened` is read from the manual compensation case's own `disputes` row (SRS FR-ADMIN-20 (c); reason `admin_opened_for_student` or `admin_opened_for_teacher`, naming the party told, and its `created_at`) and its audit entry `case.opened_manually`; a joined opening writes no row and is told again to nobody (the owner's decision of 2026-11-05, changelog row 25; `specs/004-sessions/research.md` R-326). **Amended 2026-11-06 (the owner's decision on Phase 3's fourth analysis; changelog row 30):** a fifteenth member, `session_outcome_corrected`, after `compensation_case_opened`: an Administrator's correction of an outcome nobody disputed (SRS FR-ADMIN-20 (b)), told to both parties, read from the `session_events` row `outcome_corrected`. `makeup_offered_again` stays read from a session's second or later `remedy_offered` row, with no kind of its own; Phase 4's cycle settles its reading. The migration stays in Phase 4's notifications pass, as for ADR 0021's twelve (`PLAN.md`, Phase 4); Phase 3's migration adds none.
 
 ## 12. Admin and platform kernel
 
@@ -720,7 +767,7 @@ Backs SRS §3.14. Changes are prospective-only and audit-logged.
 
 | Column | Type | Notes |
 |---|---|---|
-| key | text | PK — e.g. `attendance_threshold_pct`, `join_window_minutes`, `dispute_window_hours`, `slot_hold_ttl_minutes`, `reminder_offsets_minutes`, `chat_retention_days` |
+| key | text | PK — e.g. `attendance_threshold_pct`, `join_window_minutes`, `dispute_window_hours`, `slot_hold_ttl_minutes`, `reminder_offsets_minutes`, `chat_retention_days` (default 30 days since 2026-11-05, the owner's decision: was 0; SRS §3.14, FR-SESS-13; changelog row 24); Phase 3 adds, among its rows, `video_empty_timeout_seconds` (300) and `video_departure_timeout_seconds` (20), the video room's two timeouts (SRS §3.14; v1.15, the owner's decision of 2026-11-05 on Phase 3's analysis), and `repeated_absence_flag_count` (5), `enrollment_restore_window_days` (7) and `rate_limit_absence_complaint` (5 per 3600 s), while `teacher_no_show_threshold` is removed (SRS §3.14; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)); and four rate limits, each `{ limit, window_seconds }`: `rate_limit_signed_in_default` (seeded 150 per 60 s per research R-325 of `specs/004-sessions/research.md`, the owner's decision of 2026-11-06, changelog row 32, by SRS NFR-SEC-12's rule, its reason: the larger of 120 per 60 s and the heaviest normal minute times 2 to 3, never a number above 200; every signed-in call that declares no limit of its own; changelog row 23), `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and `rate_limit_manual_compensation_case` (10 per 60 s each, per administrator) (SRS NFR-SEC-12, FR-ADMIN-20, §3.14; v1.15, the owner's decision of 2026-11-05); and `rate_limit_outcome_correction` (10 per 60 s, per administrator: an administrator's correction of an outcome nobody disputed; SRS §3.14, the owner's decision of 2026-11-05, changelog row 26); and the live channel's two, `rate_limit_live_channel` (10 per 60 s, per user, the channel's opening) and `live_channel_max_connections_per_user` (3) (SRS §3.14, NFR-SEC-12; amended 2026-11-05, the owner's decision; changelog row 28) |
 | value | jsonb | |
 | updated_by_admin_id | FK → admin_users | |
 | updated_at | timestamptz | |
@@ -781,6 +828,10 @@ erDiagram
     enrollments ||--o{ sessions : "generates"
     enrollments ||--o{ enrollment_events : "records outcomes"
     sessions ||--o{ session_participant_events : "evidenced by"
+    sessions ||--o| session_remedies : "owed"
+    enrollments ||--o{ session_events : "records events"
+    sessions |o--o{ session_events : "of"
+    admin_users ||--o{ provider_outages : "records"
     sessions ||--o{ cancellation_requests : "may have"
     users ||--o{ cancellation_requests : "requests"
     enrollments ||--o{ chat_messages : "scopes"
@@ -823,7 +874,10 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | Index | Serves |
 |---|---|
 | `sessions (enrollment_id, sequence_number)` unique | Ordered session lists |
-| `sessions (scheduled_end_at) WHERE status = 'scheduled'` partial | The evaluate-session sweep |
+| `sessions (scheduled_end_at) WHERE status = 'scheduled'` partial | The `evaluate-sessions` sweep |
+| `cancellation_requests (session_id) WHERE status = 'pending'` partial unique | One pending request per session (§15 rule 45; v1.15) |
+| `disputes (session_id) WHERE kind = 'session_dispute' AND status = 'open'` partial unique | One open session dispute per session (§15 rule 46; v1.15) |
+| `disputes (enrollment_id) WHERE kind = 'absence_complaint' AND status = 'open'` partial unique | One open complaint of the teacher's absence per enrollment (§15 rule 46; v1.15, ADR 0023) |
 | `slot_holds (slot_id) WHERE released_at IS NULL` partial unique | Availability checks; one active hold per slot (§15.17). Replaces the plain partial index v1.3 listed here |
 | `slot_holds (student_user_id) WHERE released_at IS NULL` partial unique | One active checkout per student (§15.18) |
 | `sessions` GiST exclusion `(teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions for one teacher (§15.19); the teacher's calendar |
@@ -864,7 +918,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 16. `idempotency_keys (scope, key)` unique — a repeated client mutation returns the first outcome and never repeats the effect (FR-042, R-API-14, ADR 0008). Replaced by rule 26 (Phase 1, T018): the key is the actor's.
 17. `slot_holds (slot_id)` unique `WHERE released_at IS NULL` — one active hold per slot, so two students cannot hold the same slot at once (FR-BOOK-9, ADR 0010 D1). An expired hold still counts until `released_at` is set; the service releases the expired holds on the slot, and the student's own expired hold, in the same transaction before it inserts, then checks the existing sessions after the insert (ADR 0010 D3).
 18. `slot_holds (student_user_id)` unique `WHERE released_at IS NULL` — a student is in at most one checkout at a time; a new checkout ends the student's own unexpired hold first, at once when no order on it is still payable (`created`) and otherwise only once the gateway has cancelled that order (FR-BOOK-12, ADR 0010 D6).
-19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a system termination (FR-NOSHOW-4, FR-SESS-16, FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run with `SET CONSTRAINTS … DEFERRED` (raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another session of the same teacher or the same student that these constraints count, restores them to their previous instants and reports them to error tracking (FR-051) for an operator, so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010).
+19. `sessions`: no two sessions overlap in time for the same teacher, nor for the same student — two exclusion constraints, `EXCLUDE USING gist (teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&) WHERE (deleted_at IS NULL AND status NOT IN ('cancelled_by_agreement', 'cancelled_by_admin')) DEFERRABLE INITIALLY IMMEDIATE` and the same with `student_user_id`, on the `btree_gist` extension (FR-BOOK-5, ADR 0010 D1). Every other status occupies its time. The remaining sessions cancelled by a termination (FR-NOSHOW-4, an administrator's decision since 2026-11-05; FR-SESS-16; FR-GENDER-6/7) take `cancelled_by_admin`, so they free both parties' time. The range includes its start and excludes its end, so back-to-back sessions are allowed. Both constraints are checked as each transaction writes; only the re-resolution job of ADR 0009 defers them, inside one transaction for the whole run with `SET CONSTRAINTS … DEFERRED` (raw SQL behind a kernel helper in `apps/api/src/platform/db/`, R-API-6), so a uniform time zone shift of back-to-back sessions commits and only a true overlap is refused. Before committing, the job finds the moved sessions that overlap another session of the same teacher or the same student that these constraints count, restores them to their previous instants and reports them to error tracking (FR-051) for an operator, so the rest of the run commits; a commit still refused by a concurrent write reruns the run, and reminders are rescheduled only after the commit (ADR 0010).
 20. `payment_events`: `payment_id IS NULL` exactly when `event_type` is `recipient_verified` or `recipient_rejected` — check constraint. An order event always names its gateway order; a payout-recipient event never does (FR-PAYG-4, FR-PAYG-15, PR #39).
 21. `audit_logs`, `payment_events`, `session_participant_events`: no UPDATE, no DELETE and no TRUNCATE, revoked at the Postgres role level. Each row records something that happened: an administrator's action, a gateway's signed event, a provider's attendance evidence. It is written once and never rewritten, which restores for these tables the guarantee retired rule 6 gave the ledger. Rule 10 already revokes DELETE on `audit_logs`; this rule adds UPDATE and TRUNCATE there, and all three on the two event tables (PR #39). Their foreign keys are `ON UPDATE RESTRICT`, so an update of a referenced key is refused rather than cascaded into these rows (T135, migration `20261101050220_append_only_foreign_keys_restrict`, 2026-11-01).
 22. `auth_identities (provider, provider_subject)` unique — one provider account is one platform account (ADR 0012 D2; Phase 1 pass).
@@ -893,11 +947,29 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 39. `enrollment_events`: `(kind = 'cancelled') = (cancellation_reason IS NOT NULL)` and `(kind IN ('order_failed', 'confirmed')) = (payment_id IS NOT NULL)` — check constraints `enrollment_events_cancellation_reason_check` and `enrollment_events_payment_check`; and no UPDATE, no DELETE and no TRUNCATE for the application role, rule 21's pattern, with its foreign keys `ON UPDATE RESTRICT` (FR-375, FR-385; Phase 2's T004, migration `20261101120000`).
 
+40. `sessions`: `outcome_under_dispute IS NULL` unless `status = 'disputed'`, and when set one of `done`, `student_no_show`, `teacher_no_show`, `both_no_show`, `under_threshold`, `provider_outage`; `settled_by_admin_id` and `admin_settled_at` both NULL or both set — check constraints (FR-DISPUTE-4, FR-SESS-19; Phase 3's pass, v1.15).
+
+41. `session_participant_events`: `(event_type = 'room_ended') = (user_id IS NULL)` and `(event_type = 'room_ended') = (connection_ref IS NULL)` — check constraints; the table stays append-only under rule 21 (Phase 3's pass, v1.15).
+
+42. `session_remedies`: the five `counter_*` columns all NULL or all set, and set exactly when `status = 'counter_proposed'`; `(status = 'refund_case') = (case_id IS NOT NULL)`, so a `lapsed` remedy, closed by a student's deletion with nothing owed, has no case; `choice_closes_at > offered_at`; `snapshot_answer_window_hours > 0` and `snapshot_first_session_lead_hours >= 0` — check constraints (FR-MAKEUP-3; Phase 3's pass, v1.15, the owner's decision of 2026-11-05; `lapsed`, `frozen` and the two snapshots the owner's decisions of the same day on Phase 3's analysis).
+
+43. `session_events`: the four `counter_*` columns all set exactly when `kind = 'counter_proposed'`; `case_id IS NULL OR kind IN ('cancelled_by_admin', 'dispute_revised', 'complaint_raised', 'complaint_decided')`, and `case_id` set on every `dispute_revised`, `complaint_raised` and `complaint_decided` row (the complaint's: ADR 0023); `session_id` NULL exactly on the two complaint kinds; `outcome_before` and `outcome_after` both set exactly when `kind IN ('dispute_revised', 'outcome_corrected')`, each one of `done`, `student_no_show`, `teacher_no_show`, `both_no_show`; `previous_start_at` set exactly when `kind = 'instants_reresolved'` — check constraints (the revision's: the owner's decision of 2026-11-05 on Phase 3's third analysis; `outcome_corrected` and `previous_start_at`: the owner's decision of 2026-11-05, changelog row 26); no UPDATE, no DELETE and no TRUNCATE for the application role, foreign keys `ON UPDATE RESTRICT`, rule 21's pattern (Phase 3's pass, v1.15).
+
+44. `provider_outages`: `ends_at > starts_at` — check constraint; no UPDATE, no DELETE and no TRUNCATE for the application role (Phase 3's pass, v1.15).
+
+45. `cancellation_requests`: one pending request per session, partial unique `cancellation_requests_one_pending_key` on `(session_id) WHERE status = 'pending'`; `(status IN ('accepted', 'declined')) = (responded_at IS NOT NULL)`; `length(btrim(reason)) > 0` (FR-CANCEL-1; Phase 3's pass, v1.15).
+
+46. `disputes`: one open session dispute per session, partial unique `disputes_one_open_per_session_key` on `(session_id) WHERE kind = 'session_dispute' AND status = 'open'`; `(kind = 'session_dispute') = (session_id IS NOT NULL)`; `(status = 'open') = (resolved_at IS NULL)`; `status = 'open' OR (resolution_notes IS NOT NULL AND resolved_by_admin_id IS NOT NULL)`; one open complaint of the teacher's absence per enrollment, partial unique `disputes_one_open_complaint_per_enrollment_key` on `(enrollment_id) WHERE kind = 'absence_complaint' AND status = 'open'`; `kind <> 'absence_complaint' OR raised_by_user_id IS NOT NULL`; `resolution IS DISTINCT FROM 'enrollment_ended' OR kind = 'absence_complaint'` (FR-DISPUTE-1, FR-DISPUTE-3; Phase 3's pass, v1.15; the complaint's three: SRS FR-NOSHOW-4, ADR 0023).
+
+47. `chat_messages`: `attachment_mime IS NULL OR attachment_mime IN ('application/pdf', 'text/plain')`; the three attachment columns all NULL or all set unless `purged_at` is set (FR-SESS-7, FR-SESS-8; Phase 3's pass, v1.15).
+
+48. `slot_holds`: `release_reason IS NULL OR released_at IS NOT NULL` — check constraint; a release reason only on a released hold (SRS FR-ADMIN-20 (a); Phase 3's pass, v1.15, the owner's decision of 2026-11-05).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 42 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 44 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -1094,3 +1166,95 @@ T056 of `specs/003-booking/tasks.md` integrates Paymob, the gateway's test accou
 | 2 | §12 `admin_users.invited_by_admin_id`: NULL means made without an administrator: the seed, or the development script of T097 in `specs/003-booking/tasks.md` (B32, the owner's decision of 2026-11-04). A note only, no change to the column | none |
 
 No table is added: 42 tables.
+
+## Changelog — v1.14 → v1.15 (the Phase 3 pass, 2026-11-05)
+
+Phase 3 writes the session tables for the first time and needs what they lacked: the frozen outcome beside the `disputed` status, the provider's room-ended event and connection, the remedy's offer and its pending counter-proposal, a durable record of each session event, and the outage windows an administrator records. The design is `specs/004-sessions/data-model.md` (§2 and §7), written on the owner's decisions of 2026-11-05 (`specs/004-sessions/plan.md`, «Decisions recorded»); the task is T106 of `specs/003-booking/tasks.md`. The document is amended ahead of the migration, which lands in Phase 3's first batch (B33); the count of tables rises to 44.
+
+| # | Change | Migration |
+|---|---|---|
+| 1 | §5 `sessions.outcome_under_dispute` and `admin_settled_at`; `simultaneous_connected_seconds` written once by the evaluation, the figure its outcome was decided on (R-DB-4 names it; decision 3) | `20261108120000_sessions_pass` (B33) |
+| 2 | §5 `session_participant_events`: `event_type` gains `room_ended`, `user_id` nullable, `connection_ref` | the same |
+| 3 | §5 `session_remedies`: `offered_at`, `choice_closes_at`, and the pending counter-proposal's `counter_slot_id`, `counter_start_time_local`, `counter_timezone`, `counter_proposed_at`, `counter_answer_closes_at`, cleared when it ends (decision 9); the meaning of `refund_case` | the same |
+| 4 | §5 `session_events` (with the counter-proposals' history) and `provider_outages`, owned by `sessions`; §1 lists them, 44 tables; §13.2 draws them | the same, and this document pass |
+| 5 | §5 `enrollment_events.kind` gains `completed` and `terminated_no_show`; `enrollments.status` and `cancellation_reason` say what a student's suspension and ban do (decision 1) | the same |
+| 6 | §10 `disputes`: the compensation reasons, the frozen outcome's place, `resolved_at` by `clock_timestamp()`; §6 `chat_messages.attachment_mime` PDF or text only (decision 12) | the same |
+| 7 | §15 rules 40 to 47; §14 the two partial uniques; §0 the T090 stand-in and the note on `simultaneous_connected_seconds` | the same, and this document pass |
+
+Amended the same day on Phase 3's analysis (`specs/004-sessions/plan.md`, «Decisions on the analysis»; the owner's decisions of 2026-11-05), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 8 | §5 `session_remedies`: `snapshot_answer_window_hours` and `snapshot_first_session_lead_hours`, fixed at the offer (SRS FR-MAKEUP-3 as amended); `status` gains `frozen` (a suspended student's remedy, offered again at reinstatement, SRS FR-ADMIN-5) and `lapsed` (a deleted student's open remedy, closed with nothing owed and no case); a remedy is offered only on a `confirmed` enrollment; `refund_case`'s cause is read from its case's reason, not from `kind`; rule 42 says a `lapsed` remedy has no case and checks the snapshots | `20261108120000_sessions_pass` (B33) |
+| 9 | §5 `session_events`: `case_id` (FK → `disputes`, nullable, plain index) on a `cancelled_by_admin` row, the case the cancelling action opened or joined; kinds `remedy_frozen` and `remedy_lapsed`; rule 43 checks `case_id` | the same |
+| 10 | §12 `settings`: `video_empty_timeout_seconds` and `video_departure_timeout_seconds` (SRS §3.14) | the seed (B33) |
+| 11 | §0 and §5 `sessions.simultaneous_connected_seconds` cite ADR 0022; the header names constitution 2.5.1 | this document pass |
+
+Amended again the same day on Phase 3's second analysis (`specs/004-sessions/plan.md`, «Decisions on the second analysis»; the owner's decisions of 2026-11-05), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 12 | §5 `session_remedies`: `counter_answer_closes_at` (row 3) is not added: it was a stored derived value with no ADR (R-DB-4); the answer window's close is `counter_proposed_at` + `snapshot_answer_window_hours`, computed when read; rule 42 counts five `counter_*` columns; eleven columns in all | `20261108120000_sessions_pass` (B33) |
+| 13 | §10 `disputes.reason` gains `student_fault_confirmed`, the case a suspended student's confirmed fault opens for the remedies still owed on the enrollment; `status` says what the dismissal of a `student_suspended` case does; §5 `session_events.case_id` names it on the cancelled make-ups (SRS FR-ADMIN-5 as amended) | none: a reason of the closed list, in code (B33) |
+
+Amended again the same day on Phase 3's third analysis (`specs/004-sessions/plan.md`, «Decisions on the third analysis»; the owner's decisions of 2026-11-05), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 14 | §5 `session_remedies.counter_slot_id`, a new foreign key, gains its plain index `session_remedies_counter_slot_id_idx` (§14, FR-035); `offered_at` and the table's note: a remedy is offered only once the dispute window has closed, even after an early resolution (SRS FR-MAKEUP-1 as amended) | `20261108120000_sessions_pass` (B33) |
+| 15 | §5 `session_events`: the kind `dispute_revised` (twenty kinds), and `outcome_before` and `outcome_after`, set exactly on it; `case_id` names the dispute revised on that kind; rule 43 checks both (SRS FR-DISPUTE-7) | the same |
+| 16 | §10 `disputes.resolution`: written once and never rewritten, a revision being a `session_events` row beside it (SRS FR-DISPUTE-7); `status`: a make-up session the suspension cancelled stays owed on a confirmed fault, and a `student_suspended` case on an enrollment already ended decides only the sessions the suspension cancelled (SRS FR-ADMIN-5 as amended) | none: notes |
+
+Amended again the same day on the owner's decision of no automatic termination ([ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md); `specs/004-sessions/plan.md`, «Decisions of 2026-11-05, no automatic termination»), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 17 | §5 `enrollments.status`: `terminated_no_show` only by an administrator's decision on a complaint (no threshold); an administrator's restore returns a `terminated_no_show` enrollment ended on a complaint, or one `cancelled` (`admin`) on a confirmed fault, to `confirmed`, `cancellation_reason` to NULL and `confirmed_at` untouched; the no-show count's note names the repeated-absence mark (SRS FR-NOSHOW-3, FR-NOSHOW-4, FR-CANCEL-8) | none: notes; the restore's write is code (Phase 3) |
+| 18 | §5 `enrollment_events.kind` gains `restored`; `session_remedies.status`: `refund_case` is final except for a restore's new offer; `session_events.kind` gains `complaint_raised` and `complaint_decided` (twenty-two kinds), `case_id` naming the complaint on them and `session_id` NULL exactly on them, rule 43 | `20261108120000_sessions_pass` (B33) |
+| 19 | §10 `disputes.kind` gains `absence_complaint` and `resolution` gains `enrollment_ended`; the compensation reasons replace `teacher_no_show_threshold` with `absence_termination`; `status` says how a complaint and a restore close; rule 46 and §14 gain `disputes_one_open_complaint_per_enrollment_key` and the complaint's two checks | the same (the reasons: in code, B33) |
+| 20 | §12 `settings`: `teacher_no_show_threshold` removed; `repeated_absence_flag_count` (5), `enrollment_restore_window_days` (7) and `rate_limit_absence_complaint` (5 per 3600 s) added (SRS §3.14); §15 rule 19's note: a termination under FR-NOSHOW-4 is an administrator's | the same migration deletes the row; the seed (B33) |
+
+Amended again the same day on the owner's decisions of the administrator's control and the rate limits (`specs/004-sessions/plan.md`, «Decisions of 2026-11-05, the administrator's control and the rate limits»), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 21 | §12 `settings`: `rate_limit_signed_in_default` (seeded 120 per 60 s; the final value confirmed by T062 before B36 by SRS NFR-SEC-12's rule, the larger of 120 and research R-325's result, never above 200), `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and `rate_limit_manual_compensation_case` (10 per 60 s each) (SRS NFR-SEC-12, FR-ADMIN-20, §3.14). No column is added for a restore's `slot_changed` refusal (SRS FR-CANCEL-8 as amended): it compares the slot's `day_of_week`, `start_time_local` and `timezone` (§4) with what the enrollment's own generated sessions keep, each `sessions` row holding the local date, start and zone it was asked for (§5, ADR 0009 D1), and the enrollment's `snapshot_slot_timezone` | the seed (B33) |
+| 22 | §11 `notifications.type`: fourteen Phase 3 names after `account_reinstated`, `enrollment_restored`, `dispute_ruling_revised`, `absence_complaint_decided`, `dispute_raised`, `cancellation_request_expired`, `makeup_counter_declined`, `makeup_frozen`, `makeup_lapsed`, `makeup_offered_again`, `makeup_handed_to_case`, `session_outage_reclassified`, `enrollment_completed`, `enrollment_cancelled`, `compensation_case_opened`, each read by Phase 4 from a `session_events` or `enrollment_events` row but `compensation_case_opened` (SRS FR-NOTIF-1 as amended; the owner's decision of 2026-11-05) | none in Phase 3; Phase 4's notifications pass |
+
+Amended again the same day on the owner's decisions answering the administrator's control inventory (`specs/004-sessions/plan.md`, «Decisions of 2026-11-05, the administrator's control inventory answered»; research R-323, R-325 to R-327), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 23 | §12 `settings`: `rate_limit_signed_in_default` seeded at 160 per 60 s, per research R-325 (row 21's «seeded 120 per 60 s, the final value confirmed by T062» replaced); SRS NFR-SEC-12's rule stays its reason | the seed (B33) |
+| 24 | §12 `settings`: `chat_retention_days` defaults to 30 (was 0; SRS §3.14, FR-SESS-13 as amended), still an administrator's setting. §2 `users.photo_key` and §3 `verification_documents.erased_at`: a deleted person's file and key are kept while the person is a party to an enrollment with an open `disputes` row, and removed by `erase-deleted-files` after the last one closes (SRS FR-AUTH-14 as amended, ADR 0015's amendment; research R-327). No column | the seed (B33) for a new database; an existing database's row is changed in the panel (the seed inserts only where absent, R-PROC-11) |
+| 25 | §10 `disputes.reason` gains `admin_opened_for_student` and `admin_opened_for_teacher`, an administrator's manual compensation case (SRS FR-ADMIN-20 (c); `cases.openManual`, research R-326), the party named by the reason, the written reason in the audit entry; `kind`'s note: a case is also opened manually, and Phase 2's covering rule reads Phase 2's three reasons only. §5 `session_remedies.status`: `refund_case` also by an administrator's hand-off of an open remedy to the student's manual case. §11: `compensation_case_opened` is read from the manual case's row and its audit entry | none: reasons of the closed list, in code (B33 or the manual case's batch) |
+| 26 | §5 `session_events`: the kinds `outcome_corrected` (an administrator's correction of an outcome nobody disputed) and `instants_reresolved` (a session moved or kept back by `reresolve-session-instants`), twenty-four kinds; the column `previous_start_at`; rule 43: `outcome_before` and `outcome_after` set exactly on `dispute_revised` and `outcome_corrected`, `previous_start_at` exactly on `instants_reresolved`. §5 `slot_holds.release_reason` (enum `hold_release_reason`) and §15 rule 48. §12 `settings`: `rate_limit_outcome_correction` (10 per 60 s). All SRS FR-ADMIN-20 (`specs/004-sessions/research.md` R-323, GAP-3, GAP-6, GAP-8) | `20261108120000_sessions_pass` (B33); the setting in the seed |
+| 27 | §11 `notifications.type`: `absence_complaint_decided` is told to both parties (SRS FR-NOTIF-1 as amended, FR-NOSHOW-5) | none |
+
+Amended again the same day on the owner's decision of the live channel (2026-11-05, the owner's decision; `specs/004-sessions/research.md` R-324, `specs/004-sessions/plan.md`, «Decisions of 2026-11-05, the live channel»), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 28 | §12 `settings`: `rate_limit_live_channel` (10 per 60 s, per User: the opening of the live channel) and `live_channel_max_connections_per_user` (3: the most live streams one account holds, the oldest ended first) (SRS §3.14, NFR-SEC-12 as amended). No table and no column: the live channel keeps nothing in the database | the seed (B33) |
+
+Amended on 2026-11-06 on Phase 3's fourth analysis (`specs/004-sessions/plan.md`, «Decisions on the fourth analysis»; the owner's decisions of 2026-11-06), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 29 | §5 `session_events.kind` gains `counter_booking_refused` (twenty-five kinds): a Teacher's acceptance of a counter-proposal that the database refused, the counter released as at a decline, so the record is not the Student's acceptance of the proposal (`counter_withdrawn`) (SRS FR-MAKEUP-4, FR-ADMIN-20 (a)). No column, no rule | `20261108120000_sessions_pass` (B33) |
+| 30 | §11 `notifications.type`: `session_outcome_corrected` after `compensation_case_opened`, an Administrator's correction of an outcome nobody disputed, to both parties, read from the `session_events` row `outcome_corrected` (SRS FR-NOTIF-1 as amended on 2026-11-06, FR-ADMIN-20 (b)) | none in Phase 3; Phase 4's notifications pass |
+| 31 | §2 `users.photo_key` and §3 `verification_documents.erased_at` (row 24's hold): while a deleted person's file and key are held, an Administrator may read the file only inside an open `disputes` row of that enrollment, through a short signed link per opening, each audited; every other path still reads an erased document as none (SRS FR-AUTH-14 as amended on 2026-11-06, ADR 0015's amendment; `specs/004-sessions/research.md` R-327). No column | none |
+
+Amended on 2026-11-06 on Phase 3's fifth analysis (`specs/004-sessions/plan.md`, «Decisions on the fifth analysis»; the owner's decisions of 2026-11-06), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 32 | §12 `settings`: `rate_limit_signed_in_default` seeded at 150 per 60 s (row 23's 160 replaced): research R-325 recomputed without the name searches `rate_limit_search` counts, the heaviest normal minute a Student's 48, × 3 = 144, rounded up to ten; SRS NFR-SEC-12's rule stays its reason | the seed (B33) |
+
+Amended on 2026-11-06 on Phase 3's sixth analysis (`specs/004-sessions/plan.md`, «Decisions on the sixth analysis»; the owner's decisions of 2026-11-06), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 33 | §5 `sessions.provider_room_id` noted unused: the video room is named for the session's `id`, so nothing writes it (the join writes nothing to `sessions`); the column stays, NULL, and its removal is a Not scheduled item of `specs/004-sessions/tasks.md` | none |
+
+Two tables are added: 44 tables.

@@ -1,6 +1,6 @@
 # Ijazah — Phase Plan
 
-One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.14 and constitution v2.4.5. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change), ADR 0010 (the database refuses double booking) and ADR 0012 (sign-in with Google, Apple or email; sign-in before onboarding). The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
+One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15 and constitution v2.6.1. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change), ADR 0010 (the database refuses double booking) and ADR 0012 (sign-in with Google, Apple or email; sign-in before onboarding). The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
 
 | Phase | Spec | Working days | Day numbers | Depends on |
 |---|---|---|---|---|
@@ -20,7 +20,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 
 **The commitment.** Thirty working days after Phase 0 closes, the whole MVP — Phases 1, 2, 3, 4 and 6 — is complete and submitted. Time after day 30 is for improvement and is not planned here.
 
-**How a phase is sized.** Each phase's days above were set from its share of SRS requirement ids (44 for Phase 1, 38 for Phase 2, 39 for Phase 3, 29 for Phase 4) and from its weight: Phase 1 carries the first mobile surface (design tokens, RTL, the three feature trees, the admin shell); Phase 2 carries the real gateway, the webhooks, the two-axis booking guards and Cairo DST; Phase 3 carries the session state machine and the video adapter; Phase 4 carries the certificate itself; Phase 6 is proving and packaging, and most of its hands-on steps are the owner's (store accounts, hosting, two physical devices, the restore drill).
+**How a phase is sized.** Each phase's days above were set from its share of SRS requirement ids (44 for Phase 1, 38 for Phase 2, 39 for Phase 3, 29 for Phase 4; FR-ADMIN-4 was added to Phase 3 on 2026-11-05, on Phase 3's analysis, and its days did not change) and from its weight: Phase 1 carries the first mobile surface (design tokens, RTL, the three feature trees, the admin shell); Phase 2 carries the real gateway, the webhooks, the two-axis booking guards and Cairo DST; Phase 3 carries the session state machine and the video adapter; Phase 4 carries the certificate itself; Phase 6 is proving and packaging, and most of its hands-on steps are the owner's (store accounts, hosting, two physical devices, the restore drill).
 
 **One Spec Kit cycle per phase.** Every phase gets its own `specs/<nnn>-<name>/` written with the same cycle as Phase 0, in this order: `/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`. The cycle reads this file, the SRS, ARCHITECTURE, the ERD, the ADRs and the constitution, so this file is kept current before each cycle runs. The cycle for Phase 1 runs at the opening of Phase 1 and is counted inside its seven days. For every later phase the cycle runs on the last day of the phase before it and is counted inside that earlier phase's days, so implementation starts on the phase's first day.
 
@@ -152,7 +152,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** let a student find a teacher and buy a package with correctly scheduled sessions.
 
-**Phase 2 closed on 2026-11-05** (B32, T057 in `specs/003-booking/tasks.md`), on its fifth working day of eight (day 16). Proved on the payment port's stand-in and, for the gateway, on Paymob's test account (T056); on one device, the owner's Android phone. Left open by the owner's decisions: `002:T123`'s last key (no rated teacher before Phase 3) and Paymob's documented decline in test mode (OPEN-11). T057's note lists what the device could not reach; those parts stay with the specs.
+**Phase 2 closed on 2026-11-05** (B32, T057 in `specs/003-booking/tasks.md`), on its fifth working day of eight (day 16). Proved on the payment port's stand-in and, for the gateway, on Paymob's test account (T056); on one device, the owner's Android phone. Left open by the owner's decisions: `002:T123`'s last key (no rated teacher before Phase 4) and Paymob's documented decline in test mode (OPEN-11). T057's note lists what the device could not reach; those parts stay with the specs.
 
 **SRS:** FR-PROFILE-1…10, FR-DISC-1…5, FR-BOOK-1…11, FR-PAYG-1…11, NFR-COMP-1
 
@@ -192,7 +192,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - **The visibility predicate reads the account's standing** (T143, the owner's decision of 2026-10-29): discovery leaves out a teacher whose account is suspended or banned, so a `verification_required` teacher stays visible as FR-VERIFY-10 allows; booking and token issuance require an active account. SRS §3.7.1, ADR 0006 and ADR 0007 say so.
 - **The real gateway adapter waits for the gateway's written answers** (the owner's decision of 2026-10-31). Cause: SRS §10's "Payment gateway" row requires the gateway's capabilities confirmed in writing before it is selected, and OPEN-11's answers have not arrived. The phase is built and proved on the payment port's stand-in, which behaves as a real gateway at the boundary: signed events through the same webhook and signature check, a wrong signature refused, events delivered twice, out of order and after the hold has expired, for `paid`, `failed`, `expired` and `recipient_verified` (`specs/003-booking/spec.md`, FR-371 to FR-374). If the answers arrive before the phase's last batch, that batch builds the adapter and the owner runs the purchase on the gateway's sandbox; if not, the phase closes on the stand-in, and the adapter with its sandbox run becomes a numbered task in `specs/003-booking/tasks.md`, timed before Phase 6. *Replaced on 2026-11-03 (the owner's decision): the adapter was built in the phase's last batch and tried on Paymob's test account, OPEN-11's written answers being needed only for production and contracting (`specs/003-booking/tasks.md`, T056).*
 - **The screens are the notice of a payment's outcome** (the owner's decision of 2026-10-31, as Phase 1 decided for FR-VERIFY-6): no notification row and no push is written in this phase; the Confirming state clears by the app reading the enrollment again on return from the hosted checkout, on returning to the foreground and on a bounded schedule (FR-383, FR-384); every confirmation, failure, expiry and refused confirmation is kept as a durable record for Phase 4 (FR-385).
-- **One first-wave follow-up stays open into Phase 3** (the owner's decision of 2026-11-04): `002:T123` (an Arabic template made only of values reads right to left on Android) has its code and specs done and its device check passed on every key drawn so far, but `card.ratingCount` is drawn only for a teacher with a rating, which no teacher has before Phase 3's reviews; Phase 2's close (`specs/003-booking/tasks.md`, T057) records it open instead of checking it.
+- **One first-wave follow-up stays open into Phase 4** (the owner's decision of 2026-11-04): `002:T123` (an Arabic template made only of values reads right to left on Android) has its code and specs done and its device check passed on every key drawn so far, but `card.ratingCount` is drawn only for a teacher with a rating, which no teacher has before Phase 4's reviews (corrected on 2026-11-05: reviews are Phase 4's); Phase 2's close (`specs/003-booking/tasks.md`, T057) records it open instead of checking it.
 
 **Definition of done**
 
@@ -209,7 +209,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** run a session end to end and settle its outcome from evidence, not from the client.
 
-**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…7, FR-MAKEUP-1…6, FR-DISPUTE-1…4
+**SRS:** FR-SESS-1…19, FR-NOSHOW-1…6, FR-CANCEL-1…8 (FR-CANCEL-8, an administrator's restore of an enrollment, added on 2026-11-05, the owner's decision of no automatic termination), FR-MAKEUP-1…6, FR-DISPUTE-1…7 (FR-DISPUTE-7, a ruling's revision, added on Phase 3's third analysis, 2026-11-05), FR-ADMIN-4 (the user directory, which no phase owned; the owner's decision of 2026-11-05 on Phase 3's analysis), FR-ADMIN-5 (the student's part), FR-ADMIN-6, FR-ADMIN-7, FR-ADMIN-14 (the admin pages and the student's standing these requirements need; the owner's decision of 2026-11-05)
 
 **What this phase delivers**
 
@@ -223,7 +223,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Chat retention and purge job
 - Attendance webhooks into participant events
 - Idempotent webhook handling
-- Evaluation job at scheduled end plus two minutes
+- Evaluation job at scheduled end plus the configured evaluation delay (a setting, default two minutes; R-SESS-2 as amended on 2026-11-05, the owner's decision)
 - Full session state machine
 - Simultaneous time accumulated across reconnections
 - All four no-show outcomes
@@ -234,6 +234,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 - Compensation is an administrative matter outside the code path (FR-DISPUTE-5/6, OPEN-10 resolved): every enrollment-level termination that leaves paid sessions undelivered opens a compensation case, and the admin's binding resolution records what Platform Administration did outside the platform. No refund, wallet or balance exists in code.
 - The session screens show every time twice, in the session's own zone and in the viewer's (ADR 0009 D5).
+- Live updates while the app is open (the owner's decision of 2026-11-05; `specs/004-sessions/research.md` R-324): one Server-Sent Events channel per signed-in device through tRPC subscriptions, no WebSocket server, carrying chat and the signals that make the open screens read again; nothing while the app is closed until Phase 4's notifications. One API process until a Redis bus between processes lands (Not scheduled in `specs/004-sessions/tasks.md`).
 - FR-AUTH-14's confirmed part lands in this phase's first batch (the owner's decision of 2026-11-01; T059 in `specs/003-booking/tasks.md`): a student's deletion cancels their remaining sessions `cancelled_by_admin` and their confirmed enrollments `account_deleted`, with no compensation case; a teacher's deletion has FR-SESS-16's effect, compensation cases included. Phase 2 writes the confirmed enrollments and sessions and handles holds and pending enrollments (R-219); cancelling a session is this phase's. Any suspension or ban this phase writes goes through `StandingService` (`specs/002-identity/tasks.md` T144, open until this phase's plan names it).
 - The size of this phase depends on the Phase 0 video baseline spike (T123); if the spike concludes against the assumed approach, this phase is re-planned before its Spec Kit cycle, and Phase 4 may run first (see the schedule section).
 
@@ -243,6 +244,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 - Attendance evaluates correctly across a mid-session disconnect
 - A session evaluates even when the final webhook never arrives
 - All four no-show outcomes are reachable
+- No count of a teacher's absences ends an enrollment: an enrollment ends for a teacher's absence only by an administrator's decision on the student's complaint, which may be restored within the restore window, and the repeated-absence mark is shown to administrators only, computed when read *(added 2026-11-05, the owner's decision; [ADR 0023](docs/adr/0023-no-automatic-termination-complaint-and-restore.md))*
 - The sessions module never references a price, a payment record or any payment concept
 
 ---
@@ -251,7 +253,7 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **Spec objective:** grant, verify the certificate that is the product.
 
-**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, §3.14
+**SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, FR-GENDER-3…7, FR-ADMIN-8 (gender disputes, with user reports; the owner's decision of 2026-11-05), §3.14
 
 **What this phase delivers**
 
@@ -326,6 +328,13 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
 - Phase 1's SC-101 run on iOS (the note under T090 in `specs/002-identity/tasks.md`): deferred by the owner on 2026-10-27, since a build for an iPhone needs a paid Apple Developer account; it is run before the first store submission, when that account exists.
 - Phase 1's SC-105 run on iOS (the note under T091 in `specs/002-identity/tasks.md`): every screen of the phase in Arabic and in English on an iPhone against its board, before the first store submission; B19b walked them on Android only, by the owner's decision of 2026-10-28.
 - `expo doctor` clean before the first store submission (the note under T101): the SDK 58 packages it reports behind their expected patch versions brought up, as a task of its own (the owner, 2026-10-27).
+- The live channel behind the hosted proxy (the owner's decision of 2026-11-05; `specs/004-sessions/research.md` R-324; the configuration itself in `docs/RUNBOOK.md`, «Reverse proxy and the live channel»). `GET /trpc/live.events` is a Server-Sent Events stream, pinged every 25 s:
+  - nginx: `proxy_http_version 1.1`, `proxy_buffering off`, `gzip off`, `proxy_read_timeout 120s` (longer than the 25 s ping), and `worker_connections` raised (8192; each stream holds two);
+  - Caddy: `reverse_proxy` flushes the stream at once and has no read timeout by default; no `encode` on `text/event-stream`;
+  - Cloudflare in front, if ever: its 100 s idle limit is met by the 25 s ping;
+  - Docker: `ulimits: nofile: 65536` on the proxy and the API;
+  - RAM for choosing the VPS, **estimates**, not measurements (LiveKit Cloud, not self-hosted; Postgres with about 512 MB of shared buffers; the API and the worker as two Node processes): about 1.7 GB at rest, about 1.72, 1.77 and 1.83 GB with 100, 500 and 1000 apps open. 2 GB is too tight (no room for Postgres's page cache or a build); 4 GB is comfortable. Phase 3's live-channel server task (T063) measures the API's RSS with 500 streams and records it in the RUNBOOK, which replaces the estimate per stream;
+  - one API process until the Redis bus between processes lands (Not scheduled), so the API is not scaled by adding processes before it.
 - A restart policy for the API and the worker in the hosted Docker setup (`restart: unless-stopped` or the host's equivalent), so a process that ends is brought back (T108: B19a closed the paths found that ended it; the owner, 2026-10-28).
 - The full-codebase review that the Phase 0 schedule planned as a separate week is not inside the thirty days: it runs after day 30, in the improvement time, once the MVP is complete. Within the thirty days every batch still gets its own review.
 

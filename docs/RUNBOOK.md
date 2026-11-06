@@ -274,6 +274,19 @@ membership in the owner role.
 (`PAYMENT_GATEWAY`). The platform never holds money; it creates gateway orders
 and confirms enrollments from signed webhooks (ADR 0007).
 
+**Open a webhook tunnel for a device run** — a cloudflared quick tunnel to a
+proxy, never to the API: the API runs with `SIGN_IN_PROVIDER=fake` in
+development, so anyone holding the tunnel's address could sign in as anyone.
+The proxy passes only `POST /webhooks/payment` and, from Phase 3,
+`POST /webhooks/video`, with the raw body and query unchanged, refuses a body
+over 64 KB and answers 404 to everything else. Before giving a dashboard the
+address, check from outside that `GET /health` answers 404 and that an
+unsigned POST to each path is refused by the API itself. Afterwards close the
+tunnel, the proxy, the API and the worker, set the gateway's callback back to
+its default and delete the video provider's webhook
+(`specs/003-booking/quickstart.md`, `specs/004-sessions/quickstart.md`
+prerequisites; amended 2026-11-05).
+
 **Branches** — cut every task branch from `develop` and name it
 `Ejazah_app/<phase>/<task>`, for example `Ejazah_app/001-foundations/T001`
 (a range: `Ejazah_app/001-foundations/T001-T005`). Open the pull request into
@@ -323,6 +336,49 @@ not threads. The rate limits `rate_limit_authentication` and
 identity procedure that verifies: sign-in, the one-time-code check and password
 reset. A verifying procedure without its limit lets one client take a whole
 process.
+
+**Reverse proxy and the live channel** (added 2026-11-05, the owner's decision;
+`specs/004-sessions/research.md` R-324; PLAN.md, Phase 6, carries the same
+notes for choosing the host). `GET /trpc/live.events` is a Server-Sent Events
+stream that stays open while the app is in the foreground. The API sends a
+ping comment every 25 s; the phone restarts a stream it hears nothing on for
+60 s. A proxy in front of the API must therefore not buffer it, not compress
+it, and not time it out between two reads in less than the ping.
+
+- nginx (`proxy_http_version` defaults to 1.0 before nginx 1.29.7, so set it):
+
+  ```nginx
+  location /trpc/ {
+      proxy_pass http://api:3000;
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";
+      proxy_buffering off;          # tRPC also sends X-Accel-Buffering: no
+      proxy_cache off;
+      proxy_read_timeout 120s;      # between two reads; must exceed the 25 s ping (default 60 s)
+      proxy_send_timeout 120s;
+      gzip off;                     # never compress text/event-stream
+  }
+  events { worker_connections 8192; }   # Debian and Ubuntu ship 768; each stream holds two
+  worker_rlimit_nofile 16384;
+  ```
+
+- Caddy: `reverse_proxy api:3000` flushes `text/event-stream` at once and has
+  no read timeout by default; do not apply `encode` to `text/event-stream`.
+- Cloudflare in front, if ever: its 100 s idle limit is met by the 25 s ping.
+- Serve the phone over HTTP/2 at the proxy, so the stream and the calls share
+  one connection.
+- Docker: `ulimits: nofile: 65536` on the proxy and the API services. Node
+  needs no timeout change.
+- A deploy's SIGTERM ends every live stream before the server closes (the
+  owner's hard condition, `onShutdown` in `apps/api/src/main.ts`), so the
+  deploy never waits on one; phones come back within 1 to 15 s.
+- One API process only, until Redis pub/sub between processes lands (Not
+  scheduled in `specs/004-sessions/tasks.md`): a second API process would miss
+  the other's events. Scaling the API by adding processes waits for it.
+- Memory: assumed at most 100 KB per stream in Node and 10 to 30 KB at the
+  proxy. **Measured:** not yet; the live channel's server task (T063 of
+  `specs/004-sessions/tasks.md`) opens 500 streams locally and writes the RSS
+  before and after here.
 
 ## Leaked credential
 
@@ -416,10 +472,15 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   secret changes, an event signed with the old one is refused with 401; replay
   it from the gateway's dashboard. A replay is safe, because
   `payment_events.provider_event_id` is unique (R-MONEY-8).
-- **`DAILY_API_KEY`** and **`DAILY_WEBHOOK_SECRET`**. Issued in the video
-  provider's dashboard; the stand-in serves the port until the phase that
-  calls it adds the provider. Replaying an attendance webhook is safe for the
-  same reason (`session_participant_events.provider_event_id`).
+- **`LIVEKIT_API_KEY`** and **`LIVEKIT_API_SECRET`**, with `LIVEKIT_URL` (not a
+  secret). Until Phase 3's adapter task renames them they are `DAILY_API_KEY`
+  and `DAILY_WEBHOOK_SECRET` in `.env.example` (ADR 0003, Consequences;
+  amended 2026-11-05). Issued in the LiveKit Cloud project's settings:
+  create a new key pair, install both values, restart the API and the worker,
+  then delete the old pair. LiveKit has no separate webhook secret: the API secret signs the
+  tokens and verifies the webhooks (`specs/004-sessions/research.md` R-302).
+  Replaying an attendance webhook is safe
+  (`session_participant_events.provider_event_id` is unique).
 - **`SMS_PROVIDER_KEY`** and **`EXPO_ACCESS_TOKEN`**. Issued by the SMS provider
   (not chosen yet) and in the Expo account's access tokens.
 - **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage
@@ -503,8 +564,26 @@ hand — there is exactly one write path (R-HONEST-1).
 missed. Replay it; `provider_event_id` is unique, so a duplicate replay cannot
 double-insert, and the evaluate-session job re-runs safely.
 
-**Room does not open** — check `DAILY_API_KEY` and the session status. A
-completed session never re-issues a token.
+**Room does not open** — check `VIDEO_PROVIDER`, `LIVEKIT_URL`,
+`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` (the `DAILY_*` keys until Phase 3's
+adapter task renames them), and the session status and its join period: a
+token is issued only for a scheduled session, from the early-join lead before
+its start until its scheduled end, and a settled or cancelled session never
+re-issues one (amended 2026-11-05).
+
+**A video event refused or not attributed** — nothing reaches the database
+for either, so look in two places (`specs/004-sessions/research.md` R-323,
+GAP-10; added 2026-11-05, the owner's decision). A refused event (no or wrong
+signature: 401; a signed body the port cannot read: 400) is one API log line
+at warn with its code, the video webhook's counterpart of `Payment webhook
+refused`, counted by the webhook signature alert (ARCHITECTURE §12); its body
+and header are never logged. Many of them: check that `LIVEKIT_API_KEY` and
+`LIVEKIT_API_SECRET` match the project that sends the webhook, and that the
+tunnel's proxy passes the body unchanged. An event that names no session, or
+a participant who is not one of its two, is answered 200, written nowhere and
+reported to error tracking; compare the room's name with the session's id.
+Attendance missing because of either: «Attendance missing for a finished
+session» above.
 
 **Certificate render failed** — re-enqueue `render-certificate` for the grant.
 The grant is the source of truth; the PDF is derived and disposable.
