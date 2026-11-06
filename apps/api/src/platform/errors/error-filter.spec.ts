@@ -232,7 +232,7 @@ describe('the Phase 3 codes (T002; specs/004-sessions/contracts/README.md "Error
     ['NOT_DISPUTABLE', 409],
     ['REMEDY_NOT_OPEN', 409],
     ['COUNTER_PENDING', 409],
-    ['CHOICE_NOT_ALLOWED', 403],
+    ['CHOICE_NOT_ALLOWED', 409],
     ['SLOT_NOT_OFFERED', 409],
     ['MAKEUP_REFUSED', 409],
     ['ATTACHMENT_REFUSED', 400],

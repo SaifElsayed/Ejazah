@@ -21,8 +21,10 @@
 //
 // T002 (Phase 3, specs/004-sessions/contracts/README.md "Errors"; FR-422, FR-452, FR-454, FR-499):
 // the codes the sessions phase adds, by the same reading: a refusal by the state of a session, a
-// request, a remedy, a dispute, a case or an enrollment is 409; a refund asked where only a make-up
-// is owed is a refusal of the caller's entitlement, 403; a chat file of a type the chat does not
+// request, a remedy, a dispute, a case or an enrollment is 409, `CHOICE_NOT_ALLOWED` among them (a
+// refund asked where only a make-up is owed is refused by the remedy's state, as `APPROVAL_BLOCKED`;
+// 403 stays for what the caller may not do at all, the role check in `surfaces/procedures.ts`, so a
+// log reads it as a permission: the owner's decision of 2026-11-06); a chat file of a type the chat does not
 // take is 400, as the upload guard's `VALIDATION_FAILED` for a type it does not accept.
 
 /** One field-level validation problem: where, and what kind. Never the value that was sent. */
@@ -107,7 +109,7 @@ export const errorCodes = {
   REMEDY_NOT_OPEN: { status: 409, message: 'This make-up is no longer open.' },
   COUNTER_PENDING: { status: 409, message: 'A proposed time is waiting for an answer.' },
   // A refund where only a make-up is owed.
-  CHOICE_NOT_ALLOWED: { status: 403, message: 'This choice is not available.' },
+  CHOICE_NOT_ALLOWED: { status: 409, message: 'This choice is not available.' },
   // A counter-proposal outside the options.
   SLOT_NOT_OFFERED: { status: 409, message: 'This time is not among the options.' },
   // The database refused the booking, by an overlap or a deadlock on the retry too; the remedy
