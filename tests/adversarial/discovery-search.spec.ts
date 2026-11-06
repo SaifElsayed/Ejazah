@@ -12,7 +12,9 @@
 // exactly the two visible matches, each with its matched length marked, and no other; across all
 // subjects nothing of an excluded teacher appears, the other gender's included. A plain spelling
 // typed against the variant one, and a variant typed against the plain one, are both covered, since
-// each search meets both visible names. T070 runs every rule over a subject's name too.
+// each search meets both visible names. T070 runs every rule over a subject's name too. Every name
+// begins with the world's own prefix, so each spelling is typed after it (`nameQuery`, 003:T079);
+// the single letter is the prefix, a space and the letter.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { describe, expect, it } from 'vitest';
 
@@ -20,6 +22,7 @@ import {
   discoverySurface,
   excludedFrom,
   EXCLUDED_STATES,
+  nameQuery,
   PLAIN_NAME,
   sharedSubjectQuery,
   SUBJECT_ENGLISH,
@@ -32,7 +35,10 @@ import { directions } from './procedure-harness.js';
 
 const SEARCH_TIMEOUT_MS = 180_000;
 
-/** One typed search per spelling rule of FR-333, each folding to a prefix of `PLAIN_NAME`. */
+/**
+ * One typed search per spelling rule of FR-333, each folding to a prefix of `PLAIN_NAME`, and each
+ * sent after the world's prefix (`nameQuery`).
+ */
 const SPELLINGS: ReadonlyArray<{ readonly rule: string; readonly typed: string }> = [
   { rule: 'the plain spelling', typed: PLAIN_NAME },
   { rule: 'أ counts as ا', typed: 'أسامه' },
@@ -51,6 +57,17 @@ const SPELLINGS: ReadonlyArray<{ readonly rule: string; readonly typed: string }
 ];
 
 describe.each(directions)('SC-314, $name', { timeout: SEARCH_TIMEOUT_MS }, ({ requester }) => {
+  // 003:T079, decision 10: no other world, of this run or another, bears one of this world's names.
+  it('names every teacher of the world after its own prefix', async () => {
+    const { world } = await discoverySurface();
+    expect(world.prefix).toMatch(/^[0-9a-f]{8}$/);
+    for (const teacher of world.teachers) {
+      expect(teacher.displayName, `${teacher.gender} ${teacher.state}`).toMatch(
+        new RegExp(`^${world.prefix} \\S`),
+      );
+    }
+  });
+
   it('seeds a teacher in every excluded state of both genders, each named with the prefix', async () => {
     const { world } = await discoverySurface();
     const excluded = excludedFrom(world, requester);
@@ -59,7 +76,9 @@ describe.each(directions)('SC-314, $name', { timeout: SEARCH_TIMEOUT_MS }, ({ re
     }
     // The other gender's `otherName` is the one excluded name that does not begin with the prefix.
     for (const teacher of excluded.filter(({ state }) => state !== 'otherName')) {
-      const named = [VARIANT_NAME, PLAIN_NAME].some((name) => teacher.displayName.startsWith(name));
+      const named = [VARIANT_NAME, PLAIN_NAME].some((name) =>
+        teacher.displayName.startsWith(nameQuery(world, name)),
+      );
       expect(named, `${teacher.gender} ${teacher.state}`).toBe(true);
     }
   });
@@ -92,13 +111,14 @@ describe.each(directions)('SC-314, $name', { timeout: SEARCH_TIMEOUT_MS }, ({ re
       .sort();
     const excluded = excludedFrom(world, requester);
 
-    const inSubject = await caller.discovery.browse({ subjectId: world.shared.id, query: typed });
+    const query = nameQuery(world, typed);
+    const inSubject = await caller.discovery.browse({ subjectId: world.shared.id, query });
     expect(inSubject.cards.map(({ teacherId }) => teacherId).sort()).toEqual(matches);
     for (const card of inSubject.cards) {
       expect(card.match?.length, `${card.displayName}: the matched prefix`).toBeGreaterThan(0);
     }
 
-    const everywhere = await caller.discovery.browse({ query: typed });
+    const everywhere = await caller.discovery.browse({ query });
     const answers = JSON.stringify([inSubject, everywhere]);
     for (const teacher of excluded) {
       expect(answers, `${teacher.gender} ${teacher.state}`).not.toContain(teacher.id);

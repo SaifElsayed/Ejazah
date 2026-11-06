@@ -20,6 +20,10 @@
 // again (through the identity module's real `teacher.payout.register`, FR-193, FR-315); and the
 // account soft-deleted. Every excluded teacher's name shares the visible ones' prefix (SC-314). A
 // teacher of the other gender, in any state, is excluded too, so each direction meets every state.
+// Every name begins with the world's own `prefix` (eight hex characters, then a space; `ijazah_fold`
+// leaves them as they are), so no other world, of this run or another, bears one of its names
+// (003:T079, decision 10 of specs/004-sessions/plan.md); every name search types it first
+// (`nameQuery`).
 //
 // Every teacher teaches the world's shared subject and one private subject no one else teaches,
 // with an active package of each track in the shared subject and one in the private subject; the
@@ -186,6 +190,11 @@ export const SUBJECT_PLAIN = 'متن اصول اقراء ال الهدي قار�
 /** The shared subject's English name before its tag. */
 export const SUBJECT_ENGLISH = 'Matn Tajweed';
 
+/** What a student types to find the world's teachers by name: the world's prefix, then `typed`. */
+export function nameQuery(world: World, typed: string): string {
+  return `${world.prefix} ${typed}`;
+}
+
 /** What a student types to find the shared subject: `spelling` of its name, then its own tag. */
 export function sharedSubjectQuery(world: World, spelling: string): string {
   return `${spelling} ${world.shared.nameAr.slice(SUBJECT_VARIANT.length + 1)}`;
@@ -226,6 +235,8 @@ export interface SeededTeacher {
 }
 
 export interface World {
+  /** What every teacher's name of this world begins with, before a space (`nameQuery`). */
+  readonly prefix: string;
   readonly shared: SubjectRow;
   readonly teachers: readonly SeededTeacher[];
 }
@@ -565,7 +576,8 @@ async function build(): Promise<Built> {
     return recipientRef;
   };
 
-  const seeder = new Seeder(database, created, registerReplacement);
+  const prefix = randomUUID().slice(0, 8);
+  const seeder = new Seeder(database, created, registerReplacement, prefix);
   const [admin, shared] = await Promise.all([
     seeder.admin(),
     seeder.subject({
@@ -602,7 +614,7 @@ async function build(): Promise<Built> {
     database,
     server,
     created,
-    world: { shared, teachers },
+    world: { prefix, shared, teachers },
     student(gender) {
       const student = students.get(gender);
       if (student === undefined) throw new Error(`no ${gender} student`);
@@ -810,7 +822,11 @@ function columnsOf(state: SeededTeacher['state']) {
   };
 }
 
-function nameOf(state: SeededTeacher['state'], index: number): string {
+function nameOf(prefix: string, state: SeededTeacher['state'], index: number): string {
+  return `${prefix} ${spellingOf(state, index)}`;
+}
+
+function spellingOf(state: SeededTeacher['state'], index: number): string {
   if (state === 'variantName') return VARIANT_NAME;
   if (state === 'plainName') return PLAIN_NAME;
   if (state === 'otherName') return OTHER_NAME;
@@ -823,16 +839,19 @@ class Seeder {
   readonly #database: Database;
   readonly #created: { readonly users: string[]; readonly subjects: string[] };
   readonly #replacePayout: (teacherId: string) => Promise<unknown>;
+  readonly #prefix: string;
   #count = 0;
 
   constructor(
     database: Database,
     created: { users: string[]; subjects: string[] },
     replacePayout: (teacherId: string) => Promise<unknown>,
+    prefix: string,
   ) {
     this.#database = database;
     this.#created = created;
     this.#replacePayout = replacePayout;
+    this.#prefix = prefix;
   }
 
   async admin(): Promise<string> {
@@ -894,7 +913,7 @@ class Seeder {
   }): Promise<SeededTeacher> {
     this.#count += 1;
     const columns = columnsOf(state);
-    const displayName = nameOf(state, this.#count);
+    const displayName = nameOf(this.#prefix, state, this.#count);
     const { id } = await this.#database.user.create({
       data: {
         email: `adversarial-${randomUUID()}@example.invalid`,
