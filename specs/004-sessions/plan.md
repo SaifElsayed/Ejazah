@@ -788,7 +788,8 @@ batches; B33 stays at six.
    in Arabic and English for each, in the panel's existing wording, `ACTION_TEXT` and `admin.audit.actions.*` in both
    admin catalogues, with a spec that every one has a name (contracts/admin-surface.md, "The audit actions' names").
    Links from each entry to its target's page wait for the post-MVP review of the admin screens' clarity.
-5. **The text fixes.** L2: the counter's `counter_slot_id` key-share on `availability_slots` is stated safe in
+5. **The text fixes.** L1: spec.md's Assumption on the named constants lists constitution 2.6.1's four numbers beside
+   2.6.0's. L4: PLAN.md's header names ERD v1.15 and constitution v2.6.1. L2: the counter's `counter_slot_id` key-share on `availability_slots` is stated safe in
    contracts/kernel.md and data-model §5 (every path that locks a slot `FOR UPDATE` takes its teacher's `users` row
    first, which the counter's path holds). L3: T002 writes the reworded general rule into `row-lock.ts`' header.
    L5, changed by the owner: `reresolve-session-instants` defers the overlap exclusions, so its commit can raise
@@ -883,6 +884,7 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/ARCHITECTURE.md` | §4's Phase 3 graph: the `DisputeHeldFiles` and `FileHold` ports; an amendment line | 8 (D1) |
 | `docs/SRS.md` | The 2026-11-05 amendment's «unreadable as before» marked superseded | 8 (S9) |
 | `docs/ERD.md` | On the sixth analysis: v1.15 amended in place again, changelog row 33, §5's `provider_room_id` noted unused | Decisions on the sixth analysis, 2 (M1) |
+| `PLAN.md` | The header names ERD v1.15 and constitution v2.6.1 (was ERD v1.14 and constitution v2.4.5) | 5 (L4) |
 
 ## Phase Outputs
 
