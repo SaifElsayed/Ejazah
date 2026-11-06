@@ -1,4 +1,21 @@
 <!--
+SYNC IMPACT REPORT (2.6.0, 2026-11-06)
+=====================================
+Version change: 2.5.1 -> 2.6.0 (MINOR: R-MONEY-12's bounds changed by an exception).
+
+Modified rules: R-MONEY-12 gains an exception: the transport and protection
+operating numbers in the kernel (`apps/api/src/platform/**`) and on the phone are
+named constants (the rate limiter's 60 s settings cache, its counter's 100 ms
+timeout and 10 s breaker, the live channel's 25 s ping, the phone's reconnect
+backoff), each with its reason beside it; the work's own windows and limits stay
+settings. Its enforcement cell adds `REVIEW` of the exception. Enforcement map:
+unchanged (the magic-number gate still covers `apps/api/src/modules/`).
+Templates: none changed. Companion documents: ERD v1.15 and ARCHITECTURE v3.2
+name this version. Cited by `specs/004-sessions/` spec FR-498, plan, research
+R-321 and R-324, and tasks T053, T062, T063, T065.
+Source: Phase 3's fourth analysis, C1, the owner's decision of 2026-11-06
+(`specs/004-sessions/plan.md`, "Decisions on the fourth analysis", item 6).
+
 SYNC IMPACT REPORT (2.5.1, 2026-11-05)
 =====================================
 Version change: 2.5.0 -> 2.5.1 (PATCH: a reference; no prohibition changed).
@@ -61,7 +78,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.5.1. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md) and [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md).
+Version 2.6.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md) and [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -99,7 +116,7 @@ Rules 8 and 9 are reinstated for gateway events.
 | R-MONEY-9 | **Never** process a gateway webhook without verifying its signature first, on the raw body, before any handler runs. *(Reinstated by ADR 0007. Video-provider webhooks: R-SESS-7; amended 2026-11-05, the owner's decision, T107: was R-SEC-12, which is about Dependabot.)* | `RT` guard - unsigned or invalid requests rejected before any handler; `CI` test |
 | R-MONEY-10 | *Superseded (ADR 0005).* Was: row lock on the Enrollment for money moves. | — |
 | R-MONEY-11 | *Superseded (ADR 0005).* Was: per-session shares sum to net. There are no shares. | — |
-| R-MONEY-12 | **Never** **read** a threshold, window, offset or limit from a constant. Every operational number is read from `settings`. *(Writing settings: R-PROC-11.)* | `CI` - magic-number grep gate over `apps/api/src/modules/`; `REVIEW` |
+| R-MONEY-12 | **Never** **read** a threshold, window, offset or limit from a constant. Every operational number is read from `settings`. *(Writing settings: R-PROC-11.)* **Exception** *(2.6.0, 2026-11-06, the owner's decision; Phase 3's fourth analysis, C1)*: the transport and protection operating numbers in the kernel (`apps/api/src/platform/**`) and on the phone are named constants, not settings: the rate limiter's settings cache (60 s), its counter's timeout (100 ms) and its breaker (10 s), the live channel's ping (25 s), and the phone's reconnect backoff. Each is named once, with the reason it is not a setting beside it. The work's own windows and limits stay settings. Why: an administrator changing a ping or a timeout from the panel could break the connection; the phone cannot read settings before it connects; the queue's fixed retry numbers are the precedent (`apps/api/src/jobs/README.md`); the magic-number gate covers `apps/api/src/modules/` only. | `CI` - magic-number grep gate over `apps/api/src/modules/`; `REVIEW` (the exception: each constant named once in `apps/api/src/platform/**` or on the phone, its reason beside it, and no window or limit of the work among them) |
 
 ### II. Time (R-TIME)
 
@@ -406,6 +423,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
+| 2.6.0 | 2026-11-06 | MINOR (Phase 3's fourth analysis, C1, the owner's decision of 2026-11-06; `specs/004-sessions/plan.md`, "Decisions on the fourth analysis", item 6): R-MONEY-12 gains an exception that changes its bounds: the transport and protection operating numbers in the kernel (`apps/api/src/platform/**`) and on the phone (the rate limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker, the live channel's 25 s ping, the phone's reconnect backoff) are named constants, each with its reason beside it, while the work's own windows and limits stay settings; its enforcement cell adds `REVIEW` of the exception. MINOR rather than PATCH under the versioning policy: a semantic change to a rule's reach (the owner's decision). Follows 2.5.1. |
 | 2.5.1 | 2026-11-05 | PATCH (Phase 3's analysis, the owner's decision of 2026-11-05; `specs/004-sessions/plan.md`, "Decisions on the analysis", item 5): R-DB-4's clause for `sessions.simultaneous_connected_seconds` cites [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md), which records the owner's decision 3 as the rule's last clause asks; the 2.5.0 row says so. A reference only; R-DB-4 already admitted a cache through an ADR, so no prohibition changed. Follows 2.5.0. |
 | 2.5.0 | 2026-11-05 | MINOR (T107 of `specs/003-booking/tasks.md` and `specs/004-sessions/plan.md`, "Changes to other documents" P1 to P3; the owner's decisions of 2026-11-05): a new rule, R-SESS-7, requires the video provider's webhook signature to be verified on the raw body before any handler, held by the kernel's webhook signature guard (`RT`) and a CI test that lands with the video webhook in Phase 3; R-MONEY-9's parenthesis pointed video webhooks at R-SEC-12, which is about Dependabot, and now points at R-SESS-7. R-SESS-2's evaluation at `scheduled_end + 2m` becomes the configured evaluation delay, a setting of default 2 minutes (R-MONEY-12; SRS §3.14 gains the row). R-DB-4 names `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure the outcome was decided on, beside the declared caches, on the owner's decision; the ADR the rule's last clause asks for is ADR 0022, written the same day (2.5.1). The header names ERD v1.15, the Phase 3 pass. The enforcement map's runtime-guard row and Phase 3's CI row gain R-SESS-7. No prohibition removed or weakened. Follows 2.4.5. |
 | 2.4.5 | 2026-11-04 | PATCH (T056 of `specs/003-booking/tasks.md`, the owner's decision of 2026-11-04): the header names ERD v1.14, which adds the gateway's member `paymob` to `payment_gateway`. A companion version only; no rule changed. Follows 2.4.4. |
@@ -433,4 +451,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.5.1 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-05
+**Version**: 2.6.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-06

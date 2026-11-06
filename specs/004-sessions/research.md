@@ -803,7 +803,7 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
    retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
    magic-number gate governs `modules/`, where every operational number is a setting). **Why none is a setting**
-   (**Decided**, the owner, 2026-11-06, the fourth analysis's C1; R-MONEY-12 (as amended, constitution <VERSION>)):
+   (**Decided**, the owner, 2026-11-06, the fourth analysis's C1; R-MONEY-12 (as amended, constitution 2.6.0)):
    an administrator changing one from the panel could break every signed-in call (a long timeout holds each call on a
    failing counter, a short breaker hammers it, a long cache keeps a changed limit unseen); the queue's fixed retry
    numbers are the precedent; and the magic-number gate covers `apps/api/src/modules/` only. The limits themselves stay
@@ -1223,7 +1223,7 @@ amended). Read against this branch at `9159cec`; the versions in the repository:
    100 s; the client restarts a stream silent for 60 s (`sse.client.reconnectAfterInactivityMs`; tRPC refuses a ping
    above it), which catches a half-open connection after a network switch. A reopening backs off from 1 s, doubling to
    a 30 s cap, each delay × a random 0.5–1.5. **Why the ping and the backoff are not settings** (**Decided**, the
-   owner, 2026-11-06, the fourth analysis's C1; R-MONEY-12 (as amended, constitution <VERSION>)): the 25 s ping is a
+   owner, 2026-11-06, the fourth analysis's C1; R-MONEY-12 (as amended, constitution 2.6.0)): the 25 s ping is a
    kernel constant because an administrator changing it from the panel could break every stream (past the proxy's
    60 s read timeout or tRPC's 60 s inactivity restart, the streams drop); the phone's reconnect backoff (this item's
    delays, and item 9's 1 to 15 s) is a constant on the phone because the phone cannot read settings before it
