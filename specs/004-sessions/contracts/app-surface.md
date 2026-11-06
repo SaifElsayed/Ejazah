@@ -19,7 +19,7 @@ field (R-GENDER-2). The adversarial suite covers each procedure in both directio
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
 | `sessions.cancellation.request` | participant, idempotent | `{ sessionId, reason, idempotencyKey }` | `{ requestId, status: 'pending', expiresAt }` | A `scheduled` session not yet started; `reason` 1 to 500 characters; `CANCELLATION_PENDING` when a request is open (the caller answers it instead); `CANCELLATION_EXPIRED` at or after the start |
-| `sessions.cancellation.answer` | participant (the counterparty) | `{ requestId, accept: boolean }` | `{ requestId, status: 'accepted' \| 'declined', sessionStatus }` | The requester answering their own request is `NOT_FOUND`; at or after the start `CANCELLATION_EXPIRED`; accept → `cancelled_by_agreement`, no penalty, the make-up offered in the same transaction (final at acceptance, never disputed: the owner's decision 5; FR-457) |
+| `sessions.cancellation.answer` | participant (the counterparty) | `{ requestId, accept: boolean }` | `{ requestId, status: 'accepted' \| 'declined', sessionStatus }` | The requester answering their own request is `NOT_FOUND`; at or after the start `CANCELLATION_EXPIRED`; a session no longer `scheduled` (cancelled by another path) `SESSION_NOT_SCHEDULED`, nothing written (follow-up 3 of PR #126's review); accept → `cancelled_by_agreement`, no penalty, the make-up offered in the same transaction (final at acceptance, never disputed: the owner's decision 5; FR-457) |
 
 ## `sessions.remedy` — FR-462 to FR-469 (the student, except `answerCounter`)
 
