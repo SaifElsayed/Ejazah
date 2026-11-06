@@ -23,7 +23,14 @@ import {
   openDatabase,
   type Transaction,
 } from './prisma.repository.js';
-import { type LockedTable, type LockScope, lockKey, lockRows } from './row-lock.js';
+import {
+  type KeySharedTable,
+  keyShareRows,
+  type LockedTable,
+  type LockScope,
+  lockKey,
+  lockRows,
+} from './row-lock.js';
 import { specDatabaseUrl } from './spec-database.fixtures.js';
 
 interface Sent {
@@ -51,6 +58,10 @@ describe('lockRows (T126, T005)', () => {
     'availability_slots',
     'slot_holds',
     'enrollments',
+    'sessions',
+    'session_remedies',
+    'cancellation_requests',
+    'disputes',
     'payments',
   ])(
     'locks the rows of %s by id, in id order, FOR UPDATE, the ids bound as one uuid array',
@@ -70,6 +81,28 @@ describe('lockRows (T126, T005)', () => {
     const { tx, sent } = recordingTransaction();
     await lockRows(tx, 'users', []);
     expect(sent).toEqual([]);
+  });
+});
+
+describe('keyShareRows (T002 of specs/004-sessions, H1)', () => {
+  it('key-shares the accounts by id, in id order, FOR KEY SHARE, the ids bound as one uuid array', async () => {
+    const { tx, sent } = recordingTransaction();
+    await keyShareRows(tx, 'users', IDS);
+    expect(sent).toEqual([
+      {
+        text: 'SELECT 1 FROM users WHERE id = ANY($::uuid[]) ORDER BY id FOR KEY SHARE',
+        values: [IDS],
+      },
+    ]);
+  });
+
+  it('sends no statement for no ids, and takes a table from the closed union only', async () => {
+    const { tx, sent } = recordingTransaction();
+    await keyShareRows(tx, 'users', []);
+    expect(sent).toEqual([]);
+    // @ts-expect-error T002: `KeySharedTable` is `users` only
+    const outside: KeySharedTable = 'sessions';
+    expect(outside).toBe('sessions');
   });
 });
 

@@ -12,6 +12,7 @@ import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
 import { cityName, dayMonth, dayMonthYear, timeOfDay } from '../../lib/format';
 import { daysBefore, panelTimeZone, todayIn } from '../../lib/zone';
 import { currentPath, inBothLocales, query, refusal, renderApp } from '../../test/app-harness';
+import { actionText, targetText } from './actions';
 
 afterEach(() => setLocale('ar'));
 
@@ -371,5 +372,64 @@ describe('AdminAudit (FR-175)', () => {
       ),
     ).toBeTruthy();
     expect(getLocale()).toBe('ar');
+  });
+});
+
+// T002 of specs/004-sessions (contracts/admin-surface.md, "The audit actions' names"; the owner's
+// decision of 2026-11-06 on the sixth analysis, M3): each of the twenty-eight actions Phase 3
+// records is named by the catalogue's text, never the stored code, in Arabic and in English.
+const PHASE_3_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['sessions.monitor.listed', 'عرض الاشتراكات', 'View enrollments'],
+  ['sessions.monitor.viewed', 'عرض اشتراك', 'View an enrollment'],
+  ['sessions.review.listed', 'عرض قائمة المراجعة', 'View the review queue'],
+  ['sessions.review.viewed', 'عرض بيانات اتصال جلسة', "View a session's connection record"],
+  ['provider_outages.listed', 'عرض انقطاعات الفيديو', 'View video outages'],
+  ['disputes.listed', 'عرض النزاعات', 'View disputes'],
+  ['dispute.viewed', 'عرض نزاع', 'View a dispute'],
+  ['cases.listed', 'عرض القضايا والشكاوى', 'View cases and complaints'],
+  ['case.viewed', 'عرض قضية أو شكوى', 'View a case or complaint'],
+  ['users.listed', 'عرض المستخدمين', 'View users'],
+  ['user.viewed', 'عرض مستخدم', 'View a user'],
+  ['chat.read', 'قراءة محادثة نزاع', "Read a dispute's chat"],
+  ['dispute.held_files_listed', 'عرض الملفات المحفوظة لنزاع', "View a dispute's held files"],
+  ['held_file.view', 'عرض ملف محفوظ', 'View a held file'],
+  ['session.cancelled', 'إلغاء جلسة', 'Cancel a session'],
+  ['enrollment.restored', 'استعادة اشتراك', 'Restore an enrollment'],
+  ['session.review_resolved', 'حسم مراجعة جلسة', 'Settle a session under review'],
+  ['session.outcome_corrected', 'تصحيح نتيجة جلسة', "Correct a session's outcome"],
+  ['provider_outage.recorded', 'تسجيل انقطاع الفيديو', 'Record a video outage'],
+  ['dispute.resolved', 'الفصل في نزاع', 'Resolve a dispute'],
+  ['dispute.revised', 'مراجعة حكم نزاع', "Revise a dispute's ruling"],
+  ['case.resolved', 'حلّ قضية', 'Resolve a case'],
+  ['case.dismissed', 'رفض قضية', 'Dismiss a case'],
+  ['case.opened_manually', 'فتح قضية تعويض يدويًا', 'Open a compensation case manually'],
+  ['complaint.decided', 'البتّ في شكوى غياب المعلم', "Decide a complaint of a teacher's absence"],
+  ['student.suspend', 'إيقاف طالب', 'Suspend student'],
+  ['student.ban', 'حظر طالب', 'Ban student'],
+  ['student.reinstate', 'إعادة تفعيل طالب', 'Reinstate student'],
+];
+
+describe('the Phase 3 actions by name (T002 of specs/004-sessions, M3)', () => {
+  it('holds the twenty-eight actions of admin-surface.md’s table', () => {
+    expect(new Set(PHASE_3_ACTIONS.map(([action]) => action)).size).toBe(28);
+  });
+
+  it.each(PHASE_3_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+
+  it.each([
+    ['enrollment', 'اشتراك', 'Enrollment'],
+    ['dispute', 'نزاع أو قضية', 'Dispute or case'],
+    ['session', 'جلسة', 'Session'],
+    ['provider_outage', 'انقطاع الفيديو', 'Video outage'],
+  ] as const)('names the new target type %s «%s» and "%s"', (targetType, arText, enText) => {
+    const row = { targetType };
+    expect(targetText(row, (key: MessageKey) => translate('ar', key))).toBe(arText);
+    expect(targetText(row, (key: MessageKey) => translate('en', key))).toBe(enText);
   });
 });

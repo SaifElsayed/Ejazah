@@ -213,3 +213,61 @@ describe('a forbidden profile is indistinguishable from an absent one (T094, R-G
     expect(forbidden).toEqual(absent);
   });
 });
+
+// T002 of specs/004-sessions (contracts/README.md "Errors"; FR-422, FR-452, FR-454, FR-499). Each
+// takes the status of the earlier code it resembles, as Phase 2's do: a refusal by the state of a
+// session, a request, a remedy, a dispute, a case or an enrollment is 409 (as `SLOT_TAKEN`); a
+// refusal of what the caller is entitled to ask is 403 (as `SUBJECT_NOT_APPROVED`); a file the chat
+// does not take is 400 (as the upload guard's `VALIDATION_FAILED` for a type it does not accept).
+describe('the Phase 3 codes (T002; specs/004-sessions/contracts/README.md "Errors")', () => {
+  it.each([
+    ['JOIN_NOT_OPEN', 409],
+    ['JOIN_CLOSED', 409],
+    ['SESSION_NOT_SCHEDULED', 409],
+    ['CANCELLATION_PENDING', 409],
+    ['CANCELLATION_EXPIRED', 409],
+    ['DISPUTE_WINDOW_CLOSED', 409],
+    ['DISPUTE_OPEN', 409],
+    ['SESSION_UNDER_REVIEW', 409],
+    ['NOT_DISPUTABLE', 409],
+    ['REMEDY_NOT_OPEN', 409],
+    ['COUNTER_PENDING', 409],
+    ['CHOICE_NOT_ALLOWED', 403],
+    ['SLOT_NOT_OFFERED', 409],
+    ['MAKEUP_REFUSED', 409],
+    ['ATTACHMENT_REFUSED', 400],
+    ['CHAT_CLOSED', 409],
+    ['STUDENT_SUSPENDED', 409],
+    ['RULING_FINAL', 409],
+    ['RULING_SUPERSEDED', 409],
+    ['COMPLAINT_OPEN', 409],
+    ['RESTORE_REFUSED', 409],
+  ] as const)('%s is a stable code with one message, answered %i', (code, status) => {
+    const mapped = mapError(new DomainError(code));
+    expect(mapped.status).toBe(status);
+    expect(mapped.body).toEqual({ code, message: errorCodes[code].message });
+    expect(mapped.unexpected).toBe(false);
+    expectOneShape(mapped.body);
+    expectNoInternals(mapped.body);
+  });
+
+  it('carries a cause and an instant as field issues: a restore’s cause, the join’s opening', () => {
+    const restore = mapError(
+      new DomainError('RESTORE_REFUSED', undefined, {
+        details: [{ path: 'cause', code: 'time_taken' }],
+      }),
+    );
+    expect(restore.body).toEqual({
+      code: 'RESTORE_REFUSED',
+      message: errorCodes.RESTORE_REFUSED.message,
+      details: [{ path: 'cause', code: 'time_taken' }],
+    });
+    const notOpen = mapError(
+      new DomainError('JOIN_NOT_OPEN', undefined, {
+        details: [{ path: 'opensAt', code: '2026-11-10T06:45:00.000Z' }],
+      }),
+    );
+    expect(notOpen.body.details).toEqual([{ path: 'opensAt', code: '2026-11-10T06:45:00.000Z' }]);
+    expectOneShape(notOpen.body);
+  });
+});

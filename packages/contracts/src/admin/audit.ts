@@ -18,6 +18,14 @@ export const auditTargetType = z.enum([
   'setting',
   /** A gateway order the payments monitor opened (T052). */
   'payment',
+  /**
+   * Phase 3 (T002 of specs/004-sessions, G3): an enrollment, a `disputes` row of any kind, a
+   * session, and a video outage window.
+   */
+  'enrollment',
+  'dispute',
+  'session',
+  'provider_outage',
 ]);
 
 /**

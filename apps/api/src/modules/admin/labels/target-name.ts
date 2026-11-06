@@ -93,6 +93,10 @@ export async function resolveTargetName(
     case 'verification_request':
     case 'setting':
     case 'payment':
+    case 'enrollment':
+    case 'dispute':
+    case 'session':
+    case 'provider_outage':
       return null;
   }
 }

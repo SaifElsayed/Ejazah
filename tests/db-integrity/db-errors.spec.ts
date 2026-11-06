@@ -16,12 +16,19 @@
 // uncommitted rows, so the parents (users, offers, enrollments) are committed through the
 // application role, and removed after the suite by the OWNER role, the only role that may delete a
 // user, an enrollment or a session (T065), as `booking-concurrency.spec.ts` does.
+//
+// T002 of specs/004-sessions (contracts/kernel.md, "Locks and refusals"): the five unique refusals
+// Phase 3 names (ERD §15 rules 45 and 46, a second remedy of a session, a replayed video event),
+// each written twice in one transaction and named exactly; and a deadlock, staged between two
+// transactions that lock two accounts in opposite orders, recognised by `isDeadlock`, while
+// none of the other refusals here is.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   type ExclusionConstraint,
+  isDeadlock,
   isExclusionViolation,
   isUniqueViolation,
   type UniqueConstraint,
@@ -33,6 +40,7 @@ import {
   openDatabase,
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
+import { lockRows } from '../../apps/api/src/platform/db/row-lock.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
 import {
   connectAsApplication,
@@ -54,6 +62,11 @@ interface Enrolled {
 const UNIQUE: readonly UniqueConstraint[] = [
   'slot_holds_slot_id_active_key',
   'slot_holds_student_user_id_active_key',
+  'cancellation_requests_one_pending_key',
+  'disputes_one_open_per_session_key',
+  'session_remedies_session_id_key',
+  'session_participant_events_provider_event_id_key',
+  'disputes_one_open_complaint_per_enrollment_key',
 ];
 const EXCLUSION: readonly ExclusionConstraint[] = [
   'sessions_teacher_no_overlap',
@@ -176,7 +189,7 @@ async function refusal(work: (tx: Transaction) => Promise<unknown>): Promise<unk
   throw new Error('the transaction committed; the probe expected a refusal');
 }
 
-/** Which of the four refusals `error` is named as: exactly one for each refusal T006 names. */
+/** Which of the named refusals `error` is named as: exactly one for each refusal named. */
 function namedAs(error: unknown): string[] {
   return [
     ...UNIQUE.filter((name) => isUniqueViolation(error, name)),
@@ -273,6 +286,7 @@ describe('anything else is none of the four, so the caller rethrows it (T006)', 
   it('an error the work threw itself', async () => {
     const error = await refusal(() => Promise.reject(new Error('sessions_teacher_no_overlap')));
     expect(namedAs(error)).toEqual([]);
+    expect(isDeadlock(error)).toBe(false);
   });
 });
 
@@ -384,5 +398,139 @@ describe('withDeferredSessionConstraints (T006, R-210, ERD §15 rule 19)', () =>
     });
     expect(reached).toBe(false);
     expect(namedAs(error)).toEqual(['slot_holds_slot_id_active_key']);
+  });
+});
+
+/** One committed session of a committed enrollment between a fresh student and a fresh offer. */
+async function committedSession(): Promise<Enrolled & { readonly sessionId: string }> {
+  const enrollment = await committedEnrollment(await committedOffer(), await committedStudent());
+  const sessionId = await insertRow(setup, 'sessions', {
+    enrollment_id: enrollment.enrollmentId,
+    teacher_user_id: enrollment.teacherId,
+    student_user_id: enrollment.studentId,
+    sequence_number: 1,
+    scheduled_date_local: '2026-10-04',
+    scheduled_start_time_local: '09:00:00',
+    timezone: 'UTC',
+    scheduled_start_at: AT['09:00'],
+    scheduled_end_at: AT['10:00'],
+    status: 'scheduled',
+  });
+  return { ...enrollment, sessionId };
+}
+
+const REMEDY = {
+  kind: 'makeup' as const,
+  status: 'proposed' as const,
+  offeredAt: new Date('2026-10-07T07:00:00Z'),
+  choiceClosesAt: new Date('2026-10-14T07:00:00Z'),
+  snapshotAnswerWindowHours: 72,
+  snapshotFirstSessionLeadHours: 24,
+};
+
+describe('the five refusals of Phase 3, each named exactly (T002 of specs/004-sessions)', () => {
+  it('a second pending request on one session is cancellation_requests_one_pending_key', async () => {
+    const on = await committedSession();
+    const request = {
+      sessionId: on.sessionId,
+      requestedByUserId: on.studentId,
+      reason: 'Travelling',
+      status: 'pending' as const,
+    };
+    const error = await refusal(async (tx) => {
+      await tx.cancellationRequest.create({ data: request });
+      await tx.cancellationRequest.create({
+        data: { ...request, requestedByUserId: on.teacherId },
+      });
+    });
+    expect(namedAs(error)).toEqual(['cancellation_requests_one_pending_key']);
+  });
+
+  it('a second open dispute of one session is disputes_one_open_per_session_key', async () => {
+    const on = await committedSession();
+    const dispute = {
+      enrollmentId: on.enrollmentId,
+      sessionId: on.sessionId,
+      kind: 'session_dispute' as const,
+      reason: 'The teacher did not come',
+      status: 'open' as const,
+    };
+    const error = await refusal(async (tx) => {
+      await tx.dispute.create({ data: { ...dispute, raisedByUserId: on.studentId } });
+      await tx.dispute.create({ data: { ...dispute, raisedByUserId: on.teacherId } });
+    });
+    expect(namedAs(error)).toEqual(['disputes_one_open_per_session_key']);
+  });
+
+  it('a second remedy of one session is session_remedies_session_id_key', async () => {
+    const on = await committedSession();
+    const error = await refusal(async (tx) => {
+      await tx.sessionRemedy.create({ data: { ...REMEDY, sessionId: on.sessionId } });
+      await tx.sessionRemedy.create({ data: { ...REMEDY, sessionId: on.sessionId } });
+    });
+    expect(namedAs(error)).toEqual(['session_remedies_session_id_key']);
+  });
+
+  it('a replayed video event is session_participant_events_provider_event_id_key', async () => {
+    const on = await committedSession();
+    const event = {
+      sessionId: on.sessionId,
+      userId: on.studentId,
+      eventType: 'joined' as const,
+      connectionRef: 'PA_probe',
+      occurredAt: new Date(AT['09:00']),
+      providerEventId: `probe-video-event-${on.sessionId}`,
+    };
+    const error = await refusal(async (tx) => {
+      await tx.sessionParticipantEvent.create({ data: event });
+      await tx.sessionParticipantEvent.create({ data: event });
+    });
+    expect(namedAs(error)).toEqual(['session_participant_events_provider_event_id_key']);
+  });
+
+  it('a second open complaint of one enrollment is disputes_one_open_complaint_per_enrollment_key', async () => {
+    const on = await committedSession();
+    const complaint = {
+      enrollmentId: on.enrollmentId,
+      kind: 'absence_complaint' as const,
+      raisedByUserId: on.studentId,
+      reason: 'The teacher keeps missing sessions',
+      status: 'open' as const,
+    };
+    const error = await refusal(async (tx) => {
+      await tx.dispute.create({ data: complaint });
+      await tx.dispute.create({ data: complaint });
+    });
+    expect(namedAs(error)).toEqual(['disputes_one_open_complaint_per_enrollment_key']);
+    expect(isDeadlock(error)).toBe(false);
+  });
+});
+
+describe('a deadlock, recorded between two transactions and recognised (T002, L5)', () => {
+  it('two transactions locking two accounts in opposite orders: one refused 40P01, isDeadlock, the other commits', async () => {
+    const [one, other] = await Promise.all([committedStudent(), committedStudent()]);
+    let held = 0;
+    let bothHoldFirst = (): void => undefined;
+    const firstsHeld = new Promise<void>((resolve) => {
+      bothHoldFirst = resolve;
+    });
+    const crossing = (first: string, second: string) =>
+      database.$transaction(
+        async (tx) => {
+          await lockRows(tx, 'users', [first]);
+          held += 1;
+          if (held === 2) bothHoldFirst();
+          await firstsHeld;
+          await lockRows(tx, 'users', [second]);
+        },
+        { maxWait: 5_000, timeout: 20_000 },
+      );
+    const outcomes = await Promise.allSettled([crossing(one, other), crossing(other, one)]);
+    const refused = outcomes.filter((outcome) => outcome.status === 'rejected');
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    const error = (refused[0] as PromiseRejectedResult).reason as unknown;
+    expect(isDeadlock(error)).toBe(true);
+    expect(namedAs(error)).toEqual([]);
   });
 });
