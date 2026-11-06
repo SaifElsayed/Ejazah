@@ -375,10 +375,22 @@ L1): the two sweeps that insert a `session_events` row beside another write lock
 insert's foreign key takes a key-share lock on it: `expire-cancellation-requests` takes `enrollments`, `sessions`, then
 `cancellation_requests`, as an accepted request does, and `reresolve-session-instants` `enrollments` then `sessions`, as
 the evaluation does, each with a probe in `tests/db-integrity/` against that path. On the fifth analysis (the owner's
-decision of 2026-11-06, L2), one general rule: every path that inserts a `session_events` row, or locks a `sessions`
-row, locks the session's enrollment before any `sessions` row; a cancellation request and its decline take `users`
-(both parties, one call), `enrollments` (the session's), `sessions`, then `cancellation_requests`, with a probe racing
-each against an administrator's `sessions.cancel` on the same session (T021).
+decision of 2026-11-06, L2), one general rule, reworded on the sixth analysis (the owner's decision of 2026-11-06,
+M2): a path that locks, updates or inserts a row referencing a `sessions` row (a foreign key's key-share included)
+takes, before any session, every lock earlier in the one order that it will take. A path inserting a `session_events`
+row always takes the enrollment. No path waits on a lock earlier in the order while holding a session. A cancellation
+request and its decline take `users` (both parties, one call), `enrollments` (the session's), `sessions`, then
+`cancellation_requests`, with a probe racing each against an administrator's `sessions.cancel` on the same session
+(T021). On the sixth analysis (the owner's decisions of 2026-11-06, H1 and M2), two paths have their own rows in
+contracts/kernel.md: `sessions.join` locks the two accounts (`users`, one call) and nothing else, and writes no
+`sessions` row; `POST /webhooks/video` takes the participant's `users` row `FOR KEY SHARE` (`keyShareRows`, a new
+helper in `platform/db/row-lock.ts`) before it inserts a participant's event, whose foreign keys would otherwise
+key-share the session first and the account second, and takes no enrollment, since it inserts no `session_events`
+row; a `room_ended` event, with no user, takes no lock before its insert. A probe in `tests/db-integrity/` races a
+`participant_left` against a teacher's suspension with the session in its join period, and against a cancellation's
+decline during the early-join lead (T012). A counter-proposal's `counter_slot_id` key-shares its `availability_slots`
+row while the path holds the session; it is safe, since every path that locks an `availability_slots` row `FOR UPDATE`
+takes the slot's teacher's `users` row first, which the counter's path already holds (the sixth analysis, L2).
 
 ## 6. The migration
 

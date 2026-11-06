@@ -717,7 +717,7 @@ Where an answer changes a decision above, the answer governs. No task is added a
 1. **L2, a cancellation request's and a decline's locks.** The row "cancellation request, a decline" takes `users`
    (both parties, one call), `enrollments` (the session's), `sessions`, then `cancellation_requests`; one general rule
    in contracts/kernel.md: every path that inserts a `session_events` row, or locks a `sessions` row, locks the
-   session's enrollment before any `sessions` row. T021 gains a probe racing a request and a decline against an
+   session's enrollment before any `sessions` row (*reworded* on the sixth analysis, item 3). T021 gains a probe racing a request and a decline against an
    administrator's `sessions.cancel` on the same session (data-model §5, research R-310 and R-321, quickstart).
 2. **A6, the default limit is 150 per 60 s.** Research R-325 recomputed without the name searches `rate_limit_search`
    counts since the fourth analysis's C2: the teacher's heaviest minute about 37, the panel's directory about 9, the
@@ -755,6 +755,31 @@ Where an answer changes a decision above, the answer governs. No task is added a
    that `documents.link` and the other ordinary readers still answer a held erased document as none. U4: `fileRef` is
    `document:<documentId>` or `photo:<userId>`, stable, never a storage key (contracts/admin-surface.md, research
    R-327, T040). G4: T052's stamp check covers the three `rate_limit_search` declarations (T007, T024, T058).
+
+The window rule (R-320): nothing here offers a time.
+
+## Decisions on the sixth analysis (the owner's answers of 2026-11-06)
+
+The sixth `/speckit-analyze` (at `e37083b`) found one high issue (H1); the owner answered its findings on 2026-11-06.
+Where an answer changes a decision above, the answer governs. No task is added to a batch and no task moves between
+batches; B33 stays at six.
+
+1. **H1, the video webhook's locks.** `POST /webhooks/video` inserts a participant's event, whose two foreign keys
+   (`prisma/migrations/20261101050220_append_only_foreign_keys_restrict/migration.sql`) key-share the session first and
+   the participant's account second; a path that holds the account `FOR UPDATE` and then locks the session (a teacher's
+   suspension, a cancellation's decline during the early-join lead) could deadlock with it. T012 takes the
+   participant's `users` row `FOR KEY SHARE` before the insert, through `keyShareRows`, a new helper T002 adds to
+   `apps/api/src/platform/db/row-lock.ts` (R-API-6), and never the enrollment; `room_ended` (no user) needs none.
+   contracts/kernel.md gains the webhook's rows, and T012 a race probe in `tests/db-integrity/` against both paths
+   (data-model §5, research R-321, quickstart).
+3. **M2, the general rule reworded.** contracts/kernel.md, data-model §5 and research R-321: «A path that locks,
+   updates or inserts a row referencing a `sessions` row (a foreign key's key-share included) takes, before any
+   session, every lock earlier in the one order that it will take. A path inserting a `session_events` row always
+   takes the enrollment. No path waits on a lock earlier in the order while holding a session.» The join (`users`
+   only, no session written) and the webhook are rows of their own.
+5. **The text fixes.** L2: the counter's `counter_slot_id` key-share on `availability_slots` is stated safe in
+   contracts/kernel.md and data-model §5 (every path that locks a slot `FOR UPDATE` takes its teacher's `users` row
+   first, which the counter's path holds). L3: T002 writes the reworded general rule into `row-lock.ts`' header.
 
 The window rule (R-320): nothing here offers a time.
 

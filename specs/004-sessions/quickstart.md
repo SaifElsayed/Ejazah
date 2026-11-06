@@ -101,7 +101,10 @@ Expected:
   the database refuses writes one `counter_booking_refused` row and no `counter_withdrawn` (the fourth analysis, A1);
   `expire-cancellation-requests` racing an acceptance, and a re-resolution racing the evaluation, end with no deadlock
   (L1); a cancellation request, and a decline, racing an administrator's `sessions.cancel` on the same session end
-  with no deadlock, each having locked the enrollment before the session (the fifth analysis, L2).
+  with no deadlock, each having locked the enrollment before the session (the fifth analysis, L2); a video webhook's
+  `participant_left` racing a teacher's suspension with the session in its join period, and racing a cancellation's
+  decline during the early-join lead, ends with no deadlock, the participant's account key-shared before the insert
+  (the sixth analysis, H1).
 - The live channel (research R-324; FR-427 to FR-429): `live.events` refuses an anonymous caller and a restricted
   standing, and an open over `rate_limit_live_channel`; a fourth stream of one account ends the oldest; a chat between
   A and B and a cancellation on their session reach A and B and never C; nothing is sent when the producing

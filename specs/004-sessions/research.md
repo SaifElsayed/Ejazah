@@ -751,10 +751,22 @@ slot before it and `session_remedies` within it. On the fourth analysis (**Decid
 two sweeps that insert a `session_events` row, whose foreign key takes a key-share lock on the enrollment, lock the
 enrollment first: `expire-cancellation-requests` `enrollments`, `sessions`, `cancellation_requests`, and
 `reresolve-session-instants` `enrollments`, `sessions` (contracts/kernel.md; T022, T014, each with a probe). On the
-fifth analysis (**Decided**, the owner, 2026-11-06, L2), one general rule: every path that inserts a `session_events`
-row, or locks a `sessions` row, locks the session's enrollment before any `sessions` row; a cancellation request and
-its decline take `users` (both), `enrollments`, `sessions`, `cancellation_requests` (T021, with a probe against an
-administrator's `sessions.cancel`). Every procedure declares
+fifth analysis (**Decided**, the owner, 2026-11-06, L2), one general rule, reworded on the sixth analysis
+(**Decided**, the owner, 2026-11-06, M2): a path that locks, updates or inserts a row referencing a `sessions` row (a
+foreign key's key-share included) takes, before any session, every lock earlier in the one order that it will take. A
+path inserting a `session_events` row always takes the enrollment. No path waits on a lock earlier in the order while
+holding a session. A cancellation request and its decline take `users` (both), `enrollments`, `sessions`,
+`cancellation_requests` (T021, with a probe against an administrator's `sessions.cancel`). On the sixth analysis
+(**Decided**, the owner, 2026-11-06, H1 and M2): `sessions.join` locks the two accounts only and writes no session;
+`POST /webhooks/video` takes the participant's `users` row `FOR KEY SHARE` before it inserts a participant's event
+(`keyShareRows`, a new helper in `platform/db/row-lock.ts`, R-API-6), since the insert's foreign keys
+(`20261101050220_append_only_foreign_keys_restrict`) key-share the session first and the account second, and a path
+holding the account `FOR UPDATE` that then locks the session (a teacher's suspension, a cancellation's decline) would
+deadlock with it; it takes no enrollment, since it inserts no `session_events` row, and `room_ended`, with no user,
+takes nothing before its insert (contracts/kernel.md; T012, with a probe against both paths). A counter-proposal's
+`counter_slot_id` key-shares its `availability_slots` row while its path holds the session, safely: every path that
+locks an `availability_slots` row `FOR UPDATE` takes the slot's teacher's `users` row first, which that path already
+holds (L2). Every procedure declares
 `.output(schema)`; the contract snapshot is additive and passes `pnpm contract:snapshot --check --base origin/develop`
 (R-API-9). The boundary rule `boundaries/no-money-vocabulary` already covers `modules/sessions` and is extended to
 `modules/chat`; a CI test proves no `_piasters`, price or payment reference in either (FR-497, SC-409). R-SESS-2, R-SESS-4
