@@ -661,7 +661,7 @@ its row deleted by the first batch's migration and no longer seeded; `repeated_a
 `enrollment_restore_window_days` 7 are added, and `rate_limit_absence_complaint` `{ limit: 5, window_seconds: 3600 }`,
 the limit the owner's decision and its default this cycle's reading; each an SRS §3.14 row. On the decisions of the
 administrator's control and the rate limits (**Decided**, the owner, 2026-11-05; R-321): `rate_limit_signed_in_default`
-`{ limit: 160, window_seconds: 60 }` per R-325 (the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
+`{ limit: 150, window_seconds: 60 }` per R-325 (the owner's decision of 2026-11-06 on the fifth analysis; the larger of 120 and the heaviest normal minute × 2–3, never a number above 200: R-321, item 5), and `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and
 `rate_limit_manual_compensation_case`, `{ limit: 10, window_seconds: 60 }` each; each an SRS §3.14 row (NFR-SEC-12).
 On the decisions answering the administrator's control inventory (**Decided**, the owner, 2026-11-05):
 `rate_limit_outcome_correction`, `{ limit: 10, window_seconds: 60 }`, `sessions.review.revise`'s own limit (R-323,
@@ -800,12 +800,13 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    no subject), so a Redis outage logs one line per 10 s, not one per request. The first count after the 10 s closes it
    or opens it again. The declared limits keep the first client and fail closed, as now (lines 41 and 42): the counter's
    failure is the internal error.
-5. **The numbers.** The default's limit is its setting, **160 per 60 s** per R-325 (the owner's decision of
-   2026-11-05). The reason is the owner's rule of 2026-11-05: the larger of 120 per 60 s and the heaviest minute of
+5. **The numbers.** The default's limit is its setting, **150 per 60 s** per R-325 (the owner's decision of
+   2026-11-06 on the fifth analysis; 160 per 60 s, the owner's decision of 2026-11-05, until then). The reason is the owner's rule of 2026-11-05: the larger of 120 per 60 s and the heaviest minute of
    normal use times 2 to 3, so that a normal user is never refused; a result above **200** sets no number, the screen
-   that calls that often going back to the owner to be fixed instead of the limit being raised. R-325 found 52 calls (a
-   teacher's minute), × 3 = 156, so 160; the panel's heaviest minute (45 × 3 = 135) needs no value of its own. The
-   seed plants 160 per 60 s and SRS §3.14 says so. 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
+   that calls that often going back to the owner to be fixed instead of the limit being raised. R-325 finds 48 calls (a
+   student's minute; the teacher's, 37 once the name searches `rate_limit_search` counts are left out), × 3 = 144, so
+   150; the panel's heaviest minute (45 × 3 = 135) needs no value of its own. The seed plants 150 per 60 s and SRS §3.14
+   says so. 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
    owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
    retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
    magic-number gate governs `modules/`, where every operational number is a setting). **Why none is a setting**
@@ -1280,7 +1281,9 @@ the npm registry (`npm view <package> time`).
 
 ## R-325 — The signed-in default rate limit's value
 
-**Decided**, the owner, 2026-11-05: `rate_limit_signed_in_default` = `{ limit: 160, window_seconds: 60 }`, by the
+**Decided**, the owner, 2026-11-06, on the fifth analysis (A6): `rate_limit_signed_in_default` = `{ limit: 150,
+window_seconds: 60 }` (160 per 60 s, the owner's decision of 2026-11-05, until then, computed with the teacher's name
+searches the default no longer counts), by the
 owner's rule (SRS NFR-SEC-12, R-321 item 5): the larger of 120 per 60 s and the heaviest normal minute H times 2 to 3,
 and no number at all when that product is above 200 (the screen that calls too often is fixed instead).
 
@@ -1289,9 +1292,9 @@ counted: `discovery.browse/filters/teacher` and `booking.slots` (`rate_limit_sea
 (`rate_limit_payment_initiation`), `chat.send` (`rate_limit_chat_message`), `sessions.complaint.raise`
 (`rate_limit_absence_complaint`), the uploads (`rate_limit_upload`) and the public kinds; since the owner's decision of
 2026-11-06 on the fourth analysis (C2), also `teacher.students.list`, `sessions.monitor.list` and `users.list`
-(`rate_limit_search`): the tables below were computed before that decision and are left as written, and the value stays
-the owner's 160 per 60 s. Counted, for example:
-`account.me`, `enrollments.list/get`, `checkout.status/current/continue`, `teacher.today`, `teacher.students.list/get`,
+(`rate_limit_search`): the tables below leave them out (recomputed on the fifth analysis, the owner's decision of
+2026-11-06). Counted, for example:
+`account.me`, `enrollments.list/get`, `checkout.status/current/continue`, `teacher.today`, `teacher.students.get`,
 `teacher.slots.*`, `teacher.packages.*`, Phase 3's `sessions.*` but the complaint, `chat.list`, `chat.attachmentLink`,
 and every administrator procedure but those with their own keys (subject `admin:<id>`, apart from the users'). The
 phone as it reads today: one `QueryClient` with TanStack's defaults (`apps/mobile/src/app/_layout.tsx`), so `staleTime`
@@ -1320,29 +1323,31 @@ connection flaps):
 
 | Category | Calls | Arithmetic |
 |---|---|---|
-| Screen opens and refreshes | 12 | foreground: `account.me`, `teacher.today`, `teacher.students.list` 3; `teacher.students.get` 1; `sessions.get` 1; `chat.list` 2; `chat.attachmentLink` 1; the cancellation's answer and its re-read 2; `sessions.remedy.answerCounter` and its re-read 2 |
-| Searching and paging the students list | 14 | 3 names × 4 settled reads, and 2 more pages |
+| Screen opens and refreshes | 11 | foreground: `account.me`, `teacher.today` 2 (`teacher.students.list`, the third read, counted by `rate_limit_search`); `teacher.students.get` 1; `sessions.get` 1; `chat.list` 2; `chat.attachmentLink` 1; the cancellation's answer and its re-read 2; `sessions.remedy.answerCounter` and its re-read 2 |
+| Searching and paging the students list | 0 | 3 names × 4 settled reads, and 2 more pages: 14 `teacher.students.list` calls, counted by `rate_limit_search` (60 per 60 s) since the fourth analysis's C2, not by the default |
 | Fast switching between screens | 12 | 12 mounts, one read each |
 | Polling | 0 | no teacher screen polls |
 | Re-reads after a change on the other side | 8 | 3 changes of the session × (`sessions.get` + `teacher.students.get`) 6; a cancellation request arriving 2 |
 | Connection restarts | 6 | 2 × 3 |
-| **Total** | **52** | Editing availability instead: 10 × (`teacher.slots.create` + the list's re-read) + 3 = 23 |
+| **Total** | **37** | 52 before the fifth analysis, the 15 `teacher.students.list` calls now `rate_limit_search`'s. Editing availability instead: 10 × (`teacher.slots.create` + the list's re-read) + 3 = 23 |
 
 **The administrator's heaviest normal minute**: scanning the audit log, a page every 1.5 s, 40 `audit.list` + 5
-`audit.get` = **45** (the directory: 5 settled searches, 15 pages, 6 `users.get`, 2 `home.summary`, 1 `auth.me` = 29;
+`audit.get` = **45** (the directory: 6 `users.get`, 2 `home.summary`, 1 `auth.me` = 9, its 5 settled searches and 15
+pages being `users.list`, counted by `rate_limit_search`;
 dispute triage, 3 disputes × 8 + 2 = 26).
 
-**The result.** H = max(42–48, 52) = 52; H × 2 = 104, H × 3 = 156, both at most 200, so a number is used: H × 3
-rounded up to ten, **160 per 60 s**, above 120, so 160. The factor 3 rather than 2: a flap on mobile data reads twice;
+**The result.** H = max(42–48, 37) = 48, the student's; H × 2 = 96, H × 3 = 144, both at most 200, so a number is
+used: H × 3 rounded up to ten, **150 per 60 s**, above 120, so 150 (the owner's decision of 2026-11-06 on the fifth
+analysis, A6). The factor 3 rather than 2: a flap on mobile data reads twice;
 the default fails open on a Redis failure (R-321, item 4), so its work is to stop a runaway client (a render loop or a
-retry storm calls hundreds of times a minute, which 160 stops as surely as 120), not to be tight; and the fixed window
+retry storm calls hundreds of times a minute, which 150 stops as surely as 120), not to be tight; and the fixed window
 already lets up to twice the limit through at a window's edge (`platform/guards/rate-limit.guard.ts`'s header). The
-panel needs no value of its own: 45 × 3 = 135 < 160, on a counter apart from the users' (R-321, item 2); the four
-administrator write limits (10 per 60 s each) are unchanged. Two devices of one account share a counter: 2 × 52 = 104.
+panel needs no value of its own: 45 × 3 = 135 < 150, on a counter apart from the users' (R-321, item 2); the four
+administrator write limits (10 per 60 s each) are unchanged. Two devices of one account share a counter: 2 × 48 = 96.
 
 **What would push it above 200** (none does in the design as written; each named with its fix): (1) the chat read
 again for every incoming message instead of the message carried to the screen: up to `rate_limit_chat_message` (30)
-more a minute, H → 82, × 3 = 246; (2) re-reads after a change not coalesced: a flapping connection can report joined and
+more a minute, H → 78, × 3 = 234; (2) re-reads after a change not coalesced: a flapping connection can report joined and
 left within a second, and a cancelled read already counted is started again; one re-read per query key per second
 fixes it; (3) `retry: 3` on a refusal: the phone retries every failed query three times, `RATE_LIMITED` included, so one
 refusal becomes four counted calls; retrying only an error with no API code (a network failure) fixes it. A Phase 3

@@ -575,7 +575,7 @@ R-321, R-322, R-323), the data model, the contracts, the quickstart and `tasks.m
    it opens its transaction; (b) `disputes.revise` and `sessions.restore` declare `rate_limit_dispute_revision` and
    `rate_limit_enrollment_restore` (10 per 60 s each, the administrator as subject), apart from the
    `idempotencyKey`; (c) every signed-in procedure that declares none is counted by `rate_limit_signed_in_default`
-   (160 per 60 s per research R-325, the owner's decision of 2026-11-05; the reason, the larger of 120 and the heaviest normal minute × 2–3, so a normal user is never refused, and above 200 no number but the screen that calls too often sent back to the owner to be fixed), the user or administrator as subject, its value held in the process for up to 60 s, its counter
+   (150 per 60 s per research R-325, the owner's decision of 2026-11-06 on the fifth analysis, 160 until then; the owner's decision of 2026-11-05 its first value; the reason, the larger of 120 and the heaviest normal minute × 2–3, so a normal user is never refused, and above 200 no number but the screen that calls too often sent back to the owner to be fixed), the user or administrator as subject, its value held in the process for up to 60 s, its counter
    on a client of its own bounded at 100 ms, failing open behind a 10 s breaker with one warning per period, while every
    declared limit stays fail-closed and a missing row refuses; (d) T062 in B36 builds (a) and (c), T059 and T061 declare
    (b); (e) every rate limit, Phases 1 and 2's included, logs only a subject's first refusal in a window (the count
@@ -610,7 +610,7 @@ default's value in item 3 (c) above; item 4's «proposed, not written here»; it
 `compensation_case_opened`»). `tasks.md` is not changed here: the task changes come in one later pass.
 
 1. **The signed-in default limit is 160 per 60 s**, per R-325 (a teacher's heaviest normal minute, 52 calls, × 3, rounded
-   up to ten); the rule max(120, H × 2–3) with no number above 200 stays its reason; the panel's 45 × 3 = 135 needs no
+   up to ten; *superseded* by the fifth analysis's item 2: 150 per 60 s, the student's 48 × 3 = 144 rounded up); the rule max(120, H × 2–3) with no number above 200 stays its reason; the panel's 45 × 3 = 135 needs no
    value of its own. Written in SRS §3.14 and NFR-SEC-12, ERD §12, the spec, research R-317 and R-321, the data model,
    the contracts and the quickstart.
 2. **R-323's gaps answered** (research R-323): the monitor's timeline through `EnrollmentSide.eventsOf` (GAP-1);
@@ -706,6 +706,22 @@ changes a decision above, the answer governs. No task is added and no task moves
 
 The window rule (R-320): nothing here offers a time.
 
+## Decisions on the fifth analysis (the owner's answers of 2026-11-06)
+
+The fifth `/speckit-analyze` (at `d833159`) found no critical issue; the owner answered its findings on 2026-11-06.
+Where an answer changes a decision above, the answer governs. No task is added and no task moves between batches.
+
+1. **L2, a cancellation request's and a decline's locks.** The row "cancellation request, a decline" takes `users`
+   (both parties, one call), `enrollments` (the session's), `sessions`, then `cancellation_requests`; one general rule
+   in contracts/kernel.md: every path that inserts a `session_events` row, or locks a `sessions` row, locks the
+   session's enrollment before any `sessions` row. T021 gains a probe racing a request and a decline against an
+   administrator's `sessions.cancel` on the same session (data-model §5, research R-310 and R-321, quickstart).
+2. **A6, the default limit is 150 per 60 s.** Research R-325 recomputed without the name searches `rate_limit_search`
+   counts since the fourth analysis's C2: the teacher's heaviest minute about 37, the panel's directory about 9, the
+   administrator's 45, so the heaviest is the student's 48; max(120, 48 × 3 = 144), rounded up to ten, is 150 (SRS
+   §3.14 and NFR-SEC-12 with an amendment line, ERD changelog row 32, spec FR-470, data-model §4, the contracts, the
+   quickstart, T001 and T062).
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -750,9 +766,9 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | ADR 0023 (new) | No automatic termination, the complaint, the restore and its two exits from a final state | 5 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 17 to 20 | 1, 2, 3, 5 |
 | `PLAN.md` | Phase 3's SRS list gains FR-DISPUTE-7 and FR-CANCEL-8; the definition of done gains the line on no automatic termination | 1, 6 |
-| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value by NFR-SEC-12's rule, confirmed by T062 from research R-325 before B36; *superseded* the same day: research R-325 set 160 per 60 s, seeded by T001, and T062 sets no value, the row of the control inventory answered below), NFR-SEC-12's first-refusal logging, an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
+| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value by NFR-SEC-12's rule, confirmed by T062 from research R-325 before B36; *superseded* the same day: research R-325 set 160 per 60 s (150 since the fifth analysis), seeded by T001, and T062 sets no value, the row of the control inventory answered below), NFR-SEC-12's first-refusal logging, an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 21, the four rate-limit settings, no column for `slot_changed` | 2, 3 |
-| `docs/SRS.md` | The control inventory answered: §3.14 (the default 160 per 60 s, chat retention 30, «Outcome correction rate limit»), NFR-SEC-12, FR-SESS-13, FR-AUTH-14, FR-NOTIF-1 (`compensation_case_opened`'s record, `absence_complaint_decided` to both parties), four amendment lines | Decisions of 2026-11-05, the administrator's control inventory answered, 1 to 6 |
+| `docs/SRS.md` | The control inventory answered: §3.14 (the default 160 per 60 s, 150 since the fifth analysis, chat retention 30, «Outcome correction rate limit»), NFR-SEC-12, FR-SESS-13, FR-AUTH-14, FR-NOTIF-1 (`compensation_case_opened`'s record, `absence_complaint_decided` to both parties), four amendment lines | Decisions of 2026-11-05, the administrator's control inventory answered, 1 to 6 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 23 to 27 (the default's value, chat retention, the deleted files held, the manual reasons and the covering rule, `outcome_corrected`, `instants_reresolved`, `previous_start_at`, `slot_holds.release_reason`, rule 48, the new setting, §11) | 1 to 6 |
 | ADR 0015 | An amendment paragraph: a deleted account's files wait for its open disputes and cases | 4 |
 | `docs/RUNBOOK.md` | «A video event refused or not attributed» | 2 (GAP-10) |
@@ -769,6 +785,8 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | ADR 0023 | An amendment paragraph: `slot_inactive`, `slot_changed` and the restore's own rate limit in D4 | 7 (S3) |
 | `docs/SRS.md`, `docs/ERD.md` | S5's superseded lines marked (the «120 seeded until T062» line; the ERD header's counts) | 7 (S5) |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 31, the notes on `users.photo_key` and `verification_documents.erased_at` | 5 |
+| `docs/SRS.md` | On the fifth analysis: §3.14 and NFR-SEC-12, the default 150 per 60 s; an amendment line | Decisions on the fifth analysis, 2 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog row 32, §12's default at 150 per 60 s | 2 |
 
 ## Phase Outputs
 

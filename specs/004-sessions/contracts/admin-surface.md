@@ -7,7 +7,7 @@ monitor does. Every procedure declares `.output(schema)`. Nothing here computes,
 an enrollment (SC-413): `sessions.restore` returns an enrollment's status to `confirmed` and never writes `confirmed_at`
 (FR-455, R-HONEST-1). Every procedure here is rate-limited (spec FR-470): `disputes.revise`, `sessions.restore`, `sessions.review.revise` and `cases.openManual` by
 their own declared key, the two name searches `sessions.monitor.list` and `users.list` by Phase 1's `rate_limit_search`
-(60 per 60 s, failing closed; the owner's decision of 2026-11-06 on the fourth analysis, C2), every other one by `rate_limit_signed_in_default` (160 per 60 s per research R-325, the panel's heaviest normal minute, 45 × 3 = 135, under it with no value of its own), the administrator as subject (kernel.md,
+(60 per 60 s, failing closed; the owner's decision of 2026-11-06 on the fourth analysis, C2), every other one by `rate_limit_signed_in_default` (150 per 60 s per research R-325, the owner's decision of 2026-11-06 on the fifth analysis, the panel's heaviest normal minute, 45 × 3 = 135, under it with no value of its own), the administrator as subject (kernel.md,
 "Rate limits").
 
 ## `sessions` — the monitor, the review queue, cancellation, outages (sessions module)

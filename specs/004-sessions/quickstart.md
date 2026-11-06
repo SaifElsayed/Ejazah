@@ -82,7 +82,7 @@ Expected:
   a procedure with its own limit is not counted by the default; with the counter failing, the default lets the call
   through and its breaker skips counting, while a declared limit refuses; the default's settings row missing refuses
   the call; `disputes.revise` and `sessions.restore` over their own limit are refused with no transaction opened;
-  the seed plants the five rows (the default and the four administrator limits), the default at 160 per 60 s (research R-325); a subject's first refusal in a window writes one log record with only its allowed
+  the seed plants the five rows (the default and the four administrator limits), the default at 150 per 60 s (research R-325, the owner's decision of 2026-11-06 on the fifth analysis); a subject's first refusal in a window writes one log record with only its allowed
   fields (a user or administrator by id and the procedure; any other subject by the procedure and its keyed digest,
   never the raw subject; a budget by the procedure and its key), and a second refusal in that window writes none.
   `users.list`, `sessions.monitor.list` and `teacher.students.list` over `rate_limit_search` are refused, with the
