@@ -64,6 +64,24 @@ describe.each(directions)('SC-314, $name', { timeout: SEARCH_TIMEOUT_MS }, ({ re
     }
   });
 
+  // T079: a teacher committed visible for a moment is listed by another world's search, under a
+  // name this world's checks refuse; the replacement comes before the first package, so it never is.
+  it('offers no replaced payout account while it is still verified: the payout is replaced before the first package', async () => {
+    const surface = await discoverySurface();
+    const replaced = surface.world.teachers.filter(
+      (teacher) => teacher.gender === requester && teacher.state === 'payoutReplaced',
+    );
+    expect(replaced).toHaveLength(1);
+    for (const teacher of replaced) {
+      const { replacedAt, firstPackageAt } = await surface.payoutReplacementOrder(teacher.id);
+      expect(replacedAt, 'the replacement').not.toBeNull();
+      expect(firstPackageAt, 'the first package').not.toBeNull();
+      expect(Number(replacedAt), 'the replacement before the first package').toBeLessThan(
+        Number(firstPackageAt),
+      );
+    }
+  });
+
   it.each(SPELLINGS)('$rule: every visible match and no excluded teacher', async ({ typed }) => {
     const surface = await discoverySurface();
     const { world } = surface;
