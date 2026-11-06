@@ -323,7 +323,9 @@ rule.
 
 **Decision.** `sessions.cancellation.request` (either participant, a `scheduled` session whose start is in the future,
 a reason of bounded length, idempotent), `.answer` (the counterparty, accept or decline), each deciding under the
-session's lock (rule 1). At most one pending request per session: a partial unique index on `(session_id) WHERE status
+session's lock (rule 1): a request and a decline take `users` (both parties, one call), `enrollments` (the session's),
+`sessions`, then `cancellation_requests`, since the `session_events` row each writes takes a key-share lock on the
+enrollment (**Decided**, the owner, 2026-11-06, on the fifth analysis, L2; contracts/kernel.md). At most one pending request per session: a partial unique index on `(session_id) WHERE status
 = 'pending'` (ERD §15, new rule), so the second party answers the first instead (the edge case). A request is read as
 expired from the scheduled start whatever its row says; an answer at or after the start is refused
 `CANCELLATION_EXPIRED` and changes nothing (FR-458, SC-411); a sweep `expire-cancellation-requests` (every minute,
@@ -745,7 +747,11 @@ then `disputes`; a restore takes `sessions.cancel`'s order widened by both accou
 slot before it and `session_remedies` within it. On the fourth analysis (**Decided**, the owner, 2026-11-06, L1): the
 two sweeps that insert a `session_events` row, whose foreign key takes a key-share lock on the enrollment, lock the
 enrollment first: `expire-cancellation-requests` `enrollments`, `sessions`, `cancellation_requests`, and
-`reresolve-session-instants` `enrollments`, `sessions` (contracts/kernel.md; T022, T014, each with a probe). Every procedure declares
+`reresolve-session-instants` `enrollments`, `sessions` (contracts/kernel.md; T022, T014, each with a probe). On the
+fifth analysis (**Decided**, the owner, 2026-11-06, L2), one general rule: every path that inserts a `session_events`
+row, or locks a `sessions` row, locks the session's enrollment before any `sessions` row; a cancellation request and
+its decline take `users` (both), `enrollments`, `sessions`, `cancellation_requests` (T021, with a probe against an
+administrator's `sessions.cancel`). Every procedure declares
 `.output(schema)`; the contract snapshot is additive and passes `pnpm contract:snapshot --check --base origin/develop`
 (R-API-9). The boundary rule `boundaries/no-money-vocabulary` already covers `modules/sessions` and is extended to
 `modules/chat`; a CI test proves no `_piasters`, price or payment reference in either (FR-497, SC-409). R-SESS-2, R-SESS-4

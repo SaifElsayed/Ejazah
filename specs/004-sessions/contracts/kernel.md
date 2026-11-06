@@ -16,6 +16,11 @@ one teacher's `lockKey('teacher-slots', …)` takes the keys in ascending teache
 taken in id order; the rows marked **(L1)** are those paths. A make-up's booking takes both slots it touches in one
 call in id order (L2).
 
+One general rule (the owner's decision of 2026-11-06 on the fifth analysis, L2): every path that inserts a
+`session_events` row, or locks a `sessions` row, locks the session's enrollment (`enrollments`) before any `sessions`
+row, since the event's foreign key takes a key-share lock on the enrollment, and a path holding a session while it
+waits on the enrollment can deadlock with one that takes them in the order above. Each row below is read against it.
+
 | Path | Locks, in order | Inserts referencing an account |
 |---|---|---|
 | `sessions.join` | `users` (both, one call) | none |
@@ -30,7 +35,7 @@ call in id order (L2).
 | an administrator's correction of an outcome nobody disputed, `sessions.review.revise` (R-323, GAP-3; the owner's decision of 2026-11-05) | a revision's order without its dispute: `enrollments`, `sessions`; the session's disputes and remedy read under them, nothing of `disputes` written; no `StandingService`, so no account | none (`session_events` reference the enrollment and the session) |
 | an administrator's manual case, `cases.openManual` with no remedy (R-326; the owner's decision of 2026-11-05) | `enrollments` (the case's own lock, `lockCasesOf`; the enrollment read again through `EnrollmentSide` under it), then `disputes` (the case opened or joined through `openCompensationCase`) | none (the case references the enrollment only; `raised_by_user_id` NULL) |
 | `cases.openManual` with `remedyId`, the remedy handed to the student's manual case (R-326) | the refund hand-off's order, as `sessions.remedy.choose`'s: the enrollment's parties read with no lock, then `users` (both, one call), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies` (the remedy read again: open, of this enrollment), `disputes` | none (the case references the enrollment only; `session_events` the enrollment and the session) |
-| cancellation request, a decline | `sessions`, `cancellation_requests` | the request references the requester: `users` (both parties) locked first |
+| cancellation request, a decline | `users` (both parties, one call), `enrollments` (the session's), `sessions`, then `cancellation_requests` (the owner's decision of 2026-11-06 on the fifth analysis, L2: the `session_events` row each writes takes a key-share lock on the enrollment, so the enrollment is locked before the session, as an administrator's `sessions.cancel`, `expire-cancellation-requests` and an outage record take them) | the request references the requester: `users` (both parties) locked first |
 | cancellation accepted (the make-up offered at once, the owner's decision 5) | `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `cancellation_requests` | the request's accounts locked first |
 | dispute raised | `users` (the raiser), `enrollments`, `sessions` | the dispute references the raiser, locked first |
 | an administrator's `sessions.cancel` (the third analysis, L-C) | `enrollments` (the session's), `sessions`, `disputes` (the `admin_cancellation` case opened or joined through `openCompensationCase`, whose own enrollment lock is the one already held) | none (the case references the enrollment only; `session_events` the enrollment, the session and the case) |

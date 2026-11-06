@@ -374,7 +374,11 @@ disputed takes `enrollments`, `sessions`, reading the session's disputes and rem
 L1): the two sweeps that insert a `session_events` row beside another write lock the enrollment first, since the
 insert's foreign key takes a key-share lock on it: `expire-cancellation-requests` takes `enrollments`, `sessions`, then
 `cancellation_requests`, as an accepted request does, and `reresolve-session-instants` `enrollments` then `sessions`, as
-the evaluation does, each with a probe in `tests/db-integrity/` against that path.
+the evaluation does, each with a probe in `tests/db-integrity/` against that path. On the fifth analysis (the owner's
+decision of 2026-11-06, L2), one general rule: every path that inserts a `session_events` row, or locks a `sessions`
+row, locks the session's enrollment before any `sessions` row; a cancellation request and its decline take `users`
+(both parties, one call), `enrollments` (the session's), `sessions`, then `cancellation_requests`, with a probe racing
+each against an administrator's `sessions.cancel` on the same session (T021).
 
 ## 6. The migration
 
