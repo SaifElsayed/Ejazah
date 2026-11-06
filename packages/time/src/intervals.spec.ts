@@ -132,12 +132,23 @@ describe('clip', () => {
     ]);
   });
 
-  it('floors the bounds as it floors an interval', () => {
-    expect(seconds(clip([span(0, 200)], span(10.8, 100.8)))).toEqual([[10, 100]]);
+  it('rounds the bounds inward: the start up, the end down', () => {
+    expect(seconds(clip([span(0, 200)], span(10.8, 100.8)))).toEqual([[11, 100]]);
+  });
+
+  it('never starts before fractional bounds, for an interval that starts before them', () => {
+    const [result] = clip([span(5.3, 50.9)], span(10.2, 40.6));
+    expect(seconds(result === undefined ? [] : [result])).toEqual([[11, 40]]);
+    expect(result?.startsAt.getTime()).toBeGreaterThanOrEqual(span(10.2, 40.6).startsAt.getTime());
+    expect(result?.endsAt.getTime()).toBeLessThanOrEqual(span(10.2, 40.6).endsAt.getTime());
   });
 
   it('keeps nothing within bounds of zero length', () => {
     expect(clip([span(0, 200)], span(50, 50))).toEqual([]);
+  });
+
+  it('keeps nothing within valid bounds that rounding inward collapses, refusing nothing', () => {
+    expect(clip([span(0, 200)], span(10.2, 10.8))).toEqual([]);
   });
 });
 
@@ -274,6 +285,15 @@ function coveredSeconds(intervals: readonly Interval[]): Set<number> {
   return covered;
 }
 
+/** The whole seconds wholly inside `bounds`: s with ⌈start⌉ ≤ s and s + 1 ≤ ⌊end⌋. */
+function secondsWithin(bounds: Interval): Set<number> {
+  const within = new Set<number>();
+  const from = Math.ceil((bounds.startsAt.getTime() - BASE) / MILLISECONDS_PER_SECOND);
+  const to = Math.floor((bounds.endsAt.getTime() - BASE) / MILLISECONDS_PER_SECOND);
+  for (let second = from; second < to; second += 1) within.add(second);
+  return within;
+}
+
 function bothCover(a: Set<number>, b: Set<number>): Set<number> {
   return new Set([...a].filter((second) => b.has(second)));
 }
@@ -335,14 +355,10 @@ describe('properties', () => {
     fc.assert(
       fc.property(setArbitrary, intervalArbitrary, (intervals, bounds) => {
         const result = clip(intervals, bounds);
-        // The bounds floored, as every instant here is (the owner's decision 3).
-        const lower =
-          Math.floor(bounds.startsAt.getTime() / MILLISECONDS_PER_SECOND) * MILLISECONDS_PER_SECOND;
-        const upper =
-          Math.floor(bounds.endsAt.getTime() / MILLISECONDS_PER_SECOND) * MILLISECONDS_PER_SECOND;
+        // The original bounds, fractions and all (the owner's decision of 2026-11-06 on clip).
         for (const interval of result) {
-          expect(interval.startsAt.getTime()).toBeGreaterThanOrEqual(lower);
-          expect(interval.endsAt.getTime()).toBeLessThanOrEqual(upper);
+          expect(interval.startsAt.getTime()).toBeGreaterThanOrEqual(bounds.startsAt.getTime());
+          expect(interval.endsAt.getTime()).toBeLessThanOrEqual(bounds.endsAt.getTime());
         }
         expect(measureSeconds(result)).toBeLessThanOrEqual(measureSeconds([bounds]));
         expect(measureSeconds(result)).toBeLessThanOrEqual(measureSeconds(intervals));
@@ -361,9 +377,7 @@ describe('properties', () => {
         const together = bothCover(coveredA, coveredSeconds(b));
         expect(coveredSeconds(intersect(a, b))).toEqual(together);
         expect(measureSeconds(intersect(a, b))).toBe(together.size);
-        expect(coveredSeconds(clip(a, bounds))).toEqual(
-          bothCover(coveredA, coveredSeconds([bounds])),
-        );
+        expect(coveredSeconds(clip(a, bounds))).toEqual(bothCover(coveredA, secondsWithin(bounds)));
       }),
       settings(3007),
     );

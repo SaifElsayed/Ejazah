@@ -129,10 +129,16 @@ export function intersect(a: readonly Interval[], b: readonly Interval[]): Inter
 /**
  * The part of `intervals` within `bounds`, as a canonical set: nothing before the bounds' start
  * and nothing at or after their end (FR-443: only between the scheduled start and end). The bounds
- * are floored as an interval is; inverted bounds are a `TimeError` naming `bounds`.
+ * are rounded inward, the start up and the end down to the second, so the result always lies
+ * inside the bounds as given and never reaches past them (T003; the owner's decision of
+ * 2026-11-06); flooring the start, as an interval's is floored, could begin up to a second early.
+ * Bounds that rounding inward collapses keep nothing and are not refused. Inverted bounds, judged
+ * as given, are a `TimeError` naming `bounds.endsAt`.
  */
 export function clip(intervals: readonly Interval[], bounds: Interval): Interval[] {
-  const window = secondSpanOf(bounds, 'bounds.');
+  const floored = secondSpanOf(bounds, 'bounds.');
+  const start = Math.ceil(bounds.startsAt.getTime() / MILLISECONDS_PER_SECOND);
+  const window = { start, end: floored.end };
   const windows = window.end > window.start ? [window] : [];
   return intervalsFrom(intersectSpans(canonicalSpans(intervals), windows));
 }
