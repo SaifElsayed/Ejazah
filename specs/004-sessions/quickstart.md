@@ -85,6 +85,8 @@ Expected:
   the seed plants the four rows, the default at 160 per 60 s (research R-325); a subject's first refusal in a window writes one log record with only its allowed
   fields (a user or administrator by id and the procedure; any other subject by the procedure and its keyed digest,
   never the raw subject; a budget by the procedure and its key), and a second refusal in that window writes none.
+  `users.list`, `sessions.monitor.list` and `teacher.students.list` over `rate_limit_search` are refused, with the
+  counter failing too (the fourth analysis, C2).
 - The manual case (FR-493): `cases.openManual` opens a case on an enrollment in each state, joins the open one of the
   same party, hands an open remedy to the student's case (both reserved times released, one `remedy_handed_to_case`
   row) and refuses a remedy no longer open, a missing enrollment, a reused key with another input and a call over its
@@ -95,7 +97,10 @@ Expected:
   `CONFLICT` `ruled` or `not_settled`, `SESSION_UNDER_REVIEW`, a reused key, the limit), writing nothing; every release
   and conversion of a hold writes its `release_reason`; a time zone data change writes one `instants_reresolved` row
   per session moved or kept back, and a refused commit none; `sessions.monitor.get` answers the enrollment's timeline
-  and each session's remedy, a refused booking with its `bookingRetriedUntil`.
+  and each session's remedy, a refused booking with its `bookingRetriedUntil`; a teacher's acceptance of a counter that
+  the database refuses writes one `counter_booking_refused` row and no `counter_withdrawn` (the fourth analysis, A1);
+  `expire-cancellation-requests` racing an acceptance, and a re-resolution racing the evaluation, end with no deadlock
+  (L1).
 - The live channel (research R-324; FR-427 to FR-429): `live.events` refuses an anonymous caller and a restricted
   standing, and an open over `rate_limit_live_channel`; a fourth stream of one account ends the oldest; a chat between
   A and B and a cancellation on their session reach A and B and never C; nothing is sent when the producing

@@ -44,6 +44,8 @@ call in id order (L2).
 | a `student_suspended` case closed: cleared (remedies offered: on recitation a make-up or a refund, on the ijazah track a make-up) or the fault confirmed (the enrollment cancelled, its make-ups still scheduled cancelled, every remedy still owed handed to a new `student_fault_confirmed` case; the second analysis, C1) | cleared: `users` (both), `lockKey('teacher-slots')`, `enrollments`, `sessions`, `session_remedies`, `disputes`; confirmed: `enrollments`, `sessions` (its make-ups still scheduled, one call), `session_remedies`, `disputes` (the case dismissed, the new case opened) | none (the new case and the events reference the enrollment and the sessions only) |
 | an account's end (booking's subscriber), a student's suspension freezing remedies and deletion lapsing them included | (held) the account; `lockKey('teacher-slots')` (a student's end: each of their teachers' keys, ascending teacher id, **(L1)**); `enrollments`; `sessions`; `session_remedies` | none |
 | outage record (the analysis, F4) | `enrollments` (of the overlapped sessions, one call), then `sessions` (the overlapped, one call) | none |
+| `expire-cancellation-requests` (T022; the owner's decision of 2026-11-06 on the fourth analysis, L1) | for each pending request whose session has started: `enrollments` (the session's), `sessions`, then `cancellation_requests` (read again under them: still `pending`), the order «cancellation accepted» takes for the same rows, before `expired` and the `cancellation_expired` row are written | none (`session_events` reference the enrollment, locked first, and the session) |
+| `reresolve-session-instants` (Phase 2's, changed by T014; L1) | in the run's one transaction, once the sessions whose instants differ are found by a read with no lock: `enrollments` (of those sessions, one call, id order), then `sessions` (those sessions, one call, id order), the evaluation's order; each session read again under them before its conditional update and its `instants_reresolved` row | none (`session_events` reference the enrollment, locked first, and the session) |
 
 ## Rate limits (`apps/api/src/platform/guards/rate-limit.guard.ts`, `apps/api/src/surfaces/procedures.ts`)
 
@@ -59,6 +61,13 @@ The owner's decision of 2026-11-05 (spec FR-470, research R-321; T062):
 
 `live.events` (app-surface.md, `live`) declares its own, `rate_limit_live_channel` (10 per 60 s), `subject: 'caller'`,
 through the user kind's existing `rateLimit`, failing closed (the owner's decision of 2026-11-05, research R-324).
+
+The three name searches of this phase, `users.list` (admin-surface.md, `users`), `sessions.monitor.list`
+(admin-surface.md, `sessions`) and `teacher.students.list` (app-surface.md, Phase 2's lists), each declare Phase 1's
+existing `rate_limit_search` (`{ limit: 60, window_seconds: 60 }`, `prisma/seed.ts`; no budget, as `booking.slots` and
+`discovery.*` declare it), `subject: 'caller'`, the administrator or the teacher as subject, failing closed as every
+declared limit does, so no search endpoint is left to the default, which fails open (R-SEC-6; the owner's decision of
+2026-11-06 on the fourth analysis, C2).
 
 ## The live channel (`apps/api/src/platform/live/`; research R-324, the owner's decision of 2026-11-05)
 

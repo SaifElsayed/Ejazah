@@ -29,7 +29,7 @@ field (R-GENDER-2). The adversarial suite covers each procedure in both directio
 | `sessions.remedy.accept` | participant (student) | `{ sessionId }` | `RemedyView` with `makeupSessionId` | Books the proposal (FR-469), from `awaiting_choice`, `proposed` or `counter_proposed`; a pending counter-proposal is withdrawn and its time released (the owner's decision of 2026-11-05); `MAKEUP_REFUSED` when the database refuses it (the remedy stays open) |
 | `sessions.remedy.counterOptions` | participant (student) | `{ sessionId }` | `{ options: [{ slotId, localDate, startTimeLocal, timezone, startsAt }] }` | The teacher's active slots of the session's length, each occurrence free for both parties (sessions, holds, reservations), none starting before max(now + A + L, `choiceClosesAt`), A and L the remedy's fixed answer window and first-session lead (H2 of the owner's decision 9 with the analysis's lead, R-320), up to the end of the choice window plus the weeks `booking.slots` reads; read again after each decline (H4) |
 | `sessions.remedy.counter` | participant (student), idempotent | `{ sessionId, slotId, localDate, idempotencyKey }` | `RemedyView` | Before `choiceClosesAt` (`REMEDY_NOT_OPEN` after), one pending at a time (`COUNTER_PENDING`); must be one of `counterOptions`' answers when written (`SLOT_NOT_OFFERED`); records `counter_proposed_at` = now, its answer window closing at now + A, the remedy's fixed answer window, computed when read (`answerClosesAt`), never stored (D1); the proposal never moves (H1); a `frozen` remedy answers `REMEDY_NOT_OPEN` |
-| `sessions.remedy.answerCounter` | participant (teacher) | `{ sessionId, accept: boolean }` | `RemedyView` | Before `answerClosesAt`, the same computation (`REMEDY_NOT_OPEN` after); accept books the counter, and an acceptance the database refuses answers `MAKEUP_REFUSED` and releases the counter as a decline does (`counter_withdrawn`; the third analysis, A3); decline releases the counter's time and returns the remedy to `proposed` while the choice window is open, the student free to accept or counter-propose again, and books the proposal once it has closed (the owner's decision 9) |
+| `sessions.remedy.answerCounter` | participant (teacher) | `{ sessionId, accept: boolean }` | `RemedyView` | Before `answerClosesAt`, the same computation (`REMEDY_NOT_OPEN` after); accept books the counter, and an acceptance the database refuses answers `MAKEUP_REFUSED` and releases the counter as a decline does, recorded as one `counter_booking_refused` row, never `counter_withdrawn`, so it is not read as the student's acceptance of the proposal (the third analysis, A3; the owner's decision of 2026-11-06 on the fourth analysis, A1); decline releases the counter's time and returns the remedy to `proposed` while the choice window is open, the student free to accept or counter-propose again, and books the proposal once it has closed (the owner's decision 9) |
 
 ## `sessions.dispute` — FR-473, FR-474
 
@@ -84,6 +84,11 @@ which the enum already holds, and, on `enrollments.get`, `complaintOpen: boolean
 reads «شكوتك قيد المراجعة» while their complaint is open (FR-452; booking reads it through moderation's entry). A
 restored enrollment (FR-455) is `confirmed` again and returns to the active tab. The tabs place `completed`, `terminated_no_show` and the new `cancelled` reasons in the
 ended tab.
+
+`teacher.students.list`, the teacher's search of their students by name, declares Phase 1's `rate_limit_search` (60 per
+60 s, no budget, as `booking.slots` does), the teacher as subject, failing closed; over it `RATE_LIMITED`. Phase 2
+declared none, so the default would have counted it and failed open (R-SEC-6; the owner's decision of 2026-11-06 on the
+fourth analysis, C2; kernel.md, "Rate limits").
 
 ## The public configuration
 

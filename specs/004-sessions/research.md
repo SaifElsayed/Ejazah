@@ -423,7 +423,7 @@ nothing owed (one `remedy_lapsed` row each); a remedy already `refund_case` keep
 *History.* `session_remedies` holds the current pending counter-proposal only: the `counter_*` columns are set exactly
 while `status = 'counter_proposed'` and cleared at the decline, the withdrawal or the hand-off to a case. Every
 counter-proposal, with its slot, date, time and zone, is kept on its `session_events` row (`counter_proposed`), and its
-end on another (`counter_accepted`, `counter_declined`, `counter_withdrawn`, `remedy_handed_to_case`) (R-315).
+end on another (`counter_accepted`, `counter_declined`, `counter_withdrawn`, `counter_booking_refused`, `remedy_handed_to_case`) (R-315; `counter_booking_refused` the owner's decision of 2026-11-06 on the fourth analysis, A1).
 
 *Reservation* (FR-466, H3). No row reserves a time: the system's proposal, from the offer until the remedy settles
 (booked, or handed to a case), and a pending counter-proposal, during its answer window, are read as occupied by every
@@ -448,7 +448,8 @@ reports it (**Decided**, the owner, 2026-11-05, on the third analysis, A3, which
 
 - a refused acceptance of the system's proposal by the student leaves the remedy as it was, its windows running;
 - a refused acceptance of a counter-proposal by the teacher releases the counter as a decline does, in a second
-  transaction under the same locks: the `counter_*` columns cleared, one `counter_withdrawn` row, the remedy
+  transaction under the same locks: the `counter_*` columns cleared, one `counter_booking_refused` row (not
+  `counter_withdrawn`, the student's acceptance of the proposal: **Decided**, the owner, 2026-11-06, A1), the remedy
   `proposed` while the choice window is open (the student may accept the proposal or counter-propose again from options
   read again, H4), the proposal booked as below once it has closed; so the sweep never reads it as unanswered;
 - a booking of the system's proposal the rules decided (H5 at `choice_closes_at`, a decline or a refused counter after
@@ -617,7 +618,7 @@ session's instants re-resolved (R-323, GAP-3 and GAP-6); a
 and the outcome before and after, R-308; an `outcome_corrected` row the outcome before and after; an
 `instants_reresolved` row the previous start; a `complaint_raised` or `complaint_decided` row, with no session, the complaint,
 R-322); `enrollment_events` (booking's) gains the kinds
-`completed`, `terminated_no_show` and `restored` (R-322). Phase 4's notifications read both and change nothing here; the names they give these events are SRS FR-NOTIF-1's, amended by the owner on 2026-11-05 with fourteen Phase 3 names (plan.md, «Decisions of 2026-11-05, the administrator's control and the rate limits», item 6); `compensation_case_opened` is read
+`completed`, `terminated_no_show` and `restored` (R-322). Phase 4's notifications read both and change nothing here; the names they give these events are SRS FR-NOTIF-1's, amended by the owner on 2026-11-05 with fourteen Phase 3 names (plan.md, «Decisions of 2026-11-05, the administrator's control and the rate limits», item 6), and on 2026-11-06 with a fifteenth, `session_outcome_corrected`, read from `outcome_corrected` (plan.md, «Decisions on the fourth analysis»); `compensation_case_opened` is read
 from the manual case's `disputes` row and its audit entry `case.opened_manually` (R-326); `absence_complaint_decided`,
 read from the `complaint_decided` row, is told to both parties, the student and the teacher, as SRS FR-NOSHOW-5 says (the
 owner's decision of 2026-11-05: it named the student only). The screens are the
@@ -741,7 +742,10 @@ termination (**Decided**, the owner, 2026-11-05; R-322): a complaint's raising l
 enrollment; its decision to end the enrollment takes a confirmed fault's order (`enrollments`, `sessions`,
 `session_remedies`, `disputes`), to suspend the teacher a `party_suspended` resolution's, to close it `enrollments`
 then `disputes`; a restore takes `sessions.cancel`'s order widened by both accounts, the teacher's slots' key and the
-slot before it and `session_remedies` within it. Every procedure declares
+slot before it and `session_remedies` within it. On the fourth analysis (**Decided**, the owner, 2026-11-06, L1): the
+two sweeps that insert a `session_events` row, whose foreign key takes a key-share lock on the enrollment, lock the
+enrollment first: `expire-cancellation-requests` `enrollments`, `sessions`, `cancellation_requests`, and
+`reresolve-session-instants` `enrollments`, `sessions` (contracts/kernel.md; T022, T014, each with a probe). Every procedure declares
 `.output(schema)`; the contract snapshot is additive and passes `pnpm contract:snapshot --check --base origin/develop`
 (R-API-9). The boundary rule `boundaries/no-money-vocabulary` already covers `modules/sessions` and is extended to
 `modules/chat`; a CI test proves no `_piasters`, price or payment reference in either (FR-497, SC-409). R-SESS-2, R-SESS-4
@@ -1030,6 +1034,7 @@ control inventory answered»): each answer is under the table, and the table's c
 | P3-26 | `purge-chat` (daily): an ended enrollment's messages after the last session's end + `dispute_window_hours` + `chat_retention_days`, nothing open | `chat_messages.purged_at` on each row kept; panel: none needed (the chat is read only while a dispute is open) | None: the rule waits for every open dispute and case (FR-492) | Nothing is owed | The message bodies, the attachment fields and the stored files (FR-492, ERD §15 rule 8) |
 | P3-27 | A video webhook refused (no or wrong signature, 401) or unattributable (no such session, not a participant: 200, written nowhere) | **GAP-10**: no row; a refusal logged at warn with its code, an unattributable event reported to error tracking; panel: none | None needed | Nothing is owed | The body and the header are never stored or logged |
 | P3-28 | A call refused by a rate limit (`RATE_LIMITED`), and the default limit's breaker opening (R-321) | **GAP-9**: no durable record; the first refusal of a subject in a window logged (R-321, item 6: a user or administrator by id and the procedure, any other subject by the procedure and its keyed digest, a budget by the procedure and its key); the Redis counter expires with its window; the breaker's one warning per period in the logs; panel: none | The caller's next window | Nothing is owed | The counters, by each limit's `window_seconds`; the breaker's state in process memory after 10 s |
+| P3-29 | A teacher's acceptance of a counter-proposal that the database refuses (`sessions.remedy.answerCounter`, FR-468, A3): `MAKEUP_REFUSED`, then the counter released as at a decline in a second transaction (added on the fourth analysis, the owner's decision of 2026-11-06) | The `counter_*` columns cleared, the remedy `proposed` (or the proposal booked once the choice window has closed, P3-5); one `session_events` row `counter_booking_refused`, its kind the reason (the owner's decision of 2026-11-06, A1: was `counter_withdrawn`, the row a student's acceptance of the proposal writes, so the two were indistinguishable); panel: the timeline and the remedy on `sessions.monitor.get` (GAP-1, GAP-4) | The student's own paths again while the choice window is open (accept, counter-propose from options read again, H4); `cases.openManual` with `remedyId` (GAP-5) | The make-up booked later, or the case | Nothing |
 
 **The gaps and their answers** (**Decided**, the owner, 2026-11-05: plan.md, «Decisions of 2026-11-05, the
 administrator's control inventory answered»). The table keeps each gap's number where it was found; the answer below
@@ -1261,7 +1266,10 @@ and no number at all when that product is above 200 (the screen that calls too o
 **Method.** Only the calls the default counts (FR-470: a procedure with its own key is counted by that key only). Not
 counted: `discovery.browse/filters/teacher` and `booking.slots` (`rate_limit_search`), `checkout.hold/pay/retry`
 (`rate_limit_payment_initiation`), `chat.send` (`rate_limit_chat_message`), `sessions.complaint.raise`
-(`rate_limit_absence_complaint`), the uploads (`rate_limit_upload`) and the public kinds. Counted, for example:
+(`rate_limit_absence_complaint`), the uploads (`rate_limit_upload`) and the public kinds; since the owner's decision of
+2026-11-06 on the fourth analysis (C2), also `teacher.students.list`, `sessions.monitor.list` and `users.list`
+(`rate_limit_search`): the tables below were computed before that decision and are left as written, and the value stays
+the owner's 160 per 60 s. Counted, for example:
 `account.me`, `enrollments.list/get`, `checkout.status/current/continue`, `teacher.today`, `teacher.students.list/get`,
 `teacher.slots.*`, `teacher.packages.*`, Phase 3's `sessions.*` but the complaint, `chat.list`, `chat.attachmentLink`,
 and every administrator procedure but those with their own keys (subject `admin:<id>`, apart from the users'). The

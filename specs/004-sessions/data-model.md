@@ -114,7 +114,7 @@ Append-only record of each event a later notification needs (FR-495).
 | `id` | uuid | PK |
 | `enrollment_id` | FK → enrollments | Plain index (FR-035 of Phase 0) |
 | `session_id` | FK → sessions, nullable | NULL exactly on the two complaint kinds, enrollment-wide (rule 43); plain index |
-| `kind` | enum `session_event_kind` | `settled` · `cancellation_requested` · `cancellation_accepted` · `cancellation_declined` · `cancellation_expired` · `cancelled_by_admin` · `remedy_offered` · `counter_proposed` · `counter_accepted` · `counter_declined` · `counter_withdrawn` · `remedy_frozen` · `makeup_booked` · `remedy_handed_to_case` · `remedy_lapsed` · `dispute_raised` · `dispute_resolved` · `dispute_revised` · `review_resolved` · `outage_reclassified` · `complaint_raised` · `complaint_decided` · `outcome_corrected` · `instants_reresolved` (twenty-four; `dispute_revised` the owner's decision of 2026-11-05 on the third analysis; the two complaint kinds, rows with no session, the decision of no automatic termination, R-322; `outcome_corrected`, an administrator's correction of an outcome nobody disputed, and `instants_reresolved`, a session's instants recomputed or kept back by `reresolve-session-instants`, the decisions answering the administrator's control inventory, R-323 GAP-3 and GAP-6) |
+| `kind` | enum `session_event_kind` | `settled` · `cancellation_requested` · `cancellation_accepted` · `cancellation_declined` · `cancellation_expired` · `cancelled_by_admin` · `remedy_offered` · `counter_proposed` · `counter_accepted` · `counter_declined` · `counter_withdrawn` · `remedy_frozen` · `makeup_booked` · `remedy_handed_to_case` · `remedy_lapsed` · `dispute_raised` · `dispute_resolved` · `dispute_revised` · `review_resolved` · `outage_reclassified` · `complaint_raised` · `complaint_decided` · `outcome_corrected` · `instants_reresolved` · `counter_booking_refused` (twenty-five; `counter_booking_refused`, a teacher's acceptance of a counter-proposal that the database refused, the counter released, the owner's decision of 2026-11-06 on the fourth analysis, A1; `dispute_revised` the owner's decision of 2026-11-05 on the third analysis; the two complaint kinds, rows with no session, the decision of no automatic termination, R-322; `outcome_corrected`, an administrator's correction of an outcome nobody disputed, and `instants_reresolved`, a session's instants recomputed or kept back by `reresolve-session-instants`, the decisions answering the administrator's control inventory, R-323 GAP-3 and GAP-6) |
 | `case_id` | FK → disputes, nullable | On a `cancelled_by_admin` row only: the compensation case the cancelling action opened or joined (an administrator's cancellation, an administrator's termination on a complaint, a teacher's end, a student's suspension or ban; a suspended student's fault confirmed, whose make-ups name the new
 `student_fault_confirmed` case, the second analysis's C1); NULL for a student's deletion, which opens none. `cases.get`'s `covers` and a cleared suspension read it (the owner's decision of 2026-11-05 on the analysis, C4). On a `dispute_revised` row: the session dispute whose ruling it revises, always set (the third analysis). On a `complaint_raised` or `complaint_decided` row: the complaint, always set (R-322); plain index |
 | `counter_slot_id` | FK → `availability_slots`, nullable | The counter-proposal's slot, on a `counter_proposed` row only; plain index |
@@ -126,8 +126,12 @@ Append-only record of each event a later notification needs (FR-495).
 
 **The history of counter-proposals lives here** (the owner's decision 9 of 2026-11-05): `session_remedies` keeps only
 the pending counter-proposal (§2.3), so each `counter_proposed` row copies the counter-proposal's slot, date, start and
-zone, and its end is the next `counter_accepted`, `counter_declined`, `counter_withdrawn` or `remedy_handed_to_case` row
-of the same session. Rule 43 adds the check that the four `counter_*` columns are all set exactly when
+zone, and its end is the next `counter_accepted`, `counter_declined`, `counter_withdrawn`, `counter_booking_refused` or
+`remedy_handed_to_case` row of the same session. `counter_withdrawn` is the student's acceptance of the system's
+proposal while the counter was pending (or a suspension's freeze); `counter_booking_refused` is the teacher's acceptance
+that the database refused (an overlap, FR-468), the counter released as at a decline, so the two are never read as one
+another (the owner's decision of 2026-11-06 on the fourth analysis, A1). The kind is the refusal's record: the
+database's refusal is the only reason that path has, and the row, like every row here, holds no personal field. Rule 43 adds the check that the four `counter_*` columns are all set exactly when
 `kind = 'counter_proposed'`; `case_id IS NULL OR kind IN ('cancelled_by_admin', 'dispute_revised', 'complaint_raised', 'complaint_decided')`,
 `case_id` set on every `dispute_revised`, `complaint_raised` and `complaint_decided` row; `session_id` NULL exactly on
 the two complaint kinds; `outcome_before` and `outcome_after` both set exactly when `kind IN ('dispute_revised',
@@ -267,7 +271,7 @@ yet frozen (the owner's decision of 2026-11-05 on the third analysis, F1).
 | `counter_proposed` | `proposed` | the teacher's decline while the choice window is open: the counter's time released; the student may accept or counter-propose again (H4) |
 | `counter_proposed` | `booked` (the proposal) | the teacher's decline once the choice window has closed; or the student's acceptance of the proposal, which withdraws the pending counter-proposal and releases its time (the owner's approval of 2026-11-05) |
 | `counter_proposed` | `refund_case` (kind `refund`) | the answer window's close (the same computation) passing with no answer, on either track (FR-465) |
-| `counter_proposed` | `proposed` · `booked` (the proposal) | the teacher's acceptance refused by the database: the counter released as at a decline, one `counter_withdrawn` row (FR-468; the third analysis, A3) |
+| `counter_proposed` | `proposed` · `booked` (the proposal) | the teacher's acceptance refused by the database: the counter released as at a decline, one `counter_booking_refused` row (FR-468; the third analysis, A3; the kind, not `counter_withdrawn`, by the owner's decision of 2026-11-06 on the fourth analysis, A1) |
 | `proposed` · `awaiting_choice` (past `choice_closes_at`) | `refund_case` (reason `makeup_refused`) | the proposal's booking refused on every attempt until its occurrence would start within L of an attempt (FR-468, A3) |
 | `awaiting_choice` · `proposed` · `counter_proposed` | `frozen` | the student's suspension: a pending counter-proposal withdrawn and its time released, the proposal's time released (the owner's decision of 2026-11-05 on the analysis, C3) |
 | `frozen` | `awaiting_choice` · `proposed` | `advance-remedies`' first run after the student's reinstatement: a new offer, `offered_at`, a full `choice_closes_at`, the two snapshots read again, a new proposal under H1 |
@@ -363,7 +367,11 @@ enrollment's `availability_slots` row, `enrollments`, `sessions`, `session_remed
 answering the administrator's control inventory (R-323, R-326): an administrator's correction of an outcome nobody
 disputed takes `enrollments`, `sessions`, reading the session's disputes and remedy under them; a manual case takes
 `enrollments` then `disputes`; with a remedy handed to it, the refund hand-off's order, `users` (both), `lockKey('teacher-slots', …)`,
-`enrollments`, `sessions`, `session_remedies`, `disputes`.
+`enrollments`, `sessions`, `session_remedies`, `disputes`. On the fourth analysis (the owner's decision of 2026-11-06,
+L1): the two sweeps that insert a `session_events` row beside another write lock the enrollment first, since the
+insert's foreign key takes a key-share lock on it: `expire-cancellation-requests` takes `enrollments`, `sessions`, then
+`cancellation_requests`, as an accepted request does, and `reresolve-session-instants` `enrollments` then `sessions`, as
+the evaluation does, each with a probe in `tests/db-integrity/` against that path.
 
 ## 6. The migration
 
@@ -423,3 +431,7 @@ batch's migration, which builds them.
 16. On the decision of the live channel (the owner's decision of 2026-11-05, research R-324; the ERD's changelog row
     28): `rate_limit_live_channel` (10 per 60 s, per user) and `live_channel_max_connections_per_user` (3) (§4). No
     table: the live channel keeps nothing in the database.
+17. On the fourth analysis (the owner's decisions of 2026-11-06; the ERD's changelog rows 29 and 30):
+    `session_events`' kind `counter_booking_refused`, twenty-five kinds (§2.4, §3); §11's `notifications.type` name
+    `session_outcome_corrected`, read from the `outcome_corrected` row (SRS FR-NOTIF-1 as amended). No column and no
+    rule.

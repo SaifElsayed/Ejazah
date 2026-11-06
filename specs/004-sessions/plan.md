@@ -92,7 +92,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 | R-MOBILE | Every screen from its board as decided; strings from the catalogue with T123's marks; later phases' controls absent (no review, no report); the components render what the server decided (R-320's windows are the server's) | None new | **PASS** |
 | R-API | Thin routers; services decide; one inverted port (R-301); every procedure with both schemas; additive snapshot; the port speaks the domain (`createSessionToken`, `endRoom`) | The widened lock union and refusal names (contracts/kernel.md) | **PASS** |
 | R-DB | One forward migration; two append-only tables with their revokes; checks for every cross-field rule (rules 40 to 47); no stored count and no stored derived instant (a counter-proposal's answer deadline is computed when read, `counter_proposed_at` + the remedy's snapshot; `choice_closes_at` is the fact that fixes the choice window, not a derived value); no speculative index | Rules 40 to 47 | **PASS**, with decision 3 (`simultaneous_connected_seconds` and R-DB-4, recorded by ADR 0022, constitution 2.5.1) and the second analysis's D1 (no `counter_answer_closes_at`) |
-| R-SEC | The webhook verifies before any handler; chat documents by content, images refused by content and extension; signed expiring links; chat under a rate limit; no token, secret or body logged | The `chat` upload kind; the image corpus test (R-SEC-5) | **PASS** |
+| R-SEC | The webhook verifies before any handler; chat documents by content, images refused by content and extension; signed expiring links; chat under a rate limit; the three name searches (`users.list`, `sessions.monitor.list`, `teacher.students.list`) under `rate_limit_search`, which fails closed, never the default alone (R-SEC-6; the fourth analysis, C2); no token, secret or body logged | The `chat` upload kind; the image corpus test (R-SEC-5) | **PASS** |
 | R-SESS | Attendance from webhooks only (1); evaluation by a sweep after end + delay (2, 3); reconnection sums (4); restricted teacher refused (5); no automatic exit from review (6); the video webhook's signature on the raw body (7, T107) | The enforcement map's Phase 3 CI tests for R-SESS-2, 4, 5 and 7 | **PASS**; R-SESS-2's "+ 2m" became a setting of default 2 (P2, constitution 2.5.0) |
 | R-HONEST | No session shown done unless the job or an administrator settled it; the teacher sees none of the student's private fields; nothing implies the platform refunds (the case is Platform Administration's) | None new | **PASS** |
 | R-PROC | Spec, clarification and plan precede code; every rule the spec left open was put to the owner and answered on 2026-11-05 ("Decisions recorded"), not a keyboard rule (R-PROC-3) | The coverage floor widened to `modules/chat` | **PASS** |
@@ -656,6 +656,30 @@ The owner approved research R-324 the same day. Where it touches a decision abov
 The tasks: T063 (the server side, B36), T065 (the phone and the presence) and T066 (the remaining producers), both in a
 new batch B40a on D20, and one clause in T045 (`tasks.md`). The window rule (R-320): nothing here offers a time.
 
+## Decisions on the fourth analysis (the owner's answers of 2026-11-06)
+
+The fourth `/speckit-analyze` found no critical issue; the owner answered its findings on 2026-11-06. Where an answer
+changes a decision above, the answer governs. No task is added and no task moves between batches.
+
+1. **L1, two sweeps' locks.** `expire-cancellation-requests` (T022) locks `enrollments`, `sessions`, then
+   `cancellation_requests`, as an accepted request does; `reresolve-session-instants` (T014) locks `enrollments`, then
+   `sessions`, as the evaluation does, since each inserts a `session_events` row whose foreign key takes a key-share
+   lock on the enrollment. Two new rows in contracts/kernel.md, a probe each in `tests/db-integrity/` against that path
+   (data-model §5, research R-321).
+2. **C2, the name searches.** `users.list` (T058), `sessions.monitor.list` (T024) and `teacher.students.list` (T007)
+   declare Phase 1's `rate_limit_search` (60 per 60 s, no budget), failing closed, each with a test that a call over it
+   is refused; T062 moves `teacher.students.list`'s declaration to `subject: 'caller'` with the others (spec FR-470,
+   the contracts; R-SEC-6).
+3. **A1, a refused counter's record.** A teacher's acceptance of a counter-proposal that the database refuses writes one
+   `session_events` row of a new kind, `counter_booking_refused`, instead of `counter_withdrawn`, so it is not read as
+   the student's acceptance of the proposal (spec FR-468; data-model §2.4, twenty-five kinds; ERD changelog row 29;
+   research R-323 P3-29; T001, T032).
+4. **An outcome's correction told.** SRS FR-NOTIF-1 and ERD §11 name a fifteenth Phase 3 event,
+   `session_outcome_corrected`, to both parties, read from `outcome_corrected` (spec FR-439; ERD changelog row 30;
+   T059). Its migration stays in Phase 4's notifications pass.
+
+The window rule (R-320): nothing here offers a time.
+
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
 The owner approved every row below on 2026-11-05, with the three conflicts the spec found (T107's reference, R-SESS-2's
@@ -711,6 +735,8 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/ARCHITECTURE.md` | §3.2's chat row: Server-Sent Events through tRPC subscriptions; §4: the live channel in the kernel, no module edge | 1, 2 |
 | `docs/RUNBOOK.md` | «Reverse proxy and the live channel» | 4, 5 |
 | `PLAN.md` | Phase 3: the live channel; Phase 6: the proxy, Docker and RAM notes | 1, 5 |
+| `docs/SRS.md` | On the fourth analysis: FR-NOTIF-1's `session_outcome_corrected`, an amendment line | Decisions on the fourth analysis, 4 |
+| `docs/ERD.md` | v1.15 amended in place again: changelog rows 29 (`counter_booking_refused`) and 30 (§11's `session_outcome_corrected`) | 3, 4 |
 
 ## Phase Outputs
 
