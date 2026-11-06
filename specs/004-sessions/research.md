@@ -1272,7 +1272,12 @@ amended). Read against this branch at `9159cec`; the versions in the repository:
    because it is tied to the ping and tRPC refuses a ping above it; the per-stream queue bound, because it protects the
    API's memory; the phone's coalescing (one re-read per query key per second), because it protects the signed-in
    default limit; and the phone's 60 s after `RATE_LIMITED`, because it is part of the phone's backoff, the phone
-   cannot read settings, and an earlier retry is refused again. The ping and the restart are named in
+   cannot read settings, and an earlier retry is refused again. On the sixth analysis (**Decided**, the owner,
+   2026-11-06, item 6), the server sends the time left: a refused opening, as every refusal a rate limit's counter
+   makes, carries `retryAfterSeconds` (the counter key's remaining time to live, one `PTTL` on the refused path only;
+   T062, contracts/kernel.md "Rate limits"), and the phone waits that long before it opens the stream again; the 60 s
+   stays only as the fallback when the refusal gives no time, and is still a named constant for the same reasons
+   (without a time, the phone cannot know the window's end, and an earlier retry may be refused again; T065). The ping and the restart are named in
    `apps/api/src/platform/live/live-constants.ts`, which `apps/api/src/surfaces/procedures.ts` imports, so both sit in
    the kernel the exception names. The channel's own limits, `rate_limit_live_channel` and
    `live_channel_max_connections_per_user`, stay settings. The stream closes when the app leaves the foreground and reopens when it

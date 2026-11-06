@@ -86,7 +86,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 
 | Rule family | This phase's own compliance | Mechanism delivered here | Gate |
 |---|---|---|---|
-| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number of the work a setting, seventeen new rows; the transport and protection numbers in the kernel (`apps/api/src/platform/**`) and on the phone named constants under R-MONEY-12 (as amended, constitution 2.6.1), each with its reason beside it: the limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker (an administrator changing one from the panel could break every signed-in call), the live channel's 25 s ping (a change could break every stream) and 60 s inactivity restart (tied to the ping; tRPC refuses a ping above it), both in `apps/api/src/platform/live/live-constants.ts`, the per-stream queue bound (it protects the API's memory), the phone's reconnect backoff (the phone cannot read settings before it connects), its 60 s after `RATE_LIMITED` (part of that backoff; an earlier retry is refused again) and its coalescing of re-reads to one per query key per second (it protects the default limit); the queue's fixed retry numbers the precedent (`apps/api/src/jobs/README.md`), the magic-number gate covering `apps/api/src/modules/` only (spec FR-498; the fourth analysis, C1; the fifth analysis, C3 and C4) | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
+| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number of the work a setting, seventeen new rows; the transport and protection numbers in the kernel (`apps/api/src/platform/**`) and on the phone named constants under R-MONEY-12 (as amended, constitution 2.6.1), each with its reason beside it: the limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker (an administrator changing one from the panel could break every signed-in call), the live channel's 25 s ping (a change could break every stream) and 60 s inactivity restart (tied to the ping; tRPC refuses a ping above it), both in `apps/api/src/platform/live/live-constants.ts`, the per-stream queue bound (it protects the API's memory), the phone's reconnect backoff (the phone cannot read settings before it connects), its 60 s after a `RATE_LIMITED` that gives no time (part of that backoff; without a time an earlier retry may be refused again; a refusal's `retryAfterSeconds` is waited out instead when given, the sixth analysis, item 6) and its coalescing of re-reads to one per query key per second (it protects the default limit); the queue's fixed retry numbers the precedent (`apps/api/src/jobs/README.md`), the magic-number gate covering `apps/api/src/modules/` only (spec FR-498; the fourth analysis, C1; the fifth analysis, C3 and C4) | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
 | R-TIME | Make-ups store local date, start and zone and derive instants (FR-469); interval arithmetic in `packages/time` (R-305); attendance instants are the provider's; the outage window entered as local fields (R-307); every time shown twice (FR-494) | Interval operations with properties | **PASS** |
 | R-GENDER | The join checks gender from the server's records under the accounts' locks; a token bound to one session and one participant (`bindJoinToken`); every refusal to a non-participant is `NOT_FOUND` | R-GENDER-7's CI gate: token replay and cross-gender cases (FR-496, SC-407) | **PASS** |
 | R-MOBILE | Every screen from its board as decided; strings from the catalogue with T123's marks; later phases' controls absent (no review, no report); the components render what the server decided (R-320's windows are the server's) | None new | **PASS** |
@@ -743,12 +743,15 @@ Where an answer changes a decision above, the answer governs. No task is added a
 6. **The `RATE_LIMITED` message on the phone** (the owner's addition). No screen maps the code today; T065 (B40a)
    adds `common.state.rateLimited` in both catalogues and `genericErrorKey` in `apps/mobile/src/lib/error-message.ts`,
    which every generic-error path uses, the screens that exist before B40a listed by file in T065, and B41's six
-   tasks (T041 to T046) noting that theirs use it.
+   tasks (T041 to T046) noting that theirs use it. (*Its text replaced* on the sixth analysis, item 6: a time when the
+   server gives one, `common.state.rateLimitedIn`, and «wait a little» otherwise.)
 7. **The `RATE_LIMITED` message in the panel** (the owner's addition). No page maps the code today; T058 (B42) adds
    `admin.common.rateLimited` in both catalogues and `errorMessageKey` in `apps/admin/src/lib/error-message.ts` over
    `errorCodeOf`, applied by name to every page with a rate-limited button or search, Phase 3's and the older pages
    (the sign-in, the password and the second factor under `rate_limit_admin_authentication`, the rest under T062's
    default). T058 now runs last in B42, after the five lanes T047 to T051, each of which notes it; B42 stays at six.
+   (*Its text replaced* on the sixth analysis, item 6: `admin.common.rateLimitedIn` with the time when the server
+   gives one, «wait a little» otherwise.)
 8. **The text fixes.** D1: ARCHITECTURE §4 and an amendment line name `DisputeHeldFiles` and identity's `FileHold`,
    and the Structure Decision and Complexity Tracking count them as the sixth and seventh inverted dependencies. S9:
    SRS's 2026-11-05 «unreadable as before» marked superseded. U3: T040 names `dispute.held_files_listed` and specifies
@@ -794,6 +797,20 @@ batches; B33 stays at six.
    `details.cause` `time_taken` (T061). T002 (B33, still six tasks) adds `isDeadlock` to `db-errors.ts` and
    `runRetryingDeadlockOnce` to `transaction.repository.ts`, run as that file runs every transaction; T029 and T061
    use it, each with a spec forcing the deadlock (research R-321, contracts/kernel.md and README).
+6. **The `RATE_LIMITED` message says when to try again** (the owner's addition). The server sends the time left: T062
+   adds `retryAfterSeconds` to a counted refusal's details, `[{ path: 'retryAfterSeconds', code: '<n>' }]` in the one
+   error shape (every detail's `code` is text), the counter key's remaining time to live read by one `PTTL` on the
+   refused path only, with a spec; a refusal whose `PTTL` fails or that no counter made carries none (contracts/kernel.md
+   "Rate limits", README "Errors"). The phone's helper (T065) and the panel's (T058) read it through the existing
+   `errorDetailsOf` of each client: with a time, «طلبات كثيرة. حاول مرة أخرى بعد {n} دقيقة.» and "Too many requests.
+   Try again in {n} minutes.", n = ceil(seconds / 60), at least 1, in ICU plural forms; without one, «طلبات كثيرة.
+   انتظر قليلًا ثم حاول مرة أخرى.» and "Too many requests. Wait a little and try again."; the panel keeps its
+   «لم يتغيّر شيء» clause; the fifth analysis's «wait a minute» keys are replaced, with specs of both branches. The
+   phone's live channel waits `retryAfterSeconds` after `RATE_LIMITED`, the fixed 60 s only the fallback when no time
+   is given (T065, research R-324 item 8, spec FR-498, the R-MONEY row above). The constitution's R-MONEY-12 names
+   «the phone's wait after `RATE_LIMITED` (60 s …)» as a named constant; it still reads true of the 60 s as the
+   fallback when the server gives no time, so the constitution is unchanged and stays 2.6.1. T051 and the older panel
+   pages keep the helper (T058).
 
 The window rule (R-320): nothing here offers a time.
 

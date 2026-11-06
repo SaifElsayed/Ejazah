@@ -106,7 +106,8 @@ Expected:
   decline during the early-join lead, ends with no deadlock, the participant's account key-shared before the insert
   (the sixth analysis, H1).
 - The live channel (research R-324; FR-427 to FR-429): `live.events` refuses an anonymous caller and a restricted
-  standing, and an open over `rate_limit_live_channel`; a fourth stream of one account ends the oldest; a chat between
+  standing, and an open over `rate_limit_live_channel`, the refusal carrying `retryAfterSeconds` and the phone waiting
+  that long before it opens again (the sixth analysis, item 6); a fourth stream of one account ends the oldest; a chat between
   A and B and a cancellation on their session reach A and B and never C; nothing is sent when the producing
   transaction rolls back; a suspension ends the person's streams after its `account` event; a stream ends at its access
   token's expiry; **shutdown with streams open completes and never waits on one** (the owner's hard condition); the

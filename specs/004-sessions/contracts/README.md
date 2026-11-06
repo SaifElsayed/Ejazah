@@ -50,7 +50,12 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken` (an overlap, or a deadlock on the retry too: the sixth analysis, L5)); on the decisions answering the administrator's control inventory (2026-11-05),
   `REMEDY_NOT_OPEN` also on the administrator surface (`cases.openManual` naming a remedy no longer open), and
   `CONFLICT` with `details.cause` `ruled` or `not_settled` (`sessions.review.revise`, `sessions.review.get`). Every
-  refusal writes nothing.
+  refusal writes nothing. Changed, additively (the owner's decision of 2026-11-06 on the sixth analysis, item 6; T062):
+  Phase 1's `RATE_LIMITED` refusal from a rate limit's counter carries the time until its window ends,
+  `details: [{ path: 'retryAfterSeconds', code: '<n>' }]`, a positive whole number of seconds as text, read from the
+  counter key's remaining time to live on the refused path only; a refusal whose time cannot be read, or that no
+  counter made, has no details (kernel.md, "Rate limits"). The phone and the panel read it through their existing
+  `errorDetailsOf` (`apps/mobile/src/lib/client.ts`, `apps/admin/src/lib/client.ts`).
 - **Time.** Instants as ISO-8601 UTC strings; a session as its local date, local start and zone plus its instants,
   shown twice by the client (ADR 0009 D5, FR-494); nothing client-supplied is an instant (R-TIME-6): the outage window
   is local date, time and zone.
