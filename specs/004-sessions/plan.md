@@ -69,7 +69,7 @@ widens `moderation`, `booking` (the port and the subscriber), `identity` (a stud
 **Performance Goals**: A participant pressing join is in the room within ten seconds in at least nine of ten attempts
 on 4G (SC-414); a session with no final event settles within the evaluation delay plus one minute (SC-403).
 
-**Constraints**: No amount anywhere in this phase (FR-497, T104, T105); every number a setting (R-MONEY-12); no date
+**Constraints**: No amount anywhere in this phase (FR-497, T104, T105); every number of the work a setting, the kernel's and the phone's transport and protection numbers named constants (R-MONEY-12 (as amended, constitution <VERSION>); spec FR-498); no date
 arithmetic outside `packages/time` (R-TIME-1); attendance only from signed provider webhooks (R-SESS-1); every
 suspension and ban through `StandingService` (FR-421); T005's lock rules for every lock and FK-insert path; the owner's
 window rule of 2026-11-05 (R-320); requirements from the SRS, not the boards; seven working days for one person,
@@ -86,7 +86,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 
 | Rule family | This phase's own compliance | Mechanism delivered here | Gate |
 |---|---|---|---|
-| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number a setting, seventeen new rows | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
+| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number of the work a setting, seventeen new rows; the transport and protection numbers in the kernel (`apps/api/src/platform/**`) and on the phone named constants under R-MONEY-12 (as amended, constitution <VERSION>), each with its reason beside it: the limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker (an administrator changing one from the panel could break every signed-in call), the live channel's 25 s ping (a change could break every stream), the phone's reconnect backoff (the phone cannot read settings before it connects); the queue's fixed retry numbers the precedent (`apps/api/src/jobs/README.md`), the magic-number gate covering `apps/api/src/modules/` only (spec FR-498; the fourth analysis, C1) | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
 | R-TIME | Make-ups store local date, start and zone and derive instants (FR-469); interval arithmetic in `packages/time` (R-305); attendance instants are the provider's; the outage window entered as local fields (R-307); every time shown twice (FR-494) | Interval operations with properties | **PASS** |
 | R-GENDER | The join checks gender from the server's records under the accounts' locks; a token bound to one session and one participant (`bindJoinToken`); every refusal to a non-participant is `NOT_FOUND` | R-GENDER-7's CI gate: token replay and cross-gender cases (FR-496, SC-407) | **PASS** |
 | R-MOBILE | Every screen from its board as decided; strings from the catalogue with T123's marks; later phases' controls absent (no review, no report); the components render what the server decided (R-320's windows are the server's) | None new | **PASS** |
@@ -693,6 +693,16 @@ changes a decision above, the answer governs. No task is added and no task moves
    of their own held file; sessions' `DisputeHeldFiles` port bound in `main.ts` to verification, so no cycle forms.
    The API in T040 (B40 stays at six), the panel's «held files» section in T049 and T050 (research R-327, «The
    administrator's read»; spec FR-487; SRS FR-AUTH-14; ADR 0015's amendment).
+6. **C1, R-MONEY-12's exception** (constitution <VERSION>). The transport and protection operating numbers in the
+   kernel (`apps/api/src/platform/**`) and on the phone are named constants: the settings cache's 60 s, the counter's
+   100 ms timeout and the 10 s breaker (T062, R-321 item 5), the live channel's 25 s ping (T063, R-324 item 8) and the
+   phone's reconnect backoff (T065, R-324 items 8 and 9). The work's own windows and limits stay settings. Why each is
+   not a setting: an administrator changing a ping or a timeout from the panel could break the connection; the phone
+   cannot read settings before it connects; the queue's fixed retry numbers are the precedent
+   (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency"); the magic-number gate covers
+   `apps/api/src/modules/` only. Spec FR-498, the Constitution Check's R-MONEY row and the Constraints cite it.
+7. **The text fixes** (S1 to S8, G1, G2, U1, U2, I1 to I4, O1, A2 to A5), as the analysis recommended; A2's
+   `makeup_offered_again` stays a session's second `remedy_offered`, settled in Phase 4's cycle (T057).
 
 The window rule (R-320): nothing here offers a time.
 
@@ -755,6 +765,9 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 29 (`counter_booking_refused`) and 30 (§11's `session_outcome_corrected`) | 3, 4 |
 | `docs/SRS.md` | FR-AUTH-14: a held file read by an administrator inside an open matter only; an amendment line | 5 |
 | ADR 0015 | Its amendment paragraph: the administrator's read of a held file | 5 |
+| Constitution | R-MONEY-12's exception for the kernel's and the phone's transport and protection numbers; version 2.5.1 → <VERSION> | 6 |
+| ADR 0023 | An amendment paragraph: `slot_inactive`, `slot_changed` and the restore's own rate limit in D4 | 7 (S3) |
+| `docs/SRS.md`, `docs/ERD.md` | S5's superseded lines marked (the «120 seeded until T062» line; the ERD header's counts) | 7 (S5) |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 31, the notes on `users.photo_key` and `verification_documents.erased_at` | 5 |
 
 ## Phase Outputs

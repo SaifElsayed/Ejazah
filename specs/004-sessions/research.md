@@ -802,7 +802,12 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    seed plants 160 per 60 s and SRS §3.14 says so. 60 s (the cache), 100 ms (the timeout) and 10 s (the breaker) are the
    owner's figures for the limiter's own operation and are kept in the kernel's guard as named constants, as the queue's
    retry and backoff numbers are (`apps/api/src/jobs/README.md`, "Retry, bounded failure and concurrency": the
-   magic-number gate governs `modules/`, where every operational number is a setting).
+   magic-number gate governs `modules/`, where every operational number is a setting). **Why none is a setting**
+   (**Decided**, the owner, 2026-11-06, the fourth analysis's C1; R-MONEY-12 (as amended, constitution <VERSION>)):
+   an administrator changing one from the panel could break every signed-in call (a long timeout holds each call on a
+   failing counter, a short breaker hammers it, a long cache keeps a changed limit unseen); the queue's fixed retry
+   numbers are the precedent; and the magic-number gate covers `apps/api/src/modules/` only. The limits themselves stay
+   settings.
 6. **The first refusal logged** (**Decided**, the owner, 2026-11-05, for every limit: sign-in, the one-time code, search,
    payment initiation, chat, uploads, the complaint, the administrator's actions and the default; SRS NFR-SEC-12; it
    replaces R-323's GAP-9 proposal of a line per refusal). `RateLimiter.check` already has the count (`hit` answers how
@@ -1217,7 +1222,14 @@ amended). Read against this branch at `9159cec`; the versions in the repository:
 8. **Resilience.** The server pings every 25 s (`sse.ping`), under nginx's 60 s default read timeout and Cloudflare's
    100 s; the client restarts a stream silent for 60 s (`sse.client.reconnectAfterInactivityMs`; tRPC refuses a ping
    above it), which catches a half-open connection after a network switch. A reopening backs off from 1 s, doubling to
-   a 30 s cap, each delay × a random 0.5–1.5. The stream closes when the app leaves the foreground and reopens when it
+   a 30 s cap, each delay × a random 0.5–1.5. **Why the ping and the backoff are not settings** (**Decided**, the
+   owner, 2026-11-06, the fourth analysis's C1; R-MONEY-12 (as amended, constitution <VERSION>)): the 25 s ping is a
+   kernel constant because an administrator changing it from the panel could break every stream (past the proxy's
+   60 s read timeout or tRPC's 60 s inactivity restart, the streams drop); the phone's reconnect backoff (this item's
+   delays, and item 9's 1 to 15 s) is a constant on the phone because the phone cannot read settings before it
+   connects; the queue's fixed retry numbers are the precedent (`apps/api/src/jobs/README.md`), and the magic-number
+   gate covers `apps/api/src/modules/` only. The channel's own limits, `rate_limit_live_channel` and
+   `live_channel_max_connections_per_user`, stay settings. The stream closes when the app leaves the foreground and reopens when it
    returns, with one re-read of the open screens and of the chat's first page; re-reads are coalesced to at most one
    per screen per second (LiveKit can report joined, left, joined within a second). No `tracked()` replay: there is no
    per-user ordered log to replay from, and every signal means «read again». Each stream has a bounded queue, and a
