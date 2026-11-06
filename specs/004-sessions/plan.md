@@ -69,7 +69,7 @@ widens `moderation`, `booking` (the port and the subscriber), `identity` (a stud
 **Performance Goals**: A participant pressing join is in the room within ten seconds in at least nine of ten attempts
 on 4G (SC-414); a session with no final event settles within the evaluation delay plus one minute (SC-403).
 
-**Constraints**: No amount anywhere in this phase (FR-497, T104, T105); every number of the work a setting, the kernel's and the phone's transport and protection numbers named constants (R-MONEY-12 (as amended, constitution 2.6.0); spec FR-498); no date
+**Constraints**: No amount anywhere in this phase (FR-497, T104, T105); every number of the work a setting, the kernel's and the phone's transport and protection numbers named constants (R-MONEY-12 (as amended, constitution 2.6.0, its list completed in 2.6.1); spec FR-498); no date
 arithmetic outside `packages/time` (R-TIME-1); attendance only from signed provider webhooks (R-SESS-1); every
 suspension and ban through `StandingService` (FR-421); T005's lock rules for every lock and FK-insert path; the owner's
 window rule of 2026-11-05 (R-320); requirements from the SRS, not the boards; seven working days for one person,
@@ -86,7 +86,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 
 | Rule family | This phase's own compliance | Mechanism delivered here | Gate |
 |---|---|---|---|
-| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number of the work a setting, seventeen new rows; the transport and protection numbers in the kernel (`apps/api/src/platform/**`) and on the phone named constants under R-MONEY-12 (as amended, constitution 2.6.0), each with its reason beside it: the limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker (an administrator changing one from the panel could break every signed-in call), the live channel's 25 s ping (a change could break every stream), the phone's reconnect backoff (the phone cannot read settings before it connects); the queue's fixed retry numbers the precedent (`apps/api/src/jobs/README.md`), the magic-number gate covering `apps/api/src/modules/` only (spec FR-498; the fourth analysis, C1) | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
+| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number of the work a setting, seventeen new rows; the transport and protection numbers in the kernel (`apps/api/src/platform/**`) and on the phone named constants under R-MONEY-12 (as amended, constitution 2.6.1), each with its reason beside it: the limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker (an administrator changing one from the panel could break every signed-in call), the live channel's 25 s ping (a change could break every stream) and 60 s inactivity restart (tied to the ping; tRPC refuses a ping above it), both in `apps/api/src/platform/live/live-constants.ts`, the per-stream queue bound (it protects the API's memory), the phone's reconnect backoff (the phone cannot read settings before it connects), its 60 s after `RATE_LIMITED` (part of that backoff; an earlier retry is refused again) and its coalescing of re-reads to one per query key per second (it protects the default limit); the queue's fixed retry numbers the precedent (`apps/api/src/jobs/README.md`), the magic-number gate covering `apps/api/src/modules/` only (spec FR-498; the fourth analysis, C1; the fifth analysis, C3 and C4) | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
 | R-TIME | Make-ups store local date, start and zone and derive instants (FR-469); interval arithmetic in `packages/time` (R-305); attendance instants are the provider's; the outage window entered as local fields (R-307); every time shown twice (FR-494) | Interval operations with properties | **PASS** |
 | R-GENDER | The join checks gender from the server's records under the accounts' locks; a token bound to one session and one participant (`bindJoinToken`); every refusal to a non-participant is `NOT_FOUND` | R-GENDER-7's CI gate: token replay and cross-gender cases (FR-496, SC-407) | **PASS** |
 | R-MOBILE | Every screen from its board as decided; strings from the catalogue with T123's marks; later phases' controls absent (no review, no report); the components render what the server decided (R-320's windows are the server's) | None new | **PASS** |
@@ -158,7 +158,7 @@ apps/
     │   ├── guards/     upload kind `chat` (PDF, UTF-8 text); the signed-in default limit
     │   ├── config/     LIVEKIT_* keys, VIDEO_PROVIDER `livekit`
     │   ├── ports/video/livekit.adapter.ts; the port and stand-in widened
-    │   └── live/       the live channel's registry, in-process bus and after-commit publisher (T063)
+    │   └── live/       the live channel's registry, in-process bus, after-commit publisher and `live-constants.ts` (T063)
     ├── surfaces/       live.router.ts (`live.events`)
     └── jobs/           evaluate-sessions, advance-remedies, expire-cancellation-requests, purge-chat
 
@@ -721,6 +721,13 @@ Where an answer changes a decision above, the answer governs. No task is added a
    administrator's 45, so the heaviest is the student's 48; max(120, 48 × 3 = 144), rounded up to ten, is 150 (SRS
    §3.14 and NFR-SEC-12 with an amendment line, ERD changelog row 32, spec FR-470, data-model §4, the contracts, the
    quickstart, T001 and T062).
+3. **C3 and C4, constitution 2.6.1 (PATCH).** R-MONEY-12's exception names four more numbers, each with its reason:
+   the live channel's 60 s inactivity restart (tied to the ping; tRPC refuses a ping above it), the per-stream queue
+   bound (it protects memory), the phone's coalescing of re-reads to one per query key per second (it protects the
+   default limit) and the phone's 60 s after `RATE_LIMITED` (part of its backoff; the phone cannot read settings, and
+   an earlier retry is refused again). The 25 s ping and the 60 s `reconnectAfterInactivityMs` move out of
+   `apps/api/src/surfaces/procedures.ts` into `apps/api/src/platform/live/live-constants.ts`, which `procedures.ts`
+   imports, so both sit in the kernel the exception names (T063, T065, research R-324 item 8, contracts/kernel.md).
 
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
@@ -787,6 +794,7 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 31, the notes on `users.photo_key` and `verification_documents.erased_at` | 5 |
 | `docs/SRS.md` | On the fifth analysis: §3.14 and NFR-SEC-12, the default 150 per 60 s; an amendment line | Decisions on the fifth analysis, 2 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 32, §12's default at 150 per 60 s | 2 |
+| Constitution | R-MONEY-12's exception names four more numbers with their reasons; version 2.6.0 → 2.6.1; the ERD's and ARCHITECTURE's headers name 2.6.1 | 3 |
 
 ## Phase Outputs
 

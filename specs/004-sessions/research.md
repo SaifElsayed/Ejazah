@@ -1235,7 +1235,14 @@ amended). Read against this branch at `9159cec`; the versions in the repository:
    60 s read timeout or tRPC's 60 s inactivity restart, the streams drop); the phone's reconnect backoff (this item's
    delays, and item 9's 1 to 15 s) is a constant on the phone because the phone cannot read settings before it
    connects; the queue's fixed retry numbers are the precedent (`apps/api/src/jobs/README.md`), and the magic-number
-   gate covers `apps/api/src/modules/` only. The channel's own limits, `rate_limit_live_channel` and
+   gate covers `apps/api/src/modules/` only. On the fifth analysis (**Decided**, the owner, 2026-11-06, C3 and C4;
+   constitution 2.6.1), four more numbers are named constants, each for its reason: the 60 s inactivity restart,
+   because it is tied to the ping and tRPC refuses a ping above it; the per-stream queue bound, because it protects the
+   API's memory; the phone's coalescing (one re-read per query key per second), because it protects the signed-in
+   default limit; and the phone's 60 s after `RATE_LIMITED`, because it is part of the phone's backoff, the phone
+   cannot read settings, and an earlier retry is refused again. The ping and the restart are named in
+   `apps/api/src/platform/live/live-constants.ts`, which `apps/api/src/surfaces/procedures.ts` imports, so both sit in
+   the kernel the exception names. The channel's own limits, `rate_limit_live_channel` and
    `live_channel_max_connections_per_user`, stay settings. The stream closes when the app leaves the foreground and reopens when it
    returns, with one re-read of the open screens and of the chat's first page; re-reads are coalesced to at most one
    per screen per second (LiveKit can report joined, left, joined within a second). No `tracked()` replay: there is no
