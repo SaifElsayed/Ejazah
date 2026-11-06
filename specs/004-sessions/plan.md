@@ -728,6 +728,12 @@ Where an answer changes a decision above, the answer governs. No task is added a
    an earlier retry is refused again). The 25 s ping and the 60 s `reconnectAfterInactivityMs` move out of
    `apps/api/src/surfaces/procedures.ts` into `apps/api/src/platform/live/live-constants.ts`, which `procedures.ts`
    imports, so both sit in the kernel the exception names (T063, T065, research R-324 item 8, contracts/kernel.md).
+4. **G3, the audit target types.** T002 (B33, still six tasks) adds `enrollment`, `dispute`, `session` and
+   `provider_outage` to `AuditTargetType` (`target-label.ts`, with their kind words), `target-name.ts` (the type
+   only), the contract's `auditTargetType` (an additive snapshot) and the panel's `TARGET_TEXT` with its four keys,
+   which the enum types, with a spec that every target type this phase records is known, so none makes `targetLabel`
+   throw. contracts/admin-surface.md states the rule (one row, its type; a list read, the administrator) and names the
+   target where the action's name does not.
 
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
