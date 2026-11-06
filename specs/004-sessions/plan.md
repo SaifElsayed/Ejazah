@@ -734,6 +734,13 @@ Where an answer changes a decision above, the answer governs. No task is added a
    which the enum types, with a spec that every target type this phase records is known, so none makes `targetLabel`
    throw. contracts/admin-surface.md states the rule (one row, its type; a list read, the administrator) and names the
    target where the action's name does not.
+5. **A7, a refused counter's log line.** Where `counter_booking_refused` is written, one `warn` line
+   `{ sessionId, enrollmentId, constraint }`, the constraint `sessions_teacher_no_overlap` or
+   `sessions_student_no_overlap`; no new column, no personal data; a spec in T032 (research R-311 and R-323 P3-29).
+6. **The `RATE_LIMITED` message on the phone** (the owner's addition). No screen maps the code today; T065 (B40a)
+   adds `common.state.rateLimited` in both catalogues and `genericErrorKey` in `apps/mobile/src/lib/error-message.ts`,
+   which every generic-error path uses, the screens that exist before B40a listed by file in T065, and B41's six
+   tasks (T041 to T046) noting that theirs use it.
 
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
