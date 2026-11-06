@@ -185,15 +185,18 @@ sessions declares, `DisputeChat`, which chat implements and `main.ts` binds, sin
 booking → sessions (the owner's decision of 2026-11-05 on the analysis, C5). The sixth is `DisputeHeldFiles`, a third
 port sessions declares, which verification implements and `main.ts` binds, since sessions importing verification would
 close the cycle verification → sessions (a deleted party's held files read inside an open matter; the owner's decision
-of 2026-11-06, research R-327). The video webhook is sessions' raw-body route, as the gateway's is
-payments'.
+of 2026-11-06, research R-327). The seventh is identity's `FileHold` (`filesHeld(userId)`), which booking implements
+through `heldFileOwnersAmong` and `main.ts` binds, since identity importing booking would close the cycle booking →
+identity (a deleted person's files wait while an enrollment of theirs has an open matter; the owner's decision of
+2026-11-05, research R-327; counted on the fifth analysis, D1). The video webhook is sessions' raw-body route, as the
+gateway's is payments'.
 
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |---|---|---|
 | Two new tables (`session_events`, `provider_outages`) against ERD §0's "a table that isn't here is out of spec" | The spec names the outage window as new (FR-445); FR-495 asks a durable record of every event with its session, which `enrollment_events` (booking's, no session column) cannot hold without sessions writing booking's table | Widening `enrollment_events` through the port (decision 6); a window held in settings (an operational number, not evidence) |
-| A fourth inverted dependency (`EnrollmentSide`), and a fifth (`DisputeChat`), after the three of ARCHITECTURE §4 | Sessions must read the snapshot and write two enrollment statuses, and serve a dispute's chat; booking already imports sessions, and chat imports booking | A thirteenth orchestration module; moving the machine into booking against ARCHITECTURE §4; serving `disputes.chat` from chat's own admin router (the `disputes` namespace is sessions') |
+| A fourth inverted dependency (`EnrollmentSide`), a fifth (`DisputeChat`), a sixth (`DisputeHeldFiles`) and a seventh (identity's `FileHold`), after the three of ARCHITECTURE §4 (the sixth and seventh counted on the fifth analysis, D1) | Sessions must read the snapshot and write two enrollment statuses, serve a dispute's chat and a deleted party's held files; identity must ask whether a deleted person's files are held; booking already imports sessions and identity, chat imports booking, and verification imports sessions | A thirteenth orchestration module; moving the machine into booking against ARCHITECTURE §4; serving `disputes.chat` from chat's own admin router (the `disputes` namespace is sessions') |
 | Reservations held in code under locks, not by the database | FR-466 reserves a proposal and a counter for days; a database guard would need a reserved session row or a new instant cache (an ADR, R-DB-4) | A provisional session row (decision 2): database-enforced but visible in every list and numbering |
 | `connection_ref` and a nullable `user_id` on an append-only table | LiveKit gives no ordering guarantee and may replace a connection under one identity; the room-ended event has no participant (FR-443) | Pairing by identity in arrival order: wrong under replacement and reordering |
 
@@ -746,6 +749,14 @@ Where an answer changes a decision above, the answer governs. No task is added a
    `errorCodeOf`, applied by name to every page with a rate-limited button or search, Phase 3's and the older pages
    (the sign-in, the password and the second factor under `rate_limit_admin_authentication`, the rest under T062's
    default). T058 now runs last in B42, after the five lanes T047 to T051, each of which notes it; B42 stays at six.
+8. **The text fixes.** D1: ARCHITECTURE §4 and an amendment line name `DisputeHeldFiles` and identity's `FileHold`,
+   and the Structure Decision and Complexity Tracking count them as the sixth and seventh inverted dependencies. S9:
+   SRS's 2026-11-05 «unreadable as before» marked superseded. U3: T040 names `dispute.held_files_listed` and specifies
+   that `documents.link` and the other ordinary readers still answer a held erased document as none. U4: `fileRef` is
+   `document:<documentId>` or `photo:<userId>`, stable, never a storage key (contracts/admin-surface.md, research
+   R-327, T040). G4: T052's stamp check covers the three `rate_limit_search` declarations (T007, T024, T058).
+
+The window rule (R-320): nothing here offers a time.
 
 ## Changes to other documents (approved on 2026-11-05, applied in this cycle)
 
@@ -813,6 +824,8 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | `docs/SRS.md` | On the fifth analysis: §3.14 and NFR-SEC-12, the default 150 per 60 s; an amendment line | Decisions on the fifth analysis, 2 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 32, §12's default at 150 per 60 s | 2 |
 | Constitution | R-MONEY-12's exception names four more numbers with their reasons; version 2.6.0 → 2.6.1; the ERD's and ARCHITECTURE's headers name 2.6.1 | 3 |
+| `docs/ARCHITECTURE.md` | §4's Phase 3 graph: the `DisputeHeldFiles` and `FileHold` ports; an amendment line | 8 (D1) |
+| `docs/SRS.md` | The 2026-11-05 amendment's «unreadable as before» marked superseded | 8 (S9) |
 
 ## Phase Outputs
 

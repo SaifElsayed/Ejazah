@@ -1486,7 +1486,9 @@ held file is readable by an administrator only inside an open matter of the enro
 2. **Two administrator procedures** in sessions' admin router, beside `disputes.chat` (contracts/admin-surface.md):
    `disputes.heldFiles { disputeId }` answers metadata only, no link: per file its kind (the photo, or the document's
    `document_type`), its owner's role in the enrollment (student or teacher), its upload date where one is recorded
-   (a document's `uploaded_at`; the photo records none) and an opaque `fileRef`; only the files of a party of that
+   (a document's `uploaded_at`; the photo records none) and a `fileRef`, `document:<documentId>` for a verification
+   document or `photo:<userId>` for the deleted person's photo, stable across reads and never a storage key
+   (**Decided**, the owner, 2026-11-06, on the fifth analysis, U4); only the files of a party of that
    dispute's enrollment who is deleted and whose keys are still held. A live party's documents are read through the
    existing `documents.link`. `disputes.heldFileLink { disputeId, fileRef }` mints one signed link per press, valid
    `document_link_ttl_seconds` (300, the existing setting, `prisma/seed.ts`; no new one), and is audited per press:
