@@ -780,6 +780,11 @@ batches; B33 stays at six.
    session, every lock earlier in the one order that it will take. A path inserting a `session_events` row always
    takes the enrollment. No path waits on a lock earlier in the order while holding a session.» The join (`users`
    only, no session written) and the webhook are rows of their own.
+4. **M3, the audit actions' names.** None of this phase's twenty-eight audit actions has an `ACTION_TEXT` entry in
+   `apps/admin/src/pages/audit/actions.ts`, so `/audit` would show raw codes. T002 (B33, still six tasks) adds a name
+   in Arabic and English for each, in the panel's existing wording, `ACTION_TEXT` and `admin.audit.actions.*` in both
+   admin catalogues, with a spec that every one has a name (contracts/admin-surface.md, "The audit actions' names").
+   Links from each entry to its target's page wait for the post-MVP review of the admin screens' clarity.
 5. **The text fixes.** L2: the counter's `counter_slot_id` key-share on `availability_slots` is stated safe in
    contracts/kernel.md and data-model §5 (every path that locks a slot `FOR UPDATE` takes its teacher's `users` row
    first, which the counter's path holds). L3: T002 writes the reworded general rule into `row-lock.ts`' header.

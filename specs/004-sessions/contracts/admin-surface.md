@@ -18,6 +18,46 @@ row), the four types T002 adds; a person's standing and record keep Phase 1's `u
 targets the administrator who read it (`admin`, their id), as Phase 1's `*.read` and Phase 2's `payments.listed` do.
 A row below names its target where the action's name does not.
 
+**The audit actions' names** (the owner's decision of 2026-11-06 on the sixth analysis, M3; T002). `/audit` and the
+home name each action this phase records by the catalogue's text, never the stored code: `ACTION_TEXT` in
+`apps/admin/src/pages/audit/actions.ts` maps each to an `admin.audit.actions.*` key of `apps/admin/src/i18n/ar.json`
+and `en.json`, in the panel's existing wording (a short verb phrase, as «إيقاف معلم», "Suspend teacher", and
+«عرض المدفوعات», "View payments"). Twenty-eight actions, every one in the tables below:
+
+| Action | Key | Arabic | English |
+|---|---|---|---|
+| `sessions.monitor.listed` | `sessionsMonitorListed` | عرض الاشتراكات | View enrollments |
+| `sessions.monitor.viewed` | `sessionsMonitorViewed` | عرض اشتراك | View an enrollment |
+| `sessions.review.listed` | `sessionsReviewListed` | عرض قائمة المراجعة | View the review queue |
+| `sessions.review.viewed` | `sessionsReviewViewed` | عرض بيانات اتصال جلسة | View a session's connection record |
+| `provider_outages.listed` | `providerOutagesListed` | عرض انقطاعات الفيديو | View video outages |
+| `disputes.listed` | `disputesListed` | عرض النزاعات | View disputes |
+| `dispute.viewed` | `disputeViewed` | عرض نزاع | View a dispute |
+| `cases.listed` | `casesListed` | عرض القضايا والشكاوى | View cases and complaints |
+| `case.viewed` | `caseViewed` | عرض قضية أو شكوى | View a case or complaint |
+| `users.listed` | `usersListed` | عرض المستخدمين | View users |
+| `user.viewed` | `userViewed` | عرض مستخدم | View a user |
+| `chat.read` | `chatRead` | قراءة محادثة نزاع | Read a dispute's chat |
+| `dispute.held_files_listed` | `disputeHeldFilesListed` | عرض الملفات المحفوظة لنزاع | View a dispute's held files |
+| `held_file.view` | `heldFileView` | عرض ملف محفوظ | View a held file |
+| `session.cancelled` | `sessionCancelled` | إلغاء جلسة | Cancel a session |
+| `enrollment.restored` | `enrollmentRestored` | استعادة اشتراك | Restore an enrollment |
+| `session.review_resolved` | `sessionReviewResolved` | حسم مراجعة جلسة | Settle a session under review |
+| `session.outcome_corrected` | `sessionOutcomeCorrected` | تصحيح نتيجة جلسة | Correct a session's outcome |
+| `provider_outage.recorded` | `providerOutageRecorded` | تسجيل انقطاع الفيديو | Record a video outage |
+| `dispute.resolved` | `disputeResolved` | الفصل في نزاع | Resolve a dispute |
+| `dispute.revised` | `disputeRevised` | مراجعة حكم نزاع | Revise a dispute's ruling |
+| `case.resolved` | `caseResolved` | حلّ قضية | Resolve a case |
+| `case.dismissed` | `caseDismissed` | رفض قضية | Dismiss a case |
+| `case.opened_manually` | `caseOpenedManually` | فتح قضية تعويض يدويًا | Open a compensation case manually |
+| `complaint.decided` | `complaintDecided` | البتّ في شكوى غياب المعلم | Decide a complaint of a teacher's absence |
+| `student.suspend` | `studentSuspend` | إيقاف طالب | Suspend student |
+| `student.ban` | `studentBan` | حظر طالب | Ban student |
+| `student.reinstate` | `studentReinstate` | إعادة تفعيل طالب | Reinstate student |
+
+A link from each entry to its target's page (`targetHref`) is not added in this phase: it waits for the post-MVP
+review of the admin screens' clarity.
+
 ## `sessions` — the monitor, the review queue, cancellation, outages (sessions module)
 
 | Procedure | Input | Output | Audit | Notes |
