@@ -18,6 +18,10 @@
 //     resolved or dismissed, does nothing; one paid after every case was closed opens one
 //     `duplicate_payment` case, a second run none; two cases, one open and one closed;
 //   - a refunded order is ignored; two runs leave what one leaves.
+//   - T004 of specs/004-sessions (the owner's decision of 2026-11-06 on PR #126's review, follow-up
+//     1): a `teacher_ended` case open on a confirmed enrollment covers nothing, so a second paid
+//     order opens its `duplicate_payment` case (FR-493), the covering rule reading Phase 2's
+//     three reasons only.
 //
 // The job runs its own transactions, the refusal a second one, so every world is committed, each
 // with accounts, a slot and orders of its own (`confirmation-world.ts`).
@@ -427,6 +431,18 @@ describe('confirm-enrollment on a confirmed enrollment (FR-375)', () => {
         status: 'open',
       }),
     ]);
+  });
+
+  it('with a teacher_ended case open, a second paid order opens its duplicate_payment case (T004)', async () => {
+    const on = await world();
+    await confirm(await order(on.enrollmentId));
+    await database.$transaction((tx) => openCompensationCase(tx, on.enrollmentId, 'teacher_ended'));
+    await confirm(await order(on.enrollmentId));
+    expect((await casesOf(on.enrollmentId)).map(({ reason, status }) => [reason, status])).toEqual([
+      ['teacher_ended', 'open'],
+      ['duplicate_payment', 'open'],
+    ]);
+    expect(await enrollmentOf(on.enrollmentId)).toMatchObject({ status: 'confirmed' });
   });
 
   it('opens no case on a replay of the confirming order', async () => {

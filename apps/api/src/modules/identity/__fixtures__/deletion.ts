@@ -144,6 +144,9 @@ export function buildDeletion(
   };
   const reports: unknown[] = [];
   const pending: Promise<void>[] = [];
+  // T004 of specs/004-sessions (FR-487): the people whose files an open matter holds, as booking's
+  // `heldFileOwnersAmong` answers through the `FileHold` port.
+  const held = new Set<string>();
   const deletion = new DeletionService({
     database,
     settings: identity.settings,
@@ -159,6 +162,12 @@ export function buildDeletion(
     codes: identity.codes,
     log: { warn: (entry: object) => void identity.warnings.push(entry) },
     fileErasures: [files],
+    fileHold: {
+      filesHeld: async (userId) => {
+        events.push('files-held');
+        return held.has(userId);
+      },
+    },
     report: (error) => void reports.push(error),
     defer: (work) => void pending.push(work),
   });
@@ -169,6 +178,7 @@ export function buildDeletion(
     signInPort,
     storage,
     files,
+    held,
     consequences,
     terminations,
     keyed,

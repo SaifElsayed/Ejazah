@@ -177,6 +177,12 @@ const services = {
     fileErasures: [
       verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
     ],
+    // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
+    // entry, so identity imports no booking.
+    fileHold: {
+      filesHeld: async (userId) =>
+        (await booking.heldFileOwnersAmong(database, [userId])).has(userId),
+    },
   }),
   verification: verification.createVerificationServices({
     database,

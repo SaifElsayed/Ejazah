@@ -8,6 +8,7 @@
 // (booking's table, R-API-6); a case's insert references that row by its foreign key in any case.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { lockRows } from '../../platform/db/row-lock.js';
+import { COVERING_REASONS } from './compensation-case.service.js';
 
 type Client = Pick<Transaction, 'dispute'>;
 
@@ -48,7 +49,8 @@ export async function insertCase(
 
 /**
  * An enrollment's compensation cases as the covering rule reads them (T082, `jobs/case-cover.ts`),
- * every instant the database's clock: whether one of them is open, when the latest was opened
+ * of Phase 2's three reasons only (`COVERING_REASONS`, T004 of specs/004-sessions), every instant
+ * the database's clock: whether one of them is open, when the latest was opened
  * (`created_at`), and when the latest closed one was closed (`resolved_at`, for `resolved` and
  * `dismissed`; null when no closed case records it).
  */
@@ -79,7 +81,11 @@ export async function caseInstantsAmong(
   if (enrollmentIds.length === 0) return new Map();
   const rows = await tx.dispute.groupBy({
     by: ['enrollmentId', 'status'],
-    where: { enrollmentId: { in: [...enrollmentIds] }, kind: 'compensation_case' },
+    where: {
+      enrollmentId: { in: [...enrollmentIds] },
+      kind: 'compensation_case',
+      reason: { in: [...COVERING_REASONS] },
+    },
     _max: { createdAt: true, resolvedAt: true },
   });
   const cases = new Map<string, CaseInstants>();

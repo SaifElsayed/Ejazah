@@ -45,6 +45,7 @@ const [
   { deliverAdminInvite },
   { createRedisSingleUseMarks },
   catalog,
+  booking,
   { selectPorts, selectPushPort },
   queueing,
   { CONFIRM_ENROLLMENT, confirmEnrollment },
@@ -75,6 +76,7 @@ const [
   import('./jobs/deliver-admin-invite.js'),
   import('./platform/redis/single-use-marks.js'),
   import('./modules/catalog/index.js'),
+  import('./modules/booking/index.js'),
   import('./platform/ports/ports.module.js'),
   import('./jobs/queue.js'),
   import('./jobs/confirm-enrollment.js'),
@@ -176,7 +178,12 @@ const jobs: readonly Job[] = [
   purgeStalePushTokens({ store: purge.pushTokens, settings }),
   purgeExpiredSessions({ stores: { user: purge.userSessions, admin: adminSessions }, settings }),
   purgeUnreferencedDocuments({ store: unreferencedDocuments, storage: ports.storage, settings }),
-  eraseDeletedFiles({ stores: erasedFiles, storage: ports.storage }),
+  // T004 of specs/004-sessions (FR-487): a held owner's files wait for the last open matter.
+  eraseDeletedFiles({
+    stores: erasedFiles,
+    storage: ports.storage,
+    held: (userIds) => booking.heldFileOwnersAmong(database, userIds),
+  }),
   deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
   // A paid order's confirmation (T039, R-215): the modules' entries on the job's transactions, the
   // hold's terms and the first session's lead read through the settings reader.

@@ -12,6 +12,11 @@
 // was a case here until Phase 3's T001: ERD §15 rule 46 now refuses it, so the case proves the
 // refusal and that the case stays open (the follow-up under T001 of specs/004-sessions/tasks.md).
 //
+// T004 of specs/004-sessions (research R-312, R-326; the owner's decision of 2026-11-06 on PR #126's
+// review, follow-up 1): the closed list gains Phase 3's eleven reasons, and the covering rule reads
+// Phase 2's three only (`COVERING_REASONS`): a `teacher_ended` case, open and then closed, is not
+// read, so it never covers a second paid order, while Phase 2's three are.
+//
 // The race: `disputes` has no unique index that keeps one open case per enrollment and reason, so
 // the function locks the enrollment's row (T005's `lockRows`) and only then reads the open case.
 // HOW THE RACE IS STAGED, as `teacher-slots.spec.ts` stages it: transaction A opens the case and
@@ -28,6 +33,7 @@ import {
   caseInstantsAmong,
   caseInstantsOf,
   COMPENSATION_REASONS,
+  COVERING_REASONS,
   openCompensationCase,
 } from '../../apps/api/src/modules/moderation/index.js';
 import {
@@ -99,8 +105,28 @@ async function close(caseId: string, status: 'resolved' | 'dismissed'): Promise<
 }
 
 describe('openCompensationCase opens one system case per reason (T035, FR-DISPUTE-5)', () => {
-  it('has exactly the three reasons of the closed list', () => {
+  it('has exactly the fourteen reasons of the closed list: Phase 2’s three, R-312’s nine and the manual case’s two', () => {
     expect([...COMPENSATION_REASONS]).toEqual([
+      'slot_unavailable',
+      'party_restricted',
+      'duplicate_payment',
+      'absence_termination',
+      'admin_cancellation',
+      'teacher_ended',
+      'student_suspended',
+      'student_banned',
+      'student_fault_confirmed',
+      'refund_choice',
+      'counter_unanswered',
+      'makeup_refused',
+      'admin_opened_for_student',
+      'admin_opened_for_teacher',
+    ]);
+    expect(COMPENSATION_REASONS).not.toContain('teacher_no_show_threshold');
+  });
+
+  it('names Phase 2’s three as the only reasons the covering rule reads (T004)', () => {
+    expect([...COVERING_REASONS]).toEqual([
       'slot_unavailable',
       'party_restricted',
       'duplicate_payment',
@@ -327,6 +353,53 @@ async function race<T>(
   }
   return { a: await a, b: await b };
 }
+
+describe('the covering rule reads Phase 2’s three reasons only (T004 of specs/004-sessions)', () => {
+  it('a teacher_ended case, open and then closed, is not read', async () => {
+    const { enrollmentId } = await makeEnrollment(db);
+    const { caseId } = await open(enrollmentId, 'teacher_ended');
+    expect(await caseInstantsOf(database, enrollmentId)).toBeNull();
+    expect((await caseInstantsAmong(database, [enrollmentId])).size).toBe(0);
+    await close(caseId, 'resolved');
+    expect(await caseInstantsOf(database, enrollmentId)).toBeNull();
+  });
+
+  it.each(COVERING_REASONS)(
+    '%s is read, open and then closed, beside an open teacher_ended case it is not swayed by',
+    async (reason) => {
+      const { enrollmentId } = await makeEnrollment(db);
+      await open(enrollmentId, 'teacher_ended');
+      const { caseId } = await open(enrollmentId, reason);
+      const opened = await instantsOf(caseId);
+      expect(await caseInstantsOf(database, enrollmentId)).toEqual({
+        open: true,
+        lastOpenedAt: opened.openedAt,
+        lastClosedAt: null,
+      });
+      await close(caseId, 'dismissed');
+      const closed = await instantsOf(caseId);
+      expect(await caseInstantsOf(database, enrollmentId)).toEqual({
+        open: false,
+        lastOpenedAt: opened.openedAt,
+        lastClosedAt: closed.closedAt,
+      });
+    },
+  );
+
+  it('every reason Phase 3 adds is left out, each one open on its own enrollment', async () => {
+    const added = COMPENSATION_REASONS.filter(
+      (reason) => !(COVERING_REASONS as readonly string[]).includes(reason),
+    );
+    expect(added).toHaveLength(11);
+    const enrollments: string[] = [];
+    for (const reason of added) {
+      const { enrollmentId } = await makeEnrollment(db);
+      await open(enrollmentId, reason);
+      enrollments.push(enrollmentId);
+    }
+    expect((await caseInstantsAmong(database, enrollments)).size).toBe(0);
+  });
+});
 
 describe('two concurrent calls for one enrollment and reason leave one open case (T005)', () => {
   it('the second waits on the enrollment’s lock, then joins the first’s case', async () => {

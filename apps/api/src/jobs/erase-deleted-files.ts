@@ -13,6 +13,12 @@
 // never meets a row twice, a failing one included. Idempotent by construction: a second run finds
 // only what the first could not remove, and removing an absent object is not an error (R-API-14).
 // It reads no setting: there is no window, a held key is retried on the next run. It runs every hour.
+//
+// T004 of specs/004-sessions (FR-487; research R-327; the owner's decision of 2026-11-05): a
+// deleted person's files wait while an open dispute, case or complaint of an enrollment of theirs
+// holds them. Each page's owners are asked once through `held` (booking's `heldFileOwnersAmong`,
+// bound in `worker.ts`); a held owner's files are neither removed nor reported, and the page goes
+// on in id order, so the first run after the owner's last matter closes removes them.
 import { z } from 'zod';
 
 import { reportError } from '../platform/errors/reporting.js';
@@ -22,9 +28,10 @@ import { defineJob, type Job } from './job.js';
 /** How many rows a store is asked for at a time. */
 export const ERASE_PAGE_SIZE = 100;
 
-/** A file still to be removed: its row's id and its storage key, decrypted. */
+/** A file still to be removed: its row's id, the deleted person it belongs to and its storage key, decrypted. */
 export interface ErasedFile {
   readonly id: string;
+  readonly ownerUserId: string;
   readonly storageKey: string;
 }
 
@@ -39,6 +46,8 @@ export interface ErasedFileStore {
 export interface EraseDeletedFilesOptions {
   readonly stores: readonly ErasedFileStore[];
   readonly storage: Pick<StoragePort, 'remove'>;
+  /** Of some owners, those an open matter holds (booking's `heldFileOwnersAmong`). */
+  readonly held: (userIds: readonly string[]) => Promise<ReadonlySet<string>>;
   /** Where a file that could not be removed is reported; the error tracker unless a spec sets one. */
   readonly report?: (error: unknown) => void;
   readonly pageSize?: number;
@@ -47,6 +56,7 @@ export interface EraseDeletedFilesOptions {
 export function eraseDeletedFiles({
   stores,
   storage,
+  held,
   report = reportError,
   pageSize = ERASE_PAGE_SIZE,
 }: EraseDeletedFilesOptions): Job {
@@ -67,7 +77,13 @@ export function eraseDeletedFiles({
         let after: string | undefined;
         for (;;) {
           const page = await store.pendingPage(after, pageSize);
-          for (const file of page) await erase(store, file);
+          const holding =
+            page.length === 0
+              ? new Set<string>()
+              : await held([...new Set(page.map(({ ownerUserId }) => ownerUserId))]);
+          for (const file of page) {
+            if (!holding.has(file.ownerUserId)) await erase(store, file);
+          }
           if (page.length < pageSize) break;
           after = page.at(-1)?.id;
         }

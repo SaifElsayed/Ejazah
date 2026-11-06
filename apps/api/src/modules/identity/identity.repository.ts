@@ -453,6 +453,8 @@ export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date):
 /** A deleted person whose photo file is still to be removed. */
 export interface HeldPhoto {
   readonly id: string;
+  /** The deleted person, the row's own id (T004 of specs/004-sessions: a held owner waits). */
+  readonly ownerUserId: string;
   readonly storageKey: string;
 }
 
@@ -472,7 +474,9 @@ export class DeletedPhotosRepository {
       where: { id: userId, deletedAt: { not: null }, photoKey: { not: null } },
       select: { id: true, photoKey: true },
     });
-    return user?.photoKey == null ? null : { id: user.id, storageKey: user.photoKey };
+    return user?.photoKey == null
+      ? null
+      : { id: user.id, ownerUserId: user.id, storageKey: user.photoKey };
   }
 
   /** A page of every deleted person still holding a photo key, in id order after `after`. */
@@ -488,7 +492,7 @@ export class DeletedPhotosRepository {
       select: { id: true, photoKey: true },
     });
     return users.flatMap(({ id, photoKey }) =>
-      photoKey === null ? [] : [{ id, storageKey: photoKey }],
+      photoKey === null ? [] : [{ id, ownerUserId: id, storageKey: photoKey }],
     );
   }
 

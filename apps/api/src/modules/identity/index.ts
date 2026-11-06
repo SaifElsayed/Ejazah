@@ -18,7 +18,7 @@ import {
 } from './identity.repository.js';
 import { OnboardingService } from './onboarding.service.js';
 import type { AccountConsequences } from './consequences.js';
-import { DeletionService, type FileErasure } from './deletion.service.js';
+import { DeletionService, type FileErasure, type FileHold } from './deletion.service.js';
 import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
@@ -126,6 +126,11 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly consequences: AccountConsequences;
   /** The other modules' files of a deleted person, removed after the commit (B16, decision 1). */
   readonly fileErasures?: readonly FileErasure[];
+  /**
+   * Whether an open matter holds a deleted person's files (T004 of specs/004-sessions, FR-487):
+   * booking's `heldFileOwnersAmong`, bound by `main.ts`; none held when absent.
+   */
+  readonly fileHold?: FileHold;
   /** Where a failure after a deletion's commit is reported; the error tracker unless given. */
   readonly report?: (error: unknown) => void;
 }
@@ -142,6 +147,7 @@ export function createIdentityServices({
   idempotency,
   consequences,
   fileErasures,
+  fileHold,
   report,
   ...base
 }: IdentityServiceDependencies): IdentityServices {
@@ -167,6 +173,7 @@ export function createIdentityServices({
       codes,
       log,
       fileErasures,
+      fileHold,
       report,
     }),
   };
@@ -327,7 +334,7 @@ export function createDocumentReferences(database: Database): {
 }
 
 /** A file the deletion leaves to the `erase-deleted-files` sweep, and the deletion's file erasure (B16). */
-export type { FileErasure, HeldPhoto };
+export type { FileErasure, FileHold, HeldPhoto };
 
 /**
  * Deleted people's photo keys still held, for the `erase-deleted-files` sweep (B16, decision 1): a
