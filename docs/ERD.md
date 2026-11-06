@@ -422,7 +422,7 @@ One scheduled occurrence. Its local date, local start time and zone are the sche
 | status | enum scheduled · done · student_no_show · teacher_no_show · both_no_show · under_threshold · provider_outage · cancelled_by_agreement · cancelled_by_admin · disputed | Full machine, SRS §3.7.5 + §3.8 (`specs/004-sessions/data-model.md` §3). A `cancelled_by_agreement` session is final at acceptance and never disputed (SRS FR-CANCEL-2 as amended on 2026-11-05) |
 | outcome_under_dispute | enum `session_status`, nullable | The outcome frozen while `status = 'disputed'` (FR-DISPUTE-4); cleared by the resolution, which writes the final `status` (v1.15; §15 rule 40) |
 | simultaneous_connected_seconds | int, default 0 | Accumulated across reconnections (FR-SESS-18), from the recorded events, and written once by the evaluation as the figure its outcome was decided on; never recomputed (R-DB-4, [ADR 0022](adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md); v1.15, the owner's decision of 2026-11-05) |
-| provider_room_id | text, nullable | Video provider reference |
+| provider_room_id | text, nullable | Video provider reference. Unused: the video room is named for the session's `id`, so nothing writes this column and it stays NULL; its removal is Not scheduled (`specs/004-sessions/tasks.md`) (v1.15, the owner's decision of 2026-11-06 on Phase 3's sixth analysis) |
 | evaluated_at | timestamptz, nullable | When the worker settled it |
 | settled_by_admin_id | FK → admin_users, nullable | For review-queue resolutions (FR-SESS-19) and dispute resolutions |
 | admin_settled_at | timestamptz, nullable | When an administrator settled it; both NULL or both set with `settled_by_admin_id` (v1.15; §15 rule 40) |
@@ -1250,5 +1250,11 @@ Amended on 2026-11-06 on Phase 3's fifth analysis (`specs/004-sessions/plan.md`,
 | # | Change | Migration |
 |---|---|---|
 | 32 | §12 `settings`: `rate_limit_signed_in_default` seeded at 150 per 60 s (row 23's 160 replaced): research R-325 recomputed without the name searches `rate_limit_search` counts, the heaviest normal minute a Student's 48, × 3 = 144, rounded up to ten; SRS NFR-SEC-12's rule stays its reason | the seed (B33) |
+
+Amended on 2026-11-06 on Phase 3's sixth analysis (`specs/004-sessions/plan.md`, «Decisions on the sixth analysis»; the owner's decisions of 2026-11-06), before any migration ran:
+
+| # | Change | Migration |
+|---|---|---|
+| 33 | §5 `sessions.provider_room_id` noted unused: the video room is named for the session's `id`, so nothing writes it (the join writes nothing to `sessions`); the column stays, NULL, and its removal is a Not scheduled item of `specs/004-sessions/tasks.md` | none |
 
 Two tables are added: 44 tables.

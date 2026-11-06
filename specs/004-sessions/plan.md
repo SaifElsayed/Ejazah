@@ -772,6 +772,9 @@ batches; B33 stays at six.
    `apps/api/src/platform/db/row-lock.ts` (R-API-6), and never the enrollment; `room_ended` (no user) needs none.
    contracts/kernel.md gains the webhook's rows, and T012 a race probe in `tests/db-integrity/` against both paths
    (data-model §5, research R-321, quickstart).
+2. **M1, `sessions.provider_room_id` is never written.** The room is named for the session's id, so T011's join
+   writes nothing to `sessions`; data-model §1 and §2.1 no longer say the join writes the column; the ERD notes it
+   unused (changelog row 33); its removal is item (5) of tasks.md's Not scheduled row, in no batch.
 3. **M2, the general rule reworded.** contracts/kernel.md, data-model §5 and research R-321: «A path that locks,
    updates or inserts a row referencing a `sessions` row (a foreign key's key-share included) takes, before any
    session, every lock earlier in the one order that it will take. A path inserting a `session_events` row always
@@ -851,6 +854,7 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | Constitution | R-MONEY-12's exception names four more numbers with their reasons; version 2.6.0 → 2.6.1; the ERD's and ARCHITECTURE's headers name 2.6.1 | 3 |
 | `docs/ARCHITECTURE.md` | §4's Phase 3 graph: the `DisputeHeldFiles` and `FileHold` ports; an amendment line | 8 (D1) |
 | `docs/SRS.md` | The 2026-11-05 amendment's «unreadable as before» marked superseded | 8 (S9) |
+| `docs/ERD.md` | On the sixth analysis: v1.15 amended in place again, changelog row 33, §5's `provider_room_id` noted unused | Decisions on the sixth analysis, 2 (M1) |
 
 ## Phase Outputs
 

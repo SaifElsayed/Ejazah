@@ -21,7 +21,7 @@ analysis"), on the third (plan.md, "Decisions on the third analysis") and on the
 
 | Table | Owner (R-API-6) | Written in this phase by |
 |---|---|---|
-| `sessions` | sessions | the evaluation sweep (outcome, simultaneous seconds, `evaluated_at`); a review, dispute or outage resolution and a ruling's revision (`settled_by_admin_id`, `admin_settled_at`); a cancellation (accepted request, admin, an administrator's termination on a complaint, an account's end, the make-ups still scheduled when a suspended student's fault is confirmed); a dispute's raising (`disputed`, `outcome_under_dispute`); a make-up's booking (insert); an administrator's restore (insert of the sessions still owed, R-322); the join (`provider_room_id`) |
+| `sessions` | sessions | the evaluation sweep (outcome, simultaneous seconds, `evaluated_at`); a review, dispute or outage resolution and a ruling's revision (`settled_by_admin_id`, `admin_settled_at`); a cancellation (accepted request, admin, an administrator's termination on a complaint, an account's end, the make-ups still scheduled when a suspended student's fault is confirmed); a dispute's raising (`disputed`, `outcome_under_dispute`); a make-up's booking (insert); an administrator's restore (insert of the sessions still owed, R-322) |
 | `session_participant_events` | sessions | the video webhook only (R-SESS-1) |
 | `cancellation_requests` | sessions | `sessions.cancellation.request/answer`; the expiry sweep |
 | `session_remedies` | sessions | the `advance-remedies` sweep (offer, windows ending); an accepted cancellation request (the offer, decision 5); a suspended student's case closed as cleared (the offer, decision 1); `sessions.remedy.*`; an administrator's termination on a complaint, an account's end or a suspended student's fault confirmed (handed to a case); an administrator's restore (a `refund_case` remedy its closing's case held offered again, R-322); a student's suspension (frozen) and deletion (lapsed), through booking's subscriber and the sessions entry; a `frozen` remedy offered again by `advance-remedies`' first run after the reinstatement, never on the reinstatement's transaction (R-311) |
@@ -47,8 +47,11 @@ analysis"), on the third (plan.md, "Decisions on the third analysis") and on the
 Existing columns this phase writes for the first time: `status` (the whole machine, §3), `simultaneous_connected_seconds`
 (written once by the evaluation, the figure its outcome was decided on, R-305; the owner's decision 3 of 2026-11-05,
 which R-DB-4 names),
-`evaluated_at` (the evaluation's instant), `settled_by_admin_id`, `provider_room_id` (the session's id: the room is
-named for it), `makeup_for_session_id` (a make-up's original, FR-469).
+`evaluated_at` (the evaluation's instant), `settled_by_admin_id`, `makeup_for_session_id` (a make-up's original,
+FR-469). `provider_room_id` (since `20261007000000_init`) is never written: the room is named for the session's id,
+so the column stays NULL and unused, and the join writes nothing to `sessions` (the owner's decision of 2026-11-06 on
+the sixth analysis, M1). Its removal is a Not scheduled item of tasks.md; the ERD notes the column unused (§7, item
+18).
 
 ### 2.2 `session_participant_events`
 
@@ -456,3 +459,6 @@ batch's migration, which builds them.
     `session_events`' kind `counter_booking_refused`, twenty-five kinds (§2.4, §3); §11's `notifications.type` name
     `session_outcome_corrected`, read from the `outcome_corrected` row (SRS FR-NOTIF-1 as amended). No column and no
     rule.
+18. On the sixth analysis (the owner's decision of 2026-11-06, M1; the ERD's changelog row 33): `sessions.provider_room_id`
+    noted unused, since the room is named for the session's id; nothing writes it (§2.1), and its removal is Not
+    scheduled (tasks.md). No migration in this phase.
