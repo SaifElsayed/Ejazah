@@ -441,7 +441,7 @@ batch's migration, which builds them.
     changelog row 21): four rate-limit settings (§4); no column for a restore's `slot_changed`, which compares the
     slot's row with the enrollment's own generated sessions (R-322).
 13. On the decisions answering the administrator's control inventory (the owner's decisions of 2026-11-05; the ERD's
-    changelog rows 23 and 24): `rate_limit_signed_in_default` at 160 per 60 s (research R-325; 150 since the fifth analysis, item 17); `chat_retention_days`
+    changelog rows 23 and 24): `rate_limit_signed_in_default` at 160 per 60 s (research R-325; 150 since the fifth analysis, item 18); `chat_retention_days`
     30; a deleted person's photo and document keys kept while an open dispute, case or complaint holds them (§2.11,
     R-327).
 14. On the same decisions (the ERD's changelog row 25): `disputes.reason`'s `admin_opened_for_student` and
@@ -453,12 +453,12 @@ batch's migration, which builds them.
 16. On the decision of the live channel (the owner's decision of 2026-11-05, research R-324; the ERD's changelog row
     28): `rate_limit_live_channel` (10 per 60 s, per user) and `live_channel_max_connections_per_user` (3) (§4). No
     table: the live channel keeps nothing in the database.
-17. On the fifth analysis (the owner's decision of 2026-11-06; the ERD's changelog row 32): `rate_limit_signed_in_default`
-    seeded at 150 per 60 s, research R-325 recomputed without the name searches `rate_limit_search` counts (§4).
 17. On the fourth analysis (the owner's decisions of 2026-11-06; the ERD's changelog rows 29 and 30):
     `session_events`' kind `counter_booking_refused`, twenty-five kinds (§2.4, §3); §11's `notifications.type` name
     `session_outcome_corrected`, read from the `outcome_corrected` row (SRS FR-NOTIF-1 as amended). No column and no
     rule.
-18. On the sixth analysis (the owner's decision of 2026-11-06, M1; the ERD's changelog row 33): `sessions.provider_room_id`
+18. On the fifth analysis (the owner's decision of 2026-11-06; the ERD's changelog row 32): `rate_limit_signed_in_default`
+    seeded at 150 per 60 s, research R-325 recomputed without the name searches `rate_limit_search` counts (§4).
+19. On the sixth analysis (the owner's decision of 2026-11-06, M1; the ERD's changelog row 33): `sessions.provider_room_id`
     noted unused, since the room is named for the session's id; nothing writes it (§2.1), and its removal is Not
     scheduled (tasks.md). No migration in this phase.
