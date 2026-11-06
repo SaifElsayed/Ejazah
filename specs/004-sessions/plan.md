@@ -37,7 +37,7 @@ The technical approach, from [research.md](./research.md), rests on seven decisi
 7. **Every event is a row.** `session_events` and two new kinds of `enrollment_events`, so Phase 4's notifications read
    them with no change here (R-315).
 
-Scope is the SRS ids PLAN.md lists for Phase 3, FR-420 to FR-499 and SC-401 to SC-414 of the spec, the carried tasks
+Scope is the SRS ids PLAN.md lists for Phase 3, FR-420 to FR-499 and SC-401 to SC-416 of the spec, the carried tasks
 (T059, `002:T144`, T090, the notes under T026 and T082; T107 was done in this cycle, `9c710e3`), and nothing else. Reviews, reports, notifications,
 reminders, certificates and gender disputes are Phase 4's; T104 and T105 are out of scope and nothing is added for them.
 
@@ -54,7 +54,7 @@ the task that installs it, at least fourteen days old on 2026-11-05. No paid ser
 forward migration ([data-model.md](./data-model.md) §6); Redis for the limiter and the queue (four new sweeps; nothing
 in Redis is the only record of an outcome); the storage port for chat documents.
 
-**Testing**: Vitest; `tests/db-integrity` for rules 40 to 47 and every new lock path; the adversarial suite for every
+**Testing**: Vitest; `tests/db-integrity` for rules 40 to 48 and every new lock path; the adversarial suite for every
 procedure that issues a token or reads a session, its chat or its counterparty (FR-496); the video stand-in harness as
 the only producer of video events (contracts/video.md); double-run specs for the four new jobs; properties over the
 interval operations in `packages/time`; the owner's device runs (quickstart §4). **Every run is on `ijazah_integrity`
@@ -75,8 +75,8 @@ suspension and ban through `StandingService` (FR-421); T005's lock rules for eve
 window rule of 2026-11-05 (R-320); requirements from the SRS, not the boards; seven working days for one person,
 overflow stated when it happens and sent to the descope ladder, whose Phase 3 rung is in-session file sharing.
 
-**Scale/Scope**: FR-420 to FR-499, SC-401 to SC-414; 1 migration, 2 new tables, 11 columns, 8 integrity rules, 7
-settings rows; 13 user-surface procedures and an upload route, 21 administrator procedures
+**Scale/Scope**: FR-420 to FR-499, SC-401 to SC-416; 1 migration, 2 new tables, 13 columns, 9 integrity rules (40 to 48), 17
+settings rows (one removed, one default changed); 15 user-surface procedures (the subscription `live.events` among them) and an upload route, 28 administrator procedures
 ([contracts/](./contracts/)); 4 jobs; one webhook; the pre-session and room screens, the session, cancellation, remedy,
 dispute and chat states on both roles' enrollment screens, and six panel pages.
 
@@ -86,12 +86,12 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 
 | Rule family | This phase's own compliance | Mechanism delivered here | Gate |
 |---|---|---|---|
-| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number a setting, seven new rows | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
+| R-MONEY | No amount, share, commission, refund path or balance; a refund is a case with no amount (FR-467); sessions and chat reference no payment (FR-497); every number a setting, seventeen new rows | `no-money-vocabulary` extended to `modules/chat`; the boundary test of SC-409 | **PASS** |
 | R-TIME | Make-ups store local date, start and zone and derive instants (FR-469); interval arithmetic in `packages/time` (R-305); attendance instants are the provider's; the outage window entered as local fields (R-307); every time shown twice (FR-494) | Interval operations with properties | **PASS** |
 | R-GENDER | The join checks gender from the server's records under the accounts' locks; a token bound to one session and one participant (`bindJoinToken`); every refusal to a non-participant is `NOT_FOUND` | R-GENDER-7's CI gate: token replay and cross-gender cases (FR-496, SC-407) | **PASS** |
 | R-MOBILE | Every screen from its board as decided; strings from the catalogue with T123's marks; later phases' controls absent (no review, no report); the components render what the server decided (R-320's windows are the server's) | None new | **PASS** |
 | R-API | Thin routers; services decide; one inverted port (R-301); every procedure with both schemas; additive snapshot; the port speaks the domain (`createSessionToken`, `endRoom`) | The widened lock union and refusal names (contracts/kernel.md) | **PASS** |
-| R-DB | One forward migration; two append-only tables with their revokes; checks for every cross-field rule (rules 40 to 47); no stored count and no stored derived instant (a counter-proposal's answer deadline is computed when read, `counter_proposed_at` + the remedy's snapshot; `choice_closes_at` is the fact that fixes the choice window, not a derived value); no speculative index | Rules 40 to 47 | **PASS**, with decision 3 (`simultaneous_connected_seconds` and R-DB-4, recorded by ADR 0022, constitution 2.5.1) and the second analysis's D1 (no `counter_answer_closes_at`) |
+| R-DB | One forward migration; two append-only tables with their revokes; checks for every cross-field rule (rules 40 to 48); no stored count and no stored derived instant (a counter-proposal's answer deadline is computed when read, `counter_proposed_at` + the remedy's snapshot; `choice_closes_at` is the fact that fixes the choice window, not a derived value); no speculative index | Rules 40 to 48 | **PASS**, with decision 3 (`simultaneous_connected_seconds` and R-DB-4, recorded by ADR 0022, constitution 2.5.1) and the second analysis's D1 (no `counter_answer_closes_at`) |
 | R-SEC | The webhook verifies before any handler; chat documents by content, images refused by content and extension; signed expiring links; chat under a rate limit; the three name searches (`users.list`, `sessions.monitor.list`, `teacher.students.list`) under `rate_limit_search`, which fails closed, never the default alone (R-SEC-6; the fourth analysis, C2); no token, secret or body logged | The `chat` upload kind; the image corpus test (R-SEC-5) | **PASS** |
 | R-SESS | Attendance from webhooks only (1); evaluation by a sweep after end + delay (2, 3); reconnection sums (4); restricted teacher refused (5); no automatic exit from review (6); the video webhook's signature on the raw body (7, T107) | The enforcement map's Phase 3 CI tests for R-SESS-2, 4, 5 and 7 | **PASS**; R-SESS-2's "+ 2m" became a setting of default 2 (P2, constitution 2.5.0) |
 | R-HONEST | No session shown done unless the job or an administrator settled it; the teacher sees none of the student's private fields; nothing implies the platform refunds (the case is Platform Administration's) | None new | **PASS** |
@@ -111,13 +111,13 @@ chat and room screens are shared between the roles), R-MOBILE-12 and R-MOBILE-14
 specs/004-sessions/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification, approved 2026-11-05
-├── research.md          # Phase 0 output — 21 decisions (R-301 to R-321)
-├── data-model.md        # Phase 1 output — 2 tables, 11 columns, rules 40–47, 7 settings rows, 1 migration
+├── research.md          # Phase 0 output — 27 decisions (R-301 to R-327)
+├── data-model.md        # Phase 1 output — 2 tables, 13 columns, rules 40–48, 17 settings rows, 1 migration
 ├── quickstart.md        # Phase 1 output — validation guide, the device runs marked as the owner's
 ├── contracts/
 │   ├── README.md
-│   ├── app-surface.md   # 13 user procedures, the chat upload route, Phase 2's lists widened
-│   ├── admin-surface.md # 21 administrator procedures, the user directory's `users.list` and `users.get` among them
+│   ├── app-surface.md   # 15 user procedures (the live channel's subscription among them), the chat upload route, Phase 2's lists widened
+│   ├── admin-surface.md # 28 administrator procedures, the user directory's `users.list` and `users.get` among them
 │   ├── video.md         # The port as called, the webhook, the LiveKit adapter, the stand-in harness
 │   └── kernel.md        # Locks and refusals, the composition root, the jobs, the gates
 ├── checklists/
@@ -138,34 +138,38 @@ apps/
 │   ├── features/student/sessions · remedies · chat         # cancellation, dispute, choice, counter
 │   ├── features/teacher/sessions · chat                     # cancellation answer, counter answer, dispute
 │   ├── features/shared/room/                                # only if identical for both roles (R-MOBILE-3)
-│   └── lib/livekit.ts                                       # registerGlobals, the audio session
+│   ├── features/shared/sessions/                            # the «expired» display, identical for both roles (T065)
+│   ├── lib/livekit.ts                                       # registerGlobals, the audio session
+│   └── lib/live.ts                                          # the live channel's EventSource, backoff and re-reads (T065)
 ├── admin/src/pages/sessions · review · outages · disputes · cases · users  # users: FR-ADMIN-4's directory
 └── api/src/
     ├── modules/
     │   ├── sessions/   join, session read, video-webhook.controller, attendance.rules, evaluation,
     │   │               completion, the repeated-absence count, complaints and their decision, the restore, cancellation, remedies (offer, proposal, counter, booking), disputes, outages,
-    │   │               session-events, enrollment-side.port, dispute-chat.port, the cancellation-request counts,
+    │   │               session-events, enrollment-side.port, dispute-chat.port, dispute-held-files.port, the cancellation-request counts,
     │   │               the admin routers (monitor, review, outages, disputes, cases)
     │   ├── chat/       messages, the upload handler, attachment links, purge store, `createDisputeChat` (the port's side)
-    │   ├── verification/ the user directory: `users.list` and `users.get` beside `requireIdentity`
+    │   ├── verification/ the user directory: `users.list` and `users.get` beside `requireIdentity`; `createDisputeHeldFiles` (the port's side)
     │   ├── moderation/ the new reasons, openSessionDispute, closeCase, resolveSessionDispute
     │   ├── booking/    createEnrollmentSide, the widened termination subscriber, reservations in the hold and slots
     │   └── identity/   StandingService.suspendStudent/banStudent/reinstateStudent, the students router
     ├── platform/
-    │   ├── db/         row-lock (four tables), db-errors (four names), db-clock
-    │   ├── guards/     upload kind `chat` (PDF, UTF-8 text)
+    │   ├── db/         row-lock (four tables), db-errors (five names), db-clock
+    │   ├── guards/     upload kind `chat` (PDF, UTF-8 text); the signed-in default limit
     │   ├── config/     LIVEKIT_* keys, VIDEO_PROVIDER `livekit`
-    │   └── ports/video/livekit.adapter.ts; the port and stand-in widened
+    │   ├── ports/video/livekit.adapter.ts; the port and stand-in widened
+    │   └── live/       the live channel's registry, in-process bus and after-commit publisher (T063)
+    ├── surfaces/       live.router.ts (`live.events`)
     └── jobs/           evaluate-sessions, advance-remedies, expire-cancellation-requests, purge-chat
 
 packages/
 ├── time/src/           interval operations (R-305)
-└── contracts/src/      sessions, chat; admin/sessions, admin/disputes, admin/cases, admin/students
+└── contracts/src/      sessions, chat, live; admin/sessions, admin/disputes, admin/cases, admin/students
 
 prisma/schema · prisma/migrations · prisma/seed.ts   # data-model §2 and §6
 tests/
 ├── adversarial/        Phase 3's procedures, token replay
-├── db-integrity/       rules 40–47, the lock paths, reservations against holds
+├── db-integrity/       rules 40–48, the lock paths, reservations against holds
 ├── fixtures/chat-corpus/
 └── support/video-stand-in.ts                         # the only producer of video events
 ```
@@ -202,13 +206,13 @@ items run as parallel lanes (the owner's decision of 2026-10-26).
 
 | Day | Batch | Items | What |
 |---|---|---|---|
-| D17 Sun 11/8 | B33 | T079/T080 (decision 10); the sessions pass migration and seed (ERD v1.15, amended on 2026-11-05), the schema gate's declared caches gaining `sessions.simultaneous_connected_seconds` (R-DB-4, constitution 2.5.0); the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons | The carried tasks the spec puts first (FR-420; T107, the constitution before the webhook, done on 2026-11-05 in this cycle), and the foundations every later batch reads |
+| D17 Sun 11/8 | B33 | T079/T080 (decision 10); the sessions pass migration and seed (ERD v1.15, amended on 2026-11-05), the schema gate's declared caches gaining `sessions.simultaneous_connected_seconds` (R-DB-4, constitution 2.5.0); the kernel's locks, refusal names and clock; `packages/time`'s interval operations; T059 with sessions' `cancelRemainingSessions` and moderation's new reasons; booking's `slot_holds.release_reason` and rule 48 (R-323, GAP-8); a deleted account's files held through identity's `FileHold` port while an enrollment of theirs has an open matter (R-327) | The carried tasks the spec puts first (FR-420; T107, the constitution before the webhook, done on 2026-11-05 in this cycle), and the foundations every later batch reads |
 | D17 Sun 11/8 | B34 | `002:T144` (a student's suspension, ban and reinstatement through `StandingService`, FR-486); a teacher's end (FR-483); T090 (FR-426); the `EnrollmentSide` port; the LiveKit adapter with the Daily rename and the port's widening (FR-425, quickstart §3); the video stand-in harness | Every account's end before any session can be joined; the provider behind the port |
 | D18 Mon 11/9 | B35 | `sessions.get` and `sessions.join` with their adversarial cases; `POST /webhooks/video`; the attendance rules and `evaluate-sessions`; completion and the event rows; the outage windows; the R-SESS CI tests | US1's API and US2 whole (SC-402 to SC-407) |
 | D18 Mon 11/9 | B36 | The LiveKit packages and the development build on the owner's phone; the pre-session screen; the room screen; the session statuses on both roles' enrollment screens; the signed-in rate limits, the administrator kind's declaration and the default limit (T062, the decisions of 2026-11-05 on the administrator's control); the live channel's server side (T063: `live.events`, the registry, the in-process bus and the after-commit publisher, the shutdown order; research R-324) | US1 on the phone; the first device check of joining; the live channel's API |
 | D19 Tue 11/10 | B37 | Cancellation requests and their expiry sweep; the administrator's cancellation and the monitor; the user record's request counts; raising a dispute | US3's API, US5's first half |
 | D19 Tue 11/10 | B38 | The remedy offer and proposal; the student's choice, acceptance, counter options and counter-proposals again after a decline (R-320, decision 9); the teacher's answer and the windows' ends; the make-up's booking and the slot's release (the notes under T026); refund cases; booking's reservation reads | US4's API |
-| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1); a ruling's revision (SRS FR-DISPUTE-7, the third analysis); the manual compensation case (T064, `cases.openManual`, research R-326) | US5's administrator side |
+| D20 Wed 11/11 | B39 | The disputes queue and its resolution; the review queue and its resolution; the compensation-case queue and `closeCase` (the note under T082), a suspended student's case cleared or confirmed (decision 1); a ruling's revision (SRS FR-DISPUTE-7, the third analysis) and the correction of an outcome nobody disputed (`sessions.review.revise`, FR-439, R-323 GAP-3); the manual compensation case (T064, `cases.openManual`, research R-326) | US5's administrator side |
 | D20 Wed 11/11 | B40 | Chat messages and the rate limit; the chat upload kind and attachment links (SC-408); `purge-chat`; the dispute's chat read; the student's complaint of the teacher's absence and its decision (T060); an administrator's restore (T061) | US7's API |
 | D20 Wed 11/11 | B40a | The live channel on the phone and the pre-join presence (T065); the remaining producers: cancellation, an administrator's cancel, an enrollment closed or restored, an account's end, chat (T066) (research R-324, the owner's decision of 2026-11-05) | Live updates while the app is open (FR-427 to FR-429, FR-437, FR-438) |
 | D21 Thu 11/12 | B41 | The phone: cancellation and dispute on both roles; the remedy sheets (choice, proposal, counter, the teacher's answer); chat on both roles; the ended tab's new statuses | US3, US4, US5 and US7 on the phone |
@@ -736,7 +740,7 @@ decisions above. Two parts wait for what the build finds: whether a room must be
 | ADR 0023 (new) | No automatic termination, the complaint, the restore and its two exits from a final state | 5 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 17 to 20 | 1, 2, 3, 5 |
 | `PLAN.md` | Phase 3's SRS list gains FR-DISPUTE-7 and FR-CANCEL-8; the definition of done gains the line on no automatic termination | 1, 6 |
-| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value by NFR-SEC-12's rule, confirmed by T062 from research R-325 before B36), NFR-SEC-12's first-refusal logging, an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
+| `docs/SRS.md` | The administrator's control and the rate limits: FR-CANCEL-8 (`slot_changed`), NFR-SEC-12 (new), FR-ADMIN-20 (new), §3.14's four rows (the default's value by NFR-SEC-12's rule, confirmed by T062 from research R-325 before B36; *superseded* the same day: research R-325 set 160 per 60 s, seeded by T001, and T062 sets no value, the row of the control inventory answered below), NFR-SEC-12's first-refusal logging, an amendment line | Decisions of 2026-11-05, the administrator's control and the rate limits, 2 to 4 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog row 21, the four rate-limit settings, no column for `slot_changed` | 2, 3 |
 | `docs/SRS.md` | The control inventory answered: §3.14 (the default 160 per 60 s, chat retention 30, «Outcome correction rate limit»), NFR-SEC-12, FR-SESS-13, FR-AUTH-14, FR-NOTIF-1 (`compensation_case_opened`'s record, `absence_complaint_decided` to both parties), four amendment lines | Decisions of 2026-11-05, the administrator's control inventory answered, 1 to 6 |
 | `docs/ERD.md` | v1.15 amended in place again: changelog rows 23 to 27 (the default's value, chat retention, the deleted files held, the manual reasons and the covering rule, `outcome_corrected`, `instants_reresolved`, `previous_start_at`, `slot_holds.release_reason`, rule 48, the new setting, §11) | 1 to 6 |

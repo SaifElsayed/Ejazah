@@ -126,8 +126,9 @@ Append-only record of each event a later notification needs (FR-495).
 
 **The history of counter-proposals lives here** (the owner's decision 9 of 2026-11-05): `session_remedies` keeps only
 the pending counter-proposal (§2.3), so each `counter_proposed` row copies the counter-proposal's slot, date, start and
-zone, and its end is the next `counter_accepted`, `counter_declined`, `counter_withdrawn`, `counter_booking_refused` or
-`remedy_handed_to_case` row of the same session. `counter_withdrawn` is the student's acceptance of the system's
+zone, and its end is the next `counter_accepted`, `counter_declined`, `counter_withdrawn`, `counter_booking_refused`,
+`remedy_handed_to_case` or `remedy_lapsed` row of the same session (`remedy_lapsed`: a student's deletion lapsing a
+remedy with a counter pending). `counter_withdrawn` is the student's acceptance of the system's
 proposal while the counter was pending (or a suspension's freeze); `counter_booking_refused` is the teacher's acceptance
 that the database refused (an overlap, FR-468), the counter released as at a decline, so the two are never read as one
 another (the owner's decision of 2026-11-06 on the fourth analysis, A1). The kind is the refusal's record: the
@@ -239,7 +240,7 @@ roughly, and nothing else tells a new checkout from an account's end for a hold 
 
 | From | To | By | Writes |
 |---|---|---|---|
-| `scheduled` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` · `under_threshold` · `provider_outage` | `evaluate-sessions` only, after end + delay (R-SESS-2, R-SESS-3) | `simultaneous_connected_seconds`, `evaluated_at`; `session_events(settled)`; threshold and completion checks |
+| `scheduled` | `done` · `student_no_show` · `teacher_no_show` · `both_no_show` · `under_threshold` · `provider_outage` | `evaluate-sessions` only, after end + delay (R-SESS-2, R-SESS-3) | `simultaneous_connected_seconds`, `evaluated_at`; `session_events(settled)`; the completion check (no count is checked: FR-448, R-322) |
 | `scheduled` | `cancelled_by_agreement` | an accepted request, before the start | the request `accepted`; the remedy offered at once (final at acceptance, never disputed, decision 5); events |
 | — | `scheduled` | generation (Phase 2); a make-up's booking (FR-469); an administrator's restore, the sessions still owed (FR-455, R-322) | the local date, start and zone, the instants from `packages/time` |
 | `scheduled` | `cancelled_by_admin` | an admin's cancellation (FR-460), an administrator's termination on a complaint (FR-453), an account's end (FR-483, FR-484, FR-486), a suspended student's fault confirmed (its make-ups still scheduled, FR-486) | events; a case per R-312; for a student's suspension, if the case clears the student, what a Teacher-No-Show owes, on recitation a make-up or a refund (`awaiting_choice`), on the ijazah track a make-up (decision 1 as changed on the analysis, item 2), and nothing if the case confirms the fault |

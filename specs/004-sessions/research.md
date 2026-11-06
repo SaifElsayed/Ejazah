@@ -838,7 +838,7 @@ and the rate limits», plan.md; SRS NFR-SEC-12; spec FR-470). Today `adminProced
    through when the counter rejects and when it never answers within 100 ms, and the breaker skipping the counter until
    10 s have passed with one warning; a declared limit refusing the call when the counter rejects; the default's missing
    row refusing the call, never letting it through; the administrator kind refusing over its declared limit with no
-   transaction opened and nothing written; and `tests/seed/seed.spec.ts` asserting the seed plants the four rows. For item 6, for each kind of subject
+   transaction opened and nothing written; and `tests/seed/seed.spec.ts` asserting the seed plants the five rows (the default's and the four administrator limits': T062). For item 6, for each kind of subject
    (user, administrator, identifier, budget): the first refusal writes exactly one record whose fields are exactly the
    allowed ones; a second refusal in the same window writes nothing; a call within the limit writes nothing; and an
    identifier's record, serialised, never contains the raw subject (a phone number and an email address as subjects).
@@ -992,7 +992,7 @@ happened, when and why, and the panel page and procedure that show it), a **fix*
 contracts/admin-surface.md and of the earlier phases as they stand; the pages are the panel's (R-318; `/payments` and
 `/audit` exist, the second listing every administrator's audit entry with its reason through `audit.list/get`). A cell
 that has nothing is a **GAP**, numbered and answered after the table; **M** is the manual compensation case of FR-471
-(c), `cases.openManual` (R-326, spec FR-493; designed on 2026-11-05, its task in the tasks pass to come), and **M only** marks a row where it is the one restore-the-right path. This inventory
+(c), `cases.openManual` (R-326, spec FR-493; designed on 2026-11-05, its task T064), and **M only** marks a row where it is the one restore-the-right path. This inventory
 writes no task. The owner answered every gap on 2026-11-05 (plan.md, «Decisions of 2026-11-05, the administrator's
 control inventory answered»): each answer is under the table, and the table's cells keep the gap they found.
 
@@ -1035,6 +1035,9 @@ control inventory answered»): each answer is under the table, and the table's c
 | P3-27 | A video webhook refused (no or wrong signature, 401) or unattributable (no such session, not a participant: 200, written nowhere) | **GAP-10**: no row; a refusal logged at warn with its code, an unattributable event reported to error tracking; panel: none | None needed | Nothing is owed | The body and the header are never stored or logged |
 | P3-28 | A call refused by a rate limit (`RATE_LIMITED`), and the default limit's breaker opening (R-321) | **GAP-9**: no durable record; the first refusal of a subject in a window logged (R-321, item 6: a user or administrator by id and the procedure, any other subject by the procedure and its keyed digest, a budget by the procedure and its key); the Redis counter expires with its window; the breaker's one warning per period in the logs; panel: none | The caller's next window | Nothing is owed | The counters, by each limit's `window_seconds`; the breaker's state in process memory after 10 s |
 | P3-29 | A teacher's acceptance of a counter-proposal that the database refuses (`sessions.remedy.answerCounter`, FR-468, A3): `MAKEUP_REFUSED`, then the counter released as at a decline in a second transaction (added on the fourth analysis, the owner's decision of 2026-11-06) | The `counter_*` columns cleared, the remedy `proposed` (or the proposal booked once the choice window has closed, P3-5); one `session_events` row `counter_booking_refused`, its kind the reason (the owner's decision of 2026-11-06, A1: was `counter_withdrawn`, the row a student's acceptance of the proposal writes, so the two were indistinguishable); panel: the timeline and the remedy on `sessions.monitor.get` (GAP-1, GAP-4) | The student's own paths again while the choice window is open (accept, counter-propose from options read again, H4); `cases.openManual` with `remedyId` (GAP-5) | The make-up booked later, or the case | Nothing |
+| P3-30 | An administrator's restore (`sessions.restore`, FR-454, R-322; added on the fourth analysis, A3) | `enrollments.status` back to `confirmed`, one `enrollment_events` row `restored`, the recreated `sessions` rows, one `remedy_offered` row per remedy offered again, the closing's case `dismissed` with the note `restored`, audit `enrollment.restored` with the reason; panel: `/sessions` (the timeline, GAP-1), `/cases`, `/audit` | `sessions.cancel` of a recreated session while not settled (FR-460); the remedies' own paths | `cases.openManual` (M) | The stored idempotent answer after 24 h (the rows and the audit entry stay) |
+| P3-31 | An administrator's correction of an outcome nobody disputed (`sessions.review.revise`, FR-439, GAP-3; added on the fourth analysis, A3) | The session's `status`, `settled_by_admin_id`, `admin_settled_at`; one `session_events` row `outcome_corrected` with `outcome_before` and `outcome_after`; audit `session.outcome_corrected` with the reason; panel: `/sessions` (the timeline), `/review`, `/audit` | Another correction under the same conditions; a participant's dispute inside the window (T026) | The remedy the corrected outcome owes; otherwise **M only** | The stored idempotent answer after 24 h |
+| P3-32 | A student's complaint of the teacher's absence raised (`sessions.complaint.raise`, FR-452, R-322; added on the fourth analysis, A3) | One `disputes` row of kind `absence_complaint` with its text, `raised_by_user_id` and `created_at`; one `session_events` row `complaint_raised`; panel: `/cases` (`cases.list/get`) | The decision (`cases.decideComplaint`, P3-18, P3-19, and (b), P3-15) | The decision; otherwise **M** | Nothing |
 
 **The gaps and their answers** (**Decided**, the owner, 2026-11-05: plan.md, «Decisions of 2026-11-05, the
 administrator's control inventory answered»). The table keeps each gap's number where it was found; the answer below
@@ -1119,7 +1122,7 @@ covers).
 **What is erased automatically, and by what** (the last column, gathered): the chat's bodies, attachment fields and
 files, by `purge-chat` daily, after the last session's end + `dispute_window_hours` (72) + `chat_retention_days` (30,
 the owner's decision of 2026-11-05: was 0),
-never while a dispute or a case (from Phase 4, a report) is open (FR-492); idempotency rows, the stored answers of
+never while a dispute, a case or a complaint of the teacher's absence (from Phase 4, a report) is open (FR-492); idempotency rows, the stored answers of
 `disputes.revise`, `sessions.restore`, `sessions.review.revise` and `cases.openManual` and the time zone marker included, by `expire-idempotency-keys` hourly after
 `idempotency_key_ttl_hours` (24) (ADR 0008 D2); the rate-limit counters in Redis, each at its limit's `window_seconds`,
 and the default limit's cached setting (60 s) and breaker (10 s) in process memory (R-321); finished queue jobs at once
@@ -1205,7 +1208,7 @@ amended). Read against this branch at `9159cec`; the versions in the repository:
    (a `joined` with no later `left` for its `connection_ref`, and no `room_ended` after it), so out-of-order or
    duplicate events do not mislead it; a hint only, LiveKit giving "no guarantees around delivery"
    (https://docs.livekit.io/home/server/webhooks/), and no provider call per read.
-7. **Not live: read when the screen opens** (and on T015's foreground re-read): remedies, disputes, complaints,
+7. **Not live: read when the screen opens** (and on `003:T015`'s foreground re-read): remedies, disputes, complaints,
    outcomes and every administrator screen; **an enrollment's completion and a cancellation request's expiry**, both
    produced by the worker (the owner's decision: read on open); Phase 2's payment confirmation, still polled every
    `checkout_confirming_poll_seconds` (30). The phone's «expired» on a pending request, derived from its `expiresAt`, is
@@ -1316,7 +1319,7 @@ rounded up to ten, **160 per 60 s**, above 120, so 160. The factor 3 rather than
 the default fails open on a Redis failure (R-321, item 4), so its work is to stop a runaway client (a render loop or a
 retry storm calls hundreds of times a minute, which 160 stops as surely as 120), not to be tight; and the fixed window
 already lets up to twice the limit through at a window's edge (`platform/guards/rate-limit.guard.ts`'s header). The
-panel needs no value of its own: 45 × 3 = 135 < 160, on a counter apart from the users' (R-321, item 2); the three
+panel needs no value of its own: 45 × 3 = 135 < 160, on a counter apart from the users' (R-321, item 2); the four
 administrator write limits (10 per 60 s each) are unchanged. Two devices of one account share a counter: 2 × 52 = 104.
 
 **What would push it above 200** (none does in the design as written; each named with its fix): (1) the chat read
