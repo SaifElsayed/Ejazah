@@ -45,7 +45,12 @@ const summary = {
 
 const item = {
   enrollmentId: ids.enrollment,
-  teacher: { teacherId: ids.teacher, displayName: 'أحمد سالم' },
+  teacher: {
+    teacherId: ids.teacher,
+    displayName: 'أحمد سالم',
+    displayNameOrNull: 'أحمد سالم',
+    deleted: false,
+  },
   summary,
   status: 'confirmed',
   next: session,
@@ -106,6 +111,14 @@ describe('every enrollments input names what is asked for, never who asks (R-GEN
 describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
   it('parses an item with its next and last sessions and the three derived counts', () => {
     expect(studentEnrollmentItem.parse(item)).toEqual(item);
+  });
+
+  it('parses an item whose teacher was deleted: no name, and deleted (T007, FR-426)', () => {
+    const gone = {
+      ...item,
+      teacher: { teacherId: ids.teacher, displayName: '', displayNameOrNull: null, deleted: true },
+    };
+    expect(studentEnrollmentItem.parse(gone)).toEqual(gone);
   });
 
   it('parses an item awaiting payment, which has no session yet', () => {
