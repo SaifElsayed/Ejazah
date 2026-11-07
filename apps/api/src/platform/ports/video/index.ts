@@ -23,12 +23,19 @@ export type VideoConfig = Pick<
 
 const STAND_IN_SECRET_LABEL = 'ijazah:video-stand-in-webhook:v1';
 
+/**
+ * The secret the stand-in signs and verifies its events under, as above. Exported for the harness's
+ * fixtures (T010, `video-stand-in.fixtures.ts`), which sign what the API verifies without repeating
+ * the label.
+ */
+export function standInVideoWebhookSecret(config: Pick<VideoConfig, 'ENCRYPTION_KEY'>): string {
+  return deriveStandInSecret(config.ENCRYPTION_KEY, STAND_IN_SECRET_LABEL);
+}
+
 export function createVideoPort(config: VideoConfig): VideoPort {
   switch (config.VIDEO_PROVIDER) {
     case 'fake':
-      return new FakeVideoAdapter({
-        webhookSecret: deriveStandInSecret(config.ENCRYPTION_KEY, STAND_IN_SECRET_LABEL),
-      });
+      return new FakeVideoAdapter({ webhookSecret: standInVideoWebhookSecret(config) });
     case 'livekit':
       return new LiveKitVideoAdapter({
         url: required(config.LIVEKIT_URL, 'LIVEKIT_URL'),
