@@ -22,8 +22,24 @@
 // `account_deleted` with one `enrollment_events` row. A teacher's deletion opens one `teacher_ended`
 // compensation case per enrollment (moderation's `openCompensationCase`), which its sessions' rows
 // name and its open remedies are handed to; a student's opens none, so the rows name none and the
-// open remedies lapse. A suspension, a ban or a revocation reaches no confirmed enrollment here
-// (a student's ban, T005; a teacher's end, T006).
+// open remedies lapse.
+//
+// A STUDENT'S SUSPENSION AND BAN (T005 of specs/004-sessions, `002:T144`; FR-485, FR-486; R-313;
+// plan.md decision 1). The student's confirmed enrollments (an account is a student or a teacher,
+// ADR 0016, so the enrollments whose student it is tell it) are reached in the action's transaction,
+// in the deletion's order. A suspension cancels every upcoming session, one in its join period
+// included (the owner's decision of 2026-11-07, item 5), through `cancelRemainingSessions` with
+// `remedies: 'lockOnly'`, opens one `student_suspended` case per enrollment, which those sessions'
+// rows name, then freezes the enrollments' open remedies through sessions' `freezeOpenRemedies`;
+// each enrollment stays `confirmed` and keeps its slot. A ban cancels the upcoming sessions and
+// hands the open remedies (`frozen` included) to one `student_banned` case per enrollment, nothing
+// owed, then cancels the enrollments `admin` at once with one `enrollment_events` row each. A
+// teacher's suspension, ban or revocation reaches no confirmed enrollment here (T006).
+//
+// THE LOG LINE (the note under T005). Each call writes one info line, «Account end decided», with
+// the account's id, the cause and counts only: `{ userId, cause, enrollments, cancelledSessions,
+// frozenRemedies, handedRemedies, lapsedRemedies, cases }` (the lapsed count added by the owner's
+// decision of 2026-11-07).
 //
 // THE LOCKS (T005's rules, `platform/db/row-lock.ts`). The caller holds the account's `users` row:
 // the standing actions lock it first (`lockAccount`, then `lockApplication` for a ban and a
@@ -47,10 +63,18 @@
 // referencing them is written. They are told after the commit, from those rows (FR-385).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import { lockTeacherSlots, teacherSlotsOf } from '../catalog/index.js';
 import type { AccountConsequence, TerminationCause } from '../identity/index.js';
-import { openCompensationCase } from '../moderation/index.js';
-import { type CaseOf, cancelRemainingSessions } from '../sessions/index.js';
+import { type CompensationReason, openCompensationCase } from '../moderation/index.js';
+import {
+  type CaseOf,
+  cancelRemainingSessions,
+  type EnrollmentsEnded,
+  freezeOpenRemedies,
+  type RemainingSessionsOptions,
+  type RemediesFrozen,
+} from '../sessions/index.js';
 import {
   type EnrollmentCancellationReason,
   type EnrollmentOutcome,
@@ -74,6 +98,12 @@ import {
 
 export type { ActiveHoldScope, ConfirmedEnrollment };
 
+/** The cases an account's end opens on the enrollments it reaches (R-313). */
+export type EndCaseReason = Extract<
+  CompensationReason,
+  'teacher_ended' | 'student_suspended' | 'student_banned'
+>;
+
 /** What the subscriber reads and writes, each on the termination's transaction. */
 export interface TerminationStore {
   /** Takes the teacher's slots' advisory lock until the transaction ends (catalog's, R-206). */
@@ -96,14 +126,21 @@ export interface TerminationStore {
   /** The kernel's row lock (T005). */
   lockRows(tx: Transaction, table: LockedTable, ids: readonly string[]): Promise<void>;
   /** Moderation's case, opened or joined on the enrollment's lock already held; its id. */
-  openCase(tx: Transaction, enrollmentId: string, reason: 'teacher_ended'): Promise<string>;
+  openCase(tx: Transaction, enrollmentId: string, reason: EndCaseReason): Promise<string>;
   /** Sessions' hand-off of an enrollment's end (`cancelRemainingSessions`). */
   cancelRemainingSessions(
     tx: Transaction,
     enrollmentIds: readonly string[],
     now: Date,
     caseOf: CaseOf,
-  ): Promise<unknown>;
+    options?: RemainingSessionsOptions,
+  ): Promise<EnrollmentsEnded>;
+  /** Sessions' freeze of a suspended student's open remedies (`freezeOpenRemedies`, T005). */
+  freezeOpenRemedies(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+    now: Date,
+  ): Promise<RemediesFrozen>;
   /** Cancels those still confirmed with `reason`. */
   cancelConfirmed(
     tx: Transaction,
@@ -126,7 +163,9 @@ export const terminationStore: TerminationStore = {
   lockRows,
   openCase: async (tx, enrollmentId, reason) =>
     (await openCompensationCase(tx, enrollmentId, reason)).caseId,
-  cancelRemainingSessions,
+  cancelRemainingSessions: (tx, enrollmentIds, now, caseOf, options) =>
+    cancelRemainingSessions(tx, enrollmentIds, now, caseOf, undefined, options),
+  freezeOpenRemedies: (tx, enrollmentIds, now) => freezeOpenRemedies(tx, enrollmentIds, now),
   cancelConfirmed,
   recordEvents: recordEnrollmentEvents,
 };
@@ -134,6 +173,8 @@ export const terminationStore: TerminationStore = {
 export interface TerminationDependencies {
   /** Payments' order standing (`orderStandingsOf`), bound by `main.ts` (R-208). */
   readonly orders: OrderStandings;
+  /** The process's logger, for the one line per account end (the note under T005). */
+  readonly log: Pick<Logger, 'info'>;
   /** The clock; the system clock unless a spec sets one. */
   readonly now?: () => Date;
   readonly store?: TerminationStore;
@@ -157,14 +198,16 @@ function studentReason(cause: TerminationCause): ReleaseReason {
  */
 export function terminationSubscriber({
   orders,
+  log,
   now = () => new Date(),
   store = terminationStore,
 }: TerminationDependencies): AccountConsequence {
   return async (tx, userId, cause) => {
     // Read with no lock: the account is held, and every path that confirms an enrollment of it
     // locks the account first, so the set cannot grow before the enrollments are locked below.
-    const ending =
-      cause === 'account_deleted' ? await store.confirmedEnrollmentsOf(tx, userId) : [];
+    const ending = (await store.confirmedEnrollmentsOf(tx, userId)).filter(
+      (enrollment) => endOf(cause, roleIn(userId, enrollment)) !== null,
+    );
     // The slots' key of every teacher concerned, ascending (L1): the account's own and, for a
     // student, each of their teachers'.
     for (const key of sortedUnique([userId, ...ending.map(({ teacherUserId }) => teacherUserId)])) {
@@ -174,25 +217,90 @@ export function terminationSubscriber({
     const onSlots = await store.activeHoldIds(tx, { slotIds });
     const own = await store.activeHoldIds(tx, { studentUserId: userId });
     const at = now();
-    if (ending.length > 0) {
-      await endConfirmed(tx, userId, { ending, holdIds: [...onSlots, ...own], at, store });
-    }
+    const decided =
+      ending.length > 0
+        ? await endConfirmed(tx, userId, cause, {
+            ending,
+            holdIds: [...onSlots, ...own],
+            at,
+            store,
+          })
+        : NOTHING_DECIDED;
     // At most one of the two is non-empty (ADR 0016), so the holds are locked in one statement.
     if (onSlots.length > 0) await store.release(tx, onSlots, teacherReason(cause), { at, orders });
     if (own.length > 0) await store.release(tx, own, studentReason(cause), { at, orders });
+    // The account's id, the cause and counts only (the note under T005).
+    log.info({ userId, cause, ...decided }, 'Account end decided');
   };
 }
 
 const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
 
+type Role = 'student' | 'teacher';
+
+/** The account's role in the enrollment (an account is a student or a teacher, ADR 0016). */
+const roleIn = (userId: string, { studentUserId }: ConfirmedEnrollment): Role =>
+  studentUserId === userId ? 'student' : 'teacher';
+
+/** How an account's end ends a confirmed enrollment it reaches (R-313's table). */
+interface End {
+  /** The case it opens or joins on the enrollment, which its sessions' rows name; null for none. */
+  readonly caseReason: EndCaseReason | null;
+  /**
+   * The enrollment's cancellation reason; null for a student's suspension, which keeps it
+   * `confirmed` and freezes its open remedies.
+   */
+  readonly cancellation: EnrollmentCancellationReason | null;
+}
+
+/** How `cause` ends the confirmed enrollments of an account in `role`; null where it reaches none. */
+function endOf(cause: TerminationCause, role: Role): End | null {
+  if (cause === 'account_deleted') {
+    return {
+      caseReason: role === 'teacher' ? 'teacher_ended' : null,
+      cancellation: 'account_deleted',
+    };
+  }
+  // A teacher's suspension, ban or revocation: T006's.
+  if (role === 'teacher') return null;
+  if (cause === 'suspended') return { caseReason: 'student_suspended', cancellation: null };
+  if (cause === 'banned') return { caseReason: 'student_banned', cancellation: 'admin' };
+  return null;
+}
+
+/** What one account's end decided on its confirmed enrollments, the log line's counts. */
+interface Decided {
+  readonly enrollments: number;
+  readonly cancelledSessions: number;
+  readonly frozenRemedies: number;
+  readonly handedRemedies: number;
+  /** A student's deletion lapses the open remedies, nothing owed (C2). */
+  readonly lapsedRemedies: number;
+  readonly cases: number;
+}
+
+const NOTHING_DECIDED: Decided = {
+  enrollments: 0,
+  cancelledSessions: 0,
+  frozenRemedies: 0,
+  handedRemedies: 0,
+  lapsedRemedies: 0,
+  cases: 0,
+};
+
+const NOTHING_FROZEN: RemediesFrozen = { frozenRemedyIds: [], withdrawnCounterRemedyIds: [] };
+
 /**
- * A deletion's confirmed enrollments ended (this file's head): the holds, then every enrollment in
- * one statement, then sessions' hand-off with the cases, then the enrollments cancelled with their
- * rows. The release after it finds its holds and enrollments already held.
+ * The account's confirmed enrollments ended or kept (this file's head): the holds, then every
+ * enrollment in one statement, then sessions' hand-off with the cases (a suspension's with the
+ * remedies locked only, then frozen), then the enrollments cancelled with their rows unless the end
+ * keeps them. The release after it finds its holds and enrollments already held. An account is one
+ * role (ADR 0016), so every enrollment of one call ends the same way.
  */
 async function endConfirmed(
   tx: Transaction,
   userId: string,
+  cause: TerminationCause,
   {
     ending,
     holdIds,
@@ -204,7 +312,7 @@ async function endConfirmed(
     readonly at: Date;
     readonly store: TerminationStore;
   },
-): Promise<void> {
+): Promise<Decided> {
   const holds = sortedUnique(holdIds);
   if (holds.length > 0) await store.lockRows(tx, 'slot_holds', holds);
   const holdsEnrollments = await (holds.length > 0 ? store.holdEnrollmentIds(tx, holds) : []);
@@ -215,22 +323,39 @@ async function endConfirmed(
   );
   const locked = new Set(ending.map(({ id }) => id));
   const still = (await store.confirmedEnrollmentsOf(tx, userId)).filter(({ id }) => locked.has(id));
-  if (still.length === 0) return;
+  const [first] = still;
+  const end = first === undefined ? null : endOf(cause, roleIn(userId, first));
+  if (end === null) return NOTHING_DECIDED;
   const ids = sortedUnique(still.map(({ id }) => id));
-  const taught = new Set(
-    still.filter(({ teacherUserId }) => teacherUserId === userId).map(({ id }) => id),
-  );
-  await store.cancelRemainingSessions(tx, ids, at, async (enrollmentId) =>
-    taught.has(enrollmentId) ? store.openCase(tx, enrollmentId, 'teacher_ended') : null,
-  );
-  await store.cancelConfirmed(tx, ids, 'account_deleted');
-  await store.recordEvents(
+  const keeps = end.cancellation === null;
+  const ended = await store.cancelRemainingSessions(
     tx,
-    ids.map((enrollmentId) => ({
-      kind: 'cancelled' as const,
-      enrollmentId,
-      cancellationReason: 'account_deleted' as const,
-      occurredAt: at,
-    })),
+    ids,
+    at,
+    async (enrollmentId) =>
+      end.caseReason === null ? null : store.openCase(tx, enrollmentId, end.caseReason),
+    keeps ? { remedies: 'lockOnly' } : {},
   );
+  const frozen = keeps ? await store.freezeOpenRemedies(tx, ids, at) : NOTHING_FROZEN;
+  if (end.cancellation !== null) {
+    const cancellationReason = end.cancellation;
+    await store.cancelConfirmed(tx, ids, cancellationReason);
+    await store.recordEvents(
+      tx,
+      ids.map((enrollmentId) => ({
+        kind: 'cancelled' as const,
+        enrollmentId,
+        cancellationReason,
+        occurredAt: at,
+      })),
+    );
+  }
+  return {
+    enrollments: ids.length,
+    cancelledSessions: ended.cancelledSessionIds.length,
+    frozenRemedies: frozen.frozenRemedyIds.length,
+    handedRemedies: ended.handedRemedyIds.length,
+    lapsedRemedies: ended.lapsedRemedyIds.length,
+    cases: new Set([...ended.caseOf.values()].filter((caseId) => caseId !== null)).size,
+  };
 }

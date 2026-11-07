@@ -23,6 +23,7 @@ import type { EnrollmentOutcome } from './enrollment-events.repository.js';
 import type { OrderStandings, ReleaseDependencies, ReleaseReason } from './holds.service.js';
 import {
   type ConfirmedEnrollment,
+  type TerminationDependencies,
   type TerminationStore,
   terminationSubscriber,
 } from './termination.subscriber.js';
@@ -96,12 +97,35 @@ function world(confirmed: readonly ConfirmedEnrollment[] = []) {
       journal.push(`case:${enrollmentId}:${reason}`);
       return `case-of-${enrollmentId}`;
     },
-    cancelRemainingSessions: async (_tx, enrollmentIds, at, caseOf) => {
+    cancelRemainingSessions: async (_tx, enrollmentIds, at, caseOf, options) => {
       expect(at).toBe(NOW);
-      journal.push(`cancel-remaining:${enrollmentIds.join(',')}`);
+      const lockOnly = options?.remedies === 'lockOnly';
+      journal.push(`cancel-remaining:${enrollmentIds.join(',')}${lockOnly ? ':lockOnly' : ''}`);
+      const cases = new Map<string, string | null>();
       for (const enrollmentId of enrollmentIds) {
-        journal.push(`case-of:${enrollmentId}:${String(await caseOf(enrollmentId))}`);
+        const caseId = await caseOf(enrollmentId);
+        cases.set(enrollmentId, caseId);
+        journal.push(`case-of:${enrollmentId}:${String(caseId)}`);
       }
+      // Two sessions cancelled and one remedy handed (or lapsed, with no case) per enrollment.
+      const owed = (handed: boolean) =>
+        enrollmentIds
+          .filter((one) => !lockOnly && (cases.get(one) !== null) === handed)
+          .map((one) => `remedy-of-${one}`);
+      return {
+        cancelledSessionIds: enrollmentIds.flatMap((one) => [`s1-of-${one}`, `s2-of-${one}`]),
+        handedRemedyIds: owed(true),
+        lapsedRemedyIds: owed(false),
+        caseOf: cases,
+      };
+    },
+    freezeOpenRemedies: async (_tx, enrollmentIds, at) => {
+      expect(at).toBe(NOW);
+      journal.push(`freeze:${enrollmentIds.join(',')}`);
+      return {
+        frozenRemedyIds: enrollmentIds.map((one) => `remedy-of-${one}`),
+        withdrawnCounterRemedyIds: [],
+      };
     },
     cancelConfirmed: async (_tx, enrollmentIds, reason) => {
       journal.push(`cancel-confirmed:${enrollmentIds.join(',')}:${reason}`);
@@ -118,8 +142,14 @@ function world(confirmed: readonly ConfirmedEnrollment[] = []) {
       return { released: [...holdIds], cancelled: [], keptPending: [] };
     },
   };
-  const subscriber = terminationSubscriber({ orders, now: () => NOW, store });
-  return { journal, released, subscriber, holdsOnSlots, holdsOfStudents, store };
+  const logged: unknown[][] = [];
+  const log = {
+    info: (...args: unknown[]) => {
+      logged.push(args);
+    },
+  } as unknown as TerminationDependencies['log'];
+  const subscriber = terminationSubscriber({ orders, now: () => NOW, store, log });
+  return { journal, released, subscriber, holdsOnSlots, holdsOfStudents, store, log, logged };
 }
 
 describe("a teacher's end releases the holds on the teacher's slots (R-219)", () => {
@@ -138,6 +168,8 @@ describe("a teacher's end releases the holds on the teacher's slots (R-219)", ()
     const { journal, subscriber } = world();
     await subscriber(tx, TEACHER, 'banned');
     expect(journal).toEqual([
+      // A suspension or a ban reads the confirmed enrollments too, whose student it may be (T005).
+      `confirmed-of:${TEACHER}`,
       `lock-key:${TEACHER}`,
       `slots:${TEACHER}`,
       `holds-on:${SLOT_A},${SLOT_B}`,
@@ -244,20 +276,195 @@ describe("a deletion ends the account's confirmed enrollments (T004, FR-AUTH-14,
         return reads === 1 ? over.store.confirmedEnrollmentsOf(t, userId) : [];
       },
     };
-    await terminationSubscriber({ orders, now: () => NOW, store })(tx, TEACHER, 'account_deleted');
+    await terminationSubscriber({ orders, now: () => NOW, store, log: over.log })(
+      tx,
+      TEACHER,
+      'account_deleted',
+    );
     expect(reads).toBe(2);
     expect(over.journal.filter((entry) => /^(cancel-|case|events:)/.test(entry))).toEqual([]);
   });
 
   it.each(['suspended', 'banned', 'approval_revoked'] as const)(
-    'a %s account reaches no confirmed enrollment here',
+    "a teacher's %s reaches no confirmed enrollment here (T006's)",
     async (cause) => {
       const { journal, subscriber } = world([
         { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
       ]);
       await subscriber(tx, TEACHER, cause);
-      expect(journal.some((entry) => entry.startsWith('confirmed-of:'))).toBe(false);
-      expect(journal.some((entry) => entry.startsWith('cancel-'))).toBe(false);
+      expect(journal.some((entry) => /^(cancel-|case|freeze|events:)/.test(entry))).toBe(false);
+      expect(journal.some((entry) => entry.startsWith('lock enrollments:'))).toBe(false);
     },
   );
+});
+
+// T005 of specs/004-sessions (`002:T144`; FR-485, FR-486; R-313; plan.md decision 1): a student's
+// suspension and ban reach their confirmed enrollments, in kernel.md's order for an account's end:
+// each of their teachers' slots' keys in ascending id (L1), the holds, every enrollment in one call,
+// then sessions' hand-off with one case each, the remedies frozen on a suspension (C3).
+describe("a student's suspension and ban reach their confirmed enrollments (T005, R-313)", () => {
+  const twoTeachers = () =>
+    world([
+      { id: E2, studentUserId: STUDENT, teacherUserId: HIGH_TEACHER },
+      { id: E1, studentUserId: STUDENT, teacherUserId: LOW_TEACHER },
+    ]);
+
+  it('a suspension: the keys ascending, the holds, the enrollments, the sessions cancelled with the remedies locked only, one student_suspended case each, then the remedies frozen; the enrollments stay confirmed', async () => {
+    const { journal, subscriber } = twoTeachers();
+    await subscriber(tx, STUDENT, 'suspended');
+    expect(journal).toEqual([
+      `confirmed-of:${STUDENT}`,
+      `lock-key:${STUDENT}`,
+      `lock-key:${LOW_TEACHER}`,
+      `lock-key:${HIGH_TEACHER}`,
+      `slots:${STUDENT}`,
+      'holds-on:',
+      `holds-of:${STUDENT}`,
+      `lock slot_holds:${STUDENT_HOLD}`,
+      `hold-enrollments:${STUDENT_HOLD}`,
+      `lock enrollments:${[E1, E2, `enrollment-of-${STUDENT_HOLD}`].sort().join(',')}`,
+      `confirmed-of:${STUDENT}`,
+      `cancel-remaining:${E1},${E2}:lockOnly`,
+      `case:${E1}:student_suspended`,
+      `case-of:${E1}:case-of-${E1}`,
+      `case:${E2}:student_suspended`,
+      `case-of:${E2}:case-of-${E2}`,
+      `freeze:${E1},${E2}`,
+      `release:${STUDENT_HOLD}:admin`,
+    ]);
+  });
+
+  it('a ban: the open remedies handed to one student_banned case each, the enrollments cancelled admin at once with one row each', async () => {
+    const { journal, subscriber } = twoTeachers();
+    await subscriber(tx, STUDENT, 'banned');
+    expect(journal.filter((entry) => entry.startsWith('lock-key:'))).toEqual([
+      `lock-key:${STUDENT}`,
+      `lock-key:${LOW_TEACHER}`,
+      `lock-key:${HIGH_TEACHER}`,
+    ]);
+    expect(journal.slice(journal.indexOf(`cancel-remaining:${E1},${E2}`))).toEqual([
+      `cancel-remaining:${E1},${E2}`,
+      `case:${E1}:student_banned`,
+      `case-of:${E1}:case-of-${E1}`,
+      `case:${E2}:student_banned`,
+      `case-of:${E2}:case-of-${E2}`,
+      `cancel-confirmed:${E1},${E2}:admin`,
+      `events:${E1}:cancelled,${E2}:cancelled`,
+      `release:${STUDENT_HOLD}:admin`,
+    ]);
+    expect(journal.some((entry) => entry.startsWith('freeze:'))).toBe(false);
+  });
+
+  it("only the student's own enrollments: another student's of the same teacher is left alone", async () => {
+    const { journal, subscriber } = world([
+      { id: E1, studentUserId: STUDENT, teacherUserId: LOW_TEACHER },
+      { id: E2, studentUserId: OTHER_STUDENT, teacherUserId: LOW_TEACHER },
+    ]);
+    await subscriber(tx, OTHER_STUDENT, 'banned');
+    expect(journal).toContain(`cancel-confirmed:${E2}:admin`);
+    expect(journal.some((entry) => entry.includes(E1))).toBe(false);
+  });
+
+  it('a student with no confirmed enrollment: only the hold released', async () => {
+    const { journal, subscriber } = world();
+    await subscriber(tx, STUDENT, 'suspended');
+    expect(journal.some((entry) => /^(lock enrollments|cancel-|case|freeze)/.test(entry))).toBe(
+      false,
+    );
+    expect(journal).toContain(`release:${STUDENT_HOLD}:admin`);
+  });
+});
+
+const line = (fields: Record<string, unknown>) => [fields, 'Account end decided'];
+
+describe('one info line per account end, ids and counts only (the note under T005)', () => {
+  it("a student's suspension: the enrollments, the sessions cancelled, the remedies frozen, none handed, the cases", async () => {
+    const { logged, subscriber } = world([
+      { id: E2, studentUserId: STUDENT, teacherUserId: HIGH_TEACHER },
+      { id: E1, studentUserId: STUDENT, teacherUserId: LOW_TEACHER },
+    ]);
+    await subscriber(tx, STUDENT, 'suspended');
+    expect(logged).toEqual([
+      line({
+        userId: STUDENT,
+        cause: 'suspended',
+        enrollments: 2,
+        cancelledSessions: 4,
+        frozenRemedies: 2,
+        handedRemedies: 0,
+        lapsedRemedies: 0,
+        cases: 2,
+      }),
+    ]);
+  });
+
+  it("a student's ban: the remedies handed, none frozen", async () => {
+    const { logged, subscriber } = world([
+      { id: E1, studentUserId: STUDENT, teacherUserId: LOW_TEACHER },
+    ]);
+    await subscriber(tx, STUDENT, 'banned');
+    expect(logged).toEqual([
+      line({
+        userId: STUDENT,
+        cause: 'banned',
+        enrollments: 1,
+        cancelledSessions: 2,
+        frozenRemedies: 0,
+        handedRemedies: 1,
+        lapsedRemedies: 0,
+        cases: 1,
+      }),
+    ]);
+  });
+
+  it("a deletion, either role: a teacher's with its cases, a student's with none, nothing handed and its remedy lapsed", async () => {
+    const teacher = world([
+      { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
+      { id: E2, studentUserId: OTHER_STUDENT, teacherUserId: TEACHER },
+    ]);
+    await teacher.subscriber(tx, TEACHER, 'account_deleted');
+    expect(teacher.logged).toEqual([
+      line({
+        userId: TEACHER,
+        cause: 'account_deleted',
+        enrollments: 2,
+        cancelledSessions: 4,
+        frozenRemedies: 0,
+        handedRemedies: 2,
+        lapsedRemedies: 0,
+        cases: 2,
+      }),
+    ]);
+    const student = world([{ id: E1, studentUserId: STUDENT, teacherUserId: TEACHER }]);
+    await student.subscriber(tx, STUDENT, 'account_deleted');
+    expect(student.logged).toEqual([
+      line({
+        userId: STUDENT,
+        cause: 'account_deleted',
+        enrollments: 1,
+        cancelledSessions: 2,
+        frozenRemedies: 0,
+        handedRemedies: 0,
+        lapsedRemedies: 1,
+        cases: 0,
+      }),
+    ]);
+  });
+
+  it('an end with no confirmed enrollment writes the line with zero counts', async () => {
+    const { logged, subscriber } = world();
+    await subscriber(tx, STUDENT, 'banned');
+    expect(logged).toEqual([
+      line({
+        userId: STUDENT,
+        cause: 'banned',
+        enrollments: 0,
+        cancelledSessions: 0,
+        frozenRemedies: 0,
+        handedRemedies: 0,
+        lapsedRemedies: 0,
+        cases: 0,
+      }),
+    ]);
+  });
 });

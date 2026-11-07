@@ -11,6 +11,8 @@ import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   cancelRemainingSessions,
+  type FreezeStore,
+  freezeOpenRemedies,
   type RemainingSessionsStore,
 } from './remaining-sessions.service.js';
 import type { SessionEventRecord } from './session-events.repository.js';
@@ -248,5 +250,165 @@ describe('cancelRemainingSessions (T004, R-313)', () => {
     );
     expect(journal).toEqual([]);
     expect(asked).toEqual([]);
+  });
+});
+
+describe("cancelRemainingSessions with remedies: 'lockOnly' (T005, a student's suspension)", () => {
+  it('locks the remedies in their place, before the case, and neither hands nor lapses them', async () => {
+    const { journal, events, store } = recorded({
+      sessions: [{ id: id(11), enrollmentId: ENROLLMENT_A }],
+      remedies: [{ id: id(21), sessionId: id(10), enrollmentId: ENROLLMENT_A }],
+    });
+    const ended = await cancelRemainingSessions(
+      tx,
+      [ENROLLMENT_A],
+      NOW,
+      async (enrollmentId) => {
+        journal.push(`case of ${enrollmentId}`);
+        return id(31);
+      },
+      store,
+      { remedies: 'lockOnly' },
+    );
+    expect(journal).toEqual([
+      `read sessions ${ENROLLMENT_A}`,
+      `lock sessions ${id(11)}`,
+      `read sessions ${ENROLLMENT_A}`,
+      `read remedies ${ENROLLMENT_A}`,
+      `lock session_remedies ${id(21)}`,
+      `read remedies ${ENROLLMENT_A}`,
+      `case of ${ENROLLMENT_A}`,
+      `cancel ${id(11)}`,
+      'events 1',
+    ]);
+    expect(events).toEqual([
+      {
+        enrollmentId: ENROLLMENT_A,
+        sessionId: id(11),
+        kind: 'cancelled_by_admin',
+        caseId: id(31),
+        occurredAt: NOW,
+      },
+    ]);
+    expect(ended).toEqual({
+      cancelledSessionIds: [id(11)],
+      handedRemedyIds: [],
+      lapsedRemedyIds: [],
+      caseOf: new Map([[ENROLLMENT_A, id(31)]]),
+    });
+  });
+
+  it("the default stays 'hand'", async () => {
+    const { journal, store } = recorded({
+      sessions: [],
+      remedies: [{ id: id(21), sessionId: id(10), enrollmentId: ENROLLMENT_A }],
+    });
+    await cancelRemainingSessions(tx, [ENROLLMENT_A], NOW, async () => id(31), store, {});
+    expect(journal).toContain(`hand ${id(21)} to ${id(31)}`);
+  });
+});
+
+interface FreezeWorld {
+  remedies: { id: string; sessionId: string; enrollmentId: string; counterPending: boolean }[];
+}
+
+function freezing(world: FreezeWorld) {
+  const journal: string[] = [];
+  const events: SessionEventRecord[] = [];
+  const store: FreezeStore = {
+    freezableRemediesOf: async (_tx, enrollmentIds) => {
+      journal.push(`read freezable ${enrollmentIds.join(',')}`);
+      return world.remedies.filter(({ enrollmentId }) => enrollmentIds.includes(enrollmentId));
+    },
+    lockRows: async (_tx, table, ids) => {
+      journal.push(`lock ${table} ${ids.join(',')}`);
+    },
+    freeze: async (_tx, ids) => {
+      journal.push(`freeze ${ids.join(',')}`);
+    },
+    recordEvents: async (_tx, rows) => {
+      journal.push(`events ${rows.length}`);
+      events.push(...rows);
+    },
+  };
+  return { journal, events, store };
+}
+
+describe('freezeOpenRemedies (T005, R-311 "Frozen", the owner’s decision C3)', () => {
+  it('locks the remedies in one call in id order, reads them again, freezes them in one statement, then writes the rows', async () => {
+    const { journal, store } = freezing({
+      remedies: [
+        { id: id(22), sessionId: id(14), enrollmentId: ENROLLMENT_B, counterPending: false },
+        { id: id(21), sessionId: id(13), enrollmentId: ENROLLMENT_A, counterPending: false },
+      ],
+    });
+    await freezeOpenRemedies(tx, [ENROLLMENT_B, ENROLLMENT_A], NOW, store);
+    expect(journal).toEqual([
+      `read freezable ${ENROLLMENT_A},${ENROLLMENT_B}`,
+      `lock session_remedies ${id(21)},${id(22)}`,
+      `read freezable ${ENROLLMENT_A},${ENROLLMENT_B}`,
+      `freeze ${id(21)},${id(22)}`,
+      'events 2',
+    ]);
+  });
+
+  it('writes one remedy_frozen row per remedy, and one counter_withdrawn row before it for a pending counter-proposal', async () => {
+    const { events, store } = freezing({
+      remedies: [
+        { id: id(21), sessionId: id(13), enrollmentId: ENROLLMENT_A, counterPending: true },
+        { id: id(22), sessionId: id(14), enrollmentId: ENROLLMENT_A, counterPending: false },
+      ],
+    });
+    const frozen = await freezeOpenRemedies(tx, [ENROLLMENT_A], NOW, store);
+    expect(events).toEqual([
+      { enrollmentId: ENROLLMENT_A, sessionId: id(13), kind: 'counter_withdrawn', occurredAt: NOW },
+      { enrollmentId: ENROLLMENT_A, sessionId: id(13), kind: 'remedy_frozen', occurredAt: NOW },
+      { enrollmentId: ENROLLMENT_A, sessionId: id(14), kind: 'remedy_frozen', occurredAt: NOW },
+    ]);
+    expect(frozen).toEqual({
+      frozenRemedyIds: [id(21), id(22)],
+      withdrawnCounterRemedyIds: [id(21)],
+    });
+  });
+
+  it('a remedy no longer freezable once its lock is held is left as it is, and a pending counter is judged again under the lock', async () => {
+    const world: FreezeWorld = {
+      remedies: [
+        { id: id(21), sessionId: id(13), enrollmentId: ENROLLMENT_A, counterPending: true },
+        { id: id(22), sessionId: id(14), enrollmentId: ENROLLMENT_A, counterPending: false },
+      ],
+    };
+    const { journal, events, store } = freezing(world);
+    let reads = 0;
+    const racing: FreezeStore = {
+      ...store,
+      freezableRemediesOf: async (t, ids) => {
+        reads += 1;
+        if (reads === 2) {
+          // Meanwhile the teacher declined the counter on 21 and 22 was booked.
+          world.remedies = [
+            { id: id(21), sessionId: id(13), enrollmentId: ENROLLMENT_A, counterPending: false },
+          ];
+        }
+        return store.freezableRemediesOf(t, ids);
+      },
+    };
+    const frozen = await freezeOpenRemedies(tx, [ENROLLMENT_A], NOW, racing);
+    expect(journal).toContain(`freeze ${id(21)}`);
+    expect(events.map(({ kind, sessionId }) => [kind, sessionId])).toEqual([
+      ['remedy_frozen', id(13)],
+    ]);
+    expect(frozen).toEqual({ frozenRemedyIds: [id(21)], withdrawnCounterRemedyIds: [] });
+  });
+
+  it('nothing at all for no enrollment, and no lock or write when nothing is freezable', async () => {
+    const empty = freezing({ remedies: [] });
+    expect(await freezeOpenRemedies(tx, [], NOW, empty.store)).toEqual({
+      frozenRemedyIds: [],
+      withdrawnCounterRemedyIds: [],
+    });
+    expect(empty.journal).toEqual([]);
+    await freezeOpenRemedies(tx, [ENROLLMENT_A], NOW, empty.store);
+    expect(empty.journal).toEqual([`read freezable ${ENROLLMENT_A}`]);
   });
 });

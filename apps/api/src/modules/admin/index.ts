@@ -81,6 +81,8 @@ export interface AdminServices {
     'link' | 'requireIdentity' | 'accept' | 'requestAnother'
   >;
   readonly teachers: Pick<StandingService, 'suspend' | 'revokeApproval' | 'ban' | 'reinstate'>;
+  /** A student's standing, identity's (T005 of specs/004-sessions, `002:T144`). */
+  readonly students: Pick<StandingService, 'suspendStudent' | 'banStudent' | 'reinstateStudent'>;
   /** The payments module's read-only monitor, composed here for the surface (T052, FR-400). */
   readonly payments: ReturnType<typeof createPaymentsMonitorService>;
 }
@@ -126,6 +128,7 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     credentials: createCredentialReviewService(dependencies),
     ...createVerificationAdminServices({ ...dependencies, standing }),
     teachers: standing,
+    students: standing,
     payments: createPaymentsMonitorService(dependencies),
   };
 }

@@ -317,7 +317,13 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
 
   beforeAll(() => {
     const consequences = new AccountConsequences();
-    consequences.subscribe(terminationSubscriber({ orders: orderStandingsOf, now: () => NOW }));
+    consequences.subscribe(
+      terminationSubscriber({
+        orders: orderStandingsOf,
+        now: () => NOW,
+        log: { info: () => undefined },
+      }),
+    );
     standing = new StandingService({
       store: standingStoreOver(database),
       consequences,

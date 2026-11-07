@@ -18,6 +18,8 @@ type Teacher = NonNullable<Standing['teacher']>;
 
 interface Person {
   accountStatus: AccountStatus;
+  /** The account's one role (ADR 0016 D3); a teacher's profile comes with the application. */
+  role: 'student' | 'teacher';
   teacher:
     | (Teacher & {
         applicationNote: string | null;
@@ -35,20 +37,25 @@ export class MemoryStandingStore implements StandingStore {
   readonly #people = new Map<string, Person>();
   /**
    * Each lock and each read of the standing, in order: `lock:<id>` (T126), `lock-application:<id>`
-   * (T164), `read:<id>`.
+   * (T164), `read:<id>`, and a student's read, `read-student:<id>` (T005 of specs/004-sessions).
    */
   readonly journal: string[] = [];
 
-  /** A person with one live session, a teacher when `teacher` is given; the id. */
+  /**
+   * A person with one live session; a teacher when `teacher` is given or `role` says so (a teacher
+   * with no profile yet), a student otherwise; the id.
+   */
   plant(
     values: {
       accountStatus?: AccountStatus;
       teacher?: Pick<Teacher, 'verificationStatus' | 'applicationStatus'>;
+      role?: Person['role'];
     } = {},
   ): string {
     const userId = randomUUID();
     this.#people.set(userId, {
       accountStatus: values.accountStatus ?? 'active',
+      role: values.role ?? (values.teacher === undefined ? 'student' : 'teacher'),
       teacher:
         values.teacher === undefined
           ? null
@@ -86,6 +93,12 @@ export class MemoryStandingStore implements StandingStore {
               applicationStatus: person.teacher.applicationStatus,
             },
     };
+  }
+
+  async readStudent(_tx: Transaction, userId: string): Promise<AccountStatus | null> {
+    this.journal.push(`read-student:${userId}`);
+    const person = this.#people.get(userId);
+    return person?.role === 'student' ? person.accountStatus : null;
   }
 
   async moveAccount(

@@ -24,10 +24,19 @@
 //
 // A refusal is CONFLICT naming the standing the person is in (`details: [{ path, code }]`), or
 // NOT_FOUND for a person who is not a teacher (or not there).
+//
+// A STUDENT'S STANDING (T005 of specs/004-sessions, `002:T144`; FR-421, FR-486; R-313): the same
+// three moves for a student, `suspendStudent`, `banStudent` and `reinstateStudent`, each the
+// account's lock first, then the student's own read (`readStudent`: a student has no teacher
+// profile), the conditional move, and, for the first two, every sign-in session ended and the one
+// consequences entry on the action's transaction; the reinstatement lands as a teacher's does. A
+// refusal names the account status (`details: [{ path: 'studentUserId', code }]`), or NOT_FOUND for a
+// person who is not a live student.
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { lockApplication } from './application.repository.js';
 import type { AccountConsequences } from './consequences.js';
+import { AccountsRepository } from './identity.repository.js';
 import {
   type AccountStatus,
   banTeacherProfile,
@@ -48,6 +57,11 @@ export interface StandingStore {
   /** Locks the application's `teacher_profiles` row until the transaction ends (T164). */
   lockApplication(tx: Transaction, userId: string): Promise<void>;
   read(tx: Transaction, userId: string): Promise<Standing | null>;
+  /**
+   * A live student's account status; null for a person not there, deleted, or not a student (T005
+   * of specs/004-sessions: a student has no teacher profile, nor has a teacher before applying).
+   */
+  readStudent(tx: Transaction, userId: string): Promise<AccountStatus | null>;
   moveAccount(
     tx: Transaction,
     userId: string,
@@ -67,10 +81,19 @@ export interface StandingStore {
 /** The store over the process's database. */
 export function standingStoreOver(database: Database): StandingStore {
   const sessions = new UserSessionsRepository(database);
+  const accounts = new AccountsRepository(database);
   return {
     lockAccount,
     lockApplication,
     read: readStanding,
+    // The live person (`readStanding` leaves a deleted one out) whose one role is `student`.
+    readStudent: async (tx, userId) => {
+      const live = await readStanding(tx, userId);
+      if (live === null) return null;
+      return (await accounts.readStanding(userId, tx))?.role === 'student'
+        ? live.accountStatus
+        : null;
+    },
     moveAccount: moveAccountStatus,
     revokeApproval: revokeTeacherApproval,
     banProfile: banTeacherProfile,
@@ -238,6 +261,63 @@ export class StandingService {
     return accountMove('suspended', to);
   }
 
+  /**
+   * `students.suspend` (T005 of specs/004-sessions, `002:T144`; FR-421, FR-486; R-313): a student,
+   * active or under an identity request, suspended; booking's subscriber keeps the confirmed
+   * enrollments `confirmed`, cancels their upcoming sessions, freezes their open remedies and opens
+   * one `student_suspended` case each, on this transaction. A dispute's `party_suspended` against a
+   * student calls this on the resolution's transaction (T034).
+   */
+  async suspendStudent(tx: Transaction, _adminId: string, userId: string): Promise<AccountMove> {
+    await this.#store.lockAccount(tx, userId);
+    const accountStatus = await this.#student(tx, userId);
+    const suspendable: readonly AccountStatus[] = ['active', 'verification_required'];
+    if (!suspendable.includes(accountStatus)) throw studentConflict(accountStatus);
+    if (!(await this.#store.moveAccount(tx, userId, suspendable, 'suspended'))) {
+      throw studentConflict(await this.#student(tx, userId));
+    }
+    await this.#end(tx, userId, 'suspended');
+    return accountMove(accountStatus, 'suspended');
+  }
+
+  /**
+   * `students.ban` (T005, R-313, plan.md decision 1 (a)): a student not banned, banned for good;
+   * booking's subscriber cancels the confirmed enrollments `admin` at once, with one
+   * `student_banned` case each. A dispute's `party_banned` against a student calls this (T034).
+   */
+  async banStudent(tx: Transaction, _adminId: string, userId: string): Promise<AccountMove> {
+    await this.#store.lockAccount(tx, userId);
+    const accountStatus = await this.#student(tx, userId);
+    const bannable: readonly AccountStatus[] = ['active', 'suspended', 'verification_required'];
+    if (!bannable.includes(accountStatus)) throw studentConflict(accountStatus);
+    if (!(await this.#store.moveAccount(tx, userId, bannable, 'banned'))) {
+      throw studentConflict(await this.#student(tx, userId));
+    }
+    await this.#end(tx, userId, 'banned');
+    return accountMove(accountStatus, 'banned');
+  }
+
+  /**
+   * `students.reinstate` (T005, the note under it): a suspended student back to `active`, or to
+   * `verification_required` while an identity request is open, as a teacher's reinstatement
+   * (`002:T113`, `002:T126`). The account only: nothing cancelled is restored, the case deciding,
+   * and the frozen remedies are offered again by `advance-remedies` (T028, C3).
+   */
+  async reinstateStudent(tx: Transaction, _adminId: string, userId: string): Promise<AccountMove> {
+    // Under the account's lock, as `reinstate`: `requireIdentity` takes it first too (T126), so an
+    // identity request opened meanwhile is committed before this reads it.
+    await this.#store.lockAccount(tx, userId);
+    const accountStatus = await this.#student(tx, userId);
+    if (accountStatus !== 'suspended') throw studentConflict(accountStatus);
+    const to: AccountStatus = (await this.#hasOpenIdentityRequest(tx, userId))
+      ? 'verification_required'
+      : 'active';
+    if (!(await this.#store.moveAccount(tx, userId, ['suspended'], to))) {
+      throw studentConflict(await this.#student(tx, userId));
+    }
+    return accountMove('suspended', to);
+  }
+
   /** An identity request opened: an active account waits on it; whether it moved. */
   requireIdentity(tx: Transaction, userId: string): Promise<boolean> {
     return this.#store.moveAccount(tx, userId, ['active'], 'verification_required');
@@ -272,6 +352,20 @@ export class StandingService {
     if (standing?.teacher == null) throw new DomainError('NOT_FOUND');
     return { ...standing, teacher: standing.teacher };
   }
+
+  /** The student's account status; NOT_FOUND for a person who is not a live student. */
+  async #student(tx: Transaction, userId: string): Promise<AccountStatus> {
+    const accountStatus = await this.#store.readStudent(tx, userId);
+    if (accountStatus === null) throw new DomainError('NOT_FOUND');
+    return accountStatus;
+  }
+}
+
+/** CONFLICT naming the student's account status (T005; the input's `studentUserId`). */
+function studentConflict(accountStatus: AccountStatus): DomainError {
+  return new DomainError('CONFLICT', undefined, {
+    details: [{ path: 'studentUserId', code: accountStatus }],
+  });
 }
 
 function accountMove(before: AccountStatus, after: AccountStatus): AccountMove {

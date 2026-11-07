@@ -19,10 +19,22 @@
 // opened after the sessions and the remedies, as the one order puts `disputes` after them, its own
 // enrollment lock being the one already held. The rows written reference the enrollments, the
 // sessions and the cases, all held or written by this transaction, and no account.
+//
+// A STUDENT'S SUSPENSION (T005 of specs/004-sessions; FR-486; R-311, "Frozen"; the owner's decision
+// C3 and the note under T005). Its enrollments stay `confirmed`, so their open remedies are neither
+// handed nor lapsed but frozen: the hand-off runs with `remedies: 'lockOnly'`, which locks and reads
+// the remedies again in their place (after the sessions, before the case) and writes none of them,
+// and the caller then calls `freezeOpenRemedies`, whose lock of the same rows is already held. Each
+// open remedy not yet frozen becomes `frozen`, a pending counter-proposal's columns cleared (its time
+// released, one `counter_withdrawn` row) and `proposed_date` kept (the reservation reader skips a
+// frozen remedy, T027), with one `remedy_frozen` row each.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
 import {
   cancelByAdmin,
+  type FreezableRemedy,
+  freezableRemediesOf,
+  freeze,
   handToCase,
   lapse,
   lockRows,
@@ -86,9 +98,20 @@ function stillAmong<Row extends { readonly id: string }>(
 }
 
 /**
+ * What the hand-off does with the open remedies: `'hand'` (the default, an enrollment's end) hands
+ * them to the case or lapses them; `'lockOnly'` (a student's suspension, T005) locks them in their
+ * place and writes none, for `freezeOpenRemedies` after it.
+ */
+export type RemedyHandling = 'hand' | 'lockOnly';
+
+export interface RemainingSessionsOptions {
+  readonly remedies?: RemedyHandling;
+}
+
+/**
  * Cancels the remaining sessions of `enrollmentIds` and hands their open remedies to each one's case
- * (or lapses them where there is none), at `now`, on the caller's transaction, which holds the
- * enrollments' locks (this file's head).
+ * (or lapses them where there is none; or, with `remedies: 'lockOnly'`, only locks them), at `now`,
+ * on the caller's transaction, which holds the enrollments' locks (this file's head).
  */
 export async function cancelRemainingSessions(
   tx: Transaction,
@@ -96,6 +119,7 @@ export async function cancelRemainingSessions(
   now: Date,
   caseOf: CaseOf,
   store: RemainingSessionsStore = remainingSessionsStore,
+  { remedies: handling = 'hand' }: RemainingSessionsOptions = {},
 ): Promise<EnrollmentsEnded> {
   const enrollments = sortedUnique(enrollmentIds);
   const cases = new Map<string, string | null>();
@@ -109,7 +133,8 @@ export async function cancelRemainingSessions(
   if (readRemedies.length > 0) {
     await store.lockRows(tx, 'session_remedies', sortedUnique(readRemedies.map(({ id }) => id)));
   }
-  const remedies = stillAmong(await store.openRemediesOf(tx, enrollments), readRemedies);
+  const locked = stillAmong(await store.openRemediesOf(tx, enrollments), readRemedies);
+  const remedies = handling === 'hand' ? locked : [];
 
   for (const enrollmentId of enrollments) cases.set(enrollmentId, await caseOf(enrollmentId));
   const caseOfEnrollment = (enrollmentId: string) => cases.get(enrollmentId) ?? null;
@@ -149,5 +174,67 @@ export async function cancelRemainingSessions(
     handedRemedyIds: sortedUnique(handed.map(({ id }) => id)),
     lapsedRemedyIds: sortedUnique(lapsed.map(({ id }) => id)),
     caseOf: cases,
+  };
+}
+
+/** What a freeze reads and writes, each on the caller's transaction. */
+export interface FreezeStore {
+  freezableRemediesOf(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<readonly FreezableRemedy[]>;
+  lockRows(tx: Transaction, table: LockedTable, ids: readonly string[]): Promise<void>;
+  freeze(tx: Transaction, ids: readonly string[]): Promise<void>;
+  recordEvents(tx: Transaction, events: readonly SessionEventRecord[]): Promise<void>;
+}
+
+const freezeStore: FreezeStore = {
+  freezableRemediesOf,
+  lockRows,
+  freeze,
+  recordEvents: recordSessionEvents,
+};
+
+/** What a freeze did: the remedies frozen, and those of them whose pending counter it withdrew. */
+export interface RemediesFrozen {
+  readonly frozenRemedyIds: readonly string[];
+  readonly withdrawnCounterRemedyIds: readonly string[];
+}
+
+/**
+ * Freezes the open remedies not yet frozen of `enrollmentIds` at `now` (a student's suspension,
+ * this file's head), on the caller's transaction, which holds the enrollments' locks and the
+ * sessions' before them: the remedies locked in one statement in id order and read again under the
+ * lock, frozen in one statement, then one `counter_withdrawn` row for each pending counter-proposal
+ * and one `remedy_frozen` row each.
+ */
+export async function freezeOpenRemedies(
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+  now: Date,
+  store: FreezeStore = freezeStore,
+): Promise<RemediesFrozen> {
+  const enrollments = sortedUnique(enrollmentIds);
+  if (enrollments.length === 0) return { frozenRemedyIds: [], withdrawnCounterRemedyIds: [] };
+  const read = await store.freezableRemediesOf(tx, enrollments);
+  if (read.length === 0) return { frozenRemedyIds: [], withdrawnCounterRemedyIds: [] };
+  await store.lockRows(tx, 'session_remedies', sortedUnique(read.map(({ id }) => id)));
+  const remedies = stillAmong(await store.freezableRemediesOf(tx, enrollments), read);
+  const frozenRemedyIds = remedies.map(({ id }) => id);
+  await store.freeze(tx, frozenRemedyIds);
+  await store.recordEvents(
+    tx,
+    remedies.flatMap(({ enrollmentId, sessionId, counterPending }): SessionEventRecord[] => [
+      ...(counterPending
+        ? [{ enrollmentId, sessionId, kind: 'counter_withdrawn' as const, occurredAt: now }]
+        : []),
+      { enrollmentId, sessionId, kind: 'remedy_frozen', occurredAt: now },
+    ]),
+  );
+  return {
+    frozenRemedyIds,
+    withdrawnCounterRemedyIds: remedies
+      .filter(({ counterPending }) => counterPending)
+      .map(({ id }) => id),
   };
 }

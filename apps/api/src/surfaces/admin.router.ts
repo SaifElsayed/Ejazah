@@ -8,11 +8,11 @@
 // since T067, `auth`, `admins`, `audit` and `home`; the catalog module's `credentials` since T069;
 // the verification module's `applications`, `documents` and `users` and the identity module's
 // `teachers` since T068; the payments module's `payments`, the read-only monitor, since Phase 2's
-// T052. Its anonymous procedures are exactly the six of `auth.*` that
-// sign an administrator in (`admin.router.spec.ts`).
+// T052; the identity module's `students` since Phase 3's T005. Its anonymous procedures are exactly
+// the six of `auth.*` that sign an administrator in (`admin.router.spec.ts`).
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
 import { credentialsAdminRouter } from '../modules/catalog/index.js';
-import { teachersRouter } from '../modules/identity/index.js';
+import { studentsRouter, teachersRouter } from '../modules/identity/index.js';
 import { paymentsAdminRouter } from '../modules/payments/index.js';
 import { applicationsRouter, documentsRouter, usersRouter } from '../modules/verification/index.js';
 import { createAdminRouter } from './procedures.js';
@@ -27,6 +27,7 @@ export const adminRouter = createAdminRouter({
   documents: documentsRouter,
   users: usersRouter,
   teachers: teachersRouter,
+  students: studentsRouter,
   payments: paymentsAdminRouter,
 });
 

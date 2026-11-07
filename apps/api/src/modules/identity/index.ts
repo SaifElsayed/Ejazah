@@ -260,6 +260,8 @@ export {
 
 /** The administrator surface's `teachers` namespace (T068), mounted by `admin.router.ts`. */
 export { teachersRouter } from './teachers.router.js';
+/** The administrator surface's `students` namespace (T005 of specs/004-sessions), mounted there too. */
+export { studentsRouter } from './students.router.js';
 
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
