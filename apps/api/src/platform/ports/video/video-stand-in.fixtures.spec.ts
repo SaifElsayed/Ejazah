@@ -7,14 +7,16 @@
 // so the receiver's path is this file's own.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { clip, intersect, type Interval, measureSeconds, union } from '@ijazah/time';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventSignatureError } from '../inbound-event.js';
-import { FakeVideoAdapter } from './fake.adapter.js';
+import { FakeVideoAdapter, standInConnectionRef } from './fake.adapter.js';
 import { createVideoPort, type VideoConfig } from './index.js';
 import type { IgnoredEvent, ParticipantEvent } from './video.port.js';
 import {
   createVideoStandIn,
   VIDEO_FORGERIES,
+  VIDEO_SCENARIOS,
   type VideoStandIn,
   type VideoStandInEvent,
 } from './video-stand-in.fixtures.js';
@@ -257,5 +259,165 @@ describe('the harness forges (T010, R-SESS-7, SC-406)', () => {
     });
 
     expect(await elsewhere.deliver(elsewhere.joined(SESSION, STUDENT, { at: START }))).toBe(401);
+  });
+});
+
+// The owner's decision of 2026-11-07 (B34): `scenario` builds the events of a row of SRS §3.7.5's
+// table, a reconnection (SC-402) and a lost final leave (SC-403), under the seed's default settings
+// (70%, a 10-minute join window, 60 seconds' minimum connection). Provider-Outage is not a video
+// event and stays outside the harness. The simultaneous time is measured here with the interval
+// operations of `@ijazah/time` (R-305), so each row's events are shown to give its outcome.
+describe('the harness builds a scenario (T010, SC-402 to SC-404)', () => {
+  const session = {
+    id: SESSION,
+    teacherUserId: TEACHER,
+    studentUserId: STUDENT,
+    startAt: START,
+    endAt: END,
+  } as const;
+  const studentFirst = standInConnectionRef(STUDENT);
+  const teacherOnly = standInConnectionRef(TEACHER);
+  /** The seed's `attendance_threshold_pct` (70) of the 45-minute session, rounded up. */
+  const THRESHOLD_SECONDS = 1890;
+
+  type Row = readonly [string, string | null, string | null, string];
+
+  async function delivered(built: readonly VideoStandInEvent[]): Promise<Row[]> {
+    expect(await stand.deliverInOrder(built)).toEqual(built.map(() => 200));
+    expect(new Set(built.map((event) => event.providerEventId)).size).toBe(built.length);
+    return (events() as ParticipantEvent[]).map((event) => [
+      event.type,
+      event.participantUserId ?? null,
+      event.connectionRef ?? null,
+      event.occurredAt.toISOString(),
+    ]);
+  }
+
+  /** A participant's connected time: each connection from its join to its leave, or to the end. */
+  function connected(rows: readonly Row[], user: string): Interval[] {
+    const intervals: Interval[] = [];
+    const open = new Map<string, Date>();
+    for (const [type, participant, connection, instant] of rows) {
+      if (participant !== user || connection === null) continue;
+      if (type === 'joined') open.set(connection, new Date(instant));
+      const startsAt = open.get(connection);
+      if (type === 'left' && startsAt !== undefined) {
+        intervals.push({ startsAt, endsAt: new Date(instant) });
+        open.delete(connection);
+      }
+    }
+    for (const startsAt of open.values()) intervals.push({ startsAt, endsAt: END });
+    return union(intervals);
+  }
+
+  function simultaneousSeconds(rows: readonly Row[]): number {
+    return measureSeconds(
+      clip(intersect(connected(rows, TEACHER), connected(rows, STUDENT)), {
+        startsAt: START,
+        endsAt: END,
+      }),
+    );
+  }
+
+  it('names its rows', () => {
+    expect(VIDEO_SCENARIOS).toEqual([
+      'done',
+      'student_no_show',
+      'teacher_no_show',
+      'both_no_show',
+      'under_threshold',
+      'reconnection',
+      'lost_final_leave',
+    ]);
+  });
+
+  it('done: both connected the whole session, then the room ends', async () => {
+    const rows = await delivered(stand.scenario(session, 'done'));
+
+    expect(rows).toEqual([
+      ['joined', TEACHER, teacherOnly, '2026-11-08T17:00:00.000Z'],
+      ['joined', STUDENT, studentFirst, '2026-11-08T17:00:00.000Z'],
+      ['left', TEACHER, teacherOnly, '2026-11-08T17:45:00.000Z'],
+      ['left', STUDENT, studentFirst, '2026-11-08T17:45:00.000Z'],
+      ['room_ended', null, null, '2026-11-08T17:45:00.000Z'],
+    ]);
+    expect(simultaneousSeconds(rows)).toBe(2700);
+  });
+
+  it('student_no_show: the teacher alone', async () => {
+    expect(await delivered(stand.scenario(session, 'student_no_show'))).toEqual([
+      ['joined', TEACHER, teacherOnly, '2026-11-08T17:00:00.000Z'],
+      ['left', TEACHER, teacherOnly, '2026-11-08T17:45:00.000Z'],
+      ['room_ended', null, null, '2026-11-08T17:45:00.000Z'],
+    ]);
+  });
+
+  it('teacher_no_show: the student alone', async () => {
+    expect(await delivered(stand.scenario(session, 'teacher_no_show'))).toEqual([
+      ['joined', STUDENT, studentFirst, '2026-11-08T17:00:00.000Z'],
+      ['left', STUDENT, studentFirst, '2026-11-08T17:45:00.000Z'],
+      ['room_ended', null, null, '2026-11-08T17:45:00.000Z'],
+    ]);
+  });
+
+  it('both_no_show: no event at all, since nobody opened the room', () => {
+    expect(stand.scenario(session, 'both_no_show')).toEqual([]);
+  });
+
+  it('under_threshold: both joined, together one second short of the threshold', async () => {
+    const rows = await delivered(stand.scenario(session, 'under_threshold'));
+
+    expect(rows).toEqual([
+      ['joined', TEACHER, teacherOnly, '2026-11-08T17:00:00.000Z'],
+      ['joined', STUDENT, studentFirst, '2026-11-08T17:00:00.000Z'],
+      ['left', STUDENT, studentFirst, '2026-11-08T17:31:29.000Z'],
+      ['left', TEACHER, teacherOnly, '2026-11-08T17:45:00.000Z'],
+      ['room_ended', null, null, '2026-11-08T17:45:00.000Z'],
+    ]);
+    expect(simultaneousSeconds(rows)).toBe(THRESHOLD_SECONDS - 1);
+  });
+
+  it('reconnection: the student drops a third of the way in and rejoins on a new connection a minute later (SC-402)', async () => {
+    const rows = await delivered(stand.scenario(session, 'reconnection'));
+    const studentSecond = `${studentFirst}_reconnected`;
+
+    expect(rows).toEqual([
+      ['joined', TEACHER, teacherOnly, '2026-11-08T17:00:00.000Z'],
+      ['joined', STUDENT, studentFirst, '2026-11-08T17:00:00.000Z'],
+      ['left', STUDENT, studentFirst, '2026-11-08T17:15:00.000Z'],
+      ['joined', STUDENT, studentSecond, '2026-11-08T17:16:00.000Z'],
+      ['left', TEACHER, teacherOnly, '2026-11-08T17:45:00.000Z'],
+      ['left', STUDENT, studentSecond, '2026-11-08T17:45:00.000Z'],
+      ['room_ended', null, null, '2026-11-08T17:45:00.000Z'],
+    ]);
+    // The sum of the two overlaps, 900 s and 1740 s, over the threshold.
+    expect(simultaneousSeconds(rows)).toBe(2640);
+    expect(simultaneousSeconds(rows)).toBeGreaterThanOrEqual(THRESHOLD_SECONDS);
+  });
+
+  it('lost_final_leave: the student’s leave and the room’s end never arrive (SC-403)', async () => {
+    const rows = await delivered(stand.scenario(session, 'lost_final_leave'));
+
+    expect(rows).toEqual([
+      ['joined', TEACHER, teacherOnly, '2026-11-08T17:00:00.000Z'],
+      ['joined', STUDENT, studentFirst, '2026-11-08T17:00:00.000Z'],
+      ['left', TEACHER, teacherOnly, '2026-11-08T17:45:00.000Z'],
+    ]);
+    // The connection never left closes at the scheduled end (R-305, rule 1).
+    expect(simultaneousSeconds(rows)).toBe(2700);
+  });
+
+  it('builds fresh events each time, for the same session', () => {
+    const first = stand.scenario(session, 'done').map((event) => event.providerEventId);
+    const second = stand.scenario(session, 'done').map((event) => event.providerEventId);
+
+    expect(first.filter((id) => second.includes(id))).toEqual([]);
+  });
+
+  it('refuses a session whose end is not after its start, or too short for the rows', () => {
+    expect(() => stand.scenario({ ...session, endAt: START }, 'done')).toThrow(RangeError);
+    expect(() =>
+      stand.scenario({ ...session, endAt: new Date('2026-11-08T17:03:00Z') }, 'reconnection'),
+    ).toThrow(RangeError);
   });
 });

@@ -151,8 +151,13 @@ describe('the video stand-in: rooms and tokens (T118, FR-SESS-3)', () => {
     );
   });
 
-  it('refuses to end a room it never created', async () => {
-    await expect(video().endRoom(SESSION)).rejects.toThrow('unknown room');
+  // The owner's decision of 2026-11-07 (B34): as LiveKit's adapter answers `not_found`, so a sweep in
+  // another process, whose stand-in never created the room, ends it without an error (T014).
+  it('answers success for a room it never created, as LiveKit does, and opens none', async () => {
+    const rooms = video();
+
+    await expect(rooms.endRoom(SESSION)).resolves.toBeUndefined();
+    await expect(rooms.createSessionToken(SESSION, STUDENT, UNTIL)).rejects.toThrow('unknown room');
   });
 });
 

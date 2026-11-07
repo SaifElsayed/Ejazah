@@ -12,6 +12,8 @@
 // participant (`standInConnectionRef`), so their join and leave pair as LiveKit's `sid` makes them;
 // the room's end carries no participant. A correctly signed body of any other `type` answers
 // `{ kind: 'ignored' }`, as LiveKit's `track_*` and `room_started` do; its signature is checked first.
+// `endRoom` for a room it never created answers success, as LiveKit's adapter does (the owner's
+// decision of 2026-11-07), since the worker's stand-in never created the rooms the API's did.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
@@ -163,10 +165,10 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
   endRoom(sessionId: string): Promise<void> {
     const failure = this.attempt('endRoom', [sessionId]);
     if (failure !== undefined) return Promise.reject(failure);
+    // A room it never created is ended already, as LiveKit answers `not_found` (the owner's
+    // decision of 2026-11-07): a sweep in another process ends it without an error (T014).
     const room = this.#rooms.get(sessionId);
-    if (room === undefined)
-      return Promise.reject(new Error('unknown room: the stand-in did not create it.'));
-    room.ended = true;
+    if (room !== undefined) room.ended = true;
     return Promise.resolve();
   }
 

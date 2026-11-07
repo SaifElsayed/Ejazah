@@ -20,8 +20,23 @@
 // after signing (here the same event under a new provider id, so it would be recorded anew were the
 // signature not checked).
 //
+// SCENARIOS (the owner's decision of 2026-11-07): `scenario(session, row)` builds, in the order they
+// happen, the events of a row of SRS §3.7.5's table, a reconnection (SC-402) and a lost final leave
+// (SC-403), under the seed's default settings (`prisma/seed.ts:96-98`: `attendance_threshold_pct`
+// 70, `join_window_minutes` 10, `minimum_connection_seconds` 60). Every join is at the scheduled
+// start, inside the join window. `done`: both from the start to the end, then the room ends.
+// `student_no_show` and `teacher_no_show`: the other one alone. `both_no_show`: no event, since
+// nobody opened the room. `under_threshold`: both joined, the student leaving one second before the
+// threshold's share of the session. `reconnection`: the student drops a third of the way in and
+// rejoins a minimum connection's length later on a new connection, together still over the
+// threshold. `lost_final_leave`: both join, the teacher leaves at the end, and the student's leave and
+// the room's end never arrive. A session too short to hold a row's shape is refused. The
+// Provider-Outage row is not here: its cause is an outage window an administrator records
+// (`provider_outages`), not a video event, so no harness of the provider's events can produce it.
+//
 // Nothing here logs: the secret, the signatures and the bodies stay in the caller's hands (R-SEC-2).
 import { randomUUID } from 'node:crypto';
+import { addSeconds, unixSeconds } from '@ijazah/time';
 import {
   FakeVideoAdapter,
   type SignedEvent,
@@ -61,6 +76,38 @@ export interface RoomEndedAt {
   readonly at: Date;
 }
 
+/** SRS §3.7.5's rows but Provider-Outage, a reconnection and a lost final leave (the header). */
+export const VIDEO_SCENARIOS = [
+  'done',
+  'student_no_show',
+  'teacher_no_show',
+  'both_no_show',
+  'under_threshold',
+  'reconnection',
+  'lost_final_leave',
+] as const;
+
+export type VideoScenario = (typeof VIDEO_SCENARIOS)[number];
+
+/** The session a scenario is built for: its id, its two participants and its scheduled window. */
+export interface ScenarioSession {
+  readonly id: string;
+  readonly teacherUserId: string;
+  readonly studentUserId: string;
+  readonly startAt: Date;
+  readonly endAt: Date;
+}
+
+// The seed's defaults (`prisma/seed.ts:96-98`); a spec that changes a setting builds its own events.
+const DEFAULT_ATTENDANCE_THRESHOLD_PCT = 70;
+const DEFAULT_MINIMUM_CONNECTION_SECONDS = 60;
+const PERCENT = 100;
+
+/** The student's second connection in `reconnection`. */
+const RECONNECTED_SUFFIX = '_reconnected';
+/** `reconnection` drops the student a third of the way into the session. */
+const RECONNECTION_DROP_DIVISOR = 3;
+
 export interface VideoStandIn {
   joined(sessionId: string, userId: string, when: ParticipantEventAt): VideoStandInEvent;
   left(sessionId: string, userId: string, when: ParticipantEventAt): VideoStandInEvent;
@@ -75,6 +122,8 @@ export interface VideoStandIn {
   deliverInOrder(events: readonly VideoStandInEvent[]): Promise<number[]>;
   /** A forged variant of the event. */
   tamper(event: VideoStandInEvent, how: VideoForgery): VideoStandInEvent;
+  /** The events of a scenario's row, in the order they happen, each fresh (the header). */
+  scenario(session: ScenarioSession, row: VideoScenario): VideoStandInEvent[];
 }
 
 export interface VideoStandInOptions {
@@ -135,7 +184,7 @@ export function createVideoStandIn({
     return statuses;
   };
 
-  return {
+  const builders: EventBuilders = {
     joined: (sessionId, userId, when) => participantEvent('joined', sessionId, userId, when),
     left: (sessionId, userId, when) => participantEvent('left', sessionId, userId, when),
     roomEnded: (sessionId, { at }) =>
@@ -145,6 +194,10 @@ export function createVideoStandIn({
         session: sessionId,
         occurred_at: at.toISOString(),
       }),
+  };
+
+  return {
+    ...builders,
     deliver,
     deliverTwice: async (each) => {
       const first = await deliver(each);
@@ -158,7 +211,74 @@ export function createVideoStandIn({
     },
     deliverInOrder,
     tamper: (each, how) => tampered(signer, each, how),
+    scenario: (session, row) => scenarioEvents(builders, session, row),
   };
+}
+
+type EventBuilders = Pick<VideoStandIn, 'joined' | 'left' | 'roomEnded'>;
+
+/** The events of `row` for `session`, in the order they happen (the header). */
+function scenarioEvents(
+  { joined, left, roomEnded }: EventBuilders,
+  { id, teacherUserId: teacher, studentUserId: student, startAt, endAt }: ScenarioSession,
+  row: VideoScenario,
+): VideoStandInEvent[] {
+  const lengthSeconds = unixSeconds(endAt) - unixSeconds(startAt);
+  const thresholdSeconds = Math.ceil((lengthSeconds * DEFAULT_ATTENDANCE_THRESHOLD_PCT) / PERCENT);
+  const shortOfThresholdSeconds = thresholdSeconds - 1;
+  const gapSeconds = DEFAULT_MINIMUM_CONNECTION_SECONDS;
+  // Each row's student is connected at least the minimum, and a reconnection's gap keeps the two
+  // together at or over the threshold.
+  if (
+    shortOfThresholdSeconds < DEFAULT_MINIMUM_CONNECTION_SECONDS ||
+    lengthSeconds - gapSeconds < thresholdSeconds
+  ) {
+    throw new RangeError('The session is too short for the scenario’s rows.');
+  }
+  const after = (seconds: number): Date => new Date(addSeconds(startAt, seconds));
+  const start = { at: startAt };
+  const end = { at: endAt };
+
+  switch (row) {
+    case 'done':
+      return [
+        joined(id, teacher, start),
+        joined(id, student, start),
+        left(id, teacher, end),
+        left(id, student, end),
+        roomEnded(id, end),
+      ];
+    case 'student_no_show':
+      return [joined(id, teacher, start), left(id, teacher, end), roomEnded(id, end)];
+    case 'teacher_no_show':
+      return [joined(id, student, start), left(id, student, end), roomEnded(id, end)];
+    case 'both_no_show':
+      return [];
+    case 'under_threshold':
+      return [
+        joined(id, teacher, start),
+        joined(id, student, start),
+        left(id, student, { at: after(shortOfThresholdSeconds) }),
+        left(id, teacher, end),
+        roomEnded(id, end),
+      ];
+    case 'reconnection': {
+      const dropSeconds = Math.floor(lengthSeconds / RECONNECTION_DROP_DIVISOR);
+      const first = standInConnectionRef(student);
+      const second = `${first}${RECONNECTED_SUFFIX}`;
+      return [
+        joined(id, teacher, start),
+        joined(id, student, { at: startAt, connection: first }),
+        left(id, student, { at: after(dropSeconds), connection: first }),
+        joined(id, student, { at: after(dropSeconds + gapSeconds), connection: second }),
+        left(id, teacher, end),
+        left(id, student, { at: endAt, connection: second }),
+        roomEnded(id, end),
+      ];
+    }
+    case 'lost_final_leave':
+      return [joined(id, teacher, start), joined(id, student, start), left(id, teacher, end)];
+  }
 }
 
 function freshEventId(): string {

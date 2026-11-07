@@ -3,6 +3,10 @@
 // the stand-in's secret and the listening API's address, builds each event signed as the provider
 // would (`joined`, `left`, `roomEnded`), delivers it over HTTP to `POST /webhooks/video`
 // (`deliver`, `deliverTwice`, `deliverTimes`, `deliverInOrder`), and forges it (`tamper`).
+// `scenario(session, row)` builds the events of a row of SRS §3.7.5's table, a reconnection and a
+// lost final leave under the seed's default settings; the Provider-Outage row is not among them,
+// since an outage window an administrator records causes it, not a video event (the fixtures'
+// header).
 //
 // The building is `apps/api/src/platform/ports/video/video-stand-in.fixtures.ts` (its header says
 // why it lives there, as `003:T013` placed the gateway's); this entry binds it to the webhook's
@@ -19,8 +23,11 @@ import {
 export {
   type ParticipantEventAt,
   type RoomEndedAt,
+  type ScenarioSession,
   VIDEO_FORGERIES,
+  VIDEO_SCENARIOS,
   type VideoForgery,
+  type VideoScenario,
   type VideoStandIn,
   type VideoStandInEvent,
 } from '../../apps/api/src/platform/ports/video/video-stand-in.fixtures';
