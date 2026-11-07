@@ -33,8 +33,16 @@
 // rows name, then freezes the enrollments' open remedies through sessions' `freezeOpenRemedies`;
 // each enrollment stays `confirmed` and keeps its slot. A ban cancels the upcoming sessions and
 // hands the open remedies (`frozen` included) to one `student_banned` case per enrollment, nothing
-// owed, then cancels the enrollments `admin` at once with one `enrollment_events` row each. A
-// teacher's suspension, ban or revocation reaches no confirmed enrollment here (T006).
+// owed, then cancels the enrollments `admin` at once with one `enrollment_events` row each.
+//
+// A TEACHER'S END (T006 of specs/004-sessions; FR-482, FR-483, FR-485; R-313). A teacher's
+// suspension, revocation and ban end the teacher's confirmed enrollments as the teacher's deletion
+// does, in the same order: every remaining session `cancelled_by_admin` through
+// `cancelRemainingSessions`, one inside its join period included (the room's end is T014's), one
+// `teacher_ended` case per enrollment, which those sessions' rows name and every open remedy
+// (`frozen` included, data-model.md §3) is handed to, then each enrollment `cancelled`
+// `teacher_suspended` with one `enrollment_events` row. A ban and a revocation hold the
+// application's `teacher_profiles` row too, taken after the account and before the slots' key.
 //
 // THE LOG LINE (the note under T005). Each call writes one info line, «Account end decided», with
 // the account's id, the cause and counts only: `{ userId, cause, enrollments, cancelledSessions,
@@ -192,9 +200,10 @@ function studentReason(cause: TerminationCause): ReleaseReason {
 
 /**
  * Booking's consequence of an account's end, for `AccountConsequences.subscribe`: the holds on the
- * account's slots and its own hold released, their enrollments awaiting payment cancelled (this
- * file's head). Expects the caller to hold the account's `users` row (and, for a ban or a
- * revocation, its `teacher_profiles` row), and nothing after them in T005's order.
+ * account's slots and its own hold released, their enrollments awaiting payment cancelled, and the
+ * account's confirmed enrollments ended or kept (this file's head), with one info line. Expects the
+ * caller to hold the account's `users` row (and, for a teacher's ban or revocation, its
+ * `teacher_profiles` row), and nothing after them in T005's order.
  */
 export function terminationSubscriber({
   orders,
@@ -261,8 +270,8 @@ function endOf(cause: TerminationCause, role: Role): End | null {
       cancellation: 'account_deleted',
     };
   }
-  // A teacher's suspension, ban or revocation: T006's.
-  if (role === 'teacher') return null;
+  // A teacher's suspension, ban or revocation (T006, FR-483).
+  if (role === 'teacher') return { caseReason: 'teacher_ended', cancellation: 'teacher_suspended' };
   if (cause === 'suspended') return { caseReason: 'student_suspended', cancellation: null };
   if (cause === 'banned') return { caseReason: 'student_banned', cancellation: 'admin' };
   return null;
