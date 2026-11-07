@@ -571,6 +571,8 @@ token is issued only for a scheduled session, from the early-join lead before
 its start until its scheduled end, and a settled or cancelled session never
 re-issues one (amended 2026-11-05).
 
+LiveKit Cloud's project setting **«Automatically create rooms» must be off** in every project the platform uses, production included (T009's check, 2026-11-07): with it on, a token minted before `endRoom` re-creates the room, with no participant limit, after the platform ended it; with it off, such a token is refused and only `createRoom` opens a room. Check it whenever a project is created or its keys are rotated. The room's `maxParticipants` is not enforced by LiveKit Cloud (the same check): the server's join, which issues a token only to the session's two parties, is what keeps a third person out.
+
 **A video event refused or not attributed** — nothing reaches the database
 for either, so look in two places (`specs/004-sessions/research.md` R-323,
 GAP-10; added 2026-11-05, the owner's decision). A refused event (no or wrong
