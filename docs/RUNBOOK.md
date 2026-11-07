@@ -473,9 +473,9 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   it from the gateway's dashboard. A replay is safe, because
   `payment_events.provider_event_id` is unique (R-MONEY-8).
 - **`LIVEKIT_API_KEY`** and **`LIVEKIT_API_SECRET`**, with `LIVEKIT_URL` (not a
-  secret). Until Phase 3's adapter task renames them they are `DAILY_API_KEY`
-  and `DAILY_WEBHOOK_SECRET` in `.env.example` (ADR 0003, Consequences;
-  amended 2026-11-05). Issued in the LiveKit Cloud project's settings:
+  secret), in `.env.example` since B34's adapter task (T009 of
+  `specs/004-sessions/tasks.md`; ADR 0003, Consequences, amended 2026-11-05),
+  read only while `VIDEO_PROVIDER=livekit`. Issued in the LiveKit Cloud project's settings:
   create a new key pair, install both values, restart the API and the worker,
   then delete the old pair. LiveKit has no separate webhook secret: the API secret signs the
   tokens and verifies the webhooks (`specs/004-sessions/research.md` R-302).
@@ -565,8 +565,8 @@ missed. Replay it; `provider_event_id` is unique, so a duplicate replay cannot
 double-insert, and the evaluate-session job re-runs safely.
 
 **Room does not open** — check `VIDEO_PROVIDER`, `LIVEKIT_URL`,
-`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` (the `DAILY_*` keys until Phase 3's
-adapter task renames them), and the session status and its join period: a
+`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` (the API refuses to start with
+`VIDEO_PROVIDER=livekit` and any of the three missing), and the session status and its join period: a
 token is issued only for a scheduled session, from the early-join lead before
 its start until its scheduled end, and a settled or cancelled session never
 re-issues one (amended 2026-11-05).

@@ -102,7 +102,9 @@ describe('provider selection (T121, FR-056)', () => {
       payment.createCheckout('enr-1', piasters(100), 'EGP', new Date('2026-10-08T10:30:00Z')),
     ).resolves.toHaveProperty('gatewayOrderId');
     await expect(sms.send('+201000000000', 'Your code is 482913')).resolves.toBeUndefined();
-    await expect(video.createRoom(SESSION)).resolves.toEqual(expect.any(String));
+    await expect(
+      video.createRoom(SESSION, { emptyTimeoutSeconds: 300, departureTimeoutSeconds: 20 }),
+    ).resolves.toEqual(expect.any(String));
     const nonce = 'n_selection';
     await expect(
       signIn.verifyIdentityToken({

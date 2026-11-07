@@ -20,6 +20,14 @@
 // nothing; its names are illustrative (note under T117). Recording is the sessions module's write;
 // what the provider-facing port can do is verify and read the event, which is the contract's
 // "Record an inbound participant event | Attendance evidence" from this side of the port.
+//
+// T009 (contracts/video.md, "The port, as this phase calls it"; research R-302, R-304) widens it
+// additively: a room is created with the two timeouts the settings `video_empty_timeout_seconds`
+// and `video_departure_timeout_seconds` give, a token with the instant it stops opening a
+// connection (the session's scheduled end), and an event is a participant's join or leave, carrying
+// the participant and their connection, or the room's end, carrying neither. A correctly signed
+// event that is not attendance answers `{ kind: 'ignored' }`, which the webhook acknowledges with
+// 200 and records nowhere.
 
 declare const joinTokenBrand: unique symbol;
 
@@ -32,28 +40,61 @@ export interface JoinToken {
   readonly [joinTokenBrand]: true;
 }
 
-/** A participant connecting to or leaving a session's room, as the provider reported it. */
+/** How long the provider keeps a room open, from the two settings (R-302; the analysis, K2). */
+export interface RoomTimeouts {
+  /** Before anyone joins: `video_empty_timeout_seconds`. */
+  readonly emptyTimeoutSeconds: number;
+  /** After the last participant leaves: `video_departure_timeout_seconds`. */
+  readonly departureTimeoutSeconds: number;
+}
+
+/** Until when a token may open a connection: the session's `scheduled_end_at` (R-302). */
+export interface TokenValidity {
+  readonly validUntil: Date;
+}
+
+/**
+ * A participant connecting to or leaving a session's room, or the room's end, as the provider
+ * reported it. The participant and the connection are present exactly when `type` is not
+ * `room_ended` (contracts/video.md).
+ */
 export interface ParticipantEvent {
   /** The provider's own id, for `session_participant_events.provider_event_id` (R-SESS-1). */
   readonly providerEventId: string;
   readonly sessionId: string;
-  readonly participantUserId: string;
   /** The `session_participant_events.event_type` it is stored under. */
-  readonly type: 'joined' | 'left';
-  /** When the provider says it happened. */
+  readonly type: 'joined' | 'left' | 'room_ended';
+  /** Whose connection it is; absent for `room_ended`. */
+  readonly participantUserId?: string;
+  /** The provider's id of the connection (`connection_ref`, R-304); absent for `room_ended`. */
+  readonly connectionRef?: string;
+  /** When the provider says it happened, by the provider's clock (R-TIME-6). */
   readonly occurredAt: Date;
 }
 
+/** A correctly signed event that is not attendance: acknowledged, recorded nowhere (R-304). */
+export interface IgnoredEvent {
+  readonly kind: 'ignored';
+}
+
 export interface VideoPort {
-  /** Prepare a lesson. Answers the provider's room reference (`sessions.provider_room_id`). */
-  createRoom(sessionId: string): Promise<string>;
-  /** Admit one participant to one session (R-GENDER-7, FR-SESS-3). */
-  createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken>;
+  /**
+   * Prepare a lesson's room, named by the session's id: nothing is stored for it, the room is found
+   * again by that id. Idempotent: a room that exists is answered. Answers the provider's room
+   * reference.
+   */
+  createRoom(sessionId: string, timeouts: RoomTimeouts): Promise<string>;
+  /** Admit one participant to one session until `validUntil` (R-GENDER-7, FR-SESS-3). */
+  createSessionToken(
+    sessionId: string,
+    participantUserId: string,
+    validity: TokenValidity,
+  ): Promise<JoinToken>;
   /** Attendance evidence from the provider's signed webhook (R-SESS-1). */
   verifyAndParseParticipantEvent(
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,
-  ): Promise<ParticipantEvent>;
+  ): Promise<ParticipantEvent | IgnoredEvent>;
   /** Cleanup. Ending a room that has ended already is not an error. */
   endRoom(sessionId: string): Promise<void>;
 }

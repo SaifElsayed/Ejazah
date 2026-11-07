@@ -46,7 +46,8 @@ describe('env.schema (T015, FR-039)', () => {
 
   it('names the two values T010 left unnamed', () => {
     expect(envKeys).toContain('PUBLIC_WEBHOOK_ORIGIN');
-    expect(envKeys).toContain('DAILY_WEBHOOK_SECRET');
+    // T009: LiveKit has no separate webhook secret; its API secret verifies the video webhook (R-302).
+    expect(envKeys).toContain('LIVEKIT_API_SECRET');
   });
 
   it('accepts the stand-in adapter and refuses an unknown gateway naming the key, never the value', () => {
@@ -170,8 +171,9 @@ describe('loadConfig (T015, FR-039)', () => {
         validEnv,
         'PAYMENT_GATEWAY_API_KEY',
         'PAYMENT_GATEWAY_WEBHOOK_SECRET',
-        'DAILY_API_KEY',
-        'DAILY_WEBHOOK_SECRET',
+        'LIVEKIT_URL',
+        'LIVEKIT_API_KEY',
+        'LIVEKIT_API_SECRET',
         'SMS_PROVIDER_KEY',
         'EXPO_ACCESS_TOKEN',
         'S3_ACCESS_KEY_ID',
@@ -186,7 +188,7 @@ describe('loadConfig (T015, FR-039)', () => {
     );
 
     expect(config.PAYMENT_GATEWAY_API_KEY).toBeUndefined();
-    expect(config.DAILY_WEBHOOK_SECRET).toBeUndefined();
+    expect(config.LIVEKIT_API_SECRET).toBeUndefined();
     expect(config.GOOGLE_CLIENT_IDS).toBeUndefined();
     expect(config.APPLE_PRIVATE_KEY).toBeUndefined();
   });
@@ -205,10 +207,10 @@ describe('loadConfig (T015, FR-039)', () => {
   });
 
   it('treats an empty value as unset, as a copied .env.example leaves it', () => {
-    const config = loadConfig({ ...validEnv, SENTRY_DSN: '', DAILY_API_KEY: '' });
+    const config = loadConfig({ ...validEnv, SENTRY_DSN: '', LIVEKIT_API_KEY: '' });
 
     expect(config.SENTRY_DSN).toBeUndefined();
-    expect(config.DAILY_API_KEY).toBeUndefined();
+    expect(config.LIVEKIT_API_KEY).toBeUndefined();
   });
 
   it('requires ENCRYPTION_KEY in every environment, development included, naming it', () => {
@@ -727,6 +729,95 @@ describe('the gateway (T056)', () => {
       expect(providerKeys).toContain(key);
       expect(platformKeys).not.toContain(key);
     }
+  });
+});
+
+// T009 (R-302, contracts/video.md): LiveKit behind the video port. Every value below is a
+// placeholder, never a real key (R-SEC-1). The stand-in stays refused outside development and test
+// (T153); LiveKit is not a stand-in, and cannot start without its address, its key and its secret.
+describe('the video provider (T009)', () => {
+  const livekit: Record<string, string> = {
+    ...validEnv,
+    VIDEO_PROVIDER: 'livekit',
+    LIVEKIT_URL: 'wss://ejazah-placeholder.livekit.cloud',
+    LIVEKIT_API_KEY: 'APIplaceholder',
+    LIVEKIT_API_SECRET: 'secret-placeholder',
+  };
+
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('selects LiveKit with its address, its key and its secret', () => {
+    const config = loadConfig(livekit);
+
+    expect(config.VIDEO_PROVIDER).toBe('livekit');
+    expect(config.LIVEKIT_URL).toBe('wss://ejazah-placeholder.livekit.cloud');
+    expect(config.LIVEKIT_API_KEY).toBe('APIplaceholder');
+    expect(config.LIVEKIT_API_SECRET).toBe('secret-placeholder');
+  });
+
+  it('keeps the stand-in by default, reading none of the three', () => {
+    expect(loadConfig(validEnv).VIDEO_PROVIDER).toBe('fake');
+  });
+
+  it.each(['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'])(
+    'refuses LiveKit without %s, naming it and never a value',
+    (key) => {
+      const failure = refusal(without(livekit, key));
+
+      expect(failure.offendingKeys).toEqual([key]);
+      expect(failure.message).toContain(`${key} (required when VIDEO_PROVIDER=livekit`);
+      expect(failure.message).not.toContain('placeholder');
+    },
+  );
+
+  it("refuses a LIVEKIT_URL that is not the project's wss:// address, never echoing it", () => {
+    for (const value of [
+      'https://ejazah-placeholder.livekit.cloud',
+      'ws://ejazah-placeholder.livekit.cloud',
+      'ejazah-placeholder.livekit.cloud',
+    ]) {
+      const failure = refusal({ ...livekit, LIVEKIT_URL: value });
+      expect(failure.offendingKeys).toEqual(['LIVEKIT_URL']);
+      expect(failure.message).not.toContain('placeholder');
+    }
+  });
+
+  it('refuses an unknown provider, naming the key and never the value', () => {
+    const failure = refusal({ ...validEnv, VIDEO_PROVIDER: 'daily-placeholder' });
+
+    expect(failure.offendingKeys).toEqual(['VIDEO_PROVIDER']);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
+  it('refuses the stand-in outside development and test, and takes LiveKit there (FR-056, T153)', () => {
+    for (const env of [validEnv, { ...validEnv, VIDEO_PROVIDER: 'fake' }]) {
+      const failure = refusal({ ...env, NODE_ENV: 'production' });
+      expect(failure.offendingKeys).toContain('VIDEO_PROVIDER');
+      expect(failure.message).toMatch(/VIDEO_PROVIDER \(the stand-in is refused/);
+    }
+
+    // The configuration is still refused for the other ports' stand-ins (T153), never for video.
+    const production = refusal({ ...livekit, NODE_ENV: 'production' });
+    expect(production.offendingKeys).not.toContain('VIDEO_PROVIDER');
+    expect(production.offendingKeys).not.toContain('LIVEKIT_URL');
+    expect(production.offendingKeys).not.toContain('LIVEKIT_API_KEY');
+    expect(production.offendingKeys).not.toContain('LIVEKIT_API_SECRET');
+  });
+
+  it('classifies the three as provider keys, so no test run holds one (T114, SC-005)', () => {
+    for (const key of ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET']) {
+      expect(providerKeys).toContain(key);
+      expect(platformKeys).not.toContain(key);
+    }
+    expect(platformKeys).toContain('VIDEO_PROVIDER');
   });
 });
 
