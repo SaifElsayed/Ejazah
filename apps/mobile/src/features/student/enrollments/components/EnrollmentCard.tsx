@@ -12,6 +12,7 @@ import { Badge, Card, Stats, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
+import { usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
 import { ENROLLMENT_STATUS } from '../status';
 import { SessionWhen } from './SessionWhen';
@@ -100,11 +101,13 @@ export function EnrollmentCard({
 }) {
   const t = useT();
   const format = useFormatters();
+  const partyName = usePartyName();
+  const teacher = partyName(item.teacher, 'teacher');
   const { next, last } = item;
   const completedOn =
     item.status === 'completed' && last !== undefined
       ? t('student.enrollments.card.completedOn', {
-          teacher: item.teacher.displayName,
+          teacher,
           date: format.date(last.startsAt, zone),
         })
       : undefined;
@@ -120,7 +123,7 @@ export function EnrollmentCard({
           gap: tokens.space['2'],
         }}
       >
-        <Text tone="muted">{completedOn ?? item.teacher.displayName}</Text>
+        <Text tone="muted">{completedOn ?? teacher}</Text>
         <EnrollmentStatusBadge status={item.status} pending={pendingBadge} />
       </View>
       {next === undefined ? null : (

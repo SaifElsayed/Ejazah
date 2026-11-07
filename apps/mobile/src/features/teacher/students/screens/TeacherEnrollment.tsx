@@ -29,6 +29,7 @@ import { useLocale, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { useOnline } from '../../../../lib/online';
+import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -75,14 +76,15 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
   const t = useT();
   const nameOf = useSubjectName();
   const format = useFormatters();
+  const partyName = usePartyName();
   const rows = sessionRows(enrollment.sessions, enrollment.next?.sequenceNumber);
   return (
     <>
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['3'] }}>
-          <Avatar initials={initialOf(enrollment.student.displayName)} size="lg" />
+          <Avatar initials={initialOf(avatarNameOf(enrollment.student))} size="lg" />
           <View style={{ flex: 1, minWidth: 0, gap: tokens.space['1'] }}>
-            <Text variant="headline">{enrollment.student.displayName}</Text>
+            <Text variant="headline">{partyName(enrollment.student, 'student')}</Text>
             <Text variant="caption" tone="muted">
               {t('common.package.full', {
                 subject: nameOf(enrollment.summary.subject),

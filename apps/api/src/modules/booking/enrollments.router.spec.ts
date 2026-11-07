@@ -68,7 +68,12 @@ function sessionOf(who: Who, gender: 'male' | 'female' = 'female'): UserSession 
 
 const item = {
   enrollmentId: OWN,
-  teacher: { teacherId: TEACHER, displayName: 'أحمد سالم' },
+  teacher: {
+    teacherId: TEACHER,
+    displayName: 'أحمد سالم',
+    displayNameOrNull: 'أحمد سالم',
+    deleted: false,
+  },
   summary: {
     subject: { id: SUBJECT, nameAr: 'حفظ القرآن', nameEn: 'Quran memorisation' },
     track: 'recitation' as const,
@@ -91,6 +96,8 @@ const item = {
 };
 
 let calls: unknown[][];
+/** What `enrollments.get`'s service answers in a spec that sets it, else the own enrollment. */
+let enrollmentAnswer: Awaited<ReturnType<BookingServices['enrollment']>> | undefined;
 
 const unreached = (name: string) => () => Promise.reject(new Error(`${name} is not reached here`));
 
@@ -104,7 +111,7 @@ const booking: BookingServices = {
   enrollment: async (...args) => {
     calls.push(['enrollment', ...args]);
     if (args[1].enrollmentId !== OWN) throw new DomainError('NOT_FOUND');
-    return { ...item, sessions: [item.next] };
+    return enrollmentAnswer ?? { ...item, sessions: [item.next] };
   },
   students: unreached('teacher.students.list'),
   student: unreached('teacher.students.get'),
@@ -113,6 +120,7 @@ const booking: BookingServices = {
 
 beforeEach(() => {
   calls = [];
+  enrollmentAnswer = undefined;
 });
 
 function callerAs(session: UserSession | null): Caller {
@@ -219,6 +227,13 @@ describe("'enrollments.get' (T049)", () => {
     const answer = await calls$.get(callerAs(sessionOf('student')));
     expect(answer.sessions).toEqual([item.next]);
     expect(calls).toEqual([['enrollment', CALLER, { enrollmentId: OWN }]]);
+  });
+
+  it('answers a deleted teacher deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {
+    const deleted = { teacherId: TEACHER, displayName: '', displayNameOrNull: null, deleted: true };
+    enrollmentAnswer = { ...item, teacher: deleted, sessions: [item.next] };
+    const answer = await calls$.get(callerAs(sessionOf('student')));
+    expect(answer.teacher).toEqual(deleted);
   });
 
   it('sends another student’s enrollment NOT_FOUND with no field: the code and its message alone', async () => {

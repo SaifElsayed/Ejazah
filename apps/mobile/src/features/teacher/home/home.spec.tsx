@@ -55,7 +55,7 @@ function session(
 ): TeacherTodaySession {
   return {
     enrollmentId: `0193a6f0-0000-7000-8000-0000000000${enrollment}`,
-    student: { displayName: student },
+    student: { displayName: student, displayNameOrNull: student, deleted: false },
     summary: {
       subject: QURAN,
       track: 'recitation',
@@ -160,6 +160,19 @@ describe('TeacherHome (FR-391, FR-393)', () => {
       expect(screen.getAllByText(said(direction, 'status.session.done')).length).toBeGreaterThan(0);
       expect(screen.queryByText(said(direction, 'status.session.scheduled'))).toBeNull();
       expect(screen.queryByText(said(direction, 'teacher.today.empty.title'))).toBeNull();
+    });
+  });
+
+  // T007 (FR-426): a deleted student has no name; the row draws the stand-in, never an empty line.
+  it('draws a deleted student by the stand-in text', async () => {
+    const deleted: TeacherTodaySession = {
+      ...NEXT,
+      student: { displayName: '', displayNameOrNull: null, deleted: true },
+    };
+    today().mockResolvedValue(day([deleted]));
+    await inBothDirections(home, async (_rendered, direction) => {
+      expect(await screen.findByText(said(direction, 'common.party.deletedStudent'))).toBeTruthy();
+      expect(screen.getByText(rowMeta(direction, deleted))).toBeTruthy();
     });
   });
 

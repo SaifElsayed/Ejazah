@@ -10,6 +10,7 @@ import { Avatar, ListRow, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
+import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { useInViewerZone } from '../zone';
 import { EnrollmentBadges } from './Badges';
 
@@ -31,6 +32,7 @@ export function StudentRow({
   const t = useT();
   const format = useFormatters();
   const inViewerZone = useInViewerZone();
+  const partyName = usePartyName();
   const { next } = item;
   const progress = t('common.format.progress', {
     done: item.completed,
@@ -49,10 +51,10 @@ export function StudentRow({
     next === undefined ? null : inViewerZone(next.startsAt, next.timezone, viewerZone);
   return (
     <ListRow
-      leading={<Avatar initials={initialOf(item.student.displayName)} />}
+      leading={<Avatar initials={initialOf(avatarNameOf(item.student))} />}
       label={
         <View style={{ gap: tokens.space['1'] }}>
-          <Text weight="bold">{item.student.displayName}</Text>
+          <Text weight="bold">{partyName(item.student, 'student')}</Text>
           <Text variant="caption" tone="muted">
             {line}
           </Text>

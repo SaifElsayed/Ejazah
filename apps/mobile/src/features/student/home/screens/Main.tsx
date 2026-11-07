@@ -19,6 +19,7 @@ import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters } from '../../../../lib/formatters';
 import { useOnline } from '../../../../lib/online';
+import { usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
 import { TabScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineBanner } from '../../../shared/states';
@@ -105,6 +106,7 @@ function NextSession({
 }) {
   const t = useT();
   const nameOf = useSubjectName();
+  const partyName = usePartyName();
   return (
     <Card variant="hero">
       <Text variant="callout" tone="muted">
@@ -113,7 +115,7 @@ function NextSession({
       <Text variant="title-3">
         {t('student.home.sessionTitle', {
           subject: nameOf(item.summary.subject),
-          teacher: item.teacher.displayName,
+          teacher: partyName(item.teacher, 'teacher'),
         })}
       </Text>
       <SessionWhen session={session} zone={zone} />

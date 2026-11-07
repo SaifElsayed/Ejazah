@@ -29,12 +29,19 @@
 //
 // FIELDS (FR-395, R-HONEST-4). The student is named by display name alone; nothing of a date of
 // birth, a minor flag, a document or a dispute is read. The output schemas strip any other field.
+//
+// A DELETED PARTY (T007, `003:T090`; FR-426). Identity's names leave out a deleted account (the
+// client's extension, its name erased, FR-141), and a live account always has its name (ERD §15
+// rule 32), while the enrollment's foreign key keeps the row: a party absent from the names is a
+// deleted one, answered `displayNameOrNull: null`, `deleted: true` and the deprecated `displayName`
+// `''` (the note under T007), so the phone draws its stand-in.
 import type {
   EnrollmentsGetInput,
   EnrollmentsGetOutput,
   EnrollmentsListInput,
   EnrollmentsListOutput,
   EnrollmentTerms,
+  ListedPartyName,
   ListedSession,
   StudentEnrollmentItem,
   SubjectSummary,
@@ -179,6 +186,14 @@ function termsOf(
   };
 }
 
+/** A party as the lists name them: one absent from identity's names was deleted (this file's head). */
+function partyNameOf(names: ReadonlyMap<string, string>, userId: string): ListedPartyName {
+  const name = names.get(userId);
+  return name === undefined
+    ? { displayName: '', displayNameOrNull: null, deleted: true }
+    : { displayName: name, displayNameOrNull: name, deleted: false };
+}
+
 /** An enrollment's status and progress, the part both sides' items share. */
 type ItemCore = Pick<
   StudentEnrollmentItem,
@@ -231,17 +246,14 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
 function studentItemOf(row: ListedEnrollmentRow, context: ItemContext): StudentEnrollmentItem {
   return {
     ...coreOf(row, context),
-    teacher: {
-      teacherId: row.teacherUserId,
-      displayName: context.names.get(row.teacherUserId) ?? '',
-    },
+    teacher: { teacherId: row.teacherUserId, ...partyNameOf(context.names, row.teacherUserId) },
   };
 }
 
 function teacherItemOf(row: ListedEnrollmentRow, context: ItemContext): TeacherStudentItem {
   return {
     ...coreOf(row, context),
-    student: { displayName: context.names.get(row.studentUserId) ?? '' },
+    student: partyNameOf(context.names, row.studentUserId),
   };
 }
 
@@ -436,7 +448,7 @@ export async function teacherTodayOf(
         {
           ...listedSessionOf(session),
           enrollmentId: row.id,
-          student: { displayName: names.get(row.studentUserId) ?? '' },
+          student: partyNameOf(names, row.studentUserId),
           summary: termsOf(row, subjects),
         },
       ];

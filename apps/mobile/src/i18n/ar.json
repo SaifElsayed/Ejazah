@@ -326,6 +326,10 @@
       "short": "{subject} · {sessions, plural, one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}}",
       "withTeacher": "{teacher} · {package}"
     },
+    "party": {
+      "deletedStudent": "طالب محذوف",
+      "deletedTeacher": "معلم محذوف"
+    },
     "progress": {
       "sessions": "{done} من {total} جلسات",
       "short": "{done} من {total}"

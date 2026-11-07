@@ -326,6 +326,10 @@
       "short": "{subject} · {sessions, plural, one {# session} other {# sessions}}",
       "withTeacher": "{teacher} · {package}"
     },
+    "party": {
+      "deletedStudent": "Deleted student",
+      "deletedTeacher": "Deleted teacher"
+    },
     "progress": {
       "sessions": "{done} of {total} sessions",
       "short": "{done} of {total}"

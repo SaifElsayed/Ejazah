@@ -72,7 +72,12 @@ const next: ListedSession = {
 };
 const ongoing: StudentEnrollmentItem = {
   enrollmentId: ENROLLMENT_ID,
-  teacher: { teacherId: TEACHER_ID, displayName: TEACHER },
+  teacher: {
+    teacherId: TEACHER_ID,
+    displayName: TEACHER,
+    displayNameOrNull: TEACHER,
+    deleted: false,
+  },
   summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
   status: 'confirmed',
   next,
@@ -142,6 +147,26 @@ describe('Main', () => {
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(student)/enrollments/[id]',
       params: { id: ENROLLMENT_ID },
+    });
+  });
+
+  // T007 (FR-426): a deleted teacher has no name; the next session's title names the stand-in.
+  it('names a deleted teacher by the stand-in text in the next session’s title', async () => {
+    mockApi.api.enrollments.list.query.mockResolvedValue(
+      list({
+        ...ongoing,
+        teacher: { teacherId: TEACHER_ID, displayName: '', displayNameOrNull: null, deleted: true },
+      }),
+    );
+    await inBothDirections(within(<Main />), async (_rendered, direction) => {
+      expect(
+        await screen.findByText(
+          said(direction, 'student.home.sessionTitle', {
+            subject: direction === 'rtl' ? QURAN.nameAr : QURAN.nameEn,
+            teacher: said(direction, 'common.party.deletedTeacher'),
+          }),
+        ),
+      ).toBeTruthy();
     });
   });
 

@@ -9,7 +9,9 @@
 //     students only, in both tabs (FR-391);
 //   - a detail that is not the caller's answers NOT_FOUND;
 //   - «اليوم» is the teacher's local day in the teacher's zone (FR-393);
-//   - every session carries its local date, local start, zone, instants and status.
+//   - every session carries its local date, local start, zone, instants and status;
+//   - a party absent from identity's names (a deleted account) is answered deleted, with no name
+//     and the deprecated name empty, on every list and detail (T007, FR-426).
 import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
@@ -81,6 +83,12 @@ const LISTED = {
   endsAt: '2026-11-17T13:00:00.000Z',
   status: 'scheduled',
 };
+
+/** A live party's name as every list answers it (T007, FR-426): both fields, not deleted. */
+const named = (name: string) => ({ displayName: name, displayNameOrNull: name, deleted: false });
+
+/** A deleted party (T007, FR-426): no name, deleted, the deprecated field empty for an older phone. */
+const DELETED = { displayName: '', displayNameOrNull: null, deleted: true };
 
 interface Asked {
   readonly ended: { party: ListParty; page: unknown }[];
@@ -176,7 +184,7 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
     const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
     expect(item).toEqual({
       enrollmentId: E1,
-      teacher: { teacherId: TEACHER, displayName: 'أحمد سالم' },
+      teacher: { teacherId: TEACHER, ...named('أحمد سالم') },
       summary: { subject, track: 'recitation', sessionCount: 4, sessionDurationMinutes: 60 },
       status: 'confirmed',
       next: LISTED,
@@ -234,10 +242,21 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
     expect(answer.nextCursor).toBeUndefined();
   });
 
-  it('names a deleted teacher with no name rather than failing', async () => {
-    const { store } = storeOf({ active: [row(E1)] });
-    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
-    expect(item?.teacher).toEqual({ teacherId: TEACHER, displayName: '' });
+  // T007 (FR-426): a deleted account is absent from identity's names (its name erased, its row
+  // left out by the client's extension), and the item says so, for the phone's stand-in.
+  it('answers a deleted teacher deleted, with no name, the deprecated name empty, in both tabs', async () => {
+    const { store } = storeOf({ active: [row(E1)], ended: [row(E2, { status: 'completed' })] });
+    const [active] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK))
+      .items;
+    expect(active?.teacher).toEqual({ teacherId: TEACHER, ...DELETED });
+    const [ended] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK)).items;
+    expect(ended?.teacher).toEqual({ teacherId: TEACHER, ...DELETED });
+  });
+
+  it('answers a deleted teacher deleted on the enrollment’s detail', async () => {
+    const { store } = storeOf({ listed: row(E1) });
+    const answer = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(answer.teacher).toEqual({ teacherId: TEACHER, ...DELETED });
   });
 
   it('answers the student’s own enrollment with every session, asking for it as the student’s', async () => {
@@ -281,8 +300,8 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
     });
     const answer = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK);
     expect(answer.items.map(({ enrollmentId, student }) => [enrollmentId, student])).toEqual([
-      [E2, { displayName: 'زياد حسن' }],
-      [E1, { displayName: 'يوسف علي' }],
+      [E2, named('زياد حسن')],
+      [E1, named('يوسف علي')],
     ]);
     expect(asked.prefix).toEqual([]);
     expect(Object.keys(answer.items[0] ?? {})).not.toContain('teacher');
@@ -344,8 +363,26 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
     });
     const answer = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
     expect(asked.listed).toEqual([{ enrollmentId: E1, party: { teacherUserId: TEACHER } }]);
-    expect(answer.student).toEqual({ displayName: 'يوسف علي' });
+    expect(answer.student).toEqual(named('يوسف علي'));
     expect(answer.sessions).toHaveLength(1);
+  });
+
+  // T007 (FR-426): a deleted student, in either tab and on the detail.
+  it('answers a deleted student deleted, with no name, the deprecated name empty, in both tabs and the detail', async () => {
+    const { store } = storeOf({
+      active: [row(E1), row(E2, { studentUserId: OTHER_STUDENT })],
+      ended: [row(E3, { studentUserId: OTHER_STUDENT, status: 'completed' })],
+      listed: row(E2, { studentUserId: OTHER_STUDENT }),
+      names: { [STUDENT]: 'يوسف علي' },
+    });
+    const active = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK);
+    expect(
+      Object.fromEntries(active.items.map(({ enrollmentId, student }) => [enrollmentId, student])),
+    ).toEqual({ [E1]: named('يوسف علي'), [E2]: DELETED });
+    const ended = await teacherStudentsOf(tx, store, TEACHER, { tab: 'ended' }, CLOCK);
+    expect(ended.items.map(({ student }) => student)).toEqual([DELETED]);
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW);
+    expect(detail.student).toEqual(DELETED);
   });
 
   it('answers NOT_FOUND for an enrollment that is not the teacher’s', async () => {
@@ -377,8 +414,8 @@ describe('«اليوم» (FR-391, FR-393)', () => {
     expect(
       answer.sessions.map((one) => [one.enrollmentId, one.student, one.sequenceNumber, one.status]),
     ).toEqual([
-      [E1, { displayName: 'يوسف علي' }, 3, 'scheduled'],
-      [E2, { displayName: 'زياد حسن' }, 1, 'done'],
+      [E1, named('يوسف علي'), 3, 'scheduled'],
+      [E2, named('زياد حسن'), 1, 'done'],
     ]);
     expect(answer.sessions[0]).toMatchObject({
       localDate: '2026-11-09',
@@ -386,6 +423,15 @@ describe('«اليوم» (FR-391, FR-393)', () => {
       startsAt: '2026-11-09T07:00:00.000Z',
       summary: { subject, track: 'recitation', sessionCount: 4, sessionDurationMinutes: 60 },
     });
+  });
+
+  it('answers a deleted student of the day deleted, with no name, the deprecated name empty (T007)', async () => {
+    const { store } = storeOf({
+      active: [row(E1, { studentUserId: OTHER_STUDENT })],
+      day: [{ enrollmentId: E1, ...session(3, '2026-11-09T07:00:00Z') }],
+    });
+    const answer = await teacherTodayOf(tx, store, TEACHER, new Date('2026-11-09T06:00:00Z'));
+    expect(answer.sessions.map(({ student }) => student)).toEqual([DELETED]);
   });
 
   it('reads the day in another zone the teacher lives by', async () => {
