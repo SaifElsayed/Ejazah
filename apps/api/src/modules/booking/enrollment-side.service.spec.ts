@@ -13,7 +13,7 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import type { SlotRow } from '../catalog/index.js';
 import type { EnrollmentPageItem, EnrollmentTerms } from '../sessions/index.js';
 import type { EnrollmentOutcome } from './enrollment-events.repository.js';
-import type { ActiveHold, MoveSource, MoveTarget } from './enrollment-side.repository.js';
+import type { ActiveHold, MoveTarget } from './enrollment-side.repository.js';
 import { createEnrollmentSide, type EnrollmentSideStore } from './enrollment-side.service.js';
 import type { SlotOccupancy } from './slot-occupancy.service.js';
 
@@ -23,7 +23,7 @@ const tx = {} as Transaction;
 
 interface Recorded {
   readonly locks: { table: string; ids: readonly string[] }[];
-  readonly moves: { id: string; from: readonly MoveSource[]; target: MoveTarget }[];
+  readonly moves: { id: string; target: MoveTarget }[];
   readonly events: EnrollmentOutcome[];
   readonly pages: { cursor: string | undefined; take: number }[];
   readonly settings: string[];
@@ -67,8 +67,8 @@ function world(options: WorldOptions) {
     lockRows: async (_tx, table, ids) => {
       recorded.locks.push({ table, ids });
     },
-    moveEnrollment: async (_tx, moved, from, target) => {
-      recorded.moves.push({ id: moved, from, target });
+    moveEnrollment: async (_tx, moved, target) => {
+      recorded.moves.push({ id: moved, target });
       return options.moves ?? true;
     },
     recordEnrollmentEvents: async (_tx, outcomes) => {
@@ -94,7 +94,9 @@ function world(options: WorldOptions) {
       recorded.holds.push(scope);
       return [...(options.holds ?? [])];
     },
-    teacherSlotsOf: async (_tx, teacherUserId) => [...(options.teacherSlots?.[teacherUserId] ?? [])],
+    teacherSlotsOf: async (_tx, teacherUserId) => [
+      ...(options.teacherSlots?.[teacherUserId] ?? []),
+    ],
     readSlot: async (_tx, slotId) => {
       recorded.slotReads.push(slotId);
       return options.slots?.[slotId] ?? null;
@@ -146,28 +148,18 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
     {
       name: 'terminateNoShow: confirmed → terminated_no_show (T060 (a), R-322)',
       call: (side: ReturnType<typeof world>['side']) => side.terminateNoShow(tx, id(1)),
-      from: [{ status: 'confirmed' }],
       target: { status: 'terminated_no_show', cancellationReason: null },
       event: { kind: 'terminated_no_show', enrollmentId: id(1), occurredAt: AT },
     },
     {
       name: 'complete: confirmed → completed (T015, FR-449)',
       call: (side: ReturnType<typeof world>['side']) => side.complete(tx, id(1)),
-      from: [{ status: 'confirmed' }],
       target: { status: 'completed', cancellationReason: null },
       event: { kind: 'completed', enrollmentId: id(1), occurredAt: AT },
     },
     {
-      name: 'restore: terminated_no_show or cancelled admin → confirmed, the reason cleared (T061)',
-      call: (side: ReturnType<typeof world>['side']) => side.restore(tx, id(1)),
-      from: [{ status: 'terminated_no_show' }, { status: 'cancelled', cancellationReason: 'admin' }],
-      target: { status: 'confirmed', cancellationReason: null },
-      event: { kind: 'restored', enrollmentId: id(1), occurredAt: AT },
-    },
-    {
       name: "cancel 'admin': confirmed → cancelled admin (T036, R-313)",
       call: (side: ReturnType<typeof world>['side']) => side.cancel(tx, id(1), 'admin'),
-      from: [{ status: 'confirmed' }],
       target: { status: 'cancelled', cancellationReason: 'admin' },
       event: {
         kind: 'cancelled',
@@ -178,11 +170,11 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
     },
   ] as const;
 
-  for (const { name, call, from, target, event } of cases) {
+  for (const { name, call, target, event } of cases) {
     it(`${name}: moved, one row, true`, async () => {
       const { side, recorded } = world({ moves: true });
       expect(await call(side)).toBe(true);
-      expect(recorded.moves).toEqual([{ id: id(1), from, target }]);
+      expect(recorded.moves).toEqual([{ id: id(1), target }]);
       expect(recorded.events).toStrictEqual([event]);
       expect(recorded.locks).toEqual([]);
     });
@@ -194,6 +186,41 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
       expect(recorded.events).toEqual([]);
     });
   }
+});
+
+describe('EnrollmentSide.restore, through restoreEnrollment alone (T008, T061, FR-455, R-322)', () => {
+  /** A transaction whose one update answers `count`, recording what it was asked. */
+  function updating(count: number) {
+    const updates: unknown[] = [];
+    const client = {
+      enrollment: {
+        updateMany: async (args: unknown) => {
+          updates.push(args);
+          return { count };
+        },
+      },
+    } as unknown as Transaction;
+    return { client, updates };
+  }
+
+  it('terminated_no_show or cancelled admin, once confirmed → confirmed, the reason cleared: one row, true', async () => {
+    const { side, recorded } = world({});
+    const { client, updates } = updating(1);
+    expect(await side.restore(client, id(1))).toBe(true);
+    expect(updates).toHaveLength(1);
+    expect(recorded.moves).toEqual([]);
+    expect(recorded.events).toStrictEqual([
+      { kind: 'restored', enrollmentId: id(1), occurredAt: AT },
+    ]);
+  });
+
+  it('from another state, or never confirmed: nothing written, false', async () => {
+    const { side, recorded } = world({});
+    const { client, updates } = updating(0);
+    expect(await side.restore(client, id(1))).toBe(false);
+    expect(updates).toHaveLength(1);
+    expect(recorded.events).toEqual([]);
+  });
 });
 
 describe('EnrollmentSide.eventsOf (T008, R-323 GAP-1)', () => {
@@ -229,7 +256,7 @@ describe('EnrollmentSide.enrollmentPage (T008, U3)', () => {
   });
 });
 
-describe('EnrollmentSide.slotWeekTaken (T008, R-205; the owner\'s decision of 2026-11-07)', () => {
+describe("EnrollmentSide.slotWeekTaken (T008, R-205; the owner's decision of 2026-11-07)", () => {
   it("asks the slot's occupancy without the asking enrollment's own, the buffer read", async () => {
     const { side, recorded } = world({});
     expect(await side.slotWeekTaken(tx, id(2), '2026-11-29', id(1))).toBe(false);
@@ -271,7 +298,7 @@ const span = (start: string) => ({
 });
 const WIDE = { from: at('2026-11-01T00:00:00Z'), to: at('2027-01-01T00:00:00Z') };
 
-describe('EnrollmentSide.heldTimesOf (T008, F5; the owner\'s decision of 2026-11-07)', () => {
+describe("EnrollmentSide.heldTimesOf (T008, F5; the owner's decision of 2026-11-07)", () => {
   it('reads no setting and answers nothing when no active hold is theirs', async () => {
     const { side, recorded } = world({});
     expect(await side.heldTimesOf(tx, [id(101), id(201)], WIDE)).toEqual([]);

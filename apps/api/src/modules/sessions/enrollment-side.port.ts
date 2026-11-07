@@ -30,11 +30,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 /** `enrollments.status` (ERD §5, `enrollment_status`). */
 export type EnrollmentStatus =
-  | 'pending_payment'
-  | 'confirmed'
-  | 'completed'
-  | 'terminated_no_show'
-  | 'cancelled';
+  'pending_payment' | 'confirmed' | 'completed' | 'terminated_no_show' | 'cancelled';
 
 /** `cancellation_reason`, of an enrollment and of its `cancelled` row (ADR 0010 D7). */
 export type EnrollmentCancellationReason =
@@ -52,12 +48,7 @@ export type EnrollmentTrack = 'recitation' | 'ijazah_track';
 
 /** `enrollment_events.kind` (data-model.md §2.8, `enrollment_event_kind`). */
 export type EnrollmentEventKind =
-  | 'confirmed'
-  | 'order_failed'
-  | 'cancelled'
-  | 'completed'
-  | 'terminated_no_show'
-  | 'restored';
+  'confirmed' | 'order_failed' | 'cancelled' | 'completed' | 'terminated_no_show' | 'restored';
 
 /** What `enrollmentFor` answers: the enrollment's snapshot, its slot and its status (R-301). */
 export interface EnrollmentTerms {
@@ -134,8 +125,9 @@ export interface EnrollmentSide {
   /**
    * `terminated_no_show`, or `cancelled` with the reason `admin`, → `confirmed`, with one
    * `restored` row: an administrator's restore (T061, FR-454, R-322). `cancellation_reason` is
-   * cleared and `confirmed_at` left as it is (R-HONEST-1). Which closing may be restored (its case,
-   * its window) is the caller's to check.
+   * cleared and `confirmed_at` left as it is (R-HONEST-1); only an enrollment a payment once
+   * confirmed (`confirmed_at` set) is restored, any other answering `false`. Which closing may be
+   * restored (its case, its window) is the caller's to check.
    */
   restore(tx: Transaction, id: string): Promise<boolean>;
   /**

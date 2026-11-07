@@ -12,6 +12,7 @@ import {
   enrollmentsPage,
   enrollmentTermsById,
   moveEnrollment,
+  restoreEnrollment,
 } from './enrollment-side.repository.js';
 import { slotUses } from './slot-occupancy.repository.js';
 
@@ -72,22 +73,47 @@ describe('enrollmentTermsById (T008)', () => {
 });
 
 describe('moveEnrollment (T008)', () => {
-  it('updates only from the sources, never writing confirmed_at, and answers whether it moved', async () => {
+  it('updates a confirmed enrollment only, never writing confirmed_at, and answers whether it moved', async () => {
     const { client, calls } = recorded({ updateMany: 1 });
     expect(
-      await moveEnrollment(
-        client,
-        id(1),
-        [{ status: 'terminated_no_show' }, { status: 'cancelled', cancellationReason: 'admin' }],
-        { status: 'confirmed', cancellationReason: null },
-      ),
+      await moveEnrollment(client, id(1), { status: 'cancelled', cancellationReason: 'admin' }),
     ).toBe(true);
+    expect(calls).toEqual([
+      {
+        method: 'enrollment.updateMany',
+        args: {
+          where: { id: id(1), status: 'confirmed' },
+          data: { status: 'cancelled', cancellationReason: 'admin' },
+        },
+      },
+    ]);
+  });
+
+  it('answers false when the row was not confirmed', async () => {
+    const { client } = recorded({ updateMany: 0 });
+    expect(
+      await moveEnrollment(client, id(1), { status: 'completed', cancellationReason: null }),
+    ).toBe(false);
+  });
+
+  it('cannot be given confirmed as its target: restoreEnrollment alone writes it (R-HONEST-1)', async () => {
+    const { client } = recorded({ updateMany: 0 });
+    // @ts-expect-error -- T008: MoveTarget leaves confirmed out, so the gate's unread value cannot confirm.
+    await moveEnrollment(client, id(1), { status: 'confirmed', cancellationReason: null });
+  });
+});
+
+describe('restoreEnrollment (T008, FR-455, R-322, ADR 0023)', () => {
+  it('returns a once-confirmed terminated or admin-cancelled enrollment to confirmed, never writing confirmed_at', async () => {
+    const { client, calls } = recorded({ updateMany: 1 });
+    expect(await restoreEnrollment(client, id(1))).toBe(true);
     expect(calls).toEqual([
       {
         method: 'enrollment.updateMany',
         args: {
           where: {
             id: id(1),
+            confirmedAt: { not: null },
             OR: [
               { status: 'terminated_no_show' },
               { status: 'cancelled', cancellationReason: 'admin' },
@@ -99,14 +125,8 @@ describe('moveEnrollment (T008)', () => {
     ]);
   });
 
-  it('answers false when no row was in a source state', async () => {
-    const { client } = recorded({ updateMany: 0 });
-    expect(
-      await moveEnrollment(client, id(1), [{ status: 'confirmed' }], {
-        status: 'completed',
-        cancellationReason: null,
-      }),
-    ).toBe(false);
+  it('answers false when the row was in no source state or was never confirmed', async () => {
+    expect(await restoreEnrollment(recorded({ updateMany: 0 }).client, id(1))).toBe(false);
   });
 });
 

@@ -201,6 +201,27 @@ describe("EnrollmentSide's moves over the real tables (T008, data-model §3)", (
   }
 });
 
+describe("EnrollmentSide.restore of an enrollment no payment confirmed (T008's follow-up, the owner's decision of 2026-11-07)", () => {
+  it('a cancelled admin row whose confirmed_at is NULL: false, no change, no row', async () => {
+    const { enrollmentId } = await enrollmentIn('cancelled_admin');
+    await db.query('UPDATE enrollments SET confirmed_at = NULL, updated_at = now() WHERE id = $1', [
+      enrollmentId,
+    ]);
+    await rolledBack(async (tx) => {
+      await side.lockEnrollments(tx, [enrollmentId]);
+      const before = await rowOf(tx, enrollmentId);
+      expect(before).toEqual({
+        status: 'cancelled',
+        cancellationReason: 'admin',
+        confirmedAt: null,
+      });
+      expect(await side.restore(tx, enrollmentId)).toBe(false);
+      expect(await rowOf(tx, enrollmentId)).toEqual(before);
+      expect(await eventsWritten(tx, enrollmentId)).toEqual([]);
+    });
+  });
+});
+
 describe('EnrollmentSide.lockEnrollments (T008, T005)', () => {
   it('holds the rows FOR UPDATE until the transaction ends', async () => {
     const one = await enrollmentIn('confirmed');

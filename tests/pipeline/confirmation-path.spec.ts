@@ -2,8 +2,12 @@
 // `enrollments.status = 'confirmed'` and `enrollments.confirmed_at` have one writer, booking's
 // `markConfirmed`, called by `booking.confirmEnrollment` alone, which only the `confirm-enrollment`
 // job calls (`apps/api/src/jobs/confirm-enrollment.ts`, on a persisted, signature-verified paid
-// event). No procedure, admin action, upload, redirect or sweep may confirm an enrollment, and this
-// file fails the suite on the first that tries. Stage 2 of the pipeline runs it with the rest.
+// event). The status has one more writer, booking's `restoreEnrollment` (an administrator's restore:
+// FR-455, R-322, ADR 0023), called by `EnrollmentSide.restore` alone, which returns an enrollment a
+// payment once confirmed to `confirmed` and never writes `confirmed_at` (T008's follow-up, the
+// owner's decision of 2026-11-07). No procedure, admin action, upload, redirect or sweep may confirm
+// an enrollment otherwise, and this file fails the suite on the first that tries. Stage 2 of the
+// pipeline runs it with the rest.
 //
 // WHAT IS READ. Every TypeScript file that runs outside a test: `apps/api/src`, every package's
 // `src`, `scripts` and `prisma/seed.ts`, less `*.spec.ts` and `*.test.ts`; and every migration's
@@ -22,8 +26,9 @@
 // `status` or `confirmed_at`, whatever the value (an interpolated value cannot be read), in any
 // statement of a migration as in a `$executeRaw`, `$queryRaw`, `Prisma.sql` or `Unsafe` string.
 //
-// WHAT IS A REACH. `markConfirmed` imported from `booking/confirmation.repository` (named, by a
-// namespace, re-exported, or imported dynamically), or called inside that file; and
+// WHAT IS A REACH. `markConfirmed` imported from `booking/confirmation.repository`, and
+// `restoreEnrollment` from `booking/enrollment-side.repository` (named, by a namespace, re-exported,
+// or imported dynamically), or either called inside its own file; and
 // `confirmEnrollment` reached in booking's entry or `confirmation.service` (named import or
 // re-export, `export *`, a namespace's member by dot, by a string key or destructured, the
 // namespace handed on as a value or read by a key that is not a string, a dynamic import or a
@@ -31,11 +36,16 @@
 // another binding and never a reach.
 //
 // ALLOWED. The write inside `markConfirmed`; its one call inside `confirmEnrollment`; booking's
-// entry re-exporting `confirmEnrollment`; and the job reaching it. Everything else is refused.
+// entry re-exporting `confirmEnrollment`; and the job reaching it. And the second writer: the
+// `status` write inside `restoreEnrollment` (FR-455, R-322, ADR 0023), only `status` there, never a
+// `confirmedAt` or `confirmed_at` key nor raw SQL, since a restore never writes `confirmed_at`; and
+// its one reach, inside `enrollment-side.service`'s `restore`. Everything else is refused.
 // The real tree must show exactly those sites, so a scanner that saw nothing could not pass.
 //
 // NOT SEEN (the reviewer's, R-HONEST-1's second mechanism). A `status` key whose value is a variable
-// or a call that yields `'confirmed'` (a literal elsewhere, `data: { status: next }`); a Prisma
+// or a call that yields `'confirmed'` (a literal elsewhere, `data: { status: next }`: booking's
+// `moveEnrollment` writes `status: target.status`, whose type leaves `confirmed` out, so the
+// typecheck holds what this file cannot read); a Prisma
 // delegate or the database driver handed to code outside these roots; SQL built by concatenating
 // strings, so that no single string names both `enrollments` and the column; a write from a
 // database function or trigger body whose text does not start with `UPDATE` or `INSERT INTO`
@@ -64,9 +74,14 @@ const REPOSITORY = `${BOOKING}/confirmation.repository.ts`;
 const SERVICE = `${BOOKING}/confirmation.service.ts`;
 const ENTRY = `${BOOKING}/index.ts`;
 const JOB = 'apps/api/src/jobs/confirm-enrollment.ts';
+const SIDE_REPOSITORY = `${BOOKING}/enrollment-side.repository.ts`;
+const SIDE_SERVICE = `${BOOKING}/enrollment-side.service.ts`;
 
-/** What a site is: a write of the columns, or a reach of one of the two functions. */
-export type SiteKind = 'write' | 'markConfirmed' | 'confirmEnrollment';
+/** What a site is: a write of the columns, or a reach of one of the three functions. */
+export type SiteKind = 'write' | 'markConfirmed' | 'restoreEnrollment' | 'confirmEnrollment';
+
+/** The two functions that write the columns. */
+type Writer = 'markConfirmed' | 'restoreEnrollment';
 
 export interface Site {
   readonly kind: SiteKind;
@@ -74,6 +89,8 @@ export interface Site {
   readonly line: number;
   /** The function the site sits in, or null at a file's top level. */
   readonly within: string | null;
+  /** The column a write's key names; null for raw SQL, whose column is not told apart, and a reach. */
+  readonly column: 'status' | 'confirmed_at' | null;
   readonly what: string;
 }
 
@@ -81,9 +98,16 @@ export interface Site {
 export function allowed(site: Site): boolean {
   switch (site.kind) {
     case 'write':
-      return site.path === REPOSITORY && site.within === 'markConfirmed';
+      return (
+        (site.path === REPOSITORY && site.within === 'markConfirmed') ||
+        (site.path === SIDE_REPOSITORY &&
+          site.within === 'restoreEnrollment' &&
+          site.column === 'status')
+      );
     case 'markConfirmed':
       return site.path === SERVICE && site.within === 'confirmEnrollment';
+    case 'restoreEnrollment':
+      return site.path === SIDE_SERVICE && site.within === 'restore';
     case 'confirmEnrollment':
       return site.path === ENTRY || site.path === JOB;
   }
@@ -126,7 +150,11 @@ function landing(from: string, specifier: string): string | null {
 }
 
 const CONFIRMER_SOURCES = new Set([BOOKING, SERVICE.replace(/\.ts$/, '')]);
-const MARKER_SOURCE = REPOSITORY.replace(/\.ts$/, '');
+/** The writers, by the module that defines each. */
+const WRITERS: ReadonlyMap<string, Writer> = new Map([
+  [REPOSITORY.replace(/\.ts$/, ''), 'markConfirmed'],
+  [SIDE_REPOSITORY.replace(/\.ts$/, ''), 'restoreEnrollment'],
+]);
 
 /** A property's name when it can be read: plain, quoted or a computed string. */
 function keyOf(name: ts.PropertyName): string | null {
@@ -261,6 +289,7 @@ function migrationSites(file: PathFile): Site[] {
     path: file.path,
     line: code.slice(0, offset).split('\n').length,
     within: null,
+    column: null,
     what: `SQL: ${statement}`,
   }));
 }
@@ -275,18 +304,19 @@ function sourceSites(file: PathFile): Site[] {
     file.path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const sites: Site[] = [];
-  const site = (kind: SiteKind, node: ts.Node, what: string) =>
+  const site = (kind: SiteKind, node: ts.Node, what: string, column: Site['column'] = null) =>
     sites.push({
       kind,
       path: file.path,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
       within: withinOf(node),
+      column,
       what,
     });
 
-  // The bindings this file holds of the two functions and of the modules that export them.
-  const markers = new Set<string>();
-  const markerSpaces = new Set<string>();
+  // The bindings this file holds of the three functions and of the modules that export them.
+  const markers = new Map<string, Writer>();
+  const markerSpaces = new Map<string, Writer>();
   const confirmerSpaces = new Set<string>();
   const sourceOf = (specifier: ts.Expression | undefined) =>
     specifier !== undefined && ts.isStringLiteralLike(specifier)
@@ -299,10 +329,11 @@ function sourceSites(file: PathFile): Site[] {
       const bindings = statement.importClause?.namedBindings;
       if (from === null || bindings === undefined || statement.importClause?.isTypeOnly) continue;
       const confirmer = CONFIRMER_SOURCES.has(from);
-      const marker = from === MARKER_SOURCE;
-      if (!confirmer && !marker) continue;
+      const writer = WRITERS.get(from);
+      if (!confirmer && writer === undefined) continue;
       if (ts.isNamespaceImport(bindings)) {
-        (confirmer ? confirmerSpaces : markerSpaces).add(bindings.name.text);
+        if (writer === undefined) confirmerSpaces.add(bindings.name.text);
+        else markerSpaces.set(bindings.name.text, writer);
         continue;
       }
       for (const element of bindings.elements) {
@@ -311,7 +342,7 @@ function sourceSites(file: PathFile): Site[] {
         if (confirmer && imported === 'confirmEnrollment') {
           site('confirmEnrollment', element, `imports confirmEnrollment from ${from}`);
         }
-        if (marker && imported === 'markConfirmed') markers.add(element.name.text);
+        if (writer !== undefined && imported === writer) markers.set(element.name.text, writer);
       }
     }
     if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
@@ -327,8 +358,9 @@ function sourceSites(file: PathFile): Site[] {
       if (CONFIRMER_SOURCES.has(from) && exported('confirmEnrollment')) {
         site('confirmEnrollment', statement, `re-exports confirmEnrollment from ${from}`);
       }
-      if (from === MARKER_SOURCE && exported('markConfirmed')) {
-        site('markConfirmed', statement, `re-exports markConfirmed from ${from}`);
+      const writer = WRITERS.get(from);
+      if (writer !== undefined && exported(writer)) {
+        site(writer, statement, `re-exports ${writer} from ${from}`);
       }
     }
   }
@@ -343,10 +375,11 @@ function sourceSites(file: PathFile): Site[] {
       node.expression.kind === ts.SyntaxKind.ImportKeyword ||
       (ts.isIdentifier(node.expression) && node.expression.text === 'require');
     const from = dynamic ? sourceOf(node.arguments[0]) : null;
-    return from !== null && (CONFIRMER_SOURCES.has(from) || from === MARKER_SOURCE) ? from : null;
+    return from !== null && (CONFIRMER_SOURCES.has(from) || WRITERS.has(from)) ? from : null;
   };
   const traceLoad = (call: ts.CallExpression, from: string): void => {
-    const name = from === MARKER_SOURCE ? 'markConfirmed' : 'confirmEnrollment';
+    const writer = WRITERS.get(from);
+    const name = writer ?? 'confirmEnrollment';
     let binding: ts.BindingName | undefined;
     let value: ts.Node = call;
     let index: number | null = null;
@@ -365,7 +398,8 @@ function sourceSites(file: PathFile): Site[] {
     }
     if (binding === undefined) return;
     if (ts.isIdentifier(binding)) {
-      (name === 'markConfirmed' ? markerSpaces : confirmerSpaces).add(binding.text);
+      if (writer === undefined) confirmerSpaces.add(binding.text);
+      else markerSpaces.set(binding.text, writer);
       traced.add(call);
     } else if (ts.isObjectBindingPattern(binding)) {
       if (takesName(binding, name)) site(name, binding, `imports ${name} from ${from}`);
@@ -379,9 +413,14 @@ function sourceSites(file: PathFile): Site[] {
   };
   ts.forEachChild(source, findLoads);
 
-  // Inside the two defining files, a call of the function from the same file.
-  const ownFunction =
-    file.path === REPOSITORY ? 'markConfirmed' : file.path === SERVICE ? 'confirmEnrollment' : null;
+  // Inside the three defining files, a call of the function from the same file.
+  const ownWriter: Writer | null =
+    file.path === REPOSITORY
+      ? 'markConfirmed'
+      : file.path === SIDE_REPOSITORY
+        ? 'restoreEnrollment'
+        : null;
+  const ownConfirmer = file.path === SERVICE;
 
   const visit = (node: ts.Node): void => {
     if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
@@ -394,7 +433,10 @@ function sourceSites(file: PathFile): Site[] {
           ts.isPropertyAssignment(node) &&
           isConfirmedValue(node.initializer)) ||
           CONFIRMED_AT_KEYS.has(key));
-      if (writes && !readsAt(object)) site('write', node, node.getText(source));
+      if (writes && !readsAt(object)) {
+        const column = CONFIRMED_AT_KEYS.has(key) ? 'confirmed_at' : 'status';
+        site('write', node, node.getText(source), column);
+      }
     }
     if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) {
       const text = ts.isTemplateExpression(node) ? templateText(node) : node.text;
@@ -402,27 +444,24 @@ function sourceSites(file: PathFile): Site[] {
     }
     const from = loadedFrom(node);
     if (from !== null && !traced.has(node)) {
-      const name = from === MARKER_SOURCE ? 'markConfirmed' : 'confirmEnrollment';
+      const name = WRITERS.get(from) ?? 'confirmEnrollment';
       site(name, node, `imports ${from} dynamically, bound where it cannot be traced`);
     }
     if (ts.isIdentifier(node) && isReference(node)) {
-      if (
-        markers.has(node.text) ||
-        (ownFunction === 'markConfirmed' && node.text === ownFunction)
-      ) {
-        site('markConfirmed', node, 'calls markConfirmed');
-      }
-      if (ownFunction === 'confirmEnrollment' && node.text === ownFunction) {
+      const writer = markers.get(node.text) ?? (node.text === ownWriter ? ownWriter : undefined);
+      if (writer !== undefined) site(writer, node, `calls ${writer}`);
+      if (ownConfirmer && node.text === 'confirmEnrollment') {
         site('confirmEnrollment', node, 'calls confirmEnrollment inside its own file');
       }
       if (confirmerSpaces.has(node.text)) spaceUse(node, 'confirmEnrollment');
-      if (markerSpaces.has(node.text)) spaceUse(node, 'markConfirmed');
+      const space = markerSpaces.get(node.text);
+      if (space !== undefined) spaceUse(node, space);
     }
     ts.forEachChild(node, visit);
   };
 
   /** A use of a namespace that holds `name`: its member by dot or string key, or anything else. */
-  const spaceUse = (node: ts.Identifier, name: 'confirmEnrollment' | 'markConfirmed') => {
+  const spaceUse = (node: ts.Identifier, name: Exclude<SiteKind, 'write'>) => {
     const parent = node.parent;
     if (ts.isPropertyAccessExpression(parent) && parent.expression === node) {
       if (parent.name.text === name) site(name, parent, parent.getText(source));
@@ -641,6 +680,46 @@ describe('the gate refuses every write of a confirmed enrollment outside markCon
         '}',
         'export async function markPaidByHand(tx, enrollmentId, at) {',
         '  return tx.enrollment.update({ where: { id: enrollmentId }, data: { confirmedAt: at } });',
+        '}',
+      ),
+    ],
+    [
+      'a confirmedAt written inside restoreEnrollment',
+      at(
+        SIDE_REPOSITORY,
+        'export async function restoreEnrollment(tx, id, at) {',
+        "  return tx.enrollment.updateMany({ where: { id, confirmedAt: { not: null } }, data: { status: 'confirmed', confirmedAt: at } });",
+        '}',
+      ),
+    ],
+    [
+      'raw SQL inside restoreEnrollment',
+      at(
+        SIDE_REPOSITORY,
+        'export async function restoreEnrollment(tx, id) {',
+        "  return tx.$executeRaw`UPDATE enrollments SET status = 'confirmed' WHERE id = ${id}::uuid`;",
+        '}',
+      ),
+    ],
+    [
+      'a third writer beside restoreEnrollment in its file',
+      at(
+        SIDE_REPOSITORY,
+        'export async function restoreEnrollment(tx, id) {',
+        "  return tx.enrollment.updateMany({ where: { id }, data: { status: 'confirmed', cancellationReason: null } });",
+        '}',
+        'export async function reopen(tx, id) {',
+        "  return tx.enrollment.updateMany({ where: { id }, data: { status: 'confirmed' } });",
+        '}',
+      ),
+    ],
+    [
+      'a third writer inside the side’s restore, not through restoreEnrollment',
+      at(
+        SIDE_SERVICE,
+        'export function createEnrollmentSide() {',
+        "  const restore = (tx, id) => tx.enrollment.updateMany({ where: { id }, data: { status: 'confirmed' } });",
+        '  return { restore };',
         '}',
       ),
     ],
@@ -891,6 +970,64 @@ describe('the gate refuses every reach of markConfirmed and confirmEnrollment of
         ),
       ],
     ],
+    [
+      'another booking file importing restoreEnrollment',
+      [
+        at(
+          `${BOOKING}/holds.service.ts`,
+          "import { restoreEnrollment } from './enrollment-side.repository.js';",
+          'export const back = (tx, id) => restoreEnrollment(tx, id);',
+        ),
+      ],
+    ],
+    [
+      'the side’s service reaching restoreEnrollment outside restore',
+      [
+        at(
+          SIDE_SERVICE,
+          "import { restoreEnrollment } from './enrollment-side.repository.js';",
+          'export function createEnrollmentSide() {',
+          '  const restore = (tx, id) => restoreEnrollment(tx, id);',
+          '  const complete = (tx, id) => restoreEnrollment(tx, id);',
+          '  return { restore, complete };',
+          '}',
+        ),
+      ],
+    ],
+    [
+      'the side’s default store holding restoreEnrollment',
+      [
+        at(
+          SIDE_SERVICE,
+          "import { moveEnrollment, restoreEnrollment } from './enrollment-side.repository.js';",
+          'export const enrollmentSideStore = { moveEnrollment, restoreEnrollment };',
+        ),
+      ],
+    ],
+    [
+      'restoreEnrollment through the repository’s namespace',
+      [
+        at(
+          'apps/api/src/modules/admin/undo.service.ts',
+          "import * as side from '../booking/enrollment-side.repository.js';",
+          'export const undo = (tx, id) => side.restoreEnrollment(tx, id);',
+        ),
+      ],
+    ],
+    [
+      'a re-export of restoreEnrollment by booking’s entry',
+      [at(ENTRY, "export { restoreEnrollment } from './enrollment-side.repository.js';")],
+    ],
+    [
+      'restoreEnrollment called inside its own file',
+      [
+        at(
+          SIDE_REPOSITORY,
+          'export async function restoreEnrollment(tx, id) { return true; }',
+          'export async function reinstate(tx, id) { return restoreEnrollment(tx, id); }',
+        ),
+      ],
+    ],
   ];
 
   it.each(reaches)('%s', (_name, files) => {
@@ -936,6 +1073,26 @@ describe('the gate refuses every reach of markConfirmed and confirmEnrollment of
         'export const services = { booking: booking.createBookingServices({}), use: booking.createCatalogUse({}) };',
         'export const name: typeof booking.CONFIRMED_NAME = CONFIRM_ENROLLMENT;',
       ),
+      at(
+        SIDE_REPOSITORY,
+        'export async function moveEnrollment(tx, id, target) {',
+        "  const { count } = await tx.enrollment.updateMany({ where: { id, status: 'confirmed' }, data: { status: target.status, cancellationReason: target.cancellationReason } });",
+        '  return count === 1;',
+        '}',
+        'export async function restoreEnrollment(tx, id) {',
+        "  const { count } = await tx.enrollment.updateMany({ where: { id, confirmedAt: { not: null }, OR: [{ status: 'terminated_no_show' }, { status: 'cancelled', cancellationReason: 'admin' }] }, data: { status: 'confirmed', cancellationReason: null } });",
+        '  return count === 1;',
+        '}',
+      ),
+      at(
+        SIDE_SERVICE,
+        "import { moveEnrollment, restoreEnrollment } from './enrollment-side.repository.js';",
+        'export const enrollmentSideStore = { moveEnrollment };',
+        'export function createEnrollmentSide({ store = enrollmentSideStore }) {',
+        '  const restore = async (tx, id) => restoreEnrollment(tx, id);',
+        '  return { restore, complete: (tx, id) => store.moveEnrollment(tx, id, { status: "completed" }) };',
+        '}',
+      ),
     ];
     expect(findViolations(path)).toEqual([]);
     expect(findSites(path).map(({ kind, path: where }) => `${kind} ${where}`)).toEqual([
@@ -944,6 +1101,8 @@ describe('the gate refuses every reach of markConfirmed and confirmEnrollment of
       `markConfirmed ${SERVICE}`,
       `confirmEnrollment ${ENTRY}`,
       `confirmEnrollment ${JOB}`,
+      `write ${SIDE_REPOSITORY}`,
+      `restoreEnrollment ${SIDE_SERVICE}`,
     ]);
   });
 });
@@ -987,7 +1146,15 @@ describe('the repository’s confirmation path (R-HONEST-1, FR-366, SC-307)', ()
 
   it('reads the API, the packages, the scripts, the seed and the migrations', () => {
     const read = new Set(files.map(({ path: where }) => where));
-    for (const expected of [REPOSITORY, SERVICE, ENTRY, JOB, 'prisma/seed.ts']) {
+    for (const expected of [
+      REPOSITORY,
+      SERVICE,
+      ENTRY,
+      JOB,
+      SIDE_REPOSITORY,
+      SIDE_SERVICE,
+      'prisma/seed.ts',
+    ]) {
       expect(read).toContain(expected);
     }
     expect([...read].some((where) => where.endsWith('.sql'))).toBe(true);
@@ -999,7 +1166,7 @@ describe('the repository’s confirmation path (R-HONEST-1, FR-366, SC-307)', ()
     expect(findViolations(files)).toEqual([]);
   });
 
-  it('has exactly the path: markConfirmed writes, confirmEnrollment calls it, the job calls that', () => {
+  it('has exactly the path: markConfirmed writes, confirmEnrollment calls it, the job calls that; restoreEnrollment writes the status, restore calls it', () => {
     expect(
       findSites(files)
         .map(({ kind, path: where, within }) => `${kind} ${where} ${within ?? '-'}`)
@@ -1011,6 +1178,8 @@ describe('the repository’s confirmation path (R-HONEST-1, FR-366, SC-307)', ()
         `markConfirmed ${SERVICE} confirmEnrollment`,
         `confirmEnrollment ${ENTRY} -`,
         `confirmEnrollment ${JOB} confirmationSteps`,
+        `write ${SIDE_REPOSITORY} restoreEnrollment`,
+        `restoreEnrollment ${SIDE_SERVICE} restore`,
       ].sort(),
     );
   });

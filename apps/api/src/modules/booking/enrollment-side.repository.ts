@@ -3,6 +3,11 @@
 // the caller's transaction. Queries only; a soft-deleted enrollment is left out by the client's
 // extension (T148).
 //
+// The moves' source states sit in the `where` of their updates, which the confirmation gate reads as
+// reads (`tests/pipeline/confirmation-path.spec.ts`); restore's write is a function of its own,
+// `restoreEnrollment`, the gate's second allowed writer of the status (T008's follow-up, the
+// owner's decision of 2026-11-07).
+//
 // No lock is taken here but by `lockRows`, the kernel's: the moves' conditional updates touch the
 // one enrollment row the caller already holds (`EnrollmentSide.lockEnrollments`), and the reads
 // (the enrollments, their events and the active holds of `slot_holds`) take none.
@@ -19,10 +24,7 @@ import type {
 type Client = Pick<Transaction, 'enrollment' | 'enrollmentEvent'>;
 
 /** The enrollment's snapshot, slot and status; null when there is none. */
-export async function enrollmentTermsById(
-  tx: Client,
-  id: string,
-): Promise<EnrollmentTerms | null> {
+export async function enrollmentTermsById(tx: Client, id: string): Promise<EnrollmentTerms | null> {
   const row = await tx.enrollment.findUnique({
     where: { id },
     select: {
@@ -47,37 +49,44 @@ export async function enrollmentTermsById(
   };
 }
 
-/** A move's source: one status, with the cancellation's reason when it is `cancelled`. */
-export type MoveSource =
-  | { readonly status: Exclude<$Enums.EnrollmentStatus, 'cancelled'> }
-  | { readonly status: 'cancelled'; readonly cancellationReason: $Enums.CancellationReason };
-
-/** A move's target: the status and the reason it then carries (null clears it). */
+/**
+ * A move's target from `confirmed`: the status and the reason it then carries (null clears it).
+ * Never `confirmed`: `moveEnrollment` writes the status from this value, which the confirmation
+ * gate cannot read (`tests/pipeline/confirmation-path.spec.ts`, «NOT SEEN»), so the type keeps it
+ * from confirming an enrollment; `restoreEnrollment` alone does (T008's follow-up, R-HONEST-1).
+ */
 export interface MoveTarget {
-  readonly status: $Enums.EnrollmentStatus;
+  readonly status: Exclude<$Enums.EnrollmentStatus, 'confirmed'>;
   readonly cancellationReason: $Enums.CancellationReason | null;
 }
 
 /**
- * Moves the enrollment to `target` when it is in one of `from`, by one conditional update; answers
- * whether it moved. `confirmed_at` is never written (R-HONEST-1).
+ * Moves a `confirmed` enrollment to `target`, by one conditional update whose source state sits in
+ * its `where`; answers whether it moved. `confirmed_at` is never written (R-HONEST-1).
  */
-export async function moveEnrollment(
-  tx: Client,
-  id: string,
-  from: readonly MoveSource[],
-  target: MoveTarget,
-): Promise<boolean> {
+export async function moveEnrollment(tx: Client, id: string, target: MoveTarget): Promise<boolean> {
+  const { count } = await tx.enrollment.updateMany({
+    where: { id, status: 'confirmed' },
+    data: { status: target.status, cancellationReason: target.cancellationReason },
+  });
+  return count === 1;
+}
+
+/**
+ * An administrator's restore (FR-455, R-322, ADR 0023): `terminated_no_show`, or `cancelled` with
+ * the reason `admin`, of an enrollment a payment once confirmed (`confirmed_at` set) → `confirmed`,
+ * the reason cleared, by one conditional update; answers whether it moved. The confirmation path's
+ * second writer of the status (`tests/pipeline/confirmation-path.spec.ts`, ALLOWED), reached only
+ * from `EnrollmentSide.restore`; it never writes `confirmed_at` (R-HONEST-1).
+ */
+export async function restoreEnrollment(tx: Client, id: string): Promise<boolean> {
   const { count } = await tx.enrollment.updateMany({
     where: {
       id,
-      OR: from.map((source) =>
-        source.status === 'cancelled'
-          ? { status: source.status, cancellationReason: source.cancellationReason }
-          : { status: source.status },
-      ),
+      confirmedAt: { not: null },
+      OR: [{ status: 'terminated_no_show' }, { status: 'cancelled', cancellationReason: 'admin' }],
     },
-    data: { status: target.status, cancellationReason: target.cancellationReason },
+    data: { status: 'confirmed', cancellationReason: null },
   });
   return count === 1;
 }

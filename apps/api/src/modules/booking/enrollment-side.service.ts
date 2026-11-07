@@ -10,11 +10,17 @@
 //   terminateNoShow  confirmed → terminated_no_show                     `terminated_no_show`
 //   complete         confirmed → completed                              `completed`
 //   restore          terminated_no_show, or cancelled `admin` → confirmed `restored`
-//                    (`cancellation_reason` cleared, `confirmed_at` untouched, R-322)
+//                    (`cancellation_reason` cleared, `confirmed_at` untouched and required, R-322)
 //   cancel 'admin'   confirmed → cancelled `admin`                      `cancelled` with `admin`
 // Each is one conditional update from its source states: the row the caller read under its lock is
 // still in one of them, or the move changes nothing, writes no row and answers `false` for the
 // caller to refuse and log. A row's `occurred_at` is this side's clock at the move.
+//
+// RESTORE'S WRITE (T008's follow-up, the owner's decision of 2026-11-07). The three moves from
+// `confirmed` go through the store's `moveEnrollment`, whose target can never be `confirmed`;
+// restore calls `restoreEnrollment` itself, not through the store, since the confirmation gate
+// (`tests/pipeline/confirmation-path.spec.ts`, R-HONEST-1) allows that writer's one reach inside
+// `restore` only, so the injectable store holds no writer of a confirmed enrollment.
 //
 // THE LOCKS. `lockEnrollments` takes the enrollments' rows through the kernel's `lockRows`, the one
 // lock any function here names. The moves take none of their own: their update touches the row the
@@ -57,8 +63,8 @@ import {
   enrollmentTermsById,
   lockRows,
   moveEnrollment,
-  type MoveSource,
   type MoveTarget,
+  restoreEnrollment,
 } from './enrollment-side.repository.js';
 import { FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours } from './nearest-slot.service.js';
 import { packageSessionsOn } from './session-overlap.service.js';
@@ -79,12 +85,8 @@ const positiveWhole = z.int().positive();
 export interface EnrollmentSideStore {
   enrollmentTermsById(tx: Transaction, id: string): Promise<EnrollmentTerms | null>;
   lockRows(tx: Transaction, table: LockedTable, ids: readonly string[]): Promise<void>;
-  moveEnrollment(
-    tx: Transaction,
-    id: string,
-    from: readonly MoveSource[],
-    target: MoveTarget,
-  ): Promise<boolean>;
+  /** A move from `confirmed`; never to it (`restoreEnrollment`, outside the store, alone is). */
+  moveEnrollment(tx: Transaction, id: string, target: MoveTarget): Promise<boolean>;
   recordEnrollmentEvents(tx: Transaction, outcomes: readonly EnrollmentOutcome[]): Promise<void>;
   enrollmentEventsOf(tx: Transaction, enrollmentId: string): Promise<EnrollmentEventEntry[]>;
   enrollmentsPage(
@@ -151,12 +153,6 @@ function occurrencesOf(
   );
 }
 
-const FROM_CONFIRMED: readonly MoveSource[] = [{ status: 'confirmed' }];
-const RESTORABLE: readonly MoveSource[] = [
-  { status: 'terminated_no_show' },
-  { status: 'cancelled', cancellationReason: 'admin' },
-];
-
 /** Sessions' `EnrollmentSide` over booking's rows (T008), bound once by the composition root. */
 export function createEnrollmentSide({
   settings,
@@ -167,58 +163,53 @@ export function createEnrollmentSide({
   readonly now?: () => Date;
   readonly store?: EnrollmentSideStore;
 }): EnrollmentSide {
-  /** Applies the move and, only when it moved, writes its one row. */
-  const move = async (
+  /** Only when the update moved the row, writes its one `enrollment_events` row. */
+  const recorded = async (
     tx: Transaction,
-    id: string,
-    from: readonly MoveSource[],
-    target: MoveTarget,
+    moved: Promise<boolean>,
     outcome: (occurredAt: Date) => EnrollmentOutcome,
   ): Promise<boolean> => {
-    if (!(await store.moveEnrollment(tx, id, from, target))) return false;
+    if (!(await moved)) return false;
     await store.recordEnrollmentEvents(tx, [outcome(now())]);
     return true;
   };
+  /** A move from `confirmed`, through the store. */
+  const move = (
+    tx: Transaction,
+    id: string,
+    target: MoveTarget,
+    outcome: (occurredAt: Date) => EnrollmentOutcome,
+  ): Promise<boolean> => recorded(tx, store.moveEnrollment(tx, id, target), outcome);
+  /** The restore, through `restoreEnrollment` itself: the gate's one reach of it (this file's head). */
+  const restore: EnrollmentSide['restore'] = (tx, id) =>
+    recorded(tx, restoreEnrollment(tx, id), (occurredAt) => ({
+      kind: 'restored',
+      enrollmentId: id,
+      occurredAt,
+    }));
   return {
     enrollmentFor: (tx, id) => store.enrollmentTermsById(tx, id),
     lockEnrollments: (tx, ids) => store.lockRows(tx, 'enrollments', ids),
     terminateNoShow: (tx, id) =>
-      move(
-        tx,
-        id,
-        FROM_CONFIRMED,
-        { status: 'terminated_no_show', cancellationReason: null },
-        (occurredAt) => ({ kind: 'terminated_no_show', enrollmentId: id, occurredAt }),
-      ),
+      move(tx, id, { status: 'terminated_no_show', cancellationReason: null }, (occurredAt) => ({
+        kind: 'terminated_no_show',
+        enrollmentId: id,
+        occurredAt,
+      })),
     complete: (tx, id) =>
-      move(
-        tx,
-        id,
-        FROM_CONFIRMED,
-        { status: 'completed', cancellationReason: null },
-        (occurredAt) => ({ kind: 'completed', enrollmentId: id, occurredAt }),
-      ),
-    restore: (tx, id) =>
-      move(
-        tx,
-        id,
-        RESTORABLE,
-        { status: 'confirmed', cancellationReason: null },
-        (occurredAt) => ({ kind: 'restored', enrollmentId: id, occurredAt }),
-      ),
+      move(tx, id, { status: 'completed', cancellationReason: null }, (occurredAt) => ({
+        kind: 'completed',
+        enrollmentId: id,
+        occurredAt,
+      })),
+    restore,
     cancel: (tx, id, reason) =>
-      move(
-        tx,
-        id,
-        FROM_CONFIRMED,
-        { status: 'cancelled', cancellationReason: reason },
-        (occurredAt) => ({
-          kind: 'cancelled',
-          enrollmentId: id,
-          cancellationReason: reason,
-          occurredAt,
-        }),
-      ),
+      move(tx, id, { status: 'cancelled', cancellationReason: reason }, (occurredAt) => ({
+        kind: 'cancelled',
+        enrollmentId: id,
+        cancellationReason: reason,
+        occurredAt,
+      })),
     slotWeekTaken: async (tx, slotId, localDate: LocalDate, enrollmentId) => {
       const bufferWeeks = () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks);
       const occupancy = await store.occupancyOf(tx, [slotId], bufferWeeks, enrollmentId);
