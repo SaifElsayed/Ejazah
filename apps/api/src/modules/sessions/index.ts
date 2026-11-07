@@ -71,3 +71,19 @@ export {
   type SessionEventKind,
   type SessionEventRecord,
 } from './session-events.repository.js';
+/**
+ * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
+ * answers, bound by the composition root to booking's `createEnrollmentSide()`.
+ */
+export type {
+  EnrollmentCancellationReason,
+  EnrollmentEventEntry,
+  EnrollmentEventKind,
+  EnrollmentPage,
+  EnrollmentPageFilter,
+  EnrollmentPageItem,
+  EnrollmentSide,
+  EnrollmentStatus,
+  EnrollmentTerms,
+  EnrollmentTrack,
+} from './enrollment-side.port.js';
