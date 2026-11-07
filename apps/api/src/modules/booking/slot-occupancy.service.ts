@@ -76,13 +76,15 @@ type Client = Pick<Transaction, 'slotHold' | 'enrollment' | 'session'>;
 /**
  * Of `slotIds`, each used slot's occupancy; a free slot is absent. The buffer is read only when a
  * confirmed enrollment needs its release, so a free or a taken slot costs no settings read.
+ * `exceptEnrollmentId` leaves that enrollment's own use out (`slotUses`; T008 of specs/004-sessions).
  */
 export async function occupancyOf(
   tx: Client,
   slotIds: readonly string[],
   bufferWeeks: () => Promise<number>,
+  exceptEnrollmentId?: string,
 ): Promise<ReadonlyMap<string, SlotOccupancy>> {
-  const uses = [...(await slotUses(tx, slotIds)).values()];
+  const uses = [...(await slotUses(tx, slotIds, exceptEnrollmentId)).values()];
   const confirmedIds = uses.flatMap(({ taken, confirmed }) =>
     taken ? [] : confirmed.map(({ enrollmentId }) => enrollmentId),
   );

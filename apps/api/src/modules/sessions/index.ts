@@ -86,4 +86,5 @@ export type {
   EnrollmentStatus,
   EnrollmentTerms,
   EnrollmentTrack,
+  HeldTime,
 } from './enrollment-side.port.js';

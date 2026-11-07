@@ -5,7 +5,7 @@
 //
 // No lock is taken here but by `lockRows`, the kernel's: the moves' conditional updates touch the
 // one enrollment row the caller already holds (`EnrollmentSide.lockEnrollments`), and the reads
-// take none.
+// (the enrollments, their events and the active holds of `slot_holds`) take none.
 import type { $Enums } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -141,6 +141,36 @@ export async function enrollmentsPage(
     track: row.snapshotTrack,
     sessionCount: row.snapshotSessionCount,
   }));
+}
+
+/** An active hold as `heldTimesOf` reads it: its slot, its session count and its expiry. */
+export interface ActiveHold {
+  readonly slotId: string;
+  readonly sessionCount: number;
+  readonly expiresAt: Date;
+}
+
+/**
+ * The active holds (`released_at` NULL, even past `expires_at`: `holds.repository.ts`' rule) of
+ * `studentUserIds` or on `slotIds`, in id order; nothing asked for two empty lists. Bounded by the
+ * two partial unique indexes: one active hold per student and one per slot.
+ */
+export async function activeHoldsAmong(
+  tx: Pick<Transaction, 'slotHold'>,
+  scope: { readonly studentUserIds: readonly string[]; readonly slotIds: readonly string[] },
+): Promise<ActiveHold[]> {
+  const either = [
+    ...(scope.studentUserIds.length === 0
+      ? []
+      : [{ studentUserId: { in: [...scope.studentUserIds] } }]),
+    ...(scope.slotIds.length === 0 ? [] : [{ slotId: { in: [...scope.slotIds] } }]),
+  ];
+  if (either.length === 0) return [];
+  return tx.slotHold.findMany({
+    where: { releasedAt: null, OR: either },
+    orderBy: { id: 'asc' },
+    select: { slotId: true, sessionCount: true, expiresAt: true },
+  });
 }
 
 /** The kernel's row lock, for `EnrollmentSide.lockEnrollments` (T005). */

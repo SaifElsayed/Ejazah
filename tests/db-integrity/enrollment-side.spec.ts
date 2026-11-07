@@ -7,7 +7,10 @@
 // `admin`), and leaves `confirmed_at` as it was (R-HONEST-1); from any other state it changes
 // nothing, writes no row and answers false. `lockEnrollments` holds the rows `FOR UPDATE` until the
 // transaction ends. The reads answer the snapshot, the events oldest first with no order's id
-// (FR-497), and keyset pages newest first under every filter at once.
+// (FR-497), and keyset pages newest first under every filter at once. `slotWeekTaken` leaves the
+// asking enrollment's own occupancy out and counts any active hold, even past its expiry;
+// `heldTimesOf` answers a student's own and a teacher's slots' active holds, each counted from the
+// read and from its expiry (the owner's decision of 2026-11-07 on lane C's questions).
 //
 // The enrollments are written and committed by the harness, each probe with its own (as
 // `held-files.spec.ts`' are); each move runs in a transaction this file rolls back, so no event row
@@ -18,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
+import { addMinutes } from '../../packages/time/src/index.js';
 import {
   closeDatabase,
   type Database,
@@ -26,7 +30,14 @@ import {
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
-import { connectAsApplication, type Db, insertRow, makeEnrollment } from './harness';
+import {
+  connectAsApplication,
+  type Db,
+  enrollmentValues,
+  insertRow,
+  makeEnrollment,
+  makeUser,
+} from './harness';
 
 const AT = new Date('2026-11-08T09:00:00Z');
 const CONFIRMED_AT = new Date('2026-10-04T07:01:00Z');
@@ -35,10 +46,15 @@ const PAGE_SIZE = 2;
 let db: Db;
 let database: Database;
 
+const SETTINGS: Readonly<Record<string, number>> = {
+  admin_list_page_size: PAGE_SIZE,
+  slot_release_buffer_weeks: 1,
+  first_session_lead_hours: 24,
+};
 const settings: SettingsReader = {
   read: async (key, schema) => {
-    if (key !== 'admin_list_page_size') throw new Error(`unexpected setting ${key}`);
-    return schema.parse(PAGE_SIZE);
+    if (!(key in SETTINGS)) throw new Error(`unexpected setting ${key}`);
+    return schema.parse(SETTINGS[key]);
   },
 };
 const side = createEnrollmentSide({ settings, now: () => AT });
@@ -321,6 +337,159 @@ describe('EnrollmentSide.enrollmentPage (T008, U3, R-API-6)', () => {
       expect(
         (await side.enrollmentPage(tx, { enrollmentIds: ids, studentUserIds: [] })).items,
       ).toEqual([]);
+    });
+  });
+});
+
+/** The offer an enrollment was made on: its teacher, subject, package and slot. */
+async function offerOf(enrollmentId: string) {
+  const { rows } = await db.query<{
+    teacher_user_id: string;
+    snapshot_subject_id: string;
+    package_id: string;
+    slot_id: string;
+  }>(
+    'SELECT teacher_user_id, snapshot_subject_id, package_id, slot_id FROM enrollments WHERE id = $1',
+    [enrollmentId],
+  );
+  const [row] = rows;
+  if (row === undefined) throw new Error('offerOf: no enrollment');
+  return {
+    teacherId: row.teacher_user_id,
+    subjectId: row.snapshot_subject_id,
+    packageId: row.package_id,
+    slotId: row.slot_id,
+  };
+}
+
+/** A committed session of the enrollment on a Sunday at 09:00 in Cairo (07:00 UTC in November). */
+async function sessionOn(enrollmentId: string, localDate: string): Promise<void> {
+  const { rows } = await db.query<{ student_user_id: string; teacher_user_id: string }>(
+    'SELECT student_user_id, teacher_user_id FROM enrollments WHERE id = $1',
+    [enrollmentId],
+  );
+  const [parties] = rows;
+  if (parties === undefined) throw new Error('sessionOn: no enrollment');
+  await insertRow(db, 'sessions', {
+    enrollment_id: enrollmentId,
+    teacher_user_id: parties.teacher_user_id,
+    student_user_id: parties.student_user_id,
+    sequence_number: 1,
+    scheduled_date_local: localDate,
+    scheduled_start_time_local: '09:00:00',
+    timezone: 'Africa/Cairo',
+    scheduled_start_at: `${localDate}T07:00:00Z`,
+    scheduled_end_at: `${localDate}T08:00:00Z`,
+    status: 'scheduled',
+  });
+}
+
+/** A committed hold on the slot by `studentId`, active unless `released`. */
+async function holdOn(
+  on: { slotId: string; packageId: string },
+  studentId: string,
+  values: { sessionCount: number; expiresAt: string; released?: boolean },
+): Promise<void> {
+  await insertRow(db, 'slot_holds', {
+    slot_id: on.slotId,
+    student_user_id: studentId,
+    package_id: on.packageId,
+    session_count: values.sessionCount,
+    expires_at: values.expiresAt,
+    ...(values.released === true
+      ? { released_at: values.expiresAt, release_reason: 'expired' }
+      : {}),
+  });
+}
+
+describe("EnrollmentSide.slotWeekTaken (T008, R-205; the owner's decision of 2026-11-07)", () => {
+  it("leaves the asking enrollment's own occupancy out, and counts another's until its release", async () => {
+    const own = await enrollmentIn('confirmed');
+    await sessionOn(own.enrollmentId, '2026-11-29');
+    const on = await offerOf(own.enrollmentId);
+    await rolledBack(async (tx) => {
+      // Its own release, with a buffer of one week, would be 2026-12-13: left out.
+      expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-06', own.enrollmentId)).toBe(false);
+    });
+    const other = await insertRow(db, 'enrollments', {
+      ...enrollmentValues(on, await makeUser(db)),
+      status: 'confirmed',
+      confirmed_at: CONFIRMED_AT,
+    });
+    await sessionOn(other, '2026-12-06');
+    await rolledBack(async (tx) => {
+      // The other's release is 2026-12-20; its own (left out) 2026-12-13.
+      expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-13', own.enrollmentId)).toBe(true);
+      expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-20', own.enrollmentId)).toBe(false);
+    });
+  });
+
+  it('an active hold takes the slot even past its expiry; a released one does not', async () => {
+    const own = await enrollmentIn('terminated_no_show');
+    const on = await offerOf(own.enrollmentId);
+    await holdOn(on, await makeUser(db), {
+      sessionCount: 4,
+      expiresAt: '2026-11-01T00:00:00Z',
+      released: true,
+    });
+    await rolledBack(async (tx) => {
+      expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-06', own.enrollmentId)).toBe(false);
+    });
+    await holdOn(on, await makeUser(db), { sessionCount: 4, expiresAt: '2026-11-01T00:00:00Z' });
+    await rolledBack(async (tx) => {
+      // The other's release is 2026-12-20; its own (left out) 2026-12-13.
+      expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-13', own.enrollmentId)).toBe(true);
+    });
+  });
+});
+
+describe("EnrollmentSide.heldTimesOf (T008, F5; the owner's decision of 2026-11-07)", () => {
+  it("a student's own and a teacher's slots' active holds, from the read and from the expiry", async () => {
+    const first = await offerOf((await makeEnrollment(db)).enrollmentId);
+    const second = await offerOf((await makeEnrollment(db)).enrollmentId);
+    const third = await offerOf((await makeEnrollment(db)).enrollmentId);
+    await db.query(
+      `UPDATE availability_slots SET start_time_local = '12:00:00', updated_at = now() WHERE id = $1`,
+      [second.slotId],
+    );
+    const student = await makeUser(db);
+    // The student's own active hold on the first slot, past its expiry: from the expiry plus 24 h
+    // its first Sunday is 2026-11-08; from the read (2026-11-08T09:00Z) plus 24 h, 2026-11-15.
+    await holdOn(first, student, { sessionCount: 2, expiresAt: '2026-11-01T00:00:00Z' });
+    // Another student's hold on the second teacher's slot (12:00 in Cairo, 10:00 UTC).
+    await holdOn(second, await makeUser(db), {
+      sessionCount: 1,
+      expiresAt: '2026-11-08T09:15:00Z',
+    });
+    // A released hold of the student's on the third slot, and an active one of a stranger there.
+    await holdOn(third, student, {
+      sessionCount: 4,
+      expiresAt: '2026-11-08T09:15:00Z',
+      released: true,
+    });
+    await holdOn(third, await makeUser(db), { sessionCount: 4, expiresAt: '2026-11-08T09:15:00Z' });
+    const hour = (start: string) => ({
+      startsAt: new Date(start),
+      endsAt: new Date(addMinutes(new Date(start), 60)),
+    });
+    await rolledBack(async (tx) => {
+      expect(
+        await side.heldTimesOf(tx, [student, second.teacherId], {
+          from: new Date('2026-11-01T00:00:00Z'),
+          to: new Date('2027-01-01T00:00:00Z'),
+        }),
+      ).toEqual([
+        hour('2026-11-08T07:00:00Z'),
+        hour('2026-11-15T07:00:00Z'),
+        hour('2026-11-15T10:00:00Z'),
+        hour('2026-11-22T07:00:00Z'),
+      ]);
+      expect(
+        await side.heldTimesOf(tx, [student], {
+          from: new Date('2026-11-15T07:30:00Z'),
+          to: new Date('2026-11-22T07:00:00Z'),
+        }),
+      ).toEqual([hour('2026-11-15T07:00:00Z')]);
     });
   });
 });

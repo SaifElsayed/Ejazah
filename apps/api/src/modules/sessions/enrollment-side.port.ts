@@ -2,7 +2,8 @@
 // what sessions needs of an enrollment that only booking can answer. Booking imports sessions, so
 // sessions may not import booking; sessions' services take this port instead, and `main.ts` and
 // `worker.ts` bind it to booking's `createEnrollmentSide()`, as catalog's `CatalogUse` is bound
-// (Phase 2's R-207). Sessions reads no booking table (R-API-6): an enrollment's number and length of
+// (Phase 2's R-207); T015, its first user, writes that binding (the owner's decision of 2026-11-07
+// on lane C's questions). Sessions reads no booking table (R-API-6): an enrollment's number and length of
 // sessions come from its snapshot through `enrollmentFor`, never from its package (FR-424), and
 // nothing here assumes every session of an enrollment was generated at once.
 //
@@ -15,7 +16,7 @@
 // no lock; a path that decides on what they answer locks first and reads again (rule 1).
 //
 // THE MOVES (data-model.md §3, "Enrollment, this phase's moves"). Each is conditional on the state
-// the caller read under its locks: the update is applied only from its one source state, and a call
+// the caller read under its locks: the update is applied only from its source states, and a call
 // from any other state changes nothing, writes no event and answers `false`, so the caller refuses
 // with its own error and log line. A move applied writes its one `enrollment_events` row in the
 // same transaction and answers `true`.
@@ -23,6 +24,8 @@
 // The enums are written out, since only a repository may import the database client (R-API-2);
 // booking's repository answers the database's values as these types, so a member the schema gains
 // and these lack fails the typecheck there.
+import type { LocalDate } from '@ijazah/time';
+
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 /** `enrollments.status` (ERD §5, `enrollment_status`). */
@@ -110,6 +113,12 @@ export interface EnrollmentPage {
   readonly nextCursor?: string;
 }
 
+/** One occurrence a hold would generate, as `heldTimesOf` answers it. */
+export interface HeldTime {
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
 export interface EnrollmentSide {
   /** The enrollment's snapshot, slot and status, with no lock; null when there is none (T148). */
   enrollmentFor(tx: Transaction, id: string): Promise<EnrollmentTerms | null>;
@@ -134,6 +143,33 @@ export interface EnrollmentSide {
    * suspended student's fault confirmed (T036, R-313).
    */
   cancel(tx: Transaction, id: string, reason: 'admin'): Promise<boolean>;
+  /**
+   * Whether the slot is taken on `localDate` (a date in the slot's zone) for `enrollmentId`'s
+   * make-up or restore (T028, T061): held by any active hold (`released_at` NULL, even past
+   * `expires_at`), or occupied under Phase 2's R-205 release by an enrollment other than
+   * `enrollmentId`, whose own occupancy is left out (the owner's decision of 2026-11-07 on lane C's
+   * questions). No lock.
+   */
+  slotWeekTaken(
+    tx: Transaction,
+    slotId: string,
+    localDate: LocalDate,
+    enrollmentId: string,
+  ): Promise<boolean>;
+  /**
+   * The occurrences every active hold of `userIds` would generate that overlap `window` (the
+   * analysis's F5; T028's proposal and counter options, T061's restore): a student's own holds and
+   * the holds on a teacher's slots; per hold, its `session_count` weekly occurrences of its slot
+   * from the first at least `first_session_lead_hours` after the read's instant, together with
+   * those from the first at least that lead after its `expires_at`, so a confirmation at any moment
+   * of its payment window is covered. Each `{ startsAt, endsAt }` holds its start and not its end.
+   * No lock: the caller holds both accounts first (T005's rule 2).
+   */
+  heldTimesOf(
+    tx: Transaction,
+    userIds: readonly string[],
+    window: { readonly from: Date; readonly to: Date },
+  ): Promise<readonly HeldTime[]>;
   /** The enrollment's `enrollment_events` rows, oldest first, with no lock (T024, GAP-1). */
   eventsOf(tx: Transaction, enrollmentId: string): Promise<readonly EnrollmentEventEntry[]>;
   /**

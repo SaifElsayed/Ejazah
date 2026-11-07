@@ -7,11 +7,13 @@ import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { recordEnrollmentEvents } from './enrollment-events.repository.js';
 import {
+  activeHoldsAmong,
   enrollmentEventsOf,
   enrollmentsPage,
   enrollmentTermsById,
   moveEnrollment,
 } from './enrollment-side.repository.js';
+import { slotUses } from './slot-occupancy.repository.js';
 
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const AT = new Date('2026-11-08T09:00:00Z');
@@ -199,5 +201,69 @@ describe("recordEnrollmentEvents' Phase 3 kinds (T008)", () => {
         { enrollmentId: id(5), kind: 'confirmed', paymentId: id(55), occurredAt: AT },
       ],
     });
+  });
+});
+
+describe('activeHoldsAmong (T008, F5)', () => {
+  function holdsClient() {
+    const calls: unknown[] = [];
+    const client = {
+      slotHold: {
+        findMany: async (args: unknown) => {
+          calls.push(args);
+          return [{ slotId: id(11), sessionCount: 4, expiresAt: AT }];
+        },
+      },
+    } as unknown as Pick<Transaction, 'slotHold'>;
+    return { client, calls };
+  }
+
+  it("reads the students' own and the slots' active holds, even past their expiry", async () => {
+    const { client, calls } = holdsClient();
+    expect(
+      await activeHoldsAmong(client, { studentUserIds: [id(1)], slotIds: [id(11), id(12)] }),
+    ).toEqual([{ slotId: id(11), sessionCount: 4, expiresAt: AT }]);
+    expect(calls).toEqual([
+      {
+        where: {
+          releasedAt: null,
+          OR: [{ studentUserId: { in: [id(1)] } }, { slotId: { in: [id(11), id(12)] } }],
+        },
+        orderBy: { id: 'asc' },
+        select: { slotId: true, sessionCount: true, expiresAt: true },
+      },
+    ]);
+  });
+
+  it('leaves out an empty side, and asks nothing when both are empty', async () => {
+    const { client, calls } = holdsClient();
+    await activeHoldsAmong(client, { studentUserIds: [id(1)], slotIds: [] });
+    expect(calls[0]).toMatchObject({
+      where: { releasedAt: null, OR: [{ studentUserId: { in: [id(1)] } }] },
+    });
+    expect(await activeHoldsAmong(client, { studentUserIds: [], slotIds: [] })).toEqual([]);
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("slotUses leaving out the asking enrollment (T008, R-205; the owner's decision of 2026-11-07)", () => {
+  it("reads the slot's other enrollments only, and every one without an exception", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      slotHold: { findMany: async () => [] },
+      enrollment: {
+        findMany: async (args: unknown) => {
+          calls.push(args);
+          return [];
+        },
+      },
+    } as unknown as Pick<Transaction, 'slotHold' | 'enrollment'>;
+    await slotUses(client, [id(2)], id(1));
+    await slotUses(client, [id(2)]);
+    expect(calls[0]).toMatchObject({
+      where: { slotId: { in: [id(2)] }, id: { not: id(1) } },
+    });
+    expect(calls[1]).toMatchObject({ where: { slotId: { in: [id(2)] } } });
+    expect((calls[1] as { where: object }).where).not.toHaveProperty('id');
   });
 });

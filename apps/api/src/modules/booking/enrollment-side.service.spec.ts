@@ -4,15 +4,18 @@
 // `enrollment_events` row only when it moved, a move from any other state writes nothing and
 // answers `false`, and the page reads `admin_list_page_size` and one row more than the page. The
 // same over the real tables is `tests/db-integrity/enrollment-side.spec.ts`'s.
+import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import type { SlotRow } from '../catalog/index.js';
 import type { EnrollmentPageItem, EnrollmentTerms } from '../sessions/index.js';
 import type { EnrollmentOutcome } from './enrollment-events.repository.js';
-import type { MoveSource, MoveTarget } from './enrollment-side.repository.js';
+import type { ActiveHold, MoveSource, MoveTarget } from './enrollment-side.repository.js';
 import { createEnrollmentSide, type EnrollmentSideStore } from './enrollment-side.service.js';
+import type { SlotOccupancy } from './slot-occupancy.service.js';
 
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const AT = new Date('2026-11-08T09:00:00Z');
@@ -24,10 +27,32 @@ interface Recorded {
   readonly events: EnrollmentOutcome[];
   readonly pages: { cursor: string | undefined; take: number }[];
   readonly settings: string[];
+  readonly occupancy: { slotIds: readonly string[]; except: string; bufferWeeks: number }[];
+  readonly holds: { studentUserIds: readonly string[]; slotIds: readonly string[] }[];
+  readonly slotReads: string[];
 }
 
-function world(options: { moves?: boolean; page?: EnrollmentPageItem[]; pageSize?: unknown }) {
-  const recorded: Recorded = { locks: [], moves: [], events: [], pages: [], settings: [] };
+interface WorldOptions {
+  readonly moves?: boolean;
+  readonly page?: EnrollmentPageItem[];
+  readonly pageSize?: unknown;
+  readonly occupancy?: SlotOccupancy;
+  readonly holds?: readonly ActiveHold[];
+  readonly teacherSlots?: Readonly<Record<string, readonly SlotRow[]>>;
+  readonly slots?: Readonly<Record<string, SlotRow>>;
+}
+
+function world(options: WorldOptions) {
+  const recorded: Recorded = {
+    locks: [],
+    moves: [],
+    events: [],
+    pages: [],
+    settings: [],
+    occupancy: [],
+    holds: [],
+    slotReads: [],
+  };
   const terms: EnrollmentTerms = {
     id: id(1),
     status: 'confirmed',
@@ -57,11 +82,33 @@ function world(options: { moves?: boolean; page?: EnrollmentPageItem[]; pageSize
       recorded.pages.push({ cursor, take });
       return (options.page ?? []).slice(0, take);
     },
+    occupancyOf: async (_tx, slotIds, bufferWeeks, except) => {
+      recorded.occupancy.push({ slotIds, except, bufferWeeks: await bufferWeeks() });
+      const occupancy = new Map<string, SlotOccupancy>();
+      for (const slotId of slotIds) {
+        if (options.occupancy !== undefined) occupancy.set(slotId, options.occupancy);
+      }
+      return occupancy;
+    },
+    activeHoldsAmong: async (_tx, scope) => {
+      recorded.holds.push(scope);
+      return [...(options.holds ?? [])];
+    },
+    teacherSlotsOf: async (_tx, teacherUserId) => [...(options.teacherSlots?.[teacherUserId] ?? [])],
+    readSlot: async (_tx, slotId) => {
+      recorded.slotReads.push(slotId);
+      return options.slots?.[slotId] ?? null;
+    },
+  };
+  const values: Record<string, unknown> = {
+    admin_list_page_size: options.pageSize ?? 2,
+    slot_release_buffer_weeks: 1,
+    first_session_lead_hours: 24,
   };
   const settings: SettingsReader = {
     read: async <T>(key: string, schema: z.ZodType<T>) => {
       recorded.settings.push(key);
-      return schema.parse(options.pageSize ?? 2);
+      return schema.parse(values[key]);
     },
   };
   const side = createEnrollmentSide({ settings, now: () => AT, store });
@@ -179,5 +226,112 @@ describe('EnrollmentSide.enrollmentPage (T008, U3)', () => {
     const { side, recorded } = world({ pageSize: 0 });
     await expect(side.enrollmentPage(tx, {})).rejects.toThrow();
     expect(recorded.pages).toEqual([]);
+  });
+});
+
+describe('EnrollmentSide.slotWeekTaken (T008, R-205; the owner\'s decision of 2026-11-07)', () => {
+  it("asks the slot's occupancy without the asking enrollment's own, the buffer read", async () => {
+    const { side, recorded } = world({});
+    expect(await side.slotWeekTaken(tx, id(2), '2026-11-29', id(1))).toBe(false);
+    expect(recorded.occupancy).toEqual([{ slotIds: [id(2)], except: id(1), bufferWeeks: 1 }]);
+    expect(recorded.settings).toEqual(['slot_release_buffer_weeks']);
+  });
+
+  it('a held or pending slot is taken on every date', async () => {
+    const { side } = world({ occupancy: { kind: 'taken' } });
+    expect(await side.slotWeekTaken(tx, id(2), '2027-06-06', id(1))).toBe(true);
+  });
+
+  it("another confirmed enrollment's slot is taken before its release date and free from it", async () => {
+    const { side } = world({
+      occupancy: { kind: 'until', releasedOn: '2026-12-06', timezone: 'Africa/Cairo' },
+    });
+    expect(await side.slotWeekTaken(tx, id(2), '2026-11-29', id(1))).toBe(true);
+    expect(await side.slotWeekTaken(tx, id(2), '2026-12-06', id(1))).toBe(false);
+  });
+});
+
+/** A slot as catalog's entry answers it: Monday 11:10 in Cairo (09:10 UTC in November), 60 min. */
+function slot(n: number): SlotRow {
+  return {
+    id: id(n),
+    dayOfWeek: 1,
+    startTimeLocal: '11:10:00',
+    durationMinutes: 60,
+    timezone: 'Africa/Cairo',
+    isActive: true,
+    createdAt: AT,
+  };
+}
+
+const at = (instant: string) => new Date(instant);
+const span = (start: string) => ({
+  startsAt: at(start),
+  endsAt: new Date(addMinutes(at(start), 60)),
+});
+const WIDE = { from: at('2026-11-01T00:00:00Z'), to: at('2027-01-01T00:00:00Z') };
+
+describe('EnrollmentSide.heldTimesOf (T008, F5; the owner\'s decision of 2026-11-07)', () => {
+  it('reads no setting and answers nothing when no active hold is theirs', async () => {
+    const { side, recorded } = world({});
+    expect(await side.heldTimesOf(tx, [id(101), id(201)], WIDE)).toEqual([]);
+    expect(recorded.settings).toEqual([]);
+  });
+
+  it('asks nothing for no user', async () => {
+    const { side, recorded } = world({});
+    expect(await side.heldTimesOf(tx, [], WIDE)).toEqual([]);
+    expect(recorded.holds).toEqual([]);
+  });
+
+  it("a student's own holds and the holds on a teacher's slots, each slot read once", async () => {
+    const { side, recorded } = world({
+      teacherSlots: { [id(201)]: [slot(21)] },
+      slots: { [id(11)]: slot(11) },
+      holds: [
+        { slotId: id(11), sessionCount: 1, expiresAt: at('2026-11-08T09:05:00Z') },
+        { slotId: id(21), sessionCount: 1, expiresAt: at('2026-11-08T09:05:00Z') },
+      ],
+    });
+    const times = await side.heldTimesOf(tx, [id(201), id(101), id(201)], WIDE);
+    expect(recorded.holds).toEqual([{ studentUserIds: [id(101), id(201)], slotIds: [id(21)] }]);
+    expect(recorded.slotReads).toEqual([id(11)]);
+    expect(recorded.settings).toEqual(['first_session_lead_hours']);
+    // Both holds' one session falls on the same Monday: the occurrence is answered once.
+    expect(times).toEqual([span('2026-11-09T09:10:00Z')]);
+  });
+
+  it('the union from the read and from expires_at, when the lead after the expiry passes the slot', async () => {
+    const { side } = world({
+      slots: { [id(11)]: slot(11) },
+      // Read at 09:00 Sunday: 24 h later is before Monday's 09:10, so the first is Nov 9; from the
+      // expiry at 09:15, 24 h later is past it, so the first is Nov 16.
+      holds: [{ slotId: id(11), sessionCount: 2, expiresAt: at('2026-11-08T09:15:00Z') }],
+    });
+    expect(await side.heldTimesOf(tx, [id(101)], WIDE)).toEqual([
+      span('2026-11-09T09:10:00Z'),
+      span('2026-11-16T09:10:00Z'),
+      span('2026-11-23T09:10:00Z'),
+    ]);
+  });
+
+  it('only the occurrences overlapping the window, a touching one left out', async () => {
+    const { side } = world({
+      slots: { [id(11)]: slot(11) },
+      holds: [{ slotId: id(11), sessionCount: 2, expiresAt: at('2026-11-08T09:15:00Z') }],
+    });
+    expect(
+      await side.heldTimesOf(tx, [id(101)], {
+        from: at('2026-11-09T10:10:00Z'),
+        to: at('2026-11-23T09:10:00Z'),
+      }),
+    ).toEqual([span('2026-11-16T09:10:00Z')]);
+  });
+
+  it('refuses a hold whose slot cannot be read', async () => {
+    const { side } = world({
+      holds: [{ slotId: id(11), sessionCount: 1, expiresAt: at('2026-11-08T09:15:00Z') }],
+    });
+    await expect(side.heldTimesOf(tx, [id(101)], WIDE)).rejects.toThrow(/slot/);
   });
 });

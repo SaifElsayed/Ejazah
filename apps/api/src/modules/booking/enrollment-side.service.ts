@@ -1,6 +1,7 @@
 // T008 of specs/004-sessions/tasks.md (research R-301, R-322, R-323 GAP-1; the third analysis, U3;
 // contracts/kernel.md, "The composition root"): booking's implementation of sessions' `EnrollmentSide`
-// port (`modules/sessions/enrollment-side.port.ts`), bound once by `main.ts` and `worker.ts`. Booking
+// port (`modules/sessions/enrollment-side.port.ts`), bound once by `main.ts` and `worker.ts` (T015
+// writes that binding: the owner's decision of 2026-11-07 on lane C's questions). Booking
 // owns `enrollments` and `enrollment_events` and is the only writer of both (R-API-6), so every
 // status move sessions asks for is written here, with its one `enrollment_events` row through
 // booking's one writer, on the caller's transaction.
@@ -17,21 +18,40 @@
 //
 // THE LOCKS. `lockEnrollments` takes the enrollments' rows through the kernel's `lockRows`, the one
 // lock any function here names. The moves take none of their own: their update touches the row the
-// caller holds, and their event row references only that enrollment. The reads take none.
+// caller holds, and their event row references only that enrollment. The reads take none: the
+// callers of `slotWeekTaken` and `heldTimesOf` hold both accounts first (T005's rule 2).
+//
+// THE SLOT AND THE HOLDS (the owner's decision of 2026-11-07 on lane C's questions). A hold is
+// active while `released_at` is NULL, even past `expires_at` (`holds.repository.ts`), since a late
+// paid event can still convert it; spec.md's edge case says «an unexpired hold», and the owner chose
+// active. `slotWeekTaken` is R-205's occupancy (`slot-occupancy.service.ts`) without the asking
+// enrollment's own use: any active hold or enrollment awaiting payment takes the slot on every date,
+// another confirmed one until its release. `heldTimesOf` reads a student's own holds and, for a
+// teacher, the holds on every slot of the teacher (catalog's entry, active or not); each hold's
+// occurrences are its `session_count` weeks of its slot from the first at least
+// `first_session_lead_hours` after the read's instant, together with those from the first at least
+// that lead after its `expires_at` (the dates generation writes at a confirmation, FR-368), so a
+// confirmation anywhere inside its payment window is covered. Only those overlapping the window are
+// answered, once each, by start.
+import { type DayOfWeek, firstOccurrenceAfter, type LocalDate } from '@ijazah/time';
 import { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { readSlot, type SlotRow, teacherSlotsOf } from '../catalog/index.js';
 import type {
   EnrollmentEventEntry,
   EnrollmentPageFilter,
   EnrollmentPageItem,
   EnrollmentSide,
   EnrollmentTerms,
+  HeldTime,
 } from '../sessions/index.js';
 import { type EnrollmentOutcome, recordEnrollmentEvents } from './enrollment-events.repository.js';
 import {
+  type ActiveHold,
+  activeHoldsAmong,
   enrollmentEventsOf,
   enrollmentsPage,
   enrollmentTermsById,
@@ -40,6 +60,15 @@ import {
   type MoveSource,
   type MoveTarget,
 } from './enrollment-side.repository.js';
+import { FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours } from './nearest-slot.service.js';
+import { packageSessionsOn } from './session-overlap.service.js';
+import {
+  isFreeOn,
+  occupancyOf,
+  SLOT_RELEASE_BUFFER_SETTING,
+  type SlotOccupancy,
+  slotReleaseBufferWeeks,
+} from './slot-occupancy.service.js';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
 export const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -64,9 +93,23 @@ export interface EnrollmentSideStore {
     cursor: string | undefined,
     take: number,
   ): Promise<EnrollmentPageItem[]>;
+  occupancyOf(
+    tx: Transaction,
+    slotIds: readonly string[],
+    bufferWeeks: () => Promise<number>,
+    exceptEnrollmentId: string,
+  ): Promise<ReadonlyMap<string, SlotOccupancy>>;
+  activeHoldsAmong(
+    tx: Transaction,
+    scope: { readonly studentUserIds: readonly string[]; readonly slotIds: readonly string[] },
+  ): Promise<ActiveHold[]>;
+  /** Every slot of the teacher, active or not (catalog's entry); none for a student. */
+  teacherSlotsOf(tx: Transaction, teacherUserId: string): Promise<SlotRow[]>;
+  /** A slot by its id, active or not (catalog's entry). */
+  readSlot(tx: Transaction, slotId: string): Promise<SlotRow | null>;
 }
 
-/** Booking's repositories, as `createEnrollmentSide` uses them by default. */
+/** Booking's repositories and catalog's entry, as `createEnrollmentSide` uses them by default. */
 export const enrollmentSideStore: EnrollmentSideStore = {
   enrollmentTermsById,
   lockRows,
@@ -74,7 +117,39 @@ export const enrollmentSideStore: EnrollmentSideStore = {
   recordEnrollmentEvents,
   enrollmentEventsOf,
   enrollmentsPage,
+  occupancyOf,
+  activeHoldsAmong,
+  teacherSlotsOf,
+  readSlot,
 };
+
+/** `userIds` once each, in id order. */
+function sortedUnique(ids: readonly string[]): string[] {
+  return [...new Set(ids)].sort();
+}
+
+/** Whether `[startsAt, endsAt)` overlaps `window`; a range holds its start and not its end. */
+function overlaps(time: HeldTime, window: { readonly from: Date; readonly to: Date }): boolean {
+  return time.startsAt < window.to && window.from < time.endsAt;
+}
+
+/** The hold's occurrences from the first at least `leadHours` after each of `from`. */
+function occurrencesOf(
+  slot: SlotRow,
+  hold: ActiveHold,
+  from: readonly Date[],
+  leadHours: number,
+): HeldTime[] {
+  // `availability_slots.day_of_week` is 0 to 6 by its check (ERD §15 rule 37); the package asserts it.
+  const recurring = { ...slot, dayOfWeek: slot.dayOfWeek as DayOfWeek };
+  return from.flatMap((instant) =>
+    packageSessionsOn(
+      slot,
+      firstOccurrenceAfter(recurring, instant, leadHours),
+      hold.sessionCount,
+    ).map(({ startsAt, endsAt }) => ({ startsAt: new Date(startsAt), endsAt: new Date(endsAt) })),
+  );
+}
 
 const FROM_CONFIRMED: readonly MoveSource[] = [{ status: 'confirmed' }];
 const RESTORABLE: readonly MoveSource[] = [
@@ -144,6 +219,40 @@ export function createEnrollmentSide({
           occurredAt,
         }),
       ),
+    slotWeekTaken: async (tx, slotId, localDate: LocalDate, enrollmentId) => {
+      const bufferWeeks = () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks);
+      const occupancy = await store.occupancyOf(tx, [slotId], bufferWeeks, enrollmentId);
+      return !isFreeOn(occupancy.get(slotId), localDate);
+    },
+    heldTimesOf: async (tx, userIds, window) => {
+      const users = sortedUnique(userIds);
+      if (users.length === 0) return [];
+      const slots = new Map<string, SlotRow>();
+      for (const userId of users) {
+        for (const slot of await store.teacherSlotsOf(tx, userId)) slots.set(slot.id, slot);
+      }
+      const holds = await store.activeHoldsAmong(tx, {
+        studentUserIds: users,
+        slotIds: [...slots.keys()].sort(),
+      });
+      if (holds.length === 0) return [];
+      const leadHours = await settings.read(FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours);
+      const readAt = now();
+      const times = new Map<string, HeldTime>();
+      for (const hold of holds) {
+        const slot = slots.get(hold.slotId) ?? (await store.readSlot(tx, hold.slotId));
+        if (slot === null) throw new Error('heldTimesOf: an active hold without its slot');
+        slots.set(slot.id, slot);
+        for (const time of occurrencesOf(slot, hold, [readAt, hold.expiresAt], leadHours)) {
+          if (overlaps(time, window)) {
+            times.set(`${String(time.startsAt.getTime())}/${String(time.endsAt.getTime())}`, time);
+          }
+        }
+      }
+      return [...times.values()].sort(
+        (one, other) => one.startsAt.getTime() - other.startsAt.getTime(),
+      );
+    },
     eventsOf: (tx, enrollmentId) => store.enrollmentEventsOf(tx, enrollmentId),
     enrollmentPage: async (tx, filter, cursor) => {
       const pageSize = await settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
