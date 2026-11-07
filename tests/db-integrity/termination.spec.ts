@@ -11,7 +11,14 @@
 //     payment cancelled `teacher_suspended` with one row; another teacher's hold is untouched;
 //   - a teacher's ban keeps an enrollment with a paid order awaiting payment, with no row, its hold
 //     released, for the confirm job (FR-PAYG-6 as amended 2026-11-03);
-//   - a student's deletion releases the student's hold and cancels its enrollment `account_deleted`.
+//   - a student's deletion releases the student's hold and cancels its enrollment `account_deleted`;
+//   - T004 of specs/004-sessions (`003:T059`, FR-AUTH-14's confirmed part): a teacher's deletion with
+//     two confirmed enrollments opens one `teacher_ended` case each, cancels their remaining
+//     sessions `cancelled_by_admin` with one row each naming the case, hands the open remedy to it
+//     and cancels the enrollments `account_deleted`; a student's opens no case, its sessions' rows
+//     name none, its open remedy lapses and a chosen refund keeps its open case; and a deletion
+//     that fails after the subscriber leaves all of it as it was, every change being the
+//     deletion's transaction's (SC-412).
 //
 // Every action runs its own transaction, so the rows are committed and kept, each probe with a world
 // of its own, as `confirmation-world.ts`' are. All connections are the application role.
@@ -30,6 +37,7 @@ import {
   terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
 import { revokeSubjects } from '../../apps/api/src/modules/catalog/index.js';
+import { openCompensationCase } from '../../apps/api/src/modules/moderation/index.js';
 import {
   AccountConsequences,
   createIdentityServices,
@@ -74,6 +82,7 @@ let database: Database;
 let webhook: Webhook;
 let standing: StandingService;
 let deletion: ReturnType<typeof createIdentityServices>['deletion'];
+let deletionOver: (registry: AccountConsequences) => typeof deletion;
 /** The paid orders the webhook handed to `confirm-enrollment`. */
 const enqueued: string[] = [];
 
@@ -94,28 +103,30 @@ beforeAll(async () => {
     hasOpenIdentityRequest: async () => false,
   });
   const unreachable = () => Promise.reject(new Error('probe: not reached'));
-  deletion = createIdentityServices({
-    database,
-    settings: identitySettings,
-    encryptionKey: KEY,
-    cipher: new ColumnCipher(KEY),
-    marks: new MemorySingleUseMarks(() => new Date()),
-    signIn: {
-      verifyIdentityToken: unreachable,
-      exchangeAuthorization: unreachable,
-      revoke: unreachable,
-    },
-    email: { deliver: async () => undefined },
-    storage: { temporaryLink: unreachable, remove: async () => undefined },
-    log: { warn: () => undefined },
-    payment: { registerPayoutRecipient: unreachable },
-    idempotency: new IdempotencyService<Transaction>({
-      store: new IdempotencyRepository(database),
+  deletionOver = (registry) =>
+    createIdentityServices({
+      database,
       settings: identitySettings,
-    }),
-    consequences,
-    report: () => undefined,
-  }).deletion;
+      encryptionKey: KEY,
+      cipher: new ColumnCipher(KEY),
+      marks: new MemorySingleUseMarks(() => new Date()),
+      signIn: {
+        verifyIdentityToken: unreachable,
+        exchangeAuthorization: unreachable,
+        revoke: unreachable,
+      },
+      email: { deliver: async () => undefined },
+      storage: { temporaryLink: unreachable, remove: async () => undefined },
+      log: { warn: () => undefined },
+      payment: { registerPayoutRecipient: unreachable },
+      idempotency: new IdempotencyService<Transaction>({
+        store: new IdempotencyRepository(database),
+        settings: identitySettings,
+      }),
+      consequences: registry,
+      report: () => undefined,
+    }).deletion;
+  deletion = deletionOver(consequences);
   webhook = await listenWebhook(database, {
     enqueue: async (paymentId) => {
       enqueued.push(paymentId);
@@ -362,5 +373,229 @@ describe("a student's end (R-219, FR-AUTH-14)", () => {
       cancellationReason: 'account_deleted',
     });
     expect(await eventsOf(enrollmentId)).toEqual([cancelledRow('account_deleted')]);
+  });
+});
+
+// T004 of specs/004-sessions/tasks.md (`003:T059`, FR-AUTH-14's confirmed part; FR-420, FR-484,
+// FR-485, FR-495; R-313; SC-412): a deletion with confirmed enrollments, through identity's real
+// deletion and booking's subscriber, each change in the deletion's transaction.
+
+/** A confirmed enrollment of `studentId` on the offer's slot: hold, Pay, a paid order, the job. */
+async function confirmed(on: Offer, slotId: string, studentId: string): Promise<string> {
+  const enrollmentId = await pay(on, studentId, await hold(on, slotId, studentId));
+  await confirmEnrollment({ database, settings, clock: () => NOW }).handle({
+    paymentId: await order(enrollmentId),
+  });
+  expect(await enrollmentOf(enrollmentId)).toMatchObject({ status: 'confirmed' });
+  return enrollmentId;
+}
+
+/** Sets a password the deletion's proof checks, on a person made without one. */
+async function withPassword(userId: string): Promise<void> {
+  await database.user.update({
+    where: { id: userId },
+    data: { passwordHash: await hashPassword(PASSWORD) },
+  });
+}
+
+function deleteWithPassword(userId: string) {
+  return deletion.deleteAccount(userId, {
+    confirmation: 'DELETE',
+    reauth: { kind: 'password', password: PASSWORD },
+    idempotencyKey: randomUUID(),
+  });
+}
+
+/** The enrollment's sessions by sequence number, with their status. */
+async function sessionStates(enrollmentId: string) {
+  return database.session.findMany({
+    where: { enrollmentId },
+    orderBy: { sequenceNumber: 'asc' },
+    select: { id: true, status: true },
+  });
+}
+
+/** The session's outcome settled as a Teacher-No-Show, and a remedy owed on it in `status`. */
+async function owed(
+  sessionId: string,
+  status: 'awaiting_choice' | 'refund_case',
+  caseId: string | null = null,
+): Promise<string> {
+  await database.session.update({ where: { id: sessionId }, data: { status: 'teacher_no_show' } });
+  const { id } = await database.sessionRemedy.create({
+    data: {
+      sessionId,
+      kind: status === 'refund_case' ? 'refund' : 'makeup',
+      status,
+      caseId,
+      decidedAt: caseId === null ? null : NOW,
+      offeredAt: new Date('2026-11-03T08:00:00Z'),
+      choiceClosesAt: new Date('2026-11-10T08:00:00Z'),
+      snapshotAnswerWindowHours: 72,
+      snapshotFirstSessionLeadHours: 24,
+    },
+    select: { id: true },
+  });
+  return id;
+}
+
+async function remedyOf(id: string) {
+  return database.sessionRemedy.findUniqueOrThrow({
+    where: { id },
+    select: { status: true, caseId: true, decidedAt: true },
+  });
+}
+
+async function sessionEventsOf(enrollmentId: string) {
+  return database.sessionEvent.findMany({
+    where: { enrollmentId },
+    orderBy: [{ kind: 'asc' }, { sessionId: 'asc' }],
+    select: { kind: true, sessionId: true, caseId: true, occurredAt: true },
+  });
+}
+
+describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412)', () => {
+  it("a teacher's: one teacher_ended case per enrollment, its sessions cancelled naming it, its open remedy handed to it, the enrollments cancelled account_deleted", async () => {
+    const on = await offer(2);
+    const [slotA = '', slotB = ''] = on.slotIds;
+    const first = await confirmed(on, slotA, await person());
+    const second = await confirmed(on, slotB, await person());
+    const [missed] = await sessionStates(first);
+    const remedyId = await owed(missed?.id ?? '', 'awaiting_choice');
+    await withPassword(on.teacherId);
+
+    await deleteWithPassword(on.teacherId);
+
+    for (const enrollmentId of [first, second]) {
+      expect(await enrollmentOf(enrollmentId)).toMatchObject({
+        status: 'cancelled',
+        cancellationReason: 'account_deleted',
+      });
+      expect((await eventsOf(enrollmentId)).map(({ kind }) => kind)).toEqual([
+        'confirmed',
+        'cancelled',
+      ]);
+      const cases = await casesOf(enrollmentId);
+      expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
+        ['teacher_ended', 'open'],
+      ]);
+      const caseId = cases[0]?.id;
+      const states = await sessionStates(enrollmentId);
+      const remaining = states.filter(({ status }) => status !== 'teacher_no_show');
+      expect(remaining.map(({ status }) => status)).toEqual(
+        remaining.map(() => 'cancelled_by_admin'),
+      );
+      const events = await sessionEventsOf(enrollmentId);
+      expect(events.filter(({ kind }) => kind === 'cancelled_by_admin')).toEqual(
+        remaining
+          .map(({ id }) => ({ kind: 'cancelled_by_admin', sessionId: id, caseId, occurredAt: NOW }))
+          .sort((one, other) => one.sessionId.localeCompare(other.sessionId)),
+      );
+      if (enrollmentId === first) {
+        expect(await remedyOf(remedyId)).toEqual({
+          status: 'refund_case',
+          caseId,
+          decidedAt: NOW,
+        });
+        expect(events.filter(({ kind }) => kind === 'remedy_handed_to_case')).toEqual([
+          { kind: 'remedy_handed_to_case', sessionId: missed?.id, caseId: null, occurredAt: NOW },
+        ]);
+      }
+    }
+  });
+
+  it("a student's: no case, the sessions cancelled naming none, the open remedy lapsed and a chosen refund's case kept open", async () => {
+    const on = await offer();
+    const studentId = await person(await hashPassword(PASSWORD));
+    const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
+    const [missed, refused] = await sessionStates(enrollmentId);
+    const lapsing = await owed(missed?.id ?? '', 'awaiting_choice');
+    const { caseId: refundCase } = await database.$transaction((tx) =>
+      openCompensationCase(tx, enrollmentId, 'refund_choice'),
+    );
+    const keeping = await owed(refused?.id ?? '', 'refund_case', refundCase);
+
+    await deleteWithPassword(studentId);
+
+    expect(await enrollmentOf(enrollmentId)).toMatchObject({
+      status: 'cancelled',
+      cancellationReason: 'account_deleted',
+    });
+    expect((await casesOf(enrollmentId)).map(({ reason, status }) => [reason, status])).toEqual([
+      ['refund_choice', 'open'],
+    ]);
+    const remaining = (await sessionStates(enrollmentId)).filter(
+      ({ status }) => status !== 'teacher_no_show',
+    );
+    expect(new Set(remaining.map(({ status }) => status))).toEqual(new Set(['cancelled_by_admin']));
+    const events = await sessionEventsOf(enrollmentId);
+    expect(events.filter(({ kind }) => kind === 'cancelled_by_admin')).toHaveLength(
+      remaining.length,
+    );
+    for (const event of events.filter(({ kind }) => kind === 'cancelled_by_admin')) {
+      expect(event.caseId).toBeNull();
+    }
+    expect(await remedyOf(lapsing)).toEqual({ status: 'lapsed', caseId: null, decidedAt: NOW });
+    expect(events.filter(({ kind }) => kind === 'remedy_lapsed')).toEqual([
+      { kind: 'remedy_lapsed', sessionId: missed?.id, caseId: null, occurredAt: NOW },
+    ]);
+    expect(await remedyOf(keeping)).toEqual({
+      status: 'refund_case',
+      caseId: refundCase,
+      decidedAt: NOW,
+    });
+  });
+
+  it('a remedy of a soft-deleted session is not read, so it is left as it was (R-DB-3)', async () => {
+    const on = await offer();
+    const studentId = await person(await hashPassword(PASSWORD));
+    const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
+    const [missed, removed] = await sessionStates(enrollmentId);
+    const lapsing = await owed(missed?.id ?? '', 'awaiting_choice');
+    const hidden = await owed(removed?.id ?? '', 'awaiting_choice');
+    await database.session.update({
+      where: { id: removed?.id ?? '' },
+      data: { deletedAt: new Date('2026-11-03T08:00:00Z') },
+    });
+
+    await deleteWithPassword(studentId);
+
+    expect(await remedyOf(lapsing)).toMatchObject({ status: 'lapsed' });
+    expect(await remedyOf(hidden)).toEqual({
+      status: 'awaiting_choice',
+      caseId: null,
+      decidedAt: null,
+    });
+    expect(
+      (await sessionEventsOf(enrollmentId)).filter(({ sessionId }) => sessionId === removed?.id),
+    ).toEqual([]);
+  });
+
+  it('a deletion that fails after the subscriber leaves every confirmed enrollment, session and remedy as it was', async () => {
+    const on = await offer();
+    const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', await person());
+    const [missed] = await sessionStates(enrollmentId);
+    const remedyId = await owed(missed?.id ?? '', 'awaiting_choice');
+    await withPassword(on.teacherId);
+    const failing = new AccountConsequences();
+    failing.subscribe(terminationSubscriber({ orders: orderStandingsOf, now: () => NOW }));
+    failing.subscribe(async () => {
+      throw new Error('probe: the deletion fails after the subscriber');
+    });
+    const before = await sessionStates(enrollmentId);
+
+    await expect(
+      deletionOver(failing).deleteAccount(on.teacherId, {
+        confirmation: 'DELETE',
+        reauth: { kind: 'password', password: PASSWORD },
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toThrow();
+
+    expect(await enrollmentOf(enrollmentId)).toMatchObject({ status: 'confirmed' });
+    expect(await sessionStates(enrollmentId)).toEqual(before);
+    expect(await casesOf(enrollmentId)).toEqual([]);
+    expect(await sessionEventsOf(enrollmentId)).toEqual([]);
+    expect(await remedyOf(remedyId)).toMatchObject({ status: 'awaiting_choice', caseId: null });
   });
 });

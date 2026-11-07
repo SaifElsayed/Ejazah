@@ -1,6 +1,11 @@
 // moderation domain (T061, ERD section 10). Owned by apps/api/src/modules/moderation.
 // disputes, gender_flags, user_reports.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
+//
+// Phase 3 (T001, specs/004-sessions/data-model.md §2.7): `kind` gains `absence_complaint` and
+// `resolution` `enrollment_ended` (R-322). ERD §15 rule 46, its checks and its two partial uniques
+// (one open session dispute per session, one open complaint per enrollment), lives in migration
+// `20261108120000_sessions_pass`.
 
 // The moderation case table (ADR 0007 D5). Every case belongs to one enrollment.
 model Dispute {
@@ -30,7 +35,9 @@ model Dispute {
   resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
 
   // Phase 1 (T012, ADR 0018): the refund cases that point at this dispute.
-  remedies SessionRemedy[]
+  remedies      SessionRemedy[]
+  // Phase 3 (T001): the session events that name this case, dispute or complaint.
+  sessionEvents SessionEvent[]
 
   @@index([enrollmentId])
   @@index([sessionId])

@@ -455,6 +455,36 @@ describe('account.delete: after the commit (B16 check, decisions 1 and 3)', () =
     expect((await rows().deletedUser(second.userId))?.deletedAt).not.toBeNull();
   });
 
+  it("leaves a held person's photo and files in place after the commit, and still revokes and mails (T004, FR-487)", async () => {
+    const caller = await providerAccount('apple', 'apple-refresh-held');
+    await rows().setPersonalFields(caller.userId, { photoKey: `photos/${caller.userId}.jpg` });
+    spec.held.add(caller.userId);
+    const mails = spec.identity.mails().length;
+    await deleteWith(caller.userId, await providerProof('apple', caller.subject));
+    await spec.settle();
+    expect(spec.events.indexOf('files-held')).toBeGreaterThan(spec.events.indexOf('committed'));
+    expect(spec.storage.removed).toEqual([]);
+    expect(spec.files.erased).toEqual([]);
+    expect((await rows().deletedUser(caller.userId))?.photoKey).toBe(`photos/${caller.userId}.jpg`);
+    expect(spec.signInPort.calls.filter(({ operation }) => operation === 'revoke')).toEqual([
+      { operation: 'revoke', args: [{ provider: 'apple', refreshToken: 'apple-refresh-held' }] },
+    ]);
+    expect(spec.identity.mails()).toHaveLength(mails + 1);
+    expect(spec.reports).toEqual([]);
+  });
+
+  it('removes a person not held at once, asked after the commit and before the removal (T004)', async () => {
+    const caller = await emailAccount('teacher');
+    await rows().setPersonalFields(caller.userId, { photoKey: `photos/${caller.userId}.jpg` });
+    await deleteWith(caller.userId, byPassword());
+    await spec.settle();
+    expect(spec.events.indexOf('files-held')).toBeGreaterThan(spec.events.indexOf('committed'));
+    expect(spec.events.indexOf('remove')).toBeGreaterThan(spec.events.indexOf('files-held'));
+    expect(spec.events.indexOf('erase-files')).toBeGreaterThan(spec.events.indexOf('files-held'));
+    expect(spec.storage.removed).toEqual([`photos/${caller.userId}.jpg`]);
+    expect(spec.files.erased).toEqual([caller.userId]);
+  });
+
   it('mails the confirmation to the address after the commit, Arabic first and English under it', async () => {
     const caller = await emailAccount();
     await deleteWith(caller.userId, byPassword());

@@ -18,7 +18,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// 003:T080, decision 10: a case runs git and Gitleaks, ≤1 s alone, past 5 s under load (B31a).
+vi.setConfig({ testTimeout: 20_000 });
 
 const root = join(__dirname, '..', '..');
 const RULE = 'github-pat';
@@ -129,8 +132,8 @@ describe('the local check (.husky/pre-commit, T082)', () => {
   // It starts nine processes, git eight times and Gitleaks once (about 0.4 s of its own), with no
   // work repeated. Measured on the owner's machine (T067, 2026-11-02): 0.7 s alone, 0.7 to 0.9 s
   // under coverage, 2.7 s in a full run, and past the default five seconds in a full run on
-  // `ijazah_integrity` (B26). The room is the generated-file check's lockfile cases'.
-  it('passes a clean staged change', { timeout: 15_000 }, () => {
+  // `ijazah_integrity` (B26); the file's timeout above is its room.
+  it('passes a clean staged change', () => {
     const dir = repository();
     write(dir, 'src/config.ts', "export const region = 'eu';\n");
     git(dir, 'add', '--all');
@@ -152,15 +155,14 @@ describe('the local check (.husky/pre-commit, T082)', () => {
 
 describe('the pipeline check (ci.yml secret-scan, T083)', () => {
   // B31a (the note under 003:T080): Gitleaks over a repository's history ran past the default five
-  // seconds in a full run on `ijazah_integrity`; each history case has the staged-change case's room.
-  it('passes a clean history', { timeout: 15_000 }, () => {
+  // seconds in a full run on `ijazah_integrity`; the file's timeout above is its room.
+  it('passes a clean history', () => {
     const dir = repository();
     expect(run(pipelineCommand(), dir).status).toBe(0);
   });
 
   it.each(['src/config.ts', 'specs/001-foundations/notes.md'])(
     'rejects a secret committed in %s and removed in a later commit',
-    { timeout: 15_000 },
     (file) => {
       const dir = repository();
       write(dir, file, `token = ${plantedSecret()}\n`);

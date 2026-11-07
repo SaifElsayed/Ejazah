@@ -111,14 +111,20 @@ export async function readDocument(
 /** A document of a deleted person whose key is still held: its file is still to be removed. */
 export interface ErasedDocumentRow {
   readonly id: string;
+  /** The document's owner (T004 of specs/004-sessions: a held owner's files wait). */
+  readonly userId: string;
   readonly storageKeyEncrypted: Uint8Array;
 }
 
 const heldKeys = (
-  rows: readonly { readonly id: string; readonly storageKeyEncrypted: Uint8Array | null }[],
+  rows: readonly {
+    readonly id: string;
+    readonly userId: string;
+    readonly storageKeyEncrypted: Uint8Array | null;
+  }[],
 ): ErasedDocumentRow[] =>
-  rows.flatMap(({ id, storageKeyEncrypted }) =>
-    storageKeyEncrypted === null ? [] : [{ id, storageKeyEncrypted }],
+  rows.flatMap(({ id, userId, storageKeyEncrypted }) =>
+    storageKeyEncrypted === null ? [] : [{ id, userId, storageKeyEncrypted }],
   );
 
 /** Marks every document of `userId` not yet erased as erased at `at`, on the deletion's transaction; the keys stay. */
@@ -179,7 +185,7 @@ export class VerificationRepository {
       await this.#database.verificationDocument.findMany({
         where: { userId, erasedAt: { not: null }, storageKeyEncrypted: { not: null } },
         orderBy: { id: 'asc' },
-        select: { id: true, storageKeyEncrypted: true },
+        select: { id: true, userId: true, storageKeyEncrypted: true },
       }),
     );
   }
@@ -188,7 +194,7 @@ export class VerificationRepository {
   async erasedWithKey(id: string): Promise<ErasedDocumentRow | null> {
     const row = await this.#database.verificationDocument.findFirst({
       where: { id, erasedAt: { not: null }, storageKeyEncrypted: { not: null } },
-      select: { id: true, storageKeyEncrypted: true },
+      select: { id: true, userId: true, storageKeyEncrypted: true },
     });
     return row === null ? null : (heldKeys([row])[0] ?? null);
   }
@@ -204,7 +210,7 @@ export class VerificationRepository {
         },
         orderBy: { id: 'asc' },
         take: limit,
-        select: { id: true, storageKeyEncrypted: true },
+        select: { id: true, userId: true, storageKeyEncrypted: true },
       }),
     );
   }
@@ -244,7 +250,7 @@ export class VerificationRepository {
           },
           orderBy: { id: 'asc' },
           take: limit,
-          select: { id: true, storageKeyEncrypted: true },
+          select: { id: true, userId: true, storageKeyEncrypted: true },
         });
         return heldKeys(rows).map(({ id, storageKeyEncrypted: value }) => ({ id, value }));
       },

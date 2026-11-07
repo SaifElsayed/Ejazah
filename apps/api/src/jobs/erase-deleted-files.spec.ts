@@ -8,6 +8,11 @@
 // cannot be removed keeps its key for the next run, is reported, and does not stop the others.
 // Pages are read in id order after the last one read, so the run is bounded. Its double-run
 // assertion calls the handler directly over in-memory stores: two runs leave what one run leaves.
+//
+// T004 of specs/004-sessions (FR-487; research R-327; the owner's decision of 2026-11-05): a file's
+// owner is asked once per page through `held` (booking's `heldFileOwnersAmong`); a held owner's
+// files are neither removed nor reported and the page goes on in id order, the next page read as
+// before; the first run after the owner's last open matter closes removes them.
 import { describe, expect, it } from 'vitest';
 
 import { runOnceAndTwice } from './double-run.js';
@@ -15,6 +20,7 @@ import { type ErasedFile, type ErasedFileStore, eraseDeletedFiles } from './eras
 
 interface Row {
   readonly id: string;
+  readonly owner: string;
   key: string | null;
 }
 
@@ -28,7 +34,7 @@ function storeOf(rows: readonly Row[]) {
         .filter(({ id, key }) => key !== null && (after === undefined || id > after))
         .sort((left, right) => (left.id < right.id ? -1 : 1))
         .slice(0, limit)
-        .map(({ id, key }) => ({ id, storageKey: key ?? '' }));
+        .map(({ id, owner, key }) => ({ id, ownerUserId: owner, storageKey: key ?? '' }));
     },
     async clearKey({ id, storageKey }: ErasedFile) {
       const row = this.rows.find((each) => each.id === id);
@@ -52,13 +58,14 @@ function storageOf(objects: readonly string[], failing: readonly string[] = []) 
   };
 }
 
-function world(failing: readonly string[] = []) {
+function world(failing: readonly string[] = [], held: Set<string> = new Set()) {
   const documents = storeOf([
-    { id: 'doc-1', key: 'documents/doc-1.pdf' },
-    { id: 'doc-2', key: 'documents/doc-2.pdf' },
-    { id: 'doc-3', key: null },
+    { id: 'doc-1', owner: 'user-1', key: 'documents/doc-1.pdf' },
+    { id: 'doc-2', owner: 'user-2', key: 'documents/doc-2.pdf' },
+    { id: 'doc-3', owner: 'user-2', key: null },
   ]);
-  const photos = storeOf([{ id: 'user-1', key: 'photos/user-1.jpg' }]);
+  const photos = storeOf([{ id: 'user-1', owner: 'user-1', key: 'photos/user-1.jpg' }]);
+  const asked: (readonly string[])[] = [];
   const storage = storageOf(
     ['documents/doc-1.pdf', 'documents/doc-2.pdf', 'photos/user-1.jpg'],
     failing,
@@ -68,9 +75,13 @@ function world(failing: readonly string[] = []) {
     stores: [documents, photos],
     storage,
     report: (error) => void reports.push(error),
+    held: async (owners) => {
+      asked.push([...owners]);
+      return new Set(owners.filter((owner) => held.has(owner)));
+    },
     pageSize: 1,
   });
-  return { documents, photos, storage, reports, job };
+  return { documents, photos, storage, reports, job, asked, held };
 }
 
 const observe = ({ documents, photos, storage }: ReturnType<typeof world>) => ({
@@ -96,11 +107,11 @@ describe('erase-deleted-files', () => {
     ]);
     expect(observe(state)).toEqual({
       documents: [
-        { id: 'doc-1', key: null },
-        { id: 'doc-2', key: null },
-        { id: 'doc-3', key: null },
+        { id: 'doc-1', owner: 'user-1', key: null },
+        { id: 'doc-2', owner: 'user-2', key: null },
+        { id: 'doc-3', owner: 'user-2', key: null },
       ],
-      photos: [{ id: 'user-1', key: null }],
+      photos: [{ id: 'user-1', owner: 'user-1', key: null }],
       objects: [],
     });
     expect(state.documents.pages).toBeGreaterThan(1);
@@ -111,11 +122,11 @@ describe('erase-deleted-files', () => {
     await state.job.handle({});
     expect(observe(state)).toEqual({
       documents: [
-        { id: 'doc-1', key: 'documents/doc-1.pdf' },
-        { id: 'doc-2', key: null },
-        { id: 'doc-3', key: null },
+        { id: 'doc-1', owner: 'user-1', key: 'documents/doc-1.pdf' },
+        { id: 'doc-2', owner: 'user-2', key: null },
+        { id: 'doc-3', owner: 'user-2', key: null },
       ],
-      photos: [{ id: 'user-1', key: null }],
+      photos: [{ id: 'user-1', owner: 'user-1', key: null }],
       objects: ['documents/doc-1.pdf'],
     });
     expect(state.reports).toHaveLength(1);
@@ -133,6 +144,50 @@ describe('erase-deleted-files', () => {
   it('two runs with a failing file leave what one run leaves, the key still held', async () => {
     const { once, twice } = await runOnceAndTwice({
       world: () => world(['photos/user-1.jpg']),
+      run: (state) => state.job.handle({}),
+      observe,
+    });
+    expect(twice).toEqual(once);
+  });
+
+  it("a held owner's files are neither removed nor reported, and the next page's are removed (T004)", async () => {
+    const state = world([], new Set(['user-1']));
+    await state.job.handle({});
+    expect(state.storage.removed).toEqual(['documents/doc-2.pdf']);
+    expect(state.reports).toEqual([]);
+    expect(observe(state)).toEqual({
+      documents: [
+        { id: 'doc-1', owner: 'user-1', key: 'documents/doc-1.pdf' },
+        { id: 'doc-2', owner: 'user-2', key: null },
+        { id: 'doc-3', owner: 'user-2', key: null },
+      ],
+      photos: [{ id: 'user-1', owner: 'user-1', key: 'photos/user-1.jpg' }],
+      objects: ['documents/doc-1.pdf', 'photos/user-1.jpg'],
+    });
+  });
+
+  it("asks each page's owners once, in one call per page", async () => {
+    const state = world([], new Set(['user-1']));
+    await state.job.handle({});
+    expect(state.asked).toEqual([['user-1'], ['user-2'], ['user-1']]);
+  });
+
+  it('removes them on the first run once no open matter holds the owner (T004)', async () => {
+    const state = world([], new Set(['user-1']));
+    await state.job.handle({});
+    state.held.clear();
+    await state.job.handle({});
+    expect(observe(state).objects).toEqual([]);
+    expect(state.storage.removed).toEqual([
+      'documents/doc-2.pdf',
+      'documents/doc-1.pdf',
+      'photos/user-1.jpg',
+    ]);
+  });
+
+  it('two runs with a held owner leave what one run leaves (R-API-14)', async () => {
+    const { once, twice } = await runOnceAndTwice({
+      world: () => world([], new Set(['user-1'])),
       run: (state) => state.job.handle({}),
       observe,
     });

@@ -17,16 +17,34 @@
 // does not: adapter-pg 7.10.0 maps a SQLSTATE it has no kind for to `kind: 'postgres'` and drops
 // pg's `constraint` field, so the name is read from the server's message, as a whole identifier,
 // never as a quoted one, since a translated message (`lc_messages`) may quote it otherwise.
+//
+// PHASE 3 (T002 of specs/004-sessions, contracts/kernel.md "Locks and refusals"). The unique union
+// gains ERD §15 rules 45 and 46's partial uniques, a second remedy of a session and a replayed
+// video event. `isDeadlock` reads SQLSTATE 40P01, the database's deadlock refusal, the same way, at
+// a statement or at commit (the owner's decision of 2026-11-06 on the sixth analysis, L5): nothing
+// here recognised it before, and `runRetryingDeadlockOnce` (`transaction.repository.ts`) retries a
+// deadlocked transaction once on it.
 
-/** The partial unique indexes a caller may name (ERD §15 rule 17). */
+/**
+ * The unique indexes a caller may name: ERD §15 rule 17's two, and Phase 3's (rule 45's pending
+ * request, rule 46's open session dispute and open complaint (`COMPLAINT_OPEN`, R-322), one
+ * remedy per session and one row per video event).
+ */
 export type UniqueConstraint =
-  'slot_holds_slot_id_active_key' | 'slot_holds_student_user_id_active_key';
+  | 'slot_holds_slot_id_active_key'
+  | 'slot_holds_student_user_id_active_key'
+  | 'cancellation_requests_one_pending_key'
+  | 'disputes_one_open_per_session_key'
+  | 'session_remedies_session_id_key'
+  | 'session_participant_events_provider_event_id_key'
+  | 'disputes_one_open_complaint_per_enrollment_key';
 
 /** The exclusion constraints a caller may name (ERD §15 rule 19). */
 export type ExclusionConstraint = 'sessions_teacher_no_overlap' | 'sessions_student_no_overlap';
 
 const UNIQUE_VIOLATION = '23505';
 const EXCLUSION_VIOLATION = '23P01';
+const DEADLOCK_DETECTED = '40P01';
 
 /** What the adapter kept of the server's error: its SQLSTATE, message and named index. */
 interface Refusal {
@@ -78,4 +96,12 @@ export function isUniqueViolation(error: unknown, constraint: UniqueConstraint):
 export function isExclusionViolation(error: unknown, constraint: ExclusionConstraint): boolean {
   const refusal = refusalOf(error);
   return refusal?.code === EXCLUSION_VIOLATION && namesIdentifier(refusal.message, constraint);
+}
+
+/**
+ * Whether `error` is the database's deadlock refusal (SQLSTATE 40P01), at a statement or at commit.
+ * Its transaction was rolled back; a caller may run its work once more in a new one.
+ */
+export function isDeadlock(error: unknown): boolean {
+  return refusalOf(error)?.code === DEADLOCK_DETECTED;
 }

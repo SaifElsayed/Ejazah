@@ -110,8 +110,10 @@ const AGGREGATE_NAMES_ALLOWED: ReadonlyMap<string, string> = new Map([
 // Prisma's own bookkeeping table: its columns are Prisma's, not this schema's.
 const TABLES_NOT_CHECKED_FOR_AGGREGATES: ReadonlySet<string> = new Set(['_prisma_migrations']);
 
-// The six caches R-DB-4 declares (data-model.md §3), with the type each must keep. The four on
-// `sessions` cannot be recognised by name, so the check asserts they exist as declared.
+// The caches R-DB-4 declares (data-model.md §3), with the type each must keep: the six of Phase 0,
+// and `sessions.simultaneous_connected_seconds`, written once by the evaluation as the figure its
+// outcome was decided on (R-DB-4 as constitution 2.5.0 amends it, ADR 0022; Phase 3's T001). The
+// five on `sessions` cannot be recognised by name, so the check asserts they exist as declared.
 const DECLARED_CACHES: ReadonlyMap<string, string> = new Map([
   ['teacher_profiles.average_rating', 'numeric(3,2)'],
   ['teacher_profiles.review_count', 'integer'],
@@ -119,6 +121,7 @@ const DECLARED_CACHES: ReadonlyMap<string, string> = new Map([
   ['sessions.scheduled_end_at', 'timestamp(6) with time zone'],
   ['sessions.teacher_user_id', 'uuid'],
   ['sessions.student_user_id', 'uuid'],
+  ['sessions.simultaneous_connected_seconds', 'integer'],
 ]);
 
 const INTEGER_TYPES: ReadonlySet<string> = new Set(['int2', 'int4', 'int8']);
@@ -140,10 +143,30 @@ function holdsPhrase(name: string, phrase: readonly string[]): boolean {
   return all.some((_, start) => phrase.every((word, offset) => all[start + offset] === word));
 }
 
-function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): void {
-  const tablesWithZone = new Set(
-    columns.filter((row) => row.column_name === 'timezone').map((row) => row.table_name),
+/** Each table's zone columns: `timezone`, and every `<p>_timezone`. */
+function zoneColumnsByTable(columns: readonly ColumnRow[]): Map<string, string[]> {
+  const zones = new Map<string, string[]>();
+  for (const { table_name: table, column_name: column } of columns) {
+    if (column !== 'timezone' && !column.endsWith('_timezone')) continue;
+    zones.set(table, [...(zones.get(table) ?? []), column]);
+  }
+  return zones;
+}
+
+/**
+ * Whether a `_local` column has a zone beside it (R-TIME-3, R-TIME-5 as constitution 2.6.2 words
+ * them, the owner's decision of 2026-11-06 on Phase 3's T001): a `timezone` column, or a
+ * `<p>_timezone` column when the `_local` column's name starts with `<p>_`, as
+ * `counter_start_time_local` beside `counter_timezone`. A zone of another prefix does not count.
+ */
+function isZoned(column: string, zones: readonly string[]): boolean {
+  return zones.some(
+    (zone) => zone === 'timezone' || column.startsWith(zone.slice(0, -'timezone'.length)),
   );
+}
+
+function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): void {
+  const zonesByTable = zoneColumnsByTable(columns);
   for (const row of columns) {
     const { table_name: table, column_name: column, type_name: type } = row;
     const at = (rule: string, detail: string): void => {
@@ -163,7 +186,9 @@ function checkColumns(columns: readonly ColumnRow[], violations: Violation[]): v
     }
     if (column.endsWith('_local')) {
       if (type !== 'date' && type !== 'time') at('local-time', `a local value of ${row.formatted}`);
-      else if (!tablesWithZone.has(table)) at('local-time', 'no timezone column beside it');
+      else if (!isZoned(column, zonesByTable.get(table) ?? [])) {
+        at('local-time', 'no timezone column beside it');
+      }
     }
     const secured = column.endsWith('_hash') || column.endsWith('_encrypted');
     if (

@@ -6,6 +6,7 @@ import type { Transaction } from '../../../platform/db/prisma.repository.js';
 import type { TargetPerson } from '../../identity/index.js';
 import {
   auditTargetKinds,
+  isAuditTargetType,
   LABEL_SEPARATOR,
   targetLabel,
   TargetLabelError,
@@ -91,5 +92,71 @@ describe('the read-time name and the fused forms (T021, FR-181)', () => {
     expect(await resolveTargetName(tx, 'setting', 'rate_limit_search', readers)).toBeNull();
     expect(await resolveTargetName(tx, 'credential', USER_ID, readers)).toBeNull();
     expect(await resolveTargetName(tx, 'payment', USER_ID, readers)).toBeNull();
+  });
+});
+
+// T002 of specs/004-sessions (contracts/admin-surface.md, "The audit target"; the owner's decision
+// of 2026-11-06 on the fifth analysis, G3): every action of Phase 3 that targets one row, with the
+// type admin-surface.md gives it. A type the writer did not know would make `targetLabel` throw
+// and roll the action back (FR-180), so each must label a row's uuid. The list reads (`*.listed`)
+// keep the `admin` target of Phase 1's and Phase 2's list reads.
+const PHASE_3_ACTIONS: readonly (readonly [string, string])[] = [
+  ['sessions.monitor.listed', 'admin'],
+  ['sessions.monitor.viewed', 'enrollment'],
+  ['sessions.review.listed', 'admin'],
+  ['sessions.review.viewed', 'session'],
+  ['provider_outages.listed', 'admin'],
+  ['disputes.listed', 'admin'],
+  ['dispute.viewed', 'dispute'],
+  ['cases.listed', 'admin'],
+  ['case.viewed', 'dispute'],
+  ['users.listed', 'admin'],
+  ['user.viewed', 'user'],
+  ['chat.read', 'enrollment'],
+  ['dispute.held_files_listed', 'dispute'],
+  ['held_file.view', 'dispute'],
+  ['session.cancelled', 'session'],
+  ['enrollment.restored', 'enrollment'],
+  ['session.review_resolved', 'session'],
+  ['session.outcome_corrected', 'session'],
+  ['provider_outage.recorded', 'provider_outage'],
+  ['dispute.resolved', 'dispute'],
+  ['dispute.revised', 'dispute'],
+  ['case.resolved', 'dispute'],
+  ['case.dismissed', 'dispute'],
+  ['case.opened_manually', 'dispute'],
+  ['complaint.decided', 'dispute'],
+  ['student.suspend', 'user'],
+  ['student.ban', 'user'],
+  ['student.reinstate', 'user'],
+];
+
+describe('the Phase 3 audit targets (T002 of specs/004-sessions, G3)', () => {
+  it('labels each of the four new types by its kind word', () => {
+    expect(targetLabel('enrollment', USER_ID)).toBe(`اشتراك · ${USER_ID}`);
+    expect(targetLabel('dispute', USER_ID)).toBe(`نزاع أو قضية · ${USER_ID}`);
+    expect(targetLabel('session', USER_ID)).toBe(`جلسة · ${USER_ID}`);
+    expect(targetLabel('provider_outage', USER_ID)).toBe(`انقطاع الفيديو · ${USER_ID}`);
+  });
+
+  it.each(PHASE_3_ACTIONS)(
+    '%s: its target type %s labels a uuid, so the action never throws',
+    (_action, type) => {
+      expect(isAuditTargetType(type)).toBe(true);
+      expect(targetLabel(type, USER_ID)).toBe(
+        `${auditTargetKinds[type as keyof typeof auditTargetKinds]}${LABEL_SEPARATOR}${USER_ID}`,
+      );
+    },
+  );
+
+  it('names no target of the four new types: the type alone, as a payment order', async () => {
+    const tx = {} as Transaction;
+    const readers = {
+      person: () => Promise.reject(new Error('no person is read')),
+      administrator: () => Promise.reject(new Error('no administrator is read')),
+    };
+    for (const type of ['enrollment', 'dispute', 'session', 'provider_outage'] as const) {
+      expect(await resolveTargetName(tx, type, USER_ID, readers)).toBeNull();
+    }
   });
 });

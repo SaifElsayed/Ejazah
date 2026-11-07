@@ -44,6 +44,7 @@ import {
   discoverySurface,
   excludedFrom,
   isVisibleRole,
+  nameQuery,
   OTHER_RIWAYA,
   PLAIN_NAME,
   type SeededTeacher,
@@ -255,13 +256,16 @@ const browse: ProcedureAttacks = {
 
       const searched = await caller.discovery.browse({
         subjectId: world.shared.id,
-        query: PLAIN_NAME,
+        query: nameQuery(world, PLAIN_NAME),
       });
       expect(cardIds(searched), 'the search inside the shared subject').toEqual(
         ids(visible.filter((teacher) => teacher.state !== 'otherName')),
       );
       expectNothingOf(searched, excluded);
-      expectNothingOf(await caller.discovery.browse({ query: PLAIN_NAME }), excluded);
+      expectNothingOf(
+        await caller.discovery.browse({ query: nameQuery(world, PLAIN_NAME) }),
+        excluded,
+      );
 
       // T070: a search by the shared subject's name finds every visible teacher of it, none marked
       // (no name matched), across all subjects and inside its tab by a short prefix.

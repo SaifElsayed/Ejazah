@@ -25,7 +25,11 @@ export type AuditTargetType =
   | 'verification_request'
   | 'admin'
   | 'setting'
-  | 'payment';
+  | 'payment'
+  | 'enrollment'
+  | 'dispute'
+  | 'session'
+  | 'provider_outage';
 
 /** The kind word of each target type: the label is this word, the separator and the identifier. */
 export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
@@ -38,6 +42,13 @@ export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
   setting: 'إعداد',
   // T052: a gateway order the payments monitor opened (`payments.viewed`).
   payment: 'طلب دفع',
+  // Phase 3's T002 (specs/004-sessions/contracts/admin-surface.md, "The audit target"; the
+  // owner's decision of 2026-11-06, G3): an enrollment, one `disputes` row of any kind (a session
+  // dispute, a compensation case or a complaint), a session, and a video outage window.
+  enrollment: 'اشتراك',
+  dispute: 'نزاع أو قضية',
+  session: 'جلسة',
+  provider_outage: 'انقطاع الفيديو',
 };
 
 /** Between the kind word and the identifier (ERD §12). */

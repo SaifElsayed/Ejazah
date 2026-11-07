@@ -5,8 +5,10 @@
 // four rate-limit rows (owner's decision 2026-10-10, shared with T103) and the two budget rows
 // (T170), the twenty-six Phase 1 rows of specs/002-identity/data-model.md §4 (T002), the three rows
 // that give the administrator's sign-in and the provider nonce limits of their own (T133), the five
-// Phase 2 rows of specs/003-booking/data-model.md §4 (T002), and one administrator, each with a
-// fixed identifier and a fixed instant; every other table stays empty.
+// Phase 2 rows of specs/003-booking/data-model.md §4 (T002), the seventeen Phase 3 rows of
+// specs/004-sessions/data-model.md §4 (T001; `teacher_no_show_threshold` no longer planted), and
+// one administrator, each with a fixed identifier and a fixed instant; every other table stays
+// empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
 // it stores the Argon2id hash of a random one it discards at once (T069) and a random MFA secret
@@ -44,7 +46,6 @@ const SETTINGS: Record<string, unknown> = {
   join_window_minutes: 10,
   minimum_connection_seconds: 60,
   early_join_lead_minutes: 15,
-  teacher_no_show_threshold: 2,
   dispute_window_hours: 72,
   slot_hold_ttl_minutes: 10,
   slot_hold_grace_minutes: 5,
@@ -52,7 +53,8 @@ const SETTINGS: Record<string, unknown> = {
   idempotency_key_ttl_hours: 24,
   slot_release_buffer_weeks: 0,
   reminder_offsets_minutes: [1440, 15],
-  chat_retention_days: 0,
+  // Phase 3 (T001): 30 on a new database (the owner's decision of 2026-11-05; was 0).
+  chat_retention_days: 30,
   rate_limit_authentication: { limit: 10, window_seconds: 900 },
   rate_limit_one_time_code: { limit: 5, window_seconds: 600 },
   rate_limit_search: { limit: 60, window_seconds: 60 },
@@ -100,6 +102,26 @@ const SETTINGS: Record<string, unknown> = {
   checkout_confirming_poll_seconds: 30,
   checkout_confirming_poll_window_minutes: 10,
   discovery_page_size: 20,
+  // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
+  // is no longer planted. The default's, the four administrator limits' and the live channel's two
+  // are the rows T062's and T063's specs read.
+  session_evaluation_delay_minutes: 2,
+  rate_limit_chat_message: { limit: 30, window_seconds: 60 },
+  makeup_counter_answer_hours: 72,
+  chat_page_size: 50,
+  cancellation_requests_recent_days: 30,
+  video_empty_timeout_seconds: 300,
+  video_departure_timeout_seconds: 20,
+  repeated_absence_flag_count: 5,
+  enrollment_restore_window_days: 7,
+  rate_limit_absence_complaint: { limit: 5, window_seconds: 3600 },
+  rate_limit_signed_in_default: { limit: 150, window_seconds: 60 },
+  rate_limit_dispute_revision: { limit: 10, window_seconds: 60 },
+  rate_limit_enrollment_restore: { limit: 10, window_seconds: 60 },
+  rate_limit_manual_compensation_case: { limit: 10, window_seconds: 60 },
+  rate_limit_outcome_correction: { limit: 10, window_seconds: 60 },
+  rate_limit_live_channel: { limit: 10, window_seconds: 60 },
+  live_channel_max_connections_per_user: 3,
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -198,8 +220,8 @@ describe('the seed (T074)', () => {
           AND table_name <> '_prisma_migrations'`,
     );
     const others = rows.map((row) => row.table_name).filter((name) => !SEEDED_TABLES.has(name));
-    // 42 tables (T003, T094, T097, Phase 2's T004) less the three seeded ones.
-    expect(others).toHaveLength(39);
+    // 44 tables (T003, T094, T097, Phase 2's T004, Phase 3's T001) less the three seeded ones.
+    expect(others).toHaveLength(41);
     for (const table of others) {
       const { rows: present } = await db.query(
         `SELECT 1 FROM ${pg.escapeIdentifier(table)} LIMIT 1`,
@@ -226,6 +248,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '55', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '71', admins: '1' }]);
   });
 });

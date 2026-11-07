@@ -18,6 +18,14 @@
 // refusal by the caller's own standing or entitlement is 403 (as `ACCOUNT_RESTRICTED`,
 // `DOCUMENT_NOT_OWNED`), a refusal by the current state of a teacher, slot, hold, order or package
 // is 409 (as `APPROVAL_BLOCKED`).
+//
+// T002 (Phase 3, specs/004-sessions/contracts/README.md "Errors"; FR-422, FR-452, FR-454, FR-499):
+// the codes the sessions phase adds, by the same reading: a refusal by the state of a session, a
+// request, a remedy, a dispute, a case or an enrollment is 409, `CHOICE_NOT_ALLOWED` among them (a
+// refund asked where only a make-up is owed is refused by the remedy's state, as `APPROVAL_BLOCKED`;
+// 403 stays for what the caller may not do at all, the role check in `surfaces/procedures.ts`, so a
+// log reads it as a permission: the owner's decision of 2026-11-06); a chat file of a type the chat does not
+// take is 400, as the upload guard's `VALIDATION_FAILED` for a type it does not accept.
 
 /** One field-level validation problem: where, and what kind. Never the value that was sent. */
 export interface FieldIssue {
@@ -85,6 +93,42 @@ export const errorCodes = {
   // field: `summary.price_piasters`, `summary.sessionCount`, `summary.sessionDurationMinutes` and
   // `summary.track`, each `code` the current value as text, or `package` with `inactive`.
   SUMMARY_CHANGED: { status: 409, message: 'This package has changed since you saw it.' },
+  // Phase 3 (T002). The join opens later: `opensAt` in details.
+  JOIN_NOT_OPEN: { status: 409, message: 'This session cannot be joined yet.' },
+  JOIN_CLOSED: { status: 409, message: 'This session can no longer be joined.' },
+  SESSION_NOT_SCHEDULED: { status: 409, message: 'This session is no longer scheduled.' },
+  // The other party's request is open: `requestId` in details.
+  CANCELLATION_PENDING: { status: 409, message: 'A cancellation request is already open.' },
+  CANCELLATION_EXPIRED: { status: 409, message: 'This cancellation request has expired.' },
+  DISPUTE_WINDOW_CLOSED: { status: 409, message: 'The time to dispute this session has ended.' },
+  DISPUTE_OPEN: { status: 409, message: 'A dispute of this session is open.' },
+  SESSION_UNDER_REVIEW: { status: 409, message: 'This session is under review.' },
+  // Any cancelled session, by agreement or by an administrator.
+  NOT_DISPUTABLE: { status: 409, message: 'This session cannot be disputed.' },
+  // On the user surface and on the administrator surface (`cases.openManual`).
+  REMEDY_NOT_OPEN: { status: 409, message: 'This make-up is no longer open.' },
+  COUNTER_PENDING: { status: 409, message: 'A proposed time is waiting for an answer.' },
+  // A refund where only a make-up is owed.
+  CHOICE_NOT_ALLOWED: { status: 409, message: 'This choice is not available.' },
+  // A counter-proposal outside the options.
+  SLOT_NOT_OFFERED: { status: 409, message: 'This time is not among the options.' },
+  // The database refused the booking, by an overlap or a deadlock on the retry too; the remedy
+  // stays open.
+  MAKEUP_REFUSED: { status: 409, message: 'This make-up could not be booked.' },
+  // An image, or a type the chat does not take.
+  ATTACHMENT_REFUSED: { status: 400, message: 'This file cannot be sent in the chat.' },
+  CHAT_CLOSED: { status: 409, message: 'This chat is closed.' },
+  // A suspended student's case closed as cleared before the account is reinstated.
+  STUDENT_SUSPENDED: { status: 409, message: 'The student is still suspended.' },
+  // A ruling's revision after the dispute window closed or once a remedy exists: `cause` in details.
+  RULING_FINAL: { status: 409, message: 'This ruling can no longer be revised.' },
+  // A ruling a later dispute's resolution replaced.
+  RULING_SUPERSEDED: { status: 409, message: 'A later ruling replaced this one.' },
+  // A complaint of the teacher's absence is already open on the enrollment.
+  COMPLAINT_OPEN: { status: 409, message: 'A complaint is already open.' },
+  // `cause` in details: not_restorable, window_closed, case_closed, party_restricted,
+  // slot_inactive, slot_changed, slot_taken, time_taken.
+  RESTORE_REFUSED: { status: 409, message: 'This enrollment cannot be restored.' },
 } as const satisfies Record<string, { status: number; message: string }>;
 
 export type ErrorCode = keyof typeof errorCodes;

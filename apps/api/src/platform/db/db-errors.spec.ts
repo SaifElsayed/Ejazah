@@ -4,10 +4,15 @@
 // unique violation, P2039 for an exclusion violation), a raw write's P2010, and the bare
 // `DriverAdapterError` a deferred exclusion constraint throws at commit. Each is matched by its
 // SQLSTATE and the constraint it names; anything else answers false, so the caller rethrows it.
+//
+// T002 of specs/004-sessions (contracts/kernel.md, "Locks and refusals"): the unique union gains
+// Phase 3's five names, and `isDeadlock` reads SQLSTATE 40P01 at a statement (a raw write's P2010)
+// and at commit (the bare adapter error), as the database spec recorded a real deadlock.
 import { describe, expect, it } from 'vitest';
 
 import {
   type ExclusionConstraint,
+  isDeadlock,
   isExclusionViolation,
   isUniqueViolation,
   type UniqueConstraint,
@@ -16,6 +21,12 @@ import {
 const UNIQUE: readonly UniqueConstraint[] = [
   'slot_holds_slot_id_active_key',
   'slot_holds_student_user_id_active_key',
+  // Phase 3 (T002): ERD §15 rules 45 and 46, a remedy per session and a replayed video event.
+  'cancellation_requests_one_pending_key',
+  'disputes_one_open_per_session_key',
+  'session_remedies_session_id_key',
+  'session_participant_events_provider_event_id_key',
+  'disputes_one_open_complaint_per_enrollment_key',
 ];
 const EXCLUSION: readonly ExclusionConstraint[] = [
   'sessions_teacher_no_overlap',
@@ -70,9 +81,10 @@ describe('isUniqueViolation (T006, R-215)', () => {
     expect(isUniqueViolation(known('P2010', uniqueCause(name)), name)).toBe(true);
   });
 
-  it.each(UNIQUE)('does not take %s for the other active-hold key', (name) => {
-    const other = UNIQUE.find((candidate) => candidate !== name) ?? name;
-    expect(isUniqueViolation(known('P2002', uniqueCause(name)), other)).toBe(false);
+  it.each(UNIQUE)('does not take %s for any other named key', (name) => {
+    for (const other of UNIQUE.filter((candidate) => candidate !== name)) {
+      expect(isUniqueViolation(known('P2002', uniqueCause(name)), other)).toBe(false);
+    }
   });
 
   it('answers false for a unique violation on any other constraint, so the caller rethrows it', () => {
@@ -152,5 +164,57 @@ describe('anything that is not one of the four refusals (T006)', () => {
   it.each(others)('answers false for %s, so the caller rethrows it', (_label, error) => {
     for (const name of UNIQUE) expect(isUniqueViolation(error, name)).toBe(false);
     for (const name of EXCLUSION) expect(isExclusionViolation(error, name)).toBe(false);
+  });
+});
+
+/** The adapter's deadlock refusal, the server's error as given. */
+function deadlockCause() {
+  return Object.assign(new Error('deadlock detected'), {
+    name: 'DriverAdapterError',
+    cause: {
+      originalCode: '40P01',
+      originalMessage: 'deadlock detected',
+      kind: 'postgres',
+      code: '40P01',
+      severity: 'ERROR',
+      message: 'deadlock detected',
+    },
+  });
+}
+
+describe('isDeadlock (T002 of specs/004-sessions, L5)', () => {
+  it('reads a deadlock at a statement (P2010, a raw write) and at a model write (P2034 or any code)', () => {
+    expect(isDeadlock(known('P2010', deadlockCause()))).toBe(true);
+    expect(isDeadlock(known('P2034', deadlockCause()))).toBe(true);
+  });
+
+  it('reads a deadlock at commit, the adapter error itself', () => {
+    expect(isDeadlock(deadlockCause())).toBe(true);
+  });
+
+  it('answers false for a serialization failure, a refusal by a key, and anything else', () => {
+    const serialization = Object.assign(new Error('could not serialize access'), {
+      name: 'DriverAdapterError',
+      cause: { originalCode: '40001', kind: 'TransactionWriteConflict' },
+    });
+    for (const error of [
+      serialization,
+      known('P2002', uniqueCause('session_remedies_session_id_key')),
+      exclusionCause(excluded('sessions_teacher_no_overlap')),
+      new Error('deadlock detected'),
+      { name: 'DriverAdapterError' },
+      '40P01',
+      null,
+      undefined,
+    ]) {
+      expect(isDeadlock(error)).toBe(false);
+    }
+  });
+
+  it('a deadlock is none of the named refusals', () => {
+    for (const error of [known('P2010', deadlockCause()), deadlockCause()]) {
+      for (const name of UNIQUE) expect(isUniqueViolation(error, name)).toBe(false);
+      for (const name of EXCLUSION) expect(isExclusionViolation(error, name)).toBe(false);
+    }
   });
 });

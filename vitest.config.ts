@@ -56,6 +56,9 @@ export default mergeConfig(
             include: ['tests/db-integrity/**/*.spec.ts'],
             fileParallelism: false,
             sequence: { groupOrder: 1 },
+            // 003:T080, decision 10: probes passing alone ran past 5 s under load (B32).
+            testTimeout: 30_000,
+            hookTimeout: 30_000,
           },
         },
         {

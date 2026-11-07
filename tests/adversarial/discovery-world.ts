@@ -20,6 +20,10 @@
 // again (through the identity module's real `teacher.payout.register`, FR-193, FR-315); and the
 // account soft-deleted. Every excluded teacher's name shares the visible ones' prefix (SC-314). A
 // teacher of the other gender, in any state, is excluded too, so each direction meets every state.
+// Every name begins with the world's own `prefix` (eight hex characters, then a space; `ijazah_fold`
+// leaves them as they are), so no other world, of this run or another, bears one of its names
+// (003:T079, decision 10 of specs/004-sessions/plan.md); every name search types it first
+// (`nameQuery`).
 //
 // Every teacher teaches the world's shared subject and one private subject no one else teaches,
 // with an active package of each track in the shared subject and one in the private subject; the
@@ -186,6 +190,11 @@ export const SUBJECT_PLAIN = 'متن اصول اقراء ال الهدي قار�
 /** The shared subject's English name before its tag. */
 export const SUBJECT_ENGLISH = 'Matn Tajweed';
 
+/** What a student types to find the world's teachers by name: the world's prefix, then `typed`. */
+export function nameQuery(world: World, typed: string): string {
+  return `${world.prefix} ${typed}`;
+}
+
 /** What a student types to find the shared subject: `spelling` of its name, then its own tag. */
 export function sharedSubjectQuery(world: World, spelling: string): string {
   return `${spelling} ${world.shared.nameAr.slice(SUBJECT_VARIANT.length + 1)}`;
@@ -226,6 +235,8 @@ export interface SeededTeacher {
 }
 
 export interface World {
+  /** What every teacher's name of this world begins with, before a space (`nameQuery`). */
+  readonly prefix: string;
   readonly shared: SubjectRow;
   readonly teachers: readonly SeededTeacher[];
 }
@@ -343,6 +354,13 @@ export interface DiscoverySurface {
   replacePayout(teacherId: string): Promise<{ verify(): Promise<number> }>;
   /** The ids of the visible teachers of `gender` with an active package, in SQL from SRS §3.7.1. */
   allTabIds(gender: Gender): Promise<readonly string[]>;
+  /**
+   * T079: when the teacher's latest payout registration and first package were written, by the
+   * database's clock, so a spec can show a replaced account was never offered while verified.
+   */
+  payoutReplacementOrder(
+    teacherId: string,
+  ): Promise<{ readonly replacedAt: Date | null; readonly firstPackageAt: Date | null }>;
   /**
    * T036: ends the student's active holds that carry no enrollment, so a later case of the file
    * meets the world's slots free again (a hold outlives its case by its fifteen minutes).
@@ -548,7 +566,18 @@ async function build(): Promise<Built> {
       }),
     );
 
-  const seeder = new Seeder(database, created);
+  const registerReplacement = async (teacherId: string): Promise<string> => {
+    await identity.payout.register(teacherId, {
+      details: { holderName: 'Adversarial', method: 'bank_account', accountNumber: 'EG0028T028' },
+      idempotencyKey: randomUUID(),
+    });
+    const recipientRef = recipients.get(teacherId);
+    if (recipientRef === undefined) throw new Error('the payout port was not asked to register');
+    return recipientRef;
+  };
+
+  const prefix = randomUUID().slice(0, 8);
+  const seeder = new Seeder(database, created, registerReplacement, prefix);
   const [admin, shared] = await Promise.all([
     seeder.admin(),
     seeder.subject({
@@ -564,19 +593,6 @@ async function build(): Promise<Built> {
     for (const state of EXCLUDED_STATES) {
       teachers.push(await seeder.teacher({ gender, state, shared, admin }));
     }
-  }
-
-  const registerReplacement = async (teacherId: string): Promise<string> => {
-    await identity.payout.register(teacherId, {
-      details: { holderName: 'Adversarial', method: 'bank_account', accountNumber: 'EG0028T028' },
-      idempotencyKey: randomUUID(),
-    });
-    const recipientRef = recipients.get(teacherId);
-    if (recipientRef === undefined) throw new Error('the payout port was not asked to register');
-    return recipientRef;
-  };
-  for (const teacher of teachers.filter(({ state }) => state === 'payoutReplaced')) {
-    await registerReplacement(teacher.id);
   }
 
   const students = new Map<Gender, Student>();
@@ -598,7 +614,7 @@ async function build(): Promise<Built> {
     database,
     server,
     created,
-    world: { shared, teachers },
+    world: { prefix, shared, teachers },
     student(gender) {
       const student = students.get(gender);
       if (student === undefined) throw new Error(`no ${gender} student`);
@@ -763,6 +779,19 @@ async function build(): Promise<Built> {
          ORDER BY u.id`;
       return rows.map(({ id }) => id);
     },
+    async payoutReplacementOrder(teacherId) {
+      const [row] = await database.$queryRaw<
+        { replaced_at: Date | null; first_package_at: Date | null }[]
+      >`
+        SELECT (SELECT max(k.created_at) FROM idempotency_keys k
+                 WHERE k.actor_id = ${teacherId} AND k.scope = 'teacher.payout.register') AS replaced_at,
+               (SELECT min(p.created_at) FROM packages p
+                 WHERE p.teacher_user_id = ${teacherId}::uuid) AS first_package_at`;
+      return {
+        replacedAt: row?.replaced_at ?? null,
+        firstPackageAt: row?.first_package_at ?? null,
+      };
+    },
   };
 }
 
@@ -787,13 +816,17 @@ function columnsOf(state: SeededTeacher['state']) {
               : state === 'verificationBanned'
                 ? ('banned' as const)
                 : ('approved' as const),
-    // A replaced account was verified before; `replacePayout` clears it through the real path.
+    // A replaced account was verified before; `Seeder.teacher` clears it through the real path.
     payoutVerifiedAt: state === 'payoutUnverified' ? null : new Date('2026-10-20T09:00:00Z'),
     deletedAt: state === 'softDeleted' ? new Date('2026-10-30T09:00:00Z') : null,
   };
 }
 
-function nameOf(state: SeededTeacher['state'], index: number): string {
+function nameOf(prefix: string, state: SeededTeacher['state'], index: number): string {
+  return `${prefix} ${spellingOf(state, index)}`;
+}
+
+function spellingOf(state: SeededTeacher['state'], index: number): string {
   if (state === 'variantName') return VARIANT_NAME;
   if (state === 'plainName') return PLAIN_NAME;
   if (state === 'otherName') return OTHER_NAME;
@@ -805,11 +838,20 @@ function nameOf(state: SeededTeacher['state'], index: number): string {
 class Seeder {
   readonly #database: Database;
   readonly #created: { readonly users: string[]; readonly subjects: string[] };
+  readonly #replacePayout: (teacherId: string) => Promise<unknown>;
+  readonly #prefix: string;
   #count = 0;
 
-  constructor(database: Database, created: { users: string[]; subjects: string[] }) {
+  constructor(
+    database: Database,
+    created: { users: string[]; subjects: string[] },
+    replacePayout: (teacherId: string) => Promise<unknown>,
+    prefix: string,
+  ) {
     this.#database = database;
     this.#created = created;
+    this.#replacePayout = replacePayout;
+    this.#prefix = prefix;
   }
 
   async admin(): Promise<string> {
@@ -871,7 +913,7 @@ class Seeder {
   }): Promise<SeededTeacher> {
     this.#count += 1;
     const columns = columnsOf(state);
-    const displayName = nameOf(state, this.#count);
+    const displayName = nameOf(this.#prefix, state, this.#count);
     const { id } = await this.#database.user.create({
       data: {
         email: `adversarial-${randomUUID()}@example.invalid`,
@@ -899,6 +941,9 @@ class Seeder {
       },
       select: { id: true },
     });
+    // T079: replaced before any package exists, so no world, this one or another run's, ever lists
+    // the teacher as verified and offered under a name the excluded checks refuse.
+    if (state === 'payoutReplaced') await this.#replacePayout(id);
     const privateSubject = await this.subject();
     const riwaya =
       sharedRiwaya ??

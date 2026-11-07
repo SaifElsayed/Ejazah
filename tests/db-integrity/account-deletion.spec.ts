@@ -224,16 +224,20 @@ describe("a deleted person's documents (B16 check, decision 1)", () => {
     expect((await documentRow(document.id))?.has_key).toBe(true);
 
     const pending = await erasure.pendingPage(undefined, 1000);
-    expect(pending).toContainEqual({ id: document.id, storageKey: document.key });
+    expect(pending).toContainEqual({
+      id: document.id,
+      ownerUserId: person.userId,
+      storageKey: document.key,
+    });
     storage.failing.delete(document.key);
     await storage.remove(document.key);
-    await expect(erasure.clearKey({ id: document.id, storageKey: document.key })).resolves.toBe(
-      true,
-    );
+    await expect(
+      erasure.clearKey({ id: document.id, ownerUserId: person.userId, storageKey: document.key }),
+    ).resolves.toBe(true);
     expect(await documentRow(document.id)).toEqual({ erased_at: expect.any(Date), has_key: false });
-    await expect(erasure.clearKey({ id: document.id, storageKey: document.key })).resolves.toBe(
-      false,
-    );
+    await expect(
+      erasure.clearKey({ id: document.id, ownerUserId: person.userId, storageKey: document.key }),
+    ).resolves.toBe(false);
   });
 
   it('mints no link to an erased document, not even for an administrator, while its key is still held', async () => {
@@ -299,8 +303,10 @@ describe("a deleted person's photo", () => {
       expect(rows[0]?.deleted).toBe(true);
     });
     const pending = await photos.pendingPage(undefined, 1000);
-    expect(pending).toContainEqual({ id: userId, storageKey: photoKey });
-    await expect(photos.clearKey({ id: userId, storageKey: photoKey })).resolves.toBe(true);
+    expect(pending).toContainEqual({ id: userId, ownerUserId: userId, storageKey: photoKey });
+    await expect(
+      photos.clearKey({ id: userId, ownerUserId: userId, storageKey: photoKey }),
+    ).resolves.toBe(true);
     const { rows } = await db.query<{ photo_key: string | null }>(
       'SELECT photo_key FROM users WHERE id = $1',
       [userId],

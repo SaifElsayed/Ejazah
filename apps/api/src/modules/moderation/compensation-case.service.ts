@@ -29,6 +29,37 @@ export const COMPENSATION_REASONS = [
   'party_restricted',
   // FR-375: a second paid order on an enrollment already confirmed.
   'duplicate_payment',
+  // Phase 3 (T004 of specs/004-sessions; research R-312, R-322, R-326; the ERD's changelog row 25:
+  // a closed list in code, no column or check). An administrator's termination on a complaint
+  // (`absence_termination`, in place of the removed `teacher_no_show_threshold`, ADR 0023); an
+  // administrator's cancellation; a teacher's end; a student's suspension, ban and confirmed
+  // fault (the second analysis, C1); a student's refund choice; a counter-proposal left
+  // unanswered; a make-up the database refused on every attempt.
+  'absence_termination',
+  'admin_cancellation',
+  'teacher_ended',
+  'student_suspended',
+  'student_banned',
+  'student_fault_confirmed',
+  'refund_choice',
+  'counter_unanswered',
+  'makeup_refused',
+  // An administrator's manual case, its party being its reason (R-326).
+  'admin_opened_for_student',
+  'admin_opened_for_teacher',
+] as const;
+
+/**
+ * The reasons Phase 2's covering rule reads (`caseInstantsAmong`; FR-362 of
+ * `specs/003-booking/spec.md`, the note under it): Phase 2's three only, never one Phase 3 adds,
+ * so no case of a teacher's end, a manual case or any other covers a second paid order, whose
+ * `duplicate_payment` case then opens (FR-493; R-326; the owner's decision of 2026-11-06 on PR
+ * #126's review, follow-up 1).
+ */
+export const COVERING_REASONS = [
+  'slot_unavailable',
+  'party_restricted',
+  'duplicate_payment',
 ] as const;
 
 export type CompensationReason = (typeof COMPENSATION_REASONS)[number];

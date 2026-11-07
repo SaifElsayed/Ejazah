@@ -9,26 +9,30 @@
 // A checkout reservation with a TTL (FR-BOOK-9). NULL `released_at` means active, even past
 // `expires_at`: at most one active hold per slot and per student (T066, ADR 0010 D1, D6).
 model SlotHold {
-  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  slotId        String    @map("slot_id") @db.Uuid
-  studentUserId String    @map("student_user_id") @db.Uuid
+  id            String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  slotId        String             @map("slot_id") @db.Uuid
+  studentUserId String             @map("student_user_id") @db.Uuid
   // The package the hold was placed for, as the placement checked it (B29, T036; the owner's
   // decision of 2026-11-03): Pay names the hold alone, and a teacher may have several packages of
   // the slot's length.
-  packageId     String    @map("package_id") @db.Uuid
+  packageId     String             @map("package_id") @db.Uuid
   // The package's session count when the hold was placed, the count the hold's overlap check ran
   // on (FR-351); Pay refuses a package whose count changed since (the owner's decision of 2026-11-03).
-  sessionCount  Int       @map("session_count")
+  sessionCount  Int                @map("session_count")
   // Set in the transaction that creates the enrollment at Pay; NULL while the student is in
   // checkout before Pay (ADR 0010 D2).
-  enrollmentId  String?   @map("enrollment_id") @db.Uuid
+  enrollmentId  String?            @map("enrollment_id") @db.Uuid
   // Gateway checkout TTL plus the hold grace, counted from placement (FR-BOOK-9, ADR 0010 D4).
-  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  expiresAt     DateTime           @map("expires_at") @db.Timestamptz(6)
   // Never set by a failed gateway event (ADR 0010 D4). A release without conversion cancels the
   // linked enrollment in the same transaction (ADR 0010 D7).
-  releasedAt    DateTime? @map("released_at") @db.Timestamptz(6)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  releasedAt    DateTime?          @map("released_at") @db.Timestamptz(6)
+  // Why it was released, written with `released_at` by every path that writes it; NULL while
+  // active and on a hold released before the column existed (Phase 3, T001; data-model.md §2.12;
+  // ERD §15 rule 48). No index (R-DB-9).
+  releaseReason HoldReleaseReason? @map("release_reason")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   slot       AvailabilitySlot @relation(fields: [slotId], references: [id])
   package    Package          @relation(fields: [packageId], references: [id])
@@ -81,14 +85,16 @@ model Enrollment {
   slot            AvailabilitySlot @relation(fields: [slotId], references: [id])
   snapshotSubject Subject          @relation(fields: [snapshotSubjectId], references: [id])
 
-  slotHolds    SlotHold[]
-  sessions     Session[]
-  payments     Payment[]
-  chatMessages ChatMessage[]
-  ijazahs      Ijazah[]
-  review       Review?
-  disputes     Dispute[]
-  events       EnrollmentEvent[]
+  slotHolds     SlotHold[]
+  sessions      Session[]
+  payments      Payment[]
+  chatMessages  ChatMessage[]
+  ijazahs       Ijazah[]
+  review        Review?
+  disputes      Dispute[]
+  events        EnrollmentEvent[]
+  // Phase 3 (T001): sessions' record of the enrollment's session events.
+  sessionEvents SessionEvent[]
 
   @@index([studentUserId])
   @@index([teacherUserId])

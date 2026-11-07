@@ -14,6 +14,12 @@
 // more counter (`failed_sign_in_count`); each is on its declared list, so the first case holds.
 // The violation case gains a lookalike on neither list, so the lists admit what they name and
 // nothing more.
+//
+// Phase 3's T001 (the owner's decision of 2026-11-06, constitution 2.6.2): a `_local` column is
+// zoned by a `timezone` column, or by `<p>_timezone` when its own name starts with `<p>_`, as
+// `session_remedies.counter_start_time_local` beside `counter_timezone`. The violation case holds
+// such a pair, which passes, a `_local` column whose only zone has another prefix, and one in a
+// table with no zone at all, both refused.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -76,6 +82,8 @@ describe('the check names every kind of violation (T070)', () => {
           ends_at text,
           price_piasters numeric(12, 2),
           lesson_local date,
+          counter_start_local time,
+          counter_timezone text,
           api_token text,
           reset_code text,
           mfa_recovered_at timestamptz,
@@ -87,6 +95,12 @@ describe('the check names every kind of violation (T070)', () => {
           lesson_count integer,
           created_at timestamptz NOT NULL
         )`);
+      await db.query(`
+        CREATE TABLE probe_unzoned (
+          id uuid PRIMARY KEY,
+          visit_local date,
+          created_at timestamptz NOT NULL
+        )`);
       await db.query(`CREATE TYPE probe_gender AS ENUM ('male', 'female')`);
       await db.query('DROP INDEX users_email_key');
       await db.query('DROP INDEX reviews_enrollment_id_key');
@@ -94,6 +108,10 @@ describe('the check names every kind of violation (T070)', () => {
         'CREATE UNIQUE INDEX probe_reviews_enrollment ON reviews (enrollment_id) WHERE moderated_by_admin_id IS NULL',
       );
       await db.query('ALTER TABLE teacher_profiles ALTER COLUMN review_count TYPE bigint');
+      // Phase 3's T001: the recorded figure R-DB-4 names since constitution 2.5.0 (ADR 0022).
+      await db.query(
+        'ALTER TABLE sessions ALTER COLUMN simultaneous_connected_seconds TYPE bigint',
+      );
       return named(await checkSchema(db, { applicationRole }));
     });
 
@@ -103,7 +121,9 @@ describe('the check names every kind of violation (T070)', () => {
         'timestamp-suffix probe_violations.starts',
         'timestamp-suffix probe_violations.ends_at',
         'piasters-type probe_violations.price_piasters',
+        // Its only zone column, `counter_timezone`, has another prefix.
         'local-time probe_violations.lesson_local',
+        'local-time probe_unzoned.visit_local',
         'secret-column probe_violations.api_token',
         'secret-column probe_violations.reset_code',
         'secret-column probe_violations.mfa_recovered_at',
@@ -117,8 +137,10 @@ describe('the check names every kind of violation (T070)', () => {
         'users-partial-index users.email',
         'reviews-enrollment-unique reviews.enrollment_id',
         'declared-cache teacher_profiles.review_count',
+        'declared-cache sessions.simultaneous_connected_seconds',
       ]),
     );
-    expect(found).toHaveLength(18);
+    expect(found).not.toContain('local-time probe_violations.counter_start_local');
+    expect(found).toHaveLength(20);
   });
 });

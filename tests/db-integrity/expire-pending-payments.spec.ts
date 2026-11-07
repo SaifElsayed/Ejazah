@@ -19,6 +19,7 @@
 // worlds' rows, and runs `confirm-enrollment` only for its own orders. The files of this project run
 // one at a time (`vitest.config.ts`), so no other file's world is mid-test meanwhile.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
@@ -114,7 +115,8 @@ async function openCase(enrollmentId: string): Promise<string> {
 
 /**
  * Closes the case as an administrator's decision would (Phase 3 writes `resolved_at` with the
- * status, the note under T082). `earlier` moves its opening and its closing a few minutes back, so
+ * status, the note under T082), with its note and its administrator, as ERD §15 rule 46 requires
+ * since Phase 3's T001. `earlier` moves its opening and its closing a few minutes back, so
  * an order paid after it is later by more than the millisecond the rule compares at.
  */
 async function closeCase(
@@ -122,6 +124,16 @@ async function closeCase(
   status: 'resolved' | 'dismissed',
   earlier = false,
 ): Promise<void> {
+  const { id: adminId } = await database.adminUser.create({
+    data: {
+      email: `probe-${randomUUID()}@example.invalid`,
+      passwordHash: 'probe-hash',
+      mfaSecretEncrypted: Buffer.from('probe'),
+      displayName: 'Probe administrator',
+      isActive: true,
+    },
+    select: { id: true },
+  });
   // The database's clock, as the paid event's and the case's own instants.
   await database.$executeRaw`
     UPDATE disputes
@@ -129,6 +141,7 @@ async function closeCase(
            resolution = CASE WHEN ${status} = 'resolved'
                              THEN 'compensation_ordered'::dispute_resolution END,
            resolution_notes = 'Probe decision',
+           resolved_by_admin_id = ${adminId}::uuid,
            created_at = CASE WHEN ${earlier} THEN now() - interval '3 minutes' ELSE created_at END,
            resolved_at = CASE WHEN ${earlier} THEN now() - interval '2 minutes' ELSE now() END,
            updated_at = now()

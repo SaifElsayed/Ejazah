@@ -24,9 +24,12 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { ESLint, type Linter, type Rule } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { repositoryRoot, type RuleSet } from '../support/lint-contract';
+
+// 003:T080, decision 10: its type-aware program build takes 5.1 s alone and ran 39 s under load.
+vi.setConfig({ testTimeout: 60_000 });
 
 const require = createRequire(import.meta.url);
 
@@ -284,9 +287,8 @@ describe('T043 — the fast and type-aware sets are split as research R-10 says'
     }
   });
 
-  // The one test here that builds two TypeScript programs with the four type-aware rules loaded.
-  // Alone it takes about three seconds; in the full suite, beside every other worker, it ran past
-  // Vitest's five-second default (reviews of PR #27), so it carries its own limit, in milliseconds.
+  // The one test here that builds two TypeScript programs with the four type-aware rules loaded;
+  // the file's timeout above is for it.
   it('hands the type-aware set a program containing the linted file, fixtures included', async () => {
     const { sightings, fatal } = await observePrograms('typeAware', [realFile, fixtureFile]);
 
@@ -311,5 +313,5 @@ describe('T043 — the fast and type-aware sets are split as research R-10 says'
         ),
       ).toEqual({ program: 'program', containsFile: true });
     }
-  }, 30_000);
+  });
 });

@@ -7,6 +7,7 @@
  */
 export {
   COMPENSATION_REASONS,
+  COVERING_REASONS,
   type CompensationCase,
   type CompensationReason,
   openCompensationCase,
@@ -23,3 +24,9 @@ export {
   caseInstantsAmong,
   caseInstantsOf,
 } from './compensation-case.repository.js';
+
+/**
+ * T004 of specs/004-sessions (FR-487, R-327): of some enrollments, those with an open `disputes`
+ * row of any kind, for booking's `heldFileOwnersAmong`; no lock.
+ */
+export { enrollmentsWithOpenMatterAmong } from './open-matters.repository.js';

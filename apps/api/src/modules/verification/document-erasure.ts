@@ -26,9 +26,10 @@ import {
   VerificationRepository,
 } from './verification.repository.js';
 
-/** A file still to be removed: the row's id and its storage key, decrypted. */
+/** A file still to be removed: the row's id, its owner and its storage key, decrypted. */
 export interface ErasedFile {
   readonly id: string;
+  readonly ownerUserId: string;
   readonly storageKey: string;
 }
 
@@ -87,9 +88,10 @@ export class DocumentErasure {
     return this.#documents.clearErasedKey(row.id, row.storageKeyEncrypted);
   }
 
-  #decrypted({ id, storageKeyEncrypted }: ErasedDocumentRow): ErasedFile {
+  #decrypted({ id, userId, storageKeyEncrypted }: ErasedDocumentRow): ErasedFile {
     return {
       id,
+      ownerUserId: userId,
       storageKey: this.#cipher.decrypt(storageKeyEncrypted, DOCUMENT_STORAGE_KEY_COLUMN, id),
     };
   }

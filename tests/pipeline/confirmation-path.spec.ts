@@ -45,7 +45,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// 003:T080, decision 10: parsing the source takes 0.74 s alone, past 5 s under load (B32).
+vi.setConfig({ testTimeout: 15_000 });
 
 const root = path.resolve(__dirname, '..', '..');
 

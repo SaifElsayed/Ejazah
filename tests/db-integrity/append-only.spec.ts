@@ -98,6 +98,8 @@ const appendOnly: ReadonlyArray<{
         session_id: session.sessionId,
         user_id: session.studentId,
         event_type: 'joined',
+        // ERD §15 rule 41 (Phase 3's T001): a participant's event names its connection.
+        connection_ref: 'PA_probe',
         occurred_at: '2026-10-04T06:00:05Z',
         provider_event_id: 'probe-attendance-event',
       });

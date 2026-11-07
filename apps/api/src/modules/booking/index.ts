@@ -254,11 +254,18 @@ export {
  */
 export {
   type ActiveHoldScope,
+  type ConfirmedEnrollment,
   type TerminationDependencies,
   type TerminationStore,
   terminationStore,
   terminationSubscriber,
 } from './termination.subscriber.js';
+/**
+ * T004 of specs/004-sessions (FR-487, R-327): of some people, those a party of an enrollment with an
+ * open matter, whose files a deletion and `erase-deleted-files` leave in place; no lock. Bound by
+ * `main.ts` to identity's `FileHold` port and by `worker.ts` to the job's `held`.
+ */
+export { heldFileOwnersAmong } from './held-files.service.js';
 /**
  * Each enrollment's session length (T048, ADR 0009 D2), for the time zone re-resolution job, on the
  * caller's transaction and with no lock.

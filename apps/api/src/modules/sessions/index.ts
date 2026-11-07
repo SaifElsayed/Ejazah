@@ -47,3 +47,21 @@ export {
   teacherSessionsBetween,
 } from './sessions.repository.js';
 export { type SessionProgress, sessionProgress } from './progress.js';
+
+/**
+ * T004 of specs/004-sessions (`003:T059`, FR-AUTH-14's confirmed part; R-313): an enrollment's
+ * end, on the caller's transaction after the enrollments' lock it holds: its remaining sessions
+ * `cancelled_by_admin`, its open remedies handed to the case the caller opens or lapsed where it
+ * opens none, one `session_events` row each. The one hand-off every enrollment's end uses.
+ */
+export {
+  type CaseOf,
+  cancelRemainingSessions,
+  type EnrollmentsEnded,
+} from './remaining-sessions.service.js';
+/** Sessions' one writer of `session_events` rows (T004, FR-495, R-315), for every later task. */
+export {
+  recordSessionEvents,
+  type SessionEventKind,
+  type SessionEventRecord,
+} from './session-events.repository.js';

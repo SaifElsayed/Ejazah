@@ -32,6 +32,12 @@
 //   module's documents, decision 1); the Apple grant revoked through the port (decision 3); the
 //   confirmation mailed. Each failure is reported and the deletion stands; the files are retried by
 //   `erase-deleted-files`, and no log line names the address, a key or a token (R-SEC-2).
+// - A HELD PERSON'S FILES (T004 of specs/004-sessions; FR-487, SRS FR-AUTH-14 as amended, R-327):
+//   before the photo's removal and the other modules' erasures, the `FileHold` port is asked once
+//   whether an open dispute, case or complaint of an enrollment of the person holds their files
+//   (booking's `heldFileOwnersAmong`, bound in `main.ts`); a held person's files and keys stay, for
+//   `erase-deleted-files` to remove once the last matter closes, while the grant's revocation and
+//   the mail go on. A failed question is reported and removes nothing; the job asks again.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
@@ -73,6 +79,15 @@ export interface FileErasure {
   eraseFilesOf(userId: string): Promise<void>;
 }
 
+/**
+ * Whether an open matter holds a deleted person's files (T004 of specs/004-sessions, FR-487):
+ * booking's `heldFileOwnersAmong`, bound in `main.ts`, since identity importing booking would close
+ * a cycle (ARCHITECTURE §4).
+ */
+export interface FileHold {
+  filesHeld(userId: string): Promise<boolean>;
+}
+
 /** What the deletion is built over, beside the module's own dependencies. */
 export interface DeletionDependencies extends IdentityDependencies {
   /** The process's column cipher: Apple's grant read under the previous key too while a rotation runs (T134). */
@@ -91,6 +106,8 @@ export interface DeletionDependencies extends IdentityDependencies {
   readonly log: WarningLog;
   /** The other modules' files of a deleted person, composed by `main.ts`. */
   readonly fileErasures?: readonly FileErasure[] | undefined;
+  /** Asked before the files are removed; none held when absent. */
+  readonly fileHold?: FileHold | undefined;
   /** Where a failure after the commit is reported; the error tracker unless a spec sets one. */
   readonly report?: ((error: unknown) => void) | undefined;
   /** Where the work after the commit is left to run; detached unless a spec collects it. */
@@ -254,10 +271,16 @@ export class DeletionService {
         .then(work)
         .catch((error: unknown) => this.#report(error));
     const files = this.#dependencies.fileErasures ?? [];
+    const hold = this.#dependencies.fileHold;
     this.#defer(
       Promise.all([
-        reported(() => this.#removePhoto(userId)),
-        ...files.map((erasure) => reported(() => erasure.eraseFilesOf(userId))),
+        reported(async () => {
+          if (hold !== undefined && (await hold.filesHeld(userId))) return;
+          await Promise.all([
+            reported(() => this.#removePhoto(userId)),
+            ...files.map((erasure) => reported(() => erasure.eraseFilesOf(userId))),
+          ]);
+        }),
         ...grants.map(({ identityId, refreshTokenEncrypted }) =>
           reported(() =>
             this.#dependencies.signIn.revoke({
