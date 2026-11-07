@@ -118,8 +118,12 @@ export async function cancelRemainingSessions(
   await store.cancelByAdmin(tx, cancelledSessionIds);
   const lapsed = remedies.filter(({ enrollmentId }) => caseOfEnrollment(enrollmentId) === null);
   const handed = remedies.filter(({ enrollmentId }) => caseOfEnrollment(enrollmentId) !== null);
-  for (const caseId of new Set(handed.map(({ enrollmentId }) => caseOfEnrollment(enrollmentId)))) {
-    if (caseId === null) continue;
+  // Every handed remedy's enrollment has a case (the filter above); the narrowing only tells the
+  // compiler so, with no branch that could never run (PR #127's CI, the follow-up under T004).
+  const handedCaseIds = handed
+    .map(({ enrollmentId }) => caseOfEnrollment(enrollmentId))
+    .filter((caseId) => caseId !== null);
+  for (const caseId of new Set(handedCaseIds)) {
     const ids = handed.filter(({ enrollmentId }) => caseOfEnrollment(enrollmentId) === caseId);
     await store.handToCase(tx, sortedUnique(ids.map(({ id }) => id)), caseId, now);
   }
