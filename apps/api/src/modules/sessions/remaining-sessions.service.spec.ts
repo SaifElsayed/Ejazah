@@ -214,6 +214,25 @@ describe('cancelRemainingSessions (T004, R-313)', () => {
     expect(events).toEqual([]);
   });
 
+  it('sessions and no open remedy: the sessions locked and cancelled, no remedy locked, handed or lapsed', async () => {
+    const { journal, events, store } = recorded({
+      sessions: [{ id: id(11), enrollmentId: ENROLLMENT_A }],
+      remedies: [],
+    });
+    const ended = await cancelRemainingSessions(tx, [ENROLLMENT_A], NOW, async () => id(31), store);
+    expect(journal).toEqual([
+      `read sessions ${ENROLLMENT_A}`,
+      `lock sessions ${id(11)}`,
+      `read sessions ${ENROLLMENT_A}`,
+      `read remedies ${ENROLLMENT_A}`,
+      `read remedies ${ENROLLMENT_A}`,
+      `cancel ${id(11)}`,
+      'events 1',
+    ]);
+    expect(events.map(({ kind }) => kind)).toEqual(['cancelled_by_admin']);
+    expect(ended).toMatchObject({ handedRemedyIds: [], lapsedRemedyIds: [] });
+  });
+
   it('nothing at all for no enrollment: no read, no lock, no case asked', async () => {
     const { journal, store } = recorded({ sessions: [], remedies: [] });
     const asked: string[] = [];
