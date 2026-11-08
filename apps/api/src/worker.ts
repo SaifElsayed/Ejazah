@@ -178,7 +178,7 @@ const confirmations = {
 // Sessions' port to booking's enrollments (T008, the note under T015), bound once as main.ts binds
 // it, and T015's completion check over it, which every path that settles calls.
 const enrollmentSide = booking.createEnrollmentSide({ settings });
-const completion = sessions.createCompletion({ enrollments: enrollmentSide, settings, log });
+const completion = sessions.createCompletion({ enrollments: enrollmentSide, settings });
 
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [

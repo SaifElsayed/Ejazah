@@ -18,7 +18,9 @@ const [
   { initReporting },
   { createLogger },
   { closeDatabase, openDatabase },
-  { onShutdown },
+  { apiStopSequence, onShutdown },
+  { InProcessLiveBus },
+  { LiveRegistry },
   { ReadinessRepository },
   { requireSettingsReader },
   { createRateLimiter },
@@ -48,6 +50,8 @@ const [
   import('./platform/logging/logger.js'),
   import('./platform/db/prisma.repository.js'),
   import('./platform/lifecycle/shutdown.js'),
+  import('./platform/live/live-bus.js'),
+  import('./platform/live/live-registry.js'),
   import('./platform/db/readiness.repository.js'),
   import('./platform/settings/settings-reader.js'),
   import('./platform/guards/rate-limit.guard.js'),
@@ -87,6 +91,13 @@ const database = openDatabase(config.DATABASE_URL, {
 // rate limits, the idempotent procedures of the surfaces). No key is read here: the store is empty
 // until the seed (T074), and an empty store must not stop the process booting.
 const settings = requireSettingsReader(createSettingsReader(database));
+
+// The live channel (T063 of specs/004-sessions, R-324): one in-process bus and the registry of
+// this process's open streams. Every request's context carries a publisher over the bus,
+// `live.events` opens its streams in the registry, and shutdown ends them first. The worker
+// publishes nothing live.
+const liveBus = new InProcessLiveBus();
+const liveRegistry = new LiveRegistry({ bus: liveBus, settings, log });
 
 // The process's one rate limiter (T103, FR-043): it counts in Redis and reads each limit from the
 // settings above on every call. Every user-surface request carries it in its context (T170), so a
@@ -169,6 +180,8 @@ const services = {
   identity: identity.createIdentityServices({
     ...identityBase,
     cipher,
+    // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
+    live: liveBus,
     marks: createRedisSingleUseMarks({
       redisUrl: config.REDIS_URL,
       onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
@@ -264,6 +277,8 @@ const uploads = {
   sessions: sessions.user,
   guard: { settings, rateLimiter },
   log,
+  // T063: an upload's after-commit point flushes over the bus.
+  live: liveBus,
   ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
 };
 // The queue (T112), opened on the first add, so a process that never adds a job never connects to it
@@ -349,6 +364,8 @@ const adminServices = createAdminServices({
 
 const application = await createApplication({
   log,
+  // T063: the bus every request's publisher sends on, and the registry `live.events` opens in.
+  live: { bus: liveBus, registry: liveRegistry },
   readiness: new ReadinessRepository(database),
   securityHeaders: { allowedOrigins: config.ADMIN_ALLOWED_ORIGINS, mode: config.NODE_ENV },
   maxRequestBodyBytes: config.MAX_REQUEST_BODY_BYTES,
@@ -373,14 +390,15 @@ const application = await createApplication({
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
 
-// Once, however many signals arrive: stop listening and close the application (Nest's shutdown
-// hooks are enabled by the application, so its providers hear it too), then the queue when an add
-// opened it (T067, T038), then the database; exit 0 when all closed, 1 when any failed (T173).
+// Once, however many signals arrive: every live stream ended first (T063, FR-429, the owner's
+// hard condition: `server.close()` would wait on an open stream), then the application stops
+// listening and closes (Nest's shutdown hooks hear it), then the queue when an add opened it
+// (T067, T038), then the database; exit 0 when all closed, 1 when any failed (T173).
 onShutdown(
-  async () => {
-    await application.close();
-    await jobQueue?.close();
-    await closeDatabase(database);
-  },
+  apiStopSequence({
+    live: liveRegistry,
+    application,
+    afterwards: [() => jobQueue?.close(), () => closeDatabase(database)],
+  }),
   { log },
 );
