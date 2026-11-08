@@ -318,8 +318,23 @@ describe('evaluateAttendance: connections (FR-443, R-305)', () => {
   });
 });
 
-describe('evaluateAttendance: R-305’s tie order at one second', () => {
-  it('a leave and a join of the same connection in one second: the leave first, so a rejoin on that connection loses no time', () => {
+describe('evaluateAttendance: one connection’s leave and join in one second (R-305; the owner’s decision of 2026-11-08)', () => {
+  it('a reconnect: an open connection receiving a leave and a join in one second stays continuous, with no gap', () => {
+    for (const reconnect of [
+      [left(STUDENT, 's1', 1_000), joined(STUDENT, 's1', 1_000)],
+      [joined(STUDENT, 's1', 1_000), left(STUDENT, 's1', 1_000)],
+    ]) {
+      const events = [...TEACHER_WHOLE, joined(STUDENT, 's1', 0), ...reconnect];
+      expect(evaluateAttendance(events, window(), SETTINGS)).toEqual({
+        outcome: 'done',
+        simultaneousSeconds: 3_600,
+        teacherJoined: true,
+        studentJoined: true,
+      });
+    }
+  });
+
+  it('an open connection’s leave closes it and the join in that second reopens it, so a later leave ends the second interval', () => {
     const events = [
       ...TEACHER_WHOLE,
       joined(STUDENT, 's1', 0),
@@ -334,10 +349,26 @@ describe('evaluateAttendance: R-305’s tie order at one second', () => {
     });
   });
 
-  it('a join and a leave of the same connection in one second: the leave sorts first and is ignored, so the connection stays open', () => {
-    // R-305's order as written: in the join's own second the leave sorts first, with nothing open.
-    const events = [...TEACHER_WHOLE, left(STUDENT, 's1', 100), joined(STUDENT, 's1', 100)];
-    expect(evaluateAttendance(events, window(), SETTINGS).simultaneousSeconds).toBe(3_500);
+  it('a connection not open receiving a join and a leave in one second opens and closes at zero length', () => {
+    for (const blip of [
+      [left(STUDENT, 's1', 100), joined(STUDENT, 's1', 100)],
+      [joined(STUDENT, 's1', 100), left(STUDENT, 's1', 100)],
+    ]) {
+      expect(evaluateAttendance([...TEACHER_WHOLE, ...blip], window(), SETTINGS)).toEqual({
+        outcome: 'student_no_show',
+        simultaneousSeconds: 0,
+        teacherJoined: true,
+        studentJoined: false,
+      });
+    }
+    // After an interval already closed, the same: [0, 50) only.
+    const afterClosed = [
+      ...TEACHER_WHOLE,
+      ...connection(STUDENT, 's1', 0, 50),
+      joined(STUDENT, 's1', 100),
+      left(STUDENT, 's1', 100),
+    ];
+    expect(evaluateAttendance(afterClosed, window(), SETTINGS).simultaneousSeconds).toBe(50);
   });
 
   it('ties within a second are judged on the whole second, whatever the milliseconds', () => {

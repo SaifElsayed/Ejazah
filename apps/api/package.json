@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@trpc/client": "11.19.0",
+    "fast-check": "4.10.2",
     "tsc-watch": "7.2.1"
   }
 }

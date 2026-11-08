@@ -19,14 +19,14 @@
 // 5. The outcome by SRS §3.7.5's table, an outage window overlapping [start, end] first; `done` at
 //    ⌈`attendanceThresholdPct` % × length⌉ seconds or more.
 //
-// TIES at one second (LiveKit's resolution, R-305): every instant is floored to its second before
-// anything is compared, and within one connection a `left` sorts before a `joined` of the same
-// second. R-305's other half, `joined` before `left` for different connections, changes nothing
-// here: intervals are paired per connection, and touching intervals of one participant unite.
-// Sorting on the second and the kind alone makes the result independent of the events' order and
-// of a duplicate (a second `joined` while open, or a second `left` while closed, is ignored). As
-// R-305 is written, a connection whose `joined` and `left` fall in one second stays open: its leave
-// sorts first and finds nothing open.
+// ONE SECOND (LiveKit's resolution; R-305 as amended by the owner's decision of 2026-11-08): every
+// instant is floored to its second before anything is compared, and within one second of one
+// connection a `left` closes an interval already open on it (a `joined` in that second then
+// reopening it: a reconnect, with no gap); otherwise the `joined` opens it and the same second's
+// `left` closes it at zero length. Different connections never meet here: intervals are paired per
+// connection, and touching intervals of one participant unite. Reading each second only for
+// whether it holds a `joined`, a `left` or both makes the result independent of the events' order
+// and of a duplicate (a `joined` while open, or a `left` while closed, changes nothing).
 import type { SessionStatus } from '@ijazah/contracts';
 import {
   addMinutes,
@@ -99,9 +99,6 @@ export interface Attendance {
 /** The epoch, from which a span's whole seconds count (`unixSeconds`). */
 const EPOCH = new Date(0);
 
-/** Within one connection's second, a `left` before a `joined` (R-305). */
-const TIE_RANK = { left: 0, joined: 1 } as const;
-
 interface Mark {
   readonly second: number;
   readonly kind: 'joined' | 'left';
@@ -125,16 +122,31 @@ function intervalOf(span: Span): Interval {
  * One connection's spans (step 1), each ending at the scheduled end at the latest, a span beginning
  * at or after it dropped. `roomEnds` is sorted.
  */
-function connectionSpans(marks: Mark[], roomEnds: readonly number[], endSecond: number): Span[] {
-  marks.sort((a, b) => a.second - b.second || TIE_RANK[a.kind] - TIE_RANK[b.kind]);
+function connectionSpans(
+  marks: readonly Mark[],
+  roomEnds: readonly number[],
+  endSecond: number,
+): Span[] {
+  // Each second the connection saw: whether a `joined`, a `left`, or both fell in it.
+  const seconds = new Map<number, { joined: boolean; left: boolean }>();
+  for (const mark of marks) {
+    const kinds = seconds.get(mark.second) ?? { joined: false, left: false };
+    kinds[mark.kind] = true;
+    seconds.set(mark.second, kinds);
+  }
   const spans: Span[] = [];
   let open: number | undefined;
-  for (const mark of marks) {
-    if (mark.kind === 'joined') {
-      open ??= mark.second;
-    } else if (open !== undefined) {
-      spans.push({ start: open, end: mark.second });
-      open = undefined;
+  for (const [second, kinds] of [...seconds].sort(([a], [b]) => a - b)) {
+    if (open !== undefined) {
+      // Open: a leave closes it, and a join in the same second reopens it (a reconnect, no gap).
+      if (kinds.left) {
+        spans.push({ start: open, end: second });
+        open = kinds.joined ? second : undefined;
+      }
+    } else if (kinds.joined) {
+      // Not open: the join opens it, and a leave in the same second closes it at zero length.
+      if (kinds.left) spans.push({ start: second, end: second });
+      else open = second;
     }
   }
   if (open !== undefined) {
