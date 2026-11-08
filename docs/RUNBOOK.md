@@ -76,6 +76,12 @@ it, the development build is rebuilt on EAS with the `development` profile
 `plugins` entry in `app.json`: its config plugin does nothing unless asked
 for an option this app does not use.
 
+**The build with the video packages (Phase 3, T017).** LiveKit's packages are native, so the
+phone needs EAS build `4edc58c4-11b4-4f75-b9ae-09fe26cc2958` (`development` profile, versionCode 1)
+or a later one; an older build fails when the room first calls the SDK. Install it over the old one
+with `adb install -r`, which keeps the app's data. A signature mismatch is reported, never answered
+with an uninstall, which would erase that data.
+
 **The fake provider.** One switch on each side. The API's
 `SIGN_IN_PROVIDER=fake` (the `.env.example` value) selects the stand-in that
 accepts an unsigned token (`platform/ports/sign-in/fake.adapter.ts`);
