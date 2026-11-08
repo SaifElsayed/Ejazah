@@ -2,7 +2,8 @@
 // catalog's question (`slotInUse`, through the `CatalogUse` port) and discovery's offer read.
 //
 // A slot is taken while an active hold or an enrollment `pending_payment` uses it. A `confirmed`
-// enrollment holds it on every local date before its release, the week after its final session plus
+// enrollment, and a `completed` one (T015 of specs/004-sessions; the note under 003:T026, nit 6;
+// FR-423), holds it on every local date before its release, the week after its final session plus
 // `slot_release_buffer_weeks`: the release date is the final session's local date plus that many
 // weeks and one more, on the wall calendar (`calendarWeeksAfter`, R-TIME-2), read in the zone the
 // enrollment snapshot its slot in. The final session's date is the sessions module's
@@ -29,7 +30,10 @@ export interface SlotUse {
   readonly slotId: string;
   /** An active hold or an enrollment awaiting payment uses it. */
   readonly taken: boolean;
-  /** Its confirmed enrollments, each with the zone it snapshot the slot in. */
+  /**
+   * Its confirmed and completed enrollments, each held until its release (T015), with the zone it
+   * snapshot the slot in.
+   */
   readonly confirmed: readonly { readonly enrollmentId: string; readonly timezone: TimeZoneId }[];
 }
 

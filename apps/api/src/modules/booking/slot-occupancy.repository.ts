@@ -14,8 +14,11 @@ interface Gathered {
 
 /**
  * Of `slotIds`, each slot an active hold (`released_at IS NULL`, data-model §3) or an enrollment
- * `pending_payment` or `confirmed` uses, with its confirmed enrollments and the zone each snapshot
- * its slot in; a slot nothing uses is absent. Two statements over `slot_holds.slot_id` and
+ * `pending_payment`, `confirmed` or `completed` uses, with its confirmed and completed enrollments
+ * (both in `confirmed`, held until R-205's release) and the zone each snapshot its slot in; a slot
+ * nothing uses is absent. A completed enrollment frees its slot only from the week after its final
+ * session plus `slot_release_buffer_weeks`, as a confirmed one does (T015 of specs/004-sessions;
+ * the note under 003:T026, nit 6; FR-423). Two statements over `slot_holds.slot_id` and
  * `enrollments.slot_id`'s indexes. One active hold per slot (the partial unique index), and a slot's
  * enrollments are the few it has carried, so both reads are bounded by the slots asked about.
  * `exceptEnrollmentId`, when given, leaves that enrollment's own use out: a make-up or a restore
@@ -42,7 +45,7 @@ export async function slotUses(
   const enrollments = await tx.enrollment.findMany({
     where: {
       slotId: { in: [...slotIds] },
-      status: { in: ['pending_payment', 'confirmed'] },
+      status: { in: ['pending_payment', 'confirmed', 'completed'] },
       ...(exceptEnrollmentId === undefined ? {} : { id: { not: exceptEnrollmentId } }),
     },
     orderBy: { id: 'asc' },
