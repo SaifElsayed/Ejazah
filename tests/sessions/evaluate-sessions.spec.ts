@@ -17,6 +17,8 @@
 //     session disputed before the evaluation keeps `disputed` and gets `outcome_under_dispute`;
 //   - T015's completion on the settling transaction: an enrollment whose last session settles after
 //     its dispute window closed is completed; no count ends one;
+//   - a session whose evaluation fails: its transaction rolled back alone, one error line of its id,
+//     and the other session still settled (the owner's decision of 2026-11-08);
 //   - the double-run spec: one outcome, one event row, the enrollment not ended, the room ended once;
 //   - K6: a later run with no `room_ended` recorded calls `endRoom` again and changes nothing; once
 //     the provider's `room_ended` is recorded, no call; none once the join period has ended, or
@@ -505,6 +507,54 @@ async function roomOf(rooms: Rooms, session: World): Promise<'open' | 'ended'> {
 function callsOf(rooms: Rooms, session: World): string[] {
   return rooms.endCalls.filter((id) => id === session.sessionId);
 }
+
+describe(
+  'a session whose evaluation fails is rolled back alone (each session its own transaction; the owner’s decision of 2026-11-08)',
+  { timeout: 60_000 },
+  () => {
+    it('its settle and its row are undone, one error line of its id alone, and the other session is still settled', async () => {
+      const failing = await endedWorld();
+      const other = await endedWorld();
+      await deliver(failing, 'done');
+      await deliver(other, 'done');
+      const enrollments = createEnrollmentSide({ settings });
+      const completion = createCompletion({ enrollments, settings, log: SILENT });
+      // The completion check is the last write of a session's transaction, after its settle and its
+      // `settled` row: failing there shows those two undone with it.
+      const failingCompletion: typeof completion = {
+        completeIfDue: async (tx, enrollmentId) => {
+          if (enrollmentId === failing.enrollmentId) throw new Error('completion failed');
+          return completion.completeIfDue(tx, enrollmentId);
+        },
+      };
+
+      await evaluateSessions({
+        database,
+        settings,
+        enrollments,
+        completion: failingCompletion,
+        video: roomsOf().port,
+        log: createLogger({ level: 'info', destination: { write: (line) => void lines.push(line) } }),
+        report: (error) => void reported.push(error),
+        store: ownStore,
+      }).handle({});
+
+      expect(await read(failing)).toEqual({
+        status: 'scheduled',
+        outcome_under_dispute: null,
+        simultaneous_connected_seconds: 0,
+        evaluated: false,
+        settled_rows: 0,
+        enrollment: 'confirmed',
+      });
+      expect(await read(other)).toEqual(settled('done', 3600));
+      const errors = parsed().filter(({ msg }) => msg === 'Session evaluation failed');
+      expect(errors.map(({ sessionId }) => sessionId)).toEqual([failing.sessionId]);
+      expect(Object.keys(errors[0] ?? {}).sort()).toEqual([...PINO_FIELDS, 'sessionId'].sort());
+      expect(reported.map(({ message }) => message)).toEqual(['completion failed']);
+    });
+  },
+);
 
 describe(
   'evaluate-sessions run twice leaves what one run leaves (R-API-14; kernel.md, "Jobs")',
