@@ -35,6 +35,7 @@ import {
   intersect,
   type Interval,
   measureSeconds,
+  percentOfSeconds,
   union,
   unixSeconds,
 } from '@ijazah/time';
@@ -228,8 +229,9 @@ export function evaluateAttendance(
   const simultaneousSeconds = measureSeconds(
     clip(intersect(teacher.union, student.union), scheduled),
   );
-  const thresholdSeconds = Math.ceil(
-    (settings.attendanceThresholdPct * measureSeconds([scheduled])) / 100,
+  const thresholdSeconds = percentOfSeconds(
+    measureSeconds([scheduled]),
+    settings.attendanceThresholdPct,
   );
   return {
     outcome: outcomeOf(

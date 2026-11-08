@@ -45,7 +45,11 @@ import { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
-import { DomainError, type ErrorCode } from '../../platform/errors/domain-error.js';
+import {
+  DomainError,
+  type ErrorCode,
+  type FieldIssue,
+} from '../../platform/errors/domain-error.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
@@ -138,7 +142,8 @@ function refusal(
   ids: { readonly sessionId: string; readonly userId: string },
   errorCode: ErrorCode,
   reason: RefusalReason,
-  details?: ConstructorParameters<typeof DomainError>[2],
+  // The shape of DomainError's own options (`domain-error.ts:144`), written out so no literal index is.
+  details?: { readonly details?: readonly FieldIssue[]; readonly cause?: unknown },
 ): DomainError {
   log.info({ ...ids, errorCode, reason }, 'A session read or join was refused');
   return new DomainError(errorCode, undefined, details);

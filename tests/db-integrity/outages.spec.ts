@@ -303,7 +303,9 @@ describe(`sessions.outages.list over the real tables (T016), RUN_OFFSET ${RUN_OF
         displayName: 'Probe administrator',
       });
       expect(first.nextCursor).toBe(ids[1]);
-      const second = await outages.list(tx, { cursor: ids[1] });
+      const cursor = ids[1];
+      if (cursor === undefined) throw new Error('no second window');
+      const second = await outages.list(tx, { cursor });
       expect(second.items[0]?.outageId).toBe(ids[0]);
     });
   });

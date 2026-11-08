@@ -387,6 +387,7 @@ export function calendarDateOf(date: Date): LocalDate {
 
 export * from './resolve.js';
 export * from './intervals.js';
+export * from './percent.js';
 
 /** The age from which a person is an adult (SRS FR-AUTH-4: "accounts under 18 shall be flagged"). */
 const AGE_OF_MAJORITY_YEARS = 18;
