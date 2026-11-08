@@ -653,6 +653,20 @@ describe('EnrollmentDetail', () => {
     });
   });
 
+  it('opens the pre-session screen from a session (004:T020)', async () => {
+    const pressed = { ...sessions[0]!, status: 'disputed' } as ListedSession;
+    mockApi.api.enrollments.get.query.mockResolvedValue({
+      ...ongoing,
+      sessions: [pressed, ...sessions.slice(1)],
+    });
+    await renderIn('rtl', within(<EnrollmentDetail />)());
+    await fireEvent.press(await screen.findByText(said('rtl', 'status.session.disputed')));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(student)/sessions/[id]',
+      params: { id: pressed.sessionId },
+    });
+  });
+
   it('a Confirming enrollment is read on the schedule, then FR-384’s message', async () => {
     jest.useFakeTimers();
     mockParams = { id: SECOND_ENROLLMENT_ID };

@@ -36,6 +36,7 @@ import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { readSinceMount } from '../../read-since-mount';
+import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { isEnrollmentId, useTeacherEnrollment } from '../api';
 import { EnrollmentBadges, SessionStatusBadge } from '../components/Badges';
 import { initialOf } from '../components/StudentRow';
@@ -206,6 +207,9 @@ function SessionLine({ row }: { readonly row: SessionRow }) {
         </Text>
       }
       trailing={<SessionStatusBadge status={session.status} />}
+      onPress={() =>
+        router.push({ pathname: TEACHER_PRE_SESSION_ROUTE, params: { id: session.sessionId } })
+      }
     />
   );
 }

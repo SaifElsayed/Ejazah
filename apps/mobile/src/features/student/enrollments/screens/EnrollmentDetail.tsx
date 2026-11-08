@@ -32,6 +32,7 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
+import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { enrollmentQueryKey, isAwaitingPayment, useEnrollment } from '../api';
@@ -194,6 +195,9 @@ function SessionRow({ session, zone }: { readonly session: ListedSession; readon
         </View>
       }
       trailing={<Badge label={t(badge.label)} tone={badge.tone} />}
+      onPress={() =>
+        router.push({ pathname: STUDENT_PRE_SESSION_ROUTE, params: { id: session.sessionId } })
+      }
     />
   );
 }

@@ -35,9 +35,10 @@ jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 
 const ENROLLMENT_ID = '0193a6f0-0000-7000-8000-0000000000e1';
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 let mockParams: Record<string, string> = { enrollmentId: ENROLLMENT_ID };
 jest.mock('expo-router', () => ({
-  router: { back: () => mockBack() },
+  router: { back: () => mockBack(), push: (route: unknown) => mockPush(route) },
   useLocalSearchParams: () => mockParams,
 }));
 
@@ -245,6 +246,29 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
       expect(screen.getAllByText(doneWord)).toHaveLength(
         doneWord === said(direction, 'teacher.enrollment.stats.done') ? 2 : 1,
       );
+    });
+  });
+
+  it('opens the pre-session screen from a session (004:T020)', async () => {
+    mockPush.mockClear();
+    const pressed = { ...wednesday(1), status: 'disputed' } as ListedSession;
+    get().mockResolvedValue(
+      enrollment({
+        summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
+        sessions: [pressed],
+        last: pressed,
+        upcoming: 0,
+        completed: 0,
+        remaining: 7,
+      }),
+    );
+    await inBothDirections(detail, async (_rendered, direction) => {
+      mockPush.mockClear();
+      await fireEvent.press(await screen.findByText(said(direction, 'status.session.disputed')));
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(teacher)/sessions/[id]',
+        params: { id: pressed.sessionId },
+      });
     });
   });
 
