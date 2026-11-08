@@ -2,8 +2,10 @@
 // `createOutageServices` over a recorded store: the window resolved from wall clocks in its zone,
 // the overlapped sessions found with no lock, then their enrollments locked in one call, then the
 // sessions in one call, each in id order, read again under the locks, reclassified with one
-// `outage_reclassified` event each, then T015's completion check per enrollment; a zone the time
-// package refuses, or an end not after the start, refused `VALIDATION_FAILED` with one log line
+// `outage_reclassified` event each, then T015's completion check per enrollment; the scheduled
+// sessions the window overlaps that have ended are locked with them and read again, so a sweep
+// settling one is waited on (PR #129's review, Minor 1; the race itself:
+// `tests/db-integrity/outage-evaluation-race.spec.ts`); a zone the time package refuses, or an end not after the start, refused `VALIDATION_FAILED` with one log line
 // and nothing read or written. Over the real tables: `tests/db-integrity/outages.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
@@ -29,7 +31,11 @@ const settings: SettingsReader = {
     schema.parse(({ dispute_window_hours: 72, admin_list_page_size: 2 } as Record<string, number>)[key]),
 };
 
-function world(found: readonly OverlappedSession[], again: readonly OverlappedSession[] = found) {
+function world(
+  found: readonly OverlappedSession[],
+  again: readonly OverlappedSession[] = found,
+  ended: readonly OverlappedSession[] = [],
+) {
   const journal: string[] = [];
   const logged: unknown[][] = [];
   let reads = 0;
@@ -43,6 +49,15 @@ function world(found: readonly OverlappedSession[], again: readonly OverlappedSe
       reads += 1;
       journal.push(ids === undefined ? 'find' : `read again ${ids.join(',')}`);
       return reads === 1 ? found : again;
+    },
+    endedScheduledSessions: async (_tx, window, endedBy) => {
+      expect(window).toEqual({
+        startsAt: new Date('2026-11-06T08:00:00Z'),
+        endsAt: new Date('2026-11-06T09:30:00Z'),
+      });
+      expect(endedBy).toEqual(AT);
+      journal.push('find ended scheduled');
+      return ended;
     },
     lockSessions: async (_tx, ids) => {
       journal.push(`lock sessions ${ids.join(',')}`);
@@ -117,9 +132,10 @@ describe('outages.record (T016, FR-445, R-307)', () => {
     });
     expect(journal).toEqual([
       'find',
+      'find ended scheduled',
       `lock enrollments ${id(1)},${id(2)}`,
       `lock sessions ${id(11)},${id(12)},${id(13)}`,
-      `read again ${id(12)},${id(11)},${id(13)}`,
+      `read again ${id(11)},${id(12)},${id(13)}`,
       'insert outage',
       `reclassify ${id(11)},${id(12)}`,
       `events outage_reclassified:${id(11)},outage_reclassified:${id(12)}`,
@@ -134,10 +150,51 @@ describe('outages.record (T016, FR-445, R-307)', () => {
     ]);
   });
 
-  it('records a window over no settled session, locking nothing', async () => {
+  it('records a window over no settled and no ended scheduled session, locking nothing', async () => {
     const { services, journal } = world([]);
     expect((await services.record(tx, ADMIN, INPUT)).reclassified).toBe(0);
-    expect(journal).toEqual(['find', 'insert outage']);
+    expect(journal).toEqual(['find', 'find ended scheduled', 'insert outage']);
+  });
+
+  it('locks the ended scheduled sessions with the settled ones, in one call each, reads them all again, and moves those settled meanwhile', async () => {
+    const { services, journal } = world(
+      [{ id: id(13), enrollmentId: id(3) }],
+      // Under the locks: 11 settled by a sweep that committed first; 12 still scheduled.
+      [
+        { id: id(11), enrollmentId: id(1) },
+        { id: id(13), enrollmentId: id(3) },
+      ],
+      [
+        { id: id(12), enrollmentId: id(2) },
+        { id: id(11), enrollmentId: id(1) },
+      ],
+    );
+    expect((await services.record(tx, ADMIN, INPUT)).reclassified).toBe(2);
+    expect(journal).toEqual([
+      'find',
+      'find ended scheduled',
+      `lock enrollments ${id(1)},${id(2)},${id(3)}`,
+      `lock sessions ${id(11)},${id(12)},${id(13)}`,
+      `read again ${id(11)},${id(12)},${id(13)}`,
+      'insert outage',
+      `reclassify ${id(11)},${id(13)}`,
+      `events outage_reclassified:${id(11)},outage_reclassified:${id(13)}`,
+      `complete? ${id(1)}`,
+      `complete? ${id(3)}`,
+    ]);
+  });
+
+  it('locks an ended scheduled session alone and leaves it scheduled when no sweep settled it', async () => {
+    const { services, journal } = world([], [], [{ id: id(12), enrollmentId: id(2) }]);
+    expect((await services.record(tx, ADMIN, INPUT)).reclassified).toBe(0);
+    expect(journal).toEqual([
+      'find',
+      'find ended scheduled',
+      `lock enrollments ${id(2)}`,
+      `lock sessions ${id(12)}`,
+      `read again ${id(12)}`,
+      'insert outage',
+    ]);
   });
 
   it.each([

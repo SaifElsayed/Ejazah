@@ -19,11 +19,18 @@
 // completion check for each enrollment touched (`completion.service.ts`); no count is read (FR-448).
 //
 // THE LOCKS (kernel.md's "outage record" row, the owner's decision of 2026-11-05 on the analysis,
-// F4). The overlapped sessions are found with no lock; then their enrollments, in one call in id
-// order (`EnrollmentSide.lockEnrollments`), then those sessions, in one call in id order, T005's one
-// order; each is read again under the locks before its conditional update, so one disputed or
-// settled otherwise meanwhile is left out. The window's row references only the administrator, no
-// row of the order. Every `session_events` row references an enrollment already held.
+// F4). The overlapped sessions are found with no lock, and with them the `scheduled` sessions the
+// window overlaps that have ended by the record's instant, those `evaluate-sessions` may be settling
+// now (PR #129's review, Minor 1; the owner's decision of 2026-11-08); then all their enrollments,
+// in one call in id order (`EnrollmentSide.lockEnrollments`), then all those sessions, in one call
+// in id order, T005's one order and the sweep's; each is read again under the locks before its
+// conditional update, so one disputed or settled otherwise meanwhile is left out, and one a sweep
+// settled while the record waited is reclassified. A sweep that comes second waits on the
+// enrollment and then reads the committed window (`tests/db-integrity/outage-evaluation-race.spec.ts`).
+// "Ended" and not "due": the record's instant less the evaluation delay would leave a session the
+// sweep's later clock finds due, at the boundary, outside the locks. The window's row references
+// only the administrator, no row of the order. Every `session_events` row references an
+// enrollment already held.
 //
 // THE RECORDER'S NAME. `admin_users` is the admin module's table (R-API-6), and the admin module
 // imports sessions, so the list takes the names through `AdminNames`, a function the admin module
@@ -44,6 +51,7 @@ import type { Completion } from './completion.service.js';
 import { DISPUTE_WINDOW_SETTING, disputeWindowHours } from './completion.service.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import {
+  endedScheduledSessions,
   insertOutage,
   type OutageRow,
   outagesPage,
@@ -111,6 +119,12 @@ export interface OutageStore {
     endedAfter: Date,
     ids?: readonly string[],
   ): Promise<readonly OverlappedSession[]>;
+  /** The scheduled sessions `window` overlaps that ended at or before `endedBy`; no lock. */
+  endedScheduledSessions(
+    tx: Transaction,
+    window: OutageWindow,
+    endedBy: Date,
+  ): Promise<readonly OverlappedSession[]>;
   lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
   reclassify(tx: Transaction, ids: readonly string[]): Promise<void>;
   insertOutage(
@@ -121,8 +135,10 @@ export interface OutageStore {
   outagesPage(tx: Transaction, cursor: string | undefined, take: number): Promise<OutageRow[]>;
 }
 
-const outageStore: OutageStore = {
+/** The record's and the list's store over sessions' tables. */
+export const outageStore: OutageStore = {
   reclassifiableSessions,
+  endedScheduledSessions,
   lockSessions: (tx, ids) => lockRows(tx, 'sessions', ids),
   reclassify,
   insertOutage,
@@ -188,20 +204,19 @@ export function createOutageServices({
       const at = await clock(tx);
       const hours = await settings.read(DISPUTE_WINDOW_SETTING, disputeWindowHours);
       const endedAfter = new Date(addHours(at, -hours));
-      const found = await store.reclassifiableSessions(tx, window, endedAfter);
+      const held = [
+        ...(await store.reclassifiableSessions(tx, window, endedAfter)),
+        ...(await store.endedScheduledSessions(tx, window, at)),
+      ];
       let moved: readonly OverlappedSession[] = [];
-      if (found.length > 0) {
+      if (held.length > 0) {
         await enrollments.lockEnrollments(
           tx,
-          sortedUnique(found.map(({ enrollmentId }) => enrollmentId)),
+          sortedUnique(held.map(({ enrollmentId }) => enrollmentId)),
         );
-        await store.lockSessions(tx, sortedUnique(found.map(({ id }) => id)));
-        moved = await store.reclassifiableSessions(
-          tx,
-          window,
-          endedAfter,
-          found.map(({ id }) => id),
-        );
+        const ids = sortedUnique(held.map(({ id }) => id));
+        await store.lockSessions(tx, ids);
+        moved = await store.reclassifiableSessions(tx, window, endedAfter, ids);
       }
       const outageId = await store.insertOutage(tx, {
         ...window,
