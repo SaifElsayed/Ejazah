@@ -9,6 +9,7 @@ import { sessionRows } from './session-rows';
 function session(sequenceNumber: number, status: SessionStatus = 'scheduled'): ListedSession {
   const day = String(sequenceNumber).padStart(2, '0');
   return {
+    sessionId: `0193a6f0-0000-7000-8000-0000000005${day}`,
     sequenceNumber,
     localDate: `2026-12-${day}`,
     startTimeLocal: '18:00',

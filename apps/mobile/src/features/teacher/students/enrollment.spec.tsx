@@ -5,7 +5,9 @@
 // in the teacher's own zone when that is another (ADR 0009 D5); the sessions by number, three or more
 // of one status in one range and the next one on its own. Ended, the weekly time says from when to
 // when. The screen decides only on what it read since it opened (the owner's decision of
-// 2026-11-04; T086).
+// 2026-11-04; T086). Once Phase 3 settles them (004:T020, FR-495), each session's status after
+// settlement in both languages, a disputed session as «محل نزاع», never the outcome frozen beside it
+// (R-308).
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
@@ -53,6 +55,7 @@ function wednesday(n: number, timezone = CAIRO): ListedSession {
   const month = day > 30 ? '12' : '11';
   const date = `2026-${month}-${String(day > 30 ? day - 30 : day).padStart(2, '0')}`;
   return {
+    sessionId: `0193a6f0-0000-7000-8000-0000000005${String(n).padStart(2, '0')}`,
     sequenceNumber: n,
     localDate: date,
     startTimeLocal: '18:00',
@@ -242,6 +245,55 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
       expect(screen.getAllByText(doneWord)).toHaveLength(
         doneWord === said(direction, 'teacher.enrollment.stats.done') ? 2 : 1,
       );
+    });
+  });
+
+  it('draws each session’s status after settlement, a disputed one «محل نزاع» and never its frozen outcome (004:T020, FR-495)', async () => {
+    const statuses = [
+      'done',
+      'teacher_no_show',
+      'both_no_show',
+      'provider_outage',
+      'cancelled_by_agreement',
+      'cancelled_by_admin',
+      'disputed',
+      'scheduled',
+    ] as const;
+    // The disputed session as a leaky answer would carry it: its frozen outcome beside the status.
+    const settled = statuses.map(
+      (status, index) =>
+        ({
+          ...wednesday(index + 1),
+          status,
+          ...(status === 'disputed' ? { outcomeUnderDispute: 'student_no_show' } : {}),
+        }) as ListedSession,
+    );
+    get().mockResolvedValue(
+      enrollment({
+        summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
+        sessions: settled,
+        next: settled[7],
+        last: settled[7],
+        upcoming: 1,
+        completed: 6,
+        remaining: 2,
+      }),
+    );
+    await inBothDirections(detail, async (_rendered, direction) => {
+      expect(await screen.findByText('يوسف أحمد')).toBeTruthy();
+      for (const key of [
+        'status.session.teacherNoShow',
+        'status.session.bothNoShow',
+        'status.session.underReview',
+        'status.session.cancelledByAgreement',
+        'status.session.cancelledByAdmin',
+        'status.session.disputed',
+      ] as const) {
+        expect(screen.getAllByText(said(direction, key))).toHaveLength(1);
+      }
+      expect(screen.getAllByText(said(direction, 'status.session.done')).length).toBeGreaterThan(0);
+      // The frozen outcome is never drawn: no session here is a Student-No-Show.
+      expect(screen.queryByText(said(direction, 'status.session.studentNoShow'))).toBeNull();
     });
   });
 

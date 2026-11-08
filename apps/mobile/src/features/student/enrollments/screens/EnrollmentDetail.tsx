@@ -6,7 +6,9 @@
 // status's badge. One awaiting payment says what its last order says (`PendingOrderBadge`): a
 // Confirming one is read on FR-383's schedule and, once the window ends unconfirmed, says FR-384's
 // message. Drawn only on an answer read since the screen opened. The
-// back arrow returns where it was opened from (the tab or the home).
+// back arrow returns where it was opened from (the tab or the home). Each session's status after
+// settlement is its badge (004:T020, FR-495): a disputed session reads «محل نزاع», the outcome
+// frozen beside it never answered nor drawn (R-308); the sessions are keyed by their id.
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -111,7 +113,7 @@ export function EnrollmentDetail() {
         <Section title={t('student.enrollmentDetail.sessions')}>
           <List>
             {shown.sessions.map((session) => (
-              <SessionRow key={session.sequenceNumber} session={session} zone={zone} />
+              <SessionRow key={session.sessionId} session={session} zone={zone} />
             ))}
           </List>
         </Section>
