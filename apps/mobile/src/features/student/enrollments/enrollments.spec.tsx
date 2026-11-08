@@ -130,7 +130,12 @@ const terms: StudentEnrollmentItem['summary'] = {
 /** Two sessions held, the third next. */
 const ongoing: StudentEnrollmentItem = {
   enrollmentId: ENROLLMENT_ID,
-  teacher: { teacherId: TEACHER_ID, displayName: TEACHER },
+  teacher: {
+    teacherId: TEACHER_ID,
+    displayName: TEACHER,
+    displayNameOrNull: TEACHER,
+    deleted: false,
+  },
   summary: terms,
   status: 'confirmed',
   next: third,
@@ -142,7 +147,12 @@ const ongoing: StudentEnrollmentItem = {
 /** Paid, not confirmed yet: no sessions until it is. */
 const confirming: StudentEnrollmentItem = {
   enrollmentId: SECOND_ENROLLMENT_ID,
-  teacher: { teacherId: TEACHER_ID, displayName: 'الشيخ يوسف' },
+  teacher: {
+    teacherId: TEACHER_ID,
+    displayName: 'الشيخ يوسف',
+    displayNameOrNull: 'الشيخ يوسف',
+    deleted: false,
+  },
   summary: { ...terms, track: 'recitation', sessionCount: 4 },
   status: 'pending_payment',
   upcoming: 0,
@@ -166,6 +176,14 @@ const completed: StudentEnrollmentItem = {
   remaining: 0,
 };
 delete (completed as { next?: unknown }).next;
+
+/** A deleted teacher (T007, FR-426): no name, deleted, the deprecated field empty. */
+const deletedTeacher = {
+  teacherId: TEACHER_ID,
+  displayName: '',
+  displayNameOrNull: null,
+  deleted: true,
+};
 
 const list = (...items: StudentEnrollmentItem[]): EnrollmentsListOutput => ({ items });
 const statusOf: CheckoutStatusOutput = {
@@ -276,6 +294,17 @@ describe('Enrollments', () => {
       ).toBeTruthy();
     });
     expect(mockApi.api.enrollments.list.query).toHaveBeenCalledWith({ tab: 'active' });
+  });
+
+  // T007 (FR-426): a deleted teacher has no name; the card draws the stand-in, never an empty line.
+  it('draws a deleted teacher by the stand-in text', async () => {
+    mockApi.api.enrollments.list.query.mockResolvedValue(
+      list({ ...ongoing, teacher: deletedTeacher }),
+    );
+    await inBothDirections(within(<Enrollments />), async (_rendered, direction) => {
+      expect(await screen.findByText(said(direction, 'common.party.deletedTeacher'))).toBeTruthy();
+      expect(screen.getByText(when(direction, third, STUDENT_ZONE))).toBeTruthy();
+    });
   });
 
   it('says the first session of an enrollment that has not started', async () => {
@@ -459,6 +488,22 @@ describe('EnrollmentsEnded', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/(student)/(tabs)/enrollments');
   });
 
+  it('names a deleted teacher by the stand-in text in the date it completed (T007, FR-426)', async () => {
+    mockApi.api.enrollments.list.query.mockResolvedValue(
+      list({ ...completed, teacher: deletedTeacher }),
+    );
+    await inBothDirections(within(<EnrollmentsEnded />), async (_rendered, direction) => {
+      expect(
+        await screen.findByText(
+          said(direction, 'student.enrollments.card.completedOn', {
+            teacher: said(direction, 'common.party.deletedTeacher'),
+            date: formatDate(last.startsAt, STUDENT_ZONE, localeOf(direction)),
+          }),
+        ),
+      ).toBeTruthy();
+    });
+  });
+
   it('asks the next page with the cursor the last answered', async () => {
     mockApi.api.enrollments.list.query
       .mockResolvedValueOnce({ items: [completed], nextCursor: ENDED_ID })
@@ -579,6 +624,18 @@ describe('EnrollmentDetail', () => {
     await renderIn('rtl', within(<EnrollmentDetail />)());
     expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
     expect(screen.queryByText(TEACHER)).toBeNull();
+  });
+
+  // T007 (FR-426): a deleted teacher has no name; the header draws the stand-in and an avatar with
+  // no letter.
+  it('draws a deleted teacher by the stand-in text, the avatar with no letter', async () => {
+    mockApi.api.enrollments.get.query.mockResolvedValue({ ...detail, teacher: deletedTeacher });
+    await inBothDirections(within(<EnrollmentDetail />), async (_rendered, direction) => {
+      const standIn = said(direction, 'common.party.deletedTeacher');
+      expect(await screen.findByText(standIn)).toBeTruthy();
+      expect(screen.getByText(said(direction, 'student.enrollmentDetail.title'))).toBeTruthy();
+      expect(screen.queryByText(standIn.charAt(0))).toBeNull();
+    });
   });
 
   it('goes back where it was opened from', async () => {

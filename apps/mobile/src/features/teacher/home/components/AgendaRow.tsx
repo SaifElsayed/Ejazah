@@ -10,6 +10,7 @@ import { ListRow, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
+import { usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
 import { openEnrollment, SessionStatusBadge, useInViewerZone } from '../../students';
 
@@ -24,6 +25,7 @@ export function AgendaRow({
   const t = useT();
   const format = useFormatters();
   const nameOf = useSubjectName();
+  const partyName = usePartyName();
   const inViewerZone = useInViewerZone();
   const elsewhere = inViewerZone(session.startsAt, session.timezone, viewerZone);
   return (
@@ -35,7 +37,7 @@ export function AgendaRow({
       }
       label={
         <View style={{ gap: tokens.space['1'] }}>
-          <Text weight="medium">{session.student.displayName}</Text>
+          <Text weight="medium">{partyName(session.student, 'student')}</Text>
           <Text variant="caption" tone="muted">
             {t('teacher.today.rowMeta', {
               subject: nameOf(session.summary.subject),

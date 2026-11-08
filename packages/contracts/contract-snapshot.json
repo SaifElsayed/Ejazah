@@ -1003,6 +1003,33 @@
           "$.nextCursor": { "type": "string" }
         }
       },
+      "students.ban": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.studentUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "students.reinstate": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.studentUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "students.suspend": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.studentUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "teachers.ban": {
         "input": {
           "$": { "type": "object" },
@@ -1784,7 +1811,9 @@
             "values": ["ijazah_track", "recitation"]
           },
           "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.deleted": { "required": true, "type": "boolean" },
           "$.teacher.displayName": { "required": true, "type": "string" },
+          "$.teacher.displayNameOrNull": { "required": true, "type": "null|string" },
           "$.teacher.teacherId": { "required": true, "type": "string" },
           "$.upcoming": { "required": true, "type": "integer" }
         }
@@ -1878,7 +1907,9 @@
             "values": ["ijazah_track", "recitation"]
           },
           "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.deleted": { "required": true, "type": "boolean" },
           "$.items[].teacher.displayName": { "required": true, "type": "string" },
+          "$.items[].teacher.displayNameOrNull": { "required": true, "type": "null|string" },
           "$.items[].teacher.teacherId": { "required": true, "type": "string" },
           "$.items[].upcoming": { "required": true, "type": "integer" },
           "$.nextCursor": { "type": "string" }
@@ -2435,7 +2466,9 @@
             ]
           },
           "$.student": { "required": true, "type": "object" },
+          "$.student.deleted": { "required": true, "type": "boolean" },
           "$.student.displayName": { "required": true, "type": "string" },
+          "$.student.displayNameOrNull": { "required": true, "type": "null|string" },
           "$.summary": { "required": true, "type": "object" },
           "$.summary.sessionCount": { "required": true, "type": "integer" },
           "$.summary.sessionDurationMinutes": {
@@ -2529,7 +2562,9 @@
             ]
           },
           "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.deleted": { "required": true, "type": "boolean" },
           "$.items[].student.displayName": { "required": true, "type": "string" },
+          "$.items[].student.displayNameOrNull": { "required": true, "type": "null|string" },
           "$.items[].summary": { "required": true, "type": "object" },
           "$.items[].summary.sessionCount": { "required": true, "type": "integer" },
           "$.items[].summary.sessionDurationMinutes": {
@@ -2582,7 +2617,9 @@
             ]
           },
           "$.sessions[].student": { "required": true, "type": "object" },
+          "$.sessions[].student.deleted": { "required": true, "type": "boolean" },
           "$.sessions[].student.displayName": { "required": true, "type": "string" },
+          "$.sessions[].student.displayNameOrNull": { "required": true, "type": "null|string" },
           "$.sessions[].summary": { "required": true, "type": "object" },
           "$.sessions[].summary.sessionCount": { "required": true, "type": "integer" },
           "$.sessions[].summary.sessionDurationMinutes": {

@@ -9,6 +9,10 @@
 // field. The output schema strips what R-HONEST-4 keeps from the teacher, a date of birth, a minor
 // flag, documents, a dispute history, an id or a photo key, should a service ever return one. The
 // authorization gate (R-MOBILE-13, `pnpm check:authz`) reads these cases by path.
+//
+// T007: `teacher.students.list` is counted under `rate_limit_search` by the teacher's own id and
+// refused RATE_LIMITED past it before the service; a deleted student is answered deleted, with no
+// name.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -86,7 +90,7 @@ const summary = {
 
 const item = {
   enrollmentId: OWN,
-  student: { displayName: 'يوسف علي' },
+  student: { displayName: 'يوسف علي', displayNameOrNull: 'يوسف علي', deleted: false },
   summary,
   status: 'confirmed' as const,
   next: session,
@@ -107,6 +111,9 @@ const leaked = {
 };
 
 let calls: unknown[][];
+/** Each `check` the rate limiter was asked, and whether it refuses (T007). */
+let limited: unknown[][];
+let refuseAtLimit: boolean;
 
 const unreached = (name: string) => () => Promise.reject(new Error(`${name} is not reached here`));
 
@@ -144,9 +151,11 @@ const booking: BookingServices = {
 
 beforeEach(() => {
   calls = [];
+  limited = [];
+  refuseAtLimit = false;
 });
 
-function callerAs(who: UserSession | null): Caller {
+function callerAs(who: UserSession | null, bookingServices: BookingServices = booking): Caller {
   const services: AppServices = {
     settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
@@ -156,11 +165,16 @@ function callerAs(who: UserSession | null): Caller {
     teacherProfile: unusedTeacherProfileServices,
     catalog: unusedCatalogServices,
     discovery: unusedDiscoveryServices,
-    booking,
+    booking: bookingServices,
     checkout: unusedCheckoutServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
-  const rateLimiter = { check: vi.fn(async () => undefined) } as unknown as RateLimiter;
+  const rateLimiter = {
+    check: vi.fn(async (...args: unknown[]) => {
+      limited.push(args);
+      if (refuseAtLimit) throw new DomainError('RATE_LIMITED');
+    }),
+  } as unknown as RateLimiter;
   return callerFor(
     createAppContext({ session: who, log, rateLimiter, clientAddress: '203.0.113.9', services }),
   );
@@ -258,6 +272,36 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
     },
   );
 
+  // T007 (contracts/app-surface.md, Phase 2's lists; R-SEC-6; C2): the teacher's name search
+  // declares Phase 1's `rate_limit_search`, the teacher's own id as subject; `get` declares none.
+  it("counts every call under rate_limit_search by the teacher's own id, and refuses one past it RATE_LIMITED before the service: 'teacher.students.list'", async () => {
+    const caller = callerAs(sessionOf('approved'));
+    await caller.teacher.students.list({ tab: 'active', query: 'يوس' });
+    expect(limited).toEqual([['rate_limit_search', CALLER]]);
+    refuseAtLimit = true;
+    calls = [];
+    await expect(caller.teacher.students.list({ tab: 'active' })).rejects.toEqual(
+      refused('RATE_LIMITED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("counts no call of 'teacher.students.get' or 'teacher.today' under rate_limit_search", async () => {
+    const caller = callerAs(sessionOf('approved'));
+    await caller.teacher.students.get({ enrollmentId: OWN });
+    await caller.teacher.today({});
+    expect(limited).toEqual([]);
+  });
+
+  it('answers a deleted student deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {
+    const deleted = { displayName: '', displayNameOrNull: null, deleted: true };
+    const answer = await callerAs(sessionOf('approved'), {
+      ...booking,
+      students: async () => ({ items: [{ ...item, student: { ...deleted, ...leaked } }] }) as never,
+    }).teacher.students.list({ tab: 'active' });
+    expect(answer.items.map(({ student }) => student)).toEqual([deleted]);
+  });
+
   it('refuses a blank name VALIDATION_FAILED before the service', async () => {
     const thrown: unknown = await callerAs(sessionOf('approved'))
       .teacher.students.list({ tab: 'active', query: '   ' })
@@ -276,7 +320,7 @@ describe("'teacher.today' (T049)", () => {
     expect(answer).toEqual({
       localDate: '2026-11-12',
       timezone: 'Africa/Cairo',
-      sessions: [{ ...session, enrollmentId: OWN, student: { displayName: 'يوسف علي' }, summary }],
+      sessions: [{ ...session, enrollmentId: OWN, student: item.student, summary }],
     });
   });
 

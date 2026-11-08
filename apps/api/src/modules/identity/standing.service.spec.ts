@@ -402,3 +402,147 @@ describe('the consequences registry', () => {
     expect(calls).toEqual(['first:suspended', 'second:suspended']);
   });
 });
+
+// T005 of specs/004-sessions (`002:T144`; FR-421, FR-486; R-313; admin-surface.md "`students`"): a
+// student's suspension, ban and reinstatement, as the teacher's: the account's lock first, the
+// student's own read (a student has no teacher profile), the move, every sign-in session ended and
+// the one consequences entry, on the action's transaction; the reinstatement as the teacher's
+// (`002:T113`, `002:T126`, the note under T005), restoring the account only.
+const student = (
+  accountStatus: 'active' | 'suspended' | 'verification_required' | 'banned' = 'active',
+) => store.plant({ accountStatus, role: 'student' });
+
+describe('suspendStudent', () => {
+  it.each(['active', 'verification_required'] as const)(
+    'suspends a student %s, ends every sign-in session and calls the consequences with suspended',
+    async (accountStatus) => {
+      const userId = student(accountStatus);
+      expect(await standing.suspendStudent(TX, ADMIN, userId)).toEqual({
+        before: { accountStatus },
+        after: { accountStatus: 'suspended' },
+      });
+      expect(store.person(userId).accountStatus).toBe('suspended');
+      expect(sessionOf(userId)).toEqual({ revokedReason: 'account_suspended', revokedAt: NOW });
+      expect(consequences).toEqual([{ userId, cause: 'suspended' }]);
+    },
+  );
+
+  it('refuses a student suspended or banned, naming the standing, and ends nothing', async () => {
+    for (const accountStatus of ['suspended', 'banned'] as const) {
+      const userId = student(accountStatus);
+      expect(await refusal(standing.suspendStudent(TX, ADMIN, userId))).toEqual({
+        code: 'CONFLICT',
+        details: [{ path: 'studentUserId', code: accountStatus }],
+      });
+      expect(sessionOf(userId)?.revokedAt).toBeNull();
+    }
+    expect(consequences).toEqual([]);
+  });
+
+  it('answers NOT_FOUND for a teacher, an account with the teacher role and no profile, and no person', async () => {
+    const teacher = approvedTeacher();
+    const onboarding = store.plant({ role: 'teacher' });
+    for (const userId of [teacher, onboarding, ADMIN]) {
+      expect((await refusal(standing.suspendStudent(TX, ADMIN, userId))).code).toBe('NOT_FOUND');
+    }
+    expect(store.person(teacher).accountStatus).toBe('active');
+    expect(consequences).toEqual([]);
+  });
+});
+
+describe('banStudent', () => {
+  it.each(['active', 'verification_required', 'suspended'] as const)(
+    'bans a student %s for good, ends every sign-in session and calls the consequences with banned',
+    async (accountStatus) => {
+      const userId = student(accountStatus);
+      expect(await standing.banStudent(TX, ADMIN, userId)).toEqual({
+        before: { accountStatus },
+        after: { accountStatus: 'banned' },
+      });
+      expect(store.person(userId).accountStatus).toBe('banned');
+      expect(sessionOf(userId)).toEqual({ revokedReason: 'account_banned', revokedAt: NOW });
+      expect(consequences).toEqual([{ userId, cause: 'banned' }]);
+    },
+  );
+
+  it('refuses a student already banned, and answers NOT_FOUND for a teacher', async () => {
+    expect(await refusal(standing.banStudent(TX, ADMIN, student('banned')))).toEqual({
+      code: 'CONFLICT',
+      details: [{ path: 'studentUserId', code: 'banned' }],
+    });
+    expect((await refusal(standing.banStudent(TX, ADMIN, approvedTeacher()))).code).toBe(
+      'NOT_FOUND',
+    );
+    expect(consequences).toEqual([]);
+  });
+});
+
+describe('reinstateStudent (the note under T005: as a teacher’s)', () => {
+  it('returns a suspended student with no open identity request to active, calling no consequence', async () => {
+    const userId = student('suspended');
+    expect(await standing.reinstateStudent(TX, ADMIN, userId)).toEqual({
+      before: { accountStatus: 'suspended' },
+      after: { accountStatus: 'active' },
+    });
+    expect(store.person(userId).accountStatus).toBe('active');
+    expect(sessionOf(userId)?.revokedAt).toBeNull();
+    expect(consequences).toEqual([]);
+  });
+
+  it('lands a suspended student with an open identity request on verification_required', async () => {
+    const userId = student('suspended');
+    openIdentityRequests.add(userId);
+    expect(await standing.reinstateStudent(TX, ADMIN, userId)).toEqual({
+      before: { accountStatus: 'suspended' },
+      after: { accountStatus: 'verification_required' },
+    });
+    expect(store.person(userId).accountStatus).toBe('verification_required');
+    expect(consequences).toEqual([]);
+  });
+
+  it('refuses an active student and a banned one, and answers NOT_FOUND for a teacher', async () => {
+    for (const accountStatus of ['active', 'banned'] as const) {
+      expect(await refusal(standing.reinstateStudent(TX, ADMIN, student(accountStatus)))).toEqual({
+        code: 'CONFLICT',
+        details: [{ path: 'studentUserId', code: accountStatus }],
+      });
+    }
+    expect(
+      (await refusal(standing.reinstateStudent(TX, ADMIN, approvedTeacher('suspended')))).code,
+    ).toBe('NOT_FOUND');
+  });
+});
+
+describe("a student's account lock (T126, the note under T005)", () => {
+  beforeEach(() => {
+    standing = new StandingService({
+      store,
+      consequences: new AccountConsequences(),
+      revokeSubjects: async () => undefined,
+      hasOpenIdentityRequest: async (_tx, userId) => {
+        store.journal.push(`request:${userId}`);
+        return openIdentityRequests.has(userId);
+      },
+      now: () => NOW,
+    });
+  });
+
+  it.each(['suspendStudent', 'banStudent'] as const)(
+    '%s locks the account before it reads the student',
+    async (method) => {
+      const userId = student();
+      await standing[method](TX, ADMIN, userId);
+      expect(store.journal).toEqual([`lock:${userId}`, `read-student:${userId}`]);
+    },
+  );
+
+  it('reinstateStudent locks the account before it reads the student and the open request', async () => {
+    const userId = student('suspended');
+    await standing.reinstateStudent(TX, ADMIN, userId);
+    expect(store.journal).toEqual([
+      `lock:${userId}`,
+      `read-student:${userId}`,
+      `request:${userId}`,
+    ]);
+  });
+});

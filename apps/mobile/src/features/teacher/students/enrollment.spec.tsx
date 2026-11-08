@@ -68,7 +68,7 @@ const SESSIONS = [1, 2, 3, 4, 5].map((n) => wednesday(n));
 function enrollment(of: Partial<TeacherStudentsGetOutput> = {}): TeacherStudentsGetOutput {
   return {
     enrollmentId: ENROLLMENT_ID,
-    student: { displayName: 'يوسف أحمد' },
+    student: { displayName: 'يوسف أحمد', displayNameOrNull: 'يوسف أحمد', deleted: false },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 5, sessionDurationMinutes: 45 },
     status: 'confirmed',
     next: SESSIONS[0],
@@ -245,6 +245,20 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
     });
   });
 
+  // T007 (FR-426): a deleted student has no name; the header draws the stand-in and an avatar with
+  // no letter.
+  it('draws a deleted student by the stand-in text, the avatar with no letter', async () => {
+    get().mockResolvedValue(
+      enrollment({ student: { displayName: '', displayNameOrNull: null, deleted: true } }),
+    );
+    await inBothDirections(detail, async (_rendered, direction) => {
+      const standIn = said(direction, 'common.party.deletedStudent');
+      expect(await screen.findByText(standIn)).toBeTruthy();
+      expect(screen.getByText(said(direction, 'teacher.enrollment.title'))).toBeTruthy();
+      expect(screen.queryByText(standIn.charAt(0))).toBeNull();
+    });
+  });
+
   it('goes back from its header', async () => {
     get().mockResolvedValue(enrollment());
     await renderIn('rtl', detail());
@@ -261,7 +275,15 @@ describe('TeacherEnrollment reads since it opened (the owner’s decision of 202
     await renderIn('rtl', detail());
     expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
     expect(screen.queryByText('يوسف أحمد')).toBeNull();
-    get().mockResolvedValue(enrollment({ student: { displayName: 'يوسف أحمد علي' } }));
+    get().mockResolvedValue(
+      enrollment({
+        student: {
+          displayName: 'يوسف أحمد علي',
+          displayNameOrNull: 'يوسف أحمد علي',
+          deleted: false,
+        },
+      }),
+    );
     await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
     expect(await screen.findByText('يوسف أحمد علي')).toBeTruthy();
   });

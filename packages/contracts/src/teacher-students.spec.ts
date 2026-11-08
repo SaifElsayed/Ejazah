@@ -43,7 +43,7 @@ const summary = {
 
 const item = {
   enrollmentId: ids.enrollment,
-  student: { displayName: 'يوسف علي' },
+  student: { displayName: 'يوسف علي', displayNameOrNull: 'يوسف علي', deleted: false },
   summary,
   status: 'confirmed',
   next: session,
@@ -101,8 +101,17 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
     expect(teacherStudentsListOutput.parse({ items: [item] })).toEqual({ items: [item] });
   });
 
-  it('names the student by display name alone', () => {
-    expect(Object.keys(teacherStudentItem.shape.student.shape)).toEqual(['displayName']);
+  it('names the student by display name alone, and whether the account was deleted (T007)', () => {
+    expect(Object.keys(teacherStudentItem.shape.student.shape)).toEqual([
+      'displayName',
+      'displayNameOrNull',
+      'deleted',
+    ]);
+  });
+
+  it('parses a student whose account was deleted: no name, and deleted (T007, FR-426)', () => {
+    const gone = { ...item, student: { displayName: '', displayNameOrNull: null, deleted: true } };
+    expect(teacherStudentItem.parse(gone)).toEqual(gone);
   });
 
   it('strips a date of birth, a minor flag, documents, a dispute history, a photo key and an id', () => {
@@ -118,7 +127,7 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
 describe('«اليوم» (FR-391, FR-393)', () => {
   const today = {
     enrollmentId: ids.enrollment,
-    student: { displayName: 'يوسف علي' },
+    student: item.student,
     summary,
     ...session,
   } as const;

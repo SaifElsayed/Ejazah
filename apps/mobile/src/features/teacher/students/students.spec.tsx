@@ -66,7 +66,7 @@ function item(
 ): TeacherStudentItem {
   return {
     enrollmentId: `0193a6f0-0000-7000-8000-0000000000${id}`,
-    student: { displayName: student },
+    student: { displayName: student, displayNameOrNull: student, deleted: false },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
     upcoming: 5,
     completed: 3,
@@ -167,6 +167,24 @@ describe('TeacherStudents (FR-391, FR-393)', () => {
       expect(screen.getByText(said(direction, 'common.track.ijazahTrack'))).toBeTruthy();
     });
     expect(listedWith()).toContainEqual({ tab: 'active' });
+  });
+
+  // T007 (FR-426): a deleted student has no name; the row draws the stand-in and an avatar with no
+  // letter, never an empty line.
+  it('draws a deleted student by the stand-in text, the avatar with no letter', async () => {
+    const deleted: TeacherStudentItem = {
+      ...NOOR,
+      student: { displayName: '', displayNameOrNull: null, deleted: true },
+    };
+    answering(() => ({ items: [deleted] }));
+    await inBothDirections(active, async (_rendered, direction) => {
+      expect(await screen.findByText(said(direction, 'common.party.deletedStudent'))).toBeTruthy();
+      expect(screen.getByText(nextLine(direction, deleted))).toBeTruthy();
+      // The avatar draws no letter: not the stand-in's first.
+      expect(
+        screen.queryByText(said(direction, 'common.party.deletedStudent').charAt(0)),
+      ).toBeNull();
+    });
   });
 
   it('says a next session of another zone in the teacher’s too (ADR 0009 D5)', async () => {

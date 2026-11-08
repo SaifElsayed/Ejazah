@@ -68,10 +68,31 @@ export const enrollmentsListInput = z.object({
   cursor: enrollmentListCursor.optional(),
 });
 
+/**
+ * The other party of an enrollment as Phase 2's lists name them (T007, `003:T090`; FR-426;
+ * specs/004-sessions/contracts/README.md, "A deleted party"). A party whose account was deleted
+ * has no name (FR-141 erased it): `displayNameOrNull` null and `deleted` true, and the phone draws
+ * its stand-in. Added beside `displayName`, which the contract gate keeps a string (R-API-9; the
+ * note under T007 of specs/004-sessions/tasks.md). A later output naming a party is new and
+ * answers `{ displayName: string | null, deleted: boolean }` instead.
+ */
+export const listedPartyName = z.object({
+  /**
+   * @deprecated Since T007: read `displayNameOrNull` and `deleted`. `''` for a deleted party, so
+   * an older phone draws no name; it stays published until the contract gate has a path to
+   * deprecate and then remove a field (R-API-9).
+   */
+  displayName: z.string(),
+  /** The party's display name; null for a deleted party. */
+  displayNameOrNull: z.string().nullable(),
+  /** The party's account was deleted (FR-426). */
+  deleted: z.boolean(),
+});
+
 /** One of the student's enrollments (FR-390). */
 export const studentEnrollmentItem = z.object({
   enrollmentId: z.uuid(),
-  teacher: z.object({ teacherId: z.uuid(), displayName: z.string() }),
+  teacher: z.object({ teacherId: z.uuid(), ...listedPartyName.shape }),
   summary: enrollmentTerms,
   status: enrollmentStatus,
   ...enrollmentProgress.shape,
@@ -94,6 +115,7 @@ export type EnrollmentListTab = z.infer<typeof enrollmentListTab>;
 export type SessionStatus = z.infer<typeof sessionStatus>;
 export type ListedSession = z.infer<typeof listedSession>;
 export type EnrollmentTerms = z.infer<typeof enrollmentTerms>;
+export type ListedPartyName = z.infer<typeof listedPartyName>;
 export type EnrollmentProgress = z.infer<typeof enrollmentProgress>;
 export type EnrollmentsListInput = z.infer<typeof enrollmentsListInput>;
 export type StudentEnrollmentItem = z.infer<typeof studentEnrollmentItem>;

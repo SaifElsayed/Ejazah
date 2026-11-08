@@ -10,12 +10,19 @@ import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   cancelByAdmin,
+  freezableRemediesOf,
+  freeze,
   handToCase,
   lapse,
-  OPEN_REMEDY_STATUSES,
   openRemediesOf,
   scheduledSessionsOf,
 } from './remaining-sessions.repository.js';
+
+// The open statuses written out, not read from `OPEN_REMEDY_STATUSES`, so a list that drops one
+// (`frozen`, data-model.md §3, F1) fails here (PR #127's review, round 3, Minor; the note under T005).
+const OPEN = ['awaiting_choice', 'proposed', 'counter_proposed', 'frozen'];
+// What a student's suspension freezes: the open remedies not yet frozen (R-311, "Frozen"; T005).
+const FREEZABLE = ['awaiting_choice', 'proposed', 'counter_proposed'];
 
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const AT = new Date('2026-11-07T10:00:00Z');
@@ -58,6 +65,8 @@ describe('the queries of an enrollment’s end (T004)', () => {
     await expect(openRemediesOf(untouched, [])).resolves.toEqual([]);
     await expect(handToCase(untouched, [], id(31), AT)).resolves.toBeUndefined();
     await expect(lapse(untouched, [], AT)).resolves.toBeUndefined();
+    await expect(freezableRemediesOf(untouched, [])).resolves.toEqual([]);
+    await expect(freeze(untouched, [])).resolves.toBeUndefined();
   });
 
   it('scheduledSessionsOf reads the scheduled sessions of the enrollments, in id order', async () => {
@@ -105,7 +114,7 @@ describe('the queries of an enrollment’s end (T004)', () => {
         method: 'findMany',
         args: {
           where: {
-            status: { in: [...OPEN_REMEDY_STATUSES] },
+            status: { in: OPEN },
             session: { enrollmentId: { in: [id(1)] }, deletedAt: null },
           },
           orderBy: { id: 'asc' },
@@ -123,7 +132,7 @@ describe('the queries of an enrollment’s end (T004)', () => {
         model: 'sessionRemedy',
         method: 'updateMany',
         args: {
-          where: { id: { in: [id(21)] }, status: { in: [...OPEN_REMEDY_STATUSES] } },
+          where: { id: { in: [id(21)] }, status: { in: OPEN } },
           data: { status: 'refund_case', caseId: id(31), decidedAt: AT, ...NO_COUNTER },
         },
       },
@@ -138,8 +147,60 @@ describe('the queries of an enrollment’s end (T004)', () => {
         model: 'sessionRemedy',
         method: 'updateMany',
         args: {
-          where: { id: { in: [id(21), id(22)] }, status: { in: [...OPEN_REMEDY_STATUSES] } },
+          where: { id: { in: [id(21), id(22)] }, status: { in: OPEN } },
           data: { status: 'lapsed', decidedAt: AT, ...NO_COUNTER },
+        },
+      },
+    ]);
+  });
+});
+
+describe('the queries of a student’s suspension (T005, R-311 "Frozen")', () => {
+  it('freezableRemediesOf reads the open remedies not yet frozen of the enrollments’ live sessions, each with whether a counter is pending', async () => {
+    const { calls, tx } = recorded([
+      { id: id(21), sessionId: id(11), status: 'proposed', session: { enrollmentId: id(1) } },
+      {
+        id: id(22),
+        sessionId: id(12),
+        status: 'counter_proposed',
+        session: { enrollmentId: id(2) },
+      },
+    ]);
+    await expect(freezableRemediesOf(tx, [id(1), id(2)])).resolves.toEqual([
+      { id: id(21), sessionId: id(11), enrollmentId: id(1), counterPending: false },
+      { id: id(22), sessionId: id(12), enrollmentId: id(2), counterPending: true },
+    ]);
+    expect(calls).toEqual([
+      {
+        model: 'sessionRemedy',
+        method: 'findMany',
+        args: {
+          where: {
+            status: { in: FREEZABLE },
+            session: { enrollmentId: { in: [id(1), id(2)] }, deletedAt: null },
+          },
+          orderBy: { id: 'asc' },
+          select: {
+            id: true,
+            sessionId: true,
+            status: true,
+            session: { select: { enrollmentId: true } },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('freeze writes frozen on those still open and not frozen, the five counter columns cleared and proposed_date left as it is (rule 42)', async () => {
+    const { calls, tx } = recorded();
+    await freeze(tx, [id(21), id(22)]);
+    expect(calls).toEqual([
+      {
+        model: 'sessionRemedy',
+        method: 'updateMany',
+        args: {
+          where: { id: { in: [id(21), id(22)] }, status: { in: FREEZABLE } },
+          data: { status: 'frozen', ...NO_COUNTER },
         },
       },
     ]);

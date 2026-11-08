@@ -95,7 +95,7 @@ const allowedOrigins = z
 
 // T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each has only its
 // stand-in until the live adapter's task adds it, and each is refused outside development and test
-// as the three Phase 0 ones are.
+// as the three Phase 0 ones are. T009 adds LiveKit to `VIDEO_PROVIDER`; its stand-in stays refused.
 const standInProviderKeys = [
   'VIDEO_PROVIDER',
   'PUSH_PROVIDER',
@@ -103,6 +103,16 @@ const standInProviderKeys = [
   'SIGN_IN_PROVIDER',
   'EMAIL_PROVIDER',
 ] as const;
+
+// T009 (research R-302): the keys the provider selected by `VIDEO_PROVIDER=livekit` cannot start
+// without. The secret signs the tokens and verifies the webhooks; LiveKit has no other.
+const livekitKeys = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'] as const;
+
+// T009: the LiveKit project's address, which `sessions.join` hands the app (R-302): `wss://` only.
+const livekitUrl = z.url({
+  protocol: /^wss$/,
+  error: "must be the LiveKit project's wss:// address",
+});
 
 const s3Keys = [
   'S3_ENDPOINT',
@@ -189,8 +199,8 @@ const envObject = z.object({
   // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
   // stand-in until the phase that first calls the port adds its real member (FR-054), so each
   // defaults to it. Every mode but development and test refuses each stand-in below, as it refuses
-  // PAYMENT_GATEWAY's (T153, T168).
-  VIDEO_PROVIDER: z.enum(['fake']).default('fake'),
+  // PAYMENT_GATEWAY's (T153, T168). T009 adds LiveKit to the video port (research R-302).
+  VIDEO_PROVIDER: z.enum(['fake', 'livekit']).default('fake'),
   PUSH_PROVIDER: z.enum(['fake']).default('fake'),
   SMS_PROVIDER: z.enum(['fake']).default('fake'),
 
@@ -210,8 +220,10 @@ const envObject = z.object({
   TRUSTED_PROXY: headerName.optional(),
 
   // Provider credentials are optional: the suite passes with every one unset (FR-054).
-  DAILY_API_KEY: nonEmpty.optional(),
-  DAILY_WEBHOOK_SECRET: nonEmpty.optional(),
+  // T009: LiveKit's, read only while VIDEO_PROVIDER is `livekit` (ADR 0003, the Daily rename).
+  LIVEKIT_URL: livekitUrl.optional(),
+  LIVEKIT_API_KEY: nonEmpty.optional(),
+  LIVEKIT_API_SECRET: nonEmpty.optional(),
   SMS_PROVIDER_KEY: nonEmpty.optional(),
   EXPO_ACCESS_TOKEN: nonEmpty.optional(),
 
@@ -279,8 +291,9 @@ const envKeyKinds = {
   EMAIL_FROM: 'platform',
   SUPPORT_EMAIL: 'platform',
   TRUSTED_PROXY: 'platform',
-  DAILY_API_KEY: 'provider',
-  DAILY_WEBHOOK_SECRET: 'provider',
+  LIVEKIT_URL: 'provider',
+  LIVEKIT_API_KEY: 'provider',
+  LIVEKIT_API_SECRET: 'provider',
   SMS_PROVIDER_KEY: 'provider',
   EXPO_ACCESS_TOKEN: 'provider',
   GOOGLE_CLIENT_IDS: 'provider',
@@ -403,6 +416,20 @@ export const envSchema = envObject.superRefine((env, ctx) => {
             message: `the gateway's test mode is refused outside development and test; a live key carries ${mark} (R-HONEST-1)`,
           });
         }
+      }
+    }
+  }
+
+  // T009: LiveKit cannot start without its address, its key and its secret. The key is named, never
+  // its value (R-SEC-2).
+  if (env.VIDEO_PROVIDER === 'livekit') {
+    for (const key of livekitKeys) {
+      if (env[key] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'required when VIDEO_PROVIDER=livekit (T009)',
+        });
       }
     }
   }

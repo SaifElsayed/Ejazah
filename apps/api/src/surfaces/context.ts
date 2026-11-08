@@ -405,6 +405,12 @@ export interface AdminSurfaceServices {
     ban(tx: Transaction, actorId: string, teacherUserId: string): Move;
     reinstate(tx: Transaction, actorId: string, teacherUserId: string): Move;
   };
+  /** A student's standing (FR-421, FR-486; T005 of specs/004-sessions), the identity module's. */
+  readonly students: {
+    suspendStudent(tx: Transaction, actorId: string, userId: string): Move;
+    banStudent(tx: Transaction, actorId: string, userId: string): Move;
+    reinstateStudent(tx: Transaction, actorId: string, userId: string): Move;
+  };
 }
 
 /**

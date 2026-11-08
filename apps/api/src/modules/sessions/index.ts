@@ -52,12 +52,18 @@ export { type SessionProgress, sessionProgress } from './progress.js';
  * T004 of specs/004-sessions (`003:T059`, FR-AUTH-14's confirmed part; R-313): an enrollment's
  * end, on the caller's transaction after the enrollments' lock it holds: its remaining sessions
  * `cancelled_by_admin`, its open remedies handed to the case the caller opens or lapsed where it
- * opens none, one `session_events` row each. The one hand-off every enrollment's end uses.
+ * opens none, one `session_events` row each. The one hand-off every enrollment's end uses. A
+ * student's suspension (T005) runs it with `remedies: 'lockOnly'` and then `freezeOpenRemedies`:
+ * the enrollments stay `confirmed`, their open remedies `frozen` (R-311, "Frozen"; C3).
  */
 export {
   type CaseOf,
   cancelRemainingSessions,
   type EnrollmentsEnded,
+  freezeOpenRemedies,
+  type RemainingSessionsOptions,
+  type RemediesFrozen,
+  type RemedyHandling,
 } from './remaining-sessions.service.js';
 /** Sessions' one writer of `session_events` rows (T004, FR-495, R-315), for every later task. */
 export {
@@ -65,3 +71,20 @@ export {
   type SessionEventKind,
   type SessionEventRecord,
 } from './session-events.repository.js';
+/**
+ * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
+ * answers, bound by the composition root to booking's `createEnrollmentSide()`.
+ */
+export type {
+  EnrollmentCancellationReason,
+  EnrollmentEventEntry,
+  EnrollmentEventKind,
+  EnrollmentPage,
+  EnrollmentPageFilter,
+  EnrollmentPageItem,
+  EnrollmentSide,
+  EnrollmentStatus,
+  EnrollmentTerms,
+  EnrollmentTrack,
+  HeldTime,
+} from './enrollment-side.port.js';

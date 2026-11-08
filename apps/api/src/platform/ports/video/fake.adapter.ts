@@ -4,14 +4,27 @@
 // HMAC-SHA256 under the webhook secret in the `x-fake-signature` header, or under a random secret
 // for the incorrect one. T122: it records each operation it was asked to do and fails one when told,
 // before anything changes.
+//
+// T009 (contracts/video.md, "The stand-in and its harness"): widened to the port as LiveKit serves
+// it. A room is created with its two timeouts and a token with its `validUntil`, both recorded as
+// asked and neither enforced: the stand-in admits whom it is told to. An event is `joined`, `left` or
+// `room_ended`; a participant's carries their connection (`connection`), by default one per
+// participant (`standInConnectionRef`), so their join and leave pair as LiveKit's `sid` makes them;
+// the room's end carries no participant. A correctly signed body of any other `type` answers
+// `{ kind: 'ignored' }`, as LiveKit's `track_*` and `room_started` do; its signature is checked first.
+// `endRoom` for a room it never created answers success, as LiveKit's adapter does (the owner's
+// decision of 2026-11-07), since the worker's stand-in never created the rooms the API's did.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
 import { StandIn } from '../stand-in.js';
 import {
   bindJoinToken,
+  type IgnoredEvent,
   type JoinToken,
   type ParticipantEvent,
+  type RoomTimeouts,
+  type TokenValidity,
   type VideoPort,
 } from './video.port.js';
 
@@ -28,9 +41,14 @@ export interface EventOptions {
   readonly signature?: 'valid' | 'invalid';
 }
 
-export interface ParticipantEventOptions extends EventOptions {
+export interface RoomEndedEventOptions extends EventOptions {
   /** When the provider says it happened; the stand-in's clock by default. */
   readonly occurredAt?: Date;
+}
+
+export interface ParticipantEventOptions extends RoomEndedEventOptions {
+  /** The connection it is of; the participant's one connection by default. */
+  readonly connectionRef?: string;
 }
 
 interface Room {
@@ -38,15 +56,34 @@ interface Room {
   ended: boolean;
 }
 
-const eventBody = z.object({
-  id: z.string().min(1),
-  type: z.enum(['joined', 'left']),
-  session: z.string().min(1),
-  participant: z.string().min(1),
-  occurred_at: z.iso.datetime(),
-});
+const ATTENDANCE_TYPES: readonly string[] = ['joined', 'left', 'room_ended'];
 
-type EventBody = z.infer<typeof eventBody>;
+const eventKind = z.object({ type: z.string() });
+
+const eventBody = z.discriminatedUnion('type', [
+  z.object({
+    id: z.string().min(1),
+    type: z.enum(['joined', 'left']),
+    session: z.string().min(1),
+    participant: z.string().min(1),
+    connection: z.string().min(1),
+    occurred_at: z.iso.datetime(),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('room_ended'),
+    session: z.string().min(1),
+    occurred_at: z.iso.datetime(),
+  }),
+]);
+
+/** The stand-in's event body, as it is signed and sent. */
+export type StandInVideoEventBody = z.infer<typeof eventBody>;
+
+/** A participant's one connection, when the event names none. */
+export function standInConnectionRef(participantUserId: string): string {
+  return `fake_conn_${participantUserId}`;
+}
 
 export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
   readonly #webhookSecret: string;
@@ -57,8 +94,8 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
     this.#webhookSecret = options.webhookSecret;
   }
 
-  createRoom(sessionId: string): Promise<string> {
-    const failure = this.attempt('createRoom', [sessionId]);
+  createRoom(sessionId: string, timeouts: RoomTimeouts): Promise<string> {
+    const failure = this.attempt('createRoom', [sessionId, timeouts]);
     if (failure !== undefined) return Promise.reject(failure);
     if (sessionId.length === 0) return Promise.reject(new RangeError('A room is for a session.'));
     const existing = this.#rooms.get(sessionId);
@@ -68,8 +105,12 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
     return Promise.resolve(providerRoomId);
   }
 
-  createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken> {
-    const failure = this.attempt('createSessionToken', [sessionId, participantUserId]);
+  createSessionToken(
+    sessionId: string,
+    participantUserId: string,
+    validity: TokenValidity,
+  ): Promise<JoinToken> {
+    const failure = this.attempt('createSessionToken', [sessionId, participantUserId, validity]);
     if (failure !== undefined) return Promise.reject(failure);
     try {
       this.#openRoom(sessionId);
@@ -84,7 +125,7 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
   verifyAndParseParticipantEvent(
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,
-  ): Promise<ParticipantEvent> {
+  ): Promise<ParticipantEvent | IgnoredEvent> {
     const failure = this.attempt('verifyAndParseParticipantEvent', [rawBody, headers]);
     if (failure !== undefined) return Promise.reject(failure);
     const signature = Object.entries(headers).find(
@@ -95,29 +136,39 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
       return Promise.reject(new EventSignatureError());
     }
-    let body: EventBody;
+    let body: StandInVideoEventBody;
     try {
-      body = eventBody.parse(JSON.parse(rawBody.toString('utf8')));
+      const parsed: unknown = JSON.parse(rawBody.toString('utf8'));
+      if (!ATTENDANCE_TYPES.includes(eventKind.parse(parsed).type)) {
+        return Promise.resolve({ kind: 'ignored' });
+      }
+      body = eventBody.parse(parsed);
     } catch {
       // The parser's message can quote the body; the refusal carries none of it (R-SEC-2).
       return Promise.reject(new MalformedEventError());
     }
-    return Promise.resolve({
-      providerEventId: body.id,
-      sessionId: body.session,
-      participantUserId: body.participant,
-      type: body.type,
-      occurredAt: new Date(body.occurred_at),
-    });
+    const occurredAt = new Date(body.occurred_at);
+    return Promise.resolve(
+      body.type === 'room_ended'
+        ? { providerEventId: body.id, sessionId: body.session, type: body.type, occurredAt }
+        : {
+            providerEventId: body.id,
+            sessionId: body.session,
+            type: body.type,
+            participantUserId: body.participant,
+            connectionRef: body.connection,
+            occurredAt,
+          },
+    );
   }
 
   endRoom(sessionId: string): Promise<void> {
     const failure = this.attempt('endRoom', [sessionId]);
     if (failure !== undefined) return Promise.reject(failure);
+    // A room it never created is ended already, as LiveKit answers `not_found` (the owner's
+    // decision of 2026-11-07): a sweep in another process ends it without an error (T014).
     const room = this.#rooms.get(sessionId);
-    if (room === undefined)
-      return Promise.reject(new Error('unknown room: the stand-in did not create it.'));
-    room.ended = true;
+    if (room !== undefined) room.ended = true;
     return Promise.resolve();
   }
 
@@ -125,19 +176,35 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
   participantEvent(
     sessionId: string,
     participantUserId: string,
-    type: ParticipantEvent['type'],
+    type: 'joined' | 'left',
     options: ParticipantEventOptions = {},
   ): SignedEvent {
-    if (!this.#rooms.has(sessionId))
-      throw new Error('unknown room: the stand-in did not create it.');
-    const body: EventBody = {
-      id: `fake_vev_${randomUUID()}`,
-      type,
-      session: sessionId,
-      participant: participantUserId,
-      occurred_at: (options.occurredAt ?? new Date()).toISOString(),
-    };
-    return this.signed(Buffer.from(JSON.stringify(body)), options);
+    this.#knownRoom(sessionId);
+    return this.#event(
+      {
+        id: freshEventId(),
+        type,
+        session: sessionId,
+        participant: participantUserId,
+        connection: options.connectionRef ?? standInConnectionRef(participantUserId),
+        occurred_at: (options.occurredAt ?? new Date()).toISOString(),
+      },
+      options,
+    );
+  }
+
+  /** The provider reporting the end of a room this stand-in created. */
+  roomEndedEvent(sessionId: string, options: RoomEndedEventOptions = {}): SignedEvent {
+    this.#knownRoom(sessionId);
+    return this.#event(
+      {
+        id: freshEventId(),
+        type: 'room_ended',
+        session: sessionId,
+        occurred_at: (options.occurredAt ?? new Date()).toISOString(),
+      },
+      options,
+    );
   }
 
   /** Any body, signed as the provider would sign it (or under a secret nobody holds). */
@@ -147,12 +214,25 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
     return { rawBody, headers: { [SIGNATURE_HEADER]: sign(secret, rawBody) } };
   }
 
+  #event(body: StandInVideoEventBody, options: EventOptions): SignedEvent {
+    return this.signed(Buffer.from(JSON.stringify(body)), options);
+  }
+
+  #knownRoom(sessionId: string): void {
+    if (!this.#rooms.has(sessionId))
+      throw new Error('unknown room: the stand-in did not create it.');
+  }
+
   #openRoom(sessionId: string): Room {
     const room = this.#rooms.get(sessionId);
     if (room === undefined) throw new Error('unknown room: the stand-in did not create it.');
     if (room.ended) throw new Error('the room has ended: the stand-in admits nobody to it.');
     return room;
   }
+}
+
+function freshEventId(): string {
+  return `fake_vev_${randomUUID()}`;
 }
 
 function sign(secret: string, rawBody: Buffer): string {

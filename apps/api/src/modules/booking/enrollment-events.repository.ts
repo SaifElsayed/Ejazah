@@ -1,7 +1,10 @@
 // T033 (R-216, FR-385, data-model §2.5): booking's one writer of `enrollment_events` rows, the
 // append-only record of each outcome a later notification reads. Every confirmation, failed order
 // and cancellation writes its row here, in the transaction that made it: T033's releases, T038's
-// failed order, T039's confirmation and refusal, T040's sweeps, T041's terminations. The table is
+// failed order, T039's confirmation and refusal, T040's sweeps, T041's terminations, and Phase 3's
+// moves through sessions' `EnrollmentSide` (T008 of specs/004-sessions: `completed`,
+// `terminated_no_show`, `cancelled` with `admin`, `restored`, which carry neither an order nor a
+// reason, as rule 39's two checks require, `20261101120000_booking_pass`). The table is
 // append-only for the application role (ERD §15 rule 21, data-model rule 39), so nothing here
 // updates or deletes a row; the kind checks are the database's (a cancellation carries its reason
 // and nothing else does; a confirmation and a failed order carry their order).
@@ -35,7 +38,26 @@ export type EnrollmentOutcome =
       readonly enrollmentId: string;
       readonly cancellationReason: EnrollmentCancellationReason;
       readonly occurredAt: Date;
+    }
+  | {
+      readonly kind: 'completed' | 'terminated_no_show' | 'restored';
+      readonly enrollmentId: string;
+      readonly occurredAt: Date;
     };
+
+/** One outcome's row: its order on an order's outcome, its reason on a cancellation, else neither. */
+function rowOf(outcome: EnrollmentOutcome) {
+  const { enrollmentId, kind, occurredAt } = outcome;
+  switch (outcome.kind) {
+    case 'cancelled':
+      return { enrollmentId, kind, cancellationReason: outcome.cancellationReason, occurredAt };
+    case 'confirmed':
+    case 'order_failed':
+      return { enrollmentId, kind, paymentId: outcome.paymentId, occurredAt };
+    default:
+      return { enrollmentId, kind, occurredAt };
+  }
+}
 
 /** Writes one row per outcome, in one statement on the caller's transaction; none for none. */
 export async function recordEnrollmentEvents(
@@ -43,21 +65,5 @@ export async function recordEnrollmentEvents(
   outcomes: readonly EnrollmentOutcome[],
 ): Promise<void> {
   if (outcomes.length === 0) return;
-  await tx.enrollmentEvent.createMany({
-    data: outcomes.map((outcome) =>
-      outcome.kind === 'cancelled'
-        ? {
-            enrollmentId: outcome.enrollmentId,
-            kind: outcome.kind,
-            cancellationReason: outcome.cancellationReason,
-            occurredAt: outcome.occurredAt,
-          }
-        : {
-            enrollmentId: outcome.enrollmentId,
-            kind: outcome.kind,
-            paymentId: outcome.paymentId,
-            occurredAt: outcome.occurredAt,
-          },
-    ),
-  });
+  await tx.enrollmentEvent.createMany({ data: outcomes.map(rowOf) });
 }

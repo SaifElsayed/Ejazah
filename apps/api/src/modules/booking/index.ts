@@ -161,6 +161,12 @@ export {
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
 /**
+ * T008 of specs/004-sessions (R-301, R-322, R-323 GAP-1, U3): sessions' `EnrollmentSide` port over
+ * booking's rows, each function on the caller's transaction, each status move with its
+ * `enrollment_events` row; bound once by `main.ts` and `worker.ts`.
+ */
+export { createEnrollmentSide } from './enrollment-side.service.js';
+/**
  * The confirm job's booking (T039, R-215, FR-361, FR-362, FR-375, FR-PAYG-19), each on the job's
  * transaction: an enrollment's parties read with no lock; every lock the confirmation takes, in
  * T005's order, and the enrollment read under them; `confirmEnrollment`, the only writer of

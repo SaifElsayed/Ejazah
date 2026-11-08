@@ -9,4 +9,5 @@ export * from './credentials.js';
 export * from './documents.js';
 export * from './empty-input.js';
 export * from './payments.js';
+export * from './students.js';
 export * from './teachers.js';

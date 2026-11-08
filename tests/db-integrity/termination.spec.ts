@@ -18,7 +18,25 @@
 //     and cancels the enrollments `account_deleted`; a student's opens no case, its sessions' rows
 //     name none, its open remedy lapses and a chosen refund keeps its open case; and a deletion
 //     that fails after the subscriber leaves all of it as it was, every change being the
-//     deletion's transaction's (SC-412).
+//     deletion's transaction's (SC-412);
+//   - T005 of specs/004-sessions (`002:T144`; FR-485, FR-486; R-313): a student's suspension, through
+//     `StandingService.suspendStudent`, cancels the upcoming sessions of each confirmed enrollment
+//     (two teachers'), each row naming the enrollment's one `student_suspended` case, keeps the
+//     enrollments `confirmed` and freezes their open remedies (a pending counter withdrawn with one
+//     `counter_withdrawn` row, `proposed_date` kept, one `remedy_frozen` row each); one that fails
+//     after the subscriber leaves all of it as it was, the freeze included; a ban cancels the
+//     enrollments `admin` at once, with one `student_banned` case each, a frozen remedy handed to
+//     it with the others; a reinstatement raced against `users.requireIdentity` on one suspended
+//     student never leaves the account `active` with a request open, in either order; and the slot
+//     of another teacher whose first session falls on a frozen proposal's date and time is listed
+//     for the same student by `booking.slots` (the owner's decision of 2026-11-07, item 6: it could
+//     not be seen red first, and will not be until T027 reads reservations);
+//   - T006 of specs/004-sessions (FR-482, FR-483, FR-485; R-313): a teacher's suspension, revocation
+//     and ban each cancel the teacher's confirmed enrollments `teacher_suspended` with one row each,
+//     every remaining session `cancelled_by_admin` (one scheduled ahead and one inside its join
+//     period) with one row naming the enrollment's one `teacher_ended` case, and every open remedy,
+//     a frozen one included, handed to it; one that fails after the subscriber leaves all of it as
+//     it was.
 //
 // Every action runs its own transaction, so the rows are committed and kept, each probe with a world
 // of its own, as `confirmation-world.ts`' are. All connections are the application role.
@@ -30,6 +48,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import { piasters } from '../../packages/money/src/index';
 import {
+  bookingSlotsOf,
+  bookingSlotsStore,
   enrollOnHold,
   payStoreOver,
   payTargetOf,
@@ -41,9 +61,15 @@ import { openCompensationCase } from '../../apps/api/src/modules/moderation/inde
 import {
   AccountConsequences,
   createIdentityServices,
+  lockAccount,
   StandingService,
   standingStoreOver,
 } from '../../apps/api/src/modules/identity/index.js';
+import {
+  createIdentityRequestStore,
+  createVerificationAdminServices,
+  openRequestOf,
+} from '../../apps/api/src/modules/verification/index.js';
 import { orderStandingsOf } from '../../apps/api/src/modules/payments/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing.js';
@@ -73,6 +99,8 @@ import { connectAsApplication, type Db, makeAdmin } from './harness';
 const KEY = randomBytes(32).toString('base64');
 const PASSWORD = 'a long probe passphrase 41';
 const FEMALE = 'female' as RequesterGender;
+/** A logger that writes nothing: the line's fields are the subscriber's unit spec's. */
+const SILENT = { info: () => undefined };
 const identitySettings: SettingsReader = {
   read: async (key, schema) => schema.parse({ idempotency_key_ttl_hours: 24 }[key]),
 };
@@ -81,6 +109,8 @@ let watcher: Db;
 let database: Database;
 let webhook: Webhook;
 let standing: StandingService;
+let standingOver: (registry: AccountConsequences) => StandingService;
+let review: ReturnType<typeof createVerificationAdminServices>;
 let deletion: ReturnType<typeof createIdentityServices>['deletion'];
 let deletionOver: (registry: AccountConsequences) => typeof deletion;
 /** The paid orders the webhook handed to `confirm-enrollment`. */
@@ -95,14 +125,26 @@ beforeAll(async () => {
   });
   // The one registry, booking's subscriber bound to it as `main.ts` binds it.
   const consequences = new AccountConsequences();
-  consequences.subscribe(terminationSubscriber({ orders: orderStandingsOf, now: () => NOW }));
-  standing = new StandingService({
-    store: standingStoreOver(database),
-    consequences,
-    revokeSubjects,
-    hasOpenIdentityRequest: async () => false,
-  });
+  consequences.subscribe(
+    terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
+  );
+  // The standing as `createAdminServices` builds it, verification's open request read (T113).
+  standingOver = (registry) =>
+    new StandingService({
+      store: standingStoreOver(database),
+      consequences: registry,
+      revokeSubjects,
+      hasOpenIdentityRequest: async (tx, userId) => (await openRequestOf(tx, userId)) !== null,
+    });
+  standing = standingOver(consequences);
   const unreachable = () => Promise.reject(new Error('probe: not reached'));
+  review = createVerificationAdminServices({
+    database,
+    storage: { temporaryLink: unreachable },
+    cipher: { decrypt: () => unreachable() as never },
+    settings: { read: unreachable },
+    standing,
+  });
   deletionOver = (registry) =>
     createIdentityServices({
       database,
@@ -578,7 +620,9 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     const remedyId = await owed(missed?.id ?? '', 'awaiting_choice');
     await withPassword(on.teacherId);
     const failing = new AccountConsequences();
-    failing.subscribe(terminationSubscriber({ orders: orderStandingsOf, now: () => NOW }));
+    failing.subscribe(
+      terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
+    );
     failing.subscribe(async () => {
       throw new Error('probe: the deletion fails after the subscriber');
     });
@@ -597,5 +641,513 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     expect(await casesOf(enrollmentId)).toEqual([]);
     expect(await sessionEventsOf(enrollmentId)).toEqual([]);
     expect(await remedyOf(remedyId)).toMatchObject({ status: 'awaiting_choice', caseId: null });
+  });
+});
+
+// T005 of specs/004-sessions (`002:T144`; FR-421, FR-485, FR-486; R-313, R-311 "Frozen"; plan.md
+// decision 1; the notes under T005): a student's suspension, ban and reinstatement through identity's
+// real standing and booking's subscriber, each change in the action's transaction.
+
+/** A live person with the student role (ADR 0016 D3), as onboarding writes one. */
+async function student(): Promise<string> {
+  const userId = await person();
+  await database.userRole.create({ data: { userId, role: 'student', status: 'active' } });
+  return userId;
+}
+
+const TEN = new Date('1970-01-01T10:00:00Z');
+const PROPOSED_DATE = new Date('2026-11-05T00:00:00Z');
+
+/** The session settled as a Teacher-No-Show, and an open remedy on it in `status`. */
+async function openRemedy(
+  sessionId: string,
+  status: 'awaiting_choice' | 'proposed' | 'counter_proposed' | 'frozen',
+  counterSlotId?: string,
+): Promise<string> {
+  await database.session.update({ where: { id: sessionId }, data: { status: 'teacher_no_show' } });
+  const { id } = await database.sessionRemedy.create({
+    data: {
+      sessionId,
+      kind: 'makeup',
+      status,
+      proposedDate: status === 'awaiting_choice' ? null : PROPOSED_DATE,
+      offeredAt: new Date('2026-11-03T07:00:00Z'),
+      choiceClosesAt: new Date('2026-11-10T07:00:00Z'),
+      snapshotAnswerWindowHours: 72,
+      snapshotFirstSessionLeadHours: 24,
+      ...(status === 'counter_proposed'
+        ? {
+            counterSlotId: counterSlotId ?? '',
+            counterDate: new Date('2026-12-03T00:00:00Z'),
+            counterStartTimeLocal: TEN,
+            counterTimezone: CAIRO,
+            counterProposedAt: new Date('2026-11-03T07:30:00Z'),
+          }
+        : {}),
+    },
+    select: { id: true },
+  });
+  return id;
+}
+
+async function frozenView(id: string) {
+  return database.sessionRemedy.findUniqueOrThrow({
+    where: { id },
+    select: {
+      status: true,
+      caseId: true,
+      decidedAt: true,
+      proposedDate: true,
+      counterSlotId: true,
+      counterDate: true,
+      counterStartTimeLocal: true,
+      counterTimezone: true,
+      counterProposedAt: true,
+    },
+  });
+}
+
+const NO_COUNTER = {
+  counterSlotId: null,
+  counterDate: null,
+  counterStartTimeLocal: null,
+  counterTimezone: null,
+  counterProposedAt: null,
+};
+
+async function accountStatusOf(userId: string): Promise<string> {
+  const { accountStatus } = await database.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { accountStatus: true },
+  });
+  return accountStatus;
+}
+
+/** A student with a confirmed enrollment with each of two teachers; the second at 10:00. */
+async function enrolledWithTwo() {
+  const first = await offer(2);
+  const second = await offer(2);
+  const studentId = await student();
+  const one = await confirmed(first, first.slotIds[0] ?? '', studentId);
+  const two = await confirmed(second, second.slotIds[1] ?? '', studentId);
+  return { first, second, studentId, one, two };
+}
+
+describe("a student's suspension (T005, FR-486, R-313, plan.md decision 1 (b))", () => {
+  it('cancels the upcoming sessions naming one student_suspended case per enrollment, keeps the enrollments confirmed and freezes the open remedies', async () => {
+    const { first, studentId, one, two } = await enrolledWithTwo();
+    const [s1, s2] = await sessionStates(one);
+    const proposed = await openRemedy(s1?.id ?? '', 'proposed');
+    const countered = await openRemedy(s2?.id ?? '', 'counter_proposed', first.slotIds[1]);
+    const adminId = await makeAdmin(watcher);
+
+    await database.$transaction((tx) => standing.suspendStudent(tx, adminId, studentId));
+
+    expect(await accountStatusOf(studentId)).toBe('suspended');
+    for (const enrollmentId of [one, two]) {
+      expect(await enrollmentOf(enrollmentId)).toMatchObject({
+        status: 'confirmed',
+        cancellationReason: null,
+      });
+      expect((await eventsOf(enrollmentId)).map(({ kind }) => kind)).toEqual(['confirmed']);
+      const cases = await casesOf(enrollmentId);
+      expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
+        ['student_suspended', 'open'],
+      ]);
+      const remaining = (await sessionStates(enrollmentId)).filter(
+        ({ status }) => status !== 'teacher_no_show',
+      );
+      expect(remaining.length).toBeGreaterThan(0);
+      expect(new Set(remaining.map(({ status }) => status))).toEqual(
+        new Set(['cancelled_by_admin']),
+      );
+      const cancelledRows = (await sessionEventsOf(enrollmentId)).filter(
+        ({ kind }) => kind === 'cancelled_by_admin',
+      );
+      expect(cancelledRows).toHaveLength(remaining.length);
+      for (const row of cancelledRows) expect(row.caseId).toBe(cases[0]?.id);
+    }
+    expect(await frozenView(proposed)).toEqual({
+      status: 'frozen',
+      caseId: null,
+      decidedAt: null,
+      proposedDate: PROPOSED_DATE,
+      ...NO_COUNTER,
+    });
+    expect(await frozenView(countered)).toEqual({
+      status: 'frozen',
+      caseId: null,
+      decidedAt: null,
+      proposedDate: PROPOSED_DATE,
+      ...NO_COUNTER,
+    });
+    expect(
+      (await sessionEventsOf(one))
+        .filter(({ kind }) => kind === 'counter_withdrawn' || kind === 'remedy_frozen')
+        .map(({ kind, sessionId }) => [kind, sessionId])
+        .sort(),
+    ).toEqual(
+      [
+        ['counter_withdrawn', s2?.id],
+        ['remedy_frozen', s1?.id],
+        ['remedy_frozen', s2?.id],
+      ].sort(),
+    );
+  });
+
+  it('a suspension that fails after the subscriber leaves the account, the sessions, the cases and the remedies as they were, the freeze included', async () => {
+    const on = await offer(2);
+    const studentId = await student();
+    const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
+    const [s1, s2] = await sessionStates(enrollmentId);
+    const proposed = await openRemedy(s1?.id ?? '', 'proposed');
+    const countered = await openRemedy(s2?.id ?? '', 'counter_proposed', on.slotIds[1]);
+    const before = {
+      proposed: await frozenView(proposed),
+      countered: await frozenView(countered),
+      sessions: await sessionStates(enrollmentId),
+    };
+    const failing = new AccountConsequences();
+    failing.subscribe(
+      terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
+    );
+    failing.subscribe(async () => {
+      throw new Error('probe: the suspension fails after the subscriber');
+    });
+    const adminId = await makeAdmin(watcher);
+
+    await expect(
+      database.$transaction((tx) => standingOver(failing).suspendStudent(tx, adminId, studentId)),
+    ).rejects.toThrow();
+
+    expect(await accountStatusOf(studentId)).toBe('active');
+    expect(await sessionStates(enrollmentId)).toEqual(before.sessions);
+    expect(await casesOf(enrollmentId)).toEqual([]);
+    expect(await sessionEventsOf(enrollmentId)).toEqual([]);
+    expect(await frozenView(proposed)).toEqual(before.proposed);
+    expect(await frozenView(countered)).toEqual(before.countered);
+  });
+
+  it('the slot of another teacher whose first session falls on a frozen proposal’s date and time is listed for the same student (the owner’s decision of 2026-11-07, item 6)', async () => {
+    // The proposal is on the enrollment's own slot, Thursday 09:00 Cairo, on 2026-11-05; another
+    // teacher's Thursday 09:00 slot's first session falls on it. Not red first: `booking.slots`
+    // reads no reservation until T027, which hides a `proposed` one's time and not a frozen one's.
+    const on = await offer();
+    const studentId = await student();
+    const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
+    const sessions = await sessionStates(enrollmentId);
+    // The remedy on the last session, so the other teacher's three weeks before it are free once the
+    // suspension has cancelled them.
+    const remedyId = await openRemedy(sessions.at(-1)?.id ?? '', 'proposed');
+    const elsewhere = await offer();
+    const { id: threeWeeks } = await database.package.create({
+      data: {
+        teacherUserId: elsewhere.teacherId,
+        subjectId: elsewhere.subjectId,
+        sessionCount: 3,
+        sessionDurationMinutes: 60,
+        pricePiasters: 100_000n,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    const adminId = await makeAdmin(watcher);
+
+    await database.$transaction((tx) => standing.suspendStudent(tx, adminId, studentId));
+
+    expect(await frozenView(remedyId)).toMatchObject({
+      status: 'frozen',
+      proposedDate: PROPOSED_DATE,
+    });
+    const { slots } = await database.$transaction((tx) =>
+      bookingSlotsOf(
+        tx,
+        bookingSlotsStore,
+        { userId: studentId, gender: FEMALE },
+        { packageId: threeWeeks },
+        { now: NOW, leadHours: 24, bufferWeeks: async () => 0 },
+      ),
+    );
+    const listed = slots.find(({ slotId }) => slotId === elsewhere.slotIds[0]);
+    expect(listed?.firstSession.localDate).toBe('2026-11-05');
+    expect(new Date(listed?.firstSession.startsAt ?? 0).toISOString()).toBe(
+      '2026-11-05T07:00:00.000Z',
+    );
+  });
+});
+
+describe("a student's ban (T005, FR-486, R-313, plan.md decision 1 (a))", () => {
+  it('cancels the enrollments admin at once with one row each, one student_banned case each, the sessions naming it and every open remedy, a frozen one included, handed to it', async () => {
+    const { studentId, one, two } = await enrolledWithTwo();
+    const [s1, s2] = await sessionStates(one);
+    const waiting = await openRemedy(s1?.id ?? '', 'awaiting_choice');
+    const frozen = await openRemedy(s2?.id ?? '', 'frozen');
+    const adminId = await makeAdmin(watcher);
+
+    await database.$transaction((tx) => standing.banStudent(tx, adminId, studentId));
+
+    expect(await accountStatusOf(studentId)).toBe('banned');
+    for (const enrollmentId of [one, two]) {
+      expect(await enrollmentOf(enrollmentId)).toMatchObject({
+        status: 'cancelled',
+        cancellationReason: 'admin',
+      });
+      expect(
+        (await eventsOf(enrollmentId)).map(({ kind, cancellationReason }) => [
+          kind,
+          cancellationReason,
+        ]),
+      ).toEqual([
+        ['confirmed', null],
+        ['cancelled', 'admin'],
+      ]);
+      const cases = await casesOf(enrollmentId);
+      expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
+        ['student_banned', 'open'],
+      ]);
+      const cancelledRows = (await sessionEventsOf(enrollmentId)).filter(
+        ({ kind }) => kind === 'cancelled_by_admin',
+      );
+      expect(cancelledRows.length).toBeGreaterThan(0);
+      for (const row of cancelledRows) expect(row.caseId).toBe(cases[0]?.id);
+    }
+    const caseId = (await casesOf(one))[0]?.id;
+    for (const remedyId of [waiting, frozen]) {
+      expect(await remedyOf(remedyId)).toEqual({ status: 'refund_case', caseId, decidedAt: NOW });
+    }
+    expect(
+      (await sessionEventsOf(one))
+        .filter(({ kind }) => kind === 'remedy_handed_to_case')
+        .map(({ sessionId }) => sessionId)
+        .sort(),
+    ).toEqual([s1?.id, s2?.id].sort());
+  });
+});
+
+/** Resolves once backend `pid` waits on a lock; fails after about two seconds. */
+async function seenWaiting(pid: number): Promise<void> {
+  for (let look = 0; look < 100; look += 1) {
+    const { rows } = await watcher.query<{ waiting: boolean }>(
+      `SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = $1`,
+      [pid],
+    );
+    if (rows[0]?.waiting === true) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`backend ${String(pid)} never waited on a lock`);
+}
+
+/**
+ * A runs `first` and stays open; B runs `second` and is seen waiting on a lock; A commits. Answers
+ * how B ended (as `account-locks.spec.ts` stages a race: the order is the database's, not timing's).
+ */
+async function race<T>(
+  first: (tx: Transaction) => Promise<unknown>,
+  second: (tx: Transaction) => Promise<T>,
+): Promise<{ readonly value: T } | { readonly thrown: unknown }> {
+  let release = (): void => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let ran = (): void => undefined;
+  const firstRan = new Promise<void>((resolve) => {
+    ran = resolve;
+  });
+  const options = { maxWait: 5_000, timeout: 15_000 };
+  const a = database.$transaction(async (tx) => {
+    await first(tx);
+    ran();
+    await released;
+  }, options);
+  await Promise.race([firstRan, a]);
+  let pidOfB = (_pid: number): void => undefined;
+  const bStarted = new Promise<number>((resolve) => {
+    pidOfB = resolve;
+  });
+  const b = database
+    .$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      pidOfB(row?.pid ?? 0);
+      return second(tx);
+    }, options)
+    .then(
+      (value) => ({ value }),
+      (thrown: unknown) => ({ thrown }),
+    );
+  try {
+    await seenWaiting(await bStarted);
+  } finally {
+    release();
+    await a;
+  }
+  return b;
+}
+
+async function openRequestsOf(userId: string): Promise<number> {
+  return database.verificationRequest.count({ where: { userId, status: 'open' } });
+}
+
+describe("a student's reinstatement and an identity request (the note under T005; 002:T113, 002:T126)", () => {
+  it('a request waits for the reinstatement holding the account, then opens on the active account: verification_required, never active with it open', async () => {
+    const studentId = await student();
+    await database.user.update({ where: { id: studentId }, data: { accountStatus: 'suspended' } });
+    const adminId = await makeAdmin(watcher);
+    const ended = await race(
+      (tx) => standing.reinstateStudent(tx, adminId, studentId),
+      (tx) => review.documents.requireIdentity(tx, adminId, { userId: studentId, reason: 'بلاغ' }),
+    );
+    expect(ended).toMatchObject({ value: { requestId: expect.any(String) } });
+    expect(await accountStatusOf(studentId)).toBe('verification_required');
+    expect(await openRequestsOf(studentId)).toBe(1);
+  });
+
+  it('a reinstatement waits for a request written under the account’s lock, then lands on verification_required', async () => {
+    // A writes the request as `requireIdentity` writes it, the account's lock first: on a suspended
+    // account `requireIdentity` itself refuses, so the request is opened as its store opens one.
+    const studentId = await student();
+    await database.user.update({ where: { id: studentId }, data: { accountStatus: 'suspended' } });
+    const adminId = await makeAdmin(watcher);
+    const requests = createIdentityRequestStore(database);
+    const ended = await race(
+      async (tx) => {
+        await lockAccount(tx, studentId);
+        await requests.openRequest(tx, { userId: studentId, adminId, reason: 'بلاغ', at: NOW });
+      },
+      (tx) => standing.reinstateStudent(tx, adminId, studentId),
+    );
+    expect(ended).toEqual({
+      value: {
+        before: { accountStatus: 'suspended' },
+        after: { accountStatus: 'verification_required' },
+      },
+    });
+    expect(await accountStatusOf(studentId)).toBe('verification_required');
+    expect(await openRequestsOf(studentId)).toBe(1);
+  });
+});
+
+// T006 of specs/004-sessions (FR-482, FR-483, FR-485; SC-412; R-313): a teacher's end through
+// identity's real standing and booking's subscriber, each change in the action's transaction.
+
+/** Moves the session inside its join period at NOW: started ten minutes before, still scheduled. */
+async function inItsJoinPeriod(sessionId: string): Promise<void> {
+  await database.session.update({
+    where: { id: sessionId },
+    data: {
+      scheduledDateLocal: new Date('2026-11-03T00:00:00Z'),
+      scheduledStartTimeLocal: new Date('1970-01-01T09:50:00Z'),
+      scheduledStartAt: new Date('2026-11-03T07:50:00Z'),
+      scheduledEndAt: new Date('2026-11-03T08:50:00Z'),
+    },
+  });
+}
+
+/** A teacher with two confirmed enrollments, the first with a session in its join period and two open remedies. */
+async function teacherWithTwo() {
+  const on = await offer(2);
+  const [slotA = '', slotB = ''] = on.slotIds;
+  const one = await confirmed(on, slotA, await student());
+  const two = await confirmed(on, slotB, await student());
+  const [joining, , frozenOn, waitingOn] = await sessionStates(one);
+  await inItsJoinPeriod(joining?.id ?? '');
+  const frozen = await openRemedy(frozenOn?.id ?? '', 'frozen');
+  const waiting = await openRemedy(waitingOn?.id ?? '', 'awaiting_choice');
+  return { on, one, two, joining: joining?.id ?? '', frozen, waiting };
+}
+
+const TEACHER_ENDS = [
+  ['suspend', 'suspended'],
+  ['revokeApproval', 'active'],
+  ['ban', 'banned'],
+] as const;
+
+describe("a teacher's end (T006, FR-483, R-313)", () => {
+  it.each(TEACHER_ENDS)(
+    '%s cancels the confirmed enrollments teacher_suspended, every remaining session, one in its join period included, naming one teacher_ended case each, the open remedies, a frozen one included, handed to it',
+    async (action, accountStatus) => {
+      const { on, one, two, joining, frozen, waiting } = await teacherWithTwo();
+      const adminId = await makeAdmin(watcher);
+
+      await database.$transaction(async (tx) => {
+        if (action === 'revokeApproval') {
+          await standing.revokeApproval(tx, adminId, on.teacherId, 'Probe revocation');
+        } else {
+          await standing[action](tx, adminId, on.teacherId);
+        }
+      });
+
+      expect(await accountStatusOf(on.teacherId)).toBe(accountStatus);
+      for (const enrollmentId of [one, two]) {
+        expect(await enrollmentOf(enrollmentId)).toMatchObject({
+          status: 'cancelled',
+          cancellationReason: 'teacher_suspended',
+        });
+        expect(
+          (await eventsOf(enrollmentId)).map(({ kind, cancellationReason }) => [
+            kind,
+            cancellationReason,
+          ]),
+        ).toEqual([
+          ['confirmed', null],
+          ['cancelled', 'teacher_suspended'],
+        ]);
+        const cases = await casesOf(enrollmentId);
+        expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
+          ['teacher_ended', 'open'],
+        ]);
+        const remaining = (await sessionStates(enrollmentId)).filter(
+          ({ status }) => status !== 'teacher_no_show',
+        );
+        expect(remaining.length).toBeGreaterThan(0);
+        expect(new Set(remaining.map(({ status }) => status))).toEqual(
+          new Set(['cancelled_by_admin']),
+        );
+        const cancelledRows = (await sessionEventsOf(enrollmentId)).filter(
+          ({ kind }) => kind === 'cancelled_by_admin',
+        );
+        expect(cancelledRows.map(({ sessionId }) => sessionId).sort()).toEqual(
+          remaining.map(({ id }) => id).sort(),
+        );
+        for (const row of cancelledRows) expect(row.caseId).toBe(cases[0]?.id);
+      }
+      expect((await sessionStates(one)).find(({ id }) => id === joining)?.status).toBe(
+        'cancelled_by_admin',
+      );
+      const caseId = (await casesOf(one))[0]?.id;
+      for (const remedyId of [frozen, waiting]) {
+        expect(await remedyOf(remedyId)).toEqual({ status: 'refund_case', caseId, decidedAt: NOW });
+      }
+      expect(
+        (await sessionEventsOf(one)).filter(({ kind }) => kind === 'remedy_handed_to_case'),
+      ).toHaveLength(2);
+    },
+  );
+
+  it("a teacher's suspension that fails after the subscriber leaves every enrollment, session and remedy as it was", async () => {
+    const { on, one, two, frozen, waiting } = await teacherWithTwo();
+    const before = { one: await sessionStates(one), two: await sessionStates(two) };
+    const failing = new AccountConsequences();
+    failing.subscribe(
+      terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
+    );
+    failing.subscribe(async () => {
+      throw new Error('probe: the suspension fails after the subscriber');
+    });
+    const adminId = await makeAdmin(watcher);
+
+    await expect(
+      database.$transaction((tx) => standingOver(failing).suspend(tx, adminId, on.teacherId)),
+    ).rejects.toThrow();
+
+    expect(await accountStatusOf(on.teacherId)).toBe('active');
+    for (const enrollmentId of [one, two]) {
+      expect(await enrollmentOf(enrollmentId)).toMatchObject({ status: 'confirmed' });
+      expect(await casesOf(enrollmentId)).toEqual([]);
+      expect(await sessionEventsOf(enrollmentId)).toEqual([]);
+    }
+    expect(await sessionStates(one)).toEqual(before.one);
+    expect(await sessionStates(two)).toEqual(before.two);
+    expect(await remedyOf(frozen)).toMatchObject({ status: 'frozen', caseId: null });
+    expect(await remedyOf(waiting)).toMatchObject({ status: 'awaiting_choice', caseId: null });
   });
 });

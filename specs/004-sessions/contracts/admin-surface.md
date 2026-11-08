@@ -110,6 +110,8 @@ review of the admin screens' clarity.
 | `students.ban` | `{ userId, reason }` | `void` | `student.ban` | `StandingService.banStudent`: upcoming sessions cancelled, the confirmed enrollments cancelled `admin` at once, one `student_banned` case each (the owner's decision 1) |
 | `students.reinstate` | `{ userId, reason }` | `void` | `student.reinstate` | Restores the account only; nothing cancelled is restored, the case deciding (the owner's decision 1); the `frozen` remedies are offered again, each with a new full choice window, by `advance-remedies`' next run (C3) |
 
+The person's field is `studentUserId`, not the `userId` the rows above name: a field named `userId` is refused in any input (R-GENDER-4, `no-authority-in-input`), as `teachers.*`' `teacherUserId` and Phase 1's `users.requireIdentity` `targetUserId` are named (the owner's decision of 2026-11-07, B34).
+
 ## `users` — the user directory (verification module, FR-481, FR-ADMIN-4)
 
 Two new reads in Phase 1's `users` namespace, beside `requireIdentity` (the owner's decision of 2026-11-05 on the

@@ -31,6 +31,7 @@ import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useOnline } from '../../../../lib/online';
+import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { enrollmentQueryKey, isAwaitingPayment, useEnrollment } from '../api';
 import { ConfirmingNotice } from '../components/ConfirmingNotice';
 import { EnrollmentStatusBadge, PackageLine, SessionCounts } from '../components/EnrollmentCard';
@@ -131,15 +132,16 @@ function Overview({
   const t = useT();
   const locale = useLocale();
   const format = useFormatters();
+  const partyName = usePartyName();
   const { last } = enrollment;
   // The weekly time is the slot's, read on the next session, else the last.
   const weekly = enrollment.next ?? last;
   return (
     <Card variant="surface">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['3'] }}>
-        <Avatar initials={initialsOf(enrollment.teacher.displayName)} size="lg" />
+        <Avatar initials={initialsOf(avatarNameOf(enrollment.teacher))} size="lg" />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text variant="headline">{enrollment.teacher.displayName}</Text>
+          <Text variant="headline">{partyName(enrollment.teacher, 'teacher')}</Text>
         </View>
         <EnrollmentStatusBadge status={enrollment.status} pending={pendingBadge} />
       </View>

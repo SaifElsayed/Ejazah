@@ -107,5 +107,59 @@ export async function lapse(tx: Client, ids: readonly string[], at: Date): Promi
   });
 }
 
+// T005 (R-311, "Frozen"; FR-486; the owner's decision C3): what a student's suspension freezes.
+
+/** The statuses a suspension freezes: open and not yet frozen (R-311, "Frozen"; F1). */
+export const FREEZABLE_REMEDY_STATUSES = [
+  'awaiting_choice',
+  'proposed',
+  'counter_proposed',
+] as const;
+
+/** An open remedy a suspension freezes, and whether a counter-proposal is pending on it. */
+export interface FreezableRemedy extends OpenRemedy {
+  readonly counterPending: boolean;
+}
+
+/** The open remedies not yet frozen of `enrollmentIds`' live sessions, in id order. */
+export async function freezableRemediesOf(
+  tx: Client,
+  enrollmentIds: readonly string[],
+): Promise<FreezableRemedy[]> {
+  if (enrollmentIds.length === 0) return [];
+  const rows = await tx.sessionRemedy.findMany({
+    where: {
+      status: { in: [...FREEZABLE_REMEDY_STATUSES] },
+      session: { enrollmentId: { in: [...enrollmentIds] }, deletedAt: null },
+    },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      sessionId: true,
+      status: true,
+      session: { select: { enrollmentId: true } },
+    },
+  });
+  return rows.map(({ id, sessionId, status, session }) => ({
+    id,
+    sessionId,
+    enrollmentId: session.enrollmentId,
+    counterPending: status === 'counter_proposed',
+  }));
+}
+
+/**
+ * Freezes those of `ids` still open and not frozen, in one statement: `frozen`, a pending
+ * counter-proposal's five columns cleared (rule 42), `proposed_date` left as it is (the offer after
+ * the reinstatement writes a new proposal, R-311).
+ */
+export async function freeze(tx: Client, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await tx.sessionRemedy.updateMany({
+    where: { id: { in: [...ids] }, status: { in: [...FREEZABLE_REMEDY_STATUSES] } },
+    data: { status: 'frozen', ...NO_COUNTER },
+  });
+}
+
 /** The kernel's row lock, for the sessions and the remedies an enrollment's end decides on (T002). */
 export { lockRows } from '../../platform/db/row-lock.js';

@@ -18,10 +18,14 @@ interface Gathered {
  * its slot in; a slot nothing uses is absent. Two statements over `slot_holds.slot_id` and
  * `enrollments.slot_id`'s indexes. One active hold per slot (the partial unique index), and a slot's
  * enrollments are the few it has carried, so both reads are bounded by the slots asked about.
+ * `exceptEnrollmentId`, when given, leaves that enrollment's own use out: a make-up or a restore
+ * asks whether another enrollment uses its slot (T008 of specs/004-sessions, `slotWeekTaken`; the
+ * owner's decision of 2026-11-07 on lane C's questions).
  */
 export async function slotUses(
   tx: Pick<Transaction, 'slotHold' | 'enrollment'>,
   slotIds: readonly string[],
+  exceptEnrollmentId?: string,
 ): Promise<ReadonlyMap<string, SlotUse>> {
   const uses = new Map<string, Gathered>();
   if (slotIds.length === 0) return uses;
@@ -36,7 +40,11 @@ export async function slotUses(
   });
   for (const { slotId } of holds) useOf(slotId).taken = true;
   const enrollments = await tx.enrollment.findMany({
-    where: { slotId: { in: [...slotIds] }, status: { in: ['pending_payment', 'confirmed'] } },
+    where: {
+      slotId: { in: [...slotIds] },
+      status: { in: ['pending_payment', 'confirmed'] },
+      ...(exceptEnrollmentId === undefined ? {} : { id: { not: exceptEnrollmentId } }),
+    },
     orderBy: { id: 'asc' },
     select: { id: true, slotId: true, status: true, snapshotSlotTimezone: true },
   });

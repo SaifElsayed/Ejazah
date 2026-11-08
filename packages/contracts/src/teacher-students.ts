@@ -16,12 +16,16 @@ import {
   enrollmentListTab,
   enrollmentProgress,
   enrollmentTerms,
+  listedPartyName,
   listedSession,
 } from './enrollments.js';
 import { calendarDate, timeZone } from './onboarding.js';
 
-/** The student as the teacher's screens draw them: a name, its initial the avatar. */
-const listedStudent = z.object({ displayName: z.string() });
+/**
+ * The student as the teacher's screens draw them: a name, its initial the avatar; a deleted
+ * student's stand-in (T007, FR-426).
+ */
+const listedStudent = listedPartyName;
 
 export const teacherStudentsListInput = z.object({
   tab: enrollmentListTab,

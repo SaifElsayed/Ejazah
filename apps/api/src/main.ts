@@ -151,7 +151,7 @@ const cipher = createColumnCipher(config);
 // awaiting payment (T041, R-219), over payments' order standing (R-208).
 const consequences = new identity.AccountConsequences();
 consequences.subscribe(verification.documentErasureConsequence());
-consequences.subscribe(booking.terminationSubscriber({ orders: payments.orderStandingsOf }));
+consequences.subscribe(booking.terminationSubscriber({ orders: payments.orderStandingsOf, log }));
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
