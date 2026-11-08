@@ -8,7 +8,13 @@
 //   - a moved session that overlaps another session of its teacher or its student that the
 //     constraints count is restored to its previous instants, and so is one a restoration makes
 //     overlap, while every other moved session stays moved;
-//   - a session no longer scheduled when it is written is left as it is.
+//   - a session no longer scheduled when it is written is left as it is;
+//   - T014 (contracts/kernel.md's `reresolve-session-instants` row, L1; research R-323, GAP-6): the
+//     sessions whose instants differ are found with no lock, then their enrollments are locked in
+//     one call and those sessions in one call, each in id order, and each is read again under them
+//     before it is written, so one settled meanwhile is left; one `session_events` row
+//     `instants_reresolved` per session moved and per session kept back, `previous_start_at` the
+//     start before the run, at the transaction's instant; none when nothing differs.
 //
 // The same over the real tables, with the constraints deferred and the job around it, is
 // `tests/db-integrity/reresolve-session-instants.spec.ts`.
@@ -22,6 +28,7 @@ import {
   type SessionInstants,
   type SessionSchedule,
 } from './reresolution.service.js';
+import type { SessionEventRecord } from './session-events.repository.js';
 
 const TX = {} as Transaction;
 const CAIRO = 'Africa/Cairo';
@@ -50,22 +57,61 @@ function row(id: string, values: Partial<Row> = {}): Row {
   };
 }
 
-/** A store over `rows`, recording what was asked of it. */
-function storeOver(rows: Row[], options: { readonly statusOnWrite?: Row['status'] } = {}) {
+/** The run's transaction's instant, as the database's clock answers it. */
+const AT = new Date('2026-11-04T08:00:00Z');
+const clock = async () => AT;
+
+/**
+ * A store over `rows`, recording what was asked of it: `calls` names each step in order, a lock
+ * with the ids it was given. `onLockSessions` runs when the sessions are locked, as a write another
+ * transaction committed before the locks were granted.
+ */
+function storeOver(
+  rows: Row[],
+  options: {
+    readonly statusOnWrite?: Row['status'];
+    readonly onLockSessions?: () => void;
+  } = {},
+) {
   const pages: (string | undefined)[] = [];
   const writes: SessionInstants[][] = [];
+  const calls: string[] = [];
+  const events: SessionEventRecord[] = [];
   const counted = (session: Row) => session.status !== 'cancelled_by_admin';
+  const scheduled = (session: Row) => session.status === 'scheduled';
+  const byId = (a: Row, b: Row) => (a.id < b.id ? -1 : 1);
   const store: ReresolutionStore = {
     async scheduledAfter(_tx, after, limit) {
+      calls.push('scheduledAfter');
       pages.push(after);
       return rows
-        .filter((session) => session.status === 'scheduled')
+        .filter(scheduled)
         .filter((session) => after === undefined || session.id > after)
-        .toSorted((a, b) => (a.id < b.id ? -1 : 1))
+        .toSorted(byId)
         .slice(0, limit)
         .map((session) => ({ ...session }));
     },
+    async lockEnrollments(_tx, ids) {
+      calls.push(`lockEnrollments ${ids.join(',')}`);
+    },
+    async lockSessions(_tx, ids) {
+      calls.push(`lockSessions ${ids.join(',')}`);
+      options.onLockSessions?.();
+    },
+    async scheduledAmong(_tx, ids) {
+      calls.push(`scheduledAmong ${ids.join(',')}`);
+      return rows
+        .filter(scheduled)
+        .filter((session) => ids.includes(session.id))
+        .toSorted(byId)
+        .map((session) => ({ ...session }));
+    },
+    async recordEvents(_tx, recorded) {
+      calls.push('recordEvents');
+      events.push(...recorded);
+    },
     async setInstants(_tx, sessions) {
+      calls.push('setInstants');
       writes.push([...sessions]);
       const written: string[] = [];
       for (const next of sessions) {
@@ -81,6 +127,7 @@ function storeOver(rows: Row[], options: { readonly statusOnWrite?: Row['status'
       return written;
     },
     async countedOverlapping(_tx, sessions) {
+      calls.push('countedOverlapping');
       return rows
         .filter(counted)
         .filter((other) =>
@@ -96,7 +143,7 @@ function storeOver(rows: Row[], options: { readonly statusOnWrite?: Row['status'
         .map((other) => ({ ...other }));
     },
   };
-  return { store, pages, writes };
+  return { store, pages, writes, calls, events };
 }
 
 /** Each enrollment's length: sixty minutes unless named. */
@@ -130,6 +177,7 @@ describe('reresolveScheduledSessions: the cache recomputed from the schedule (AD
       store,
       lengthsOf: lengths({ 'enrollment-a': 45 }).lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: ['a'], restored: [] });
@@ -145,7 +193,12 @@ describe('reresolveScheduledSessions: the cache recomputed from the schedule (AD
     });
     const { store } = storeOver([gap]);
 
-    await reresolveScheduledSessions(TX, { store, lengthsOf: lengths().lengthsOf, pageSize: PAGE });
+    await reresolveScheduledSessions(TX, {
+      store,
+      lengthsOf: lengths().lengthsOf,
+      pageSize: PAGE,
+      clock,
+    });
 
     expect(instantsOf(gap)).toEqual(['2027-04-29T22:30:00.000Z', '2027-04-29T23:30:00.000Z']);
   });
@@ -157,6 +210,7 @@ describe('reresolveScheduledSessions: the cache recomputed from the schedule (AD
       store,
       lengthsOf: lengths().lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: [], restored: [] });
@@ -175,7 +229,12 @@ describe('reresolveScheduledSessions: the cache recomputed from the schedule (AD
     const { store, pages } = storeOver(rows);
     const { asked, lengthsOf } = lengths();
 
-    const outcome = await reresolveScheduledSessions(TX, { store, lengthsOf, pageSize: PAGE });
+    const outcome = await reresolveScheduledSessions(TX, {
+      store,
+      lengthsOf,
+      pageSize: PAGE,
+      clock,
+    });
 
     expect(pages).toEqual([undefined, 'b', 'd']);
     expect(asked).toEqual([
@@ -197,6 +256,7 @@ describe('reresolveScheduledSessions: the cache recomputed from the schedule (AD
       store,
       lengthsOf: lengths().lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: [], restored: [] });
@@ -239,6 +299,7 @@ describe('reresolveScheduledSessions: a moved session that would overlap is rest
       store,
       lengthsOf: lengths().lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: ['b'], restored: ['a'] });
@@ -254,6 +315,7 @@ describe('reresolveScheduledSessions: a moved session that would overlap is rest
       store,
       lengthsOf: lengths().lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: ['a'], restored: [] });
@@ -281,6 +343,7 @@ describe('reresolveScheduledSessions: a moved session that would overlap is rest
       store,
       lengthsOf: lengths().lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: ['b'], restored: ['a'] });
@@ -304,9 +367,131 @@ describe('reresolveScheduledSessions: a moved session that would overlap is rest
       store,
       lengthsOf: lengths().lengthsOf,
       pageSize: PAGE,
+      clock,
     });
 
     expect(outcome).toEqual({ moved: [], restored: ['a', 'b'] });
     expect(instantsOf(mate)).toEqual(['2026-11-08T05:00:00.000Z', '2026-11-08T06:00:00.000Z']);
+  });
+});
+
+describe('reresolveScheduledSessions: the locks and the record (T014; kernel.md L1; R-323, GAP-6)', () => {
+  /** A session cached an hour early (06:00Z) whose resolution is 07:00Z. */
+  const stale = (id: string, values: Partial<Row> = {}) =>
+    row(id, {
+      scheduledStartAt: new Date('2026-11-08T06:00:00Z'),
+      scheduledEndAt: new Date('2026-11-08T07:00:00Z'),
+      ...values,
+    });
+
+  it('finds the differing sessions with no lock, then locks their enrollments, then those sessions, one call each in id order, then reads them again', async () => {
+    const rows = [
+      stale('c', { enrollmentId: 'enrollment-x' }),
+      row('b'),
+      stale('a', { enrollmentId: 'enrollment-y' }),
+      stale('d', { enrollmentId: 'enrollment-x' }),
+    ];
+    const { store, calls } = storeOver(rows);
+
+    await reresolveScheduledSessions(TX, {
+      store,
+      lengthsOf: lengths().lengthsOf,
+      pageSize: PAGE,
+      clock,
+    });
+
+    expect(calls.slice(0, 6)).toEqual([
+      'scheduledAfter',
+      'scheduledAfter',
+      'scheduledAfter',
+      'lockEnrollments enrollment-x,enrollment-y',
+      'lockSessions a,c,d',
+      'scheduledAmong a,c',
+    ]);
+    expect(calls.slice(6, 8)).toEqual(['setInstants', 'scheduledAmong d']);
+  });
+
+  it('takes no lock and writes no row when no session differs', async () => {
+    const { store, calls, events } = storeOver([row('a'), row('b')]);
+
+    const outcome = await reresolveScheduledSessions(TX, {
+      store,
+      lengthsOf: lengths().lengthsOf,
+      pageSize: PAGE,
+      clock,
+    });
+
+    expect(outcome).toEqual({ moved: [], restored: [] });
+    expect(calls).toEqual(['scheduledAfter', 'scheduledAfter']);
+    expect(events).toEqual([]);
+  });
+
+  it('leaves a session another transaction settled before the locks were granted: not moved, no row', async () => {
+    const settled = stale('a');
+    const other = stale('b');
+    const { store, writes, events } = storeOver([settled, other], {
+      onLockSessions: () => {
+        settled.status = 'done';
+      },
+    });
+
+    const outcome = await reresolveScheduledSessions(TX, {
+      store,
+      lengthsOf: lengths().lengthsOf,
+      pageSize: PAGE,
+      clock,
+    });
+
+    expect(outcome).toEqual({ moved: ['b'], restored: [] });
+    expect(writes.flat().map(({ id }) => id)).toEqual(['b']);
+    expect(instantsOf(settled)).toEqual(['2026-11-08T06:00:00.000Z', '2026-11-08T07:00:00.000Z']);
+    expect(events.map(({ sessionId }) => sessionId)).toEqual(['b']);
+  });
+
+  it('writes one instants_reresolved row per session moved and per session kept back, with the start before the run', async () => {
+    // `a` moves into the teacher's other session `n` and is kept back; `b`, cached at 05:00Z, moves.
+    const kept = stale('a', { teacherUserId: 'teacher-shared' });
+    const moved = row('b', {
+      scheduledStartTimeLocal: '08:00:00',
+      scheduledStartAt: new Date('2026-11-08T05:00:00Z'),
+      scheduledEndAt: new Date('2026-11-08T06:00:00Z'),
+    });
+    const neighbour = row('n', {
+      teacherUserId: 'teacher-shared',
+      scheduledStartTimeLocal: '09:30:00',
+      scheduledStartAt: new Date('2026-11-08T07:30:00Z'),
+      scheduledEndAt: new Date('2026-11-08T08:30:00Z'),
+      status: 'done',
+    });
+    const { store, calls, events } = storeOver([kept, moved, neighbour]);
+
+    const outcome = await reresolveScheduledSessions(TX, {
+      store,
+      lengthsOf: lengths().lengthsOf,
+      pageSize: PAGE,
+      clock,
+    });
+
+    expect(outcome).toEqual({ moved: ['b'], restored: ['a'] });
+    expect(events).toEqual([
+      {
+        enrollmentId: 'enrollment-a',
+        sessionId: 'a',
+        kind: 'instants_reresolved',
+        previousStartAt: new Date('2026-11-08T06:00:00Z'),
+        occurredAt: AT,
+      },
+      {
+        enrollmentId: 'enrollment-b',
+        sessionId: 'b',
+        kind: 'instants_reresolved',
+        previousStartAt: new Date('2026-11-08T05:00:00Z'),
+        occurredAt: AT,
+      },
+    ]);
+    expect(calls.at(-1)).toBe('recordEvents');
+    // The kept-back session still starts at `previous_start_at`; the moved one no longer does.
+    expect(kept.scheduledStartAt).toEqual(events[0]?.previousStartAt);
+    expect(moved.scheduledStartAt).not.toEqual(events[1]?.previousStartAt);
   });
 });

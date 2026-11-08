@@ -18,6 +18,11 @@
 // previous instants (sessions' rule), and after the commit they are reported to error tracking
 // (FR-051) for an operator, once, so a refused and rerun commit does not report them twice.
 //
+// T014 (research R-323, GAP-6; contracts/kernel.md's `reresolve-session-instants` row, L1): on the
+// same transaction, sessions' run locks the differing sessions' enrollments, then those sessions,
+// and writes one `session_events` row `instants_reresolved` per session moved and per session kept
+// back, at the database's clock (`clockTimestamp`), so a refused commit writes none.
+//
 // A REFUSED COMMIT. A write committed by another transaction during the run can still make the
 // deferred check refuse the commit; the run is then run again, from a fresh read, up to
 // `RERESOLUTION_ATTEMPTS` times in all, and after that it fails for the queue's retry (T171). Any
@@ -36,6 +41,7 @@ import {
   reresolutionStore,
   reresolveScheduledSessions,
 } from '../modules/sessions/index.js';
+import { clockTimestamp } from '../platform/db/db-clock.js';
 import { isExclusionViolation } from '../platform/db/db-errors.js';
 import { withDeferredSessionConstraints } from '../platform/db/deferred-constraints.js';
 import type { Database, Transaction } from '../platform/db/prisma.repository.js';
@@ -96,6 +102,7 @@ export const reresolutionSteps: ReresolutionSteps = {
       store: reresolutionStore,
       lengthsOf: sessionLengthsOf,
       pageSize: RERESOLUTION_PAGE_SIZE,
+      clock: clockTimestamp,
     }),
 };
 

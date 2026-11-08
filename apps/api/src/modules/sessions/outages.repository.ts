@@ -5,10 +5,30 @@
 // `provider_outages` is append-only for the application role (rule 44: UPDATE, DELETE and TRUNCATE
 // revoked), so a window is inserted once and never edited. The reclassification is conditional on
 // the state the service read under its locks: a session still settled (`done`, `*_no_show`,
-// `under_threshold`), so one disputed or moved meanwhile is left as it is.
+// `under_threshold`), so one disputed or moved meanwhile is left as it is. T014: the evaluation reads
+// the windows overlapping the session it settles (`outagesOverlapping`).
+import type { Interval } from '@ijazah/time';
+
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 type Client = Pick<Transaction, 'session' | 'providerOutage'>;
+
+/**
+ * T014 (FR-445; research R-305, R-307): the windows overlapping `session` (`[startsAt, endsAt)`
+ * against the session's scheduled `[startsAt, endsAt)`, as a record reclassifies), oldest first; no
+ * lock: a window is never edited (rule 44). No index serves it (R-DB-9 adds none): windows are few,
+ * recorded by an administrator.
+ */
+export async function outagesOverlapping(
+  tx: Pick<Transaction, 'providerOutage'>,
+  session: Interval,
+): Promise<readonly Interval[]> {
+  return tx.providerOutage.findMany({
+    where: { startsAt: { lt: session.endsAt }, endsAt: { gt: session.startsAt } },
+    orderBy: { id: 'asc' },
+    select: { startsAt: true, endsAt: true },
+  });
+}
 
 /** The settled outcomes an outage window reclassifies (data-model.md §3, the last session row). */
 export const OUTAGE_RECLASSIFIABLE = [

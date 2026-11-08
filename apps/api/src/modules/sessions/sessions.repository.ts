@@ -112,6 +112,8 @@ export interface EnrollmentSessionRow {
   readonly startsAt: Date;
   readonly endsAt: Date;
   readonly status: SessionStatus;
+  /** The outcome frozen beside a `disputed` status once written (T014, R-308); absent otherwise. */
+  readonly outcomeUnderDispute?: SessionStatus;
 }
 
 interface SelectedSession {
@@ -122,6 +124,7 @@ interface SelectedSession {
   readonly scheduledStartAt: Date;
   readonly scheduledEndAt: Date;
   readonly status: SessionStatus;
+  readonly outcomeUnderDispute: SessionStatus | null;
 }
 
 function sessionRowOf(row: SelectedSession): EnrollmentSessionRow {
@@ -133,6 +136,7 @@ function sessionRowOf(row: SelectedSession): EnrollmentSessionRow {
     startsAt: row.scheduledStartAt,
     endsAt: row.scheduledEndAt,
     status: row.status,
+    ...(row.outcomeUnderDispute === null ? {} : { outcomeUnderDispute: row.outcomeUnderDispute }),
   };
 }
 
@@ -157,6 +161,7 @@ export async function enrollmentSessionsOf(
       scheduledStartAt: true,
       scheduledEndAt: true,
       status: true,
+      outcomeUnderDispute: true,
     },
   });
   return rows.map(sessionRowOf);
@@ -186,6 +191,7 @@ export async function sessionsOfEnrollments(
       scheduledStartAt: true,
       scheduledEndAt: true,
       status: true,
+      outcomeUnderDispute: true,
     },
   });
   for (const row of rows) {
@@ -224,6 +230,7 @@ export async function teacherSessionsBetween(
       scheduledStartAt: true,
       scheduledEndAt: true,
       status: true,
+      outcomeUnderDispute: true,
     },
   });
   return rows.map((row) => ({ enrollmentId: row.enrollmentId, ...sessionRowOf(row) }));
