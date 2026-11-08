@@ -1,8 +1,11 @@
 // T048 (R-210, FR-370, ERD §15 rule 19): the re-resolution run's queries over `sessions`, on the
 // job's one transaction (the rules are `reresolution.service.ts`'s). A soft-deleted session is left
-// out of every read and write by the client's extension (T148).
+// out of every read and write by the client's extension (T148). T014: the locks the run takes (the
+// kernel's `lockRows`: the `enrollments` rows its `session_events` rows reference by a foreign key,
+// then the `sessions` rows), the read again under them, and T004's writer for its rows.
 import { calendarDateOf, localTimeOf } from '@ijazah/time';
 
+import { lockRows } from '../../platform/db/row-lock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type {
   PartiedSession,
@@ -10,6 +13,7 @@ import type {
   SessionInstants,
   SessionSchedule,
 } from './reresolution.service.js';
+import { recordSessionEvents } from './session-events.repository.js';
 import { TIME_FREEING_STATUSES } from './sessions.repository.js';
 
 /** A page of the scheduled sessions in id order after `after`, over the primary key. */
@@ -22,6 +26,37 @@ async function scheduledAfter(
     where: { status: 'scheduled', ...(after === undefined ? {} : { id: { gt: after } }) },
     orderBy: { id: 'asc' },
     take: limit,
+    select: {
+      id: true,
+      teacherUserId: true,
+      studentUserId: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      enrollmentId: true,
+      scheduledDateLocal: true,
+      scheduledStartTimeLocal: true,
+      timezone: true,
+    },
+  });
+  return rows.map((row) => ({
+    ...row,
+    scheduledDateLocal: calendarDateOf(row.scheduledDateLocal),
+    scheduledStartTimeLocal: localTimeOf(row.scheduledStartTimeLocal),
+  }));
+}
+
+/**
+ * Of `ids`, the sessions still `scheduled`, in id order, over the primary key; read under the run's
+ * locks. Bounded by the ids given, a page of the run's.
+ */
+async function scheduledAmong(
+  tx: Pick<Transaction, 'session'>,
+  ids: readonly string[],
+): Promise<readonly SessionSchedule[]> {
+  if (ids.length === 0) return [];
+  const rows = await tx.session.findMany({
+    where: { id: { in: [...ids] }, status: 'scheduled' },
+    orderBy: { id: 'asc' },
     select: {
       id: true,
       teacherUserId: true,
@@ -96,6 +131,10 @@ async function countedOverlapping(
 /** The run's store over the `sessions` table. */
 export const reresolutionStore: ReresolutionStore = {
   scheduledAfter,
+  lockEnrollments: (tx, ids) => lockRows(tx, 'enrollments', ids),
+  lockSessions: (tx, ids) => lockRows(tx, 'sessions', ids),
+  scheduledAmong,
   setInstants,
   countedOverlapping,
+  recordEvents: recordSessionEvents,
 };

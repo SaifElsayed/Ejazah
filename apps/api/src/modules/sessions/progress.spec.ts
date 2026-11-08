@@ -76,6 +76,21 @@ describe('sessionProgress (FR-392)', () => {
     expect(progress.next).toBeUndefined();
   });
 
+  it('counts a disputed session by its frozen outcome: done and student_no_show consumed (T014, R-308, K7)', () => {
+    const frozen = ['done', 'student_no_show', 'teacher_no_show', 'both_no_show'] as const;
+    const sessions = [
+      ...frozen.map((outcomeUnderDispute, index) => ({
+        ...session(index + 1, `2026-10-0${String(index + 1)}T12:00:00Z`, 'disputed'),
+        outcomeUnderDispute,
+      })),
+      // Disputed before the evaluation: no outcome frozen yet, nothing consumed.
+      session(5, '2026-10-05T12:00:00Z', 'disputed'),
+    ];
+    const progress = sessionProgress(sessions, { sessionCount: 8, now: NOW });
+    expect(progress.completed).toBe(2);
+    expect(progress.remaining).toBe(6);
+  });
+
   it('does not count a scheduled session already over as upcoming, nor take it as next', () => {
     const sessions = [session(1, '2026-11-09T12:00:00Z'), session(2, '2026-11-16T12:00:00Z')];
     const progress = sessionProgress(sessions, { sessionCount: 2, now: NOW });

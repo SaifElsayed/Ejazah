@@ -8,9 +8,17 @@
 // `snapshot_duration_minutes` of elapsed time (D2), read through booking's entry by the caller's
 // `lengthsOf` (R-API-6). Every session still `scheduled` is read, whatever its cached start says,
 // since that cache is the value that may be wrong (D3); only one whose cache differs is written, by
-// a conditional update on its being still `scheduled`, so a session settled meanwhile keeps its
-// instants and nothing is locked here (no lock order is touched: no row referencing an account is
-// inserted).
+// a conditional update on its being still `scheduled`.
+//
+// THE LOCKS (T014; contracts/kernel.md's `reresolve-session-instants` row; the owner's decision of
+// 2026-11-06 on the fourth analysis, L1). The sessions whose instants differ are found by a read
+// with no lock, a page at a time. Then, before any is written, their `enrollments` are locked in one
+// call and those `sessions` in one call, each in id order: the evaluation's order
+// (`evaluate-sessions` locks the enrollment, then the session), since each `instants_reresolved`
+// row below takes a key-share lock on its enrollment (`003:T005`'s rules) and the run writes the
+// session. Each is read again under the locks and recomputed, so one settled, cancelled or moved
+// meanwhile is left as it now is; the enrollment's length is the one read before the locks, a
+// snapshot that never changes.
 //
 // AN OVERLAP (rule 19). The constraints are checked at the commit, which names only the first
 // conflict, so before the caller commits: every moved session that overlaps another session of its
@@ -19,6 +27,12 @@
 // it, so the check runs again over the sessions still moved until none meets another; it ends,
 // since each round restores one at least, and with every session restored the rows are as they
 // were. The previous instants are held for the run only. The caller reports the restored ones.
+//
+// THE RECORD (T014; research R-323, GAP-6). On the run's one transaction, through T004's writer,
+// one `session_events` row `instants_reresolved` per session the run kept moved and per session it
+// kept back, `previous_start_at` the start it had before the run (the one a session kept back still
+// keeps), at the transaction's instant by the database's clock; a refused commit writes none, and a
+// later run that keeps the same session back again writes another.
 import {
   addMinutes,
   resolveLocalDateTime,
@@ -28,6 +42,7 @@ import {
 } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { SessionEventRecord } from './session-events.repository.js';
 
 /** A scheduled session as the run reads it: its schedule, parties and cached instants. */
 export interface SessionSchedule {
@@ -57,12 +72,18 @@ export interface PartiedSession extends SessionInstants {
 
 /** What the run asks of the `sessions` table, each on the caller's transaction. */
 export interface ReresolutionStore {
-  /** A page of the scheduled sessions in id order after `after`, at most `limit`. */
+  /** A page of the scheduled sessions in id order after `after`, at most `limit`; no lock. */
   scheduledAfter(
     tx: Transaction,
     after: string | undefined,
     limit: number,
   ): Promise<readonly SessionSchedule[]>;
+  /** Locks the enrollments' rows, `FOR UPDATE`, in id order, in one statement. */
+  lockEnrollments(tx: Transaction, ids: readonly string[]): Promise<void>;
+  /** Locks the sessions' rows, `FOR UPDATE`, in id order, in one statement. */
+  lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
+  /** Of `ids`, those still scheduled, in id order, read under the caller's locks. */
+  scheduledAmong(tx: Transaction, ids: readonly string[]): Promise<readonly SessionSchedule[]>;
   /** Writes each session's instants where it is still scheduled; answers the ids written. */
   setInstants(tx: Transaction, sessions: readonly SessionInstants[]): Promise<readonly string[]>;
   /**
@@ -73,6 +94,8 @@ export interface ReresolutionStore {
     tx: Transaction,
     sessions: readonly PartiedSession[],
   ): Promise<readonly PartiedSession[]>;
+  /** T004's writer of `session_events` rows. */
+  recordEvents(tx: Transaction, events: readonly SessionEventRecord[]): Promise<void>;
 }
 
 /** Each enrollment's `snapshot_duration_minutes`, by id, as booking's entry reads it. */
@@ -86,6 +109,8 @@ export interface ReresolutionDependencies {
   readonly lengthsOf: SessionLengths;
   /** How many sessions are read, and checked for an overlap, at a time. */
   readonly pageSize: number;
+  /** The database's clock on the run's transaction, the instant of its rows (`clockTimestamp`). */
+  readonly clock: (tx: Transaction) => Promise<Date>;
 }
 
 /** What the run left: the sessions it moved and kept moved, and those it restored, by id. */
@@ -97,7 +122,7 @@ export interface Reresolution {
 /** A moved session: where it is now and where it was. */
 interface Move {
   readonly next: PartiedSession;
-  readonly previous: SessionInstants;
+  readonly previous: SessionSchedule;
 }
 
 /** The session's instants as `packages/time` resolves its schedule, `minutes` long. */
@@ -124,28 +149,19 @@ function sameInstants(a: SessionInstants, b: SessionInstants): boolean {
   );
 }
 
-/** Recomputes one page; answers the moves written. A session whose enrollment is absent is left. */
-async function movePage(
-  tx: Transaction,
-  page: readonly SessionSchedule[],
-  { store, lengthsOf }: ReresolutionDependencies,
-): Promise<Move[]> {
-  const lengths = await lengthsOf(tx, [...new Set(page.map((session) => session.enrollmentId))]);
+/** Of `sessions`, those whose cache differs from their resolution; one with no length is left. */
+function movesOf(
+  sessions: readonly SessionSchedule[],
+  lengths: ReadonlyMap<string, number>,
+): Move[] {
   const moves: Move[] = [];
-  for (const session of page) {
+  for (const session of sessions) {
     const minutes = lengths.get(session.enrollmentId);
     if (minutes === undefined) continue;
     const next = resolvedInstants(session, minutes);
     if (!sameInstants(next, session)) moves.push({ next, previous: session });
   }
-  if (moves.length === 0) return moves;
-  const written = new Set(
-    await store.setInstants(
-      tx,
-      moves.map(({ next }) => next),
-    ),
-  );
-  return moves.filter(({ next }) => written.has(next.id));
+  return moves;
 }
 
 function meets(a: PartiedSession, b: PartiedSession): boolean {
@@ -175,26 +191,66 @@ async function overlappingMoves(
   return overlapping;
 }
 
+/** `ids` once each, in id order. */
+const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
+
+/** The read with no lock: every scheduled session whose instants differ, and the lengths read. */
+async function differingSessions(
+  tx: Transaction,
+  { store, lengthsOf, pageSize }: ReresolutionDependencies,
+): Promise<{ readonly sessions: SessionSchedule[]; readonly lengths: Map<string, number> }> {
+  const sessions: SessionSchedule[] = [];
+  const lengths = new Map<string, number>();
+  let after: string | undefined;
+  for (;;) {
+    const page = await store.scheduledAfter(tx, after, pageSize);
+    if (page.length > 0) {
+      const read = await lengthsOf(tx, [...new Set(page.map((session) => session.enrollmentId))]);
+      for (const [id, minutes] of read) lengths.set(id, minutes);
+      sessions.push(...movesOf(page, lengths).map(({ previous }) => previous));
+    }
+    if (page.length < pageSize) break;
+    after = page.at(-1)?.id;
+  }
+  return { sessions, lengths };
+}
+
 /**
  * Recomputes every scheduled session's cached instants on `tx` and restores the moved ones that
- * would overlap (ERD §15 rule 19). Expects the caller to have deferred the overlap constraints on
- * `tx` and to commit, or roll back, the whole run; takes no lock.
+ * would overlap (ERD §15 rule 19), with one `instants_reresolved` row per session moved or kept
+ * back. Expects the caller to have deferred the overlap constraints on `tx` and to commit, or roll
+ * back, the whole run; takes the locks this file's head names.
  */
 export async function reresolveScheduledSessions(
   tx: Transaction,
   dependencies: ReresolutionDependencies,
 ): Promise<Reresolution> {
-  const { store, pageSize } = dependencies;
+  const { store, pageSize, clock } = dependencies;
+  const differing = await differingSessions(tx, dependencies);
+  if (differing.sessions.length === 0) return { moved: [], restored: [] };
+
+  const ids = sortedUnique(differing.sessions.map(({ id }) => id));
+  await store.lockEnrollments(
+    tx,
+    sortedUnique(differing.sessions.map(({ enrollmentId }) => enrollmentId)),
+  );
+  await store.lockSessions(tx, ids);
+
   let moves: Move[] = [];
-  let after: string | undefined;
-  for (;;) {
-    const page = await store.scheduledAfter(tx, after, pageSize);
-    moves.push(...(await movePage(tx, page, dependencies)));
-    if (page.length < pageSize) break;
-    after = page.at(-1)?.id;
+  for (let start = 0; start < ids.length; start += pageSize) {
+    const fresh = await store.scheduledAmong(tx, ids.slice(start, start + pageSize));
+    const chunk = movesOf(fresh, differing.lengths);
+    if (chunk.length === 0) continue;
+    const written = new Set(
+      await store.setInstants(
+        tx,
+        chunk.map(({ next }) => next),
+      ),
+    );
+    moves.push(...chunk.filter(({ next }) => written.has(next.id)));
   }
 
-  const restored: string[] = [];
+  const kept: Move[] = [];
   for (;;) {
     const overlapping = await overlappingMoves(tx, moves, dependencies);
     if (overlapping.length === 0) break;
@@ -207,8 +263,23 @@ export async function reresolveScheduledSessions(
       })),
     );
     const back = new Set(overlapping.map(({ next }) => next.id));
-    restored.push(...back);
+    kept.push(...overlapping);
     moves = moves.filter(({ next }) => !back.has(next.id));
   }
-  return { moved: moves.map(({ next }) => next.id), restored };
+
+  const recorded = [...kept, ...moves].toSorted((a, b) => (a.previous.id < b.previous.id ? -1 : 1));
+  if (recorded.length > 0) {
+    const occurredAt = await clock(tx);
+    await store.recordEvents(
+      tx,
+      recorded.map(({ previous }) => ({
+        enrollmentId: previous.enrollmentId,
+        sessionId: previous.id,
+        kind: 'instants_reresolved',
+        previousStartAt: previous.scheduledStartAt,
+        occurredAt,
+      })),
+    );
+  }
+  return { moved: moves.map(({ next }) => next.id), restored: kept.map(({ next }) => next.id) };
 }

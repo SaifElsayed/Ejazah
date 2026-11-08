@@ -167,6 +167,24 @@ export function createVideoWebhookRoute({
 }
 
 /**
+ * T014 (FR-441, FR-446, FR-482; R-SESS-2, R-SESS-3; research R-306, R-313): the evaluation the
+ * `evaluate-sessions` sweep runs every minute: each session due settled on its own transaction under
+ * the enrollment's and the session's locks, with T015's completion check, and the rooms of the
+ * cancelled sessions in their join period ended.
+ */
+export {
+  createEvaluation,
+  type DueSession,
+  type Evaluation,
+  EVALUATION_DELAY_SETTING,
+  type EvaluationRun,
+  type EvaluationStore,
+  evaluationStore,
+  type SessionToSettle,
+  type Settlement,
+} from './evaluation.service.js';
+
+/**
  * T013 (FR-442, FR-443, FR-444; research R-305): the attendance rules, pure, which the evaluation
  * (T014) runs over a session's recorded events, its window and the outages overlapping it.
  */
