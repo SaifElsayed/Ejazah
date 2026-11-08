@@ -39,10 +39,11 @@ import {
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
@@ -377,6 +378,7 @@ const caller = createAppCallerFactory(
       discovery: unusedDiscoveryServices,
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
+      sessions: unusedSessionsServices,
     },
   }),
 );

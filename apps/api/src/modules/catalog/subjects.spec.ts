@@ -17,10 +17,11 @@ import { createSubjectsService, subjectsRouter, type SubjectsReader } from './in
 import { SubjectsRepository } from './subjects.repository.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -75,6 +76,7 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
       discovery: unusedDiscoveryServices,
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
+      sessions: unusedSessionsServices,
     };
     const router = createAppRouter({ catalog: createAppRouter({ subjects: subjectsRouter }) });
     const caller = createAppCallerFactory(router)(

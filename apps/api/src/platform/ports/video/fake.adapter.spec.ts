@@ -12,11 +12,15 @@
 // and an event is a join, a leave or the room's end, a participant's carrying its connection; a
 // signed event the port does not treat as attendance answers `{ kind: 'ignored' }`.
 //
+// T011 (the note under T011, K1): a token carries the provider's address the phone connects to,
+// `serverUrl`, answered by the adapter and taken by `bindJoinToken`; the stand-in answers one fixed
+// address, `STAND_IN_VIDEO_SERVER_URL`.
+//
 // The type checks are enforced by `pnpm typecheck` (CI stage 1), not by vitest.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
 import { StandInFailure } from '../stand-in.js';
-import { FakeVideoAdapter } from './fake.adapter.js';
+import { FakeVideoAdapter, STAND_IN_VIDEO_SERVER_URL } from './fake.adapter.js';
 import {
   bindJoinToken,
   type IgnoredEvent,
@@ -56,10 +60,16 @@ describe('the video port (T118, contracts/ports.md)', () => {
   it('cannot represent a token bound to a session alone, or written by hand', () => {
     expectTypeOf<JoinToken['sessionId']>().toEqualTypeOf<string>();
     expectTypeOf<JoinToken['participantUserId']>().toEqualTypeOf<string>();
+    expectTypeOf<JoinToken['serverUrl']>().toEqualTypeOf<string>();
     // @ts-expect-error -- T118: a token without its participant is not a join token (R-GENDER-7)
-    const unbound: JoinToken = { sessionId: SESSION, credential: 'x' };
+    const unbound: JoinToken = { sessionId: SESSION, credential: 'x', serverUrl: 'wss://x' };
     // @ts-expect-error -- T118: a token is minted by `bindJoinToken`, never written as a literal
-    const forged: JoinToken = { sessionId: SESSION, participantUserId: STUDENT, credential: 'x' };
+    const forged: JoinToken = {
+      sessionId: SESSION,
+      participantUserId: STUDENT,
+      credential: 'x',
+      serverUrl: 'wss://x',
+    };
     expect([unbound, forged]).toHaveLength(2);
   });
 
@@ -87,14 +97,17 @@ describe('the video port (T118, contracts/ports.md)', () => {
     expectTypeOf<IgnoredEvent>().toEqualTypeOf<{ readonly kind: 'ignored' }>();
   });
 
-  it('refuses to bind a token to an empty session or participant', () => {
-    expect(() => bindJoinToken('', STUDENT, 'credential')).toThrow(RangeError);
-    expect(() => bindJoinToken(SESSION, '', 'credential')).toThrow(RangeError);
-    expect(() => bindJoinToken(SESSION, STUDENT, '')).toThrow(RangeError);
-    expect(bindJoinToken(SESSION, STUDENT, 'credential')).toEqual({
+  it('refuses to bind a token to an empty session, participant, credential or address', () => {
+    const at = 'wss://video.example.invalid';
+    expect(() => bindJoinToken('', STUDENT, 'credential', at)).toThrow(RangeError);
+    expect(() => bindJoinToken(SESSION, '', 'credential', at)).toThrow(RangeError);
+    expect(() => bindJoinToken(SESSION, STUDENT, '', at)).toThrow(RangeError);
+    expect(() => bindJoinToken(SESSION, STUDENT, 'credential', '')).toThrow(RangeError);
+    expect(bindJoinToken(SESSION, STUDENT, 'credential', at)).toEqual({
       sessionId: SESSION,
       participantUserId: STUDENT,
       credential: 'credential',
+      serverUrl: at,
     });
   });
 });
@@ -122,6 +135,20 @@ describe('the video stand-in: rooms and tokens (T118, FR-SESS-3)', () => {
 
     expect(token).toMatchObject({ sessionId: SESSION, participantUserId: STUDENT });
     expect(token.credential).toMatch(/^fake_vtk_/);
+  });
+
+  it('answers its one fixed address with every token (K1)', async () => {
+    const rooms = video();
+    await rooms.createRoom(SESSION, TIMEOUTS);
+    await rooms.createRoom(OTHER_SESSION, TIMEOUTS);
+
+    expect((await rooms.createSessionToken(SESSION, STUDENT, UNTIL)).serverUrl).toBe(
+      STAND_IN_VIDEO_SERVER_URL,
+    );
+    expect((await rooms.createSessionToken(OTHER_SESSION, TEACHER, UNTIL)).serverUrl).toBe(
+      STAND_IN_VIDEO_SERVER_URL,
+    );
+    expect(STAND_IN_VIDEO_SERVER_URL).toMatch(/^wss:\/\/[^/]+\.invalid$/);
   });
 
   it('issues every participant a credential of their own', async () => {

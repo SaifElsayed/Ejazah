@@ -14,6 +14,7 @@
 // `{ kind: 'ignored' }`, as LiveKit's `track_*` and `room_started` do; its signature is checked first.
 // `endRoom` for a room it never created answers success, as LiveKit's adapter does (the owner's
 // decision of 2026-11-07), since the worker's stand-in never created the rooms the API's did.
+// T011 (K1): every token carries one fixed address, `STAND_IN_VIDEO_SERVER_URL`.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
@@ -29,6 +30,12 @@ import {
 } from './video.port.js';
 
 const SIGNATURE_HEADER = 'x-fake-signature';
+
+/**
+ * The one address the stand-in answers with every token (T011, K1): a reserved name (RFC 6761),
+ * never resolved, so nothing ever connects to it.
+ */
+export const STAND_IN_VIDEO_SERVER_URL = 'wss://video-stand-in.invalid';
 
 /** An inbound event as it arrives: the raw body and the headers that carry its signature. */
 export interface SignedEvent {
@@ -115,7 +122,12 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
     try {
       this.#openRoom(sessionId);
       return Promise.resolve(
-        bindJoinToken(sessionId, participantUserId, `fake_vtk_${randomUUID()}`),
+        bindJoinToken(
+          sessionId,
+          participantUserId,
+          `fake_vtk_${randomUUID()}`,
+          STAND_IN_VIDEO_SERVER_URL,
+        ),
       );
     } catch (error: unknown) {
       return Promise.reject(error as Error);

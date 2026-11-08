@@ -16,10 +16,11 @@ import { createLogger } from '../../logging/logger.js';
 import {
   unusedAdminServices,
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -74,6 +75,7 @@ beforeAll(async () => {
       discovery: unusedDiscoveryServices,
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
+      sessions: unusedSessionsServices,
     },
     adminServices: unusedAdminServices,
     routes: filesRoutes(storage),

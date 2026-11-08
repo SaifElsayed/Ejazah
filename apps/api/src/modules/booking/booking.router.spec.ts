@@ -24,6 +24,7 @@ import {
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -116,6 +117,7 @@ function callerAs(session: UserSession | null): Caller {
     discovery: unusedDiscoveryServices,
     booking,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

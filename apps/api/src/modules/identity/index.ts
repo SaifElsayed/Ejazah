@@ -239,6 +239,8 @@ export { lockAccount, readStanding } from './standing.repository.js';
 export { accountTimezone } from './users.repository.js';
 /** The display names of some accounts, for booking's lists (003:T049, FR-390, FR-391, FR-395). */
 export { displayNamesOf } from './users.repository.js';
+/** A session's parties' gender, standing, approval and name, for sessions' read and join (T011 of specs/004-sessions). */
+export { type SessionPartyRecord, sessionPartiesOf } from './users.repository.js';
 
 /**
  * The visibility predicate (T010, `002:T143`, SRS §3.7.1, R-201): the only way any module learns

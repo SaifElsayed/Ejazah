@@ -40,6 +40,7 @@ import {
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
@@ -157,6 +158,7 @@ function teacherCaller(tx: Transaction, teacherId: string, gender: Gender) {
         discovery: unusedDiscoveryServices,
         booking: unusedBookingServices,
         checkout: unusedCheckoutServices,
+        sessions: unusedSessionsServices,
         catalog: catalogOn(tx),
       },
     }),

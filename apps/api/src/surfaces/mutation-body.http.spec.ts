@@ -25,6 +25,7 @@ import {
   unusedBookingServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
 } from './services.fixtures.js';
 
@@ -164,6 +165,7 @@ beforeAll(async () => {
       discovery: unusedDiscoveryServices,
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
+      sessions: unusedSessionsServices,
     },
     adminServices,
   });

@@ -55,10 +55,11 @@ import {
 import {
   unusedAdminServices,
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
@@ -166,6 +167,7 @@ const services = {
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
+  sessions: unusedSessionsServices,
 };
 
 /** The user surface's context for a fixture session, as the HTTP application builds one. */

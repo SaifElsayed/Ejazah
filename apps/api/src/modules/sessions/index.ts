@@ -88,3 +88,18 @@ export type {
   EnrollmentTrack,
   HeldTime,
 } from './enrollment-side.port.js';
+/**
+ * T011 of specs/004-sessions (FR-431, FR-432, FR-434, FR-435; R-GENDER-7, R-SESS-5): `sessions.get`
+ * and `sessions.join`, the router `app.router.ts` mounts under `sessions` and the services
+ * `main.ts` binds over the process's client, the settings, the video port and booking's
+ * `EnrollmentSide`, with the store over this module's reads and identity's accounts.
+ */
+export { sessionsRouter } from './sessions.router.js';
+export {
+  createSessionsServices,
+  type PartyStanding,
+  type SessionsDependencies,
+  type SessionsServices,
+  type SessionsStore,
+  sessionsStore,
+} from './sessions.service.js';

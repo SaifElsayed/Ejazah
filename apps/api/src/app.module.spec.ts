@@ -38,6 +38,7 @@ const services = {
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
+  sessions: unusedSessionsServices,
 };
 
 import { createLogger } from './platform/logging/logger.js';
@@ -52,10 +53,11 @@ import {
 import {
   unusedAdminServices,
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './surfaces/services.fixtures.js';
