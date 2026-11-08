@@ -31,6 +31,24 @@ export async function readAdministratorName(
   return row?.displayName ?? null;
 }
 
+/**
+ * The display names of `adminIds` by id, in one statement over the primary key (T016's outage
+ * list, sessions' `AdminNames`; PR #129's review, nit 4): bounded by the page; an id with no row
+ * named by an empty string.
+ */
+export async function readAdministratorNames(
+  tx: Pick<Transaction, 'adminUser'>,
+  adminIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (adminIds.length === 0) return new Map();
+  const rows = await tx.adminUser.findMany({
+    where: { id: { in: [...adminIds] } },
+    select: { id: true, displayName: true },
+  });
+  const byId = new Map(rows.map(({ id, displayName }) => [id, displayName]));
+  return new Map(adminIds.map((adminId) => [adminId, byId.get(adminId) ?? '']));
+}
+
 export class AdminUsersRepository {
   readonly #database: Client;
 
