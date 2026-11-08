@@ -11,8 +11,9 @@
 // the admin module's invites with the email port and the invite marks for `deliver-admin-invite`
 // (T066), the stores of deleted people's files for `erase-deleted-files` (B16), `confirm-enrollment`
 // over the database and the settings reader (T039), the two expiry sweeps (T040), the time zone
-// re-resolution over the kernel's record of its runs, added once at start (T048), every sweep
-// registered on its schedule, and the queue's deliveries run through the
+// re-resolution over the kernel's record of its runs, added once at start (T048), `evaluate-sessions`
+// over sessions' completion and booking's `EnrollmentSide` (T014, T015), every sweep registered on
+// its schedule, and the queue's deliveries run through the
 // registered jobs (T112).
 //
 // The worker is a plain composition, not a Nest application context: no job resolves anything by
@@ -53,6 +54,8 @@ const [
   { expirePendingPayments },
   { RERESOLVE_SESSION_INSTANTS, reresolveSessionInstants },
   { jobRunsOver },
+  sessions,
+  { evaluateSessions },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -84,6 +87,8 @@ const [
   import('./jobs/expire-pending-payments.js'),
   import('./jobs/reresolve-session-instants.js'),
   import('./platform/idempotency/job-runs.repository.js'),
+  import('./modules/sessions/index.js'),
+  import('./jobs/evaluate-sessions.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -170,6 +175,11 @@ const confirmations = {
     ),
 };
 
+// Sessions' port to booking's enrollments (T008, the note under T015), bound once as main.ts binds
+// it, and T015's completion check over it, which every path that settles calls.
+const enrollmentSide = booking.createEnrollmentSide({ settings });
+const completion = sessions.createCompletion({ enrollments: enrollmentSide, settings, log });
+
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
 const jobs: readonly Job[] = [
   expireIdempotencyKeys(idempotency),
@@ -196,6 +206,16 @@ const jobs: readonly Job[] = [
   // The time zone re-resolution (T048, R-210, ADR 0009 D3), daily and once at start below: it runs
   // when `process.versions.tz` differs from its last run's, kept by the kernel in `idempotency_keys`.
   reresolveSessionInstants({ database, runs: jobRunsOver(database), settings }),
+  // The sessions' sweep (T014, R-306), every minute: a cancelled session's room ended in its join
+  // period, then every session due settled under its enrollment's and its own locks.
+  evaluateSessions({
+    database,
+    settings,
+    enrollments: enrollmentSide,
+    completion,
+    video: ports.video,
+    log,
+  }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);
