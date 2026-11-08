@@ -46,6 +46,14 @@
 //
 // `RequesterGender` is minted here and nowhere else outside a spec file (R-GENDER-5): from the
 // session's gender, never from input. A caller kind narrows this context; it never mints (T107).
+//
+// BOTH CONTEXTS CARRY THE REQUEST'S LIVE PUBLISHER (T063 of specs/004-sessions; research R-324,
+// item 5): `live`, the request's own after-commit list over the process's bus, which the caller kind
+// flushes once the call's work has committed and drops otherwise; the user context also carries the
+// process's registry of open streams, `liveStreams`, which `live.events` opens a stream in. Both are
+// the live channel `main.ts` hands the HTTP application; a context built without one carries a
+// publisher that sends nowhere and no registry. The session's access-token expiry travels with the
+// caller (`accessExpiresAt`), so a stream ends when the token it opened with does.
 import { randomUUID } from 'node:crypto';
 import type {
   adminMeOutput,
@@ -96,6 +104,9 @@ import type { Transactions } from '../platform/db/transaction.repository.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { DEFAULT_LOCALE, type Locale } from '../platform/http/locale.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
+import type { LiveBus } from '../platform/live/live-bus.js';
+import { RequestLive } from '../platform/live/live-publisher.js';
+import type { LiveRegistry } from '../platform/live/live-registry.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
@@ -149,6 +160,11 @@ export interface UserSession {
   readonly accountStatus: AccountStatus;
   /** Present for a teacher-role holder: the standing the teacher kind narrows by. */
   readonly teacher?: TeacherStanding;
+  /**
+   * When the access token this request came with expires (T063): identity's resolver always says;
+   * a live stream ends then, and is not opened for a session that does not say.
+   */
+  readonly accessExpiresAt?: Date;
 }
 
 /** What a server-held administrator session records. A different principal, not a user role. */
@@ -168,6 +184,8 @@ export interface UserCaller {
   readonly accountStatus: AccountStatus;
   readonly gender: RequesterGender;
   readonly teacher?: TeacherStanding;
+  /** When the access token this request came with expires (T063), as the session says. */
+  readonly accessExpiresAt?: Date;
 }
 
 /** The authenticated administrator making the request. */
@@ -242,7 +260,23 @@ export interface AppContext {
   readonly clientAddress: string;
   /** The services the surface's procedures read (T038). */
   readonly services: AppServices;
+  /** The request's after-commit live events, flushed by the caller kind (T063). */
+  readonly live: RequestLive;
+  /** The process's open streams, which `live.events` opens one in; null without a channel (T063). */
+  readonly liveStreams: LiveRegistry | null;
 }
+
+/** The process's live channel (T063): the bus a request's events go out on, and its streams. */
+export interface LiveChannel {
+  readonly bus: LiveBus;
+  readonly registry: LiveRegistry;
+}
+
+/** The bus of a context built without a channel: what it is handed goes nowhere. */
+const unboundBus: LiveBus = {
+  publish: () => undefined,
+  subscribe: () => () => undefined,
+};
 
 /** What the administrator caller kind needs to audit every call (T108). */
 export interface Administration {
@@ -449,9 +483,11 @@ export interface AdminContext {
   readonly administration: Administration;
   /** The admin module's services, bound once by `main.ts` (T067). */
   readonly services: AdminSurfaceServices;
-  /** The process's limiter, for the surface's anonymous kind (`adminPublicProcedure`, T017). */
+  /** The process's limiter: the anonymous kind's limits (T017) and the administrator kind's (T062). */
   readonly rateLimiter: RateLimiter;
   readonly clientAddress: string;
+  /** The request's after-commit live events, flushed once the call's transaction commits (T063). */
+  readonly live: RequestLive;
 }
 
 export interface ContextSource<TSession> {
@@ -463,6 +499,8 @@ export interface ContextSource<TSession> {
   readonly rateLimiter: RateLimiter;
   /** The client's address, from `clientAddressOf`. */
   readonly clientAddress: string;
+  /** The process's live channel (T063), bound in main.ts; absent, events go nowhere. */
+  readonly live?: LiveChannel;
 }
 
 function correlated(log: Logger, clientAddress: string): { correlationId: string; log: Logger } {
@@ -482,6 +520,7 @@ export function createAppContext({
   rateLimiter,
   clientAddress,
   services,
+  live,
 }: AppContextSource): AppContext {
   const caller: UserCaller | null =
     session === null
@@ -494,15 +533,21 @@ export function createAppContext({
           // The one place outside a spec file where a requester's gender is minted (R-GENDER-5).
           gender: session.gender as RequesterGender,
           ...(session.teacher === undefined ? {} : { teacher: session.teacher }),
+          ...(session.accessExpiresAt === undefined
+            ? {}
+            : { accessExpiresAt: session.accessExpiresAt }),
         };
+  const request = correlated(log, clientAddress);
   return {
     surface: 'app',
     caller,
     locale: session?.preferredLanguage ?? DEFAULT_LOCALE,
-    ...correlated(log, clientAddress),
+    ...request,
     rateLimiter,
     clientAddress,
     services,
+    live: new RequestLive(live?.bus ?? unboundBus, request.log),
+    liveStreams: live?.registry ?? null,
   };
 }
 
@@ -519,7 +564,9 @@ export function createAdminContext({
   services,
   rateLimiter,
   clientAddress,
+  live,
 }: AdminContextSource): AdminContext {
+  const request = correlated(log, clientAddress);
   return {
     surface: 'admin',
     administrator:
@@ -530,10 +577,11 @@ export function createAdminContext({
             sessionId: session.sessionId,
             mfaVerified: session.mfaVerified,
           },
-    ...correlated(log, clientAddress),
+    ...request,
     administration,
     services,
     rateLimiter,
     clientAddress,
+    live: new RequestLive(live?.bus ?? unboundBus, request.log),
   };
 }

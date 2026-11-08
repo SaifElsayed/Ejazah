@@ -47,6 +47,7 @@ import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { reportError } from '../../platform/errors/reporting.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
+import type { LiveBus } from '../../platform/live/live-bus.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import { IdentityTokenError, type SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
@@ -113,6 +114,11 @@ export interface DeletionDependencies extends IdentityDependencies {
   /** Where the work after the commit is left to run; detached unless a spec collects it. */
   readonly defer?: (work: Promise<void>) => void;
   readonly passwords?: PasswordHashing;
+  /**
+   * The process's live bus (T063 of specs/004-sessions, FR-429): the deleted person's `account`,
+   * sent after the commit, ends their live streams. Bound by `main.ts`; nothing is sent without it.
+   */
+  readonly live?: Pick<LiveBus, 'publish'>;
 }
 
 type Reauth = DeleteAccountInput['reauth'];
@@ -264,6 +270,7 @@ export class DeletionService {
 
   /** The work after the commit, each part on its own, detached from the request. */
   #afterCommit(userId: string, { email, grants }: ErasureSnapshot): void {
+    this.#endLiveStreams(userId);
     // Through a resolved promise, so a part that throws before it returns one (the grant's
     // decryption) is reported like a rejection and never escapes into the answered request.
     const reported = (work: () => Promise<void>) =>
@@ -292,6 +299,22 @@ export class DeletionService {
         this.#mail(email),
       ]).then(() => undefined),
     );
+  }
+
+  /**
+   * The person's `account`, after the commit (T063; research R-324, item 6): their streams read
+   * `account.me` and end. A publish that fails loses a hint only: logged without its payload, never
+   * retried; the stream still ends at its access token's expiry.
+   */
+  #endLiveStreams(userId: string): void {
+    try {
+      this.#dependencies.live?.publish({ to: [userId], event: { type: 'account' } });
+    } catch (error: unknown) {
+      this.#dependencies.log.warn(
+        { eventType: 'account', errorName: error instanceof Error ? error.name : 'unknown' },
+        'A live event could not be published; it is not retried',
+      );
+    }
   }
 
   /** The photo's file removed, and its key cleared only once it is gone. */

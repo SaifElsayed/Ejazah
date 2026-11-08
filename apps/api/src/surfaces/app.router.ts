@@ -38,6 +38,7 @@ import {
   identityVerificationRouter,
 } from '../modules/verification/index.js';
 import { createAppRouter, mergeAppRouters } from './procedures.js';
+import { liveRouter } from './live.router.js';
 import { platformRouter } from './public-config.router.js';
 
 export const appRouter = createAppRouter({
@@ -64,6 +65,8 @@ export const appRouter = createAppRouter({
   checkout: checkoutRouter,
   enrollments: enrollmentsRouter,
   sessions: sessionsRouter,
+  // T063 of specs/004-sessions: the live channel, one subscription per signed-in device.
+  live: liveRouter,
 });
 
 /** The user surface's type, the only one the mobile application may see. */

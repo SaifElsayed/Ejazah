@@ -84,7 +84,7 @@ import {
   type TRPCProcedureBuilder,
   type TRPCUnsetMarker,
 } from '@trpc/server';
-import { type z, ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import type { AuditEntry, AuditTrail } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
@@ -97,6 +97,11 @@ import {
   throttle,
   throttleDefault,
 } from '../platform/guards/rate-limit.guard.js';
+import {
+  LIVE_PING_INTERVAL_MS,
+  LIVE_RECONNECT_AFTER_INACTIVITY_MS,
+} from '../platform/live/live-constants.js';
+import { bindToTransaction } from '../platform/live/live-publisher.js';
 import type { Logger } from '../platform/logging/logger.js';
 import type {
   AccountStatus,
@@ -124,6 +129,11 @@ export interface AppMeta {
   readonly caller: AppCallerKind;
   /** The settings key of the procedure's declared rate limit, when it declares one (T170). */
   readonly rateLimit?: RateLimitKey;
+  /**
+   * A subscription's per-yield schema (T063): its output parser describes the stream it returns,
+   * not what it yields, so the contract snapshot records this one in its place (R-API-9, R-324).
+   */
+  readonly events?: z.ZodType;
 }
 
 /** The meta of every administrator-surface procedure: what makes it an administrative capability. */
@@ -180,7 +190,18 @@ const app = initTRPC
   .meta<AppMeta>()
   // Every kind stamps its caller; the default is the guarded one, so a procedure that somehow
   // skipped a kind would be held by the R-MOBILE-13 gate rather than read as public (T028).
-  .create({ ...formatter, defaultMeta: { surface: 'app', caller: 'user' }, isServer: true });
+  .create({
+    ...formatter,
+    defaultMeta: { surface: 'app', caller: 'user' },
+    isServer: true,
+    // The live channel's Server-Sent Events (T063; research R-324, item 8): a ping comment on
+    // every open stream, and the client's restart of a stream silent too long; both numbers are
+    // the kernel's (`platform/live/live-constants.ts`), never written here.
+    sse: {
+      ping: { enabled: true, intervalMs: LIVE_PING_INTERVAL_MS },
+      client: { reconnectAfterInactivityMs: LIVE_RECONNECT_AFTER_INACTIVITY_MS },
+    },
+  });
 
 const admin = initTRPC
   .context<AdminContext>()
@@ -343,15 +364,56 @@ const administratorSubject = (ctx: AdministratorContext): CallerSubject => ({
   adminId: ctx.administrator.adminId,
 });
 
-/** The meta a user-surface procedure is stamped with: its surface, and its limit's key when declared. */
+/**
+ * A subscription's output schema (T063): the stream its handler returns, which tRPC's output
+ * parser checks is one, and `events`, the schema of each event it yields, which the kind stamps in
+ * the meta for the contract snapshot. tRPC parses no yielded value (https://trpc.io/docs/server/
+ * subscriptions), so the handler parses each one by `events` itself before it is sent.
+ */
+export function eventStream<TEvent>(events: z.ZodType<TEvent>): z.ZodType<AsyncIterable<TEvent>> {
+  const stream = z.custom<AsyncIterable<TEvent>>(
+    (value) =>
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as Partial<AsyncIterable<TEvent>>)[Symbol.asyncIterator] === 'function',
+    { message: 'A subscription answers a stream of events.' },
+  );
+  streamedEvents.set(stream, events);
+  return stream;
+}
+
+/** The per-yield schema of each `eventStream` output, by that output's schema. */
+const streamedEvents = new WeakMap<object, z.ZodType>();
+
+/**
+ * The meta a user-surface procedure is stamped with: its surface, its limit's key when declared,
+ * and a subscription's per-yield schema.
+ */
 function appMeta(
   caller: AppCallerKind,
   rateLimit: { readonly key: RateLimitKey } | undefined,
+  output: object,
 ): AppMeta {
-  return rateLimit === undefined
-    ? { surface: 'app', caller }
-    : { surface: 'app', caller, rateLimit: rateLimit.key };
+  const events = streamedEvents.get(output);
+  return {
+    surface: 'app',
+    caller,
+    ...(rateLimit === undefined ? {} : { rateLimit: rateLimit.key }),
+    ...(events === undefined ? {} : { events }),
+  };
 }
+
+/**
+ * The user kinds' after-commit point (T063; Saif's review of PR #126, round 1, follow-up 4): they
+ * open no transaction, their services committing their own, so the request's live events go out
+ * once the handler resolves, and none when it throws or is refused.
+ */
+const flushLiveAfterHandler = app.middleware(async ({ ctx, next }) => {
+  const result = await next();
+  if (result.ok) ctx.live.flush();
+  else ctx.live.drop();
+  return result;
+});
 
 /** The two standings every user kind refuses unless it says otherwise (FR-137, kernel.md). */
 const RESTRICTED_STANDINGS: ReadonlySet<AccountStatus> = new Set(['suspended', 'banned']);
@@ -479,7 +541,7 @@ export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
     throw new Error('A public procedure declares its rate limit (R-SEC-6, T170).');
   }
   return app.procedure
-    .meta(appMeta('public', rateLimit))
+    .meta(appMeta('public', rateLimit, output))
     .use(readAppInput)
     .input(input)
     .output(output)
@@ -498,7 +560,8 @@ function signedIn<TIn, TInOut, TOutIn, TOutOut>(
   kind: AppCallerKind = role ?? 'user',
 ): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
   const builder = app.procedure
-    .meta(appMeta(kind, rateLimit))
+    .meta(appMeta(kind, rateLimit, output))
+    .use(flushLiveAfterHandler)
     .use(requireUser({ role, admitsRestricted }))
     .use(readAppInput)
     .input(input)
@@ -557,7 +620,8 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
   }
   const { input, output, rateLimit, admitsRestricted = false } = declaration;
   const builder = app.procedure
-    .meta(appMeta('teacher', rateLimit))
+    .meta(appMeta('teacher', rateLimit, output))
+    .use(flushLiveAfterHandler)
     .use(requireUser({ role: 'teacher', admitsRestricted }))
     .use(requireStanding(admits))
     .use(readAppInput)
@@ -607,24 +671,40 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
     rateLimit === undefined
       ? builder.use(throttleDefault(administratorSubject))
       : builder.use(throttle(rateLimit, administratorSubject))
-  ).use(({ ctx, next }) => {
+  ).use(async ({ ctx, next }) => {
     const { transactions, auditWriter } = ctx.administration;
-    return transactions.run(async (tx) => {
-      const entries: AuditEntry[] = [];
-      const audit: AuditTrail = { record: (entry) => void entries.push(entry) };
-      const result = await next({ ctx: { tx, audit } });
-      // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
-      if (!result.ok) throw result.error;
-      if (entries.length === 0) {
-        throw new Error(
-          'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
-        );
-      }
-      for (const entry of entries) {
-        await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
-      }
-      return result;
-    });
+    const result = await transactions
+      .run(async (tx) => {
+        // A service handed only `tx` reaches this request's after-commit list through it (T063).
+        const unbind = bindToTransaction(tx, ctx.live);
+        try {
+          const entries: AuditEntry[] = [];
+          const audit: AuditTrail = { record: (entry) => void entries.push(entry) };
+          const called = await next({ ctx: { tx, audit } });
+          // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
+          if (!called.ok) throw called.error;
+          if (entries.length === 0) {
+            throw new Error(
+              'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
+            );
+          }
+          for (const entry of entries) {
+            await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
+          }
+          return called;
+        } finally {
+          unbind();
+        }
+      })
+      .catch((error: unknown) => {
+        // Rolled back: nothing the call added is sent (T063).
+        ctx.live.drop();
+        throw error;
+      });
+    // THE ADMINISTRATOR KIND'S AFTER-COMMIT POINT (T063; contracts/kernel.md, `LivePublisher`):
+    // `transactions.run` has committed, so the request's live events go out now, and only now.
+    ctx.live.flush();
+    return result;
   });
 }
 

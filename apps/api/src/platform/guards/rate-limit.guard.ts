@@ -94,6 +94,12 @@ export const defaultRateLimits = {
 export const SIGNED_IN_DEFAULT_RATE_LIMIT = 'rate_limit_signed_in_default' satisfies RateLimitKey;
 
 /**
+ * The opening of the live channel, `live.events`, per user (T063, FR-428; SRS §3.14 «Live channel
+ * open rate limit», seeded by T001 at 10 per 60 s). Declared, so it fails closed.
+ */
+export const LIVE_CHANNEL_RATE_LIMIT = 'rate_limit_live_channel' satisfies RateLimitKey;
+
+/**
  * How long the default's setting is held after a read (R-321, item 3). A named constant under
  * R-MONEY-12's exception (constitution 2.6.0), not a setting: a long hold changed from the panel
  * would keep a changed limit unseen on every signed-in call.

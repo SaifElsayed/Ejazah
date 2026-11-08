@@ -120,6 +120,7 @@ import {
   clientAddressOf,
   createAdminContext,
   createAppContext,
+  type LiveChannel,
   type SessionResolver,
   type SessionResolvers,
 } from './surfaces/context.js';
@@ -175,6 +176,12 @@ export interface ApplicationOptions {
   readonly adminServices: AdminSurfaceServices;
   /** `TRUSTED_PROXY`: the one proxy header whose last hop is the client's address, when set (T017). */
   readonly trustedProxyHeader?: string;
+  /**
+   * The process's live channel, its bus and its registry of open streams (T063), bound by `main.ts`:
+   * every request's context carries a publisher over the bus, and the user surface's `live.events`
+   * opens its streams in the registry. Without one, nothing is sent and no stream opens.
+   */
+  readonly live?: LiveChannel;
   /** The routers to mount; the real surfaces (T109) unless a spec passes its own. */
   readonly surfaces?: Surfaces;
   /** The public pages, each under its own path (T019); the stylesheets are served regardless. */
@@ -380,8 +387,12 @@ function surfaceHandler<TContext extends Correlated>(
     // instead. With batching off, a response carries at most one error, a refused batch included.
     // tRPC also sets its own `Vary`, replacing the `Vary: Origin` of the CORS middleware (T136), so
     // `Origin` is appended back: a cache must not serve one origin's answer to another.
-    responseMeta: ({ errors }) => {
-      const headers = { vary: ['Origin'] };
+    // A live stream's response (T063, a subscription) closes its connection when it ends: its socket
+    // is never reused (the client opens a new request), and a keep-alive socket left idle would hold
+    // the stop's `server.close()` until the client let it go (FR-429).
+    responseMeta: ({ errors, type }) => {
+      const headers: Record<string, string[] | string> = { vary: ['Origin'] };
+      if (type === 'subscription') headers['connection'] = 'close';
       const [first] = errors;
       if (first === undefined) return { headers };
       return { status: toErrorShape(first).status, headers };
@@ -425,10 +436,12 @@ export async function createApplication({
   services,
   adminServices,
   trustedProxyHeader,
+  live,
   surfaces = { app: appRouter, admin: adminRouter },
   webRoutes = {},
   routes = {},
 }: ApplicationOptions): Promise<INestApplication> {
+  const channel = live === undefined ? {} : { live };
   const clientAddress = (request: IncomingMessage): string =>
     clientAddressOf(
       { remoteAddress: request.socket.remoteAddress, headers: request.headers },
@@ -463,6 +476,7 @@ export async function createApplication({
           rateLimiter,
           clientAddress: clientAddress(request),
           services,
+          ...channel,
         }),
       log,
       maxRequestBodyBytes,
@@ -481,6 +495,7 @@ export async function createApplication({
           services: adminServices,
           rateLimiter,
           clientAddress: clientAddress(request),
+          ...channel,
         }),
       log,
       maxRequestBodyBytes,

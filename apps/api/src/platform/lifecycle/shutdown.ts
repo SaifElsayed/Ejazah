@@ -11,6 +11,10 @@
 //
 // The process is a parameter, defaulting to Node's, so a spec can signal a fake and watch what it
 // records; nothing here reads a signal from anywhere else.
+//
+// The request process's own sequence is `apiStopSequence` (T063 of specs/004-sessions): the live
+// streams first, then the application, then the queue and the database, so a spec proves the order
+// and that the stop never waits on an open stream without `main.ts`.
 
 /** The two signals a process is stopped with. */
 export const SHUTDOWN_SIGNALS: readonly NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
@@ -70,4 +74,28 @@ export function onShutdown(
     });
   }
   return stop;
+}
+
+/** What the API's stop closes (T063 of specs/004-sessions). */
+export interface ApiStopParts {
+  /** The process's live streams: every one ended at once, synchronously (`LiveRegistry.endAll`). */
+  readonly live: { endAll(): number };
+  /** The HTTP application: stops listening and waits for the requests it is answering. */
+  readonly application: { close(): Promise<void> };
+  /** What closes after it, in order: the queue when an add opened it, then the database. */
+  readonly afterwards: ReadonlyArray<() => Promise<unknown> | undefined>;
+}
+
+/**
+ * The request process's stop sequence, for `onShutdown` (T063; FR-429; contracts/kernel.md,
+ * "Shutdown order", the owner's hard condition): every live stream ended BEFORE the application
+ * closes, since Node's `server.close()` waits on a connection still answering and one open stream
+ * would hold a deploy until it is killed; then the application; then each later part.
+ */
+export function apiStopSequence({ live, application, afterwards }: ApiStopParts): () => Promise<void> {
+  return async () => {
+    live.endAll();
+    await application.close();
+    for (const close of afterwards) await close();
+  };
 }
