@@ -9,7 +9,7 @@ import { vi } from 'vitest';
 import type { Database } from '../../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../../platform/db/transaction.repository.js';
 import { DomainError } from '../../../platform/errors/domain-error.js';
-import type { RateLimiter } from '../../../platform/guards/rate-limit.guard.js';
+import type { RateLimiter, RateLimitSubject } from '../../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../../platform/logging/logger.js';
 import {
   type AdminSession,
@@ -66,7 +66,7 @@ export function surfaceOf(
   options: { readonly refuseAfter?: Readonly<Record<string, number>> } = {},
 ): AdminSurface {
   const seen = new Map<string, number>();
-  const check = vi.fn(async (key: string, _subject: string) => {
+  const check = vi.fn(async (key: string, _subject: RateLimitSubject, _procedure: string) => {
     const count = (seen.get(key) ?? 0) + 1;
     seen.set(key, count);
     const limit = options.refuseAfter?.[key];
@@ -114,7 +114,9 @@ export function surfaceOf(
       }),
     );
   return {
-    counts: () => check.mock.calls.map(([key, subject]) => [key, subject]),
+    // Each subject read back as the text it is counted under (T062): the budget's `*`, an identifier
+    // itself, an administrator by id.
+    counts: () => check.mock.calls.map(([key, subject]) => [key, countedText(subject)]),
     anonymous: () => as(null),
     bearing: async (sessionToken: string) => as(await world.sessions.resolve(sessionToken)),
   };
@@ -134,4 +136,18 @@ export async function verifiedToken(
     .anonymous()
     .auth.mfa.verify({ sessionToken, code: await world.currentCode(admin.adminId) });
   return sessionToken;
+}
+
+/** The text a subject is counted under, as the endpoints named it before T062's subject kinds. */
+function countedText(subject: RateLimitSubject): string {
+  switch (subject.kind) {
+    case 'budget':
+      return '*';
+    case 'identifier':
+      return subject.value;
+    case 'user':
+      return subject.userId;
+    case 'administrator':
+      return subject.adminId;
+  }
 }
