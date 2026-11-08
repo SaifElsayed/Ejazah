@@ -259,8 +259,14 @@ describe('a forged event is refused with 401 and writes nothing (T013, FR-372, S
 
     expect(lines.join('\n')).not.toContain(event.providerEventId);
     expect(lines.join('\n')).not.toContain(event.headers['x-fake-signature'] ?? 'no signature');
-    expect(lines.map((line) => JSON.parse(line) as { level: string })).toContainEqual(
-      expect.objectContaining({ level: 'warn' }),
+    // The code's value itself, not only the level: the signature alert counts it (the follow-up
+    // under T012 of specs/004-sessions/tasks.md, 2026-11-08).
+    expect(lines.map((line) => JSON.parse(line) as Record<string, unknown>)).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        errorCode: 'UNAUTHENTICATED',
+        msg: 'Payment webhook refused',
+      }),
     );
   });
 });
