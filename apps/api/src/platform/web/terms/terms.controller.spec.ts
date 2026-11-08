@@ -19,10 +19,11 @@ import { TERMS_PATH, termsRoute } from './terms.controller.js';
 import {
   unusedAdminServices,
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -62,6 +63,7 @@ const services = {
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
+  sessions: unusedSessionsServices,
 };
 
 let application: INestApplication;

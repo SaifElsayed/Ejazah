@@ -192,7 +192,12 @@ describe('the LiveKit adapter: tokens (T009, R-302, FR-430, FR-431)', () => {
       validUntil: SCHEDULED_END,
     });
 
-    expect(token).toMatchObject({ sessionId: SESSION, participantUserId: STUDENT });
+    // The project's address, the phone's to connect to (the note under T011, K1).
+    expect(token).toMatchObject({
+      sessionId: SESSION,
+      participantUserId: STUDENT,
+      serverUrl: LIVEKIT_URL,
+    });
     const claims = await claimsOf(token.credential);
     expect(claims['sub']).toBe(STUDENT);
     expect(claims['iss']).toBe(API_KEY);

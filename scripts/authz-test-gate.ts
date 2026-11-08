@@ -8,7 +8,8 @@
 // `apps/api/src/modules/**` that name the procedure's path and assert its kind's refusals
 // (kernel.md "Caller kinds"): a `user` procedure refuses an anonymous caller (UNAUTHENTICATED); a
 // `student` or `teacher` one refuses an anonymous caller and a caller of the other role
-// (UNAUTHENTICATED and FORBIDDEN). A procedure without them is refused, naming R-MOBILE-13 and the
+// (UNAUTHENTICATED and FORBIDDEN); a `participant` one (T011 of specs/004-sessions), of either role,
+// an anonymous caller (UNAUTHENTICATED). A procedure without them is refused, naming R-MOBILE-13 and the
 // path and the codes it lacks.
 //
 // WHAT IS READ. The committed contract snapshot (`packages/contracts/contract-snapshot.json`),
@@ -41,6 +42,10 @@ export const REQUIRED_REFUSALS: Readonly<Record<string, readonly string[]>> = {
   user: ['UNAUTHENTICATED'],
   student: ['UNAUTHENTICATED', 'FORBIDDEN'],
   teacher: ['UNAUTHENTICATED', 'FORBIDDEN'],
+  // T011 of specs/004-sessions: either role is a participant, so no role is refused; a restricted
+  // standing is ACCOUNT_RESTRICTED, which no kind is required to prove (the owner's decision of
+  // 2026-11-08 on lane A's questions).
+  participant: ['UNAUTHENTICATED'],
 };
 const ALL_REFUSALS = ['UNAUTHENTICATED', 'FORBIDDEN'];
 

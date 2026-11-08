@@ -16,10 +16,11 @@ import { createAppCallerFactory, createAppRouter } from './procedures.js';
 import { platformRouter } from './public-config.router.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
@@ -73,6 +74,7 @@ function fixture(changes: Readonly<Record<string, unknown>> = {}) {
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   const router = createAppRouter({ platform: platformRouter });
   const caller = createAppCallerFactory(router)(

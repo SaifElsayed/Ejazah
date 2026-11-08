@@ -15,10 +15,11 @@ import {
 } from '../../../surfaces/procedures.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
 import type { TeacherProfileServices } from '../index.js';
@@ -118,6 +119,7 @@ export function profileSurfaceOf(teacherProfile: TeacherProfileServices) {
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

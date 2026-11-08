@@ -13,7 +13,8 @@
 // identity's `account`, since T068 (R-121); the identity module's `teacher.payout` since T077; the
 // catalog module's `teacher.packages` since T018 and `teacher.slots` since T019; the booking module's
 // `discovery` since T026 and `booking` since T032; the payments module's `checkout` since T036;
-// the booking module's `enrollments`, `teacher.students` and `teacher.today` since T049.
+// the booking module's `enrollments`, `teacher.students` and `teacher.today` since T049; the sessions
+// module's `sessions` since T011 of specs/004-sessions.
 import {
   bookingRouter,
   discoveryRouter,
@@ -30,6 +31,7 @@ import {
   teacherProfileRouter,
 } from '../modules/identity/index.js';
 import { checkoutRouter } from '../modules/payments/index.js';
+import { sessionsRouter } from '../modules/sessions/index.js';
 import {
   applicationRouter,
   credentialsRouter,
@@ -61,6 +63,7 @@ export const appRouter = createAppRouter({
   booking: bookingRouter,
   checkout: checkoutRouter,
   enrollments: enrollmentsRouter,
+  sessions: sessionsRouter,
 });
 
 /** The user surface's type, the only one the mobile application may see. */

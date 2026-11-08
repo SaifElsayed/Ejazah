@@ -174,3 +174,53 @@ export async function accountTimezone(
   });
   return user?.timezone ?? null;
 }
+
+/** What a session's party is, by identity's records (T011 of specs/004-sessions, FR-432). */
+export interface SessionPartyRecord {
+  readonly gender: 'male' | 'female';
+  readonly accountStatus: 'active' | 'suspended' | 'verification_required' | 'banned';
+  /** Whether the account's teacher approval stands: its profile's `verification_status` is `approved`. */
+  readonly teacherApproved: boolean;
+  readonly displayName: string;
+}
+
+/**
+ * The live accounts of `userIds` as the sessions module's read and join decide on them (T011 of
+ * specs/004-sessions; FR-432, R-GENDER-7, R-SESS-5), in one statement on the caller's transaction:
+ * the gender, the standing, whether a teacher approval stands, and the display name, nothing else
+ * (R-HONEST-4). A deleted account is left out by the client's extension (FR-141), so it is absent.
+ * Takes no lock: the join locks both accounts first and reads them here under the locks.
+ */
+export async function sessionPartiesOf(
+  tx: Pick<Transaction, 'user'>,
+  userIds: readonly string[],
+): Promise<ReadonlyMap<string, SessionPartyRecord>> {
+  if (userIds.length === 0) return new Map();
+  const rows = await tx.user.findMany({
+    where: { id: { in: [...userIds] } },
+    select: {
+      id: true,
+      gender: true,
+      accountStatus: true,
+      displayName: true,
+      teacherProfile: { select: { verificationStatus: true } },
+    },
+  });
+  return new Map(
+    rows.flatMap(({ id, gender, accountStatus, displayName, teacherProfile }) =>
+      displayName === null
+        ? []
+        : [
+            [
+              id,
+              {
+                gender,
+                accountStatus,
+                teacherApproved: teacherProfile?.verificationStatus === 'approved',
+                displayName,
+              },
+            ] as const,
+          ],
+    ),
+  );
+}

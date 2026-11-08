@@ -55,10 +55,11 @@ import {
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
@@ -147,6 +148,7 @@ function surfaceCaller(teacherId: string) {
         discovery: unusedDiscoveryServices,
         booking: unusedBookingServices,
         checkout: unusedCheckoutServices,
+        sessions: unusedSessionsServices,
         catalog,
       },
     }),
@@ -200,6 +202,7 @@ function publishedCaller(teacherId: string, gender: 'male' | 'female') {
         discovery: unusedDiscoveryServices,
         booking: unusedBookingServices,
         checkout: unusedCheckoutServices,
+        sessions: unusedSessionsServices,
       },
     }),
   );

@@ -99,8 +99,12 @@ import type {
 } from './context.js';
 
 /** The meta of every user-surface procedure. */
-/** The user surface's caller kinds, as the meta names them. */
-export type AppCallerKind = 'public' | 'user' | 'student' | 'teacher';
+/**
+ * The user surface's caller kinds, as the meta names them. `participant` (T011 of
+ * specs/004-sessions; contracts/README.md, "Callers") is a session's or an enrollment's student or
+ * teacher; which of the two people the caller is, the service decides.
+ */
+export type AppCallerKind = 'public' | 'user' | 'student' | 'teacher' | 'participant';
 
 export interface AppMeta {
   readonly surface: 'app';
@@ -437,9 +441,10 @@ function signedIn<TIn, TInOut, TOutIn, TOutOut>(
     admitsRestricted = false,
   }: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>,
   role: Role | undefined,
+  kind: AppCallerKind = role ?? 'user',
 ): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
   const builder = app.procedure
-    .meta(appMeta(role ?? 'user', rateLimit))
+    .meta(appMeta(kind, rateLimit))
     .use(requireUser({ role, admitsRestricted }))
     .use(readAppInput)
     .input(input)
@@ -462,6 +467,19 @@ export function userProcedure<TIn, TInOut, TOutIn, TOutOut>(
   declaration: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>,
 ): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
   return signedIn(declaration, undefined);
+}
+
+/**
+ * A participant (T011 of specs/004-sessions; contracts/README.md, "Callers"): an authenticated
+ * person of either role, a suspended or banned account refused `ACCOUNT_RESTRICTED` before the
+ * service as every user kind refuses it. Whether the caller is one of the two people of the session
+ * or enrollment named is the service's to decide, from the caller's own id: anyone else answers
+ * `NOT_FOUND` with the shape a nonexistent id gets (R-GENDER-2, FR-432).
+ */
+export function participantProcedure<TIn, TInOut, TOutIn, TOutOut>(
+  declaration: AppProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut, SignedInContext>,
+): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
+  return signedIn(declaration, undefined, 'participant');
 }
 
 /** A caller holding the teacher role, of the standing the declaration admits (R-106). */

@@ -6,11 +6,15 @@
 // times of a student's sessions in a window, for the booking sheet; read-only, no lock. T033 widens
 // it to the student's and the teacher's, for the one overlap check the hold and the sheet share
 // (FR-351, FR-BOOK-5). T049: the lists' reads, each session with its status: the sessions of some
-// enrollments, and the sessions of a teacher's day (FR-390, FR-391); read-only, no lock.
+// enrollments, and the sessions of a teacher's day (FR-390, FR-391); read-only, no lock. T011 of
+// specs/004-sessions: a session as its party reads it, by its id and the party together, and the
+// join's one lock, the session's two accounts in one `lockRows` call (kernel.md's `sessions.join`
+// row).
 import type { SessionStatus } from '@ijazah/contracts';
 import { calendarDateOf, type LocalDate, type LocalTime, localTimeOf } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 /**
  * Of `enrollmentIds`, each enrollment's latest `scheduled_date_local`, its final session's requested
@@ -227,4 +231,93 @@ export async function teacherSessionsBetween(
     },
   });
   return rows.map((row) => ({ enrollmentId: row.enrollmentId, ...sessionRowOf(row) }));
+}
+
+/**
+ * A session as its party reads it (T011, FR-434): the session's own columns, the sequence number of
+ * the session a make-up is for, and its two parties, so the caller can name the counterparty.
+ */
+export interface PartySessionRow {
+  readonly id: string;
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly sequenceNumber: number;
+  /** The sequence number of the session this one makes up for; null for an ordinary session. */
+  readonly makeupForSequenceNumber: number | null;
+  readonly localDate: LocalDate;
+  /** `HH:MM:SS`, as the `time` column holds it. */
+  readonly startTimeLocal: LocalTime;
+  readonly timezone: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+  readonly status: SessionStatus;
+}
+
+/**
+ * The session `sessionId` when `userId` is its student or its teacher, else null: another person's
+ * session and a nonexistent one answer alike (T011, R-GENDER-2), a soft-deleted one left out by the
+ * client's extension. By the primary key, the party in the same statement. Takes no lock: the join
+ * locks both accounts and reads it again under them (contracts/kernel.md, the `sessions.join` row).
+ */
+export async function sessionOfParty(
+  tx: Pick<Transaction, 'session'>,
+  sessionId: string,
+  userId: string,
+): Promise<PartySessionRow | null> {
+  const found = await tx.session.findFirst({
+    where: { id: sessionId, OR: [{ studentUserId: userId }, { teacherUserId: userId }] },
+    select: {
+      id: true,
+      enrollmentId: true,
+      studentUserId: true,
+      teacherUserId: true,
+      sequenceNumber: true,
+      scheduledDateLocal: true,
+      scheduledStartTimeLocal: true,
+      timezone: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      status: true,
+      makeupForSessionId: true,
+    },
+  });
+  if (found === null) return null;
+  // The session made up for, read on its own so the client's extension leaves out a soft-deleted
+  // one (R-DB-3); by the primary key.
+  const madeUpFor =
+    found.makeupForSessionId === null
+      ? null
+      : await tx.session.findFirst({
+          where: { id: found.makeupForSessionId },
+          select: { sequenceNumber: true },
+        });
+  return {
+    id: found.id,
+    enrollmentId: found.enrollmentId,
+    studentUserId: found.studentUserId,
+    teacherUserId: found.teacherUserId,
+    sequenceNumber: found.sequenceNumber,
+    makeupForSequenceNumber: madeUpFor?.sequenceNumber ?? null,
+    localDate: calendarDateOf(found.scheduledDateLocal),
+    startTimeLocal: localTimeOf(found.scheduledStartTimeLocal),
+    timezone: found.timezone,
+    startsAt: found.scheduledStartAt,
+    endsAt: found.scheduledEndAt,
+    status: found.status,
+  };
+}
+
+/**
+ * Locks a session's two accounts, `FOR UPDATE`, in id order, in one statement (T011; the
+ * `sessions.join` row of contracts/kernel.md): the accounts' place of the one order, and nothing
+ * else, since the join locks no session and writes nothing. A `sessions` row references both
+ * accounts by a foreign key, so sessions takes them through `lockRows` only, reading no column of
+ * `users` (`platform/db/row-lock.ts`, the owner's decision of 2026-11-02).
+ */
+export async function lockSessionParties(
+  tx: Transaction,
+  userIds: readonly string[],
+): Promise<void> {
+  await lockRows(tx, 'users', userIds);
 }
