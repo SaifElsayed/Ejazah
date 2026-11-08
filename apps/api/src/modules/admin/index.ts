@@ -3,6 +3,7 @@
 import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
@@ -20,6 +21,12 @@ import {
 } from '../identity/index.js';
 import { createPaymentsMonitorService } from '../payments/index.js';
 import {
+  createCompletion,
+  createOutageServices,
+  type EnrollmentSide,
+  type OutageServices,
+} from '../sessions/index.js';
+import {
   type ApplicationReviewService,
   createVerificationAdminServices,
   openRequestOf,
@@ -29,7 +36,7 @@ import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
 import { AdminSessionsRepository } from './admin-sessions.repository.js';
-import { AdminUsersRepository } from './admin-users.repository.js';
+import { AdminUsersRepository, readAdministratorName } from './admin-users.repository.js';
 import { type AdminInviteQueue, AdminsService } from './admins.service.js';
 import { AuditQueryService } from './audit-query.service.js';
 import { AuditRepository } from './audit.repository.js';
@@ -85,6 +92,12 @@ export interface AdminServices {
   readonly students: Pick<StandingService, 'suspendStudent' | 'banStudent' | 'reinstateStudent'>;
   /** The payments module's read-only monitor, composed here for the surface (T052, FR-400). */
   readonly payments: ReturnType<typeof createPaymentsMonitorService>;
+  /**
+   * The sessions module's provider outage windows, composed here for the surface (T016 of
+   * specs/004-sessions, FR-445): over the bound `EnrollmentSide` and sessions' completion, the
+   * recorders' names read from this module's `admin_users` (`AdminNames`, Q6).
+   */
+  readonly outages: Pick<OutageServices, 'record' | 'list'>;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -99,6 +112,13 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   /** The one registry of an account's end (FR-142), shared with the identity module's deletion (B16). */
   readonly consequences?: AccountConsequences;
+  /**
+   * Sessions' `EnrollmentSide`, bound once by `main.ts` to booking's `createEnrollmentSide()` (T015's
+   * note; the owner's decision of 2026-11-08 on lane D's questions, Q5 (b)), for the outages.
+   */
+  readonly enrollmentSide: EnrollmentSide;
+  /** The process's logger: the outage record's and completion's lines (T016, T015). */
+  readonly log: Pick<Logger, 'info'>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -130,7 +150,35 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     teachers: standing,
     students: standing,
     payments: createPaymentsMonitorService(dependencies),
+    outages: createOutageServices({
+      enrollments: dependencies.enrollmentSide,
+      completion: createCompletion({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      settings: dependencies.settings,
+      log: dependencies.log,
+      adminNames,
+    }),
   };
+}
+
+/**
+ * The administrators' display names by id, this module's `admin_users` (R-API-6), handed to
+ * sessions' outage list as its `AdminNames` (T016; the eighth dependency handed in against the
+ * arrows, docs/ARCHITECTURE.md). One read per distinct recorder of a page, an id with no row named by
+ * an empty string.
+ */
+async function adminNames(
+  tx: Parameters<typeof readAdministratorName>[0],
+  adminIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const names = new Map<string, string>();
+  for (const adminId of adminIds) {
+    names.set(adminId, (await readAdministratorName(tx, adminId)) ?? '');
+  }
+  return names;
 }
 
 /** The invites `deliver-admin-invite` sends, handed to the job by `worker.ts` (T066, R-110). */

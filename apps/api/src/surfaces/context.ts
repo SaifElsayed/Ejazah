@@ -81,6 +81,10 @@ import type {
   auditListInput,
   auditListOutput,
   homeSummaryOutput,
+  outagesListInput,
+  outagesListOutput,
+  outagesRecordInput,
+  outagesRecordOutput,
   paymentsGetOutput,
   paymentsListInput,
   paymentsListOutput,
@@ -410,6 +414,22 @@ export interface AdminSurfaceServices {
     suspendStudent(tx: Transaction, actorId: string, userId: string): Move;
     banStudent(tx: Transaction, actorId: string, userId: string): Move;
     reinstateStudent(tx: Transaction, actorId: string, userId: string): Move;
+  };
+  /**
+   * The provider outage windows (FR-445, R-307; T016 of specs/004-sessions), the sessions module's,
+   * composed by the admin module: a window recorded on the call's transaction with its sessions'
+   * reclassification, and a page of the windows recorded.
+   */
+  readonly outages: {
+    record(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof outagesRecordInput>,
+    ): Answer<typeof outagesRecordOutput>;
+    list(
+      tx: Transaction,
+      input: z.output<typeof outagesListInput>,
+    ): Answer<typeof outagesListOutput>;
   };
 }
 

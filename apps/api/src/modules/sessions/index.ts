@@ -95,6 +95,19 @@ export {
   disputeWindowHours,
 } from './completion.service.js';
 /**
+ * T016 (FR-445, R-307): the provider outage windows, `sessions.outages.record` and `.list`, behind
+ * the administrator surface's `sessions` namespace.
+ */
+export {
+  type AdminNames,
+  createOutageServices,
+  type OutagePage,
+  type OutageRecorded,
+  type OutageRecordInput,
+  type OutageServices,
+} from './outages.service.js';
+export { sessionsAdminRouter } from './sessions-admin.router.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */
