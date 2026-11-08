@@ -62,6 +62,7 @@ const me: MeOutput = {
 };
 
 const next: ListedSession = {
+  sessionId: '0193a6f0-0000-7000-8000-000000000503',
   sequenceNumber: 3,
   localDate: '2026-11-26',
   startTimeLocal: '20:00',

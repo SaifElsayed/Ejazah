@@ -49,6 +49,7 @@ const QURAN = {
 
 function listed(n: number, startsAt: string, timezone = CAIRO): ListedSession {
   return {
+    sessionId: `0193a6f0-0000-7000-8000-0000000005${String(n).padStart(2, '0')}`,
     sequenceNumber: n,
     localDate: startsAt.slice(0, 'YYYY-MM-DD'.length),
     startTimeLocal: '10:00',

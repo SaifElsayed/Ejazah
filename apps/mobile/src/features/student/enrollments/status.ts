@@ -1,7 +1,7 @@
 // T050 (FR-390; screens.md §6 `Enrollments`, `EnrollmentsEnded`, `SessionStates`): an enrollment's
 // and a session's status as their badges say them, in the tones the boards draw. An enrollment
 // awaiting payment takes its badge from its last order (`order-state.ts`). Every session status
-// the API can answer has its badge, though this phase writes only `scheduled`; the two statuses
+// the API can answer has its badge, each drawn after settlement (004:T020, FR-495); the two statuses
 // awaiting the administration's review share one word, as `SessionStates` draws them.
 import type { EnrollmentStatus, SessionStatus } from '@ijazah/contracts';
 

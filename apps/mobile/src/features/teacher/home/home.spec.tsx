@@ -62,6 +62,7 @@ function session(
       sessionCount: of.total,
       sessionDurationMinutes: of.minutes,
     },
+    sessionId: `0193a6f0-0000-7000-8000-0000000006${String(of.n).padStart(2, '0')}`,
     sequenceNumber: of.n,
     localDate: '2026-11-04',
     startTimeLocal: '00:00',

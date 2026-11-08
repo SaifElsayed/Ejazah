@@ -25,6 +25,7 @@ const ids = {
 };
 
 const session = {
+  sessionId: '0199d0a0-0000-7000-8000-000000000d03',
   sequenceNumber: 3,
   localDate: '2026-11-08',
   startTimeLocal: '17:00',
@@ -47,7 +48,12 @@ const item = {
   summary,
   status: 'confirmed',
   next: session,
-  last: { ...session, sequenceNumber: 8, localDate: '2026-12-13' },
+  last: {
+    ...session,
+    sessionId: '0199d0a0-0000-7000-8000-000000000d08',
+    sequenceNumber: 8,
+    localDate: '2026-12-13',
+  },
   upcoming: 6,
   completed: 2,
   remaining: 6,
@@ -136,6 +142,14 @@ describe('«اليوم» (FR-391, FR-393)', () => {
     const answer = { localDate: '2026-11-08', timezone: 'Africa/Cairo', sessions: [today] };
     expect(teacherTodayOutput.parse(answer)).toEqual(answer);
     expect(teacherTodayOutput.parse({ ...answer, sessions: [] }).sessions).toEqual([]);
+  });
+
+  it('carries each session’s id, on the day and on the enrollment (004:T020, FR-495)', () => {
+    const { sessionId: _sessionId, ...withoutId } = today;
+    expect(teacherTodaySession.safeParse(withoutId).success).toBe(false);
+    expect(teacherTodaySession.parse(today).sessionId).toBe(session.sessionId);
+    const { sessionId: _also, ...bare } = session;
+    expect(teacherStudentsGetOutput.safeParse({ ...item, sessions: [bare] }).success).toBe(false);
   });
 
   it('strips what R-HONEST-4 keeps from the teacher', () => {

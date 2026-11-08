@@ -7,7 +7,9 @@
 // the order reference, the support address and «تحقق مرة أخرى», and reads no more on its own. Each
 // screen decides only on an answer read since it opened (the owner's decision of 2026-11-04): a
 // failed read on opening draws the retry state, never the cached answer; a failed read inside the
-// window draws the retry state over the answer and claims nothing.
+// window draws the retry state over the answer and claims nothing. Once Phase 3 settles them
+// (004:T020, FR-495), the detail draws each session's status after settlement in both languages, a
+// disputed session as «محل نزاع», never the outcome frozen beside it (R-308).
 import type {
   CheckoutStatusOutput,
   EnrollmentsGetOutput,
@@ -109,6 +111,7 @@ const WEEKS = [
   ['2026-12-31', '2026-12-31T18:00:00Z', '2026-12-31T18:45:00Z'],
 ] as const;
 const sessions: ListedSession[] = WEEKS.map(([localDate, startsAt, endsAt], index) => ({
+  sessionId: `0193a6f0-0000-7000-8000-0000000005${String(index + 1).padStart(2, '0')}`,
   sequenceNumber: index + 1,
   localDate,
   startTimeLocal: '20:00',
@@ -600,6 +603,53 @@ describe('EnrollmentDetail', () => {
     });
     expect(mockApi.api.enrollments.get.query).toHaveBeenCalledWith({
       enrollmentId: ENROLLMENT_ID,
+    });
+  });
+
+  it('draws each session’s status after settlement, a disputed one «محل نزاع» and never its frozen outcome (004:T020, FR-495)', async () => {
+    const settledStatuses = [
+      'done',
+      'teacher_no_show',
+      'both_no_show',
+      'under_threshold',
+      'cancelled_by_agreement',
+      'cancelled_by_admin',
+      'disputed',
+      'scheduled',
+    ] as const;
+    // The disputed session as a leaky answer would carry it: its frozen outcome beside the status.
+    const settledSessions = sessions.map(
+      (one, index) =>
+        ({
+          ...one,
+          status: settledStatuses[index] ?? 'scheduled',
+          ...(settledStatuses[index] === 'disputed' ? { outcomeUnderDispute: 'student_no_show' } : {}),
+        }) as ListedSession,
+    );
+    const next = settledSessions[7]!;
+    mockApi.api.enrollments.get.query.mockResolvedValue({
+      ...ongoing,
+      next,
+      completed: 6,
+      upcoming: 1,
+      remaining: 2,
+      sessions: settledSessions,
+    });
+    await inBothDirections(within(<EnrollmentDetail />), async (_rendered, direction) => {
+      expect(await screen.findByText(TEACHER)).toBeTruthy();
+      for (const key of [
+        'status.session.teacherNoShow',
+        'status.session.bothNoShow',
+        'status.session.underReview',
+        'status.session.cancelledByAgreement',
+        'status.session.cancelledByAdmin',
+        'status.session.disputed',
+      ] as const) {
+        expect(screen.getAllByText(said(direction, key))).toHaveLength(1);
+      }
+      expect(screen.getAllByText(said(direction, 'status.session.done')).length).toBeGreaterThan(0);
+      // The frozen outcome is never drawn: no session here is a Student-No-Show.
+      expect(screen.queryByText(said(direction, 'status.session.studentNoShow'))).toBeNull();
     });
   });
 

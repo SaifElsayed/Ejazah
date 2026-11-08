@@ -27,6 +27,7 @@ const ids = {
 };
 
 const session = {
+  sessionId: '0199d0a0-0000-7000-8000-000000000d01',
   sequenceNumber: 1,
   localDate: '2026-11-08',
   startTimeLocal: '17:00',
@@ -54,7 +55,12 @@ const item = {
   summary,
   status: 'confirmed',
   next: session,
-  last: { ...session, sequenceNumber: 8, localDate: '2026-12-27' },
+  last: {
+    ...session,
+    sessionId: '0199d0a0-0000-7000-8000-000000000d08',
+    sequenceNumber: 8,
+    localDate: '2026-12-27',
+  },
   upcoming: 8,
   completed: 0,
   remaining: 8,
@@ -85,6 +91,20 @@ describe('the tabs and the session statuses', () => {
     const { timezone: _timezone, ...withoutZone } = session;
     expect(listedSession.safeParse(withoutZone).success).toBe(false);
     expect(listedSession.safeParse({ ...session, status: 'cancelled' }).success).toBe(false);
+  });
+
+  it('carries each session’s id, so the phone opens its pre-session screen (004:T020, FR-495)', () => {
+    const { sessionId: _sessionId, ...withoutId } = session;
+    expect(listedSession.safeParse(withoutId).success).toBe(false);
+    expect(listedSession.safeParse({ ...session, sessionId: 'session-1' }).success).toBe(false);
+    expect(enrollmentsGetOutput.parse({ ...item, sessions: [session] }).sessions[0]?.sessionId).toBe(
+      session.sessionId,
+    );
+  });
+
+  it('answers a disputed session as `disputed`, with no frozen outcome beside it (004:T020, R-308)', () => {
+    const disputed = { ...session, status: 'disputed', outcomeUnderDispute: 'student_no_show' };
+    expect(listedSession.parse(disputed)).toEqual({ ...session, status: 'disputed' });
   });
 });
 

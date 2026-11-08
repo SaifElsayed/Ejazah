@@ -199,7 +199,7 @@ function roomsOf(): Rooms {
 /** One run of the job as `worker.ts` builds it, over `rooms`. */
 async function run(rooms: Rooms = roomsOf()): Promise<void> {
   const enrollments = createEnrollmentSide({ settings });
-  const completion = createCompletion({ enrollments, settings, log: SILENT });
+  const completion = createCompletion({ enrollments, settings });
   await evaluateSessions({
     database,
     settings,
@@ -518,7 +518,7 @@ describe(
       await deliver(failing, 'done');
       await deliver(other, 'done');
       const enrollments = createEnrollmentSide({ settings });
-      const completion = createCompletion({ enrollments, settings, log: SILENT });
+      const completion = createCompletion({ enrollments, settings });
       // The completion check is the last write of a session's transaction, after its settle and its
       // `settled` row: failing there shows those two undone with it.
       const failingCompletion: typeof completion = {

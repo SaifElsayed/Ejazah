@@ -159,8 +159,10 @@ export interface ListClock {
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
 
+/** The session as the lists answer it; a disputed one's frozen outcome is left out (R-308). */
 function listedSessionOf(session: EnrollmentSessionRow): ListedSession {
   return {
+    sessionId: session.id,
     sequenceNumber: session.sequenceNumber,
     localDate: session.localDate,
     startTimeLocal: session.startTimeLocal.slice(0, -SECONDS.length),

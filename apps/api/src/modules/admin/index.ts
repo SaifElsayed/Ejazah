@@ -36,7 +36,7 @@ import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
 import { AdminSessionsRepository } from './admin-sessions.repository.js';
-import { AdminUsersRepository, readAdministratorName } from './admin-users.repository.js';
+import { AdminUsersRepository, readAdministratorNames } from './admin-users.repository.js';
 import { type AdminInviteQueue, AdminsService } from './admins.service.js';
 import { AuditQueryService } from './audit-query.service.js';
 import { AuditRepository } from './audit.repository.js';
@@ -117,7 +117,7 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * note; the owner's decision of 2026-11-08 on lane D's questions, Q5 (b)), for the outages.
    */
   readonly enrollmentSide: EnrollmentSide;
-  /** The process's logger: the outage record's and completion's lines (T016, T015). */
+  /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
   readonly log: Pick<Logger, 'info'>;
 }
 
@@ -155,30 +155,15 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       completion: createCompletion({
         enrollments: dependencies.enrollmentSide,
         settings: dependencies.settings,
-        log: dependencies.log,
       }),
       settings: dependencies.settings,
       log: dependencies.log,
-      adminNames,
+      // The administrators' display names by id, this module's `admin_users` (R-API-6), handed to
+      // sessions' outage list as its `AdminNames` (T016; the eighth dependency handed in against
+      // the arrows, docs/ARCHITECTURE.md): one read for the page's recorders (PR #129's review, nit 4).
+      adminNames: readAdministratorNames,
     }),
   };
-}
-
-/**
- * The administrators' display names by id, this module's `admin_users` (R-API-6), handed to
- * sessions' outage list as its `AdminNames` (T016; the eighth dependency handed in against the
- * arrows, docs/ARCHITECTURE.md). One read per distinct recorder of a page, an id with no row named by
- * an empty string.
- */
-async function adminNames(
-  tx: Parameters<typeof readAdministratorName>[0],
-  adminIds: readonly string[],
-): Promise<ReadonlyMap<string, string>> {
-  const names = new Map<string, string>();
-  for (const adminId of adminIds) {
-    names.set(adminId, (await readAdministratorName(tx, adminId)) ?? '');
-  }
-  return names;
 }
 
 /** The invites `deliver-admin-invite` sends, handed to the job by `worker.ts` (T066, R-110). */
