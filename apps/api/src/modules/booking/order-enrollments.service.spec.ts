@@ -48,6 +48,7 @@ function session(
 ): EnrollmentSessionRow {
   const start = new Date(startsAt);
   return {
+    id: `0199d0a0-0000-7000-8000-${String(sequenceNumber).padStart(12, '0')}`,
     sequenceNumber,
     localDate: startsAt.slice(0, 10) as EnrollmentSessionRow['localDate'],
     startTimeLocal: '14:00:00' as EnrollmentSessionRow['startTimeLocal'],

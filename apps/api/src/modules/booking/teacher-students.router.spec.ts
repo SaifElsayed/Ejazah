@@ -73,6 +73,7 @@ function sessionOf(who: Who): UserSession {
 }
 
 const session = {
+  sessionId: '0199d0a0-0000-7000-8000-000000000d02',
   sequenceNumber: 2,
   localDate: '2026-11-12',
   startTimeLocal: '09:00',

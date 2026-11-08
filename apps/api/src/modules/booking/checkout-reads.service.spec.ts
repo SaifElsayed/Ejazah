@@ -85,6 +85,7 @@ const session = (
   startsAt: string,
   endsAt: string,
 ): EnrollmentSessionRow => ({
+  id: `0199d0a0-0000-7000-8000-${String(sequenceNumber).padStart(12, '0')}`,
   sequenceNumber,
   localDate: localDate as EnrollmentSessionRow['localDate'],
   startTimeLocal: '09:00:00' as EnrollmentSessionRow['startTimeLocal'],
