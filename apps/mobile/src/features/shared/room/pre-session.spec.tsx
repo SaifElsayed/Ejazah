@@ -21,6 +21,8 @@ import { apiError } from '../__tests__/api-double';
 import { CAIRO, DUBAI, roomApi, SESSION_ID, session } from './__tests__/room-api';
 import { PreSessionScreen } from './index';
 
+jest.mock('livekit-client', () => require('./__tests__/fake-room'));
+
 let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 

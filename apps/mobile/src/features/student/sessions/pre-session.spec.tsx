@@ -15,6 +15,8 @@ import type { Direction } from '../../../lib/direction';
 import { CAIRO, roomApi, SESSION_ID, session } from '../../shared/room/__tests__/room-api';
 import { PreSession, STUDENT_ROOM_ROUTE } from './index';
 
+jest.mock('livekit-client', () => require('../../shared/room/__tests__/fake-room'));
+
 let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 
