@@ -60,7 +60,7 @@ import type { NodeHandler } from '../../platform/web/route.js';
 import {
   insertParticipantEvent,
   keyShareRows,
-  sessionPartiesOf,
+  participantIdsOfSession,
 } from './participant-events.repository.js';
 
 /** Where the video provider posts its signed events (contracts/video.md, "The webhook"). */
@@ -114,7 +114,7 @@ export class ParticipantEventsService {
   async #recordOnce(event: ParticipantEvent): Promise<VideoEventOutcome> {
     try {
       return await this.#transactions.run(async (tx) => {
-        const parties = await sessionPartiesOf(tx, event.sessionId);
+        const parties = await participantIdsOfSession(tx, event.sessionId);
         if (parties === null) return 'unknown_session';
         let userId: string | null = null;
         if (event.type !== 'room_ended') {

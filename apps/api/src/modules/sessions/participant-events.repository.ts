@@ -21,7 +21,7 @@ export interface SessionParties {
  * left out by the client's extension, T148). No lock: a session's participants never change, and
  * the insert's foreign key takes the session's key-share itself.
  */
-export async function sessionPartiesOf(
+export async function participantIdsOfSession(
   tx: Pick<Transaction, 'session'>,
   sessionId: string,
 ): Promise<SessionParties | null> {
