@@ -1,5 +1,10 @@
 // PUBLIC ENTRY of the sessions module (T017, ADR 0005 D2). Other modules import this file and nothing below it (R-API-3).
 // booking requests session generation through this entry; it never writes the sessions table itself.
+import type { Transactions } from '../../platform/db/transaction.repository.js';
+import type { Logger } from '../../platform/logging/logger.js';
+import type { VideoPort } from '../../platform/ports/video/video.port.js';
+import type { NodeHandler } from '../../platform/web/route.js';
+import { ParticipantEventsService, videoWebhookRoute } from './video-webhook.controller.js';
 
 /** Each enrollment's final session's local date, for a slot's release (T026, R-205, FR-394). */
 export { lastSessionDateOf } from './sessions.repository.js';
@@ -88,3 +93,39 @@ export type {
   EnrollmentTrack,
   HeldTime,
 } from './enrollment-side.port.js';
+
+/**
+ * T012 (FR-440; R-SESS-1, R-SESS-7; research R-303, R-304): `POST /webhooks/video`, the video
+ * provider's signed webhook, a raw-body route the composition root mounts beside the payment
+ * webhook. It verifies each event through the video port before anything runs and records an
+ * attendance event once under its provider id in `session_participant_events`.
+ */
+export { VIDEO_WEBHOOK_PATH, type VideoEventOutcome } from './video-webhook.controller.js';
+
+/** The route over the video port's verify operation, the process's transactions and its log. */
+export function createVideoWebhookRoute({
+  transactions,
+  video,
+  log,
+  maxBodyBytes,
+  report,
+}: {
+  readonly transactions: Transactions;
+  readonly video: Pick<VideoPort, 'verifyAndParseParticipantEvent'>;
+  readonly log: Logger;
+  /** `MAX_REQUEST_BODY_BYTES`. */
+  readonly maxBodyBytes: number;
+  /** The process's error reporting by default (T111); a recorder in the specs. */
+  readonly report?: (error: Error) => void;
+}): NodeHandler {
+  return videoWebhookRoute({
+    verify: (rawBody, headers) => video.verifyAndParseParticipantEvent(rawBody, headers),
+    events: new ParticipantEventsService({
+      transactions,
+      log,
+      ...(report === undefined ? {} : { report }),
+    }),
+    log,
+    maxBodyBytes,
+  });
+}
