@@ -23,6 +23,9 @@
 // T015 (R-217, FR-383): AppState drives the query cache's focus (lib/focus.ts), once per process
 // beside NetInfo, so stale queries read again when the app comes back to the foreground.
 //
+// T017 (research R-316): the video SDK's WebRTC globals are registered once per process here, at
+// the root, before any room (lib/livekit.ts).
+//
 // T078: the stacks, this one and the role groups', take the scheme's navigation theme, so a pushed
 // screen's card, the system bars' insets included, is the scheme's background and not
 // react-navigation's light default.
@@ -47,6 +50,7 @@ import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
 import { ApiProvider, useApi } from '../lib/api';
 import { followAppState } from '../lib/focus';
+import { registerVideoGlobals } from '../lib/livekit';
 import { followNetInfo } from '../lib/online';
 import {
   allows,
@@ -61,6 +65,7 @@ import { deviceTimeZone } from '../lib/time-zone';
 
 followNetInfo();
 followAppState();
+registerVideoGlobals();
 
 export default function RootLayout() {
   const [queries] = useState(() => new QueryClient());
