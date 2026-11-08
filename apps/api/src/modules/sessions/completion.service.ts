@@ -42,16 +42,18 @@
 // compared with the database's clock, `clockTimestamp(tx)` (T002), as `evaluate-sessions` and the
 // restore read it, never the process's; a reader injected so a unit spec can stand one in.
 //
-// THE LOG (the owner's rule and decision of 2026-11-08, Q2). The completion is an automatic final
-// action: one info line, `{ enrollmentId }` only. A completion postponed writes none, since the
-// check runs every minute. The enrollment's `enrollment_events` row `completed` is its durable
-// evidence.
+// THE LOG (the owner's rule and decision of 2026-11-08, Q2; PR #129's review, round 1, Minor 3).
+// The completion is an automatic final action with one info line, `{ enrollmentId }` only, which
+// the caller writes once `completeIfDue` answers true: the sweep after its transaction has
+// committed (`evaluation.service.ts`), so a rolled-back session leaves no line; the outage record on
+// its transaction for now (`outages.service.ts`; after its commit with T063). This writes none. A
+// completion postponed writes none, since the check runs every minute. The enrollment's
+// `enrollment_events` row `completed` is its durable evidence.
 import { addHours } from '@ijazah/time';
 import { z } from 'zod';
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { openCaseOf } from '../moderation/index.js';
 import {
@@ -110,7 +112,8 @@ const completionStore: CompletionStore = {
 export interface Completion {
   /**
    * Completes the enrollment when FR-449's conditions hold (this file's head), on the caller's
-   * transaction after the enrollment's lock; whether it was completed now.
+   * transaction after the enrollment's lock; whether it was completed now, for the caller's one
+   * line «Enrollment completed» (this file's head, THE LOG).
    */
   completeIfDue(tx: Transaction, enrollmentId: string): Promise<boolean>;
 }
@@ -138,13 +141,11 @@ function lastDisputableEnd(sessions: readonly CompletionSession[]): Date | null 
 export function createCompletion({
   enrollments,
   settings,
-  log,
   clock = clockTimestamp,
   store = completionStore,
 }: {
   readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'complete'>;
   readonly settings: SettingsReader;
-  readonly log: Pick<Logger, 'info'>;
   /** The database's clock on the call's transaction (Q3); `clockTimestamp` in production. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: CompletionStore;
@@ -162,9 +163,7 @@ export function createCompletion({
         if (at.getTime() < new Date(addHours(lastEnd, hours)).getTime()) return false;
       }
       if (await store.studentSuspendedCaseOpen(tx, enrollmentId)) return false;
-      if (!(await enrollments.complete(tx, enrollmentId))) return false;
-      log.info({ enrollmentId }, 'Enrollment completed');
-      return true;
+      return enrollments.complete(tx, enrollmentId);
     },
   };
 }

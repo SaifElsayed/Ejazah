@@ -117,7 +117,7 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * note; the owner's decision of 2026-11-08 on lane D's questions, Q5 (b)), for the outages.
    */
   readonly enrollmentSide: EnrollmentSide;
-  /** The process's logger: the outage record's and completion's lines (T016, T015). */
+  /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
   readonly log: Pick<Logger, 'info'>;
 }
 
@@ -155,7 +155,6 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       completion: createCompletion({
         enrollments: dependencies.enrollmentSide,
         settings: dependencies.settings,
-        log: dependencies.log,
       }),
       settings: dependencies.settings,
       log: dependencies.log,

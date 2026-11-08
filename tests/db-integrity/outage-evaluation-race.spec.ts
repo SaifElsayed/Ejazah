@@ -209,7 +209,7 @@ function record(
   const enrollments = createEnrollmentSide({ settings, now: () => at });
   const outages = createOutageServices({
     enrollments,
-    completion: createCompletion({ enrollments, settings, log: SILENT }),
+    completion: createCompletion({ enrollments, settings }),
     settings,
     log: SILENT,
     adminNames: async () => new Map(),
@@ -252,7 +252,7 @@ function evaluation(at: Date, stops: { readonly afterSettle?: () => Promise<void
     sweep: createEvaluation({
       transactions,
       enrollments,
-      completion: createCompletion({ enrollments, settings, log: SILENT }),
+      completion: createCompletion({ enrollments, settings }),
       video: { endRoom: async () => undefined },
       settings,
       log: SILENT,

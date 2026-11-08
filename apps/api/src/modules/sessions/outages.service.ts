@@ -38,7 +38,9 @@
 // (docs/ARCHITECTURE.md; the owner's decision of 2026-11-08 on lane D's questions, Q6).
 //
 // THE LOG (the owner's rule). A refusal writes one info line with the administrator's id and the
-// reason code; a record writes one with the window's id and the sessions it reclassified.
+// reason code; a record writes one with the window's id and the sessions it reclassified, and one
+// «Enrollment completed» `{ enrollmentId }` per enrollment T015's check completed, on its
+// transaction as before (PR #129's review, Minor 3: after its commit with T063).
 import { addHours, resolveLocalDateTime, TimeError } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -238,7 +240,10 @@ export function createOutageServices({
           })),
         );
         for (const enrollmentId of sortedUnique(moved.map(({ enrollmentId: id }) => id))) {
-          await completion.completeIfDue(tx, enrollmentId);
+          // On the record's transaction until T063's after-commit point (the follow-up under T063).
+          if (await completion.completeIfDue(tx, enrollmentId)) {
+            log.info({ enrollmentId }, 'Enrollment completed');
+          }
         }
       }
       log.info(

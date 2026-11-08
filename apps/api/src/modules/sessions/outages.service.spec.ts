@@ -35,6 +35,7 @@ function world(
   found: readonly OverlappedSession[],
   again: readonly OverlappedSession[] = found,
   ended: readonly OverlappedSession[] = [],
+  completes: readonly string[] = [],
 ) {
   const journal: string[] = [];
   const logged: unknown[][] = [];
@@ -95,7 +96,7 @@ function world(
     completion: {
       completeIfDue: async (_tx, enrollmentId) => {
         journal.push(`complete? ${enrollmentId}`);
-        return false;
+        return completes.includes(enrollmentId);
       },
     },
     settings,
@@ -143,6 +144,26 @@ describe('outages.record (T016, FR-445, R-307)', () => {
       `complete? ${id(2)}`,
     ]);
     expect(logged).toEqual([
+      [
+        { outageId: id(99), sessionIds: [id(11), id(12)] },
+        'Outage window recorded and its sessions reclassified',
+      ],
+    ]);
+  });
+
+  it('an enrollment completed: one line «Enrollment completed» of exactly { enrollmentId }, then the record’s line', async () => {
+    const { services, logged } = world(
+      [
+        { id: id(11), enrollmentId: id(1) },
+        { id: id(12), enrollmentId: id(2) },
+      ],
+      undefined,
+      [],
+      [id(2)],
+    );
+    await services.record(tx, ADMIN, INPUT);
+    expect(logged).toEqual([
+      [{ enrollmentId: id(2) }, 'Enrollment completed'],
       [
         { outageId: id(99), sessionIds: [id(11), id(12)] },
         'Outage window recorded and its sessions reclassified',
