@@ -577,15 +577,28 @@ LiveKit Cloud's project setting **«Automatically create rooms» must be off** i
 for either, so look in two places (`specs/004-sessions/research.md` R-323,
 GAP-10; added 2026-11-05, the owner's decision). A refused event (no or wrong
 signature: 401; a signed body the port cannot read: 400) is one API log line
-at warn with its code, the video webhook's counterpart of `Payment webhook
-refused`, counted by the webhook signature alert (ARCHITECTURE §12); its body
-and header are never logged. Many of them: check that `LIVEKIT_API_KEY` and
+at warn with its errorCode, `Video webhook refused`, the video webhook's
+counterpart of `Payment webhook refused` (which carries `errorCode` too),
+counted by the webhook signature alert (ARCHITECTURE §12); its body and header
+are never logged. Many of them: check that `LIVEKIT_API_KEY` and
 `LIVEKIT_API_SECRET` match the project that sends the webhook, and that the
 tunnel's proxy passes the body unchanged. An event that names no session, or
 a participant who is not one of its two, is answered 200, written nowhere and
-reported to error tracking; compare the room's name with the session's id.
-Attendance missing because of either: «Attendance missing for a finished
-session» above.
+reported to error tracking (the report names the provider's event id and the
+session's id, never the identity), with one API log line at warn:
+
+- a `participant_joined` from someone who is not a party:
+  `Video webhook: someone who is not a party joined the room; nothing was recorded`,
+  with `{ sessionId, eventId }` (the session's id and the provider's event id)
+  and no other field; LiveKit Cloud does not enforce `maxParticipants`, so
+  this is a third person in the room;
+- any other event not recorded (a `participant_left` from someone who is not
+  a party, or an event naming no session):
+  `Video webhook acknowledged an event it did not record`,
+  with `{ reason }`, `not_a_party` or `unknown_session`, and no id.
+
+Compare the room's name with the session's id. Attendance missing because of
+either: «Attendance missing for a finished session» above.
 
 **Certificate render failed** — re-enqueue `render-certificate` for the grant.
 The grant is the source of truth; the PDF is derived and disposable.
