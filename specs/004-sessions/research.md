@@ -174,8 +174,12 @@ interval operations added to `packages/time` (R-TIME-1: instant arithmetic lives
    joined and simultaneous ≥ ⌈`attendance_threshold_pct` × length⌉ → `done`; both joined below it → `under_threshold`;
    only the teacher → `student_no_show`; only the student → `teacher_no_show`; neither → `both_no_show`.
 
-Ties at one second (LiveKit's resolution) sort `joined` before `left` for different connections and `left` before
-`joined` for the same one. Properties (fast-check, as `packages/time` already uses): the result does not depend on the
+Ties at one second (LiveKit's resolution), within one connection: a `left` closes an interval already open on that
+connection, a `joined` in the same second then reopening it (a reconnect, with no gap); otherwise the `joined` opens it
+and the same second's `left` closes it at zero length. Different connections never tie, each being its own interval.
+*(Amended 2026-11-08, the owner's decision on T013's findings: was «sort `joined` before `left` for different
+connections and `left` before `joined` for the same one», under which a connection joined and left in one second stayed
+open until the room's end or the scheduled end.)* Properties (fast-check, as `packages/time` already uses): the result does not depend on the
 events' order or on a duplicate; a reconnection never lowers simultaneous time; a left lost changes nothing past the
 end. SC-402 is the spec that a disconnect and reconnection yields the sum of the overlaps.
 
