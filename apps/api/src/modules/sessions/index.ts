@@ -87,7 +87,7 @@ export {
   type RepeatedAbsence,
   repeatedAbsenceFlagCount,
 } from './repeated-absence.service.js';
-export type { TeacherNoShowCount } from './repeated-absence.repository.js';
+export type { EnrollmentNoShowCount } from './repeated-absence.repository.js';
 /**
  * T015 (FR-449, R-309): an enrollment's completion, checked on the settling transaction by every
  * path that settles (T014, T016, T033, T034) and again by `advance-remedies` (T028), after the

@@ -14,7 +14,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   teacherEnrollmentsWithNoShowsAtLeast,
-  type TeacherNoShowCount,
+  type EnrollmentNoShowCount,
   teacherNoShowCountsOf,
 } from './repeated-absence.repository.js';
 
@@ -34,7 +34,7 @@ export interface RepeatedAbsenceStore {
     tx: Transaction,
     teacherUserId: string,
     atLeast: number,
-  ): Promise<readonly TeacherNoShowCount[]>;
+  ): Promise<readonly EnrollmentNoShowCount[]>;
 }
 
 const repeatedAbsenceStore: RepeatedAbsenceStore = {
@@ -55,7 +55,7 @@ export interface RepeatedAbsence {
   markedEnrollmentsOfTeacher(
     tx: Transaction,
     teacherUserId: string,
-  ): Promise<readonly TeacherNoShowCount[]>;
+  ): Promise<readonly EnrollmentNoShowCount[]>;
 }
 
 /** The count and the mark over sessions' table, the flag count read at each mark's read. */

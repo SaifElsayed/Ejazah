@@ -19,7 +19,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 type Client = Pick<Transaction, 'session'>;
 
 /** An enrollment and its Teacher-No-Show count. */
-export interface TeacherNoShowCount {
+export interface EnrollmentNoShowCount {
   readonly enrollmentId: string;
   readonly teacherNoShows: number;
 }
@@ -52,7 +52,7 @@ export async function teacherEnrollmentsWithNoShowsAtLeast(
   tx: Client,
   teacherUserId: string,
   atLeast: number,
-): Promise<readonly TeacherNoShowCount[]> {
+): Promise<readonly EnrollmentNoShowCount[]> {
   const groups = await tx.session.groupBy({
     by: ['enrollmentId'],
     where: { teacherUserId, status: 'teacher_no_show' },
