@@ -88,3 +88,15 @@ export type {
   EnrollmentTrack,
   HeldTime,
 } from './enrollment-side.port.js';
+/**
+ * T013 (FR-442, FR-443, FR-444; research R-305): the attendance rules, pure, which the evaluation
+ * (T014) runs over a session's recorded events, its window and the outages overlapping it.
+ */
+export {
+  type Attendance,
+  type AttendanceEvent,
+  type AttendanceOutcome,
+  type AttendanceSettings,
+  type AttendanceWindow,
+  evaluateAttendance,
+} from './attendance.rules.js';
