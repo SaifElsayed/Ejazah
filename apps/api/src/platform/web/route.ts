@@ -249,7 +249,13 @@ export function webRoute(
           sendPage(response, lang, 405, errorPage(lang, 405), { allow: allowOf(methods) });
           return;
         }
-        await rateLimiter.check(PUBLIC_PAGE_RATE_LIMIT, clientAddress);
+        // The page's fixed name in a refusal's record is the path it is mounted under (T062):
+        // Express's `baseUrl`, set by `application.use(path, …)` and never by the client.
+        await rateLimiter.check(
+          PUBLIC_PAGE_RATE_LIMIT,
+          { kind: 'identifier', value: clientAddress },
+          `page:${(incoming as { readonly baseUrl?: string }).baseUrl ?? ''}`,
+        );
         const form = method === 'POST' ? await readForm(incoming, response) : new URLSearchParams();
         const answer = await route.handle({
           method: method as WebMethod,

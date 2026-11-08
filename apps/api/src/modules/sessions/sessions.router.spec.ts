@@ -11,7 +11,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
-import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import {
+  RateLimiter,
+  SIGNED_IN_DEFAULT_RATE_LIMIT,
+} from '../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../surfaces/context.js';
 import {
@@ -29,7 +32,11 @@ import {
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
 import { sessionsRouter } from './sessions.router.js';
-import type { SessionsServices } from './sessions.service.js';
+import {
+  createSessionsServices,
+  type SessionsServices,
+  type SessionsStore,
+} from './sessions.service.js';
 
 const CALLER = '0199d0a0-0000-7000-8000-00000000d001';
 const OTHER = '0199d0a0-0000-7000-8000-00000000d002';
@@ -267,5 +274,77 @@ describe("'sessions.join' (T011)", () => {
       surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
     )['sessions.join'];
     expect(procedure?._def.type).toBe('mutation');
+  });
+
+  // PR #129's review, round 1, Minor 2 (the owner's decision of 2026-11-08; T062): no limit of its
+  // own, so the participant kind's signed-in default counts the join, and a join past it is
+  // refused before the real service runs: no transaction opened, no room, no token.
+  it("refuses a join past the signed-in default RATE_LIMITED, never reaching createRoom nor writing anything: 'sessions.join'", async () => {
+    const opened = vi.fn();
+    const video = {
+      createRoom: vi.fn(async () => 'room'),
+      createSessionToken: vi.fn(async () => {
+        throw new Error('no token is issued here');
+      }),
+      verifyAndParseParticipantEvent: vi.fn(),
+      endRoom: vi.fn(),
+    };
+    const realSessions = createSessionsServices({
+      transactions: {
+        run: async () => {
+          opened();
+          throw new Error('no transaction is opened here');
+        },
+      },
+      settings: { read: async () => Promise.reject(new Error('no setting is read here')) },
+      video,
+      enrollmentSide: {} as never,
+      store: {} as SessionsStore,
+    });
+    const read: string[] = [];
+    // The caller already made the window's one call: this one is the limit plus one.
+    const rateLimiter = new RateLimiter({
+      settings: {
+        read: async (key, schema) => {
+          read.push(key);
+          return schema.parse({ limit: 1, window_seconds: 60 });
+        },
+      },
+      counter: { hit: async () => 2 },
+      subjectKey: Buffer.alloc(32, 5),
+    });
+    const services: AppServices = {
+      settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+      publicConfig: { supportEmail: 'support@ijazah.invalid' },
+      subjects: { listActive: async () => [] },
+      identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
+      teacherProfile: unusedTeacherProfileServices,
+      catalog: unusedCatalogServices,
+      discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
+      sessions: realSessions,
+    };
+    const log = createLogger({ level: 'info', destination: { write: () => undefined } });
+    const caller = callerFor(
+      createAppContext({
+        session: sessionOf('student'),
+        log,
+        rateLimiter,
+        clientAddress: '203.0.113.9',
+        services,
+      }),
+    );
+
+    const thrown: unknown = await procedures['sessions.join'](caller).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(toErrorShape(thrown as never).body.code).toBe('RATE_LIMITED');
+    expect(read).toEqual([SIGNED_IN_DEFAULT_RATE_LIMIT]);
+    expect(opened).not.toHaveBeenCalled();
+    expect(video.createRoom).not.toHaveBeenCalled();
+    expect(video.createSessionToken).not.toHaveBeenCalled();
   });
 });

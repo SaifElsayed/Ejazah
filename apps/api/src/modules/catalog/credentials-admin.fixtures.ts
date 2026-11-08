@@ -4,7 +4,6 @@
 // transaction is a stand-in the memory store never reads, and the audit writer records what the
 // kind would insert. The session is handed in, as the admin module's resolver would yield it.
 import type { AuditRecord } from '../../platform/audit/audit-writer.js';
-import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import {
@@ -72,11 +71,9 @@ export function surfaceOver(store: MemoryReviewStore): CredentialsSurface {
       },
     },
   };
-  const rateLimiter = {
-    check: async () => {
-      throw new DomainError('INTERNAL');
-    },
-  } as unknown as RateLimiter;
+  // Every administrator call is counted by the signed-in default since T062 (FR-470); the limit
+  // itself is the kernel's spec's, so this limiter admits every call.
+  const rateLimiter = { check: async () => undefined } as unknown as RateLimiter;
   const as = (session: AdminSession | null) =>
     callerFor(
       createAdminContext({

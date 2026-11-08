@@ -30,7 +30,7 @@ export const teacherStudentsRouter = createAppRouter({
     admits: 'approved',
     input: teacherStudentsListInput,
     output: teacherStudentsListOutput,
-    rateLimit: { key: search, subjectOf: ({ ctx }) => ctx.caller.userId },
+    rateLimit: { key: search, subject: 'caller' },
   }).query(({ ctx, input }) => ctx.services.booking.students(ctx.caller.userId, input)),
 
   get: teacherProcedure({

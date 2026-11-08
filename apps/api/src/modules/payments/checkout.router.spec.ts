@@ -205,7 +205,9 @@ describe.each(Object.entries(procedures))("'checkout.%s' (T036)", (name, call) =
   it(`counts every call under rate_limit_payment_initiation by the caller's id, and refuses one past it RATE_LIMITED before the service: 'checkout.${name}'`, async () => {
     const caller = callerAs(sessionOf('student'));
     await call(caller);
-    expect(limited).toEqual([['rate_limit_payment_initiation', CALLER]]);
+    expect(limited).toEqual([
+      ['rate_limit_payment_initiation', { kind: 'user', userId: CALLER }, `checkout.${name}`],
+    ]);
     refuseAtLimit = true;
     calls = [];
     await expect(call(caller)).rejects.toEqual(refused('RATE_LIMITED'));
@@ -358,7 +360,7 @@ describe('the reads of T037 (FR-BOOK-12 (c), FR-380 to FR-386, M3)', () => {
     expect(calls).toEqual([]);
   });
 
-  it('hands each read the session’s account and gender, in both directions, and counts none of them', async () => {
+  it('hands each read the session’s account and gender, in both directions, and counts none of them under the payment limit', async () => {
     for (const gender of ['female', 'male'] as const) {
       const caller = callerAs(sessionOf('student', gender));
       for (const call of Object.values(reads)) await call(caller);
@@ -371,7 +373,10 @@ describe('the reads of T037 (FR-BOOK-12 (c), FR-380 to FR-386, M3)', () => {
       ['continue', { userId: CALLER, gender: 'male' }, { enrollmentId: ENROLLMENT }],
       ['status', { userId: CALLER, gender: 'male' }, { enrollmentId: ENROLLMENT }],
     ]);
-    expect(limited).toEqual([]);
+    // Declaring none, each is counted by the signed-in default only (T062, FR-470).
+    expect(limited.map(([key]) => key)).toEqual(
+      Array.from({ length: 6 }, () => 'rate_limit_signed_in_default'),
+    );
   });
 
   it('answers each read parsed by its output schema', async () => {

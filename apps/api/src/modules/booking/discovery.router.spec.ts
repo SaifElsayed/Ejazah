@@ -166,10 +166,12 @@ describe('the namespace', () => {
     await caller.discovery.browse({ query: 'محمد' });
     await caller.discovery.filters({ subjectId: SUBJECT });
     await caller.discovery.teacher({ teacherId: TEACHER });
+    // The caller the student kind authenticated, never a value computed by the endpoint (T062).
+    const caller_ = { kind: 'user', userId: CALLER };
     expect(limited).toEqual([
-      ['rate_limit_search', CALLER],
-      ['rate_limit_search', CALLER],
-      ['rate_limit_search', CALLER],
+      ['rate_limit_search', caller_, 'discovery.browse'],
+      ['rate_limit_search', caller_, 'discovery.filters'],
+      ['rate_limit_search', caller_, 'discovery.teacher'],
     ]);
   });
 

@@ -20,15 +20,13 @@ import {
 } from '@ijazah/contracts';
 
 import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
-import { type AppContext, type UserCaller } from '../../surfaces/context.js';
+import { type UserCaller } from '../../surfaces/context.js';
 import { createAppRouter, studentProcedure } from '../../surfaces/procedures.js';
 
 const { paymentInitiation } = defaultRateLimits;
 
-const initiation = {
-  key: paymentInitiation,
-  subjectOf: ({ ctx }: { ctx: AppContext & { caller: UserCaller } }) => ctx.caller.userId,
-};
+// The caller the student kind authenticated, never a value computed here (T062).
+const initiation = { key: paymentInitiation, subject: 'caller' } as const;
 
 const studentOf = (caller: UserCaller) => ({ userId: caller.userId, gender: caller.gender });
 

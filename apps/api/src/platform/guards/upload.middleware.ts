@@ -228,7 +228,12 @@ export async function acceptUploadOfKind(
   { settings, rateLimiter }: UploadGuard,
   { kind, uploaderId, body, declaredLength }: UploadOfKind,
 ): Promise<SniffedUpload<SniffedType>> {
-  await rateLimiter.check(UPLOAD_RATE_LIMIT, uploaderId);
+  // The uploader the route authenticated, as a user (T062); the route's fixed name as the procedure.
+  await rateLimiter.check(
+    UPLOAD_RATE_LIMIT,
+    { kind: 'user', userId: uploaderId },
+    `uploads.${kind}`,
+  );
   const limit = await settings.read(UPLOAD_MAX_BYTES_SETTING, uploadMaxBytes);
   if (declaredLength !== undefined && declaredLength > limit) throw tooLarge();
   const upload = await acceptUpload(body, uploadKinds[kind]);

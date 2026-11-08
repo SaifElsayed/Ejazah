@@ -113,11 +113,9 @@ function surfaceOver(payments: Partial<AdminSurfaceServices['payments']> = {}): 
       },
     },
   };
-  const rateLimiter = {
-    check: async () => {
-      throw new DomainError('INTERNAL');
-    },
-  } as unknown as RateLimiter;
+  // Every administrator call is counted by the signed-in default since T062 (FR-470); the limit
+  // itself is the kernel's spec's, so this limiter admits every call.
+  const rateLimiter = { check: async () => undefined } as unknown as RateLimiter;
   const as = (session: AdminSession | null) =>
     callerFor(
       createAdminContext({

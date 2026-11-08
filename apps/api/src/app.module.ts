@@ -28,7 +28,11 @@
 // read is the client's, never unexpected (T108): the caller kinds answer a body or GET `input` that
 // is not JSON `VALIDATION_FAILED`, and each surface's handler refuses the same way, before tRPC and
 // without reading the body, what tRPC would fail on before any procedure runs; each refusal is one
-// info line with its correlation id and nothing of the body, never reported.
+// info line with its correlation id and nothing of the body, never reported. Every other expected
+// refusal of a procedure (T062's follow-up from B34) is one info line too, written by the handler's
+// `onError` for both surfaces: `{ procedure, errorCode }` and the caller's `userId` or `adminId`,
+// never an input, a name or a message; a `RATE_LIMITED` is left to the limiter, which logs a
+// subject's first refusal in a window only (SRS NFR-SEC-12).
 //
 // NEST LOGS THROUGH THE KERNEL LOGGER (T100), never through the console, so its records carry the
 // redaction list like every other. Nest's body parser is off: tRPC reads its own body, and the
@@ -119,7 +123,7 @@ import {
   type SessionResolver,
   type SessionResolvers,
 } from './surfaces/context.js';
-import { toErrorShape } from './surfaces/procedures.js';
+import { isRefusalLoggedByKind, toErrorShape } from './surfaces/procedures.js';
 
 /**
  * The root module. Each module registers here as it gains a controller or a provider. Its
@@ -314,13 +318,28 @@ function refusalOf(request: IncomingMessage): Refusal | undefined {
   return undefined;
 }
 
+/** Who made a refused call, as its log line names them: a user's id, an administrator's, or no one. */
+type ActorOf<TContext> = (
+  context: TContext,
+) => { readonly userId: string } | { readonly adminId: string } | Record<string, never>;
+
+const appActor: ActorOf<AppContext> = (context) =>
+  context.caller === null ? {} : { userId: context.caller.userId };
+
+const adminActor: ActorOf<AdminContext> = (context) =>
+  context.administrator === null ? {} : { adminId: context.administrator.adminId };
+
 /** One surface's tRPC handler, mounted by Nest under the surface's path. */
 function surfaceHandler<TContext extends Correlated>(
   router: SurfaceRouter<TContext>,
   createContext: (request: IncomingMessage) => Promise<TContext>,
   log: Logger,
   maxBodySize: number,
+  actorOf: ActorOf<TContext>,
 ): (request: IncomingMessage, response: ServerResponse) => void {
+  // tRPC tells a subscription's refused open twice, once by its call and once by its stream (its
+  // `resolveResponse`), with the one error: each is written once.
+  const told = new WeakSet<object>();
   const handler = createHTTPHandler({
     router,
     // A body past the limit is refused as it streams in, never read whole (T150, FR-077):
@@ -331,11 +350,30 @@ function surfaceHandler<TContext extends Correlated>(
     allowBatching: false,
     createContext: async ({ req }) =>
       (await createContext(req)) as inferRouterContext<SurfaceRouter<TContext>>,
-    onError: ({ error, ctx }) => {
-      if (!toErrorShape(error).unexpected) return;
-      const cause = error.cause ?? error;
+    onError: ({ error, ctx, path }) => {
+      if (told.has(error)) return;
+      told.add(error);
+      const mapped = toErrorShape(error);
       const context = ctx as TContext | undefined;
-      (context?.log ?? log).error({ err: cause }, 'Unexpected error in a procedure');
+      const requestLog = context?.log ?? log;
+      if (!mapped.unexpected) {
+        // Every expected refusal, one info line in this one place (T062's follow-up from B34): the
+        // procedure, the code and who called, never an input, a name or a message. A rate limit's
+        // refusal is the limiter's to log, once per subject and window (SRS NFR-SEC-12).
+        // An unreadable input is logged by the kinds' input guard, with its reason (T108).
+        if (mapped.body.code === 'RATE_LIMITED' || isRefusalLoggedByKind(error)) return;
+        requestLog.info(
+          {
+            procedure: path ?? 'unknown',
+            errorCode: mapped.body.code,
+            ...(context === undefined ? {} : actorOf(context)),
+          },
+          'A procedure call was refused',
+        );
+        return;
+      }
+      const cause = error.cause ?? error;
+      requestLog.error({ err: cause }, 'Unexpected error in a procedure');
       reportError(cause, context?.correlationId);
     },
     // tRPC answers 500 for every error a procedure throws; the status follows the kernel's mapping
@@ -428,6 +466,7 @@ export async function createApplication({
         }),
       log,
       maxRequestBodyBytes,
+      appActor,
     ),
   );
   application.use(
@@ -445,6 +484,7 @@ export async function createApplication({
         }),
       log,
       maxRequestBodyBytes,
+      adminActor,
     ),
   );
   // The public pages and the design's stylesheets, beside the surfaces (T019, ADR 0021 D5).

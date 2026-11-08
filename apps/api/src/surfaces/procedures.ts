@@ -25,10 +25,16 @@
 //
 // A RATE LIMIT IS DECLARED ON THE KIND, never applied by hand (T170, FR-043, R-SEC-6):
 // `rateLimit: { key, subjectOf, budget? }`, required on the two anonymous kinds (an anonymous
-// endpoint without one does not compile) and accepted by the signed-in user kinds. After the input
-// is validated, the kind applies `throttle` from the limiter the request context carries, budget
-// first and then the subject, and stamps the key in the procedure's meta beside its surface, so
-// what a surface serves can be read for its limits (surfaces.spec.ts).
+// endpoint without one does not compile) and accepted by every signed-in kind, the administrator's
+// included (T062 of specs/004-sessions, FR-470), which also accept `subject: 'caller'`: the caller
+// the kind authenticated (`user:<userId>`, `admin:<adminId>`), never a value the endpoint computes.
+// After the input is validated, the kind applies `throttle` from the limiter the request context
+// carries, budget first and then the subject, and stamps the key in the procedure's meta beside its
+// surface, so what a surface serves can be read for its limits (surfaces.spec.ts). EVERY SIGNED-IN
+// KIND GIVEN NO `rateLimit` applies `throttleDefault` at the same place (T062; SRS NFR-SEC-12):
+// `rate_limit_signed_in_default`, the caller as subject, stamped nowhere since nothing is declared.
+// The administrator kind applies either before the `.use` that opens its transaction, so a refused
+// call opens none and writes nothing. tRPC's `path` names the call in a refusal's record.
 //
 // TWO tRPC INSTANCES, one per surface, because the two contexts are separate types (R-SEC-8). Each
 // stamps its procedures with the surface's meta, in the type and at runtime, so an administrative
@@ -84,9 +90,12 @@ import type { Transaction } from '../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
 import {
+  type CallerSubject,
+  type IdentifierRateLimit,
   type RateLimitDeclaration,
   type RateLimitKey,
   throttle,
+  throttleDefault,
 } from '../platform/guards/rate-limit.guard.js';
 import type { Logger } from '../platform/logging/logger.js';
 import type {
@@ -120,7 +129,7 @@ export interface AppMeta {
 /** The meta of every administrator-surface procedure: what makes it an administrative capability. */
 export interface AdminMeta {
   readonly surface: 'admin';
-  /** The settings key of the anonymous kind's rate limit (T017). */
+  /** The settings key of the procedure's declared rate limit: the anonymous kind's (T017), or T062's. */
   readonly rateLimit?: RateLimitKey;
 }
 
@@ -286,14 +295,17 @@ export interface TeacherProcedureDeclaration<
   readonly admits: TeacherStandingAdmitted;
 }
 
-/** The public kind's declaration: an anonymous endpoint always names its limit (R-SEC-6). */
+/**
+ * The public kind's declaration: an anonymous endpoint always names its limit (R-SEC-6), and its
+ * subject is always a value it names, since it has no caller (T062).
+ */
 export interface PublicProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut> extends ProcedureSchemas<
   TIn,
   TInOut,
   TOutIn,
   TOutOut
 > {
-  readonly rateLimit: RateLimitDeclaration<AppContext, TInOut>;
+  readonly rateLimit: IdentifierRateLimit<AppContext, TInOut>;
 }
 
 /** The administrator surface's anonymous kind: the same rule as the user surface's (R-SEC-6). */
@@ -303,13 +315,38 @@ export interface AdminPublicProcedureDeclaration<
   TOutIn,
   TOutOut,
 > extends ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut> {
-  readonly rateLimit: RateLimitDeclaration<AdminContext, TInOut>;
+  readonly rateLimit: IdentifierRateLimit<AdminContext, TInOut>;
 }
+
+/** The context an administrator's procedure reads once the kind admitted the caller (T062). */
+type AdministratorContext = AdminContext & { readonly administrator: AdministratorCaller };
+
+/** The administrator kind's declaration: its schemas, and its own limit when it has one (T062). */
+export interface AdminProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut> extends ProcedureSchemas<
+  TIn,
+  TInOut,
+  TOutIn,
+  TOutOut
+> {
+  readonly rateLimit?: RateLimitDeclaration<AdministratorContext, TInOut>;
+}
+
+/** A signed-in user as the limiter counts them: `user:<userId>` (T062). */
+const userSubject = (ctx: SignedInContext): CallerSubject => ({
+  kind: 'user',
+  userId: ctx.caller.userId,
+});
+
+/** An administrator as the limiter counts them: `admin:<adminId>`, apart from every user (T062). */
+const administratorSubject = (ctx: AdministratorContext): CallerSubject => ({
+  kind: 'administrator',
+  adminId: ctx.administrator.adminId,
+});
 
 /** The meta a user-surface procedure is stamped with: its surface, and its limit's key when declared. */
 function appMeta(
   caller: AppCallerKind,
-  rateLimit: RateLimitDeclaration<never, never> | undefined,
+  rateLimit: { readonly key: RateLimitKey } | undefined,
 ): AppMeta {
   return rateLimit === undefined
     ? { surface: 'app', caller }
@@ -384,8 +421,25 @@ async function readInput(getRawInput: () => Promise<unknown>, log: Logger): Prom
       { errorCode: 'VALIDATION_FAILED', reason: 'input_unreadable' },
       'A request whose input could not be read was refused',
     );
-    throw new TRPCError({ code: 'BAD_REQUEST', cause: new DomainError('VALIDATION_FAILED') });
+    const refusal = new TRPCError({
+      code: 'BAD_REQUEST',
+      cause: new DomainError('VALIDATION_FAILED'),
+    });
+    loggedRefusals.add(refusal);
+    throw refusal;
   }
+}
+
+/** The refusals a kind already logged itself, held weakly by the error (T062). */
+const loggedRefusals = new WeakSet<object>();
+
+/**
+ * Whether a kind already wrote this refusal's line (the input guard's unreadable input, T108), so
+ * the handler's one-place refusal log writes no second line for the one call (T062's follow-up from
+ * B34; `app.module.ts`' `onError`).
+ */
+export function isRefusalLoggedByKind(error: object): boolean {
+  return loggedRefusals.has(error);
 }
 
 /** The user surface's input guard: after the kind's authentication, before its schema (T108). */
@@ -449,7 +503,9 @@ function signedIn<TIn, TInOut, TOutIn, TOutOut>(
     .use(readAppInput)
     .input(input)
     .output(output);
-  return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
+  return rateLimit === undefined
+    ? builder.use(throttleDefault(userSubject))
+    : builder.use(throttle(rateLimit, userSubject));
 }
 
 /** A caller holding the student role. */
@@ -507,7 +563,9 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
     .use(readAppInput)
     .input(input)
     .output(output);
-  return rateLimit === undefined ? builder : builder.use(throttle(rateLimit));
+  return rateLimit === undefined
+    ? builder.use(throttleDefault(userSubject))
+    : builder.use(throttle(rateLimit, userSubject));
 }
 
 /** What an administrator handler receives beyond the surface's context (T108). */
@@ -521,12 +579,14 @@ export interface AuditedCall {
 
 /**
  * An authenticated administrator with the second factor verified, every call audited in its own
- * transaction (FR-049, FR-170, R-API-12). Exists on the administrator surface only (R-API-11).
+ * transaction (FR-049, FR-170, R-API-12). Exists on the administrator surface only (R-API-11). Its
+ * declared limit, or the signed-in default, is checked before the transaction opens (T062, FR-470).
  */
 export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
   output,
-}: ProcedureSchemas<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
+  rateLimit,
+}: AdminProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
   AdminContext,
   AdminMeta,
   AuditedCall,
@@ -535,30 +595,37 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
   TOutIn,
   TOutOut
 > {
-  return admin.procedure
+  const meta: AdminMeta =
+    rateLimit === undefined ? { surface: 'admin' } : { surface: 'admin', rateLimit: rateLimit.key };
+  const builder = admin.procedure
+    .meta(meta)
     .use(requireAdministrator)
     .use(readAdminInput)
     .input(input)
-    .output(output)
-    .use(({ ctx, next }) => {
-      const { transactions, auditWriter } = ctx.administration;
-      return transactions.run(async (tx) => {
-        const entries: AuditEntry[] = [];
-        const audit: AuditTrail = { record: (entry) => void entries.push(entry) };
-        const result = await next({ ctx: { tx, audit } });
-        // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
-        if (!result.ok) throw result.error;
-        if (entries.length === 0) {
-          throw new Error(
-            'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
-          );
-        }
-        for (const entry of entries) {
-          await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
-        }
-        return result;
-      });
+    .output(output);
+  return (
+    rateLimit === undefined
+      ? builder.use(throttleDefault(administratorSubject))
+      : builder.use(throttle(rateLimit, administratorSubject))
+  ).use(({ ctx, next }) => {
+    const { transactions, auditWriter } = ctx.administration;
+    return transactions.run(async (tx) => {
+      const entries: AuditEntry[] = [];
+      const audit: AuditTrail = { record: (entry) => void entries.push(entry) };
+      const result = await next({ ctx: { tx, audit } });
+      // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
+      if (!result.ok) throw result.error;
+      if (entries.length === 0) {
+        throw new Error(
+          'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
+        );
+      }
+      for (const entry of entries) {
+        await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
+      }
+      return result;
     });
+  });
 }
 
 /**
