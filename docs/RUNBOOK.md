@@ -381,10 +381,11 @@ it, and not time it out between two reads in less than the ping.
 - One API process only, until Redis pub/sub between processes lands (Not
   scheduled in `specs/004-sessions/tasks.md`): a second API process would miss
   the other's events. Scaling the API by adding processes waits for it.
-- Memory: assumed at most 100 KB per stream in Node and 10 to 30 KB at the
-  proxy. **Measured:** not yet; the live channel's server task (T063 of
-  `specs/004-sessions/tasks.md`) opens 500 streams locally and writes the RSS
-  before and after here.
+- Memory: 10 to 30 KB per stream at the proxy is still an assumption. **Measured in
+  Node** (T063 of `specs/004-sessions/tasks.md`, 2026-11-08, Node 24 on Windows,
+  the process's working set, 500 streams of one account, no event sent): 200.5 MB
+  before, 273.3 MB with the streams open, 214.9 MB after they closed: about 145 KB
+  per stream, above the 100 KB assumed until then.
 
 ## Leaked credential
 
