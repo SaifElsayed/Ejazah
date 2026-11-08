@@ -313,6 +313,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   document_link_ttl_seconds: 300,
   rate_limit_search: { limit: 60, window_seconds: 60 },
   rate_limit_payment_initiation: { limit: 10, window_seconds: 600 },
+  // Every signed-in call with no limit of its own is counted by it since T062 (FR-470).
+  rate_limit_signed_in_default: { limit: 150, window_seconds: 60 },
   slot_hold_ttl_minutes: 10,
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,

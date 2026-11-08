@@ -473,6 +473,21 @@ describe('account.delete: after the commit (B16 check, decisions 1 and 3)', () =
     expect(spec.reports).toEqual([]);
   });
 
+  // T063 of specs/004-sessions (FR-429; research R-324, item 6): the deleted person's `account`, once
+  // the deletion has committed, ends their live streams; a refused deletion sends nothing.
+  it('publishes the person’s `account` on the live bus after the commit, and nothing when refused (T063)', async () => {
+    const caller = await emailAccount();
+    await expect(deleteWith(caller.userId, byPassword('a wrong passphrase'))).rejects.toEqual(
+      refused('SIGN_IN_FAILED'),
+    );
+    expect(spec.published).toEqual([]);
+
+    await deleteWith(caller.userId, byPassword());
+
+    expect(spec.published).toEqual([{ to: [caller.userId], event: { type: 'account' } }]);
+    expect(spec.events.indexOf('live-account')).toBeGreaterThan(spec.events.indexOf('committed'));
+  });
+
   it('removes a person not held at once, asked after the commit and before the removal (T004)', async () => {
     const caller = await emailAccount('teacher');
     await rows().setPersonalFields(caller.userId, { photoKey: `photos/${caller.userId}.jpg` });

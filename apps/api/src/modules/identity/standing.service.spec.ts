@@ -12,6 +12,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { bindToTransaction } from '../../platform/live/live-publisher.js';
 import { MemoryStandingStore, TX } from './__fixtures__/standing-store.js';
 import { AccountConsequences, type TerminationCause } from './consequences.js';
 import { StandingService } from './standing.service.js';
@@ -544,5 +545,59 @@ describe("a student's account lock (T126, the note under T005)", () => {
       `read-student:${userId}`,
       `request:${userId}`,
     ]);
+  });
+});
+
+// T063 of specs/004-sessions (FR-429; research R-324, item 6): a suspension, a ban and a revocation,
+// a teacher's or a student's, add the person's `account` to the action's after-commit list, which
+// the administrator kind binds to its transaction; nothing is added for a reinstatement or a refusal,
+// and a transaction no kind bound reaches no list.
+describe('the `account` event after a standing change (T063)', () => {
+  function bound() {
+    const added: Array<{ to: readonly string[]; event: unknown }> = [];
+    const tx = {} as typeof TX;
+    const unbind = bindToTransaction(tx, {
+      afterCommit: (to, event) => void added.push({ to, event }),
+    });
+    return { tx, added, unbind };
+  }
+
+  it.each([
+    ['suspend', (tx: typeof TX, userId: string) => standing.suspend(tx, ADMIN, userId)],
+    ['revokeApproval', (tx: typeof TX, userId: string) => standing.revokeApproval(tx, ADMIN, userId, 'a reason')],
+    ['ban', (tx: typeof TX, userId: string) => standing.ban(tx, ADMIN, userId)],
+  ] as const)('%s adds one `account` to the person’s streams', async (_, act) => {
+    const { tx, added, unbind } = bound();
+    const userId = approvedTeacher();
+    await act(tx, userId);
+    unbind();
+    expect(added).toEqual([{ to: [userId], event: { type: 'account' } }]);
+  });
+
+  it.each([
+    ['suspendStudent', (tx: typeof TX, userId: string) => standing.suspendStudent(tx, ADMIN, userId)],
+    ['banStudent', (tx: typeof TX, userId: string) => standing.banStudent(tx, ADMIN, userId)],
+  ] as const)('%s adds one `account` to the student’s streams', async (_, act) => {
+    const { tx, added, unbind } = bound();
+    const userId = student();
+    await act(tx, userId);
+    unbind();
+    expect(added).toEqual([{ to: [userId], event: { type: 'account' } }]);
+  });
+
+  it('adds nothing for a reinstatement, nor for a refused change', async () => {
+    const { tx, added, unbind } = bound();
+    await standing.reinstate(tx, ADMIN, approvedTeacher('suspended'));
+    await standing.reinstateStudent(tx, ADMIN, student('suspended'));
+    await refusal(standing.suspendStudent(tx, ADMIN, student('banned')));
+    unbind();
+    expect(added).toEqual([]);
+  });
+
+  it('reaches no list on a transaction no caller kind bound', async () => {
+    const userId = approvedTeacher();
+    await expect(standing.suspend(TX, ADMIN, userId)).resolves.toMatchObject({
+      after: { accountStatus: 'suspended' },
+    });
   });
 });

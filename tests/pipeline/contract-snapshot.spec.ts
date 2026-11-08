@@ -29,9 +29,11 @@ import {
   adminProcedure,
   createAdminRouter,
   createAppRouter,
+  eventStream,
   publicProcedure,
   studentProcedure,
   teacherProcedure,
+  userProcedure,
 } from '../../apps/api/src/surfaces/procedures.js';
 import {
   type ContractSnapshot,
@@ -309,6 +311,63 @@ describe('the snapshot records the published contract (T084, FR-063)', () => {
     const { routers, ...rest } = sources();
     expect(() => snapshotOf({ ...rest, routers: { ...routers, app: stray } })).toThrow(
       /app profile\.get.*no output parser/,
+    );
+  });
+
+  // T063 of specs/004-sessions (research R-324, item 3; contracts/kernel.md, "Gates"): a
+  // subscription's output parser describes the stream it returns, not what it yields, so the
+  // snapshot records the per-yield schema the kind stamps (`eventStream`), and R-API-9's gate covers
+  // every event field as it covers an output's.
+  it('records a subscription’s event schema as its output, with its kind (T063)', () => {
+    const { z: zod } = apiRequire('zod') as {
+      z: {
+        discriminatedUnion(key: string, members: readonly Schema[]): Schema;
+        object(shape: Record<string, Schema>): Schema;
+        literal(value: string): Schema;
+        string(): Schema;
+      };
+    };
+    const liveEvent = zod.discriminatedUnion('type', [
+      zod.object({ type: zod.literal('session'), sessionId: zod.string() }),
+      zod.object({ type: zod.literal('account') }),
+    ]);
+    const { routers, ...rest } = sources();
+    const app = createAppRouter({
+      live: {
+        events: userProcedure({ input: z.void(), output: eventStream(liveEvent) }).subscription(
+          async function* () {
+            yield* [];
+          },
+        ),
+      },
+    });
+
+    const entry = snapshotOf({ ...rest, routers: { ...routers, app } }).procedures.app[
+      'live.events'
+    ];
+    expect(entry).toMatchObject({ caller: 'user', kind: 'subscription' });
+    expect(entry?.output['$.type']).toEqual({
+      type: 'string',
+      values: ['account', 'session'],
+      required: true,
+    });
+    expect(entry?.output['$.sessionId']).toMatchObject({ type: 'string' });
+  });
+
+  it('refuses a subscription that names no event schema, naming its path (T063)', () => {
+    const { routers, ...rest } = sources();
+    const app = createAppRouter({
+      live: {
+        events: userProcedure({ input: z.void(), output: z.null() }).subscription(
+          async function* () {
+            yield* [];
+          },
+        ),
+      },
+    });
+
+    expect(() => snapshotOf({ ...rest, routers: { ...routers, app } })).toThrow(
+      /app live\.events.*event schema/,
     );
   });
 

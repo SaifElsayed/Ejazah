@@ -144,6 +144,7 @@ export function buildDeletion(
   };
   const reports: unknown[] = [];
   const pending: Promise<void>[] = [];
+  const published: unknown[] = [];
   // T004 of specs/004-sessions (FR-487): the people whose files an open matter holds, as booking's
   // `heldFileOwnersAmong` answers through the `FileHold` port.
   const held = new Set<string>();
@@ -170,11 +171,20 @@ export function buildDeletion(
     },
     report: (error) => void reports.push(error),
     defer: (work) => void pending.push(work),
+    // T063 of specs/004-sessions: the deleted person's `account`, published after the commit.
+    live: {
+      publish: (message) => {
+        events.push('live-account');
+        published.push(message);
+      },
+    },
   });
   return {
     identity,
     deletion,
     events,
+    /** What the deletion published on the live bus (T063). */
+    published,
     signInPort,
     storage,
     files,

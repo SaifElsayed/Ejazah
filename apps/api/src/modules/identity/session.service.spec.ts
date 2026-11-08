@@ -75,6 +75,8 @@ describe('resolveUserSession', () => {
       gender: 'male',
       preferredLanguage: 'ar',
       accountStatus: 'active',
+      // T063 of specs/004-sessions: the token's own expiry, at which a live stream opened with it ends.
+      accessExpiresAt: new Date('2026-10-20T08:15:00Z'),
     });
   });
 

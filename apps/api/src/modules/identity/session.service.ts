@@ -81,6 +81,11 @@ export interface ResolvedUserSession {
     readonly payoutVerified: boolean;
     readonly applicationStatus: 'in_review' | 'needs_document' | 'rejected' | 'banned' | 'approved';
   };
+  /**
+   * When the bearer access token expires, as it carries it (T063 of specs/004-sessions, additive):
+   * a live stream opened with it ends then (FR-429; research R-324, item 8).
+   */
+  readonly accessExpiresAt: Date;
 }
 
 /**
@@ -226,6 +231,7 @@ export class SessionService {
       preferredLanguage: row.preferredLanguage,
       accountStatus: row.accountStatus,
       ...(teacher === undefined ? {} : { teacher }),
+      accessExpiresAt: expiresAt,
     };
   }
 

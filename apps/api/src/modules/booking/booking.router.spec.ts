@@ -162,7 +162,9 @@ describe("'booking.slots' (T032)", () => {
   it("counts every call under rate_limit_search by the caller's id, and refuses one past it RATE_LIMITED before the service: 'booking.slots'", async () => {
     const caller = callerAs(sessionOf('student'));
     await caller.booking.slots({ packageId: PACKAGE });
-    expect(limited).toEqual([['rate_limit_search', CALLER]]);
+    expect(limited).toEqual([
+      ['rate_limit_search', { kind: 'user', userId: CALLER }, 'booking.slots'],
+    ]);
     refuseAtLimit = true;
     calls = [];
     await expect(caller.booking.slots({ packageId: PACKAGE })).rejects.toEqual(

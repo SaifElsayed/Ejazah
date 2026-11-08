@@ -11,3 +11,12 @@ export const DOCUMENT_LINK_TTL_SETTING = 'document_link_ttl_seconds';
 
 /** The link lifetime's schema: whole seconds, at least one; the storage port caps it at seven days. */
 export const documentLinkTtl = z.int().positive();
+
+/**
+ * The most live streams one account holds, the oldest ended when one more opens (T063 of
+ * specs/004-sessions, FR-428; SRS §3.14 «Live channel connections per User», seeded at 3 by T001).
+ */
+export const LIVE_MAX_CONNECTIONS_SETTING = 'live_channel_max_connections_per_user';
+
+/** Its schema: a whole number of streams, at least one. */
+export const liveMaxConnections = z.int().positive();

@@ -24,18 +24,18 @@ export const discoveryRouter = createAppRouter({
   browse: studentProcedure({
     input: discoveryBrowseInput,
     output: discoveryBrowseOutput,
-    rateLimit: { key: search, subjectOf: ({ ctx }) => ctx.caller.userId },
+    rateLimit: { key: search, subject: 'caller' },
   }).query(({ ctx, input }) => ctx.services.discovery.browse(ctx.caller.gender, input)),
 
   filters: studentProcedure({
     input: discoveryFiltersInput,
     output: discoveryFiltersOutput,
-    rateLimit: { key: search, subjectOf: ({ ctx }) => ctx.caller.userId },
+    rateLimit: { key: search, subject: 'caller' },
   }).query(({ ctx, input }) => ctx.services.discovery.filters(ctx.caller.gender, input)),
 
   teacher: studentProcedure({
     input: discoveryTeacherInput,
     output: discoveryTeacherOutput,
-    rateLimit: { key: search, subjectOf: ({ ctx }) => ctx.caller.userId },
+    rateLimit: { key: search, subject: 'caller' },
   }).query(({ ctx, input }) => ctx.services.discovery.teacher(ctx.caller.gender, input)),
 });

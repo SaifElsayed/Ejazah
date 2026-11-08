@@ -7,7 +7,6 @@
 // the admin module's resolver would yield it; the services a spec does not hand in throw when reached.
 import type { AuditRecord } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
-import { DomainError } from '../platform/errors/domain-error.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import {
@@ -63,11 +62,9 @@ export function adminContextsOver(given: Partial<AdminSurfaceServices>): AdminCo
       },
     },
   };
-  const rateLimiter = {
-    check: async () => {
-      throw new DomainError('INTERNAL');
-    },
-  } as unknown as RateLimiter;
+  // Every administrator call is counted by the signed-in default since T062 (FR-470); the limit
+  // itself is the kernel's spec's, so this limiter admits every call.
+  const rateLimiter = { check: async () => undefined } as unknown as RateLimiter;
   return {
     written,
     contextFor: (session) =>

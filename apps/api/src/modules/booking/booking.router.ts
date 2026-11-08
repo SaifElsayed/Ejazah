@@ -16,7 +16,7 @@ export const bookingRouter = createAppRouter({
   slots: studentProcedure({
     input: bookingSlotsInput,
     output: bookingSlotsOutput,
-    rateLimit: { key: search, subjectOf: ({ ctx }) => ctx.caller.userId },
+    rateLimit: { key: search, subject: 'caller' },
   }).query(({ ctx, input }) =>
     ctx.services.booking.slots({ userId: ctx.caller.userId, gender: ctx.caller.gender }, input),
   ),

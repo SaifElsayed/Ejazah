@@ -93,7 +93,11 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
   it('counts the client address under rate_limit_public_page (T170)', async () => {
     const { caller, check, router } = fixture();
     await caller.catalog.subjects.list();
-    expect(check).toHaveBeenCalledWith(PUBLIC_PAGE_RATE_LIMIT, CLIENT);
+    expect(check).toHaveBeenCalledWith(
+      PUBLIC_PAGE_RATE_LIMIT,
+      { kind: 'identifier', value: CLIENT },
+      'catalog.subjects.list',
+    );
     const procedures = router._def.procedures as unknown as Record<
       string,
       { _def: { meta?: { surface: string; caller?: string; rateLimit?: string } } }

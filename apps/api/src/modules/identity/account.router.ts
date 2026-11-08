@@ -57,11 +57,7 @@ export const accountRouter = createAppRouter({
     input: deleteAccountInput,
     output: z.void(),
     admitsRestricted: true,
-    rateLimit: {
-      key: authentication,
-      budget: authenticationBudget,
-      subjectOf: ({ ctx }) => ctx.caller.userId,
-    },
+    rateLimit: { key: authentication, budget: authenticationBudget, subject: 'caller' },
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.identity.deletion.deleteAccount(ctx.caller.userId, input);
   }),

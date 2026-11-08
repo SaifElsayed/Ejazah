@@ -6,7 +6,10 @@
 // application resolves it.
 import { vi } from 'vitest';
 
-import type { RateLimiter } from '../../../platform/guards/rate-limit.guard.js';
+import type {
+  RateLimiter,
+  RateLimitSubject,
+} from '../../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
@@ -62,7 +65,9 @@ export function surfaceOf(
   identity: Identity,
   overrides: { readonly deletion?: AppServices['identity']['deletion'] } = {},
 ): IdentitySurface {
-  const check = vi.fn(async (_key: string, _subject: string) => undefined);
+  const check = vi.fn(
+    async (_key: string, _subject: RateLimitSubject, _procedure: string) => undefined,
+  );
   const rateLimiter = { check } as unknown as RateLimiter;
   const services: AppServices = {
     settings: identity.settings,
@@ -88,9 +93,25 @@ export function surfaceOf(
       createAppContext({ session, log, rateLimiter, clientAddress: SPEC_CLIENT, services }),
     );
   return {
-    counts: () => check.mock.calls.map(([key, subject]) => [key, subject]),
+    // Each subject read back as the text it is counted under (T062): the budget's `*`, an identifier
+    // itself, a user by id.
+    counts: () => check.mock.calls.map(([key, subject]) => [key, countedText(subject)]),
     anonymous: () => as(null),
     bearing: async (accessToken: string) =>
       as(await identity.sessions.resolveUserSession(accessToken)),
   };
+}
+
+/** The text a subject is counted under, as the endpoints named it before T062's subject kinds. */
+function countedText(subject: RateLimitSubject): string {
+  switch (subject.kind) {
+    case 'budget':
+      return '*';
+    case 'identifier':
+      return subject.value;
+    case 'user':
+      return subject.userId;
+    case 'administrator':
+      return subject.adminId;
+  }
 }

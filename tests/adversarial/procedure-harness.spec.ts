@@ -365,7 +365,13 @@ const caller = createAppCallerFactory(
   createAppContext({
     session: student,
     log: createLogger({ level: 'fatal' }),
-    rateLimiter: new RateLimiter({ settings, counter, subjectKey: Buffer.alloc(32, 1) }),
+    // Every signed-in call is counted by the signed-in default since T062 (FR-470), whose row this
+    // limiter reads; nothing else here reads a setting.
+    rateLimiter: new RateLimiter({
+      settings: { read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }) },
+      counter,
+      subjectKey: Buffer.alloc(32, 1),
+    }),
     clientAddress: '203.0.113.7',
     services: {
       settings,

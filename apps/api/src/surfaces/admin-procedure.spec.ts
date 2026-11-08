@@ -21,7 +21,7 @@ import {
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import { DomainError } from '../platform/errors/domain-error.js';
-import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
+import { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { createAdminContext } from './context.js';
 import { unusedAdminServices } from './services.fixtures.js';
@@ -129,6 +129,16 @@ function surfaceOver(database: FakeDatabase) {
       ctx.audit.record(disabling);
       return 'disabled';
     }),
+    // T062: an administrator limit of its own, the administrator the kind authenticated as subject.
+    restore: adminProcedure({
+      ...approvalCall,
+      rateLimit: { key: 'rate_limit_enrollment_restore', subject: 'caller' },
+    }).mutation(({ input, ctx }) => {
+      handlerRan();
+      database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
+      ctx.audit.record(approval);
+      return 'restored';
+    }),
     disableUnlabelled: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
       database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
       // A target the renderer refuses: no identifier at all.
@@ -138,14 +148,35 @@ function surfaceOver(database: FakeDatabase) {
   });
 }
 
-function callerOver(database: FakeDatabase, auditWriter: AuditWriter, adminId: string | null) {
+/** A limiter whose every row is `limit` per 60 s, over an in-memory counter (T062). */
+function limiterAt(limit: number): RateLimiter {
+  const counts = new Map<string, number>();
+  return new RateLimiter({
+    settings: { read: async (_key, schema) => schema.parse({ limit, window_seconds: 60 }) },
+    counter: {
+      hit: async (key) => {
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        return count;
+      },
+    },
+    subjectKey: Buffer.alloc(32, 2),
+  });
+}
+
+function callerOver(
+  database: FakeDatabase,
+  auditWriter: AuditWriter,
+  adminId: string | null,
+  rateLimiter: RateLimiter = limiterAt(1_000),
+) {
   const context = createAdminContext({
     // The second factor is verified on every session here; its refusal is T016's, in procedures.spec.ts.
     session: adminId === null ? null : { adminId, sessionId: 'session-1', mfaVerified: true },
     log,
     administration: { transactions: database, auditWriter },
     services: unusedAdminServices,
-    rateLimiter: {} as RateLimiter,
+    rateLimiter,
     clientAddress: '203.0.113.7',
   });
   return createAdminCallerFactory(surfaceOver(database))(context);
@@ -265,6 +296,55 @@ describe('the administrator caller kind writes its own audit record (T099, FR-04
       code: 'VALIDATION_FAILED',
     });
     expect(database.opened).toBe(0);
+  });
+});
+
+// T062 (FR-470; research R-321, items 1 and 2): the administrator kind's own `rateLimit`, applied
+// after the administrator and the input are checked and before the kind opens its transaction, and
+// the signed-in default where none is declared, so a refused call opens none and writes nothing.
+describe('the administrator kind is rate limited before its transaction (T062, FR-470)', () => {
+  it('refuses a call over its declared limit RATE_LIMITED, with no transaction opened and nothing written', async () => {
+    handlerRan.mockClear();
+    const database = new FakeDatabase();
+    const caller = callerOver(database, writerOver(database), 'admin-1', limiterAt(1));
+
+    expect(await caller.restore({ teacherId: 't1' })).toBe('restored');
+    expect(database.opened).toBe(1);
+    expect(await refusal(() => caller.restore({ teacherId: 't2' }))).toEqual({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+
+    expect(database.opened).toBe(1);
+    expect(handlerRan).toHaveBeenCalledOnce();
+    expect(database.committed).toEqual([
+      { table: 'teacher_approvals', teacherId: 't1' },
+      { table: 'audit_logs', record: { adminId: 'admin-1', ...approval } },
+    ]);
+  });
+
+  it('refuses a call with no limit of its own past the default, with no transaction opened', async () => {
+    const database = new FakeDatabase();
+    const caller = callerOver(database, writerOver(database), 'admin-1', limiterAt(1));
+
+    expect(await caller.approve({ teacherId: 't1' })).toBe('approved');
+    expect(await refusal(() => caller.approve({ teacherId: 't2' }))).toEqual({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    expect(database.opened).toBe(1);
+  });
+
+  it('stamps the declared key in the procedure’s meta, and none where the default applies', () => {
+    const router = surfaceOver(new FakeDatabase());
+    const metaOf = (path: string) =>
+      (router._def.procedures as Record<string, { _def: { meta?: unknown } }>)[path]?._def.meta;
+
+    expect(metaOf('restore')).toEqual({
+      surface: 'admin',
+      rateLimit: 'rate_limit_enrollment_restore',
+    });
+    expect(metaOf('approve')).toEqual({ surface: 'admin' });
   });
 });
 

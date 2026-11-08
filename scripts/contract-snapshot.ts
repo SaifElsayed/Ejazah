@@ -21,7 +21,10 @@
 // implements by calling its own `z.toJSONSchema`, so no Zod import and no dependency is needed
 // here. A parser that cannot describe itself is refused, never recorded as having no field, and so
 // is a procedure with no output parser (T169): an output inferred from the handler exists only for
-// the compiler, and every caller kind takes `{ input, output }`. Then every enum member: the Prisma enums, read from
+// the compiler, and every caller kind takes `{ input, output }`. A subscription's output is the
+// schema of each event it yields, which its kind stamps in the meta as `events` (T063 of
+// specs/004-sessions): its own output parser only checks it answers a stream, and one that names no
+// event schema is refused. Then every enum member: the Prisma enums, read from
 // the generated client's `$Enums` (Prisma's own reading of `prisma/schema/base.prisma`, so a comment
 // or an attribute cannot be misread; it needs `pnpm db:generate`, which every pipeline stage already
 // runs), and every enum `packages/contracts` exports, read as a schema whose JSON Schema is an enum.
@@ -290,7 +293,21 @@ function proceduresOf(router: RouterLike, surface: Surface): Record<string, Proc
     if (typeof kind !== 'string' || !Array.isArray(inputs) || !isObject(definition)) {
       throw new Error(`contract snapshot: ${where} is not a tRPC procedure this file can read`);
     }
-    const output = definition['output'];
+    const meta = definition['meta'];
+    // A subscription's output parser describes the stream its handler returns, not what it yields
+    // (T063 of specs/004-sessions, research R-324): the per-yield schema its kind stamps in the meta
+    // (`eventStream`) is recorded in its place, so R-API-9 holds every event field as an output's.
+    const subscription = kind === 'subscription';
+    const output = subscription
+      ? isObject(meta)
+        ? meta['events']
+        : undefined
+      : definition['output'];
+    if (output === undefined && subscription) {
+      throw new Error(
+        `contract snapshot: ${where} is a subscription that names no event schema, so nothing it yields can be recorded; its output is \`eventStream(<the event schema>)\` (R-API-9, T063)`,
+      );
+    }
     // An output inferred from the handler exists only for the compiler, so a procedure without an
     // output parser would publish nothing this file can hold a removal against (T169, R-API-9).
     if (output === undefined) {
@@ -298,7 +315,6 @@ function proceduresOf(router: RouterLike, surface: Surface): Record<string, Proc
         `contract snapshot: ${where} has no output parser, so nothing it returns can be recorded; every caller kind takes \`{ input, output }\` (R-API-9, T169)`,
       );
     }
-    const meta = definition['meta'];
     const caller =
       isObject(meta) && typeof meta['caller'] === 'string' ? meta['caller'] : undefined;
     entries.push([

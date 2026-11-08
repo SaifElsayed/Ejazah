@@ -122,10 +122,17 @@ export const authRouter = createAppRouter({
     },
   }).mutation(({ ctx, input }) => ctx.services.identity.sessions.refresh(input.refreshToken)),
 
-  // A restricted account signs out like any other (FR-137).
+  // A restricted account signs out like any other (FR-137). Once the session is revoked, that
+  // sign-in session's live streams read `account` and end, its other devices' stay (T063, FR-429);
+  // the user kind sends it when this resolves, nothing when it throws.
   signOut: userProcedure({ input: emptyInput, output: z.void(), admitsRestricted: true }).mutation(
     async ({ ctx }) => {
       await ctx.services.identity.sessions.signOut(ctx.caller.sessionId);
+      ctx.live.afterCommit(
+        [ctx.caller.userId],
+        { type: 'account' },
+        { session: ctx.caller.sessionId },
+      );
     },
   ),
 });
