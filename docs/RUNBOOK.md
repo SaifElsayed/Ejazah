@@ -383,9 +383,9 @@ it, and not time it out between two reads in less than the ping.
   the other's events. Scaling the API by adding processes waits for it.
 - Memory: 10 to 30 KB per stream at the proxy is still an assumption. **Measured in
   Node** (T063 of `specs/004-sessions/tasks.md`, 2026-11-08, Node 24 on Windows,
-  the process's working set, 500 streams of one account, no event sent): 200.5 MB
-  before, 273.3 MB with the streams open, 214.9 MB after they closed: about 145 KB
-  per stream, above the 100 KB assumed until then.
+  the process's working set, 500 streams of one account, no event sent): 200,528 KiB
+  before, 273,252 KiB with the streams open, 214,904 KiB after they closed: about
+  145 KiB per stream, above the 100 KB assumed until then.
 
 ## Leaked credential
 
