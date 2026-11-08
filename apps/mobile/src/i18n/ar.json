@@ -555,7 +555,9 @@
       "a11y": {
         "preview": "معاينة الكاميرا"
       },
+      "allowMic": "السماح بالميكروفون",
       "camera": "الكاميرا",
+      "cameraInRoom": "تشغّلها إن شئت من داخل الجلسة.",
       "cameraOff": "كاميرتك مغلقة",
       "cameraOptional": "اختيارية",
       "cameraStatus": {
@@ -570,6 +572,7 @@
         "working": "يعمل"
       },
       "micWorking": "الميكروفون يعمل",
+      "opensAt": "يفتح الدخول",
       "permission": {
         "banner": "اسمح لإجازة باستخدام الميكروفون من الإعدادات لتدخل الجلسة.",
         "meta": "{date} · {start} – {end} · {minutes, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
@@ -578,6 +581,7 @@
         "openSettings": "فتح الإعدادات"
       },
       "sessionOf": "{subject} · الجلسة {n} من {total}",
+      "startsAt": "موعد البدء",
       "teacher": {
         "a11y": {
           "cameraPreview": "معاينة الكاميرا",
@@ -597,7 +601,9 @@
         "timeRange": "{start} – {end}",
         "title": "قبل الجلسة"
       },
-      "title": "قبل الجلسة"
+      "timeIn": "{date} · {time} · بتوقيت {city}",
+      "title": "قبل الجلسة",
+      "unavailable": "لا يمكن دخول هذه الجلسة الآن."
     },
     "room": {
       "a11y": {
