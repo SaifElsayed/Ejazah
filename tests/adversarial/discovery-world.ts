@@ -49,6 +49,13 @@
 // reach booking's T041 subscriber on the one `AccountConsequences`, bound as `main.ts` binds it.
 // T049: the surface's `booking` services carry the lists, so `enrollments.list` and
 // `enrollments.get` are attacked in the same world (`enrollments.attacks.ts`).
+// T011 of specs/004-sessions: the surface's `sessions` services are the ones `main.ts` binds, over
+// the video stand-in the configuration chooses (its calls recorded, `video`), so `sessions.get`
+// and `sessions.join` are attacked in the same world (`sessions.attacks.ts`): for each gender, a
+// pair of its own (`sessionPair`), a lone visible teacher signed in and a student, both named
+// through the world's prefix, with a confirmed enrollment and three sessions, one inside its join
+// period, one not yet open and one over; and an administrator's gender correction is the server's
+// record changed in place (`setGender`; the note under T011, K2).
 //
 // NOTHING STAYS VISIBLE. At the end of the file every account the world created is soft-deleted and
 // every subject deactivated, so a later run, or another spec, never meets these teachers.
@@ -67,6 +74,7 @@ import { afterAll } from 'vitest';
 import {
   createBookingServices,
   createDiscoveryServices,
+  createEnrollmentSide,
   terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
 import {
@@ -87,6 +95,10 @@ import {
   orderStandingsOf,
   PAYMENT_WEBHOOK_PATH,
 } from '../../apps/api/src/modules/payments/index.js';
+import {
+  createSessionsServices,
+  sessionsStore,
+} from '../../apps/api/src/modules/sessions/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing.js';
 import {
@@ -105,6 +117,8 @@ import {
   createPaymentPort,
   type PaymentConfig,
 } from '../../apps/api/src/platform/ports/payment/index.js';
+import { createVideoPort } from '../../apps/api/src/platform/ports/video/index.js';
+import type { VideoPort } from '../../apps/api/src/platform/ports/video/video.port.js';
 import { MemorySingleUseMarks } from '../../apps/api/src/platform/redis/single-use-marks.fixtures.js';
 import {
   SettingError,
@@ -142,6 +156,10 @@ import type {
   EnrollmentsGetOutput,
   EnrollmentsListInput,
   EnrollmentsListOutput,
+  SessionsGetInput,
+  SessionsGetOutput,
+  SessionsJoinInput,
+  SessionsJoinOutput,
 } from '../../packages/contracts/src/index.js';
 import { addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
@@ -150,6 +168,34 @@ type Gender = 'male' | 'female';
 
 /** A hold's minutes: the checkout's ten and the grace's five (the seeded settings). */
 const HOLD_MINUTES = 15;
+
+/** T011: a pair's sessions are an hour, the packages' length. */
+const SESSION_MINUTES = 60;
+/** T011: the open session starts in five minutes, inside the seeded fifteen of early join. */
+const OPEN_SESSION_STARTS_IN_MINUTES = 5;
+/** T011: the session not yet open starts in three days. */
+const LATER_SESSION_STARTS_IN_MINUTES = 4_320;
+/** T011: the session over started three hours ago, so it ended two hours ago. */
+const PAST_SESSION_STARTS_IN_MINUTES = -180;
+
+/** The stand-in the configuration chooses, as `ports.module.ts` builds it, its calls recorded. */
+function recordedVideo(encryptionKey: string): RecordedVideo {
+  const port = createVideoPort({ VIDEO_PROVIDER: 'fake', ENCRYPTION_KEY: encryptionKey });
+  const calls: RecordedVideo['calls'] = [];
+  return {
+    calls,
+    createRoom: (...args) => {
+      calls.push({ operation: 'createRoom', args });
+      return port.createRoom(...args);
+    },
+    createSessionToken: (...args) => {
+      calls.push({ operation: 'createSessionToken', args });
+      return port.createSessionToken(...args);
+    },
+    verifyAndParseParticipantEvent: (...args) => port.verifyAndParseParticipantEvent(...args),
+    endRoom: (...args) => port.endRoom(...args),
+  };
+}
 
 export const GENDERS: readonly Gender[] = ['male', 'female'];
 
@@ -279,6 +325,9 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   onboarding_token_ttl_minutes: 15,
   provider_nonce_ttl_minutes: 10,
   idempotency_key_ttl_hours: 24,
+  early_join_lead_minutes: 15,
+  video_empty_timeout_seconds: 300,
+  video_departure_timeout_seconds: 20,
 };
 
 const settings: SettingsReader = {
@@ -328,6 +377,37 @@ export interface AppCaller {
     list(input: EnrollmentsListInput): Promise<EnrollmentsListOutput>;
     get(input: EnrollmentsGetInput): Promise<EnrollmentsGetOutput>;
   };
+  /** T011 of specs/004-sessions: a session read and joined, attacked in `sessions.attacks.ts`. */
+  readonly sessions: {
+    get(input: SessionsGetInput): Promise<SessionsGetOutput>;
+    join(input: SessionsJoinInput): Promise<SessionsJoinOutput>;
+  };
+}
+
+/** The video stand-in the surface's sessions services use, with what it was asked to make recorded. */
+export interface RecordedVideo extends VideoPort {
+  readonly calls: { readonly operation: string; readonly args: readonly unknown[] }[];
+}
+
+/** A party of a session pair, signed in. */
+export interface SessionParty {
+  readonly userId: string;
+  readonly accessToken: string;
+  readonly sessionId: string;
+  readonly caller: AppCaller;
+}
+
+/**
+ * T011 of specs/004-sessions: a student and a lone visible teacher of one gender, both signed in,
+ * with a confirmed enrollment and three of its sessions: `open` inside its join period (starting
+ * five minutes after the pair was made), `later` not yet open (three days on) and `past` over (it
+ * ended two hours before).
+ */
+export interface SessionPair {
+  readonly enrollmentId: string;
+  readonly sessions: { readonly open: string; readonly later: string; readonly past: string };
+  readonly student: SessionParty;
+  readonly teacher: SessionParty;
 }
 
 /** A signed-in student and the bearer token the sign-in issued. */
@@ -386,6 +466,12 @@ export interface DiscoverySurface {
   deleteAccount(teacherId: string): Promise<void>;
   /** T043: an administrator suspends the teacher through identity's real `StandingService` (FR-165). */
   suspend(teacherId: string): Promise<void>;
+  /** T011 of specs/004-sessions: the pair of `gender`, made on first use (`SessionPair`). */
+  sessionPair(gender: Gender): Promise<SessionPair>;
+  /** T011: the video stand-in the sessions services ask, with its calls. */
+  readonly video: RecordedVideo;
+  /** T011 (K2): the account's gender changed in place, as the server's record after a correction. */
+  setGender(userId: string, gender: Gender): Promise<void>;
 }
 
 /** An account standing a case moves a teacher to (SRS §3.7.1, `002:T143`). */
@@ -522,6 +608,7 @@ async function build(): Promise<Built> {
   // call in a read transaction of its own, composed by booking with the nearest free slots.
   const catalog = createDiscoveryCatalog(settings, storage);
   const reads = transactionsOver(database);
+  const video = recordedVideo(encryptionKey);
   const services: AppServices = {
     settings,
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
@@ -549,6 +636,14 @@ async function build(): Promise<Built> {
       payment,
       cipher,
       gateway: 'fake',
+    }),
+    // As `main.ts` binds it (T011 of specs/004-sessions): over the video port and booking's side.
+    sessions: createSessionsServices({
+      transactions: reads,
+      settings,
+      video,
+      enrollmentSide: createEnrollmentSide({ settings }),
+      store: sessionsStore,
     }),
   };
   const rateLimiter = new RateLimiter({
@@ -596,6 +691,93 @@ async function build(): Promise<Built> {
       teachers.push(await seeder.teacher({ gender, state, shared, admin }));
     }
   }
+
+  const signedIn = async (userId: string, email: string): Promise<SessionParty> => {
+    const { accessToken } = await identity.emailAuth.signIn(email, PASSWORD);
+    const session = await resolve(accessToken);
+    if (session === null) throw new Error('the issued token did not resolve');
+    return {
+      userId,
+      accessToken,
+      sessionId: session.sessionId,
+      caller: await bearing(accessToken),
+    };
+  };
+  const pairs = new Map<Gender, Promise<SessionPair>>();
+  const makePair = async (gender: Gender): Promise<SessionPair> => {
+    const { userId: studentId, email: studentEmail } = await seeder.student(
+      gender,
+      `${prefix} طالب`,
+    );
+    const subject = await seeder.subject();
+    const teacher = await seeder.teacher({
+      gender,
+      state: 'plainName',
+      shared: subject,
+      admin,
+      sharedRiwaya: `رواية ${randomUUID()}`,
+    });
+    // A world teacher has no password; one is set so the pair's teacher signs in (as `deleteAccount`).
+    const { email: teacherEmail } = await database.user.update({
+      where: { id: teacher.id },
+      data: { passwordHash: await hashPassword(PASSWORD) },
+      select: { email: true },
+    });
+    if (teacherEmail === null) throw new Error('a world teacher without an address');
+    const [packageId] = teacher.packageIds;
+    if (packageId === undefined) throw new Error('a world teacher without a package');
+    const now = new Date();
+    const { id: enrollmentId } = await database.enrollment.create({
+      data: {
+        studentUserId: studentId,
+        teacherUserId: teacher.id,
+        packageId,
+        slotId: teacher.slotId,
+        snapshotPricePiasters: BigInt(100_000),
+        snapshotSessionCount: 4,
+        snapshotDurationMinutes: SESSION_MINUTES,
+        snapshotSubjectId: subject.id,
+        snapshotSlotTimezone: 'Africa/Cairo',
+        snapshotTrack: 'recitation',
+        status: 'confirmed',
+        confirmedAt: now,
+        purchasedAt: now,
+        quotedFirstSessionLocalDate: new Date('2026-12-03T00:00:00Z'),
+      },
+      select: { id: true },
+    });
+    const session = async (sequenceNumber: number, startsInMinutes: number): Promise<string> => {
+      const startsAt = new Date(addMinutes(now, startsInMinutes));
+      const { id } = await database.session.create({
+        data: {
+          enrollmentId,
+          teacherUserId: teacher.id,
+          studentUserId: studentId,
+          sequenceNumber,
+          // The local fields as the schedule's text; the join reads the instants (R-TIME-1).
+          scheduledDateLocal: new Date('2026-12-03T00:00:00Z'),
+          scheduledStartTimeLocal: SLOT_START,
+          timezone: 'Africa/Cairo',
+          scheduledStartAt: startsAt,
+          scheduledEndAt: new Date(addMinutes(startsAt, SESSION_MINUTES)),
+          status: 'scheduled',
+        },
+        select: { id: true },
+      });
+      return id;
+    };
+    const sessions = {
+      past: await session(1, PAST_SESSION_STARTS_IN_MINUTES),
+      open: await session(2, OPEN_SESSION_STARTS_IN_MINUTES),
+      later: await session(3, LATER_SESSION_STARTS_IN_MINUTES),
+    };
+    return {
+      enrollmentId,
+      sessions,
+      student: await signedIn(studentId, studentEmail),
+      teacher: await signedIn(teacher.id, teacherEmail),
+    };
+  };
 
   const students = new Map<Gender, Student>();
   const pending = new Map<Gender, Promise<{ enrollmentId: string; holdId: string }>>();
@@ -768,6 +950,17 @@ async function build(): Promise<Built> {
     async suspend(teacherId) {
       await database.$transaction((tx) => standing.suspend(tx, admin, teacherId));
     },
+    sessionPair(gender) {
+      const made = pairs.get(gender);
+      if (made !== undefined) return made;
+      const making = makePair(gender);
+      pairs.set(gender, making);
+      return making;
+    },
+    video,
+    async setGender(userId, gender) {
+      await database.user.update({ where: { id: userId }, data: { gender } });
+    },
     async allTabIds(gender) {
       // SRS §3.7.1's five conjuncts as written, and FR-332's "with an active package".
       const rows = await database.$queryRaw<{ id: string }[]>`
@@ -880,7 +1073,7 @@ class Seeder {
     return row;
   }
 
-  async student(gender: Gender): Promise<{ userId: string; email: string }> {
+  async student(gender: Gender, displayName = 'طالب'): Promise<{ userId: string; email: string }> {
     const email = `adversarial-${randomUUID()}@example.invalid`;
     const { id } = await this.#database.user.create({
       data: {
@@ -888,7 +1081,7 @@ class Seeder {
         passwordHash: await hashPassword(PASSWORD),
         gender,
         dateOfBirth: new Date('2004-05-01'),
-        displayName: 'طالب',
+        displayName,
         preferredLanguage: 'ar',
         timezone: 'Africa/Cairo',
         accountStatus: 'active',

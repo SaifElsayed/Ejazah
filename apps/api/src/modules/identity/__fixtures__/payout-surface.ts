@@ -11,10 +11,11 @@ import { type AppServices, createAppContext, type UserSession } from '../../../s
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../../surfaces/services.fixtures.js';
@@ -123,6 +124,7 @@ export function appContextFor(
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }

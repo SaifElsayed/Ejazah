@@ -95,6 +95,8 @@ export function surfaceOf(
     teachers: unusedAdminServices.teachers,
     students: unusedAdminServices.students,
     payments: unusedAdminServices.payments,
+    // The outage windows have their own router spec (`sessions/sessions-admin.router.spec.ts`).
+    outages: unusedAdminServices.outages,
   };
   const administration = {
     transactions: transactionsOver(database),

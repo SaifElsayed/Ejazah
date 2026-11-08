@@ -22,6 +22,7 @@ import {
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -114,6 +115,7 @@ function as(session: UserSession | null) {
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
     catalog: { slots, packages: unusedPackages },
   };
   return callerFor(

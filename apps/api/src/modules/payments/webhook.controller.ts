@@ -202,7 +202,9 @@ export function paymentWebhookRoute({
           requestLog.error({ err: error }, 'Unexpected error on the payment webhook');
           reportError(error, correlationId);
         } else {
-          requestLog.warn({ code: mapped.body.code }, 'Payment webhook refused');
+          // `errorCode`: the logger redacts a bare `code`, which may be a one-time code (logger.ts;
+          // the follow-up under T012 of specs/004-sessions/tasks.md).
+          requestLog.warn({ errorCode: mapped.body.code }, 'Payment webhook refused');
         }
         refuse(request, response, mapped);
       }

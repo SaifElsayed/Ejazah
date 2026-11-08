@@ -4,12 +4,26 @@
 // absence, both absent, a cancellation, a review or a dispute consumes nothing until it is settled
 // so (FR-NOSHOW-2, FR-NOSHOW-6, FR-DISPUTE-4). The sessions module owns what a status means; booking
 // hands in the snapshot's count. Pure: no clock is read, the caller passes `now`.
+//
+// A DISPUTED SESSION (T014; research R-308; the note under T014, K7). While a session is
+// `disputed` its outcome is frozen beside the status, in `outcome_under_dispute`, and that is what
+// counts: consumed when it is `done` or `student_no_show`, not when it is another or not yet written
+// (a dispute raised before the evaluation). So the «remaining» of Phase 2's lists counts a disputed
+// session by its frozen outcome.
 import type { SessionStatus } from '@ijazah/contracts';
 
 import type { EnrollmentSessionRow } from './sessions.repository.js';
 
 /** The statuses that consume a session from the package (SRS §3.8.3). */
 const CONSUMED: ReadonlySet<SessionStatus> = new Set(['done', 'student_no_show']);
+
+/** Whether the session is consumed: by its status, a disputed one by its frozen outcome. */
+function consumed({ status, outcomeUnderDispute }: EnrollmentSessionRow): boolean {
+  if (status === 'disputed') {
+    return outcomeUnderDispute !== undefined && CONSUMED.has(outcomeUnderDispute);
+  }
+  return CONSUMED.has(status);
+}
 
 /** Where an enrollment stands: `next` and `last` absent while it has no such session. */
 export interface SessionProgress {
@@ -33,7 +47,7 @@ export function sessionProgress(
   const ahead = sessions
     .filter(({ status, endsAt }) => status === 'scheduled' && endsAt.getTime() > now.getTime())
     .toSorted((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  const completed = sessions.filter(({ status }) => CONSUMED.has(status)).length;
+  const completed = sessions.filter(consumed).length;
   const last = sessions.reduce<EnrollmentSessionRow | undefined>(
     (latest, one) =>
       latest === undefined || one.sequenceNumber > latest.sequenceNumber ? one : latest,

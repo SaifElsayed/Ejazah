@@ -1,5 +1,10 @@
 // PUBLIC ENTRY of the sessions module (T017, ADR 0005 D2). Other modules import this file and nothing below it (R-API-3).
 // booking requests session generation through this entry; it never writes the sessions table itself.
+import type { Transactions } from '../../platform/db/transaction.repository.js';
+import type { Logger } from '../../platform/logging/logger.js';
+import type { VideoPort } from '../../platform/ports/video/video.port.js';
+import type { NodeHandler } from '../../platform/web/route.js';
+import { ParticipantEventsService, videoWebhookRoute } from './video-webhook.controller.js';
 
 /** Each enrollment's final session's local date, for a slot's release (T026, R-205, FR-394). */
 export { lastSessionDateOf } from './sessions.repository.js';
@@ -72,6 +77,42 @@ export {
   type SessionEventRecord,
 } from './session-events.repository.js';
 /**
+ * T015 (FR-447, FR-451, SC-404; R-322; ADR 0023): an enrollment's Teacher-No-Show count, read when
+ * shown and never stored, and the repeated-absence mark at `repeated_absence_flag_count`, for
+ * administrators only (T024, T034, T035, T058). No lock, no write; nothing follows from either.
+ */
+export {
+  createRepeatedAbsence,
+  REPEATED_ABSENCE_FLAG_SETTING,
+  type RepeatedAbsence,
+  repeatedAbsenceFlagCount,
+} from './repeated-absence.service.js';
+export type { EnrollmentNoShowCount } from './repeated-absence.repository.js';
+/**
+ * T015 (FR-449, R-309): an enrollment's completion, checked on the settling transaction by every
+ * path that settles (T014, T016, T033, T034) and again by `advance-remedies` (T028), after the
+ * enrollment's lock the caller holds; bound by the composition root over `EnrollmentSide`.
+ */
+export {
+  type Completion,
+  createCompletion,
+  DISPUTE_WINDOW_SETTING,
+  disputeWindowHours,
+} from './completion.service.js';
+/**
+ * T016 (FR-445, R-307): the provider outage windows, `sessions.outages.record` and `.list`, behind
+ * the administrator surface's `sessions` namespace.
+ */
+export {
+  type AdminNames,
+  createOutageServices,
+  type OutagePage,
+  type OutageRecorded,
+  type OutageRecordInput,
+  type OutageServices,
+} from './outages.service.js';
+export { sessionsAdminRouter } from './sessions-admin.router.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */
@@ -88,3 +129,86 @@ export type {
   EnrollmentTrack,
   HeldTime,
 } from './enrollment-side.port.js';
+
+/**
+ * T012 (FR-440; R-SESS-1, R-SESS-7; research R-303, R-304): `POST /webhooks/video`, the video
+ * provider's signed webhook, a raw-body route the composition root mounts beside the payment
+ * webhook. It verifies each event through the video port before anything runs and records an
+ * attendance event once under its provider id in `session_participant_events`.
+ */
+export { VIDEO_WEBHOOK_PATH, type VideoEventOutcome } from './video-webhook.controller.js';
+
+/** The route over the video port's verify operation, the process's transactions and its log. */
+export function createVideoWebhookRoute({
+  transactions,
+  video,
+  log,
+  maxBodyBytes,
+  report,
+}: {
+  readonly transactions: Transactions;
+  readonly video: Pick<VideoPort, 'verifyAndParseParticipantEvent'>;
+  readonly log: Logger;
+  /** `MAX_REQUEST_BODY_BYTES`. */
+  readonly maxBodyBytes: number;
+  /** The process's error reporting by default (T111); a recorder in the specs. */
+  readonly report?: (error: Error) => void;
+}): NodeHandler {
+  return videoWebhookRoute({
+    verify: (rawBody, headers) => video.verifyAndParseParticipantEvent(rawBody, headers),
+    events: new ParticipantEventsService({
+      transactions,
+      log,
+      ...(report === undefined ? {} : { report }),
+    }),
+    log,
+    maxBodyBytes,
+  });
+}
+
+/**
+ * T014 (FR-441, FR-446, FR-482; R-SESS-2, R-SESS-3; research R-306, R-313): the evaluation the
+ * `evaluate-sessions` sweep runs every minute: each session due settled on its own transaction under
+ * the enrollment's and the session's locks, with T015's completion check, and the rooms of the
+ * cancelled sessions in their join period ended.
+ */
+export {
+  createEvaluation,
+  type DueSession,
+  type Evaluation,
+  EVALUATION_DELAY_SETTING,
+  type EvaluationRun,
+  type EvaluationStore,
+  evaluationStore,
+  type SessionToSettle,
+  type Settlement,
+} from './evaluation.service.js';
+
+/**
+ * T013 (FR-442, FR-443, FR-444; research R-305): the attendance rules, pure, which the evaluation
+ * (T014) runs over a session's recorded events, its window and the outages overlapping it.
+ */
+export {
+  type Attendance,
+  type AttendanceEvent,
+  type AttendanceOutcome,
+  type AttendanceSettings,
+  type AttendanceWindow,
+  evaluateAttendance,
+} from './attendance.rules.js';
+
+/**
+ * T011 of specs/004-sessions (FR-431, FR-432, FR-434, FR-435; R-GENDER-7, R-SESS-5): `sessions.get`
+ * and `sessions.join`, the router `app.router.ts` mounts under `sessions` and the services
+ * `main.ts` binds over the process's client, the settings, the video port and booking's
+ * `EnrollmentSide`, with the store over this module's reads and identity's accounts.
+ */
+export { sessionsRouter } from './sessions.router.js';
+export {
+  createSessionsServices,
+  type PartyStanding,
+  type SessionsDependencies,
+  type SessionsServices,
+  type SessionsStore,
+  sessionsStore,
+} from './sessions.service.js';

@@ -4,16 +4,19 @@
 // spec reads, so a procedure of the `discovery`, `booking`, `checkout` or `enrollments` router that
 // is not listed here fails it. T032 adds `booking.slots` as its router lands; T043 the checkout and
 // enrollments procedures. T036 adds `checkout.hold` and `checkout.retry` as their router lands, and
-// T049 `enrollments.list` and `enrollments.get`.
+// T049 `enrollments.list` and `enrollments.get`; T011 of specs/004-sessions `sessions.get` and
+// `sessions.join`.
 import { bookingAttacks } from './booking.attacks.js';
 import { checkoutAttacks } from './checkout.attacks.js';
 import { discoveryAttacks } from './discovery.attacks.js';
 import { enrollmentsAttacks } from './enrollments.attacks.js';
 import type { ProcedureAttacks } from './procedure-harness.js';
+import { sessionsAttacks } from './sessions.attacks.js';
 
 export const registeredAttacks: readonly ProcedureAttacks[] = [
   ...discoveryAttacks,
   ...bookingAttacks,
   ...checkoutAttacks,
   ...enrollmentsAttacks,
+  ...sessionsAttacks,
 ];

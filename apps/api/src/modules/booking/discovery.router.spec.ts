@@ -21,9 +21,10 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -111,6 +112,7 @@ function callerAs(session: UserSession | null): Caller {
     discovery,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

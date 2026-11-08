@@ -8,7 +8,11 @@
 //   - the last run's version: nothing is read or written;
 //   - a moved session that would overlap another session of its teacher that the constraints count
 //     is restored to its previous instants and reported, while the run's other sessions commit;
-//   - two runs leave what one leaves.
+//   - two runs leave what one leaves;
+//   - T014 (research R-323, GAP-6): in the run's one transaction, one `session_events` row
+//     `instants_reresolved` per session moved and per session kept back, `previous_start_at` the
+//     start before the run; a refused commit writes none, and a later run that keeps the same
+//     session back again writes another.
 //
 // The stale caches are written as a data change would leave them: a Cairo session of
 // Sunday 2026-11-08 (+02:00) cached as if Cairo were still at +03:00, an hour early. The job runs
@@ -24,6 +28,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { runOnceAndTwice } from '../../apps/api/src/jobs/double-run.js';
 import {
+  type ReresolutionSteps,
+  reresolutionSteps,
   reresolveSessionInstants,
   SessionsKeptAtPreviousInstants,
   TZDATA_RERESOLVE_SCOPE,
@@ -77,6 +83,12 @@ afterAll(async () => {
       TZDATA_RERESOLVE_SCOPE,
       versions,
     ]);
+    // T014: the run's `instants_reresolved` rows reference the sessions and their enrollments.
+    await owner.query(
+      `DELETE FROM "session_events" WHERE enrollment_id IN (
+         SELECT id FROM "enrollments" WHERE teacher_user_id = ANY($1) OR student_user_id = ANY($1))`,
+      [users],
+    );
     await owner.query(
       'DELETE FROM "sessions" WHERE teacher_user_id = ANY($1) OR student_user_id = ANY($1)',
       [users],
@@ -168,16 +180,42 @@ const settings: SettingsReader = {
 };
 
 /** The job over the real tables under `version`, its reports kept. */
-function jobUnder(version: string) {
+function jobUnder(version: string, steps: ReresolutionSteps = reresolutionSteps) {
   const reports: Error[] = [];
   const job = reresolveSessionInstants({
     database,
     runs: jobRunsOver(database),
     settings,
+    steps,
     tzVersion: () => version,
     report: (error) => reports.push(error),
   });
   return { job, reports };
+}
+
+/** The `instants_reresolved` rows of `ids`, by session in the order given, oldest first. */
+async function reresolvedRowsOf(ids: readonly string[]): Promise<string[][]> {
+  const { rows } = await setup.query<{ session_id: string; previous: string }>(
+    `SELECT session_id::text,
+            to_char(previous_start_at AT TIME ZONE 'UTC', 'HH24:MI"Z"') AS previous
+       FROM "session_events"
+      WHERE kind = 'instants_reresolved' AND session_id = ANY($1::uuid[])
+      ORDER BY id`,
+    [ids],
+  );
+  return ids.map((id) => rows.filter((row) => row.session_id === id).map((row) => row.previous));
+}
+
+/** The refusal of a commit by an overlap constraint, as the adapter throws it (T006). */
+function refusedAtCommit(): Error {
+  return Object.assign(new Error('refused'), {
+    name: 'DriverAdapterError',
+    cause: {
+      originalCode: '23P01',
+      originalMessage:
+        'conflicting key value violates exclusion constraint "sessions_teacher_no_overlap"',
+    },
+  });
 }
 
 /** The ids `reports` named among `ids`. */
@@ -281,6 +319,7 @@ describe('reresolve-session-instants over the real tables (FR-370, ADR 0009 D3)'
         instants: await instantsOf(ids),
         recorded:
           (await jobRunsOver(database).lastKey(TZDATA_RERESOLVE_SCOPE, new Date())) === version,
+        rows: await reresolvedRowsOf(ids),
       }),
     });
     expect(reading.twice).toEqual(reading.once);
@@ -290,6 +329,76 @@ describe('reresolve-session-instants over the real tables (FR-370, ADR 0009 D3)'
         ['08:00Z', '09:00Z'],
       ],
       recorded: true,
+      rows: [['06:00Z'], ['07:00Z']],
     });
+  });
+});
+
+describe('reresolve-session-instants: the record of each session moved or kept back (T014, R-323 GAP-6)', () => {
+  /** The teacher's counted 09:30 and another student's 09:00 cached an hour early, kept back. */
+  async function keptBackWorld(): Promise<string> {
+    const offer = await committedOffer();
+    await committedSession(await committedEnrollment(offer), {
+      sequence: 1,
+      startLocal: '09:30:00',
+      startsAt: `${DAY}T07:30:00Z`,
+      endsAt: `${DAY}T08:30:00Z`,
+      status: 'done',
+    });
+    return committedSession(await committedEnrollment(offer), {
+      sequence: 1,
+      startLocal: '09:00:00',
+      startsAt: `${DAY}T06:00:00Z`,
+      endsAt: `${DAY}T07:00:00Z`,
+    });
+  }
+
+  it('one row per session moved and per session kept back, each with the start before the run', async () => {
+    const blocked = await keptBackWorld();
+    const moved = await backToBackStale();
+
+    await jobUnder(versionOfItsOwn()).job.handle({});
+
+    // The kept-back one still starts at its row's `previous_start_at`; the moved ones do not.
+    expect(await instantsOf([blocked, ...moved])).toEqual([
+      ['06:00Z', '07:00Z'],
+      ['07:00Z', '08:00Z'],
+      ['08:00Z', '09:00Z'],
+    ]);
+    expect(await reresolvedRowsOf([blocked, ...moved])).toEqual([
+      ['06:00Z'],
+      ['06:00Z'],
+      ['07:00Z'],
+    ]);
+  });
+
+  it('a commit refused and run again writes the rows of the run that committed only', async () => {
+    const moved = await backToBackStale();
+    let refusals = 1;
+    const steps: ReresolutionSteps = {
+      defer: reresolutionSteps.defer,
+      reresolve: async (tx) => {
+        const outcome = await reresolutionSteps.reresolve(tx);
+        if (refusals > 0) {
+          refusals -= 1;
+          throw refusedAtCommit();
+        }
+        return outcome;
+      },
+    };
+
+    await jobUnder(versionOfItsOwn(), steps).job.handle({});
+
+    expect(refusals).toBe(0);
+    expect(await reresolvedRowsOf(moved)).toEqual([['06:00Z'], ['07:00Z']]);
+  });
+
+  it('a later run that keeps the same session back again writes another row', async () => {
+    const blocked = await keptBackWorld();
+
+    await jobUnder(versionOfItsOwn()).job.handle({});
+    await jobUnder(versionOfItsOwn()).job.handle({});
+
+    expect(await reresolvedRowsOf([blocked])).toEqual([['06:00Z', '06:00Z']]);
   });
 });

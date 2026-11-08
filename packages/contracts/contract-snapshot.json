@@ -1003,6 +1003,44 @@
           "$.nextCursor": { "type": "string" }
         }
       },
+      "sessions.outages.list": {
+        "input": { "$": { "type": "object" }, "$.cursor": { "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].endsAt": { "required": true, "type": "string" },
+          "$.items[].outageId": { "required": true, "type": "string" },
+          "$.items[].reason": { "required": true, "type": "string" },
+          "$.items[].recordedBy": { "required": true, "type": "object" },
+          "$.items[].recordedBy.adminId": { "required": true, "type": "string" },
+          "$.items[].recordedBy.displayName": { "required": true, "type": "string" },
+          "$.items[].startsAt": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "sessions.outages.record": {
+        "input": {
+          "$": { "type": "object" },
+          "$.end": { "required": true, "type": "object" },
+          "$.end.localDate": { "required": true, "type": "string" },
+          "$.end.localTime": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.start": { "required": true, "type": "object" },
+          "$.start.localDate": { "required": true, "type": "string" },
+          "$.start.localTime": { "required": true, "type": "string" },
+          "$.timezone": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.endsAt": { "required": true, "type": "string" },
+          "$.outageId": { "required": true, "type": "string" },
+          "$.reclassified": { "required": true, "type": "integer" },
+          "$.startsAt": { "required": true, "type": "string" }
+        }
+      },
       "students.ban": {
         "input": {
           "$": { "type": "object" },
@@ -1965,6 +2003,114 @@
           "$.checkout.processingPollSeconds": { "required": true, "type": "integer" },
           "$.supportEmail": { "required": true, "type": "string" },
           "$.termsVersion": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.get": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.canRaiseDispute": { "type": "boolean" },
+          "$.cancellation": { "type": "object" },
+          "$.cancellation.expiresAt": { "required": true, "type": "string" },
+          "$.cancellation.reason": { "required": true, "type": "string" },
+          "$.cancellation.requestId": { "required": true, "type": "string" },
+          "$.cancellation.requestedByMe": { "required": true, "type": "boolean" },
+          "$.cancellation.status": {
+            "required": true,
+            "type": "string",
+            "values": ["accepted", "declined", "expired", "pending"]
+          },
+          "$.counterparty": { "required": true, "type": "object" },
+          "$.counterparty.deleted": { "required": true, "type": "boolean" },
+          "$.counterparty.displayName": { "required": true, "type": "null|string" },
+          "$.dispute": { "type": "object" },
+          "$.dispute.closesAt": { "required": true, "type": "string" },
+          "$.dispute.raisedByMe": { "required": true, "type": "boolean" },
+          "$.dispute.status": {
+            "required": true,
+            "type": "string",
+            "values": ["dismissed", "open", "resolved"]
+          },
+          "$.disputeClosesAt": { "type": "string" },
+          "$.endsAt": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.join": { "required": true, "type": "object" },
+          "$.join.closesAt": { "required": true, "type": "string" },
+          "$.join.opensAt": { "required": true, "type": "string" },
+          "$.lengthMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.localDate": { "required": true, "type": "string" },
+          "$.makeupFor": { "type": "object" },
+          "$.makeupFor.sequenceNumber": { "required": true, "type": "integer" },
+          "$.remedy": { "type": "object" },
+          "$.remedy.canChooseRefund": { "required": true, "type": "boolean" },
+          "$.remedy.choiceClosesAt": { "required": true, "type": "string" },
+          "$.remedy.counter": { "type": "object" },
+          "$.remedy.counter.answerClosesAt": { "required": true, "type": "string" },
+          "$.remedy.counter.localDate": { "required": true, "type": "string" },
+          "$.remedy.counter.startTimeLocal": { "required": true, "type": "string" },
+          "$.remedy.counter.startsAt": { "required": true, "type": "string" },
+          "$.remedy.counter.timezone": { "required": true, "type": "string" },
+          "$.remedy.kind": { "required": true, "type": "string", "values": ["makeup", "refund"] },
+          "$.remedy.makeupSessionId": { "type": "string" },
+          "$.remedy.offeredAt": { "required": true, "type": "string" },
+          "$.remedy.proposal": { "type": "object" },
+          "$.remedy.proposal.localDate": { "required": true, "type": "string" },
+          "$.remedy.proposal.startTimeLocal": { "required": true, "type": "string" },
+          "$.remedy.proposal.startsAt": { "required": true, "type": "string" },
+          "$.remedy.proposal.timezone": { "required": true, "type": "string" },
+          "$.remedy.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
+          "$.sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.startTimeLocal": { "required": true, "type": "string" },
+          "$.startsAt": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.timezone": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.join": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.serverUrl": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.token": { "required": true, "type": "string" },
+          "$.validUntil": { "required": true, "type": "string" }
         }
       },
       "teacher.application.get": {

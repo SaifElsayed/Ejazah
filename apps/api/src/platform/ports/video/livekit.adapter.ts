@@ -20,7 +20,8 @@
 // possibly a second further on, so the TTL is the whole seconds between now and `validUntil` less
 // one (the token ends one or two seconds early, never late). LiveKit checks it on the first
 // connection only and refreshes it for a connected client (R-302). With no whole second left the
-// SDK would fall back to its six-hour default (a TTL of 0 is falsy there), so that is refused.
+// SDK would fall back to its six-hour default (a TTL of 0 is falsy there), so that is refused. The
+// token carries the project's address, `LIVEKIT_URL`, where the phone presents it (T011, K1).
 //
 // THE WEBHOOK is verified by `WebhookReceiver.receive(body, Authorization)`, never with `skipAuth`:
 // it verifies the JWT in `Authorization` under the key and secret and compares its `sha256` claim
@@ -75,12 +76,15 @@ export interface LiveKitVideoOptions {
 }
 
 export class LiveKitVideoAdapter implements VideoPort {
+  /** `LIVEKIT_URL`, answered with every token as the address the phone connects to (K1). */
+  readonly #url: string;
   readonly #apiKey: string;
   readonly #apiSecret: string;
   readonly #rooms: RoomServiceClient;
   readonly #receiver: WebhookReceiver;
 
   constructor({ url, apiKey, apiSecret }: LiveKitVideoOptions) {
+    this.#url = url;
     this.#apiKey = apiKey;
     this.#apiSecret = apiSecret;
     this.#rooms = new RoomServiceClient(url, apiKey, apiSecret, {
@@ -127,7 +131,7 @@ export class LiveKitVideoAdapter implements VideoPort {
       canSubscribe: true,
       canPublishData: false,
     });
-    return bindJoinToken(sessionId, participantUserId, await token.toJwt());
+    return bindJoinToken(sessionId, participantUserId, await token.toJwt(), this.#url);
   }
 
   async verifyAndParseParticipantEvent(

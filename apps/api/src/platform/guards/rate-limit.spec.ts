@@ -44,10 +44,11 @@ import {
 } from './rate-limit.guard.js';
 import {
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../surfaces/services.fixtures.js';
@@ -189,6 +190,7 @@ function fixture(
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>

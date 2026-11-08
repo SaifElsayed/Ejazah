@@ -1,8 +1,8 @@
 // T020 — booking's answers to catalog's `CatalogUse` port over the real tables (R-207, FR-312,
 // FR-318; specs/003-booking/contracts/kernel.md "The composition root").
 //
-// A slot is in use while an active hold (`released_at IS NULL`) or an enrollment awaiting payment or
-// confirmed uses it; a released hold, a cancelled enrollment and a soft-deleted one do not count,
+// A slot is in use while an active hold (`released_at IS NULL`) or an enrollment awaiting payment,
+// confirmed or completed (until its release, T015 of specs/004-sessions) uses it; a released hold, a cancelled enrollment and a soft-deleted one do not count,
 // and another slot's rows never do. A package has an enrollment once any live enrollment, of any
 // status, was made on it. T018 adds each package's count, every live enrollment and the confirmed
 // ones, for the teacher's list. The answers are reached through booking's entry, as `main.ts` binds them.
@@ -221,12 +221,23 @@ describe('slotInUse (T020, R-207, FR-318)', () => {
     });
   });
 
-  it('answers false for a slot only a cancelled or a completed enrollment used', async () => {
+  it('answers false for a slot only a cancelled enrollment used', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
       await enrollment(tx, on, { status: 'cancelled' });
-      await enrollment(tx, on, { status: 'completed' });
       expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(false);
+    });
+  });
+
+  // T015 of specs/004-sessions (the note under 003:T026, nit 6; the follow-up under T015): a
+  // completed enrollment holds its slot until R-205's release, as a confirmed one does; with no
+  // session written its release cannot be read, so the slot stays taken. Its release week is
+  // `completion.spec.ts`'.
+  it('answers true while a completed enrollment whose release cannot be read uses the slot', async () => {
+    await rolledBack(async (tx) => {
+      const on = await offer(tx);
+      await enrollment(tx, on, { status: 'completed' });
+      expect(await slotInUse(tx, on.slotId, RELEASE)).toBe(true);
     });
   });
 

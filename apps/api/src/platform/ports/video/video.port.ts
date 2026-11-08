@@ -28,6 +28,11 @@
 // the participant and their connection, or the room's end, carrying neither. A correctly signed
 // event that is not attendance answers `{ kind: 'ignored' }`, which the webhook acknowledges with
 // 200 and records nowhere.
+//
+// T011 (the note under T011, K1): a token also carries the provider's address the participant's
+// app connects to, `serverUrl`, which only the adapter knows (LiveKit: the project's `LIVEKIT_URL`;
+// the stand-in: one fixed address), so `sessions.join` answers it beside the credential and no
+// address is built into the app (R-302).
 
 declare const joinTokenBrand: unique symbol;
 
@@ -37,6 +42,8 @@ export interface JoinToken {
   readonly participantUserId: string;
   /** What the participant's app presents to the provider; opaque to the platform. */
   readonly credential: string;
+  /** Where the participant's app presents it: the provider's address (K1). */
+  readonly serverUrl: string;
   readonly [joinTokenBrand]: true;
 }
 
@@ -99,11 +106,15 @@ export interface VideoPort {
   endRoom(sessionId: string): Promise<void>;
 }
 
-/** The only way to make a `JoinToken`: bound to a session and a participant, with a credential. */
+/**
+ * The only way to make a `JoinToken`: bound to a session and a participant, with a credential and
+ * the provider's address it is presented at (K1).
+ */
 export function bindJoinToken(
   sessionId: string,
   participantUserId: string,
   credential: string,
+  serverUrl: string,
 ): JoinToken {
   if (sessionId.length === 0 || participantUserId.length === 0) {
     throw new RangeError('A join token is bound to one session and one participant (R-GENDER-7).');
@@ -111,5 +122,8 @@ export function bindJoinToken(
   if (credential.length === 0) {
     throw new RangeError('A join token carries a credential.');
   }
-  return { sessionId, participantUserId, credential } as JoinToken;
+  if (serverUrl.length === 0) {
+    throw new RangeError('A join token carries the address it is presented at.');
+  }
+  return { sessionId, participantUserId, credential, serverUrl } as JoinToken;
 }

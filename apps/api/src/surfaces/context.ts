@@ -81,6 +81,10 @@ import type {
   auditListInput,
   auditListOutput,
   homeSummaryOutput,
+  outagesListInput,
+  outagesListOutput,
+  outagesRecordInput,
+  outagesRecordOutput,
   paymentsGetOutput,
   paymentsListInput,
   paymentsListOutput,
@@ -99,6 +103,7 @@ import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.j
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
+import type { SessionsServices } from '../modules/sessions/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 
 // The request's language and the client's address are the kernel's (`platform/http/`, PR #79
@@ -219,6 +224,8 @@ export interface AppServices {
   readonly booking: BookingServices;
   /** `checkout.*`: the payments module's checkout over booking's holds and enrollments (T036, R-208). */
   readonly checkout: CheckoutServices;
+  /** `sessions.get` and `sessions.join`: the sessions module's services (T011 of specs/004-sessions). */
+  readonly sessions: SessionsServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
@@ -410,6 +417,22 @@ export interface AdminSurfaceServices {
     suspendStudent(tx: Transaction, actorId: string, userId: string): Move;
     banStudent(tx: Transaction, actorId: string, userId: string): Move;
     reinstateStudent(tx: Transaction, actorId: string, userId: string): Move;
+  };
+  /**
+   * The provider outage windows (FR-445, R-307; T016 of specs/004-sessions), the sessions module's,
+   * composed by the admin module: a window recorded on the call's transaction with its sessions'
+   * reclassification, and a page of the windows recorded.
+   */
+  readonly outages: {
+    record(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof outagesRecordInput>,
+    ): Answer<typeof outagesRecordOutput>;
+    list(
+      tx: Transaction,
+      input: z.output<typeof outagesListInput>,
+    ): Answer<typeof outagesListOutput>;
   };
 }
 

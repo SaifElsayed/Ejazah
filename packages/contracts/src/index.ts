@@ -25,6 +25,7 @@ export * from './packages.js';
 export * from './password.js';
 export * from './payout.js';
 export * from './platform.js';
+export * from './sessions.js';
 export * from './slots.js';
 export * from './teacher-application.js';
 export * from './teacher-credentials.js';

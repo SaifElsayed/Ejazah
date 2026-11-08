@@ -40,6 +40,7 @@ import {
   unusedBookingServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
 } from './services.fixtures.js';
 import {
@@ -141,6 +142,7 @@ const services = {
   discovery: unusedDiscoveryServices,
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
+  sessions: unusedSessionsServices,
 };
 
 const sessions = {

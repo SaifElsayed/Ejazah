@@ -42,6 +42,7 @@ const [
   payments,
   { standInCheckoutRoutes },
   { CONFIRM_ENROLLMENT },
+  sessionsModule,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -70,6 +71,7 @@ const [
   import('./modules/payments/index.js'),
   import('./platform/web/stand-in-checkout.js'),
   import('./jobs/confirm-enrollment.js'),
+  import('./modules/sessions/index.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -156,6 +158,10 @@ const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
 });
+// Sessions' `EnrollmentSide` port bound to booking's side (T008, bound by T015 of specs/004-sessions,
+// the note under T015): one instance, handed to the sessions services and the administrator's
+// outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
+const enrollmentSide = booking.createEnrollmentSide({ settings });
 const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
@@ -233,6 +239,15 @@ const services = {
     cipher,
     gateway: config.PAYMENT_GATEWAY,
   }),
+  // `sessions.get` and `sessions.join` (T011 of specs/004-sessions): the session read under both
+  // accounts' locks, the room and the token through the video port after the commit.
+  sessions: sessionsModule.createSessionsServices({
+    transactions: transactionsOver(database),
+    settings,
+    video: ports.video,
+    enrollmentSide,
+    store: sessionsModule.sessionsStore,
+  }),
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -293,6 +308,15 @@ const routes = {
       },
     },
   }),
+  // The video provider's signed webhook (T012 of specs/004-sessions, R-SESS-7): its raw body read
+  // under the request limit, verified through the video port before anything runs, and an
+  // attendance event recorded once under its provider id.
+  [sessionsModule.VIDEO_WEBHOOK_PATH]: sessionsModule.createVideoWebhookRoute({
+    transactions: transactionsOver(database),
+    video: ports.video,
+    log,
+    maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
+  }),
   // The stand-in's hosted page (T012, R-213): a route only while the payment port is the stand-in
   // (`PAYMENT_GATEWAY=fake`); it posts its signed events to the webhook above over HTTP.
   ...standInCheckoutRoutes({
@@ -312,6 +336,10 @@ const adminServices = createAdminServices({
   storage: ports.storage,
   cipher,
   consequences,
+  // T016 of specs/004-sessions: the outages' reclassification checks completion (T015) through the
+  // one `EnrollmentSide` above, and logs a completion and a refusal.
+  enrollmentSide,
+  log,
   inviteQueue: {
     queue: async (adminId) => {
       await queue().add(DELIVER_ADMIN_INVITE, { adminId });

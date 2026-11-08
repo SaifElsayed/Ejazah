@@ -25,10 +25,11 @@ import { createAdminCallerFactory, createAppCallerFactory, toErrorShape } from '
 import {
   unusedAdminServices,
   unusedBookingServices,
-  unusedCheckoutServices,
   unusedCatalogServices,
+  unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
+  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from './services.fixtures.js';
@@ -119,6 +120,7 @@ function surfaces({ subject, budget }: { readonly subject: number; readonly budg
     discovery: unusedDiscoveryServices,
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
+    sessions: unusedSessionsServices,
   };
   const administration = {
     transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },
