@@ -172,7 +172,7 @@ async function sessionRows(tx: Transaction, ids: readonly string[]) {
   });
 }
 
-describe('sessions.outages.record over the real tables (T016, FR-445, R-307)', () => {
+describe(`sessions.outages.record over the real tables (T016, FR-445, R-307), RUN_OFFSET ${RUN_OFFSET}`, () => {
   it('reclassifies the settled sessions inside their dispute window, a resolved one included, with one event each, and leaves the others', async () => {
     const admin = await makeAdmin(db);
     const enrollment = await confirmed();
@@ -280,7 +280,7 @@ describe('sessions.outages.record over the real tables (T016, FR-445, R-307)', (
   });
 });
 
-describe('sessions.outages.list over the real tables (T016)', () => {
+describe(`sessions.outages.list over the real tables (T016), RUN_OFFSET ${RUN_OFFSET}`, () => {
   it('lists the windows newest first, a page at a time, each with its recorder', async () => {
     const admin = await makeAdmin(db);
     await rolledBack(async (tx) => {
