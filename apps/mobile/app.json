@@ -17,10 +17,25 @@
       "expo-localization",
       "expo-status-bar",
       "expo-secure-store",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "enableScreenShareService": true
+          }
+        }
+      ],
+      "@config-plugins/react-native-webrtc"
     ],
     "android": {
-      "package": "com.ijazah.app"
+      "package": "com.ijazah.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.ijazah.app"
