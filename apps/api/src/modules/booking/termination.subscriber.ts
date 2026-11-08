@@ -47,7 +47,7 @@
 // THE LOG LINE (the note under T005). Each call writes one info line, «Account end decided», with
 // the account's id, the cause and counts only: `{ userId, cause, enrollments, cancelledSessions,
 // frozenRemedies, handedRemedies, lapsedRemedies, cases }` (the lapsed count added by the owner's
-// decision of 2026-11-07).
+// decision of 2026-11-07), zero counts included when the call decides on no confirmed enrollment.
 //
 // THE LOCKS (T005's rules, `platform/db/row-lock.ts`). The caller holds the account's `users` row:
 // the standing actions lock it first (`lockAccount`, then `lockApplication` for a ban and a
