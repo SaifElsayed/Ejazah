@@ -555,7 +555,9 @@
       "a11y": {
         "preview": "معاينة الكاميرا"
       },
+      "allowMic": "السماح بالميكروفون",
       "camera": "الكاميرا",
+      "cameraInRoom": "تشغّلها إن شئت من داخل الجلسة.",
       "cameraOff": "كاميرتك مغلقة",
       "cameraOptional": "اختيارية",
       "cameraStatus": {
@@ -570,6 +572,7 @@
         "working": "يعمل"
       },
       "micWorking": "الميكروفون يعمل",
+      "opensAt": "يفتح الدخول",
       "permission": {
         "banner": "اسمح لإجازة باستخدام الميكروفون من الإعدادات لتدخل الجلسة.",
         "meta": "{date} · {start} – {end} · {minutes, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
@@ -578,6 +581,7 @@
         "openSettings": "فتح الإعدادات"
       },
       "sessionOf": "{subject} · الجلسة {n} من {total}",
+      "startsAt": "موعد البدء",
       "teacher": {
         "a11y": {
           "cameraPreview": "معاينة الكاميرا",
@@ -597,7 +601,9 @@
         "timeRange": "{start} – {end}",
         "title": "قبل الجلسة"
       },
-      "title": "قبل الجلسة"
+      "timeIn": "{date} · {time} · بتوقيت {city}",
+      "title": "قبل الجلسة",
+      "unavailable": "لا يمكن دخول هذه الجلسة الآن."
     },
     "room": {
       "a11y": {
@@ -611,9 +617,22 @@
       },
       "audioOnCameraOff": "الصوت يعمل · الكاميرا مغلقة",
       "audioOnly": "بالصوت فقط",
+      "cameraDenied": "لم يُسمح للتطبيق باستخدام الكاميرا.",
+      "cameraOff": "إيقاف الكاميرا",
       "cameraOffSpeaking": "الكاميرا مغلقة · يتحدث الآن",
+      "cameraOn": "تشغيل الكاميرا",
+      "connecting": "جارٍ الدخول إلى الجلسة…",
+      "ended": "انتهى وقت الجلسة.",
+      "leave": "مغادرة الجلسة",
       "notJoined": "{name} · لم ينضم بعد",
       "reconnecting": "جارٍ إعادة الاتصال…",
+      "screenShare": {
+        "title": "مشاركة الشاشة كاملة",
+        "warning": "إذا شاركت الشاشة كاملة، سيرى الطرف الآخر كل ما يظهر عليها، بما في ذلك الإشعارات. أغلق ما لا تريد مشاركته قبل المتابعة."
+      },
+      "shareScreen": "مشاركة الشاشة",
+      "sharing": "تشارك شاشتك الآن",
+      "stopShare": "إيقاف مشاركة الشاشة",
       "subtitle": "{subject} · الجلسة {n} من {total}",
       "timer": "{elapsed} / {total}",
       "waitingFor": "بانتظار انضمام {name}…",
