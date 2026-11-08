@@ -72,6 +72,29 @@ export {
   type SessionEventRecord,
 } from './session-events.repository.js';
 /**
+ * T015 (FR-447, FR-451, SC-404; R-322; ADR 0023): an enrollment's Teacher-No-Show count, read when
+ * shown and never stored, and the repeated-absence mark at `repeated_absence_flag_count`, for
+ * administrators only (T024, T034, T035, T058). No lock, no write; nothing follows from either.
+ */
+export {
+  createRepeatedAbsence,
+  REPEATED_ABSENCE_FLAG_SETTING,
+  type RepeatedAbsence,
+  repeatedAbsenceFlagCount,
+} from './repeated-absence.service.js';
+export type { TeacherNoShowCount } from './repeated-absence.repository.js';
+/**
+ * T015 (FR-449, R-309): an enrollment's completion, checked on the settling transaction by every
+ * path that settles (T014, T016, T033, T034) and again by `advance-remedies` (T028), after the
+ * enrollment's lock the caller holds; bound by the composition root over `EnrollmentSide`.
+ */
+export {
+  type Completion,
+  createCompletion,
+  DISPUTE_WINDOW_SETTING,
+  disputeWindowHours,
+} from './completion.service.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */

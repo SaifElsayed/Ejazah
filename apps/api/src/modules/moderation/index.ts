@@ -30,3 +30,10 @@ export {
  * row of any kind, for booking's `heldFileOwnersAmong`; no lock.
  */
 export { enrollmentsWithOpenMatterAmong } from './open-matters.repository.js';
+
+/**
+ * T015 of specs/004-sessions (FR-449, FR-486; the owner's decision of 2026-11-08 on lane D's
+ * questions, Q1): the enrollment's open compensation case of a reason, or null, with no lock;
+ * sessions' completion asks whether a `student_suspended` case is open, under the enrollment's lock.
+ */
+export { openCaseOf } from './compensation-case.repository.js';
