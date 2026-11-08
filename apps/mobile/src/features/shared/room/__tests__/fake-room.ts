@@ -19,7 +19,12 @@ export const RoomEvent = {
   LocalTrackUnpublished: 'localTrackUnpublished',
 } as const;
 
-export const DisconnectReason = { CLIENT_INITIATED: 1, SIGNAL_CLOSE: 9, ROOM_DELETED: 5 } as const;
+export const DisconnectReason = {
+  CLIENT_INITIATED: 1,
+  DUPLICATE_IDENTITY: 2,
+  SIGNAL_CLOSE: 9,
+  ROOM_DELETED: 5,
+} as const;
 
 export const Track = {
   Source: { Camera: 'camera', Microphone: 'microphone', ScreenShare: 'screen_share' },

@@ -325,6 +325,50 @@ describe('RoomScreen: a dropped connection and a lost room (FR-435)', () => {
     expect(room().localParticipant.setScreenShareEnabled).not.toHaveBeenCalled();
   });
 
+  it('stops trying when the same account joins from another device, and says so (the note under T019)', async () => {
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await screen.findByText(said(direction, 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+      join().mockClear();
+      await lose(DisconnectReason.DUPLICATE_IDENTITY);
+      expect(screen.getByText(said(direction, 'session.room.anotherDevice.message'))).toBeTruthy();
+      expect(
+        screen.getByRole('button', { name: said(direction, 'session.room.anotherDevice.action') }),
+      ).toBeTruthy();
+      await advance(5 * 60_000);
+      expect(join()).not.toHaveBeenCalled();
+    });
+  });
+
+  it('joins once for each press of «الدخول من هذا الجهاز», with no backoff after it', async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+    await lose(DisconnectReason.DUPLICATE_IDENTITY);
+    join().mockClear();
+    join().mockRejectedValueOnce(new Error('offline'));
+    await press('rtl', 'session.room.anotherDevice.action');
+    await advance(0);
+    expect(join()).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(said('rtl', 'session.room.anotherDevice.message'))).toBeTruthy();
+    await advance(5 * 60_000);
+    expect(join()).toHaveBeenCalledTimes(1);
+    await press('rtl', 'session.room.anotherDevice.action');
+    await advance(0);
+    expect(join()).toHaveBeenCalledTimes(2);
+    expect(room().connect).toHaveBeenCalledWith('wss://video.ijazah.test', 'token-1');
+    expect(screen.queryByText(said('rtl', 'session.room.anotherDevice.message'))).toBeNull();
+  });
+
+  it('offers the press only until the scheduled end', async () => {
+    jest.setSystemTime(new Date('2026-11-11T16:44:50.000Z'));
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+    await lose(DisconnectReason.DUPLICATE_IDENTITY);
+    expect(screen.getByText(said('rtl', 'session.room.anotherDevice.message'))).toBeTruthy();
+    await advance(11_000);
+    expect(screen.getByText(said('rtl', 'session.room.ended'))).toBeTruthy();
+    expect(screen.queryByText(said('rtl', 'session.room.anotherDevice.message'))).toBeNull();
+  });
+
   it('stops at a final refusal', async () => {
     await renderIn('ltr', ui());
     await screen.findByText(said('ltr', 'session.room.waitingFor', { name: 'يوسف أحمد' }));

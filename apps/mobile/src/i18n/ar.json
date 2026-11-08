@@ -569,9 +569,9 @@
       "micRequired": "مطلوب",
       "micStatus": {
         "denied": "غير مسموح",
-        "working": "يعمل"
+        "working": "مسموح"
       },
-      "micWorking": "الميكروفون يعمل",
+      "micWorking": "الميكروفون مسموح",
       "opensAt": "يفتح الدخول",
       "permission": {
         "banner": "اسمح لإجازة باستخدام الميكروفون من الإعدادات لتدخل الجلسة.",
@@ -595,9 +595,9 @@
         "durationValue": "{minutes} دقيقة",
         "join": "دخول الجلسة",
         "mic": "الميكروفون",
-        "micOk": "يعمل",
+        "micOk": "مسموح",
         "micRequired": "مطلوب",
-        "micWorking": "الميكروفون يعمل",
+        "micWorking": "الميكروفون مسموح",
         "timeRange": "{start} – {end}",
         "title": "قبل الجلسة"
       },
@@ -638,7 +638,11 @@
       "waitingFor": "بانتظار انضمام {name}…",
       "weakConnection": "الاتصال ضعيف — نكمل بالصوت فقط",
       "you": "أنت",
-      "youInSession": "أنت · في الجلسة"
+      "youInSession": "أنت · في الجلسة",
+      "anotherDevice": {
+        "message": "دخلت إلى هذه الجلسة من جهاز آخر.",
+        "action": "الدخول من هذا الجهاز"
+      }
     }
   },
   "status": {
@@ -1315,12 +1319,12 @@
         "disabled": "معطّل",
         "free": "متاح"
       },
-      "lockedBanner": "‏لن تظهر مواعيدك للطلاب حتى يتم التحقق من حساب الاستلام",
+      "lockedBanner": "\u200Fلن تظهر مواعيدك للطلاب حتى يتم التحقق من حساب الاستلام",
       "noSlotsOn": "{days}: لا مواعيد",
       "slot": "{time} · {minutes} د",
       "subtitle": "بتوقيتك: {city} · تتكرر كل أسبوع",
       "title": "المواعيد",
-      "unpublished": "‏غير منشورة"
+      "unpublished": "\u200Fغير منشورة"
     },
     "cancel": {
       "picker": {

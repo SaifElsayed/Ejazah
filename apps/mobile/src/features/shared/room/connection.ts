@@ -11,6 +11,10 @@
 // up on (`Disconnected`, not by the participant) is asked of `sessions.join` again on `rejoin.ts`'
 // schedule, in a room made again, the camera turned back on when it was on; a final refusal ends
 // the tries, and so does the scheduled end (the join's `validUntil`): no try is made after it.
+// `DUPLICATE_IDENTITY` (the same account joined from another device; the owner's decision of
+// 2026-11-08, the note under T019) makes no automatic try, or the two devices would push each other
+// out until the end: the screen says so and offers the room back until the scheduled end (FR-435),
+// each press one `sessions.join` and no backoff after it.
 // Leaving (or the screen going away) clears the timer, drops every listener, disconnects, then stops
 // the audio session. Nothing here outlives the screen.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
@@ -32,6 +36,8 @@ export type RoomPhase =
   | { readonly kind: 'notOpen'; readonly opensAt: string | undefined }
   /** A final refusal: the session cannot be joined. */
   | { readonly kind: 'refused' }
+  /** The same account joined from another device: no automatic try; the room can be taken back. */
+  | { readonly kind: 'anotherDevice' }
   /** The first join had no answer; the participant may try again. */
   | { readonly kind: 'failed' }
   /** The room was lost and the scheduled end came before it could be joined again. */
@@ -53,6 +59,9 @@ export interface RoomView {
 }
 
 const MS_PER_SECOND = 1_000;
+
+/** Who asked for a join: the screen opening, the schedule after a loss, or the participant's press. */
+type AttemptMode = 'first' | 'again' | 'takeBack';
 
 export class RoomConnection {
   phase: RoomPhase = { kind: 'connecting' };
@@ -82,14 +91,23 @@ export class RoomConnection {
       this.set({ kind: 'failed' });
       return;
     }
-    if (!this.closed) await this.attempt(true);
+    if (!this.closed) await this.attempt('first');
+  }
+
+  /** «الدخول من هذا الجهاز»: one `sessions.join`, and no backoff after it. */
+  takeBack(): void {
+    if (this.closed || this.phase.kind !== 'anotherDevice') return;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.set({ kind: 'connecting' });
+    void this.attempt('takeBack');
   }
 
   /** The first join again, after it had no answer. */
   retry(): void {
     if (this.closed || this.phase.kind !== 'failed') return;
     this.set({ kind: 'connecting' });
-    void this.attempt(true);
+    void this.attempt('first');
   }
 
   view(): RoomView {
@@ -171,12 +189,12 @@ export class RoomConnection {
     await stopAudio();
   }
 
-  private async attempt(first: boolean): Promise<void> {
+  private async attempt(mode: AttemptMode): Promise<void> {
     let grant: SessionsJoinOutput;
     try {
       grant = await this.join();
     } catch (error) {
-      if (!this.closed) this.refused(error, first);
+      if (!this.closed) this.refused(error, mode);
       return;
     }
     if (this.closed) return;
@@ -198,23 +216,27 @@ export class RoomConnection {
       // A room that connected before the microphone failed is left too; its listeners are gone, so
       // this disconnect is not read as a lost room, and a failure of it changes nothing here.
       room.disconnect().catch(() => undefined);
-      if (first) this.set({ kind: 'failed' });
-      else this.again();
+      this.notJoined(mode);
     }
   }
 
-  private refused(error: unknown, first: boolean): void {
+  private refused(error: unknown, mode: AttemptMode): void {
     const code = errorCodeOf(error);
     if (isFinalRefusal(code)) {
       this.set({ kind: 'refused' });
-    } else if (first && code === 'JOIN_NOT_OPEN') {
+    } else if (mode === 'first' && code === 'JOIN_NOT_OPEN') {
       const opensAt = errorDetailsOf(error).find((detail) => detail.path === 'opensAt')?.code;
       this.set({ kind: 'notOpen', opensAt });
-    } else if (first) {
-      this.set({ kind: 'failed' });
     } else {
-      this.again();
+      this.notJoined(mode);
     }
+  }
+
+  /** A try that did not reach the room: what follows depends on who asked for it. */
+  private notJoined(mode: AttemptMode): void {
+    if (mode === 'first') this.set({ kind: 'failed' });
+    else if (mode === 'takeBack') this.offerTakeBack();
+    else this.again();
   }
 
   private listen(room: Room): void {
@@ -244,7 +266,26 @@ export class RoomConnection {
     if (reason === DisconnectReason.CLIENT_INITIATED) return;
     this.drop(room);
     this.failures = 0;
-    this.again();
+    if (reason === DisconnectReason.DUPLICATE_IDENTITY) this.offerTakeBack();
+    else this.again();
+  }
+
+  /** The other device holds the room: no automatic try, the press offered until the scheduled end. */
+  private offerTakeBack(): void {
+    const left = this.millisecondsLeft();
+    if (left <= 0) {
+      this.set({ kind: 'ended' });
+      return;
+    }
+    this.set({ kind: 'anotherDevice' });
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.set({ kind: 'ended' });
+    }, left);
+  }
+
+  private millisecondsLeft(): number {
+    return this.endsAt === undefined ? 0 : secondsUntil(this.endsAt, new Date()) * MS_PER_SECOND;
   }
 
   private drop(room: Room): void {
@@ -258,8 +299,7 @@ export class RoomConnection {
   private again(): void {
     const delay = rejoinDelayMs(this.failures);
     this.failures += 1;
-    const left =
-      this.endsAt === undefined ? 0 : secondsUntil(this.endsAt, new Date()) * MS_PER_SECOND;
+    const left = this.millisecondsLeft();
     if (left <= delay) {
       this.set({ kind: 'reconnecting' });
       this.timer = setTimeout(() => this.set({ kind: 'ended' }), left);
@@ -268,7 +308,7 @@ export class RoomConnection {
     this.set({ kind: 'reconnecting' });
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      void this.attempt(false);
+      void this.attempt('again');
     }, delay);
   }
 

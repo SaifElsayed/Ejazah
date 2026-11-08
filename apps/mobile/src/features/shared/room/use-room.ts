@@ -14,6 +14,8 @@ export interface RoomControls {
   readonly confirmShare: () => void;
   readonly stopShare: () => void;
   readonly retry: () => void;
+  /** «الدخول من هذا الجهاز»: one `sessions.join`. */
+  readonly takeBack: () => void;
   /** Leaves the room; resolves once the audio session is stopped. */
   readonly leave: () => Promise<void>;
 }
@@ -44,6 +46,7 @@ export function useRoom(sessionId: string): RoomControls {
     confirmShare: () => void connection?.confirmShare(),
     stopShare: () => void connection?.stopShare(),
     retry: () => connection?.retry(),
+    takeBack: () => connection?.takeBack(),
     leave: () => connection?.close() ?? Promise.resolve(),
   };
 }

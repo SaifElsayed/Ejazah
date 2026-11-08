@@ -128,6 +128,17 @@ function Body({
       return <Text tone="muted">{t('session.pre.unavailable')}</Text>;
     case 'ended':
       return <Text tone="muted">{t('session.room.ended')}</Text>;
+    case 'anotherDevice':
+      return (
+        <View style={{ gap: tokens.space['3'] }}>
+          <Text>{t('session.room.anotherDevice.message')}</Text>
+          <Button
+            label={t('session.room.anotherDevice.action')}
+            variant="primary"
+            onPress={room.takeBack}
+          />
+        </View>
+      );
     case 'failed':
       return (
         <View style={{ gap: tokens.space['3'] }}>
