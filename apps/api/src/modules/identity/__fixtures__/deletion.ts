@@ -17,10 +17,12 @@ import {
   type IdempotentRequest,
   type JsonValue,
 } from '../../../platform/idempotency/idempotency.service.js';
+import type { LiveBus } from '../../../platform/live/live-bus.js';
 import type { ProviderGrant } from '../../../platform/ports/sign-in/sign-in.port.js';
 import type { StoragePort } from '../../../platform/ports/storage/storage.port.js';
 import { AccountConsequences, type TerminationCause } from '../consequences.js';
 import { DeletionService, type FileErasure } from '../deletion.service.js';
+import type { IdentityServiceDependencies } from '../index.js';
 import { buildIdentity, type Identity, SPEC_ENCRYPTION_KEY, SpecSignInPort } from './identity.js';
 
 /** The column Apple's grant is encrypted under, bound to the identity's row (R-DB-8). */
@@ -109,6 +111,7 @@ export class SpecFileErasure implements FileErasure {
 export function buildDeletion(
   database: Database,
   overrides: Parameters<typeof buildIdentity>[1] = {},
+  live?: Pick<LiveBus, 'publish'>,
 ) {
   const identity: Identity = buildIdentity(database, {
     ...overrides,
@@ -148,7 +151,7 @@ export function buildDeletion(
   // T004 of specs/004-sessions (FR-487): the people whose files an open matter holds, as booking's
   // `heldFileOwnersAmong` answers through the `FileHold` port.
   const held = new Set<string>();
-  const deletion = new DeletionService({
+  const dependencies = {
     database,
     settings: identity.settings,
     encryptionKey: identity.encryptionKey,
@@ -170,18 +173,26 @@ export function buildDeletion(
       },
     },
     report: (error) => void reports.push(error),
-    defer: (work) => void pending.push(work),
+    defer: (work: Promise<void>) => void pending.push(work),
     // T063 of specs/004-sessions: the deleted person's `account`, published after the commit.
-    live: {
-      publish: (message) => {
+    live: live ?? {
+      publish: (message: unknown) => {
         events.push('live-account');
         published.push(message);
       },
     },
-  });
+  } satisfies ConstructorParameters<typeof DeletionService>[0];
+  const deletion = new DeletionService(dependencies);
+  /** The same stand-ins as the composition takes them, for a spec of `createIdentityServices`. */
+  const composition: IdentityServiceDependencies = {
+    ...dependencies,
+    storage: storage as unknown as IdentityServiceDependencies['storage'],
+    payment: {} as IdentityServiceDependencies['payment'],
+  };
   return {
     identity,
     deletion,
+    composition,
     events,
     /** What the deletion published on the live bus (T063). */
     published,
