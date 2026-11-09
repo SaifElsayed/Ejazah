@@ -39,6 +39,11 @@ export interface FakePublication {
 }
 
 export class FakeLocalParticipant {
+  /** The screen's track: react-native-webrtc's `release()` is what ends the capture's service. */
+  readonly screenTrack: { readonly mediaStreamTrack: { readonly release: jest.Mock<() => void> } } =
+    {
+      mediaStreamTrack: { release: jest.fn() },
+    };
   isCameraEnabled = false;
   isScreenShareEnabled = false;
   isMicrophoneEnabled = false;
@@ -61,10 +66,12 @@ export class FakeLocalParticipant {
     },
   );
   getTrackPublication(source: string): FakePublication | undefined {
-    const on =
-      (source === Track.Source.Camera && this.isCameraEnabled) ||
-      (source === Track.Source.ScreenShare && this.isScreenShareEnabled);
-    return on ? { isSubscribed: true, isMuted: false, track: {} } : undefined;
+    if (source === Track.Source.ScreenShare && this.isScreenShareEnabled) {
+      return { isSubscribed: true, isMuted: false, track: this.screenTrack };
+    }
+    return source === Track.Source.Camera && this.isCameraEnabled
+      ? { isSubscribed: true, isMuted: false, track: {} }
+      : undefined;
   }
 }
 

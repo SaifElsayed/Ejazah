@@ -16,7 +16,9 @@
 // out until the end: the screen says so and offers the room back until the scheduled end (FR-435),
 // each press one `sessions.join` and no backoff after it.
 // Leaving (or the screen going away) clears the timer, drops every listener, disconnects, then stops
-// the audio session. Nothing here outlives the screen.
+// the audio session; a step that refuses or never answers does not keep the participant in the room
+// (the device check of 2026-11-09). The screen's track is released when its share ends: stopping it
+// alone leaves the capture and its foreground service running. Nothing here outlives the screen.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import type { TrackReference } from '@livekit/react-native';
@@ -59,6 +61,25 @@ export interface RoomView {
 }
 
 const MS_PER_SECOND = 1_000;
+/** How long leaving waits for each of its steps: the SDK's disconnect was seen never to answer. */
+const LEAVE_WAIT_MS = 5_000;
+
+/** react-native-webrtc's track: `release()` alone disposes the capture and ends its service. */
+interface NativeTrack {
+  release(): void;
+}
+
+/** Resolves when `work` settles, either way, or after `LEAVE_WAIT_MS`. */
+function settled(work: Promise<unknown>): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, LEAVE_WAIT_MS);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    work.then(done, done);
+  });
+}
 
 /** Who asked for a join: the screen opening, the schedule after a loss, or the participant's press. */
 type AttemptMode = 'first' | 'again' | 'takeBack';
@@ -77,6 +98,7 @@ export class RoomConnection {
   private deviceFailed = false;
   private shareWarningOpen = false;
   private closing: Promise<void> | undefined;
+  private shareTrack: NativeTrack | undefined;
 
   constructor(
     private readonly join: () => Promise<SessionsJoinOutput>,
@@ -138,8 +160,9 @@ export class RoomConnection {
       return;
     }
     this.cameraRefused = false;
-    this.cameraWanted = turnOn;
-    await this.device(() => room.localParticipant.setCameraEnabled(turnOn));
+    if (await this.device(() => room.localParticipant.setCameraEnabled(turnOn))) {
+      this.cameraWanted = turnOn;
+    }
   }
 
   /** FR-500: the warning first, every time. */
@@ -159,14 +182,19 @@ export class RoomConnection {
     this.shareWarningOpen = false;
     this.changed();
     const room = this.joined ? this.room : undefined;
-    if (room !== undefined)
-      await this.device(() => room.localParticipant.setScreenShareEnabled(true));
+    if (room === undefined) return;
+    if (await this.device(() => room.localParticipant.setScreenShareEnabled(true))) {
+      const publication = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+      this.shareTrack = publication?.track?.mediaStreamTrack as unknown as NativeTrack | undefined;
+    }
   }
 
   async stopShare(): Promise<void> {
     const room = this.joined ? this.room : undefined;
-    if (room !== undefined)
-      await this.device(() => room.localParticipant.setScreenShareEnabled(false));
+    if (room === undefined) return;
+    if (await this.device(() => room.localParticipant.setScreenShareEnabled(false))) {
+      this.releaseShare();
+    }
   }
 
   /** Leaves the room: no timer, no listener, the connection closed, then the audio session stopped. */
@@ -184,9 +212,15 @@ export class RoomConnection {
     this.joined = false;
     if (room !== undefined) {
       room.removeAllListeners();
-      await room.disconnect();
+      await settled(room.disconnect());
     }
-    await stopAudio();
+    this.releaseShare();
+    await settled(stopAudio());
+  }
+
+  private releaseShare(): void {
+    this.shareTrack?.release();
+    this.shareTrack = undefined;
   }
 
   private async attempt(mode: AttemptMode): Promise<void> {
@@ -208,7 +242,9 @@ export class RoomConnection {
       this.joined = true;
       this.failures = 0;
       await room.localParticipant.setMicrophoneEnabled(true);
-      if (this.cameraWanted) await room.localParticipant.setCameraEnabled(true);
+      // A camera that fails is a device failure: the room and its audio stay (FR-433).
+      if (this.cameraWanted) await this.device(() => room.localParticipant.setCameraEnabled(true));
+      if (this.closed || this.room !== room) return;
       this.set({ kind: 'connected' });
     } catch {
       if (this.closed || this.room !== room) return;
@@ -293,6 +329,7 @@ export class RoomConnection {
     if (this.room === room) this.room = undefined;
     this.joined = false;
     this.shareWarningOpen = false;
+    this.releaseShare();
   }
 
   /** The next try on the schedule, or none once the scheduled end comes first. */
@@ -312,7 +349,8 @@ export class RoomConnection {
     }, delay);
   }
 
-  private async device(change: () => Promise<unknown>): Promise<void> {
+  /** Whether the change went through. */
+  private async device(change: () => Promise<unknown>): Promise<boolean> {
     try {
       await change();
       this.deviceFailed = false;
@@ -320,6 +358,7 @@ export class RoomConnection {
       this.deviceFailed = true;
     }
     this.changed();
+    return !this.deviceFailed;
   }
 
   private set(phase: RoomPhase): void {

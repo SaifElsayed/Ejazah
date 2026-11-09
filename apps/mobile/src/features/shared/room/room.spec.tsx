@@ -82,6 +82,25 @@ const room = (): FakeRoom => {
   return last;
 };
 
+/** A promise a spec settles by hand. */
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve: (value: T) => resolve(value) };
+}
+
+/** The next room made, as `prepare` sets it up. */
+function nextRoom(prepare: (made: FakeRoom) => void) {
+  Room.mockImplementationOnce(() => {
+    const made = new FakeRoom();
+    prepare(made);
+    rooms.push(made);
+    return made;
+  });
+}
+
 /** The room is lost: the provider closed it, not the participant. */
 async function lose(reason: number = DisconnectReason.SIGNAL_CLOSE) {
   await act(async () => {
@@ -319,6 +338,7 @@ describe('RoomScreen: a dropped connection and a lost room (FR-435)', () => {
     await renderIn('rtl', ui());
     await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
     await press('rtl', 'session.room.cameraOn');
+    await advance(0);
     await lose();
     await advance(2_000);
     expect(room().localParticipant.setCameraEnabled).toHaveBeenCalledWith(true);
@@ -425,5 +445,167 @@ describe('RoomScreen: leaving the room', () => {
     expect(lost.listenerCount()).toBe(0);
     await advance(10 * 60_000);
     expect(join()).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('RoomScreen: what the review at 3a14fc7 and the device check found (the notes under T019)', () => {
+  const inRoom = async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+  };
+  const cameraOn = async () => {
+    await press('rtl', 'session.room.cameraOn');
+    await advance(0);
+  };
+  const share = async () => {
+    await press('rtl', 'session.room.shareScreen');
+    await press('rtl', 'common.action.continue');
+    await advance(0);
+  };
+
+  it('goes back one screen however many times leaving is pressed', async () => {
+    await inRoom();
+    const pending = deferred<void>();
+    room().disconnect.mockReturnValueOnce(pending.promise);
+    await press('rtl', 'session.room.leave');
+    await press('rtl', 'session.room.leave');
+    await press('rtl', 'session.room.leave');
+    pending.resolve();
+    await advance(0);
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not turn on in the room made again a camera that failed to turn on', async () => {
+    await inRoom();
+    room().localParticipant.setCameraEnabled.mockRejectedValueOnce(new Error('busy'));
+    await cameraOn();
+    await lose();
+    await advance(2_000);
+    expect(rooms).toHaveLength(2);
+    expect(room().localParticipant.setCameraEnabled).not.toHaveBeenCalled();
+  });
+
+  it('keeps wanting a camera that failed to turn off', async () => {
+    await inRoom();
+    await cameraOn();
+    room().localParticipant.setCameraEnabled.mockRejectedValueOnce(new Error('busy'));
+    await press('rtl', 'session.room.cameraOff');
+    await advance(0);
+    await lose();
+    await advance(2_000);
+    expect(rooms).toHaveLength(2);
+    expect(room().localParticipant.setCameraEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('does not say connected over «جهاز آخر» when the microphone answers late', async () => {
+    const microphone = deferred<undefined>();
+    nextRoom((made) =>
+      made.localParticipant.setMicrophoneEnabled.mockReturnValueOnce(microphone.promise),
+    );
+    await renderIn('rtl', ui());
+    await advance(0);
+    await lose(DisconnectReason.DUPLICATE_IDENTITY);
+    microphone.resolve(undefined);
+    await advance(0);
+    expect(screen.getByText(said('rtl', 'session.room.anotherDevice.message'))).toBeTruthy();
+  });
+
+  it('does not say connected over a lost room when the microphone answers late', async () => {
+    const microphone = deferred<undefined>();
+    nextRoom((made) =>
+      made.localParticipant.setMicrophoneEnabled.mockReturnValueOnce(microphone.promise),
+    );
+    await renderIn('rtl', ui());
+    await advance(0);
+    join().mockRejectedValue(new Error('offline'));
+    await lose();
+    microphone.resolve(undefined);
+    await advance(0);
+    expect(screen.getByText(said('rtl', 'session.room.reconnecting'))).toBeTruthy();
+  });
+
+  it('stops the audio and goes back though the disconnect and the audio both refuse', async () => {
+    await inRoom();
+    room().disconnect.mockRejectedValueOnce(new Error('gone'));
+    stopAudio.mockImplementationOnce(() => Promise.reject(new Error('no session')));
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the audio and goes back when the disconnect never answers, after a bounded wait', async () => {
+    await inRoom();
+    room().disconnect.mockReturnValueOnce(new Promise<void>(() => undefined));
+    await press('rtl', 'session.room.leave');
+    await advance(4_999);
+    expect(mockBack).not.toHaveBeenCalled();
+    await advance(1);
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the room and its audio when the camera fails on a rejoin (again)', async () => {
+    await inRoom();
+    await cameraOn();
+    nextRoom((made) =>
+      made.localParticipant.setCameraEnabled.mockRejectedValueOnce(new Error('busy')),
+    );
+    await lose();
+    await advance(2_000);
+    expect(rooms).toHaveLength(2);
+    expect(room().localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+    expect(room().disconnect).not.toHaveBeenCalled();
+    expect(room().listenerCount()).toBeGreaterThan(0);
+    expect(screen.getByText(said('rtl', 'common.state.actionError'))).toBeTruthy();
+    await advance(60_000);
+    expect(join()).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the room and its audio when the camera fails on a rejoin (takeBack)', async () => {
+    await inRoom();
+    await cameraOn();
+    await lose(DisconnectReason.DUPLICATE_IDENTITY);
+    nextRoom((made) =>
+      made.localParticipant.setCameraEnabled.mockRejectedValueOnce(new Error('busy')),
+    );
+    await press('rtl', 'session.room.anotherDevice.action');
+    await advance(0);
+    expect(rooms).toHaveLength(2);
+    expect(room().disconnect).not.toHaveBeenCalled();
+    expect(room().listenerCount()).toBeGreaterThan(0);
+    expect(screen.getByText(said('rtl', 'common.state.actionError'))).toBeTruthy();
+    expect(join()).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases the screen track when the share is stopped', async () => {
+    await inRoom();
+    await share();
+    const { release } = room().localParticipant.screenTrack.mediaStreamTrack;
+    await press('rtl', 'session.room.stopShare');
+    await advance(0);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the screen track after the disconnect when leaving while sharing', async () => {
+    await inRoom();
+    await share();
+    const left = room();
+    const { release } = left.localParticipant.screenTrack.mediaStreamTrack;
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(release.mock.invocationCallOrder[0]).toBeGreaterThan(
+      left.disconnect.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('releases the screen track when the room is lost while sharing', async () => {
+    await inRoom();
+    await share();
+    const { release } = room().localParticipant.screenTrack.mediaStreamTrack;
+    join().mockRejectedValue(new Error('offline'));
+    await lose();
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });

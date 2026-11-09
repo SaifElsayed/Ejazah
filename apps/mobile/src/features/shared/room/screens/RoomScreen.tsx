@@ -10,7 +10,7 @@
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { type TrackReference, VideoTrack } from '@livekit/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { View } from 'react-native';
 
 import {
@@ -56,7 +56,10 @@ export function RoomScreen({ counterpartyRole }: { readonly counterpartyRole: Pa
           deleted: session.counterparty.deleted,
         };
   const name = party === undefined ? '' : partyName(party, counterpartyRole);
+  const leaving = useRef(false);
   const leave = () => {
+    if (leaving.current) return;
+    leaving.current = true;
     void room.leave().then(() => router.back());
   };
   const header = <NavHeader title={name} back={{ kind: 'back', onPress: leave }} />;
