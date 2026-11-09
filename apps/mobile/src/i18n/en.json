@@ -627,6 +627,8 @@
       "notJoined": "{name} · not joined yet",
       "reconnecting": "Reconnecting…",
       "screenShare": {
+        "noticeText": "You are sharing your screen. Tap to return to the session.",
+        "noticeTitle": "Your Ijazah session is in progress",
         "title": "Share the whole screen",
         "warning": "If you share your whole screen, the other party will see everything on it, notifications included. Close anything you do not want to share before you continue."
       },

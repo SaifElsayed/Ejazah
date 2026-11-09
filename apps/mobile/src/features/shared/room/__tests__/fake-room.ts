@@ -26,6 +26,8 @@ export const DisconnectReason = {
   ROOM_DELETED: 5,
 } as const;
 
+export const TrackEvent = { Ended: 'ended' } as const;
+
 export const Track = {
   Source: { Camera: 'camera', Microphone: 'microphone', ScreenShare: 'screen_share' },
 } as const;
@@ -38,12 +40,34 @@ export interface FakePublication {
   readonly track: object | undefined;
 }
 
+/** The screen's track as `createScreenTracks` hands it: Android may end the capture by itself. */
+export class FakeScreenTrack {
+  readonly mediaStreamTrack: { readonly release: jest.Mock<() => void> } = {
+    release: jest.fn(),
+  };
+  private ended: (() => void) | undefined;
+  once(_event: string, listener: () => void): this {
+    this.ended = listener;
+    return this;
+  }
+  /** Android ended the capture. */
+  end(): void {
+    this.ended?.();
+  }
+}
+
 export class FakeLocalParticipant {
   /** The screen's track: react-native-webrtc's `release()` is what ends the capture's service. */
-  readonly screenTrack: { readonly mediaStreamTrack: { readonly release: jest.Mock<() => void> } } =
-    {
-      mediaStreamTrack: { release: jest.fn() },
-    };
+  readonly screenTrack = new FakeScreenTrack();
+  readonly createScreenTracks: jest.Mock<() => Promise<FakeScreenTrack[]>> = jest.fn(async () => [
+    this.screenTrack,
+  ]);
+  readonly publishTrack: jest.Mock<(track: FakeScreenTrack) => Promise<object>> = jest.fn(
+    async (_track: FakeScreenTrack) => {
+      this.isScreenShareEnabled = true;
+      return {};
+    },
+  );
   isCameraEnabled = false;
   isScreenShareEnabled = false;
   isMicrophoneEnabled = false;

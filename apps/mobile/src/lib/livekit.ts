@@ -4,12 +4,15 @@
 // room is connected and stopped after it is left (T019's room calls both), as the SDK's guide asks.
 import { AudioSession, registerGlobals } from '@livekit/react-native';
 
+import { registerRoomKeepAlive } from './room-keep-alive';
+
 let registered = false;
 
 /** Installs the WebRTC globals once; later calls do nothing. */
 export function registerVideoGlobals(): void {
   if (registered) return;
   registerGlobals();
+  registerRoomKeepAlive();
   registered = true;
 }
 

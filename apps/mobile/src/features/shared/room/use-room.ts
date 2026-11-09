@@ -2,6 +2,7 @@
 // opens and closed when it goes away, drawn again on every change.
 import { useEffect, useState } from 'react';
 
+import { useT } from '../../../i18n';
 import { useApi } from '../../../lib/api';
 import { RoomConnection, type RoomPhase, type RoomView } from './connection';
 
@@ -24,6 +25,7 @@ const CONNECTING: RoomPhase = { kind: 'connecting' };
 
 export function useRoom(sessionId: string): RoomControls {
   const { client } = useApi();
+  const t = useT();
   const [connection, setConnection] = useState<RoomConnection | undefined>(undefined);
   const [, setVersion] = useState(0);
   useEffect(() => {
@@ -43,7 +45,11 @@ export function useRoom(sessionId: string): RoomControls {
     toggleCamera: () => void connection?.toggleCamera(),
     askToShare: () => connection?.askToShare(),
     cancelShare: () => connection?.cancelShare(),
-    confirmShare: () => void connection?.confirmShare(),
+    confirmShare: () =>
+      void connection?.confirmShare({
+        title: t('session.room.screenShare.noticeTitle'),
+        text: t('session.room.screenShare.noticeText'),
+      }),
     stopShare: () => void connection?.stopShare(),
     retry: () => connection?.retry(),
     takeBack: () => connection?.takeBack(),

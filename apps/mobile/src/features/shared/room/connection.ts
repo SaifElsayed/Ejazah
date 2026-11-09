@@ -17,15 +17,25 @@
 // each press one `sessions.join` and no backoff after it.
 // Leaving (or the screen going away) clears the timer, drops every listener, disconnects, then stops
 // the audio session; a step that refuses or never answers does not keep the participant in the room
-// (the device check of 2026-11-09). The screen's track is released when its share ends: stopping it
-// alone leaves the capture and its foreground service running. Nothing here outlives the screen.
+// (the device check of 2026-11-09). The screen's track is held before it is published and released
+// when its share ends, however it ends: stopping it alone leaves the capture and its foreground
+// service running. The share runs under `lib/room-keep-alive.ts`, started while the app is visible,
+// before Android's prompts, and stopped with the share. Nothing here outlives the screen.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import type { TrackReference } from '@livekit/react-native';
-import { DisconnectReason, type Participant, Room, RoomEvent, Track } from 'livekit-client';
+import {
+  DisconnectReason,
+  type Participant,
+  Room,
+  RoomEvent,
+  Track,
+  TrackEvent,
+} from 'livekit-client';
 
 import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
 import { startAudio, stopAudio } from '../../../lib/livekit';
+import { startRoomKeepAlive, stopRoomKeepAlive } from '../../../lib/room-keep-alive';
 import { askAccess } from './permissions';
 import { isFinalRefusal, rejoinDelayMs } from './rejoin';
 
@@ -69,6 +79,12 @@ interface NativeTrack {
   release(): void;
 }
 
+/** The words of the notification that stays for the whole share. */
+export interface ShareNotice {
+  readonly title: string;
+  readonly text: string;
+}
+
 /** Resolves when `work` settles, either way, or after `LEAVE_WAIT_MS`. */
 function settled(work: Promise<unknown>): Promise<void> {
   return new Promise((resolve) => {
@@ -99,6 +115,7 @@ export class RoomConnection {
   private shareWarningOpen = false;
   private closing: Promise<void> | undefined;
   private shareTrack: NativeTrack | undefined;
+  private keepingAlive = false;
 
   constructor(
     private readonly join: () => Promise<SessionsJoinOutput>,
@@ -178,22 +195,38 @@ export class RoomConnection {
   }
 
   /** The warning's «متابعة»: the share starts, Android asking its own permission. */
-  async confirmShare(): Promise<void> {
+  async confirmShare(notice: ShareNotice): Promise<void> {
     this.shareWarningOpen = false;
     this.changed();
     const room = this.joined ? this.room : undefined;
     if (room === undefined) return;
-    if (await this.device(() => room.localParticipant.setScreenShareEnabled(true))) {
-      const publication = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
-      this.shareTrack = publication?.track?.mediaStreamTrack as unknown as NativeTrack | undefined;
+    if (!(await this.device(() => this.share(room, notice)))) this.endShare();
+  }
+
+  /** The service first, then Android's prompts; the track is held before it is published. */
+  private async share(room: Room, notice: ShareNotice): Promise<void> {
+    this.keepingAlive = true;
+    await startRoomKeepAlive(notice.title, notice.text);
+    const [track] = await room.localParticipant.createScreenTracks();
+    if (track === undefined) throw new Error('Android gave no screen track.');
+    const held = track.mediaStreamTrack as unknown as NativeTrack;
+    this.shareTrack = held;
+    track.once(TrackEvent.Ended, () => {
+      if (this.shareTrack === held) this.endShare();
+      this.changed();
+    });
+    if (this.closed || this.room !== room) {
+      this.endShare();
+      return;
     }
+    await room.localParticipant.publishTrack(track);
   }
 
   async stopShare(): Promise<void> {
     const room = this.joined ? this.room : undefined;
     if (room === undefined) return;
     if (await this.device(() => room.localParticipant.setScreenShareEnabled(false))) {
-      this.releaseShare();
+      this.endShare();
     }
   }
 
@@ -214,13 +247,18 @@ export class RoomConnection {
       room.removeAllListeners();
       await settled(room.disconnect());
     }
-    this.releaseShare();
+    this.endShare();
     await settled(stopAudio());
   }
 
-  private releaseShare(): void {
+  /** However the share ended: the capture released and the service stopped, once. */
+  private endShare(): void {
     this.shareTrack?.release();
     this.shareTrack = undefined;
+    if (this.keepingAlive) {
+      this.keepingAlive = false;
+      stopRoomKeepAlive();
+    }
   }
 
   private async attempt(mode: AttemptMode): Promise<void> {
@@ -329,7 +367,7 @@ export class RoomConnection {
     if (this.room === room) this.room = undefined;
     this.joined = false;
     this.shareWarningOpen = false;
-    this.releaseShare();
+    this.endShare();
   }
 
   /** The next try on the schedule, or none once the scheduled end comes first. */

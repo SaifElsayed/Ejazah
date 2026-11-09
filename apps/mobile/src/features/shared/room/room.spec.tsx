@@ -19,10 +19,12 @@ import { inBothDirections, renderIn } from '../../../design/primitives/__tests__
 import { type MessageKey, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
 import type { Direction } from '../../../lib/direction';
+import { startRoomKeepAlive, stopRoomKeepAlive } from '../../../lib/room-keep-alive';
 import { apiError } from '../__tests__/api-double';
 import {
   DisconnectReason,
   FakeRoom,
+  type FakeScreenTrack,
   resetRooms,
   Room,
   RoomEvent,
@@ -34,6 +36,10 @@ import { RoomScreen } from './index';
 
 jest.mock('livekit-client', () => require('./__tests__/fake-room'));
 jest.mock('@livekit/react-native', () => require('./__tests__/fake-livekit-rn'));
+jest.mock('../../../lib/room-keep-alive', () => ({
+  startRoomKeepAlive: jest.fn(() => Promise.resolve()),
+  stopRoomKeepAlive: jest.fn(),
+}));
 
 let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
@@ -47,6 +53,10 @@ jest.mock('expo-router', () => ({
 const startAudio = AudioSession.startAudioSession as unknown as jest.Mock;
 const stopAudio = AudioSession.stopAudioSession as unknown as jest.Mock;
 const join = () => mockApi.sessions.join.mutate;
+const startKeepAlive = startRoomKeepAlive as unknown as jest.Mock<
+  (...args: unknown[]) => Promise<void>
+>;
+const stopKeepAlive = stopRoomKeepAlive as unknown as jest.Mock;
 
 /** The session's start; it ends at 16:45. */
 const START = '2026-11-11T16:00:00.000Z';
@@ -119,6 +129,8 @@ beforeEach(() => {
   mockBack.mockReset();
   startAudio.mockClear();
   stopAudio.mockClear();
+  startKeepAlive.mockClear();
+  stopKeepAlive.mockClear();
   resetRooms();
   queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queries.setQueryData(ME_QUERY_KEY, me);
@@ -249,7 +261,8 @@ describe('RoomScreen: the camera and the screen share are the participant’s ow
   it('warns before every whole-screen share; a cancel starts nothing (FR-500)', async () => {
     await inBothDirections(ui, async (_rendered, direction) => {
       await screen.findByText(said(direction, 'session.room.waitingFor', { name: 'يوسف أحمد' }));
-      const share = room().localParticipant.setScreenShareEnabled;
+      const share = room().localParticipant.createScreenTracks;
+      const stop = room().localParticipant.setScreenShareEnabled;
       await press(direction, 'session.room.shareScreen');
       expect(screen.getByText(said(direction, 'session.room.screenShare.warning'))).toBeTruthy();
       await press(direction, 'common.action.cancel');
@@ -260,10 +273,14 @@ describe('RoomScreen: the camera and the screen share are the participant’s ow
       expect(screen.getByText(said(direction, 'session.room.screenShare.warning'))).toBeTruthy();
       expect(share).not.toHaveBeenCalled();
       await press(direction, 'common.action.continue');
-      expect(share).toHaveBeenCalledWith(true);
+      await advance(0);
+      expect(share).toHaveBeenCalledTimes(1);
+      expect(room().localParticipant.publishTrack).toHaveBeenCalledWith(
+        room().localParticipant.screenTrack,
+      );
       // Stopping asks nothing.
       await press(direction, 'session.room.stopShare');
-      expect(share).toHaveBeenLastCalledWith(false);
+      expect(stop).toHaveBeenLastCalledWith(false);
       expect(screen.queryByText(said(direction, 'session.room.screenShare.warning'))).toBeNull();
     });
     expect(join()).toHaveBeenCalledTimes(4);
@@ -607,5 +624,128 @@ describe('RoomScreen: what the review at 3a14fc7 and the device check found (the
     join().mockRejectedValue(new Error('offline'));
     await lose();
     expect(release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('RoomScreen: the service that keeps the room alive while sharing (the owner’s conditions of 2026-11-09)', () => {
+  const inRoom = async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+  };
+  const askShare = async () => {
+    await press('rtl', 'session.room.shareScreen');
+    await press('rtl', 'common.action.continue');
+    await advance(0);
+  };
+  const local = () => room().localParticipant;
+
+  it('starts while the app is visible, before Android’s prompts, with its notification’s words', async () => {
+    await inRoom();
+    await askShare();
+    expect(startKeepAlive).toHaveBeenCalledTimes(1);
+    expect(startKeepAlive).toHaveBeenCalledWith(
+      said('rtl', 'session.room.screenShare.noticeTitle'),
+      said('rtl', 'session.room.screenShare.noticeText'),
+    );
+    expect(startKeepAlive.mock.invocationCallOrder[0]).toBeLessThan(
+      local().createScreenTracks.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(stopKeepAlive).not.toHaveBeenCalled();
+  });
+
+  it('asks Android for nothing when the service cannot start', async () => {
+    await inRoom();
+    startKeepAlive.mockRejectedValueOnce(new Error('refused'));
+    await askShare();
+    expect(local().createScreenTracks).not.toHaveBeenCalled();
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(said('rtl', 'common.state.actionError'))).toBeTruthy();
+  });
+
+  it('stops when Android’s prompt is cancelled', async () => {
+    await inRoom();
+    local().createScreenTracks.mockRejectedValueOnce(new Error('NotAllowedError'));
+    await askShare();
+    expect(local().publishTrack).not.toHaveBeenCalled();
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops and releases the held track when the publish fails', async () => {
+    await inRoom();
+    local().publishTrack.mockRejectedValueOnce(new Error('negotiation'));
+    await askShare();
+    expect(local().screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when the share is stopped, and not before', async () => {
+    await inRoom();
+    await askShare();
+    await press('rtl', 'session.room.stopShare');
+    await advance(0);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after the disconnect when leaving while sharing', async () => {
+    await inRoom();
+    await askShare();
+    const left = room();
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive.mock.invocationCallOrder[0]).toBeGreaterThan(
+      left.disconnect.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('stops when the room is lost while sharing', async () => {
+    await inRoom();
+    await askShare();
+    join().mockRejectedValue(new Error('offline'));
+    await lose();
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops on «جهاز آخر» while sharing', async () => {
+    await inRoom();
+    await askShare();
+    await lose(DisconnectReason.DUPLICATE_IDENTITY);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops and releases when Android ends the capture by itself', async () => {
+    await inRoom();
+    await askShare();
+    await act(async () => {
+      local().screenTrack.end();
+      await Promise.resolve();
+    });
+    expect(local().screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes nothing and stops when the participant left during Android’s prompt', async () => {
+    await inRoom();
+    const prompt = deferred<FakeScreenTrack[]>();
+    const left = room();
+    left.localParticipant.createScreenTracks.mockReturnValueOnce(prompt.promise);
+    await askShare();
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    prompt.resolve([left.localParticipant.screenTrack]);
+    await advance(0);
+    expect(left.localParticipant.publishTrack).not.toHaveBeenCalled();
+    expect(left.localParticipant.screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start the service for a camera or a plain room', async () => {
+    await inRoom();
+    await press('rtl', 'session.room.cameraOn');
+    await advance(0);
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    expect(startKeepAlive).not.toHaveBeenCalled();
+    expect(stopKeepAlive).not.toHaveBeenCalled();
   });
 });
