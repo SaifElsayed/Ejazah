@@ -17,6 +17,8 @@ const PERMISSION: Readonly<Record<Device, Permission>> = {
 };
 
 const asksItself = () => Platform.OS === 'android';
+/** Android 13, where notifications became a permission. */
+const NOTIFICATIONS_FROM_API = 33;
 
 /** Whether `device` is granted, asking nothing. */
 export async function readAccess(device: Device): Promise<'granted' | 'undecided'> {
@@ -30,6 +32,16 @@ export async function askAccess(device: Device): Promise<Access> {
   const answer = await PermissionsAndroid.request(PERMISSION[device]);
   if (answer === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
   return answer === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN ? 'blocked' : 'denied';
+}
+
+/** Asks once for the notification the share keeps up; a refusal or a failure stops nothing. */
+export async function askNotifications(): Promise<void> {
+  if (!asksItself() || Number(Platform.Version) < NOTIFICATIONS_FROM_API) return;
+  try {
+    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+  } catch {
+    // The share goes on without its notification in the shade.
+  }
 }
 
 export interface Microphone {

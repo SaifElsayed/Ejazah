@@ -27,8 +27,13 @@ export function registerRoomKeepAlive(): void {
     TASK,
     () => () =>
       new Promise<void>((resolve) => {
+        // Nobody is waiting (the wait ran out, or the share was stopped): the timers must not stay on.
+        if (started === undefined) {
+          resolve();
+          return;
+        }
         finish = resolve;
-        started?.();
+        started();
       }),
   );
 }
@@ -57,6 +62,7 @@ export async function startRoomKeepAlive(title: string, text: string): Promise<v
 }
 
 export function stopRoomKeepAlive(): void {
+  started?.();
   finish?.();
   finish = undefined;
   native?.stop();

@@ -93,6 +93,29 @@ describe('the room keep-alive', () => {
     expect(mockNative.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('finishes at once a task that no start is waiting for', async () => {
+    const { runTask } = load();
+    await expect(runTask()).resolves.toBeUndefined();
+  });
+
+  it('finishes at once a task that arrives after the wait ran out', async () => {
+    const { keepAlive, runTask } = load();
+    const starting = keepAlive.startRoomKeepAlive('title', 'text');
+    const outcome = expect(starting).rejects.toThrow();
+    await jest.advanceTimersByTimeAsync(3_000);
+    await outcome;
+    await expect(runTask()).resolves.toBeUndefined();
+  });
+
+  it('finishes at once a task that arrives after the stop, and releases the start waiting', async () => {
+    const { keepAlive, runTask } = load();
+    const starting = keepAlive.startRoomKeepAlive('title', 'text');
+    keepAlive.stopRoomKeepAlive();
+    await expect(starting).resolves.toBeUndefined();
+    await expect(runTask()).resolves.toBeUndefined();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   it('does nothing in a build without the module', async () => {
     mockAvailable = false;
     const { keepAlive } = load();

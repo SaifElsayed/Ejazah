@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { act, renderHook } from '@testing-library/react-native';
 import { AppState, type AppStateStatus, Linking, PermissionsAndroid, Platform } from 'react-native';
 
-import { askAccess, useMicrophone } from './permissions';
+import { askAccess, askNotifications, useMicrophone } from './permissions';
 
 const { RECORD_AUDIO, CAMERA } = PermissionsAndroid.PERMISSIONS;
 const { GRANTED, DENIED, NEVER_ASK_AGAIN } = PermissionsAndroid.RESULTS;
@@ -103,5 +103,29 @@ describe('askAccess', () => {
     request.mockResolvedValue(DENIED);
     expect(await askAccess('camera')).toBe('denied');
     expect(request).toHaveBeenCalledWith(CAMERA);
+  });
+});
+
+describe('askNotifications (the notification of the share, the owner’s decision of 2026-11-09)', () => {
+  const { POST_NOTIFICATIONS } = PermissionsAndroid.PERMISSIONS;
+  const onApi = (version: number) =>
+    jest.spyOn(Platform, 'Version', 'get').mockReturnValue(version);
+
+  it('asks from Android 13 on', async () => {
+    onApi(33);
+    await askNotifications();
+    expect(request).toHaveBeenCalledWith(POST_NOTIFICATIONS);
+  });
+
+  it('asks nothing before Android 13, where no permission exists', async () => {
+    onApi(32);
+    await askNotifications();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('never fails the share', async () => {
+    onApi(36);
+    request.mockRejectedValue(new Error('no activity'));
+    await expect(askNotifications()).resolves.toBeUndefined();
   });
 });

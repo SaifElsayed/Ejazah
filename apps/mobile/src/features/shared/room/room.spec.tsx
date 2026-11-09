@@ -135,6 +135,7 @@ beforeEach(() => {
   queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queries.setQueryData(ME_QUERY_KEY, me);
   jest.replaceProperty(Platform, 'OS', 'android');
+  jest.spyOn(Platform, 'Version', 'get').mockReturnValue(36);
   request = jest
     .spyOn(PermissionsAndroid, 'request')
     .mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
@@ -737,6 +738,78 @@ describe('RoomScreen: the service that keeps the room alive while sharing (the o
     expect(left.localParticipant.publishTrack).not.toHaveBeenCalled();
     expect(left.localParticipant.screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
     expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  const NOTIFICATIONS = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  const askedNotifications = () => request.mock.calls.filter(([asked]) => asked === NOTIFICATIONS);
+
+  it('asks for notifications after «متابعة» and before the service', async () => {
+    await inRoom();
+    await press('rtl', 'session.room.shareScreen');
+    expect(askedNotifications()).toHaveLength(0);
+    await press('rtl', 'common.action.continue');
+    await advance(0);
+    expect(askedNotifications()).toHaveLength(1);
+    const asked = request.mock.calls.findIndex(([each]) => each === NOTIFICATIONS);
+    expect(request.mock.invocationCallOrder[asked]).toBeLessThan(
+      startKeepAlive.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('asks for notifications once however many shares follow', async () => {
+    await inRoom();
+    await askShare();
+    await press('rtl', 'session.room.stopShare');
+    await advance(0);
+    await askShare();
+    expect(askedNotifications()).toHaveLength(1);
+    expect(startKeepAlive).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares all the same when notifications are refused', async () => {
+    await inRoom();
+    request.mockResolvedValue(PermissionsAndroid.RESULTS.DENIED);
+    await askShare();
+    expect(startKeepAlive).toHaveBeenCalledTimes(1);
+    expect(local().publishTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares all the same when asking for notifications fails', async () => {
+    await inRoom();
+    request.mockRejectedValue(new Error('no activity'));
+    await askShare();
+    expect(startKeepAlive).toHaveBeenCalledTimes(1);
+    expect(local().publishTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens no Android prompt and stops the service when the participant left while it started', async () => {
+    await inRoom();
+    const starting = deferred<void>();
+    startKeepAlive.mockReturnValueOnce(starting.promise);
+    const left = room();
+    await askShare();
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    const before = stopKeepAlive.mock.calls.length;
+    starting.resolve();
+    await advance(0);
+    expect(left.localParticipant.createScreenTracks).not.toHaveBeenCalled();
+    expect(stopKeepAlive.mock.calls.length).toBe(before + 1);
+  });
+
+  it('opens no Android prompt and stops the service when the room was lost while it started', async () => {
+    await inRoom();
+    const starting = deferred<void>();
+    startKeepAlive.mockReturnValueOnce(starting.promise);
+    const lost = room();
+    join().mockRejectedValue(new Error('offline'));
+    await askShare();
+    await lose();
+    const before = stopKeepAlive.mock.calls.length;
+    starting.resolve();
+    await advance(0);
+    expect(lost.localParticipant.createScreenTracks).not.toHaveBeenCalled();
+    expect(stopKeepAlive.mock.calls.length).toBe(before + 1);
   });
 
   it('does not start the service for a camera or a plain room', async () => {

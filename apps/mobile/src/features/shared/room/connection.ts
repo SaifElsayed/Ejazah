@@ -36,7 +36,7 @@ import {
 import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
 import { startAudio, stopAudio } from '../../../lib/livekit';
 import { startRoomKeepAlive, stopRoomKeepAlive } from '../../../lib/room-keep-alive';
-import { askAccess } from './permissions';
+import { askAccess, askNotifications } from './permissions';
 import { isFinalRefusal, rejoinDelayMs } from './rejoin';
 
 export type RoomPhase =
@@ -116,6 +116,7 @@ export class RoomConnection {
   private closing: Promise<void> | undefined;
   private shareTrack: NativeTrack | undefined;
   private keepingAlive = false;
+  private askedNotifications = false;
 
   constructor(
     private readonly join: () => Promise<SessionsJoinOutput>,
@@ -203,10 +204,21 @@ export class RoomConnection {
     if (!(await this.device(() => this.share(room, notice)))) this.endShare();
   }
 
-  /** The service first, then Android's prompts; the track is held before it is published. */
+  /** The notification's permission, the service, then Android's prompts; the track held before it is published. */
   private async share(room: Room, notice: ShareNotice): Promise<void> {
+    if (!this.askedNotifications) {
+      this.askedNotifications = true;
+      await askNotifications();
+    }
+    if (this.closed || this.room !== room) return;
     this.keepingAlive = true;
     await startRoomKeepAlive(notice.title, notice.text);
+    if (this.closed || this.room !== room) {
+      // Leaving or the lost room already turned `keepingAlive` off, perhaps before the task ran.
+      this.keepingAlive = true;
+      this.endShare();
+      return;
+    }
     const [track] = await room.localParticipant.createScreenTracks();
     if (track === undefined) throw new Error('Android gave no screen track.');
     const held = track.mediaStreamTrack as unknown as NativeTrack;
