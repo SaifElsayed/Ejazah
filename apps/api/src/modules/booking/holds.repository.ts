@@ -123,12 +123,30 @@ export async function activeHoldIds(
   return rows.map(({ id }) => id);
 }
 
-/** Releases the still-active holds of `ids` at `at`, by one conditional update. */
-export async function markReleased(tx: Client, ids: readonly string[], at: Date): Promise<void> {
+/** Why a hold is released without conversion: `hold_release_reason` less `converted` (GAP-8). */
+export type HoldReleaseReason =
+  | 'expired'
+  | 'checkout_abandoned'
+  | 'slot_unavailable'
+  | 'admin'
+  | 'teacher_suspended'
+  | 'account_deleted';
+
+/**
+ * Releases the still-active holds of `ids` at `at` with `reason`, by one conditional update; the
+ * reason is written with `released_at` (T027 of specs/004-sessions; research R-323, GAP-8; ERD §15
+ * rule 48).
+ */
+export async function markReleased(
+  tx: Client,
+  ids: readonly string[],
+  at: Date,
+  reason: HoldReleaseReason,
+): Promise<void> {
   if (ids.length === 0) return;
   await tx.slotHold.updateMany({
     where: { id: { in: [...ids] }, releasedAt: null },
-    data: { releasedAt: at },
+    data: { releasedAt: at, releaseReason: reason },
   });
 }
 

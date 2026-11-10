@@ -94,12 +94,13 @@ export async function confirmingOrderOf(tx: Client, enrollmentId: string): Promi
 
 /**
  * Converts the enrollment's active hold at `at`, by a conditional update (`released_at IS NULL`,
- * ADR 0010 D5); whether a hold was converted.
+ * ADR 0010 D5), its release reason `converted` (T027 of specs/004-sessions, GAP-8; ERD §15 rule
+ * 48); whether a hold was converted.
  */
 export async function convertHoldOf(tx: Client, enrollmentId: string, at: Date): Promise<boolean> {
   const { count } = await tx.slotHold.updateMany({
     where: { enrollmentId, releasedAt: null },
-    data: { releasedAt: at },
+    data: { releasedAt: at, releaseReason: 'converted' },
   });
   return count > 0;
 }

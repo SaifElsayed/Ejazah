@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { SessionTime } from '../sessions/index.js';
 import {
+  busyBetween,
   freeOfPartiesSessions,
   overlapsAny,
   packageSessionsOn,
@@ -115,5 +116,51 @@ describe('freeOfPartiesSessions (FR-351, FR-BOOK-5)', () => {
     );
     expect(free).toEqual([]);
     expect(read).toBe(false);
+  });
+});
+
+describe('busyBetween (T027, FR-466, H3): the parties’ sessions and the times open remedies reserve', () => {
+  it('answers both, reading the reservations of the two people over the same window', async () => {
+    const asked: unknown[] = [];
+    const window = { from: new Date('2026-12-01T00:00:00Z'), to: new Date('2026-12-31T00:00:00Z') };
+    const read = busyBetween({
+      sessionsBetween: async () => [session('2026-12-10T07:00:00Z', '2026-12-10T08:00:00Z')],
+      reservedTimesOf: async (_tx, userIds, asking) => {
+        asked.push([userIds, asking]);
+        return [
+          {
+            remedyId: 'remedy',
+            sessionId: 'session',
+            ...session('2026-12-03T07:00:00Z', '2026-12-03T08:00:00Z'),
+          },
+        ];
+      },
+    });
+    const times = await read(tx, parties, window);
+    expect(times.map(({ startsAt }) => startsAt.toISOString())).toEqual([
+      '2026-12-10T07:00:00.000Z',
+      '2026-12-03T07:00:00.000Z',
+    ]);
+    expect(asked).toEqual([[[parties.studentUserId, parties.teacherUserId], window]]);
+  });
+
+  it('leaves out a candidate whose session falls on a reserved time, as the sheet and the hold read it', async () => {
+    const first = firstOccurrenceAfter({ ...thursday, dayOfWeek: 4 as DayOfWeek }, TUESDAY, 24);
+    const sessions = packageSessionsOn(thursday, first, 4);
+    const third = sessions[2];
+    const read = busyBetween({
+      sessionsBetween: async () => [],
+      reservedTimesOf: async () =>
+        third === undefined
+          ? []
+          : [
+              {
+                remedyId: 'remedy',
+                sessionId: 'session',
+                ...session(third.startsAt, third.endsAt),
+              },
+            ],
+    });
+    expect(await freeOfPartiesSessions(tx, read, parties, [{ sessions }])).toEqual([]);
   });
 });
