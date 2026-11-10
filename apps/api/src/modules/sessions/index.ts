@@ -315,3 +315,34 @@ export {
 export { enrollmentsWithOpenRemedyAmong } from './reservations.repository.js';
 /** T027: the sessions a confirmation would generate, for the late payment's reservation read. */
 export { sessionsFor } from './generation.service.js';
+/**
+ * T028 of specs/004-sessions (FR-462 to FR-464, FR-449; research R-311; decisions 5 and 9; Q3, Q8,
+ * Q11): a remedy's offer and its proposal (H1), the function an accepted cancellation, the sweep
+ * and a cleared suspension's case (T036) call, a re-offer of a frozen one (T061) among them; what
+ * `advance-remedies` runs (the offers, the frozen remedies' new offers and T015's completion check);
+ * a remedy as its parties read it (`RemedyView`, T031); and the lists' `remedyStatus`.
+ */
+export {
+  createRemedyOffer,
+  MAKEUP_CHOICE_WINDOW_SETTING,
+  MAKEUP_COUNTER_ANSWER_SETTING,
+  type Offered,
+  offeredLine,
+  type OfferOptions,
+  type RemedyOffer,
+  type RemedyOfferStore,
+  remedyOfferStore,
+} from './remedy-offer.service.js';
+export {
+  type AdvanceRun,
+  createRemedyAdvance,
+  type RemedyAdvance,
+  type RemedyAdvanceStore,
+  remedyAdvanceStore,
+} from './remedy-offer.sweep.js';
+export { remedyViewOf } from './remedy-offer.view.js';
+export {
+  type RemedyViewRow,
+  remedyStatusesAmong,
+  remedyViewRowOf,
+} from './remedy-offer.repository.js';

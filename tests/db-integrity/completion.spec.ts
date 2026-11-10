@@ -303,12 +303,14 @@ describe('completeIfDue over the real tables (T015, FR-449, R-309)', () => {
     });
   });
 
+  // B38 (the owner's decision of 2026-11-10 under T023, Q3 (a)): an open admin_cancellation case
+  // holds completion too, so "another case" is a refund_choice case.
   it('a student_suspended case open on it holds completion; another case does not (FR-486)', async () => {
     const suspended = await delivered(await makeOffer(db));
     await openCaseOn(suspended, 'student_suspended');
     await check(suspended, false);
     const other = await delivered(await makeOffer(db));
-    await openCaseOn(other, 'admin_cancellation');
+    await openCaseOn(other, 'refund_choice');
     await check(other, true);
   });
 
@@ -332,9 +334,10 @@ describe('completeIfDue over the real tables (T015, FR-449, R-309)', () => {
     const enrollment = await delivered(await makeOffer(db));
     const held = await sessionOn(enrollment, '2026-09-13', 'under_threshold');
     await check(enrollment, false);
-    await db.query("UPDATE sessions SET status = 'provider_outage', updated_at = now() WHERE id = $1", [
-      held,
-    ]);
+    await db.query(
+      "UPDATE sessions SET status = 'provider_outage', updated_at = now() WHERE id = $1",
+      [held],
+    );
     await check(enrollment, false);
     await db.query(
       `UPDATE sessions SET status = 'disputed', outcome_under_dispute = 'done', updated_at = now()
@@ -353,7 +356,13 @@ describe('completeIfDue over the real tables (T015, FR-449, R-309)', () => {
   it('five or more Teacher-No-Shows end nothing: the enrollment stays confirmed and each absence is owed its remedy (FR-448, SC-404)', async () => {
     const enrollment = await delivered(await makeOffer(db));
     const absences: string[] = [];
-    for (const localDate of ['2026-08-09', '2026-08-16', '2026-08-23', '2026-08-30', '2026-09-06']) {
+    for (const localDate of [
+      '2026-08-09',
+      '2026-08-16',
+      '2026-08-23',
+      '2026-08-30',
+      '2026-09-06',
+    ]) {
       absences.push(await sessionOn(enrollment, localDate, 'teacher_no_show'));
     }
     for (const absence of absences) await remedyOf(absence, 'awaiting_choice');

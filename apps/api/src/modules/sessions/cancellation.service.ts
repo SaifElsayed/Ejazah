@@ -14,8 +14,10 @@
 // then `cancellation_requests`: every `session_events` row they write key-shares the enrollment, so
 // the enrollment is taken before the session. An acceptance takes «cancellation accepted»'s row:
 // `users` (both), the teacher's `lockKey('teacher-slots')`, `enrollments`, `sessions`, the session's
-// `session_remedies`, then the request; the make-up it owes is offered in that place by T028 (B38),
-// and an acceptance made before T028 lands is offered its remedy by T028's sweep (the analysis's F8).
+// `session_remedies`, then the request; the make-up it owes is offered in that transaction, under
+// those locks, by T028's `offerLocked` (decision 5), one info line `{ remedyId, sessionId,
+// enrollmentId, action }` written after the commit (Q11); an acceptance made before T028 landed is
+// offered its remedy by T028's sweep (the analysis's F8), and so is one whose student was suspended.
 // A request decides on the session's pending request, so it locks that row, when there is one, and
 // reads it again (rule 1); the second line is rule 45's partial unique index, whose refusal is
 // answered as the same `CANCELLATION_PENDING`. Each decision is read under the locks: the session,
@@ -87,6 +89,7 @@ import {
   requestOfParty,
 } from './cancellation.repository.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
+import { offeredLine, type RemedyOffer } from './remedy-offer.service.js';
 import { recordSessionEvents, type SessionEventRecord } from './session-events.repository.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
@@ -182,6 +185,8 @@ export interface CancellationDependencies {
   readonly transactions: Transactions;
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   readonly enrollments: Pick<EnrollmentSide, 'lockEnrollments'>;
+  /** T028: the make-up an acceptance owes, offered under the acceptance's locks (decision 5). */
+  readonly offer: Pick<RemedyOffer, 'offerLocked'>;
   readonly store?: CancellationStore;
   /** The database's clock on a transaction (`clockTimestamp`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
@@ -226,6 +231,7 @@ export function createCancellationServices({
   transactions,
   idempotency,
   enrollments,
+  offer,
   store = cancellationStore,
   clock = clockTimestamp,
 }: CancellationDependencies): CancellationServices {
@@ -330,8 +336,8 @@ export function createCancellationServices({
         },
       ),
 
-    answer: ({ userId }, { requestId, accept }, log) =>
-      transactions.run(async (tx) => {
+    answer: async ({ userId }, { requestId, accept }, log) => {
+      const answered = await transactions.run(async (tx) => {
         const found = await store.requestOfParty(tx, requestId, userId);
         if (found === null) throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'not_a_party');
         if (found.requestedByUserId === userId) {
@@ -362,7 +368,7 @@ export function createCancellationServices({
           });
         }
 
-        const status = accept ? 'accepted' : 'declined';
+        const status = accept ? ('accepted' as const) : ('declined' as const);
         // Both conditional updates hold: the request is pending and the session scheduled under
         // the locks just read.
         await store.answerRequest(tx, requestId, status, at);
@@ -375,12 +381,19 @@ export function createCancellationServices({
             occurredAt: at,
           },
         ]);
+        const offered = accept ? await offer.offerLocked(tx, session.id) : null;
         return {
-          requestId,
-          status,
-          sessionStatus: accept ? 'cancelled_by_agreement' : session.status,
+          offered,
+          output: {
+            requestId,
+            status,
+            sessionStatus: accept ? ('cancelled_by_agreement' as const) : session.status,
+          },
         };
-      }),
+      });
+      if (answered.offered !== null) offeredLine(log, answered.offered);
+      return answered.output;
+    },
   };
 }
 

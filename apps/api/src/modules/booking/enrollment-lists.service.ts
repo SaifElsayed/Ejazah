@@ -34,7 +34,9 @@
 // sessions' `pendingCancellationsAmong` over the sessions the list answers at the read's instant (the
 // database's clock on the read's transaction, the follow-up under 004:T021),
 // through sessions' entry (R-API-6): sessions decides what is pending. `disputed` (004:T026): the
-// session's status is `disputed`, as sessions' `isDisputed` answers it.
+// session's status is `disputed`, as sessions' `isDisputed` answers it. `remedyStatus` (004:T028): the
+// session's remedy by its status, sessions' `remedyStatusesAmong` through its entry, absent while it
+// has none.
 //
 // A DELETED PARTY (T007, `003:T090`; FR-426). Identity's names leave out a deleted account (the
 // client's extension, its name erased, FR-141), and a live account always has its name (ERD §15
@@ -74,6 +76,7 @@ import {
   type EnrollmentSessionRow,
   isDisputed,
   pendingCancellationsAmong,
+  remedyStatusesAmong,
   sessionProgress,
   sessionsOfEnrollments,
   teacherSessionsBetween,
@@ -147,6 +150,11 @@ export interface EnrollmentListsStore {
     sessionIds: readonly string[],
     at: Date,
   ): Promise<ReadonlySet<string>>;
+  /** 004:T028: of `sessionIds`, each one's remedy status, a lapsed one absent (sessions' entry). */
+  remedyStatusesOf(
+    tx: Transaction,
+    sessionIds: readonly string[],
+  ): Promise<ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>>;
 }
 
 /** The store over booking's own queries and the owners' entries (R-API-6). */
@@ -164,6 +172,7 @@ export const enrollmentListsStore: EnrollmentListsStore = {
   namePrefixMatches: idsWithFoldedNamePrefix,
   timezoneOf: accountTimezone,
   pendingCancellationsOf: pendingCancellationsAmong,
+  remedyStatusesOf: remedyStatusesAmong,
 };
 
 /** The read's instant, and the ended tab's page size read before the transaction. */
@@ -182,7 +191,9 @@ const SECONDS = ':00';
 function listedSessionOf(
   session: EnrollmentSessionRow,
   pending: ReadonlySet<string>,
+  remedies: ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>,
 ): ListedSession {
+  const remedyStatus = remedies.get(session.id);
   return {
     sessionId: session.id,
     sequenceNumber: session.sequenceNumber,
@@ -194,6 +205,7 @@ function listedSessionOf(
     status: session.status,
     pendingCancellation: pending.has(session.id),
     disputed: isDisputed(session.status),
+    ...(remedyStatus === undefined ? {} : { remedyStatus }),
   };
 }
 
@@ -233,6 +245,8 @@ interface ItemContext {
   readonly subjects: ReadonlyMap<string, SubjectSummary>;
   /** 004:T021: the sessions with a cancellation request pending at `now`. */
   readonly pending: ReadonlySet<string>;
+  /** 004:T028: the sessions' remedy statuses. */
+  readonly remedies: ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>;
   readonly now: Date;
 }
 
@@ -252,8 +266,11 @@ async function contextOf(
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
   ]);
   const sessionIds = [...sessions.values()].flatMap((rows) => rows.map(({ id }) => id));
-  const pending = await store.pendingCancellationsOf(tx, sessionIds, now);
-  return { sessions, names, subjects, pending, now };
+  const [pending, remedies] = await Promise.all([
+    store.pendingCancellationsOf(tx, sessionIds, now),
+    store.remedyStatusesOf(tx, sessionIds),
+  ]);
+  return { sessions, names, subjects, pending, remedies, now };
 }
 
 function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
@@ -267,10 +284,10 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
     status: row.status,
     ...(progress.next === undefined
       ? {}
-      : { next: listedSessionOf(progress.next, context.pending) }),
+      : { next: listedSessionOf(progress.next, context.pending, context.remedies) }),
     ...(progress.last === undefined
       ? {}
-      : { last: listedSessionOf(progress.last, context.pending) }),
+      : { last: listedSessionOf(progress.last, context.pending, context.remedies) }),
     upcoming: progress.upcoming,
     completed: progress.completed,
     remaining: progress.remaining,
@@ -358,7 +375,7 @@ export async function studentEnrollmentOf(
   return {
     ...studentItemOf(row, context),
     sessions: (context.sessions.get(row.id) ?? []).map((one) =>
-      listedSessionOf(one, context.pending),
+      listedSessionOf(one, context.pending, context.remedies),
     ),
   };
 }
@@ -447,7 +464,7 @@ export async function teacherStudentOf(
   return {
     ...teacherItemOf(row, context),
     sessions: (context.sessions.get(row.id) ?? []).map((one) =>
-      listedSessionOf(one, context.pending),
+      listedSessionOf(one, context.pending, context.remedies),
     ),
   };
 }
@@ -472,13 +489,17 @@ export async function teacherTodayOf(
     ...new Set(day.map(({ enrollmentId }) => enrollmentId)),
   ]);
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const [names, subjects, pending] = await Promise.all([
+  const [names, subjects, pending, remedies] = await Promise.all([
     store.namesOf(tx, [...new Set(rows.map(ofStudent))]),
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
     store.pendingCancellationsOf(
       tx,
       day.map(({ id }) => id),
       now,
+    ),
+    store.remedyStatusesOf(
+      tx,
+      day.map(({ id }) => id),
     ),
   ]);
   return {
@@ -489,7 +510,7 @@ export async function teacherTodayOf(
       if (row === undefined) return [];
       return [
         {
-          ...listedSessionOf(session, pending),
+          ...listedSessionOf(session, pending, remedies),
           enrollmentId: row.id,
           student: partyNameOf(names, row.studentUserId),
           summary: termsOf(row, subjects),
@@ -549,7 +570,10 @@ export function createEnrollmentListServices({
     students: async (teacherUserId, input) => {
       const size = await pageSize();
       return transactions.run(async (tx) =>
-        teacherStudentsOf(tx, store, teacherUserId, input, { now: await clock(tx), pageSize: size }),
+        teacherStudentsOf(tx, store, teacherUserId, input, {
+          now: await clock(tx),
+          pageSize: size,
+        }),
       );
     },
     student: (teacherUserId, input) =>

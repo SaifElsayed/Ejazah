@@ -128,6 +128,8 @@ function storeOf(
     timezone?: string | null;
     /** 004:T021: the session ids with a request pending. */
     pending?: readonly string[];
+    /** 004:T028: each session's remedy status. */
+    remedies?: Record<string, 'awaiting_choice' | 'proposed' | 'frozen' | 'booked'>;
   } = {},
 ): { store: EnrollmentListsStore; asked: Asked } {
   const asked: Asked = { ended: [], listed: [], prefix: [], day: [], pending: [] };
@@ -167,6 +169,13 @@ function storeOf(
       asked.pending.push({ sessionIds, at: at.toISOString() });
       return new Set(sessionIds.filter((id) => (data.pending ?? []).includes(id)));
     },
+    remedyStatusesOf: async (_tx, sessionIds) =>
+      new Map(
+        sessionIds.flatMap((id) => {
+          const status = data.remedies?.[id];
+          return status === undefined ? [] : [[id, status] as const];
+        }),
+      ),
   };
   return { store, asked };
 }
@@ -308,7 +317,9 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       listed: row(E1),
       sessions: {
         [E1]: [
-          session(1, '2026-11-03T09:00:00Z', 'disputed', { outcomeUnderDispute: 'student_no_show' }),
+          session(1, '2026-11-03T09:00:00Z', 'disputed', {
+            outcomeUnderDispute: 'student_no_show',
+          }),
           session(2, '2026-11-10T09:00:00Z', 'teacher_no_show'),
         ],
       },
@@ -521,8 +532,14 @@ describe('pendingCancellation (004:T021)', () => {
       false,
     ]);
     expect(asked.pending).toEqual([
-      { sessionIds: [sessionIdOf('2026-11-10T09:00:00Z'), NEXT.id, LATER.id], at: NOW.toISOString() },
-      { sessionIds: [sessionIdOf('2026-11-10T09:00:00Z'), NEXT.id, LATER.id], at: NOW.toISOString() },
+      {
+        sessionIds: [sessionIdOf('2026-11-10T09:00:00Z'), NEXT.id, LATER.id],
+        at: NOW.toISOString(),
+      },
+      {
+        sessionIds: [sessionIdOf('2026-11-10T09:00:00Z'), NEXT.id, LATER.id],
+        at: NOW.toISOString(),
+      },
     ]);
   });
 
@@ -627,5 +644,37 @@ describe('the lists’ instant is the database’s clock on the read’s transac
     const [item] = (await lists.enrollments(STUDENT, { tab: 'active' })).items;
     expect(item?.next).toBeUndefined();
     expect(item?.last?.sessionId).toBe(FAR.id);
+  });
+});
+
+// 004:T028 (FR-495; contracts/app-surface.md, "Phase 2's lists, widened additively"): each session's
+// `remedyStatus`, sessions' read of its remedy through its entry (R-API-6), absent when it has none
+// (or a lapsed one, which sessions never answers).
+describe('remedyStatus (004:T028)', () => {
+  // The highest sequence number, so it is the item's `last`: a make-up's place, made up for later.
+  const OWED = session(3, '2026-11-10T09:00:00Z', 'teacher_no_show');
+  const NEXT = session(2, '2026-11-17T12:00:00Z');
+
+  it('marks a session with a remedy by its status, on a list item, a detail and the day, and leaves the others without it', async () => {
+    const { store } = storeOf({
+      active: [row(E1)],
+      listed: row(E1),
+      sessions: { [E1]: [OWED, NEXT] },
+      day: [{ enrollmentId: E1, ...OWED }],
+      names: { [TEACHER]: 'أحمد سالم', [STUDENT]: 'يوسف علي' },
+      remedies: { [OWED.id]: 'awaiting_choice' },
+    });
+    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    expect(item?.last?.remedyStatus).toBe('awaiting_choice');
+    expect(item?.next).toEqual(LISTED);
+    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(detail.sessions.map(({ remedyStatus }) => remedyStatus)).toEqual([
+      'awaiting_choice',
+      undefined,
+    ]);
+    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    expect(taught.sessions[0]?.remedyStatus).toBe('awaiting_choice');
+    const today = await teacherTodayOf(tx, store, TEACHER, NOW);
+    expect(today.sessions[0]?.remedyStatus).toBe('awaiting_choice');
   });
 });

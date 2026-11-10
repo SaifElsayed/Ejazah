@@ -89,6 +89,9 @@ const SEEDED: Record<string, unknown> = {
   first_session_lead_hours: 24,
   // T026: `sessions.get` reads the dispute window (B37's integration).
   dispute_window_hours: 72,
+  // T028 (B38): an acceptance offers the make-up it owes, reading the choice and answer windows.
+  makeup_choice_window_days: 7,
+  makeup_counter_answer_hours: 72,
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
@@ -263,7 +266,12 @@ describe('a request and its answer (FR-456, FR-457, FR-458, FR-495)', () => {
         responded: true,
       }),
     ]);
-    expect(written.events).toEqual(['cancellation_requested', 'cancellation_accepted']);
+    // T028 (B38): the acceptance offers the make-up it owes in its transaction (decision 5).
+    expect(written.events).toEqual([
+      'cancellation_requested',
+      'cancellation_accepted',
+      'remedy_offered',
+    ]);
     const seen = await services.get({ userId: w.studentId }, { sessionId: w.sessionId }, log);
     expect(seen.cancellation).toEqual({
       requestId,
