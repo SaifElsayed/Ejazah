@@ -24,7 +24,6 @@ import { idempotencyKey } from './idempotency-key.js';
 import { calendarDate, timeZone } from './onboarding.js';
 import { sessionStatus } from './enrollments.js';
 import { sessionLengthMinutes } from './packages.js';
-import { idempotencyKey } from './idempotency-key.js';
 import { slotStartTimeLocal } from './slots.js';
 
 /** A session, as the caller names it. */

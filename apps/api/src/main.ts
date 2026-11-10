@@ -253,13 +253,15 @@ const services = {
     gateway: config.PAYMENT_GATEWAY,
   }),
   // `sessions.get` and `sessions.join` (T011 of specs/004-sessions): the session read under both
-  // accounts' locks, the room and the token through the video port after the commit.
+  // accounts' locks, the room and the token through the video port after the commit. The kernel's
+  // idempotency keys `sessions.cancellation.request` (T021) and runs `sessions.dispute.raise` (T026).
   sessions: sessionsModule.createSessionsServices({
     transactions: transactionsOver(database),
     settings,
     video: ports.video,
     enrollmentSide,
     store: sessionsModule.sessionsStore,
+    idempotency,
   }),
 };
 
