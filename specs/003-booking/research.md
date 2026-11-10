@@ -123,7 +123,7 @@ Every query is under `rate_limit_search`.
 **Decision.** A slot is *offerable* to a student when it is active, its teacher passes R-201 with `purpose: 'book'`,
 its length equals the package's, it has no active hold, and it is not *occupied*. A slot is occupied while an
 enrollment on it is `pending_payment`, or is `confirmed` and the week after its last session plus
-`slot_release_buffer_weeks` has not begun (FR-BOOK-10). The last session's date is read from `sessions` through
+`slot_release_buffer_weeks` has not begun (FR-BOOK-10). *(Amended 2026-11-10, the owner's rule of 2026-11-10: a package's slot does not return to the teacher until the package has fully ended, its make-ups part of it: a `confirmed` enrollment occupies its slot whatever the date, and the week after its last session plus the buffer frees it only once it is `completed`; FR-394 as amended, `specs/004-sessions` FR-423.)* The last session's date is read from `sessions` through
 `sessions/index.ts` (`lastSessionDateOf(tx, enrollmentIds)`), so booking never reads that table. The booking sheet
 (`booking.slots`) also removes the slots any of whose sessions (the package's count of consecutive weeks from the first, R-209) overlaps one of the student's own sessions, by the one check the hold applies too (FR-BOOK-5: at generation and at reservation; the owner's decision of 2026-11-02, T033),
 and returns each slot's preview: first and last session dates by R-209's rule from now. The discovery card's nearest
