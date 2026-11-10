@@ -292,6 +292,11 @@ describe('advance-remedies over this file’s rows, run twice (T028, R-API-14, Q
     const sweep = createRemedyAdvance({
       transactions: transactionsOver(database),
       offer,
+      // T032's windows' ends are `remedy-windows.spec.ts`'; this file's run reads none (below).
+      windows: {
+        endAnswerWindow: async () => 'not_due',
+        bookAtChoiceEnd: async () => 'not_due',
+      },
       completion: createCompletion({ enrollments, settings, clock: async () => at }),
       enrollments: {
         lockEnrollments: enrollments.lockEnrollments,
@@ -312,6 +317,8 @@ describe('advance-remedies over this file’s rows, run twice (T028, R-API-14, Q
           (await remedyAdvanceStore.frozenRemedies(tx, after, 10_000))
             .filter(({ remedyId }) => remedyId === frozenId)
             .slice(0, limit),
+        pendingCounters: async () => [],
+        choiceWindowsEnded: async () => [],
       },
     });
 

@@ -383,3 +383,25 @@ export {
   remedyStatusesAmong,
   remedyViewRowOf,
 } from './remedy-offer.repository.js';
+/**
+ * T031 of specs/004-sessions (FR-463 to FR-466; research R-311, "The student"; Q5 (a), Q9 (a)): the
+ * student's `sessions.remedy` procedures, composed into `SessionsServices.remedy`, and their store,
+ * for a spec that narrows it.
+ */
+export {
+  createRemedyServices,
+  type RemedyServices,
+  type RemedyStore,
+  remedyStore,
+} from './remedy.service.js';
+/**
+ * T032 of specs/004-sessions (FR-465 to FR-468; research R-311, "Windows ending"; D1; H5; A3;
+ * Q4 (a), Q11 (a)): the windows' ends, one remedy at a time, which `advance-remedies`' run calls
+ * (`createRemedyAdvance`'s `windows`).
+ */
+export {
+  type ChoiceEndOutcome,
+  createRemedyWindows,
+  type RemedyWindows,
+  type RemedyWindowsDependencies,
+} from './remedy.service.js';

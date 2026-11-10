@@ -24,6 +24,8 @@ export const idempotentProcedures = [
   'sessions.cancellation.request',
   // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.dispute`"; T026).
   'sessions.dispute.raise',
+  // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.remedy`"; T031, Q14 (a)).
+  'sessions.remedy.counter',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

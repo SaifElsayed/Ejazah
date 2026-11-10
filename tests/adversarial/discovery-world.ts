@@ -166,8 +166,18 @@ import type {
   SessionsGetOutput,
   SessionsJoinInput,
   SessionsJoinOutput,
+  SessionsRemedyAcceptInput,
+  SessionsRemedyAcceptOutput,
+  SessionsRemedyAnswerCounterInput,
+  SessionsRemedyAnswerCounterOutput,
+  SessionsRemedyChooseInput,
+  SessionsRemedyChooseOutput,
+  SessionsRemedyCounterInput,
+  SessionsRemedyCounterOptionsInput,
+  SessionsRemedyCounterOptionsOutput,
+  SessionsRemedyCounterOutput,
 } from '../../packages/contracts/src/index.js';
-import { addMinutes } from '../../packages/time/src/index.js';
+import { addDays, addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 
 type Gender = 'male' | 'female';
@@ -402,6 +412,19 @@ export interface AppCaller {
     readonly dispute: {
       raise(input: SessionsDisputeRaiseInput): Promise<SessionsDisputeRaiseOutput>;
     };
+    /** T031: a remedy chosen, accepted and counter-proposed, attacked in `sessions-remedy.attacks.ts`. */
+    readonly remedy: {
+      choose(input: SessionsRemedyChooseInput): Promise<SessionsRemedyChooseOutput>;
+      accept(input: SessionsRemedyAcceptInput): Promise<SessionsRemedyAcceptOutput>;
+      counterOptions(
+        input: SessionsRemedyCounterOptionsInput,
+      ): Promise<SessionsRemedyCounterOptionsOutput>;
+      counter(input: SessionsRemedyCounterInput): Promise<SessionsRemedyCounterOutput>;
+      /** T032: the teacher's answer to a counter-proposal. */
+      answerCounter(
+        input: SessionsRemedyAnswerCounterInput,
+      ): Promise<SessionsRemedyAnswerCounterOutput>;
+    };
   };
 }
 
@@ -495,6 +518,13 @@ export interface DiscoverySurface {
   suspend(teacherId: string): Promise<void>;
   /** T011 of specs/004-sessions: the pair of `gender`, made on first use (`SessionPair`). */
   sessionPair(gender: Gender): Promise<SessionPair>;
+  /**
+   * T031 of specs/004-sessions: a new session of the pair of `gender`, a Teacher-No-Show over ten
+   * days before, with its remedy `proposed`: offered an hour ago, its choice window open a week, its
+   * proposal on a Sunday of its own years ahead, so booking it meets no other session. Each call a
+   * new one, so an attack that books keeps no other attack's remedy from being open.
+   */
+  remedySession(gender: Gender): Promise<string>;
   /** T011: the video stand-in the sessions services ask, with its calls. */
   readonly video: RecordedVideo;
   /** T011 (K2): the account's gender changed in place, as the server's record after a correction. */
@@ -734,6 +764,8 @@ async function build(): Promise<Built> {
     };
   };
   const pairs = new Map<Gender, Promise<SessionPair>>();
+  // T031: `remedySession`'s calls, one after the other.
+  let remedies: Promise<unknown> = Promise.resolve();
   const makePair = async (gender: Gender): Promise<SessionPair> => {
     const { userId: studentId, email: studentEmail } = await seeder.student(
       gender,
@@ -986,6 +1018,54 @@ async function build(): Promise<Built> {
       if (made !== undefined) return made;
       const making = makePair(gender);
       pairs.set(gender, making);
+      return making;
+    },
+    remedySession(gender) {
+      // One at a time, so two calls never draw the same sequence number.
+      const making = remedies.then(async () => {
+        let pairMaking = pairs.get(gender);
+        if (pairMaking === undefined) {
+          pairMaking = makePair(gender);
+          pairs.set(gender, pairMaking);
+        }
+        const pair = await pairMaking;
+        const { _max } = await database.session.aggregate({
+          where: { enrollmentId: pair.enrollmentId },
+          _max: { sequenceNumber: true },
+        });
+        const sequenceNumber = (_max.sequenceNumber ?? 0) + 1;
+        const now = new Date();
+        const startsAt = new Date(addMinutes(now, -(14_400 + 120 * sequenceNumber)));
+        const { id: sessionId } = await database.session.create({
+          data: {
+            enrollmentId: pair.enrollmentId,
+            teacherUserId: pair.teacher.userId,
+            studentUserId: pair.student.userId,
+            sequenceNumber,
+            scheduledDateLocal: new Date('2026-12-03T00:00:00Z'),
+            scheduledStartTimeLocal: SLOT_START,
+            timezone: 'Africa/Cairo',
+            scheduledStartAt: startsAt,
+            scheduledEndAt: new Date(addMinutes(startsAt, SESSION_MINUTES)),
+            status: 'teacher_no_show',
+          },
+          select: { id: true },
+        });
+        await database.sessionRemedy.create({
+          data: {
+            sessionId,
+            kind: 'makeup',
+            status: 'proposed',
+            offeredAt: new Date(addMinutes(now, -60)),
+            choiceClosesAt: new Date(addDays(now, 7)),
+            snapshotAnswerWindowHours: 72,
+            snapshotFirstSessionLeadHours: 24,
+            proposedDate: new Date(addDays(new Date('2040-01-01T00:00:00Z'), 7 * sequenceNumber)),
+          },
+        });
+        return sessionId;
+      });
+      remedies = making.catch(() => undefined);
       return making;
     },
     video,
