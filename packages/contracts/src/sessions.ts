@@ -141,12 +141,15 @@ export type SessionsJoinOutput = z.infer<typeof sessionsJoinOutput>;
 // row says (FR-458). The caller names the session or the request and nothing else (R-GENDER-4).
 // ---------------------------------------------------------------------------------------------
 
-/** A cancellation request's reason, at most (FR-CANCEL-1); never blank (ERD §15 rule 45). */
-export const CANCELLATION_REASON_MAX_LENGTH = 500;
+/**
+ * A participant's reason, at most: a cancellation request's (FR-CANCEL-1) and a dispute's (T026),
+ * one bound for both; never blank (ERD §15 rule 45).
+ */
+export const PARTICIPANT_REASON_MAX_LENGTH = 500;
 
 export const sessionsCancellationRequestInput = z.object({
   sessionId: z.uuid(),
-  reason: z.string().trim().min(1).max(CANCELLATION_REASON_MAX_LENGTH),
+  reason: z.string().trim().min(1).max(PARTICIPANT_REASON_MAX_LENGTH),
   idempotencyKey,
 });
 
@@ -178,14 +181,15 @@ export type SessionsCancellationAnswerOutput = z.infer<typeof sessionsCancellati
 // FR-473, FR-474; research R-308). Either participant disputes a session of theirs with a reason,
 // from its scheduled end, before the evaluation too, until `dispute_window_hours` after it; keyed by
 // the client's idempotency key (`idempotent-procedures.ts`), so a retry answers the first result.
-// The reason is the participant's own text, bounded as this file's other participant reason is
-// (`cancellation.reason`, 1 to 500 characters), and trimmed before its bounds as a cancellation
-// request's is, so a reason of spaces only is refused (the owner's decision of 2026-11-10).
+// The reason is the participant's own text, bounded as a cancellation request's is
+// (`PARTICIPANT_REASON_MAX_LENGTH`, 1 to 500 characters), and trimmed before its bounds as a
+// cancellation request's is, so a reason of spaces only is refused (the owner's decision of
+// 2026-11-10).
 
 /** The session disputed, the participant's reason and the client's idempotency key. */
 export const sessionsDisputeRaiseInput = z.object({
   sessionId: z.uuid(),
-  reason: z.string().trim().min(1).max(500),
+  reason: z.string().trim().min(1).max(PARTICIPANT_REASON_MAX_LENGTH),
   idempotencyKey,
 });
 

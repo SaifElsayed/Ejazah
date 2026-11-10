@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isIdempotentProcedure } from './idempotent-procedures.js';
 import {
-  CANCELLATION_REASON_MAX_LENGTH,
+  PARTICIPANT_REASON_MAX_LENGTH,
   sessionsCancellationAnswerInput,
   sessionsCancellationAnswerOutput,
   sessionsCancellationRequestInput,
@@ -34,7 +34,7 @@ describe('sessions.cancellation.request', () => {
   it.each([
     ['empty', ''],
     ['blank', '   '],
-    ['too long', 'ا'.repeat(CANCELLATION_REASON_MAX_LENGTH + 1)],
+    ['too long', 'ا'.repeat(PARTICIPANT_REASON_MAX_LENGTH + 1)],
   ])('refuses a reason %s', (_name, reason) => {
     expect(
       sessionsCancellationRequestInput.safeParse({
@@ -46,7 +46,7 @@ describe('sessions.cancellation.request', () => {
   });
 
   it('takes a reason of exactly 500 characters', () => {
-    expect(CANCELLATION_REASON_MAX_LENGTH).toBe(500);
+    expect(PARTICIPANT_REASON_MAX_LENGTH).toBe(500);
     expect(
       sessionsCancellationRequestInput.safeParse({
         sessionId: SESSION,
