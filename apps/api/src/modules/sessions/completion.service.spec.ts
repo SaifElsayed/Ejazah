@@ -2,7 +2,9 @@
 // `createCompletion().completeIfDue` over a recorded store and enrollment side: an enrollment is
 // completed only when every session is settled and not frozen, no remedy is owed, the last
 // session's dispute window has closed and no `student_suspended` case is open, and then once,
-// through `EnrollmentSide.complete`, with its one log line. No count is read, and five or more
+// through `EnrollmentSide.complete`, answering true; it writes no log line itself, its caller
+// writing «Enrollment completed» (PR #129's review, Minor 3: the sweep after its commit, the outage
+// record on its transaction). No count is read, and five or more
 // Teacher-No-Shows end nothing. Over the real tables: `tests/db-integrity/completion.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
@@ -60,7 +62,6 @@ function world({
   moves?: boolean;
 } = {}) {
   const completed: string[] = [];
-  const logged: unknown[][] = [];
   const keys: string[] = [];
   const settings: SettingsReader = {
     read: async (key, schema) => {
@@ -84,11 +85,6 @@ function world({
       },
     },
     settings,
-    log: {
-      info: (...args: unknown[]) => {
-        logged.push(args);
-      },
-    } as unknown as Parameters<typeof createCompletion>[0]['log'],
     clock: async (given) => {
       // The reader is asked on the call's transaction (the database's clock in production, Q3).
       expect(given).toBe(tx);
@@ -96,27 +92,21 @@ function world({
     },
     store,
   });
-  return { completion, completed, logged, keys };
+  return { completion, completed, keys };
 }
 
 describe('completeIfDue (T015, FR-449)', () => {
-  it('completes a confirmed enrollment once the last window has closed, through EnrollmentSide.complete, with one log line', async () => {
-    const { completion, completed, logged, keys } = world();
+  it('completes a confirmed enrollment once the last window has closed, through EnrollmentSide.complete, answering true and taking no logger', async () => {
+    const { completion, completed, keys } = world();
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
     expect(completed).toEqual([ENROLLMENT]);
-    // One info line, its fields exactly the enrollment's id (the owner's decision of 2026-11-08, Q2).
-    expect(logged).toHaveLength(1);
-    expect(logged[0]?.[0]).toStrictEqual({ enrollmentId: ENROLLMENT });
-    expect(Object.keys(logged[0]?.[0] as object)).toEqual(['enrollmentId']);
-    expect(logged[0]?.[1]).toBe('Enrollment completed');
     expect(keys).toEqual(['dispute_window_hours']);
   });
 
   it('does not complete before the last session’s dispute window has closed', async () => {
-    const { completion, completed, logged } = world({ at: new Date('2026-11-04T07:59:59Z') });
+    const { completion, completed } = world({ at: new Date('2026-11-04T07:59:59Z') });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
     expect(completed).toEqual([]);
-    expect(logged).toEqual([]);
   });
 
   it('counts the window from the last session that can be disputed, not a later cancelled one', async () => {
@@ -141,11 +131,10 @@ describe('completeIfDue (T015, FR-449)', () => {
     ['a remedy proposed', settled('both_no_show', { remedyStatus: 'proposed' })],
     ['a counter-proposal pending', settled('teacher_no_show', { remedyStatus: 'counter_proposed' })],
     ['a frozen remedy', settled('cancelled_by_admin', { remedyStatus: 'frozen' })],
-  ])('holds it while there is %s, writing no log line (postponed)', async (_name, session) => {
-    const { completion, completed, logged } = world({ sessions: [...DELIVERED, session] });
+  ])('holds it while there is %s (postponed)', async (_name, session) => {
+    const { completion, completed } = world({ sessions: [...DELIVERED, session] });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
     expect(completed).toEqual([]);
-    expect(logged).toEqual([]);
   });
 
   it('completes with a refund handed to its case, or a remedy lapsed: no longer owed by the enrollment', async () => {
@@ -180,10 +169,9 @@ describe('completeIfDue (T015, FR-449)', () => {
     expect(completed).toEqual([]);
   });
 
-  it('writes no log line when the move changes nothing', async () => {
-    const { completion, logged } = world({ moves: false });
+  it('answers false when the move changes nothing', async () => {
+    const { completion } = world({ moves: false });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
-    expect(logged).toEqual([]);
   });
 
   it('five or more Teacher-No-Shows, each owed its remedy, end nothing and hold completion while owed (FR-448, SC-404)', async () => {

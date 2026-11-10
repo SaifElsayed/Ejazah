@@ -9,7 +9,9 @@
 //     students only, in both tabs (FR-391);
 //   - a detail that is not the caller's answers NOT_FOUND;
 //   - «اليوم» is the teacher's local day in the teacher's zone (FR-393);
-//   - every session carries its local date, local start, zone, instants and status;
+//   - every session carries its id (004:T020, FR-495: the phone opens its pre-session screen), its
+//     local date, local start, zone, instants and status, a disputed one `disputed` with no frozen
+//     outcome beside it (R-308);
 //   - a party absent from identity's names (a deleted account) is answered deleted, with no name
 //     and the deprecated name empty, on every list and detail (T007, FR-426).
 import { addMinutes } from '@ijazah/time';
@@ -58,12 +60,18 @@ function row(id: string, overrides: Partial<ListedEnrollmentRow> = {}): ListedEn
   };
 }
 
+/** A session's id, by its start: one per session of the spec. */
+const sessionIdOf = (startsAt: string): string =>
+  `0199d0a0-0000-7000-8000-${startsAt.slice(5, 16).replace(/D/g, '').padStart(12, '0')}`;
+
 function session(
   sequenceNumber: number,
   startsAt: string,
   status: EnrollmentSessionRow['status'] = 'scheduled',
+  values: Partial<EnrollmentSessionRow> = {},
 ): EnrollmentSessionRow {
   return {
+    id: sessionIdOf(startsAt),
     sequenceNumber,
     localDate: startsAt.slice(0, 10),
     startTimeLocal: '14:00:00',
@@ -71,10 +79,12 @@ function session(
     startsAt: new Date(startsAt),
     endsAt: new Date(addMinutes(new Date(startsAt), 60)),
     status,
+    ...values,
   };
 }
 
 const LISTED = {
+  sessionId: sessionIdOf('2026-11-17T12:00:00Z'),
   sequenceNumber: 2,
   localDate: '2026-11-17',
   startTimeLocal: '14:00',
@@ -190,6 +200,7 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       next: LISTED,
       last: {
         ...LISTED,
+        sessionId: sessionIdOf('2026-12-01T12:00:00Z'),
         sequenceNumber: 4,
         localDate: '2026-12-01',
         startsAt: '2026-12-01T12:00:00.000Z',
@@ -276,6 +287,30 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       [2, 'scheduled'],
     ]);
     expect(answer.next).toEqual(LISTED);
+  });
+
+  it('answers each session by its id, a disputed one `disputed` with no frozen outcome (004:T020, R-308)', async () => {
+    const { store } = storeOf({
+      listed: row(E1),
+      sessions: {
+        [E1]: [
+          session(1, '2026-11-03T09:00:00Z', 'disputed', { outcomeUnderDispute: 'student_no_show' }),
+          session(2, '2026-11-10T09:00:00Z', 'teacher_no_show'),
+        ],
+      },
+      names: { [TEACHER]: 'أحمد سالم' },
+    });
+    const answer = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(answer.sessions.map(({ sessionId, status }) => [sessionId, status])).toEqual([
+      [sessionIdOf('2026-11-03T09:00:00Z'), 'disputed'],
+      [sessionIdOf('2026-11-10T09:00:00Z'), 'teacher_no_show'],
+    ]);
+    expect(answer.sessions[0]).not.toHaveProperty('outcomeUnderDispute');
+    const teacher = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    expect(teacher.sessions.map(({ sessionId }) => sessionId)).toEqual(
+      answer.sessions.map(({ sessionId }) => sessionId),
+    );
+    expect(teacher.sessions[0]).not.toHaveProperty('outcomeUnderDispute');
   });
 
   it('answers NOT_FOUND for an enrollment that is not the student’s, or none', async () => {
@@ -416,6 +451,10 @@ describe('«اليوم» (FR-391, FR-393)', () => {
     ).toEqual([
       [E1, named('يوسف علي'), 3, 'scheduled'],
       [E2, named('زياد حسن'), 1, 'done'],
+    ]);
+    expect(answer.sessions.map(({ sessionId }) => sessionId)).toEqual([
+      sessionIdOf('2026-11-09T07:00:00Z'),
+      sessionIdOf('2026-11-09T09:00:00Z'),
     ]);
     expect(answer.sessions[0]).toMatchObject({
       localDate: '2026-11-09',

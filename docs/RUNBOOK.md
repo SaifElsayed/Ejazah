@@ -76,6 +76,14 @@ it, the development build is rebuilt on EAS with the `development` profile
 `plugins` entry in `app.json`: its config plugin does nothing unless asked
 for an option this app does not use.
 
+**The build with the video packages (Phase 3, T017).** LiveKit's packages are native, so the
+phone needs EAS build `725d593f-1f7d-4bd0-ad0e-fbc80737f685` (`development` profile, the build
+T019's device check passed on, with the service that keeps the room alive while sharing) or a later
+one. A build before the video packages fails when the room first calls the SDK; one before the
+service loses the room while the screen is shared. Install it over the old one
+with `adb install -r`, which keeps the app's data. A signature mismatch is reported, never answered
+with an uninstall, which would erase that data.
+
 **The fake provider.** One switch on each side. The API's
 `SIGN_IN_PROVIDER=fake` (the `.env.example` value) selects the stand-in that
 accepts an unsigned token (`platform/ports/sign-in/fake.adapter.ts`);
@@ -375,10 +383,11 @@ it, and not time it out between two reads in less than the ping.
 - One API process only, until Redis pub/sub between processes lands (Not
   scheduled in `specs/004-sessions/tasks.md`): a second API process would miss
   the other's events. Scaling the API by adding processes waits for it.
-- Memory: assumed at most 100 KB per stream in Node and 10 to 30 KB at the
-  proxy. **Measured:** not yet; the live channel's server task (T063 of
-  `specs/004-sessions/tasks.md`) opens 500 streams locally and writes the RSS
-  before and after here.
+- Memory: 10 to 30 KB per stream at the proxy is still an assumption. **Measured in
+  Node** (T063 of `specs/004-sessions/tasks.md`, 2026-11-08, Node 24 on Windows,
+  the process's working set, 500 streams of one account, no event sent): 200,528 KiB
+  before, 273,252 KiB with the streams open, 214,904 KiB after they closed: about
+  145 KiB per stream, above the 100 KB assumed until then.
 
 ## Leaked credential
 

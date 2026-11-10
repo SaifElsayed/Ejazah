@@ -34,6 +34,7 @@
 // person who is not a live student.
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import { lockApplication } from './application.repository.js';
 import type { AccountConsequences } from './consequences.js';
 import { AccountsRepository } from './identity.repository.js';
@@ -328,7 +329,12 @@ export class StandingService {
     await this.#store.moveAccount(tx, userId, ['verification_required'], 'active');
   }
 
-  /** Every session ended, then the one consequences entry. */
+  /**
+   * Every session ended, then the one consequences entry; and the person's `account` event added to
+   * the action's after-commit list (T063 of specs/004-sessions, FR-429; research R-324, item 6), so
+   * once the transaction commits their live streams read `account.me` and end, and on a rollback
+   * nothing is sent. The list is the administrator kind's, bound to this transaction.
+   */
   async #end(
     tx: Transaction,
     userId: string,
@@ -342,6 +348,7 @@ export class StandingService {
           : 'admin_action';
     await this.#store.revokeSessions(tx, userId, reason, this.#now());
     await this.#consequences.onAccountTerminated(tx, userId, cause);
+    publisherOn(tx)?.afterCommit([userId], { type: 'account' });
   }
 
   async #teacher(

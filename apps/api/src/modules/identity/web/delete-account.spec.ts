@@ -24,6 +24,7 @@ import {
   defaultRateLimits,
   RateLimiter,
   type RateLimitKey,
+  type RateLimitSubject,
 } from '../../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../../platform/logging/logger.js';
 import { copyOf } from '../../../platform/web/copy.js';
@@ -83,13 +84,19 @@ const pageLimiter = new RateLimiter({
   subjectKey: Buffer.alloc(32, 1),
 });
 
-/** What the pages counted, in order, and the subjects to refuse. */
+/**
+ * What the pages counted, in order (the budget as `*`, an address as itself, T062's
+ * `RateLimitSubject` read back), each step's procedure name, and the subjects to refuse.
+ */
 const counted: Array<readonly [RateLimitKey, string]> = [];
+const procedures: string[] = [];
 const refusedSubjects = new Set<string>();
 const addressLimiter = {
-  check: vi.fn(async (key: RateLimitKey, subject: string) => {
-    counted.push([key, subject]);
-    if (refusedSubjects.has(subject)) throw new DomainError('RATE_LIMITED');
+  check: vi.fn(async (key: RateLimitKey, subject: RateLimitSubject, procedure: string) => {
+    const text = subject.kind === 'identifier' ? subject.value : subject.kind === 'budget' ? '*' : '';
+    counted.push([key, text]);
+    procedures.push(procedure);
+    if (refusedSubjects.has(text)) throw new DomainError('RATE_LIMITED');
   }),
 };
 
@@ -242,6 +249,8 @@ describe('POST /delete-account: the email step (FR-143, public-pages.md)', () =>
       [defaultRateLimits.oneTimeCodeBudget, '*'],
       [defaultRateLimits.oneTimeCode, 'someone@example.com'],
     ]);
+    // The step's path names it in a refusal's record (T062).
+    expect(procedures.slice(-2)).toEqual([DELETE_ACCOUNT_PATH, DELETE_ACCOUNT_PATH]);
     refusedSubjects.add('limited@example.com');
     const refused = await submit(DELETE_ACCOUNT_PATH, { email: 'limited@example.com' });
     expect(refused.status).toBe(429);

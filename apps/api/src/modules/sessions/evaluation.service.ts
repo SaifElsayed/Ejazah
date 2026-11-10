@@ -31,7 +31,9 @@
 //
 // THE LOG (the owner's rule; research R-323, GAP-7). Each settlement, an automatic action, writes
 // one info line `{ sessionId, outcome }` after its commit; a session not settled because another
-// path got there first writes none. Each `endRoom` call writes one info line `video room ended` with
+// path got there first writes none. A completion T015's check made on that transaction writes one
+// more, «Enrollment completed» `{ enrollmentId }`, after the same commit, so a rolled-back session
+// leaves neither and a completion postponed none (PR #129's review, round 1, Minor 3). Each `endRoom` call writes one info line `video room ended` with
 // exactly `{ sessionId }`, never a token, a name or an address, and no row (the provider's
 // `room_ended` event stays the record). A session whose evaluation fails writes one error line
 // `{ sessionId }` and is reported to error tracking, and the run goes on to the next, which a later
@@ -146,6 +148,8 @@ export interface Evaluation {
 interface Settled {
   readonly outcome: AttendanceOutcome;
   readonly disputed: boolean;
+  /** T015's check completed the enrollment on the same transaction. */
+  readonly completed: boolean;
 }
 
 export function createEvaluation({
@@ -236,8 +240,8 @@ export function createEvaluation({
           occurredAt: at,
         },
       ]);
-      await completion.completeIfDue(tx, session.enrollmentId);
-      return { outcome: attendance.outcome, disputed: session.status === 'disputed' };
+      const completed = await completion.completeIfDue(tx, session.enrollmentId);
+      return { outcome: attendance.outcome, disputed: session.status === 'disputed', completed };
     });
 
   return {
@@ -261,6 +265,9 @@ export function createEvaluation({
               { sessionId: due.id, outcome: written.outcome },
               written.disputed ? 'Session evaluated under dispute' : 'Session settled',
             );
+            if (written.completed) {
+              log.info({ enrollmentId: due.enrollmentId }, 'Enrollment completed');
+            }
           } catch (error: unknown) {
             failed.push(due.id);
             log.error({ sessionId: due.id }, 'Session evaluation failed');

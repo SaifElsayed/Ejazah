@@ -2,6 +2,7 @@
 import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { LiveBus } from '../../platform/live/live-bus.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
@@ -133,6 +134,11 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly fileHold?: FileHold;
   /** Where a failure after a deletion's commit is reported; the error tracker unless given. */
   readonly report?: (error: unknown) => void;
+  /**
+   * The process's live bus (T063 of specs/004-sessions): a deleted person's `account`, sent after the
+   * deletion's commit, ends their live streams. Bound by `main.ts`.
+   */
+  readonly live?: Pick<LiveBus, 'publish'>;
 }
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
@@ -149,6 +155,7 @@ export function createIdentityServices({
   fileErasures,
   fileHold,
   report,
+  live,
   ...base
 }: IdentityServiceDependencies): IdentityServices {
   const sessions = new SessionService(base);
@@ -175,6 +182,7 @@ export function createIdentityServices({
       fileErasures,
       fileHold,
       report,
+      ...(live === undefined ? {} : { live }),
     }),
   };
 }

@@ -17,6 +17,7 @@ import { initTRPC } from '@trpc/server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createApplication, type Surfaces, surfacePaths } from './app.module.js';
+import { DomainError } from './platform/errors/domain-error.js';
 import { RateLimiter } from './platform/guards/rate-limit.guard.js';
 
 // No session is resolved in these cases: the resolvers answer null, as main.ts's stand-ins do (T017).
@@ -319,5 +320,169 @@ describe('the request body limit (T150, FR-077)', () => {
     await post(`${wiredOrigin}${surfacePaths.admin}/approve`, bodyOf(BODY_LIMIT + 1));
 
     expect(errorRecords()).toBe(before);
+  });
+});
+
+// T062's follow-up from B34 (the owner's decision of 2026-11-07 on B34's conflict check, item 4
+// (b)): every expected refusal leaves one info line, written in one place for every procedure of
+// both surfaces (the handlers' `onError`): `{ procedure, errorCode, userId }` for a signed-in user,
+// `{ procedure, errorCode, adminId }` for an administrator, `{ procedure, errorCode }` for an
+// anonymous call, never an input, a name or a message. A rate limit's refusal is the limiter's to
+// log, once per subject and window (SRS NFR-SEC-12), so it writes no line here.
+describe('every expected refusal is logged once, in one place (T062, the B34 follow-up)', () => {
+  const STUDENT_ID = '0199d0a0-0000-7000-8000-0000000000a1';
+  const ADMIN_ID = '0199d0a0-0000-7000-8000-0000000000a2';
+  const lines: string[] = [];
+  const marker = 'Nour Abdelrahman, +201001234567';
+  let refusing: INestApplication;
+  let refusingOrigin: string;
+
+  const refusals = createAppRouter({
+    taken: studentProcedure({ input: z.object({ note: z.string() }), output: z.void() }).mutation(
+      () => {
+        throw new DomainError('CONFLICT', marker);
+      },
+    ),
+    missing: studentProcedure({ input: z.void(), output: z.void() }).query(() => {
+      throw new DomainError('NOT_FOUND');
+    }),
+    limited: studentProcedure({ input: z.void(), output: z.void() }).query(() => {
+      throw new DomainError('RATE_LIMITED');
+    }),
+    open: publicProcedure({ input: z.void(), output: z.void(), rateLimit: anyone }).query(() => {
+      throw new DomainError('FORBIDDEN');
+    }),
+  });
+  const adminRefusals = createAdminRouter({
+    decide: adminProcedure({ input: z.object({ note: z.string() }), output: z.void() }).mutation(
+      () => {
+        throw new DomainError('CONFLICT', marker);
+      },
+    ),
+  });
+
+  beforeAll(async () => {
+    refusing = await createApplication({
+      log: createLogger({ level: 'info', destination: { write: (line) => lines.push(line) } }),
+      readiness: { databaseReachable: async () => {} },
+      securityHeaders: { allowedOrigins: [], mode: 'test' },
+      maxRequestBodyBytes: BODY_LIMIT,
+      administration: {
+        transactions: { run: (work) => work({} as never) },
+        auditWriter: { write: () => Promise.reject(new Error('nothing is audited here')) },
+      },
+      rateLimiter,
+      sessions: {
+        user: async (bearer) =>
+          bearer === 'student-token'
+            ? {
+                userId: STUDENT_ID,
+                sessionId: '0199d0a0-0000-7000-8000-0000000000b1',
+                role: 'student',
+                gender: 'female',
+                preferredLanguage: 'ar',
+                accountStatus: 'active',
+              }
+            : null,
+        admin: async (bearer) =>
+          bearer === 'admin-token'
+            ? { adminId: ADMIN_ID, sessionId: '0199d0a0-0000-7000-8000-0000000000b2', mfaVerified: true }
+            : null,
+      },
+      services,
+      adminServices: unusedAdminServices,
+      surfaces: { app: refusals, admin: adminRefusals },
+    });
+    await refusing.listen(0, '127.0.0.1');
+    refusingOrigin = (await refusing.getUrl()).replace('[::1]', '127.0.0.1');
+  });
+
+  afterAll(async () => {
+    await refusing?.close();
+  });
+
+  async function call(
+    path: string,
+    bearer: string | null,
+    input?: unknown,
+  ): Promise<number> {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (bearer !== null) headers['authorization'] = `Bearer ${bearer}`;
+    const response =
+      input === undefined
+        ? await fetch(`${refusingOrigin}${path}`, { headers })
+        : await fetch(`${refusingOrigin}${path}`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(input),
+          });
+    await response.arrayBuffer();
+    return response.status;
+  }
+
+  /** The refusal lines written since `from`, as records. */
+  function refusalLines(from: number): Array<Record<string, unknown>> {
+    return lines
+      .slice(from)
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((record) => record['msg'] === 'A procedure call was refused');
+  }
+
+  /** A record's own fields: what the request logger binds to every line left out. */
+  function ownFields(record: Record<string, unknown>): Record<string, unknown> {
+    const { level, time, pid, hostname, msg, correlationId, clientAddress, ...own } = record;
+    void [level, time, pid, hostname, msg, correlationId, clientAddress];
+    return own;
+  }
+
+  it('writes one info line for a signed-in user’s refusal: the procedure, the code and the user id', async () => {
+    const from = lines.length;
+    expect(await call(`${surfacePaths.app}/taken`, 'student-token', { note: marker })).toBe(409);
+    expect(await call(`${surfacePaths.app}/missing`, 'student-token')).toBe(404);
+
+    const written = refusalLines(from);
+    expect(written.map((record) => record['level'])).toEqual(['info', 'info']);
+    expect(written.map(ownFields)).toEqual([
+      { procedure: 'taken', errorCode: 'CONFLICT', userId: STUDENT_ID },
+      { procedure: 'missing', errorCode: 'NOT_FOUND', userId: STUDENT_ID },
+    ]);
+    expect(written.every((record) => typeof record['correlationId'] === 'string')).toBe(true);
+  });
+
+  it('writes one for an administrator’s refusal, by the administrator’s id', async () => {
+    const from = lines.length;
+    expect(await call(`${surfacePaths.admin}/decide`, 'admin-token', { note: marker })).toBe(409);
+
+    expect(refusalLines(from).map(ownFields)).toEqual([
+      { procedure: 'decide', errorCode: 'CONFLICT', adminId: ADMIN_ID },
+    ]);
+  });
+
+  it('writes one for an anonymous refusal, with no id at all', async () => {
+    const from = lines.length;
+    expect(await call(`${surfacePaths.app}/open`, null)).toBe(403);
+    expect(await call(`${surfacePaths.app}/missing`, null)).toBe(401);
+
+    expect(refusalLines(from).map(ownFields)).toEqual([
+      { procedure: 'open', errorCode: 'FORBIDDEN' },
+      { procedure: 'missing', errorCode: 'UNAUTHENTICATED' },
+    ]);
+  });
+
+  it('writes none for a rate limit’s refusal, which the limiter logs once per window', async () => {
+    const from = lines.length;
+    expect(await call(`${surfacePaths.app}/limited`, 'student-token')).toBe(429);
+
+    expect(refusalLines(from)).toEqual([]);
+  });
+
+  it('never writes the input, a name or the error’s message', async () => {
+    const from = lines.length;
+    await call(`${surfacePaths.app}/taken`, 'student-token', { note: marker });
+    await call(`${surfacePaths.admin}/decide`, 'admin-token', { note: marker });
+
+    const written = lines.slice(from).join('\n');
+    expect(written).not.toContain('Nour');
+    expect(written).not.toContain('201001234567');
   });
 });

@@ -47,6 +47,7 @@ import {
   uniqueEmail,
   uniqueSubject,
 } from './__fixtures__/identity.js';
+import { createIdentityServices } from './index.js';
 import type { CodeHasher } from './one-time-codes.js';
 
 const database = openSpecDatabase();
@@ -471,6 +472,63 @@ describe('account.delete: after the commit (B16 check, decisions 1 and 3)', () =
     ]);
     expect(spec.identity.mails()).toHaveLength(mails + 1);
     expect(spec.reports).toEqual([]);
+  });
+
+  // T063 of specs/004-sessions (FR-429; research R-324, item 6): the deleted person's `account`, once
+  // the deletion has committed, ends their live streams; a refused deletion sends nothing.
+  it('publishes the person’s `account` on the live bus after the commit, and nothing when refused (T063)', async () => {
+    const caller = await emailAccount();
+    await expect(deleteWith(caller.userId, byPassword('a wrong passphrase'))).rejects.toEqual(
+      refused('SIGN_IN_FAILED'),
+    );
+    expect(spec.published).toEqual([]);
+
+    await deleteWith(caller.userId, byPassword());
+
+    expect(spec.published).toEqual([{ to: [caller.userId], event: { type: 'account' } }]);
+    expect(spec.events.indexOf('live-account')).toBeGreaterThan(spec.events.indexOf('committed'));
+  });
+
+  // T063: the owner's decision of 2026-11-09 (the coverage of CI's command, deletion.service.ts:313).
+  it.each([
+    ['an Error, by its name', new TypeError('spec bus: unreachable'), 'TypeError'],
+    ['anything else, as unknown', 'spec bus: a thrown string', 'unknown'],
+  ])(
+    'a publish that fails with %s writes one warning of eventType and errorName only, and the deletion goes on (T063)',
+    async (_case, thrown, errorName) => {
+      spec = buildDeletion(database, {}, {
+        publish: () => {
+          throw thrown;
+        },
+      });
+      const caller = await emailAccount();
+
+      await deleteWith(caller.userId, byPassword());
+      await spec.settle();
+
+      expect(spec.identity.warnings).toEqual([{ eventType: 'account', errorName }]);
+      expect((await rows().deletedUser(caller.userId))?.deletedAt).not.toBeNull();
+      expect(spec.identity.mails().filter(({ to }) => to === caller.email)).toHaveLength(1);
+    },
+  );
+
+  // T063: the owner's decision of 2026-11-09 (the coverage of CI's command, index.ts:185).
+  it('the composition hands `live` to the deletion: createIdentityServices publishes the person’s `account` (T063)', async () => {
+    const published: unknown[] = [];
+    const services = createIdentityServices({
+      ...spec.composition,
+      live: { publish: (message) => void published.push(message) },
+    });
+    const caller = await emailAccount();
+
+    await services.deletion.deleteAccount(caller.userId, {
+      confirmation: 'حذف',
+      reauth: byPassword(),
+      idempotencyKey: key(),
+    });
+    await spec.settle();
+
+    expect(published).toEqual([{ to: [caller.userId], event: { type: 'account' } }]);
   });
 
   it('removes a person not held at once, asked after the commit and before the removal (T004)', async () => {

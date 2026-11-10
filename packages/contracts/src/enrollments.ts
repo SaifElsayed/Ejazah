@@ -33,8 +33,16 @@ export const sessionStatus = z.enum([
   'disputed',
 ]);
 
-/** One session as a list shows it: `checkout.status`' session with its status (FR-393). */
-export const listedSession = enrollmentSession.extend({ status: sessionStatus });
+/**
+ * One session as a list shows it: `checkout.status`' session with its status (FR-393), and its id
+ * (004:T020; specs/004-sessions/contracts/app-surface.md, "Phase 2's lists, widened additively"), so
+ * the phone opens the session's pre-session screen from it. A disputed session's status is
+ * `disputed`; the outcome frozen beside it is never answered (R-308).
+ */
+export const listedSession = enrollmentSession.extend({
+  sessionId: z.uuid(),
+  status: sessionStatus,
+});
 
 /** The package line an enrollment shows, from its snapshot: subject, track, sessions, minutes. */
 export const enrollmentTerms = z.object({

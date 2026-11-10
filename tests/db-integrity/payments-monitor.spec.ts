@@ -374,11 +374,8 @@ describe('no monitor procedure writes beyond its audit entry (FR-401)', () => {
             },
           },
           services,
-          rateLimiter: {
-            check: async () => {
-              throw new DomainError('INTERNAL');
-            },
-          } as unknown as RateLimiter,
+          // Every administrator call is counted by the signed-in default since T062 (FR-470).
+          rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
           clientAddress: '203.0.113.9',
         }),
       );

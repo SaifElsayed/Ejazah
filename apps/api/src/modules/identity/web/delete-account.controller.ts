@@ -30,11 +30,7 @@
 import { emailAddress, oneTimeCode } from '@ijazah/contracts';
 
 import { errorCodes } from '../../../platform/errors/domain-error.js';
-import {
-  BUDGET_SUBJECT,
-  defaultRateLimits,
-  type RateLimiter,
-} from '../../../platform/guards/rate-limit.guard.js';
+import { defaultRateLimits, type RateLimiter } from '../../../platform/guards/rate-limit.guard.js';
 import type { Locale } from '../../../platform/http/locale.js';
 import { copyOf, fill } from '../../../platform/web/copy.js';
 import { html, type SafeHtml } from '../../../platform/web/html.js';
@@ -363,8 +359,13 @@ export function deleteAccountRoutes({
   const requestCode = async ({ lang, form }: WebRequest): Promise<WebResponse> => {
     const email = emailOf(form);
     if (!emailAddress.safeParse(email).success) return emailStep(lang, { email });
-    await rateLimiter.check(ONE_TIME_CODE_BUDGET, BUDGET_SUBJECT);
-    await rateLimiter.check(ONE_TIME_CODE_LIMIT, normalizeEmail(email));
+    // Each step's path is its fixed name in a refusal's record (T062); the address is an identifier.
+    await rateLimiter.check(ONE_TIME_CODE_BUDGET, { kind: 'budget' }, DELETE_ACCOUNT_PATH);
+    await rateLimiter.check(
+      ONE_TIME_CODE_LIMIT,
+      { kind: 'identifier', value: normalizeEmail(email) },
+      DELETE_ACCOUNT_PATH,
+    );
     await deletion.requestWebCode(email);
     return codeStep(lang, email, false);
   };
@@ -376,7 +377,11 @@ export function deleteAccountRoutes({
     if (!emailAddress.safeParse(email).success || !oneTimeCode.safeParse(code).success) {
       return codeStep(lang, email, true);
     }
-    await rateLimiter.check(ONE_TIME_CODE_LIMIT, normalizeEmail(email));
+    await rateLimiter.check(
+      ONE_TIME_CODE_LIMIT,
+      { kind: 'identifier', value: normalizeEmail(email) },
+      DELETE_ACCOUNT_CONFIRM_PATH,
+    );
     const deleted = await deletion.confirmWebDeletion(email, code);
     return deleted ? doneStep(lang, email, supportEmail) : codeStep(lang, email, true);
   };

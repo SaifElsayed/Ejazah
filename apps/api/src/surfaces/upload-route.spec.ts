@@ -11,6 +11,7 @@ import { createApplication } from '../app.module.js';
 import { DomainError } from '../platform/errors/domain-error.js';
 import { type RateLimitCounter, RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { UPLOAD_RATE_LIMIT } from '../platform/guards/upload.middleware.js';
+import { InProcessLiveBus } from '../platform/live/live-bus.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../platform/settings/settings-reader.js';
 import type { UserSession } from './context.js';
@@ -63,6 +64,7 @@ const sessionsByBearer: Readonly<Record<string, UserSession>> = {
   't-banned': session('u-banned', 'banned'),
   't-fresh': session('u-fresh', 'active'),
   't-conflict': session('u-conflict', 'active'),
+  't-live': session('u-live', 'active'),
 };
 const sessions = {
   user: async (bearer: string) => {
@@ -100,6 +102,12 @@ const log = createLogger({ level: 'info', destination: { write: (line) => record
 let application: INestApplication;
 let origin: string;
 
+// T063 of specs/004-sessions: the route's own after-commit point, over the process's bus.
+const bus = new InProcessLiveBus();
+const published: unknown[] = [];
+bus.subscribe((message) => void published.push(message));
+const uploaded = { type: 'enrollment', enrollmentId: '0199d0a0-0000-7000-8000-00000000e0a1' } as const;
+
 beforeAll(async () => {
   application = await createApplication({
     log,
@@ -113,17 +121,14 @@ beforeAll(async () => {
     adminServices: unusedAdminServices,
     routes: {
       '/uploads/probe': uploadRoute(
-        { sessions: sessions.user, guard: { settings, rateLimiter }, log },
+        { sessions: sessions.user, guard: { settings, rateLimiter }, log, live: bus },
         {
           kindOf: kindField(['identity', 'credential']),
           refuses: ['banned'],
-          handle: async ({ uploader, kind, type, bytes, filename }) => ({
-            userId: uploader.userId,
-            kind,
-            type,
-            size: bytes.byteLength,
-            filename,
-          }),
+          handle: async ({ uploader, kind, type, bytes, filename, live }) => {
+            live.afterCommit([uploader.userId], uploaded);
+            return { userId: uploader.userId, kind, type, size: bytes.byteLength, filename };
+          },
         },
       ),
       '/uploads/strict': uploadRoute(
@@ -132,6 +137,18 @@ beforeAll(async () => {
           kindOf: () => 'photo',
           refuses: ['suspended', 'banned'],
           handle: async () => {
+            throw new DomainError('CONFLICT');
+          },
+        },
+      ),
+      // T063: a handler that adds an event and then fails, as a refused transaction would.
+      '/uploads/refusing': uploadRoute(
+        { sessions: sessions.user, guard: { settings, rateLimiter }, log, live: bus },
+        {
+          kindOf: kindField(['identity']),
+          refuses: ['banned'],
+          handle: async ({ uploader, live }) => {
+            live.afterCommit([uploader.userId], uploaded);
             throw new DomainError('CONFLICT');
           },
         },
@@ -201,6 +218,20 @@ async function loggedSoon(text: string): Promise<void> {
   }
   throw new Error(`nothing logged containing "${text}"`);
 }
+
+describe('the upload route’s after-commit point (T063)', () => {
+  it('sends what the handler added once it resolved, and nothing when it threw', async () => {
+    published.length = 0;
+    expect((await post('/uploads/probe', 't-live', identityPdf())).status).toBe(201);
+    expect(published).toEqual([{ to: ['u-live'], event: uploaded }]);
+
+    published.length = 0;
+    const refused = await post('/uploads/refusing', 't-live', identityPdf());
+    expect(refused.status).toBe(409);
+    await refused.arrayBuffer();
+    expect(published).toEqual([]);
+  });
+});
 
 describe('the upload route helper (T024, FR-151)', () => {
   it('accepts one multipart file behind the bearer and hands the handler the sniffed type and the bytes', async () => {

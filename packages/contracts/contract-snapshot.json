@@ -1754,6 +1754,7 @@
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
           "$.last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.last.sessionId": { "required": true, "type": "string" },
           "$.last.startTimeLocal": { "required": true, "type": "string" },
           "$.last.startsAt": { "required": true, "type": "string" },
           "$.last.status": {
@@ -1777,6 +1778,7 @@
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
           "$.next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.next.sessionId": { "required": true, "type": "string" },
           "$.next.startTimeLocal": { "required": true, "type": "string" },
           "$.next.startsAt": { "required": true, "type": "string" },
           "$.next.status": {
@@ -1802,6 +1804,7 @@
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
           "$.sessions[].startsAt": { "required": true, "type": "string" },
           "$.sessions[].status": {
@@ -1874,6 +1877,7 @@
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
           "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].last.sessionId": { "required": true, "type": "string" },
           "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
           "$.items[].last.startsAt": { "required": true, "type": "string" },
           "$.items[].last.status": {
@@ -1897,6 +1901,7 @@
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
           "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].next.sessionId": { "required": true, "type": "string" },
           "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
           "$.items[].next.startsAt": { "required": true, "type": "string" },
           "$.items[].next.status": {
@@ -1951,6 +1956,21 @@
           "$.items[].teacher.teacherId": { "required": true, "type": "string" },
           "$.items[].upcoming": { "required": true, "type": "integer" },
           "$.nextCursor": { "type": "string" }
+        }
+      },
+      "live.events": {
+        "caller": "user",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "subscription",
+        "output": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.type": {
+            "required": true,
+            "type": "string",
+            "values": ["account", "enrollment", "session"]
+          }
         }
       },
       "onboarding.complete": {
@@ -2533,6 +2553,7 @@
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
           "$.last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.last.sessionId": { "required": true, "type": "string" },
           "$.last.startTimeLocal": { "required": true, "type": "string" },
           "$.last.startsAt": { "required": true, "type": "string" },
           "$.last.status": {
@@ -2556,6 +2577,7 @@
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
           "$.next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.next.sessionId": { "required": true, "type": "string" },
           "$.next.startTimeLocal": { "required": true, "type": "string" },
           "$.next.startsAt": { "required": true, "type": "string" },
           "$.next.status": {
@@ -2581,6 +2603,7 @@
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
           "$.sessions[].startsAt": { "required": true, "type": "string" },
           "$.sessions[].status": {
@@ -2653,6 +2676,7 @@
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
           "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].last.sessionId": { "required": true, "type": "string" },
           "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
           "$.items[].last.startsAt": { "required": true, "type": "string" },
           "$.items[].last.status": {
@@ -2676,6 +2700,7 @@
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
           "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
+          "$.items[].next.sessionId": { "required": true, "type": "string" },
           "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
           "$.items[].next.startsAt": { "required": true, "type": "string" },
           "$.items[].next.status": {
@@ -2744,6 +2769,7 @@
           "$.sessions[].enrollmentId": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
           "$.sessions[].startsAt": { "required": true, "type": "string" },
           "$.sessions[].status": {

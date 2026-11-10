@@ -517,6 +517,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-433**: Every participant MUST have audio in every session; camera and screen share MUST be each participant's own choice, off until turned on, and nothing about them MAY be evaluated, stored or minted into a token (FR-SESS-4, §3.7.2).
 - **FR-434**: Before entering the room, each participant MUST see a pre-session screen with the counterparty's name, the scheduled length, the start in the session's zone and in the viewer's, and their own microphone and camera state, and MUST be able to grant the microphone there (FR-SESS-5, ADR 0009 D5).
 - **FR-435**: A participant whose connection drops MUST be able to rejoin the same session's room until its scheduled end (FR-SESS-18).
+- **FR-500**: Before a participant shares their whole screen, the app MUST warn them, every time and in both roles, before the operating system's own permission prompt: «إذا شاركت الشاشة كاملة، سيرى الطرف الآخر كل ما يظهر عليها، بما في ذلك الإشعارات. أغلق ما لا تريد مشاركته قبل المتابعة.», with «متابعة» and «إلغاء»; a cancel MUST send nothing to the server and start no share (SRS §3.7.2, added 2026-11-08, the owner's decision on B36's conflict check).
 - **FR-436**: A room MUST admit at most the session's two participants.
 
 **Attendance evidence and evaluation**

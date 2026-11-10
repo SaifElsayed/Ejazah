@@ -555,7 +555,9 @@
       "a11y": {
         "preview": "معاينة الكاميرا"
       },
+      "allowMic": "السماح بالميكروفون",
       "camera": "الكاميرا",
+      "cameraInRoom": "تشغّلها إن شئت من داخل الجلسة.",
       "cameraOff": "كاميرتك مغلقة",
       "cameraOptional": "اختيارية",
       "cameraStatus": {
@@ -567,9 +569,10 @@
       "micRequired": "مطلوب",
       "micStatus": {
         "denied": "غير مسموح",
-        "working": "يعمل"
+        "working": "مسموح"
       },
-      "micWorking": "الميكروفون يعمل",
+      "micWorking": "الميكروفون مسموح",
+      "opensAt": "يفتح الدخول",
       "permission": {
         "banner": "اسمح لإجازة باستخدام الميكروفون من الإعدادات لتدخل الجلسة.",
         "meta": "{date} · {start} – {end} · {minutes, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
@@ -578,6 +581,7 @@
         "openSettings": "فتح الإعدادات"
       },
       "sessionOf": "{subject} · الجلسة {n} من {total}",
+      "startsAt": "موعد البدء",
       "teacher": {
         "a11y": {
           "cameraPreview": "معاينة الكاميرا",
@@ -591,13 +595,15 @@
         "durationValue": "{minutes} دقيقة",
         "join": "دخول الجلسة",
         "mic": "الميكروفون",
-        "micOk": "يعمل",
+        "micOk": "مسموح",
         "micRequired": "مطلوب",
-        "micWorking": "الميكروفون يعمل",
+        "micWorking": "الميكروفون مسموح",
         "timeRange": "{start} – {end}",
         "title": "قبل الجلسة"
       },
-      "title": "قبل الجلسة"
+      "timeIn": "{date} · {time} · بتوقيت {city}",
+      "title": "قبل الجلسة",
+      "unavailable": "لا يمكن دخول هذه الجلسة الآن."
     },
     "room": {
       "a11y": {
@@ -611,15 +617,34 @@
       },
       "audioOnCameraOff": "الصوت يعمل · الكاميرا مغلقة",
       "audioOnly": "بالصوت فقط",
+      "cameraDenied": "لم يُسمح للتطبيق باستخدام الكاميرا.",
+      "cameraOff": "إيقاف الكاميرا",
       "cameraOffSpeaking": "الكاميرا مغلقة · يتحدث الآن",
+      "cameraOn": "تشغيل الكاميرا",
+      "connecting": "جارٍ الدخول إلى الجلسة…",
+      "ended": "انتهى وقت الجلسة.",
+      "leave": "مغادرة الجلسة",
       "notJoined": "{name} · لم ينضم بعد",
       "reconnecting": "جارٍ إعادة الاتصال…",
+      "screenShare": {
+        "noticeText": "تشارك شاشتك الآن. اضغط للرجوع إلى الجلسة.",
+        "noticeTitle": "جلستك على إجازة مستمرة",
+        "title": "مشاركة الشاشة كاملة",
+        "warning": "إذا شاركت الشاشة كاملة، سيرى الطرف الآخر كل ما يظهر عليها، بما في ذلك الإشعارات. أغلق ما لا تريد مشاركته قبل المتابعة."
+      },
+      "shareScreen": "مشاركة الشاشة",
+      "sharing": "تشارك شاشتك الآن",
+      "stopShare": "إيقاف مشاركة الشاشة",
       "subtitle": "{subject} · الجلسة {n} من {total}",
       "timer": "{elapsed} / {total}",
       "waitingFor": "بانتظار انضمام {name}…",
       "weakConnection": "الاتصال ضعيف — نكمل بالصوت فقط",
       "you": "أنت",
-      "youInSession": "أنت · في الجلسة"
+      "youInSession": "أنت · في الجلسة",
+      "anotherDevice": {
+        "message": "دخلت إلى هذه الجلسة من جهاز آخر.",
+        "action": "الدخول من هذا الجهاز"
+      }
     }
   },
   "status": {
@@ -1296,12 +1321,12 @@
         "disabled": "معطّل",
         "free": "متاح"
       },
-      "lockedBanner": "‏لن تظهر مواعيدك للطلاب حتى يتم التحقق من حساب الاستلام",
+      "lockedBanner": "\u200Fلن تظهر مواعيدك للطلاب حتى يتم التحقق من حساب الاستلام",
       "noSlotsOn": "{days}: لا مواعيد",
       "slot": "{time} · {minutes} د",
       "subtitle": "بتوقيتك: {city} · تتكرر كل أسبوع",
       "title": "المواعيد",
-      "unpublished": "‏غير منشورة"
+      "unpublished": "\u200Fغير منشورة"
     },
     "cancel": {
       "picker": {

@@ -555,7 +555,9 @@
       "a11y": {
         "preview": "Camera preview"
       },
+      "allowMic": "Allow the microphone",
       "camera": "Camera",
+      "cameraInRoom": "Turn it on in the session if you wish.",
       "cameraOff": "Your camera is off",
       "cameraOptional": "Optional",
       "cameraStatus": {
@@ -567,9 +569,10 @@
       "micRequired": "Required",
       "micStatus": {
         "denied": "Not allowed",
-        "working": "Working"
+        "working": "Allowed"
       },
-      "micWorking": "Microphone working",
+      "micWorking": "Microphone allowed",
+      "opensAt": "Joining opens",
       "permission": {
         "banner": "Allow Ijazah to use the microphone in Settings to join the session.",
         "meta": "{date} · {start} – {end} · {minutes, plural, one {# minute} other {# minutes}}",
@@ -578,6 +581,7 @@
         "openSettings": "Open Settings"
       },
       "sessionOf": "{subject} · session {n} of {total}",
+      "startsAt": "Starts",
       "teacher": {
         "a11y": {
           "cameraPreview": "Camera preview",
@@ -591,13 +595,15 @@
         "durationValue": "{minutes} minutes",
         "join": "Join the session",
         "mic": "Microphone",
-        "micOk": "Working",
+        "micOk": "Allowed",
         "micRequired": "Required",
-        "micWorking": "Microphone is working",
+        "micWorking": "Microphone is allowed",
         "timeRange": "{start} – {end}",
         "title": "Before the session"
       },
-      "title": "Before the session"
+      "timeIn": "{date} · {time} · {city} time",
+      "title": "Before the session",
+      "unavailable": "This session cannot be joined now."
     },
     "room": {
       "a11y": {
@@ -611,15 +617,34 @@
       },
       "audioOnCameraOff": "Audio on · camera off",
       "audioOnly": "Audio only",
+      "cameraDenied": "The app was not allowed to use the camera.",
+      "cameraOff": "Turn the camera off",
       "cameraOffSpeaking": "Camera off · speaking now",
+      "cameraOn": "Turn the camera on",
+      "connecting": "Joining the session…",
+      "ended": "The session's time is over.",
+      "leave": "Leave the session",
       "notJoined": "{name} · not joined yet",
       "reconnecting": "Reconnecting…",
+      "screenShare": {
+        "noticeText": "You are sharing your screen. Tap to return to the session.",
+        "noticeTitle": "Your Ijazah session is in progress",
+        "title": "Share the whole screen",
+        "warning": "If you share your whole screen, the other party will see everything on it, notifications included. Close anything you do not want to share before you continue."
+      },
+      "shareScreen": "Share the screen",
+      "sharing": "You are sharing your screen",
+      "stopShare": "Stop sharing the screen",
       "subtitle": "{subject} · session {n} of {total}",
       "timer": "{elapsed} / {total}",
       "waitingFor": "Waiting for {name} to join…",
       "weakConnection": "Weak connection — continuing with audio only",
       "you": "You",
-      "youInSession": "You · in the session"
+      "youInSession": "You · in the session",
+      "anotherDevice": {
+        "message": "You joined this session from another device.",
+        "action": "Join from this device"
+      }
     }
   },
   "status": {

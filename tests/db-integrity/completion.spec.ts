@@ -205,14 +205,12 @@ function openCaseOn(enrollmentId: string, reason: string): Promise<string> {
   });
 }
 
-const log = { info: () => undefined } as unknown as Parameters<typeof createCompletion>[0]['log'];
-
 /**
  * Completion as `main.ts` binds it: over booking's side, the window's close compared with the
  * database's own clock (`clockTimestamp`, the owner's decision of 2026-11-08, Q3).
  */
 const enrollments = createEnrollmentSide({ settings });
-const completion = createCompletion({ enrollments, settings, log });
+const completion = createCompletion({ enrollments, settings });
 
 async function statusOf(tx: Transaction, enrollmentId: string) {
   const row = await tx.enrollment.findUniqueOrThrow({

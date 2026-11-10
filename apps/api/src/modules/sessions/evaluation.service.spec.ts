@@ -10,7 +10,9 @@
 //     (its end moved by a re-resolution); T013's outcome from its events and the outages
 //     overlapping it; `status` written, or `outcome_under_dispute` when disputed, with the
 //     simultaneous seconds and `evaluated_at`; one `session_events` row `settled`; then T015's
-//     completion, the only check; one info line `{ sessionId, outcome }`;
+//     completion, the only check; one info line `{ sessionId, outcome }`, and when it completed
+//     the enrollment one line «Enrollment completed» `{ enrollmentId }`, both once the session's
+//     transaction has committed, so a rolled-back one leaves neither (PR #129's review, Minor 3);
 //   - a session that fails is logged by its id and reported, and the run goes on;
 //   - the room of every cancelled session in its join period with no `room_ended` row is ended
 //     through `endRoom`, one info line `video room ended` with exactly `{ sessionId }`; a failed
@@ -55,8 +57,6 @@ const settings: SettingsReader = {
   },
 };
 
-const transactions: Transactions = { run: (work) => work(TX) };
-
 /** A session as the store holds it: due, scheduled, unevaluated. */
 function session(id: string, values: Partial<SessionToSettle> = {}): SessionToSettle {
   return {
@@ -100,6 +100,8 @@ function worldOf({
   cancelled = [],
   failingRooms = [],
   page = 10,
+  completes = false,
+  commitRefused = false,
 }: {
   sessions?: SessionToSettle[];
   attendance?: Readonly<Record<string, readonly AttendanceEvent[]>>;
@@ -111,7 +113,22 @@ function worldOf({
   cancelled?: string[];
   failingRooms?: string[];
   page?: number;
+  /** What completion answers: whether it completed the enrollment. */
+  completes?: boolean;
+  /** The commit of a transaction that checked completion is refused, so it rolls back. */
+  commitRefused?: boolean;
 } = {}) {
+  let refuseCommit = false;
+  const transactions: Transactions = {
+    run: async (work) => {
+      const result = await work(TX);
+      if (refuseCommit) {
+        refuseCommit = false;
+        throw new Error('commit refused');
+      }
+      return result;
+    },
+  };
   const calls: string[] = [];
   const settlements: Settlement[] = [];
   const events: SessionEventRecord[] = [];
@@ -168,7 +185,8 @@ function worldOf({
     completion: {
       completeIfDue: async (_tx, enrollmentId) => {
         calls.push(`complete ${enrollmentId}`);
-        return false;
+        refuseCommit = commitRefused;
+        return completes;
       },
     },
     video: {
@@ -322,6 +340,37 @@ describe('settleDue: the sessions due, each settled in its own transaction (R-30
       'due 2026-11-08T09:58:00.000Z b 2',
     ]);
     expect(world.settlements.map(({ id }) => id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('a completion: one line «Enrollment completed» of exactly { enrollmentId }, after the session’s, once committed', async () => {
+    const world = worldOf({ completes: true });
+
+    await world.evaluation.settleDue();
+
+    expect(world.lines).toEqual([
+      { level: 'info', fields: { sessionId: 'a', outcome: 'both_no_show' }, message: 'Session settled' },
+      { level: 'info', fields: { enrollmentId: 'enrollment-a' }, message: 'Enrollment completed' },
+    ]);
+    expect(Object.keys(world.lines[1]?.fields ?? {})).toEqual(['enrollmentId']);
+  });
+
+  it('a completion postponed: no completion line', async () => {
+    const world = worldOf({ completes: false });
+
+    await world.evaluation.settleDue();
+
+    expect(world.lines.map(({ message }) => message)).toEqual(['Session settled']);
+  });
+
+  it('a session whose transaction rolls back after its completion: no completion line, no settled line, the error line', async () => {
+    const world = worldOf({ completes: true, commitRefused: true });
+
+    const run = await world.evaluation.settleDue();
+
+    expect(run).toEqual({ settled: [], failed: ['a'] });
+    expect(world.lines).toEqual([
+      { level: 'error', fields: { sessionId: 'a' }, message: 'Session evaluation failed' },
+    ]);
   });
 
   it('a session that fails is logged by its id alone and reported, and the next one is still settled', async () => {

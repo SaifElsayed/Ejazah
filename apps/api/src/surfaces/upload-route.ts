@@ -33,6 +33,8 @@ import {
   uploadMaxBytes,
 } from '../platform/guards/upload.middleware.js';
 import { firstFileOf } from '../platform/http/multipart.js';
+import type { LiveBus } from '../platform/live/live-bus.js';
+import { type LivePublisher, RequestLive } from '../platform/live/live-publisher.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { NodeHandler } from '../platform/web/route.js';
 import {
@@ -54,7 +56,19 @@ export interface UploadRouteDependencies {
   readonly guard: UploadGuard;
   readonly log: Logger;
   readonly trustedProxyHeader?: string;
+  /**
+   * The process's live bus (T063 of specs/004-sessions): what a handler adds to its upload's
+   * after-commit list is sent once the handler has resolved, its transaction committed, and nothing
+   * when it throws. Bound by `main.ts`; without it nothing is sent.
+   */
+  readonly live?: LiveBus;
 }
+
+/** The bus of a route built without one: what it is handed goes nowhere. */
+const unboundBus: LiveBus = {
+  publish: () => undefined,
+  subscribe: () => () => undefined,
+};
 
 /** Who uploaded, as the session resolved them. */
 export interface Uploader {
@@ -70,6 +84,11 @@ export interface AcceptedUpload<TKind extends UploadKind> {
   readonly type: SniffedType;
   readonly bytes: Buffer;
   readonly filename: string | undefined;
+  /**
+   * The upload's after-commit list (T063): events added here go out once `handle` resolves, its
+   * own transaction committed, and none when it throws (T066's chat documents use it).
+   */
+  readonly live: LivePublisher;
 }
 
 export interface UploadRoute<TKind extends UploadKind> {
@@ -132,7 +151,7 @@ function declaredLengthOf(request: IncomingMessage): number | undefined {
 }
 
 export function uploadRoute<TKind extends UploadKind>(
-  { sessions, guard, log, trustedProxyHeader }: UploadRouteDependencies,
+  { sessions, guard, log, trustedProxyHeader, live }: UploadRouteDependencies,
   route: UploadRoute<TKind>,
 ): NodeHandler {
   return (request, response) => {
@@ -142,6 +161,7 @@ export function uploadRoute<TKind extends UploadKind>(
       trustedProxyHeader,
     );
     const requestLog = requestLogger(log, correlationId).child({ clientAddress });
+    const afterCommit = new RequestLive(live ?? unboundBus, requestLog);
     void (async () => {
       try {
         const { pathname } = new URL(request.url ?? '/', 'http://local');
@@ -191,9 +211,13 @@ export function uploadRoute<TKind extends UploadKind>(
           type: upload.type,
           bytes: Buffer.concat(chunks),
           filename: file.filename,
+          live: afterCommit,
         });
+        // The upload route's after-commit point (T063): the handler's transaction has committed.
+        afterCommit.flush();
         sendJson(response, 201, result);
       } catch (error: unknown) {
+        afterCommit.drop();
         // Destroyed or errored before its end: a request that ended normally is closed too, and is
         // not an abort.
         if (request.readableAborted) {

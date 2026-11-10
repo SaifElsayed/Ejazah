@@ -76,10 +76,10 @@ const settings: SettingsReader = {
     return schema.parse(SETTINGS[key]);
   },
 };
-const log = { info: () => undefined } as unknown as Parameters<typeof createCompletion>[0]['log'];
+const log = { info: () => undefined } as unknown as Parameters<typeof createOutageServices>[0]['log'];
 const enrollments = createEnrollmentSide({ settings, now: () => AT });
 // Completion reads the database's own clock (Q3); the record's dispute window reads AT.
-const completion = createCompletion({ enrollments, settings, log });
+const completion = createCompletion({ enrollments, settings });
 const outages = createOutageServices({
   enrollments,
   completion,

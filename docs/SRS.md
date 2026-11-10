@@ -3,6 +3,8 @@
 **Version 1.4 — MVP Baseline (Buildable)**
 Supersedes v1.3, v1.2, v1.1 and v1.0. Date: September 2026.
 
+> **Amendment 2026-11-08 — a warning before the whole screen is shared (`specs/004-sessions/spec.md` FR-500; T019 in `specs/004-sessions/tasks.md`; the owner's decision on B36's conflict check).** §3.7.2: before a participant shares their whole screen, the app warns them, every time and in both roles, before the operating system's own permission prompt, that the other party will see everything on it, notifications included; they continue or cancel, and a cancel sends nothing and starts no share. Screen share stays each participant's own choice, and nothing about it is sent to the server or evaluated (FR-SESS-4's subsection unchanged). Was: §3.7.2 said nothing of what a participant is told before sharing.
+
 > **Amendment 2026-11-06 — the signed-in default rate limit's value recomputed (`specs/004-sessions/research.md` R-325; `specs/004-sessions/plan.md`, «Decisions on the fifth analysis»; T106 in `specs/003-booking/tasks.md`; the owner's decision of 2026-11-06).** §3.14 «Signed-in default rate limit» and NFR-SEC-12: the default is **150 per 60 s** instead of 160. Since the Teacher's and the Administrator's name searches are counted by the search limit (NFR-SEC-10), research R-325 no longer counts them under the default: a Teacher's heaviest normal minute is about 37 calls, the Admin panel's directory about 9 and its heaviest minute 45, so the heaviest is a Student's, 48; under NFR-SEC-12's rule, the larger of 120 and 48 × 3 = 144, rounded up to ten, is 150. The rule stays its reason. It replaces the 160 of the amendment of 2026-11-05 on the default's value.
 
 > **Amendment 2026-11-06 — a deleted account's held files read inside an open matter (`specs/004-sessions/research.md` R-327, «The administrator's read»; T106 in `specs/003-booking/tasks.md`; the owner's decision of 2026-11-06).** FR-AUTH-14: the stored files a deleted account keeps while it is a party to an Enrollment with an open Dispute, compensation case or complaint are readable by an Administrator only inside such an open matter of that Enrollment, through a short signed link per opening, each opening audit-logged, and through no other path; once the last matter closes they are removed as before. Holding files nobody can read kept personal data that served as no evidence.
@@ -360,6 +362,8 @@ Because every session is same-gender, there is no gender-based camera restrictio
 | Any cross-gender pairing        | Cannot occur (§3.7.1)         | Cannot occur                  |
 
 Publishing video is always optional — nobody is ever required to turn a camera on, and either party may disable their camera at any time.
+
+Before a participant shares their whole screen, the app shall warn them, every time and in both roles, before the operating system's own permission prompt, that the other party will see everything on the screen, notifications included, with a choice to continue or cancel; a cancel sends nothing and starts no share *(added 2026-11-08, the owner's decision)*.
 
 Nothing about camera state is evaluated, snapshotted or persisted against a Session. There is no camera rule to resolve at session start and no per-participant publish permission to mint into a token — FR-SESS-3 binds a token to one session and one participant, and nothing further. An implementer needing a camera decision at any layer should read this subsection as complete.
 

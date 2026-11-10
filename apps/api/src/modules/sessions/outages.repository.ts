@@ -85,6 +85,28 @@ export async function reclassifiableSessions(
   });
 }
 
+/**
+ * The `scheduled` sessions `window` overlaps whose scheduled end is at or before `endedBy`, by id:
+ * those an evaluation may be settling while the record runs (PR #129's review, Minor 1), which the
+ * record locks so the two wait for each other. Over the sessions' instants, bounded by the window;
+ * no lock.
+ */
+export async function endedScheduledSessions(
+  tx: Client,
+  window: OutageWindow,
+  endedBy: Date,
+): Promise<readonly OverlappedSession[]> {
+  return tx.session.findMany({
+    where: {
+      status: 'scheduled',
+      scheduledStartAt: { lt: window.endsAt },
+      scheduledEndAt: { gt: window.startsAt, lte: endedBy },
+    },
+    orderBy: { id: 'asc' },
+    select: { id: true, enrollmentId: true },
+  });
+}
+
 /** Moves those of `ids` still settled to `provider_outage`, in one statement. */
 export async function reclassify(tx: Client, ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return;

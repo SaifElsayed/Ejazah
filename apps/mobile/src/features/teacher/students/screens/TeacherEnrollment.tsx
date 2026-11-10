@@ -4,7 +4,9 @@
 // card and request are Phase 4's); what is done and what is to come, derived by the server; the
 // weekly time as the slot holds it, in the sessions' zone with its city, until the last session, or
 // from the first to the last once ended; and when the teacher's zone is now another, the next
-// session there (ADR 0009 D5). Then the sessions by number (`session-rows.ts`). It decides only on
+// session there (ADR 0009 D5). Then the sessions by number (`session-rows.ts`), keyed by their id,
+// each with its status after settlement (004:T020, FR-495): a disputed session reads «محل نزاع»,
+// the outcome frozen beside it never answered nor drawn (R-308). It decides only on
 // what it read since it opened (`read-since-mount.ts`). A link with no enrollment id is never read:
 // it draws the load error, as the student's detail does, and its retry sends nothing (T091).
 // Phase 3's parts are not drawn: the report, the no-show tile and banner, the chat, the
@@ -34,6 +36,7 @@ import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { readSinceMount } from '../../read-since-mount';
+import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { isEnrollmentId, useTeacherEnrollment } from '../api';
 import { EnrollmentBadges, SessionStatusBadge } from '../components/Badges';
 import { initialOf } from '../components/StudentRow';
@@ -115,7 +118,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
           <List>
             {rows.map((row) => (
               <SessionLine
-                key={row.kind === 'one' ? row.session.sequenceNumber : row.first.sequenceNumber}
+                key={row.kind === 'one' ? row.session.sessionId : row.first.sessionId}
                 row={row}
               />
             ))}
@@ -204,6 +207,9 @@ function SessionLine({ row }: { readonly row: SessionRow }) {
         </Text>
       }
       trailing={<SessionStatusBadge status={session.status} />}
+      onPress={() =>
+        router.push({ pathname: TEACHER_PRE_SESSION_ROUTE, params: { id: session.sessionId } })
+      }
     />
   );
 }

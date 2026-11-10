@@ -19,6 +19,7 @@
 // factor is unverified with `MFA_REQUIRED` (FR-170); `adminPublicProcedure` is anonymous, exists on
 // the administrator instance only and names its rate limit, applied from the limiter the
 // administrator context carries.
+import { createHmac } from 'node:crypto';
 import { type AnyProcedure, initTRPC, TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import { z, ZodError } from 'zod';
@@ -27,6 +28,7 @@ import {
   defaultRateLimits,
   type RateLimitCounter,
   RateLimiter,
+  SIGNED_IN_DEFAULT_RATE_LIMIT,
 } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../platform/settings/settings-reader.js';
@@ -46,6 +48,7 @@ import {
   createAppCallerFactory,
   createAppRouter,
   inputsReadUnguarded,
+  participantProcedure,
   publicProcedure,
   studentProcedure,
   teacherProcedure,
@@ -564,16 +567,13 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
       mine: studentProcedure({
         input: z.void(),
         output: z.string(),
-        rateLimit: { key: defaultRateLimits.search, subjectOf: ({ ctx }) => ctx.caller.userId },
+        rateLimit: { key: defaultRateLimits.search, subject: 'caller' },
       }).query(() => 'mine'),
       // The user kind accepts a declaration as the student and teacher kinds do (`account.delete`).
       erase: userProcedure({
         input: z.void(),
         output: z.string(),
-        rateLimit: {
-          key: defaultRateLimits.authentication,
-          subjectOf: ({ ctx }) => ctx.caller.userId,
-        },
+        rateLimit: { key: defaultRateLimits.authentication, subject: 'caller' },
       }).mutation(() => 'erased'),
     });
     const { limiter, counter } = limiterOf(1);
@@ -601,8 +601,9 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
       search: studentProcedure({
         input: z.void(),
         output: z.string(),
-        rateLimit: { key: defaultRateLimits.search, subjectOf: ({ ctx }) => ctx.caller.userId },
+        rateLimit: { key: defaultRateLimits.search, subject: 'caller' },
       }).query(() => 'results'),
+      // The signed-in default is not a declaration: no key stamped (T062).
       unlimited: studentProcedure({ input: z.void(), output: z.string() }).query(() => 'free'),
     });
     const metaOf = (path: string) =>
@@ -641,6 +642,131 @@ describe('a rate limit is declared on the kind (T170, FR-043, R-SEC-6)', () => {
       'student',
       'teacher',
     ]);
+  });
+});
+
+// T062 (FR-470, SRS NFR-SEC-12; research R-321, items 1, 2 and 6): every signed-in kind given no
+// `rateLimit` is counted by the signed-in default, the caller as subject; a declaration names the
+// caller with `subject: 'caller'`, which only a signed-in kind accepts.
+describe('every signed-in kind is rate limited (T062, FR-470)', () => {
+  const subjectKey = Buffer.alloc(32, 1);
+  const digestOf = (subject: string) =>
+    createHmac('sha256', subjectKey).update(subject).digest('hex');
+
+  /** A limiter over a counter that keeps its keys, every key's row at `limit` per 60 s. */
+  function countingLimiter(limit: number) {
+    const counts = new Map<string, number>();
+    const lines: Array<Readonly<Record<string, string>>> = [];
+    const limiter = new RateLimiter({
+      settings: {
+        read: async (key, schema) => {
+          if (!key.startsWith('rate_limit_')) throw new SettingError(key, 'missing');
+          return schema.parse({ limit, window_seconds: 60 });
+        },
+      },
+      counter: {
+        hit: async (key) => {
+          const count = (counts.get(key) ?? 0) + 1;
+          counts.set(key, count);
+          return count;
+        },
+      },
+      subjectKey,
+      log: { warn: (fields) => void lines.push(fields) },
+    });
+    return { limiter, counts, lines };
+  }
+
+  const handled = vi.fn(() => 'done');
+  const kinds = createAppRouter({
+    student: studentProcedure({ input: z.void(), output: z.string() }).query(handled),
+    user: userProcedure({ input: z.void(), output: z.string() }).query(handled),
+    participant: participantProcedure({ input: z.void(), output: z.string() }).query(handled),
+    teacher: teacherProcedure({ admits: 'applicant', input: z.void(), output: z.string() }).query(
+      handled,
+    ),
+    declared: userProcedure({
+      input: z.void(),
+      output: z.string(),
+      rateLimit: { key: defaultRateLimits.search, subject: 'caller' },
+    }).query(handled),
+  });
+  const callKinds = createAppCallerFactory(kinds);
+
+  it.each([
+    ['student', student, (caller: ReturnType<typeof callKinds>) => caller.student()],
+    ['user', student, (caller: ReturnType<typeof callKinds>) => caller.user()],
+    ['participant', applicant, (caller: ReturnType<typeof callKinds>) => caller.participant()],
+    ['teacher', applicant, (caller: ReturnType<typeof callKinds>) => caller.teacher()],
+  ] as const)(
+    'the %s kind refuses a call with no limit RATE_LIMITED past the default, before the handler',
+    async (_, session, call) => {
+      handled.mockClear();
+      const { limiter, counts, lines } = countingLimiter(2);
+      const caller = callKinds(appContext(session, limiter));
+
+      expect(await call(caller)).toBe('done');
+      expect(await call(caller)).toBe('done');
+      expect(await refusal(() => call(caller))).toMatchObject({
+        status: 429,
+        code: 'RATE_LIMITED',
+        unexpected: false,
+      });
+      expect(handled).toHaveBeenCalledTimes(2);
+      // One counter, the default's, under `user:<userId>`; the first refusal names tRPC's path.
+      expect([...counts.keys()]).toEqual([
+        `rate-limit:${SIGNED_IN_DEFAULT_RATE_LIMIT}:${digestOf(`user:${session.userId}`)}`,
+      ]);
+      expect(lines).toEqual([{ procedure: _, userId: session.userId }]);
+    },
+  );
+
+  it('counts a declared limit only, under the caller the kind authenticated', async () => {
+    const { limiter, counts } = countingLimiter(5);
+    await callKinds(appContext(student, limiter)).declared();
+
+    expect([...counts.keys()]).toEqual([
+      `rate-limit:${defaultRateLimits.search}:${digestOf(`user:${student.userId}`)}`,
+    ]);
+  });
+
+  it('the administrator kind refuses a call with no limit past the default, under `admin:<adminId>`, before any transaction', async () => {
+    approve.mockClear();
+    const { limiter, counts, lines } = countingLimiter(1);
+    const caller = callAdministrator(adminContext(verifiedAdmin, limiter));
+
+    // The first call passes the limit and then reaches the transaction this fixture refuses.
+    expect(await refusal(() => caller.approve({ teacherId: 't1' }))).toMatchObject({
+      status: 500,
+    });
+    expect(await refusal(() => caller.approve({ teacherId: 't1' }))).toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+    });
+    expect(approve).not.toHaveBeenCalled();
+    expect([...counts.keys()]).toEqual([
+      `rate-limit:${SIGNED_IN_DEFAULT_RATE_LIMIT}:${digestOf(`admin:${verifiedAdmin.adminId}`)}`,
+    ]);
+    expect(lines).toEqual([{ procedure: 'approve', adminId: verifiedAdmin.adminId }]);
+  });
+
+  it("refuses `subject: 'caller'` on the anonymous kinds, in the type and at build", () => {
+    expect(() =>
+      publicProcedure({
+        input: z.void(),
+        output: z.string(),
+        // @ts-expect-error -- T062: an anonymous kind has no caller to count
+        rateLimit: { key: defaultRateLimits.search, subject: 'caller' },
+      }),
+    ).toThrow(/signed-in kind/);
+    expect(() =>
+      adminPublicProcedure({
+        input: z.void(),
+        output: z.string(),
+        // @ts-expect-error -- T062: an anonymous kind has no caller to count
+        rateLimit: { key: defaultRateLimits.authentication, subject: 'caller' },
+      }),
+    ).toThrow(/signed-in kind/);
   });
 });
 

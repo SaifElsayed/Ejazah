@@ -184,6 +184,30 @@ describe('the seed (T074)', () => {
     );
   });
 
+  // T062 (FR-470; research R-321, item 7): the rows the signed-in limits read. A missing one fails
+  // closed: the default refuses every signed-in call, a declared limit its own procedure.
+  it('plants the signed-in default at 150 per 60 s and the four administrator limits (T062)', async () => {
+    const { rows } = await db.query<{ key: string; value: unknown }>(
+      `SELECT key, value FROM settings WHERE key = ANY($1::text[]) ORDER BY key`,
+      [
+        [
+          'rate_limit_signed_in_default',
+          'rate_limit_dispute_revision',
+          'rate_limit_enrollment_restore',
+          'rate_limit_manual_compensation_case',
+          'rate_limit_outcome_correction',
+        ],
+      ],
+    );
+    expect(rows).toEqual([
+      { key: 'rate_limit_dispute_revision', value: { limit: 10, window_seconds: 60 } },
+      { key: 'rate_limit_enrollment_restore', value: { limit: 10, window_seconds: 60 } },
+      { key: 'rate_limit_manual_compensation_case', value: { limit: 10, window_seconds: 60 } },
+      { key: 'rate_limit_outcome_correction', value: { limit: 10, window_seconds: 60 } },
+      { key: 'rate_limit_signed_in_default', value: { limit: 150, window_seconds: 60 } },
+    ]);
+  });
+
   it('plants one administrator, active, whose credential nobody holds', async () => {
     const admin = await administrator();
     expect(admin).toMatchObject({

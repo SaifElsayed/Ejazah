@@ -101,7 +101,8 @@ export {
 } from './completion.service.js';
 /**
  * T016 (FR-445, R-307): the provider outage windows, `sessions.outages.record` and `.list`, behind
- * the administrator surface's `sessions` namespace.
+ * the administrator surface's `sessions` namespace, and the record's store over sessions' tables,
+ * which the race probe narrows as it narrows `evaluationStore`.
  */
 export {
   type AdminNames,
@@ -110,6 +111,8 @@ export {
   type OutageRecorded,
   type OutageRecordInput,
   type OutageServices,
+  type OutageStore,
+  outageStore,
 } from './outages.service.js';
 export { sessionsAdminRouter } from './sessions-admin.router.js';
 /**

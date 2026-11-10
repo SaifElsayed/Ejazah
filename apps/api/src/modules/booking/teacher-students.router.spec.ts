@@ -73,6 +73,7 @@ function sessionOf(who: Who): UserSession {
 }
 
 const session = {
+  sessionId: '0199d0a0-0000-7000-8000-000000000d02',
   sequenceNumber: 2,
   localDate: '2026-11-12',
   startTimeLocal: '09:00',
@@ -279,7 +280,9 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
   it("counts every call under rate_limit_search by the teacher's own id, and refuses one past it RATE_LIMITED before the service: 'teacher.students.list'", async () => {
     const caller = callerAs(sessionOf('approved'));
     await caller.teacher.students.list({ tab: 'active', query: 'يوس' });
-    expect(limited).toEqual([['rate_limit_search', CALLER]]);
+    expect(limited).toEqual([
+      ['rate_limit_search', { kind: 'user', userId: CALLER }, 'teacher.students.list'],
+    ]);
     refuseAtLimit = true;
     calls = [];
     await expect(caller.teacher.students.list({ tab: 'active' })).rejects.toEqual(
@@ -292,7 +295,12 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
     const caller = callerAs(sessionOf('approved'));
     await caller.teacher.students.get({ enrollmentId: OWN });
     await caller.teacher.today({});
-    expect(limited).toEqual([]);
+    // Declaring none, both are counted by the signed-in default only (T062, FR-470).
+    const teacher = { kind: 'user', userId: CALLER };
+    expect(limited).toEqual([
+      ['rate_limit_signed_in_default', teacher, 'teacher.students.get'],
+      ['rate_limit_signed_in_default', teacher, 'teacher.today'],
+    ]);
   });
 
   it('answers a deleted student deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {

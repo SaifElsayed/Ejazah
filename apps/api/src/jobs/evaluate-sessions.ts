@@ -45,7 +45,7 @@ export interface EvaluateSessionsDependencies {
   readonly settings: SettingsReader;
   /** Sessions' `EnrollmentSide`, bound to booking's `createEnrollmentSide({ settings })`. */
   readonly enrollments: Pick<EnrollmentSide, 'lockEnrollments'>;
-  /** Sessions' `createCompletion({ enrollments, settings, log })` (T015). */
+  /** Sessions' `createCompletion({ enrollments, settings })` (T015). */
   readonly completion: Completion;
   readonly video: Pick<VideoPort, 'endRoom'>;
   readonly log: Pick<Logger, 'info' | 'warn' | 'error'>;

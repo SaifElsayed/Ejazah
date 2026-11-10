@@ -109,6 +109,8 @@ export async function insertSessions(
  * with its status for the lists (T049, FR-390, FR-391).
  */
 export interface EnrollmentSessionRow {
+  /** The session's id (004:T020: the lists answer it as `sessionId`). */
+  readonly id: string;
   readonly sequenceNumber: number;
   readonly localDate: LocalDate;
   readonly startTimeLocal: LocalTime;
@@ -121,6 +123,7 @@ export interface EnrollmentSessionRow {
 }
 
 interface SelectedSession {
+  readonly id: string;
   readonly sequenceNumber: number;
   readonly scheduledDateLocal: Date;
   readonly scheduledStartTimeLocal: Date;
@@ -133,6 +136,7 @@ interface SelectedSession {
 
 function sessionRowOf(row: SelectedSession): EnrollmentSessionRow {
   return {
+    id: row.id,
     sequenceNumber: row.sequenceNumber,
     localDate: calendarDateOf(row.scheduledDateLocal),
     startTimeLocal: localTimeOf(row.scheduledStartTimeLocal),
@@ -157,6 +161,7 @@ export async function enrollmentSessionsOf(
     where: { enrollmentId },
     orderBy: { sequenceNumber: 'asc' },
     select: {
+      id: true,
       enrollmentId: true,
       sequenceNumber: true,
       scheduledDateLocal: true,
@@ -187,6 +192,7 @@ export async function sessionsOfEnrollments(
     where: { enrollmentId: { in: [...enrollmentIds] } },
     orderBy: [{ enrollmentId: 'asc' }, { sequenceNumber: 'asc' }],
     select: {
+      id: true,
       enrollmentId: true,
       sequenceNumber: true,
       scheduledDateLocal: true,
@@ -226,6 +232,7 @@ export async function teacherSessionsBetween(
     where: { teacherUserId, scheduledStartAt: { gte: window.from, lt: window.to } },
     orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }],
     select: {
+      id: true,
       enrollmentId: true,
       sequenceNumber: true,
       scheduledDateLocal: true,

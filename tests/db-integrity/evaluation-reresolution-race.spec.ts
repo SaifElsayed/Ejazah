@@ -212,7 +212,7 @@ function evaluation(stops: { readonly afterSettle?: () => Promise<void> } = {}) 
     sweep: createEvaluation({
       transactions,
       enrollments,
-      completion: createCompletion({ enrollments, settings, log: SILENT }),
+      completion: createCompletion({ enrollments, settings }),
       video: { endRoom: async () => undefined },
       settings,
       log: SILENT,

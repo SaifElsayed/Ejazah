@@ -109,7 +109,11 @@ describe('platform.publicConfig (T038, FR-145)', () => {
   it('is public and counts the client address under rate_limit_public_page (T170)', async () => {
     const { caller, check, router } = fixture();
     await caller.platform.publicConfig();
-    expect(check).toHaveBeenCalledWith(PUBLIC_PAGE_RATE_LIMIT, CLIENT);
+    expect(check).toHaveBeenCalledWith(
+      PUBLIC_PAGE_RATE_LIMIT,
+      { kind: 'identifier', value: CLIENT },
+      'platform.publicConfig',
+    );
     const procedures = router._def.procedures as unknown as Record<
       string,
       { _def: { meta?: { surface: string; caller?: string; rateLimit?: string } } }
