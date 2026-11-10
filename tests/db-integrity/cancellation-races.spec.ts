@@ -187,15 +187,30 @@ const cancelAsAdmin = (adminId: string, sessionId: string) =>
     adminCancel.cancel(tx, adminId, { sessionId, reason: 'سبب إداري' }),
   );
 
-/** T022's sweep over this file's requests; its stop after the expiry's writes, inside its transaction. */
+/** How many due requests the sweep's narrowed read asks for at a time. */
+const DUE_PAGE = 500;
+
+/**
+ * T022's sweep over the probe's requests; its stop after the expiry's writes, inside its
+ * transaction. Its read goes through every due request to the end (PR #131's review, round 1,
+ * Minor 2): other specs leave requests pending on started sessions, and the probe's, the newest
+ * ids, come after them.
+ */
 function sweep() {
   const side = createEnrollmentSide({ settings });
   const store: CancellationExpiryStore = {
     ...cancellationExpiryStore,
-    dueForExpiry: async (tx, at, after, limit) =>
-      (await cancellationExpiryStore.dueForExpiry(tx, at, after, 500))
-        .filter(({ id }) => own.has(id))
-        .slice(0, limit),
+    dueForExpiry: async (tx, at, after, limit) => {
+      const mine = [];
+      let cursor = after;
+      for (;;) {
+        const page = await cancellationExpiryStore.dueForExpiry(tx, at, cursor, DUE_PAGE);
+        mine.push(...page.filter(({ id }) => own.has(id)));
+        if (page.length < DUE_PAGE) break;
+        cursor = page.at(-1)?.id;
+      }
+      return mine.slice(0, limit);
+    },
     lockSessions: stopping('sweep', 'sessions', cancellationExpiryStore.lockSessions),
     lockRequests: stopping('sweep', 'requests', cancellationExpiryStore.lockRequests),
     recordEvents: async (tx, events) => {
