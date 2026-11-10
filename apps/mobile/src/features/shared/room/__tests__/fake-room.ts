@@ -57,11 +57,24 @@ export class FakeScreenTrack {
 }
 
 export class FakeLocalParticipant {
-  /** The screen's track: react-native-webrtc's `release()` is what ends the capture's service. */
-  readonly screenTrack = new FakeScreenTrack();
-  readonly createScreenTracks: jest.Mock<() => Promise<FakeScreenTrack[]>> = jest.fn(async () => [
-    this.screenTrack,
-  ]);
+  /** Every capture `createScreenTracks` made, in order: a new track each time, as Android's are. */
+  readonly screenTracks: FakeScreenTrack[] = [];
+  readonly createScreenTracks: jest.Mock<() => Promise<FakeScreenTrack[]>> = jest.fn(async () => {
+    const track = new FakeScreenTrack();
+    this.screenTracks.push(track);
+    return [track];
+  });
+  /**
+   * The last capture made, or one made now for a spec that hands it back itself: react-native-webrtc's
+   * `release()` is what ends the capture's service.
+   */
+  get screenTrack(): FakeScreenTrack {
+    const last = this.screenTracks.at(-1);
+    if (last !== undefined) return last;
+    const track = new FakeScreenTrack();
+    this.screenTracks.push(track);
+    return track;
+  }
   readonly publishTrack: jest.Mock<(track: FakeScreenTrack) => Promise<object>> = jest.fn(
     async (_track: FakeScreenTrack) => {
       this.isScreenShareEnabled = true;

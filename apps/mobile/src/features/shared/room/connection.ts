@@ -20,8 +20,9 @@
 // (the device check of 2026-11-09). The screen's track is held before it is published and released
 // when its share ends, however it ends: stopping it alone leaves the capture and its foreground
 // service running. The share runs under `lib/room-keep-alive.ts`, started while the app is visible,
-// before Android's prompts, and stopped with the share. One share starts at a time, and stopping it
-// is bounded as leaving is (PR #130's review, round 1). Nothing here outlives the screen.
+// before Android's prompts, and stopped with the share. One share starts at a time, stopping it is
+// bounded as leaving is (PR #130's review, round 1), and none starts while one stops (round 2).
+// Nothing here outlives the screen.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import type { TrackReference } from '@livekit/react-native';
@@ -71,6 +72,8 @@ export interface RoomView {
   readonly shareWarningOpen: boolean;
   /** A share is starting: no second one is offered. */
   readonly startingShare: boolean;
+  /** A share is stopping: no new one is offered until the stop has settled. */
+  readonly stoppingShare: boolean;
 }
 
 const MS_PER_SECOND = 1_000;
@@ -118,6 +121,8 @@ export class RoomConnection {
   private shareWarningOpen = false;
   /** From «متابعة» until the share is published or given up. */
   private startingShare = false;
+  /** From «إيقاف» until the stop has settled or its wait ran out. */
+  private stoppingShare = false;
   private closing: Promise<void> | undefined;
   private shareTrack: NativeTrack | undefined;
   private keepingAlive = false;
@@ -170,6 +175,7 @@ export class RoomConnection {
       deviceFailed: this.deviceFailed,
       shareWarningOpen: this.shareWarningOpen,
       startingShare: this.startingShare,
+      stoppingShare: this.stoppingShare,
     };
   }
 
@@ -189,9 +195,9 @@ export class RoomConnection {
     }
   }
 
-  /** FR-500: the warning first, every time; none while a share is starting. */
+  /** FR-500: the warning first, every time; none while a share is starting or stopping. */
   askToShare(): void {
-    if (this.startingShare) return;
+    if (this.startingShare || this.stoppingShare) return;
     this.shareWarningOpen = true;
     this.changed();
   }
@@ -208,7 +214,7 @@ export class RoomConnection {
    * then release.
    */
   async confirmShare(notice: ShareNotice): Promise<void> {
-    if (this.startingShare) return;
+    if (this.startingShare || this.stoppingShare) return;
     this.startingShare = true;
     try {
       this.shareWarningOpen = false;
@@ -254,14 +260,22 @@ export class RoomConnection {
 
   /**
    * The capture released and the service stopped whichever way the SDK answers, and after
-   * `LEAVE_WAIT_MS` when it does not (PR #130's review, round 1, Minor 2).
+   * `LEAVE_WAIT_MS` when it does not (PR #130's review, round 1, Minor 2). One at a time, and no
+   * share starts meanwhile (round 2): the SDK unpublishes, and says so, before it negotiates, and
+   * this late `endShare()` would end a share started in between.
    */
   async stopShare(): Promise<void> {
-    const room = this.joined ? this.room : undefined;
-    if (room === undefined) return;
-    await settled(room.localParticipant.setScreenShareEnabled(false));
-    this.endShare();
-    this.changed();
+    if (this.stoppingShare) return;
+    this.stoppingShare = true;
+    try {
+      const room = this.joined ? this.room : undefined;
+      if (room === undefined) return;
+      await settled(room.localParticipant.setScreenShareEnabled(false));
+      this.endShare();
+    } finally {
+      this.stoppingShare = false;
+      this.changed();
+    }
   }
 
   /** Leaves the room: no timer, no listener, the connection closed, then the audio session stopped. */

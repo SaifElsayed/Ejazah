@@ -101,6 +101,23 @@ function deferred<T>() {
   return { promise, resolve: (value: T) => resolve(value) };
 }
 
+/**
+ * The press handler `fireEvent.press` would call, found as it finds it: up the fibers from the
+ * host element to the first `onPress`.
+ */
+function pressHandlerOf(element: ReturnType<typeof screen.getByRole>): () => void {
+  let fiber = element.unstable_fiber;
+  while (fiber !== null) {
+    const props: unknown = fiber.memoizedProps;
+    if (typeof props === 'object' && props !== null && 'onPress' in props) {
+      const { onPress } = props;
+      if (typeof onPress === 'function') return () => void onPress();
+    }
+    fiber = fiber.return;
+  }
+  throw new Error('the element has no press handler');
+}
+
 /** The next room made, as `prepare` sets it up. */
 function nextRoom(prepare: (made: FakeRoom) => void) {
   Room.mockImplementationOnce(() => {
@@ -860,9 +877,12 @@ describe('RoomScreen: a share while one starts, and a stop that fails (PR #130�
     local().publishTrack.mockReturnValueOnce(deferred<object>().promise);
     await press('rtl', 'session.room.shareScreen');
     const proceed = screen.getByRole('button', { name: said('rtl', 'common.action.continue') });
-    // Both presses before the screen draws again: the dialog is still there for the second.
-    await act(async () => {
-      await Promise.all([fireEvent.press(proceed), fireEvent.press(proceed)]);
+    // Two taps before the screen draws again, in one act: `fireEvent` opens an act of its own for
+    // each press, and two of them overlap (PR #130's review, round 2, nit 2).
+    const onPress = pressHandlerOf(proceed);
+    await act(() => {
+      onPress();
+      onPress();
     });
     await advance(0);
     expect(local().createScreenTracks).toHaveBeenCalledTimes(1);
@@ -925,5 +945,59 @@ describe('RoomScreen: a share while one starts, and a stop that fails (PR #130�
     await advance(1);
     expect(local().screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
     expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  // PR #130's review, round 2: livekit-client unpublishes the track, and says so, before it
+  // negotiates, so the room offers the share again while the stop still waits.
+  it('starts no share while the stop negotiates, and releases each capture once', async () => {
+    await inRoom();
+    await askShare();
+    const participant = local();
+    const current = room();
+    const first = participant.screenTrack;
+    const negotiating = deferred<undefined>();
+    participant.setScreenShareEnabled.mockImplementationOnce(() => {
+      participant.isScreenShareEnabled = false;
+      current.emit(RoomEvent.LocalTrackUnpublished);
+      return negotiating.promise;
+    });
+    await press('rtl', 'session.room.stopShare');
+    await advance(0);
+    // The person tries to share again: «مشاركة الشاشة», then «متابعة» if it is offered.
+    await fireEvent.press(shareButton());
+    const proceed = screen.queryByRole('button', { name: said('rtl', 'common.action.continue') });
+    if (proceed !== null) await fireEvent.press(proceed);
+    await advance(0);
+    expect(participant.createScreenTracks).toHaveBeenCalledTimes(1);
+    expect(startKeepAlive).toHaveBeenCalledTimes(1);
+    negotiating.resolve(undefined);
+    await advance(0);
+    expect(first.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+    expect(shareButton().props.accessibilityState?.disabled).toBe(false);
+    // Once the stop has settled, a new share has its own capture, and leaving releases it once.
+    await askShare();
+    const second = participant.screenTrack;
+    expect(second).not.toBe(first);
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    expect(first.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(second.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(2);
+  });
+
+  it('disables «مشاركة الشاشة» while the stop negotiates', async () => {
+    await inRoom();
+    await askShare();
+    const participant = local();
+    const current = room();
+    participant.setScreenShareEnabled.mockImplementationOnce(() => {
+      participant.isScreenShareEnabled = false;
+      current.emit(RoomEvent.LocalTrackUnpublished);
+      return deferred<undefined>().promise;
+    });
+    await press('rtl', 'session.room.stopShare');
+    await advance(0);
+    expect(shareButton().props.accessibilityState?.disabled).toBe(true);
   });
 });
