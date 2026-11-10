@@ -439,7 +439,11 @@ describe("EnrollmentSide.slotWeekTaken (T008, R-205; the owner's decision of 202
     });
     await sessionOn(other, '2026-12-06');
     await rolledBack(async (tx) => {
-      // The other's release is 2026-12-20; its own (left out) 2026-12-13.
+      // Still confirmed, the other keeps the slot whatever the week (the owner's rule of
+      // 2026-11-10; FR-394 as amended).
+      expect(await side.slotWeekTaken(tx, on.slotId, '2027-06-06', own.enrollmentId)).toBe(true);
+      await tx.enrollment.update({ where: { id: other }, data: { status: 'completed' } });
+      // Completed, the other's release is 2026-12-20; its own (left out) 2026-12-13.
       expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-13', own.enrollmentId)).toBe(true);
       expect(await side.slotWeekTaken(tx, on.slotId, '2026-12-20', own.enrollmentId)).toBe(false);
     });

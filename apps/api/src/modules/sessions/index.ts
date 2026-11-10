@@ -340,8 +340,8 @@ export {
  * T027 of specs/004-sessions (FR-466; research R-311, "Reservation"; H3; Q1 (a), Q7 (a)): the times
  * open remedies reserve for some people, each `{ remedyId, sessionId, startsAt, endsAt }`, read by
  * booking's one overlap check, the confirmation's new hold for a released one, the proposal, the
- * counter options and a make-up's booking; and the enrollments whose open remedy keeps their slot
- * in use (booking's occupancy). No lock, no write.
+ * counter options and a make-up's booking. No lock, no write. (An open remedy's slot is kept by its
+ * enrollment being confirmed, booking's occupancy; the follow-up under T027.)
  */
 export {
   type ReservationReads,
@@ -350,7 +350,6 @@ export {
   type ReservedTime,
   reservedTimesOf,
 } from './reservations.service.js';
-export { enrollmentsWithOpenRemedyAmong } from './reservations.repository.js';
 /** T027: the sessions a confirmation would generate, for the late payment's reservation read. */
 export { sessionsFor } from './generation.service.js';
 /**

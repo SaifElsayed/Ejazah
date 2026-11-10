@@ -8,15 +8,13 @@
 // during its answer window, which the service compares with the clock. A `frozen` remedy keeps its
 // `proposed_date` (T005's note) and reserves nothing (the note under T027, B34's (b)).
 //
-// Which remedies keep their enrollment's slot in use (Q1 (a)): every open one, `frozen` included
-// (data-model.md §3, F1), until it settles, so the proposal's start, the slot's local start, cannot
-// move under it. Booking learns of it through this module's entry, never by reading the table
-// (R-API-6).
+// An open remedy keeps its slot in use only because its enrollment is still `confirmed`: booking's
+// occupancy takes the slot of a confirmed enrollment whatever the date (FR-BOOK-10, FR-394, FR-423
+// as amended on 2026-11-10; the follow-up under T027), so no read of open remedies is needed there.
 //
 // Bounded: a person's open remedies are among their own sessions, few; a soft-deleted session's
 // remedy is left out.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { OPEN_REMEDY_STATUSES } from './remaining-sessions.repository.js';
 
 type Client = Pick<Transaction, 'sessionRemedy'>;
 
@@ -96,20 +94,4 @@ export async function reservingRemediesOf(
           },
     snapshotAnswerWindowHours: row.snapshotAnswerWindowHours,
   }));
-}
-
-/** Of `enrollmentIds`, those with an open remedy, `frozen` included (Q1 (a)). */
-export async function enrollmentsWithOpenRemedyAmong(
-  tx: Client,
-  enrollmentIds: readonly string[],
-): Promise<ReadonlySet<string>> {
-  if (enrollmentIds.length === 0) return new Set();
-  const rows = await tx.sessionRemedy.findMany({
-    where: {
-      status: { in: [...OPEN_REMEDY_STATUSES] },
-      session: { enrollmentId: { in: [...enrollmentIds] }, deletedAt: null },
-    },
-    select: { session: { select: { enrollmentId: true } } },
-  });
-  return new Set(rows.map(({ session }) => session.enrollmentId));
 }

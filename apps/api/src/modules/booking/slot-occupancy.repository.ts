@@ -9,16 +9,18 @@ import type { SlotUse } from './slot-occupancy.service.js';
 interface Gathered {
   readonly slotId: string;
   taken: boolean;
-  readonly confirmed: { readonly enrollmentId: string; readonly timezone: string }[];
+  readonly completed: { readonly enrollmentId: string; readonly timezone: string }[];
 }
 
 /**
  * Of `slotIds`, each slot an active hold (`released_at IS NULL`, data-model §3) or an enrollment
- * `pending_payment`, `confirmed` or `completed` uses, with its confirmed and completed enrollments
- * (both in `confirmed`, held until R-205's release) and the zone each snapshot its slot in; a slot
- * nothing uses is absent. A completed enrollment frees its slot only from the week after its final
- * session plus `slot_release_buffer_weeks`, as a confirmed one does (T015 of specs/004-sessions;
- * the note under 003:T026, nit 6; FR-423). Two statements over `slot_holds.slot_id` and
+ * `pending_payment`, `confirmed` or `completed` uses, with its completed enrollments (held until
+ * R-205's release) and the zone each snapshot its slot in; a slot nothing uses is absent. A
+ * `pending_payment` or `confirmed` enrollment takes its slot whatever the date: a package's slot
+ * returns only once the package is completed, its make-ups part of it (FR-BOOK-10, FR-394, FR-423
+ * as amended on 2026-11-10, the owner's rule; the follow-up under T027). A completed enrollment
+ * frees its slot from the week after its final session plus `slot_release_buffer_weeks` (T015 of
+ * specs/004-sessions; the note under 003:T026, nit 6). Two statements over `slot_holds.slot_id` and
  * `enrollments.slot_id`'s indexes. One active hold per slot (the partial unique index), and a slot's
  * enrollments are the few it has carried, so both reads are bounded by the slots asked about.
  * `exceptEnrollmentId`, when given, leaves that enrollment's own use out: a make-up or a restore
@@ -33,7 +35,7 @@ export async function slotUses(
   const uses = new Map<string, Gathered>();
   if (slotIds.length === 0) return uses;
   const useOf = (slotId: string): Gathered => {
-    const held = uses.get(slotId) ?? { slotId, taken: false, confirmed: [] };
+    const held = uses.get(slotId) ?? { slotId, taken: false, completed: [] };
     uses.set(slotId, held);
     return held;
   };
@@ -53,8 +55,9 @@ export async function slotUses(
   });
   for (const { id, slotId, status, snapshotSlotTimezone } of enrollments) {
     const use = useOf(slotId);
-    if (status === 'pending_payment') use.taken = true;
-    else use.confirmed.push({ enrollmentId: id, timezone: snapshotSlotTimezone });
+    if (status === 'completed')
+      use.completed.push({ enrollmentId: id, timezone: snapshotSlotTimezone });
+    else use.taken = true;
   }
   return uses;
 }

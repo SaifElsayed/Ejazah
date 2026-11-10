@@ -297,7 +297,51 @@ describe('an open remedy keeps its enrollment’s slot in use until it settles (
     expect(await inUse()).toBe(true);
     expect((await card()).has(confirmed.teacherId)).toBe(false);
 
+    // Booked, the make-up is a session of the enrollment, which is still confirmed: the slot stays
+    // until the enrollment is completed (the owner's rule of 2026-11-10, the follow-up under T027).
     await setStatus(remedyId, 'booked');
+    expect(await inUse()).toBe(true);
+    await database.enrollment.update({
+      where: { id: confirmed.enrollmentId },
+      data: { status: 'completed' },
+    });
+    expect(await inUse()).toBe(false);
+    expect((await card()).get(confirmed.teacherId)?.startsAt).toBe('2026-12-24T07:00:00Z');
+  });
+
+  // The owner's rule of 2026-11-10 (the follow-up under T027; FR-BOOK-10, FR-394, FR-423 as amended):
+  // a package's slot returns only once the package is completed, so a dispute still open on its last
+  // session past the week after it, with no remedy yet, keeps the slot.
+  it('a dispute open on the last session past its release keeps the slot, from slotInUse and from discovery’s card, until the enrollment is completed', async () => {
+    const confirmed = await confirmedWorld();
+    const { id: lastId } = await database.session.findFirstOrThrow({
+      where: { enrollmentId: confirmed.enrollmentId },
+      orderBy: { sequenceNumber: 'desc' },
+      select: { id: true },
+    });
+    await database.session.update({ where: { id: lastId }, data: { status: 'disputed' } });
+    // The release of a final session on 2026-11-26 is 2026-12-03; this is well after it.
+    const after = new Date('2026-12-20T08:00:00Z');
+    const inUse = () =>
+      database.$transaction((tx) =>
+        slotInUse(tx, confirmed.slotId, { now: () => after, bufferWeeks: async () => 0 }),
+      );
+    const card = () =>
+      database.$transaction((tx) =>
+        nearestFreeSlots(tx, FEMALE, [confirmed.teacherId], {
+          now: after,
+          leadHours: 24,
+          bufferWeeks: async () => 0,
+        }),
+      );
+
+    expect(await inUse()).toBe(true);
+    expect((await card()).has(confirmed.teacherId)).toBe(false);
+
+    await database.enrollment.update({
+      where: { id: confirmed.enrollmentId },
+      data: { status: 'completed' },
+    });
     expect(await inUse()).toBe(false);
     expect((await card()).get(confirmed.teacherId)?.startsAt).toBe('2026-12-24T07:00:00Z');
   });

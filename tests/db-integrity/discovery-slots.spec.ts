@@ -312,10 +312,14 @@ describe('offeredSlotsOf (T026, the catalog entry)', () => {
 });
 
 describe('slotInUse with R-205’s release (the note under T026, FR-394)', () => {
-  it('keeps a confirmed enrollment’s slot in use until the week after its final session', async () => {
+  it('keeps a confirmed enrollment’s slot in use whatever the date, and a completed one’s until the week after its final session', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
-      await confirmedThroughNovember5(tx, on);
+      const id = await confirmedThroughNovember5(tx, on);
+      // Still confirmed: in use past the week after its final session (the owner's rule of
+      // 2026-11-10; FR-394 as amended).
+      expect(await slotInUse(tx, on.slotId, releaseAt('2027-06-01T00:00:00Z').release)).toBe(true);
+      await tx.enrollment.update({ where: { id }, data: { status: 'completed' } });
       // Thursday 11-05 09:30 and Wednesday 11-11 23:59 in Cairo: still in use.
       expect(await slotInUse(tx, on.slotId, releaseAt('2026-11-05T07:30:00Z').release)).toBe(true);
       expect(await slotInUse(tx, on.slotId, releaseAt('2026-11-11T21:59:00Z').release)).toBe(true);
@@ -324,10 +328,11 @@ describe('slotInUse with R-205’s release (the note under T026, FR-394)', () =>
     });
   });
 
-  it('keeps it through the buffer weeks', async () => {
+  it('keeps a completed one’s through the buffer weeks', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
-      await confirmedThroughNovember5(tx, on);
+      const id = await confirmedThroughNovember5(tx, on);
+      await tx.enrollment.update({ where: { id }, data: { status: 'completed' } });
       expect(await slotInUse(tx, on.slotId, releaseAt('2026-11-12T08:00:00Z', 1).release)).toBe(
         true,
       );
@@ -393,12 +398,17 @@ describe('nearestFreeSlots (T026, R-205, FR-335)', () => {
     });
   });
 
-  it('skips a slot in use and offers it again from the week after the final session (FR-394)', async () => {
+  it('skips a slot in use and offers it again from the week after the final session once completed (FR-394)', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);
-      await confirmedThroughNovember5(tx, on);
+      const id = await confirmedThroughNovember5(tx, on);
       expect(await nearestFreeSlots(tx, FEMALE, [on.teacherId], clock(TUESDAY))).toEqual(new Map());
       const wednesday = new Date('2026-11-04T10:00:00Z');
+      // Still confirmed, the package keeps its slot (the owner's rule of 2026-11-10).
+      expect(await nearestFreeSlots(tx, FEMALE, [on.teacherId], clock(wednesday))).toEqual(
+        new Map(),
+      );
+      await tx.enrollment.update({ where: { id }, data: { status: 'completed' } });
       expect(await nearestFreeSlots(tx, FEMALE, [on.teacherId], clock(wednesday))).toEqual(
         new Map([[on.teacherId, { startsAt: '2026-11-12T07:00:00Z', timezone: CAIRO }]]),
       );
