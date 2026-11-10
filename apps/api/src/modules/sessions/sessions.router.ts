@@ -8,7 +8,7 @@
 //
 // T021: `sessions.cancellation.request` (keyed by the kernel's idempotency) and `.answer`, the same
 // kind, one service call each with the caller's own account (contracts/app-surface.md,
-// "`sessions.cancellation`"). T026: `sessions.dispute.raise`, below.
+// "`sessions.cancellation`"). T026: `sessions.dispute.raise`, below. T031: `sessions.remedy`, below.
 import {
   sessionsCancellationAnswerInput,
   sessionsCancellationAnswerOutput,
@@ -20,6 +20,14 @@ import {
   sessionsGetOutput,
   sessionsJoinInput,
   sessionsJoinOutput,
+  sessionsRemedyAcceptInput,
+  sessionsRemedyAcceptOutput,
+  sessionsRemedyChooseInput,
+  sessionsRemedyChooseOutput,
+  sessionsRemedyCounterInput,
+  sessionsRemedyCounterOptionsInput,
+  sessionsRemedyCounterOptionsOutput,
+  sessionsRemedyCounterOutput,
 } from '@ijazah/contracts';
 
 import { createAppRouter, participantProcedure } from '../../surfaces/procedures.js';
@@ -33,6 +41,38 @@ const disputeRouter = createAppRouter({
     output: sessionsDisputeRaiseOutput,
   }).mutation(({ ctx, input }) =>
     ctx.services.sessions.raiseDispute({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+});
+
+// T031 (contracts/app-surface.md, "`sessions.remedy`"; FR-463 to FR-466): the student's four, the
+// participant kind (the teacher's refusal is the service's `NOT_FOUND`), with no limit of their own
+// (the signed-in default counts them, T062); `counterOptions` a read, the other three mutations,
+// `counter` keyed by the client's idempotency key. The caller's own account and the input handed to
+// one service call each.
+const remedyRouter = createAppRouter({
+  choose: participantProcedure({
+    input: sessionsRemedyChooseInput,
+    output: sessionsRemedyChooseOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.remedy.choose({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+  accept: participantProcedure({
+    input: sessionsRemedyAcceptInput,
+    output: sessionsRemedyAcceptOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.remedy.accept({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+  counterOptions: participantProcedure({
+    input: sessionsRemedyCounterOptionsInput,
+    output: sessionsRemedyCounterOptionsOutput,
+  }).query(({ ctx, input }) =>
+    ctx.services.sessions.remedy.counterOptions({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+  counter: participantProcedure({
+    input: sessionsRemedyCounterInput,
+    output: sessionsRemedyCounterOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.remedy.counter({ userId: ctx.caller.userId }, input, ctx.log),
   ),
 });
 
@@ -63,4 +103,7 @@ export const sessionsRouter = createAppRouter({
 
   // T026.
   dispute: disputeRouter,
+
+  // T031.
+  remedy: remedyRouter,
 });

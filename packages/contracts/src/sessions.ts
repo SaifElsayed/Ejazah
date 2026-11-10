@@ -201,3 +201,67 @@ export const sessionsDisputeRaiseOutput = z.object({
 
 export type SessionsDisputeRaiseInput = z.infer<typeof sessionsDisputeRaiseInput>;
 export type SessionsDisputeRaiseOutput = z.infer<typeof sessionsDisputeRaiseOutput>;
+
+// T031 and T032 of specs/004-sessions: `sessions.remedy` (contracts/app-surface.md,
+// "`sessions.remedy`"; FR-463 to FR-469; research R-311). The student chooses a make-up or, where a
+// refund is owed, a refund (`choose`), accepts the system's proposal (`accept`), reads the times a
+// counter-proposal may name (`counterOptions`) and names one (`counter`, keyed by the client's
+// idempotency key, `idempotent-procedures.ts`); the teacher accepts or declines it
+// (`answerCounter`). The caller names the session and what they chose, never who asks or of what
+// gender (R-GENDER-4); a counter names a slot and a local date, never an instant or a zone, which
+// are the slot's (R-TIME-6, `003:T077`). Each answers the remedy as `sessions.get` shows it
+// (`RemedyView`); `accept` always with its make-up's id.
+
+/** The remedy's session, and the choice the student makes (`refund` only where one is owed, A1). */
+export const sessionsRemedyChooseInput = z.object({
+  sessionId: z.uuid(),
+  choice: z.enum(['makeup', 'refund']),
+});
+export const sessionsRemedyChooseOutput = remedyView;
+
+/** The remedy's session; its proposal is booked. */
+export const sessionsRemedyAcceptInput = z.object({ sessionId: z.uuid() });
+/** The remedy booked, with its make-up's session. */
+export const sessionsRemedyAcceptOutput = remedyView.extend({ makeupSessionId: z.uuid() });
+
+/** The remedy's session. */
+export const sessionsRemedyCounterOptionsInput = z.object({ sessionId: z.uuid() });
+
+/** One time a counter-proposal may name: a teacher's slot on a local date, in the slot's zone. */
+export const counterOption = z.object({
+  slotId: z.uuid(),
+  localDate: calendarDate,
+  startTimeLocal: slotStartTimeLocal,
+  timezone: timeZone,
+  startsAt: z.iso.datetime(),
+});
+/** Per active slot of the session's length, its first free occurrence at or after the bound (Q5 (a)). */
+export const sessionsRemedyCounterOptionsOutput = z.object({ options: z.array(counterOption) });
+
+/** One of the options, by its slot and local date, with the client's idempotency key. */
+export const sessionsRemedyCounterInput = z.object({
+  sessionId: z.uuid(),
+  slotId: z.uuid(),
+  localDate: calendarDate,
+  idempotencyKey,
+});
+export const sessionsRemedyCounterOutput = remedyView;
+
+/** The teacher's answer to the pending counter-proposal. */
+export const sessionsRemedyAnswerCounterInput = z.object({
+  sessionId: z.uuid(),
+  accept: z.boolean(),
+});
+export const sessionsRemedyAnswerCounterOutput = remedyView;
+
+export type SessionsRemedyChooseInput = z.infer<typeof sessionsRemedyChooseInput>;
+export type SessionsRemedyChooseOutput = z.infer<typeof sessionsRemedyChooseOutput>;
+export type SessionsRemedyAcceptInput = z.infer<typeof sessionsRemedyAcceptInput>;
+export type SessionsRemedyAcceptOutput = z.infer<typeof sessionsRemedyAcceptOutput>;
+export type CounterOption = z.infer<typeof counterOption>;
+export type SessionsRemedyCounterOptionsInput = z.infer<typeof sessionsRemedyCounterOptionsInput>;
+export type SessionsRemedyCounterOptionsOutput = z.infer<typeof sessionsRemedyCounterOptionsOutput>;
+export type SessionsRemedyCounterInput = z.infer<typeof sessionsRemedyCounterInput>;
+export type SessionsRemedyCounterOutput = z.infer<typeof sessionsRemedyCounterOutput>;
+export type SessionsRemedyAnswerCounterInput = z.infer<typeof sessionsRemedyAnswerCounterInput>;
+export type SessionsRemedyAnswerCounterOutput = z.infer<typeof sessionsRemedyAnswerCounterOutput>;

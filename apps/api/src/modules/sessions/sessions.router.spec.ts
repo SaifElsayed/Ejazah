@@ -161,7 +161,55 @@ const sessions: SessionsServices = {
     // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
     return { ...raised, raisedByUserId: CALLER } as never;
   },
+  // T031.
+  remedy: {
+    choose: async (caller, input) => {
+      calls.push(['choose', caller, input]);
+      if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+      return { ...remedied, caseId: OTHER } as never;
+    },
+    accept: async (caller, input) => {
+      calls.push(['accept', caller, input]);
+      if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+      return { ...accepted, enrollmentId: ENROLLMENT } as never;
+    },
+    counterOptions: async (caller, input) => {
+      calls.push(['counterOptions', caller, input]);
+      if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+      return { options: [{ ...option, teacherUserId: OTHER }] } as never;
+    },
+    counter: async (caller, input) => {
+      calls.push(['counter', caller, input]);
+      if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+      return { ...remedied, snapshotAnswerWindowHours: 72 } as never;
+    },
+  },
 };
+
+// T031: what the remedy's procedures answer, and the extra field each careless answer above adds
+// (stripped, R-HONEST-4).
+const remedied = {
+  status: 'proposed' as const,
+  kind: 'makeup' as const,
+  offeredAt: '2026-11-01T10:00:00.000Z',
+  choiceClosesAt: '2026-11-08T10:00:00.000Z',
+  proposal: {
+    localDate: '2026-11-15',
+    startTimeLocal: '09:00',
+    timezone: 'Africa/Cairo',
+    startsAt: '2026-11-15T07:00:00.000Z',
+  },
+  canChooseRefund: false,
+};
+const accepted = { ...remedied, status: 'booked' as const, makeupSessionId: DISPUTE };
+const option = {
+  slotId: REQUEST,
+  localDate: '2026-11-16',
+  startTimeLocal: '18:00',
+  timezone: 'Africa/Cairo',
+  startsAt: '2026-11-16T16:00:00Z',
+};
+const COUNTER_KEY = 'counter-key-0000000001';
 
 beforeEach(() => {
   calls = [];
@@ -203,6 +251,20 @@ const procedures = {
       sessionId,
       reason: 'لم يحضر المعلم',
       idempotencyKey: DISPUTE_KEY,
+    }),
+  // T031.
+  'sessions.remedy.choose': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.remedy.choose({ sessionId, choice: 'makeup' }),
+  'sessions.remedy.accept': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.remedy.accept({ sessionId }),
+  'sessions.remedy.counterOptions': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.remedy.counterOptions({ sessionId }),
+  'sessions.remedy.counter': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.remedy.counter({
+      sessionId,
+      slotId: REQUEST,
+      localDate: '2026-11-16',
+      idempotencyKey: COUNTER_KEY,
     }),
 } as const;
 
@@ -650,5 +712,182 @@ describe("'sessions.dispute.raise' (T026)", () => {
       surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
     )['sessions.dispute.raise'];
     expect(procedure?._def.type).toBe('mutation');
+  });
+});
+
+// T031 of specs/004-sessions: `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`,
+// the participant kind (the student's own refusal of the teacher is the service's NOT_FOUND), each
+// handing the service the caller's own account and the validated input only; `counterOptions` a
+// query, the other three mutations, `counter` keyed (contracts/app-surface.md, "`sessions.remedy`").
+const RESTRICTED = [
+  'suspended student',
+  'banned student',
+  'suspended teacher',
+  'banned teacher',
+] as const;
+
+const typeOf = (path: string): unknown =>
+  (surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>)[path]
+    ?._def.type;
+
+describe("'sessions.remedy.choose' (T031)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted one ACCOUNT_RESTRICTED before the service: 'sessions.remedy.choose'", async () => {
+    await expect(procedures['sessions.remedy.choose'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(
+        procedures['sessions.remedy.choose'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the input only, and answers the remedy stripped: 'sessions.remedy.choose'", async () => {
+    const answered = await callerAs(sessionOf('student')).sessions.remedy.choose({
+      sessionId: SESSION,
+      choice: 'refund',
+      userId: OTHER,
+      gender: 'male',
+    } as never);
+    expect(calls).toEqual([
+      ['choose', { userId: CALLER }, { sessionId: SESSION, choice: 'refund' }],
+    ]);
+    expect(answered).toEqual(remedied);
+  });
+
+  it("refuses a choice it does not name VALIDATION_FAILED before the service, and is a participant mutation: 'sessions.remedy.choose'", async () => {
+    const thrown: unknown = await callerAs(sessionOf('student'))
+      .sessions.remedy.choose({ sessionId: SESSION, choice: 'cash' } as never)
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+    expect(metaOf('sessions.remedy.choose')).toEqual({ surface: 'app', caller: 'participant' });
+    expect(typeOf('sessions.remedy.choose')).toBe('mutation');
+  });
+});
+
+describe("'sessions.remedy.accept' (T031)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted one ACCOUNT_RESTRICTED before the service: 'sessions.remedy.accept'", async () => {
+    await expect(procedures['sessions.remedy.accept'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(
+        procedures['sessions.remedy.accept'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the session only, and answers the remedy with its make-up, stripped: 'sessions.remedy.accept'", async () => {
+    const answered = await callerAs(sessionOf('student')).sessions.remedy.accept({
+      sessionId: SESSION,
+      userId: OTHER,
+    } as never);
+    expect(calls).toEqual([['accept', { userId: CALLER }, { sessionId: SESSION }]]);
+    expect(answered).toEqual(accepted);
+  });
+
+  it("answers the service's NOT_FOUND with no field, and is a participant mutation: 'sessions.remedy.accept'", async () => {
+    const thrown: unknown = await procedures['sessions.remedy.accept'](
+      callerAs(sessionOf('teacher')),
+      OTHER,
+    ).catch((error: unknown) => error);
+    const { status, body } = toErrorShape(thrown as Parameters<typeof toErrorShape>[0]);
+    expect(status).toBe(404);
+    expect(Object.keys(body).sort()).toEqual(['code', 'message']);
+    expect(metaOf('sessions.remedy.accept')).toEqual({ surface: 'app', caller: 'participant' });
+    expect(typeOf('sessions.remedy.accept')).toBe('mutation');
+  });
+});
+
+describe("'sessions.remedy.counterOptions' (T031)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted one ACCOUNT_RESTRICTED before the service: 'sessions.remedy.counterOptions'", async () => {
+    await expect(procedures['sessions.remedy.counterOptions'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(
+        procedures['sessions.remedy.counterOptions'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the session only, and answers the options stripped; a participant query: 'sessions.remedy.counterOptions'", async () => {
+    const answered = await callerAs(sessionOf('student')).sessions.remedy.counterOptions({
+      sessionId: SESSION,
+      gender: 'male',
+    } as never);
+    expect(calls).toEqual([['counterOptions', { userId: CALLER }, { sessionId: SESSION }]]);
+    expect(answered).toEqual({ options: [option] });
+    expect(metaOf('sessions.remedy.counterOptions')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+    });
+    expect(typeOf('sessions.remedy.counterOptions')).toBe('query');
+  });
+});
+
+describe("'sessions.remedy.counter' (T031)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted one ACCOUNT_RESTRICTED before the service: 'sessions.remedy.counter'", async () => {
+    await expect(procedures['sessions.remedy.counter'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(
+        procedures['sessions.remedy.counter'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the input with its key, never an instant or a zone, and answers the remedy stripped: 'sessions.remedy.counter'", async () => {
+    const answered = await callerAs(sessionOf('student')).sessions.remedy.counter({
+      sessionId: SESSION,
+      slotId: REQUEST,
+      localDate: '2026-11-16',
+      idempotencyKey: COUNTER_KEY,
+      startsAt: '2026-11-16T16:00:00Z',
+      timezone: 'UTC',
+    } as never);
+    expect(calls).toEqual([
+      [
+        'counter',
+        { userId: CALLER },
+        {
+          sessionId: SESSION,
+          slotId: REQUEST,
+          localDate: '2026-11-16',
+          idempotencyKey: COUNTER_KEY,
+        },
+      ],
+    ]);
+    expect(answered).toEqual(remedied);
+  });
+
+  it("refuses a malformed key, date or slot VALIDATION_FAILED before the service, and is a participant mutation: 'sessions.remedy.counter'", async () => {
+    for (const input of [
+      { sessionId: SESSION, slotId: REQUEST, localDate: '2026-11-16', idempotencyKey: 'short' },
+      { sessionId: SESSION, slotId: REQUEST, localDate: '16/11/2026', idempotencyKey: COUNTER_KEY },
+      { sessionId: SESSION, slotId: 'slot', localDate: '2026-11-16', idempotencyKey: COUNTER_KEY },
+    ]) {
+      const thrown: unknown = await callerAs(sessionOf('student'))
+        .sessions.remedy.counter(input)
+        .catch((error: unknown) => error);
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+    expect(metaOf('sessions.remedy.counter')).toEqual({ surface: 'app', caller: 'participant' });
+    expect(typeOf('sessions.remedy.counter')).toBe('mutation');
   });
 });

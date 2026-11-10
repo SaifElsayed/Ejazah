@@ -384,3 +384,14 @@ export {
   remedyStatusesAmong,
   remedyViewRowOf,
 } from './remedy-offer.repository.js';
+/**
+ * T031 of specs/004-sessions (FR-463 to FR-466; research R-311, "The student"; Q5 (a), Q9 (a)): the
+ * student's `sessions.remedy` procedures, composed into `SessionsServices.remedy`, and their store,
+ * for a spec that narrows it.
+ */
+export {
+  createRemedyServices,
+  type RemedyServices,
+  type RemedyStore,
+  remedyStore,
+} from './remedy.service.js';
