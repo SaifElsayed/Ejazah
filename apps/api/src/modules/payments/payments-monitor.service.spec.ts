@@ -99,6 +99,31 @@ const monitored: MonitoredEnrollment = {
       occurredAt: new Date('2026-11-05T10:00:00Z'),
     },
   ],
+  // T024 of specs/004-sessions (GAP-8): a hold released before its reason was recorded, the
+  // converted one, and one still active.
+  holds: [
+    {
+      id: '0199d0a0-0000-7000-8000-0000000000d1',
+      placedAt: new Date('2026-11-01T10:00:00Z'),
+      expiresAt: new Date('2026-11-01T10:45:00Z'),
+      releasedAt: new Date('2026-11-01T10:46:00Z'),
+      releaseReason: null,
+    },
+    {
+      id: '0199d0a0-0000-7000-8000-0000000000d2',
+      placedAt: new Date('2026-11-03T09:58:00Z'),
+      expiresAt: new Date('2026-11-03T10:43:00Z'),
+      releasedAt: new Date('2026-11-03T10:06:00Z'),
+      releaseReason: 'converted',
+    },
+    {
+      id: '0199d0a0-0000-7000-8000-0000000000d3',
+      placedAt: new Date('2026-11-09T09:00:00Z'),
+      expiresAt: new Date('2026-11-09T09:45:00Z'),
+      releasedAt: null,
+      releaseReason: null,
+    },
+  ],
 };
 
 interface Recorded extends PaymentsMonitorStore {
@@ -318,6 +343,27 @@ describe('payments.get', () => {
         status: 'confirmed',
         completed: 3,
         total: 8,
+        // Oldest first; a release and its reason only where recorded («not recorded» on the panel).
+        holds: [
+          {
+            holdId: '0199d0a0-0000-7000-8000-0000000000d1',
+            placedAt: '2026-11-01T10:00:00.000Z',
+            expiresAt: '2026-11-01T10:45:00.000Z',
+            releasedAt: '2026-11-01T10:46:00.000Z',
+          },
+          {
+            holdId: '0199d0a0-0000-7000-8000-0000000000d2',
+            placedAt: '2026-11-03T09:58:00.000Z',
+            expiresAt: '2026-11-03T10:43:00.000Z',
+            releasedAt: '2026-11-03T10:06:00.000Z',
+            releaseReason: 'converted',
+          },
+          {
+            holdId: '0199d0a0-0000-7000-8000-0000000000d3',
+            placedAt: '2026-11-09T09:00:00.000Z',
+            expiresAt: '2026-11-09T09:45:00.000Z',
+          },
+        ],
       },
       events: [
         { eventType: 'failed', receivedAt: '2026-11-03T10:01:00.000Z' },

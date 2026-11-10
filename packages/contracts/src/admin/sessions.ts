@@ -7,9 +7,12 @@
 // §2.5, rule 44); no procedure here changes or removes one.
 import { z } from 'zod';
 
+import { enrollmentCancellationReason, enrollmentStatus } from '../checkout.js';
+import { sessionStatus } from '../enrollments.js';
 import { calendarDate, timeZone } from '../onboarding.js';
+import { packageTrack } from '../packages.js';
 import { slotStartTimeLocal } from '../slots.js';
-import { adminReason } from './admins.js';
+import { adminReason, adminSearch } from './admins.js';
 
 /** One end of the window: a calendar date and a wall-clock time (`HH:MM`), in the input's zone. */
 export const outageWallClock = z.object({ localDate: calendarDate, localTime: slotStartTimeLocal });
@@ -68,3 +71,248 @@ export const sessionsCancelOutput = z.object({
 
 export type SessionsCancelInput = z.infer<typeof sessionsCancelInput>;
 export type SessionsCancelOutput = z.infer<typeof sessionsCancelOutput>;
+
+// T024 of specs/004-sessions (FR-479, FR-480, FR-451, FR-439; R-MONEY-6; research R-322, R-323 GAP-1
+// and GAP-4; admin-surface.md, `sessions.monitor.list/get`, `TimelineEvent`, `RemedyMonitor`): the
+// enrollment and session monitor, read-only (the cancellation is `sessions.cancel`'s). Every derived
+// value is computed when read and never stored (R-DB-4): `completed`, `remaining`, `teacherNoShows`
+// and its mark `repeatedAbsence`, `restorableUntil`, `cancellable`, `correctable`, and each remedy's
+// `answerClosesAt` and `bookingRetriedUntil`. No amount, payment record or payment id crosses
+// (FR-497): payment status is `/payments`' page. A party is named as this phase names one, with
+// its id for the panel's links (`Party`, FR-426: a deleted account has no name).
+
+/** A party of an enrollment (admin-surface.md, `Party`). */
+export const monitorParty = z.object({
+  userId: z.uuid(),
+  /** The party's display name; null for a deleted party. */
+  displayName: z.string().nullable(),
+  /** The party's account was deleted (FR-426). */
+  deleted: z.boolean(),
+});
+
+/** A page of the list starts after this enrollment; enrollments are listed by their time-ordered id. */
+export const sessionsMonitorCursor = z.uuid();
+
+export const sessionsMonitorListInput = z.object({
+  status: enrollmentStatus.optional(),
+  /** The start of the student's name, folded (R-203). */
+  student: adminSearch.optional(),
+  /** The start of the teacher's name, folded (R-203). */
+  teacher: adminSearch.optional(),
+  /** Enrollments with a session on or after this local date, in the session's own zone. */
+  from: calendarDate.optional(),
+  /** Enrollments with a session on or before this local date, in the session's own zone. */
+  to: calendarDate.optional(),
+  cursor: sessionsMonitorCursor.optional(),
+});
+
+/** A session's schedule as the monitor shows it: its local date, start and zone, and its instant. */
+export const monitorSessionTime = z.object({
+  sessionId: z.uuid(),
+  localDate: calendarDate,
+  startTimeLocal: slotStartTimeLocal,
+  timezone: timeZone,
+  startsAt: z.iso.datetime(),
+});
+
+/** One enrollment of the list (FR-479; FR-451's count and mark, for administrators only). */
+export const sessionsMonitorListItem = z.object({
+  enrollmentId: z.uuid(),
+  student: monitorParty,
+  teacher: monitorParty,
+  status: enrollmentStatus,
+  track: packageTrack,
+  sessionCount: z.int().min(1),
+  /** Sessions consumed (FR-392). */
+  completed: z.int().nonnegative(),
+  /** The snapshot's count less those consumed. */
+  remaining: z.int().nonnegative(),
+  teacherNoShows: z.int().nonnegative(),
+  /** `teacherNoShows` at `repeated_absence_flag_count` or above (FR-451); nothing follows from it. */
+  repeatedAbsence: z.boolean(),
+  /** The earliest scheduled session not yet over. */
+  nextSession: monitorSessionTime.optional(),
+});
+
+export const sessionsMonitorListOutput = z.object({
+  items: z.array(sessionsMonitorListItem),
+  /** Present while more enrollments follow the page. */
+  nextCursor: sessionsMonitorCursor.optional(),
+});
+
+export const sessionsMonitorGetInput = z.object({ enrollmentId: z.uuid() });
+
+/** The enrollment of `sessions.monitor.get`: the list's fields with the restore window's end. */
+export const monitorEnrollment = sessionsMonitorListItem.omit({ nextSession: true }).extend({
+  /**
+   * The closing case's opening plus `enrollment_restore_window_days`, present only for an
+   * enrollment `sessions.restore` could admit by its closing and its case (FR-454, R-322); it may
+   * already have passed, the restore then refused `window_closed`.
+   */
+  restorableUntil: z.iso.datetime().optional(),
+});
+
+/** A time a remedy names, in its own zone (FR-494). */
+const monitorRemedyTime = z.object({
+  localDate: calendarDate,
+  startTimeLocal: slotStartTimeLocal,
+  timezone: timeZone,
+  startsAt: z.iso.datetime(),
+});
+
+/** A session's remedy as the administrator sees it (admin-surface.md, `RemedyMonitor`; GAP-4). */
+export const remedyMonitor = z.object({
+  remedyId: z.uuid(),
+  kind: z.enum(['makeup', 'refund']),
+  status: z.enum([
+    'awaiting_choice',
+    'proposed',
+    'counter_proposed',
+    'booked',
+    'refund_case',
+    'frozen',
+    'lapsed',
+  ]),
+  offeredAt: z.iso.datetime(),
+  choiceClosesAt: z.iso.datetime(),
+  /** The system's proposal: the enrollment's slot's local start on its date, in the enrollment's zone. */
+  proposal: monitorRemedyTime.optional(),
+  /** The pending counter-proposal only; `answerClosesAt` computed when read (D1). */
+  counter: monitorRemedyTime
+    .extend({ proposedAt: z.iso.datetime(), answerClosesAt: z.iso.datetime() })
+    .optional(),
+  caseId: z.uuid().optional(),
+  decidedAt: z.iso.datetime().optional(),
+  /** A refused booking of the proposal, retried until then (FR-468): «booking refused, retried until …». */
+  bookingRetriedUntil: z.iso.datetime().optional(),
+});
+
+/** One session of the enrollment (admin-surface.md, `sessions.monitor.get`). */
+export const monitorSession = z.object({
+  sessionId: z.uuid(),
+  sequenceNumber: z.int().positive(),
+  /** The session this one makes up for, when it is a make-up (ADR 0018 D3). */
+  makeupFor: z.object({ sessionId: z.uuid(), sequenceNumber: z.int().positive() }).optional(),
+  localDate: calendarDate,
+  startTimeLocal: slotStartTimeLocal,
+  timezone: timeZone,
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  status: sessionStatus,
+  /** The outcome frozen while the session is `disputed` (R-308). */
+  outcomeUnderDispute: sessionStatus.optional(),
+  /** `sessions.cancel` would be admitted: the session is `scheduled` (FR-460). */
+  cancellable: z.boolean(),
+  /** `sessions.review.revise` would be admitted now (FR-439). */
+  correctable: z.boolean(),
+  remedy: remedyMonitor.optional(),
+});
+
+/** A compensation case's reason (`disputes.reason`, the closed list of moderation's cases). */
+export const compensationCaseReason = z.enum([
+  'slot_unavailable',
+  'party_restricted',
+  'duplicate_payment',
+  'absence_termination',
+  'admin_cancellation',
+  'teacher_ended',
+  'student_suspended',
+  'student_banned',
+  'student_fault_confirmed',
+  'refund_choice',
+  'counter_unanswered',
+  'makeup_refused',
+  'admin_opened_for_student',
+  'admin_opened_for_teacher',
+]);
+
+/** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */
+export const monitorCase = z.object({
+  caseId: z.uuid(),
+  reason: compensationCaseReason,
+  status: z.enum(['open', 'resolved', 'dismissed']),
+});
+
+/** One cancellation request of the enrollment's sessions, newest first, as its row records it. */
+export const monitorCancellationRequest = z.object({
+  requestId: z.uuid(),
+  sessionId: z.uuid(),
+  requestedBy: z.enum(['student', 'teacher']),
+  reason: z.string(),
+  status: z.enum(['pending', 'accepted', 'declined', 'expired']),
+  createdAt: z.iso.datetime(),
+  respondedAt: z.iso.datetime().optional(),
+});
+
+/** `enrollment_event_kind` and `session_event_kind`, a timeline row's kind by its source. */
+export const timelineEventKind = z.enum([
+  'confirmed',
+  'order_failed',
+  'cancelled',
+  'completed',
+  'terminated_no_show',
+  'restored',
+  'settled',
+  'cancellation_requested',
+  'cancellation_accepted',
+  'cancellation_declined',
+  'cancellation_expired',
+  'cancelled_by_admin',
+  'remedy_offered',
+  'counter_proposed',
+  'counter_accepted',
+  'counter_declined',
+  'counter_withdrawn',
+  'remedy_frozen',
+  'makeup_booked',
+  'remedy_handed_to_case',
+  'remedy_lapsed',
+  'dispute_raised',
+  'dispute_resolved',
+  'dispute_revised',
+  'review_resolved',
+  'outage_reclassified',
+  'complaint_raised',
+  'complaint_decided',
+  'outcome_corrected',
+  'instants_reresolved',
+  'counter_booking_refused',
+]);
+
+/**
+ * One row of the enrollment's timeline (admin-surface.md, `TimelineEvent`; GAP-1): an
+ * `enrollment_events` row (its kind and reason; no payment id, FR-497) or a `session_events` row
+ * (its kind and the columns its kind sets).
+ */
+export const timelineEvent = z.object({
+  source: z.enum(['enrollment', 'session']),
+  kind: timelineEventKind,
+  sessionId: z.uuid().optional(),
+  caseId: z.uuid().optional(),
+  cancellationReason: enrollmentCancellationReason.optional(),
+  outcomeBefore: sessionStatus.optional(),
+  outcomeAfter: sessionStatus.optional(),
+  previousStartAt: z.iso.datetime().optional(),
+  occurredAt: z.iso.datetime(),
+});
+
+export const sessionsMonitorGetOutput = z.object({
+  enrollment: monitorEnrollment,
+  /** By sequence number. */
+  sessions: z.array(monitorSession),
+  cases: z.array(monitorCase),
+  cancellationRequests: z.array(monitorCancellationRequest),
+  /** Newest first; at one instant, the session rows before the enrollment's. */
+  events: z.array(timelineEvent),
+});
+
+export type MonitorParty = z.infer<typeof monitorParty>;
+export type SessionsMonitorListInput = z.infer<typeof sessionsMonitorListInput>;
+export type SessionsMonitorListItem = z.infer<typeof sessionsMonitorListItem>;
+export type SessionsMonitorListOutput = z.infer<typeof sessionsMonitorListOutput>;
+export type SessionsMonitorGetInput = z.infer<typeof sessionsMonitorGetInput>;
+export type SessionsMonitorGetOutput = z.infer<typeof sessionsMonitorGetOutput>;
+export type MonitorEnrollment = z.infer<typeof monitorEnrollment>;
+export type MonitorSession = z.infer<typeof monitorSession>;
+export type RemedyMonitor = z.infer<typeof remedyMonitor>;
+export type TimelineEvent = z.infer<typeof timelineEvent>;

@@ -254,6 +254,22 @@ describe('EnrollmentSide.enrollmentPage (T008, U3)', () => {
     await expect(side.enrollmentPage(tx, {})).rejects.toThrow();
     expect(recorded.pages).toEqual([]);
   });
+
+  // T024 (the owner's decision of 2026-11-10 on B37 lane B's Q3): the monitor's name search reads
+  // in batches, each twice the one before, as the payments monitor does.
+  it('reads a batch of the size asked, and one row more, reading no setting', async () => {
+    const { side, recorded } = world({ page: [item(5), item(4), item(3), item(2)], pageSize: 2 });
+    const page = await side.enrollmentPage(tx, {}, undefined, 3);
+    expect(recorded.settings).toEqual([]);
+    expect(recorded.pages).toEqual([{ cursor: undefined, take: 4 }]);
+    expect(page).toEqual({ items: [item(5), item(4), item(3)], nextCursor: id(3) });
+  });
+
+  it('refuses a batch size that is not a positive whole number, reading nothing', async () => {
+    const { side, recorded } = world({ pageSize: 2 });
+    await expect(side.enrollmentPage(tx, {}, undefined, 0)).rejects.toThrow();
+    expect(recorded.pages).toEqual([]);
+  });
 });
 
 describe("EnrollmentSide.slotWeekTaken (T008, R-205; the owner's decision of 2026-11-07)", () => {

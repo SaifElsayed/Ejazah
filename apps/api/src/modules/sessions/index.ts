@@ -130,6 +130,22 @@ export {
   sessionCancelStore,
 } from './session-cancel.service.js';
 /**
+ * T024 (FR-479, FR-451, FR-439, FR-454; R-323 GAP-1, GAP-4): the enrollment and session monitor,
+ * `sessions.monitor.list` and `.get`, read on the call's transaction, composed by the admin module;
+ * and the derived values other tasks read through the same one function: a counter-proposal's
+ * `answerClosesAt` (D1; T031, T032), a refused booking's `bookingRetriedUntil`, an outcome's
+ * `correctable` (T059) and the restore window's end (T061).
+ */
+export {
+  createSessionsMonitor,
+  type SessionsMonitor,
+  type SessionsMonitorStore,
+  sessionsMonitorStore,
+} from './sessions-monitor.service.js';
+export { answerClosesAt, bookingRetriedUntil } from './remedy-deadlines.js';
+export { isCorrectable } from './outcome-correction.js';
+export { ENROLLMENT_RESTORE_WINDOW_SETTING, restorableUntil } from './restore-window.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */

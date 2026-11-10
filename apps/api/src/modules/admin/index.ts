@@ -24,9 +24,11 @@ import {
   createCompletion,
   createOutageServices,
   createSessionCancel,
+  createSessionsMonitor,
   type EnrollmentSide,
   type OutageServices,
   type SessionCancel,
+  type SessionsMonitor,
 } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
@@ -105,6 +107,11 @@ export interface AdminServices {
    * specs/004-sessions, FR-460): over the bound `EnrollmentSide`'s lock and the process's logger.
    */
   readonly sessionCancel: SessionCancel;
+  /**
+   * The sessions module's enrollment and session monitor, composed here for the surface (T024 of
+   * specs/004-sessions, FR-479): over the bound `EnrollmentSide`'s reads and the settings.
+   */
+  readonly monitor: SessionsMonitor;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -172,6 +179,11 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     }),
     sessionCancel: createSessionCancel({
       enrollments: dependencies.enrollmentSide,
+      log: dependencies.log,
+    }),
+    monitor: createSessionsMonitor({
+      enrollments: dependencies.enrollmentSide,
+      settings: dependencies.settings,
       log: dependencies.log,
     }),
   };

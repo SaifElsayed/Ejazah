@@ -65,6 +65,32 @@ export const paymentEventType = z.enum(['paid', 'failed', 'expired', 'refunded']
 /** ERD `enrollment_event_kind`: an outcome booking recorded for the enrollment (R-216). */
 export const enrollmentOutcomeKind = z.enum(['confirmed', 'order_failed', 'cancelled']);
 
+/**
+ * Why a hold was released (ERD `hold_release_reason`; T001 of specs/004-sessions, data-model §2.12).
+ */
+export const holdReleaseReason = z.enum([
+  'converted',
+  'expired',
+  'checkout_abandoned',
+  'slot_unavailable',
+  'admin',
+  'teacher_suspended',
+  'account_deleted',
+]);
+
+/**
+ * One hold of the enrollment (T024 of specs/004-sessions; research R-323 GAP-8): placed, expiring,
+ * and, once released, when and why. `releaseReason` is absent for a hold released before the reason
+ * was recorded, which the panel reads «not recorded».
+ */
+export const paymentEnrollmentHold = z.object({
+  holdId: z.uuid(),
+  placedAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  releasedAt: z.iso.datetime().optional(),
+  releaseReason: holdReleaseReason.optional(),
+});
+
 /** The order's enrollment: its package, its status and its progress (FR-400). */
 export const paymentEnrollment = z.object({
   enrollmentId: z.uuid(),
@@ -76,6 +102,8 @@ export const paymentEnrollment = z.object({
   completed: z.int().nonnegative(),
   /** The package's session count. */
   total: z.int().min(1),
+  /** The enrollment's holds, oldest first (T024 of specs/004-sessions, GAP-8; additive, R-API-9). */
+  holds: z.array(paymentEnrollmentHold),
 });
 
 /** One order of the enrollment the gateway reported paid (the note under T052, T082). */
@@ -128,3 +156,5 @@ export type PaymentsGetOutput = z.infer<typeof paymentsGetOutput>;
 export type PaymentEnrollment = z.infer<typeof paymentEnrollment>;
 export type PaymentEventType = z.infer<typeof paymentEventType>;
 export type EnrollmentOutcomeKind = z.infer<typeof enrollmentOutcomeKind>;
+export type HoldReleaseReason = z.infer<typeof holdReleaseReason>;
+export type PaymentEnrollmentHold = z.infer<typeof paymentEnrollmentHold>;

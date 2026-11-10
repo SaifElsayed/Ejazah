@@ -166,11 +166,14 @@ export interface EnrollmentSide {
   eventsOf(tx: Transaction, enrollmentId: string): Promise<readonly EnrollmentEventEntry[]>;
   /**
    * A keyset page by id, newest first, of `admin_list_page_size` enrollments matching `filter`,
-   * after `cursor` (the last id of the page before), with no lock (T024; R-API-6).
+   * after `cursor` (the last id of the page before), with no lock (T024; R-API-6). `batchSize`,
+   * when given, is the page's size in place of the setting: the monitor's name search reads in
+   * batches, each twice the one before (the owner's decision of 2026-11-10 on B37 lane B's Q3).
    */
   enrollmentPage(
     tx: Transaction,
     filter: EnrollmentPageFilter,
     cursor?: string,
+    batchSize?: number,
   ): Promise<EnrollmentPage>;
 }
