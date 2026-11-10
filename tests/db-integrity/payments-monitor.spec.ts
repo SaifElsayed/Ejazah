@@ -239,11 +239,35 @@ async function world(tx: Transaction) {
   });
   await session(yusras, yusra, 1, '2026-11-03T12:00:00.000Z');
   await session(yusras, yusra, 2, '2026-11-17T12:00:00.000Z');
+  // T024 of specs/004-sessions (GAP-8): Yusra's holds, oldest first: one released before its reason
+  // was recorded, one expired, and the one Pay converted.
+  const holds: string[] = [];
+  for (const [placed, released, releaseReason] of [
+    ['2026-11-01T09:00:00Z', '2026-11-01T09:46:00Z', null],
+    ['2026-11-01T09:50:00Z', '2026-11-01T10:36:00Z', 'expired'],
+    ['2026-11-01T10:00:00Z', '2026-11-01T10:06:00Z', 'converted'],
+  ] as const) {
+    const { id } = await tx.slotHold.create({
+      data: {
+        slotId,
+        studentUserId: yusra,
+        packageId,
+        sessionCount: 4,
+        enrollmentId: yusras,
+        createdAt: new Date(placed),
+        expiresAt: new Date(addMinutes(new Date(placed), 45)),
+        releasedAt: new Date(released),
+        releaseReason,
+      },
+      select: { id: true },
+    });
+    holds.push(id);
+  }
   // Huda's: paid, then refused at confirmation (`slot_unavailable`).
   const hudas = await enrollment(huda, 'cancelled');
   const refused = await order(hudas, 'paid');
   const created = await order(await enrollment(huda, 'pending_payment'), 'created');
-  return { token, subject, yusras, failed, paid, second, refused, created };
+  return { token, subject, yusras, failed, paid, second, refused, created, holds };
 }
 
 describe('payments.list over the real tables', () => {
@@ -329,6 +353,37 @@ describe('payments.get over the real tables', () => {
       expect(failed.events).toEqual([
         { eventType: 'failed', receivedAt: '2026-11-01T10:01:00.000Z' },
       ]);
+    });
+  });
+
+  it('lists the enrollment’s holds oldest first, a release reason only where recorded (T024, GAP-8)', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const detail = await monitor.get(tx, w.paid.id);
+      expect(detail.enrollment?.holds).toEqual([
+        {
+          holdId: w.holds[0],
+          placedAt: '2026-11-01T09:00:00.000Z',
+          expiresAt: '2026-11-01T09:45:00.000Z',
+          releasedAt: '2026-11-01T09:46:00.000Z',
+        },
+        {
+          holdId: w.holds[1],
+          placedAt: '2026-11-01T09:50:00.000Z',
+          expiresAt: '2026-11-01T10:35:00.000Z',
+          releasedAt: '2026-11-01T10:36:00.000Z',
+          releaseReason: 'expired',
+        },
+        {
+          holdId: w.holds[2],
+          placedAt: '2026-11-01T10:00:00.000Z',
+          expiresAt: '2026-11-01T10:45:00.000Z',
+          releasedAt: '2026-11-01T10:06:00.000Z',
+          releaseReason: 'converted',
+        },
+      ]);
+      // Huda's refused enrollment has no hold of its own here: an empty list, never absent.
+      expect((await monitor.get(tx, w.refused.id)).enrollment?.holds).toEqual([]);
     });
   });
 

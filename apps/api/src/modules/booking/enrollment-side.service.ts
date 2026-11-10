@@ -245,8 +245,12 @@ export function createEnrollmentSide({
       );
     },
     eventsOf: (tx, enrollmentId) => store.enrollmentEventsOf(tx, enrollmentId),
-    enrollmentPage: async (tx, filter, cursor) => {
-      const pageSize = await settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
+    enrollmentPage: async (tx, filter, cursor, batchSize) => {
+      // A batch the caller sizes (T024's name search, Q3) reads no setting.
+      const pageSize =
+        batchSize === undefined
+          ? await settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole)
+          : positiveWhole.parse(batchSize);
       const rows = await store.enrollmentsPage(tx, filter, cursor, pageSize + 1);
       const items = rows.slice(0, pageSize);
       const last = items.at(-1);
