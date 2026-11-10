@@ -602,6 +602,31 @@ describe("'sessions.dispute.raise' (T026)", () => {
     );
   });
 
+  // The owner's decision of 2026-11-10: the reason is trimmed before its bounds, as a cancellation
+  // request's is, so a reason of spaces only is refused (no migration: `disputes` checks no blank).
+  it("refuses a reason of spaces only VALIDATION_FAILED before the service, and hands it a reason trimmed: 'sessions.dispute.raise'", async () => {
+    const caller = callerAs(sessionOf('student'));
+    const thrown: unknown = await caller.sessions.dispute
+      .raise({ sessionId: SESSION, reason: '   ', idempotencyKey: DISPUTE_KEY })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+    await caller.sessions.dispute.raise({
+      sessionId: SESSION,
+      reason: '  لم يحضر المعلم ',
+      idempotencyKey: DISPUTE_KEY,
+    });
+    expect(calls).toEqual([
+      [
+        'raiseDispute',
+        { userId: CALLER },
+        { sessionId: SESSION, reason: 'لم يحضر المعلم', idempotencyKey: DISPUTE_KEY },
+      ],
+    ]);
+  });
+
   it("refuses an empty or over-long reason, a malformed key or session id VALIDATION_FAILED before the service: 'sessions.dispute.raise'", async () => {
     for (const input of [
       { sessionId: SESSION, reason: '', idempotencyKey: DISPUTE_KEY },

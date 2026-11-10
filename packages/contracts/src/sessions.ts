@@ -179,12 +179,13 @@ export type SessionsCancellationAnswerOutput = z.infer<typeof sessionsCancellati
 // from its scheduled end, before the evaluation too, until `dispute_window_hours` after it; keyed by
 // the client's idempotency key (`idempotent-procedures.ts`), so a retry answers the first result.
 // The reason is the participant's own text, bounded as this file's other participant reason is
-// (`cancellation.reason`, 1 to 500 characters).
+// (`cancellation.reason`, 1 to 500 characters), and trimmed before its bounds as a cancellation
+// request's is, so a reason of spaces only is refused (the owner's decision of 2026-11-10).
 
 /** The session disputed, the participant's reason and the client's idempotency key. */
 export const sessionsDisputeRaiseInput = z.object({
   sessionId: z.uuid(),
-  reason: z.string().min(1).max(500),
+  reason: z.string().trim().min(1).max(500),
   idempotencyKey,
 });
 
