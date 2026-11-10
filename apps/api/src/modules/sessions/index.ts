@@ -89,6 +89,17 @@ export {
 } from './repeated-absence.service.js';
 export type { EnrollmentNoShowCount } from './repeated-absence.repository.js';
 /**
+ * T025 (FR-459; SRS FR-CANCEL-5): the cancellation requests a user made, in total and within
+ * `cancellation_requests_recent_days`, counted from sessions' own table when read and never stored
+ * (R-DB-4), for the user directory's `users.get` (T058). No lock, no write.
+ */
+export {
+  CANCELLATION_REQUESTS_RECENT_DAYS_SETTING,
+  type CancellationRequestCounts,
+  type CancellationRequestCountsReader,
+  createCancellationRequestCounts,
+} from './cancellation-request-counts.service.js';
+/**
  * T015 (FR-449, R-309): an enrollment's completion, checked on the settling transaction by every
  * path that settles (T014, T016, T033, T034) and again by `advance-remedies` (T028), after the
  * enrollment's lock the caller holds; bound by the composition root over `EnrollmentSide`.
