@@ -286,6 +286,44 @@ export {
 } from './cancellation.service.js';
 export { pendingCancellationsAmong } from './cancellation.repository.js';
 /**
+ * T030 of specs/004-sessions (FR-463, FR-465, FR-467; SC-410; Q6 (a)): the one hand-off of a remedy
+ * to its enrollment's compensation case, `refund_choice`, `counter_unanswered` or `makeup_refused`,
+ * on the caller's transaction under contracts/kernel.md's row, for T031's `choose`, T032's sweep,
+ * T036 and T064; and the automatic hand-off's one line (Q11 (a)), which the sweep writes after its
+ * commit.
+ */
+export {
+  type AutomaticRemedyCaseReason,
+  createRemedyCase,
+  logRemedyHandedOff,
+  REMEDY_CASE_REASONS,
+  type RemedyCase,
+  type RemedyCaseInput,
+  type RemedyCaseReason,
+  type RemedyCaseStore,
+  remedyCaseStore,
+  type RemedyHandedOff,
+} from './remedy-case.service.js';
+/**
+ * T029 of specs/004-sessions (FR-423, FR-468, FR-469; L5; Q4 (a)): the one booking of a remedy's
+ * proposal or pending counter under contracts/kernel.md's row, on the caller's transaction
+ * (`bookOn`) or in its own through `runRetryingDeadlockOnce` (`run`, `book`), for T031's `accept`,
+ * T032's `answerCounter` and `advance-remedies`; `makeupRefusalOf` names what refused a
+ * `MAKEUP_REFUSED` (an exclusion's constraint, a reservation, a second deadlock).
+ */
+export {
+  createMakeupBooking,
+  type MakeupBooked,
+  type MakeupBooking,
+  type MakeupBookingInput,
+  type MakeupBookingKind,
+  type MakeupBookingStore,
+  makeupBookingStore,
+  type MakeupOperation,
+  type MakeupRefusal,
+  makeupRefusalOf,
+} from './makeup-booking.service.js';
+/**
  * T022 of specs/004-sessions (FR-458, SC-411): what the `expire-cancellation-requests` sweep runs,
  * each pending request whose session has started expired on its own transaction under
  * contracts/kernel.md's row, and its store over sessions' tables, which a spec narrows to its rows.
