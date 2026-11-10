@@ -28,13 +28,15 @@ session length once it has an enrollment.
   price is derived from it. The count and the length are set once, at the offer, and frozen from then on, as FR-312
   freezes them for a package today.
 - After the assessment the package's slots stay reserved while the student decides: cancel, or pay the rest within
-  **24 hours**. If the first regular session starts sooner than that, the deadline is its start less **2 hours**. If
-  it starts less than 2 hours after the assessment, it is not the package's first: the first becomes the next weekly
-  occurrence, and the deadline is computed from it. A cancellation, or no payment by the deadline, offers the slots to
-  anyone again. The student is reminded before the deadline.
+  **two days (48 hours)**. The first regular session is the first weekly occurrence of the package's slot after the
+  two days end, even when the student pays on the first day. A cancellation, or no payment by the deadline, offers the
+  slots to anyone again. The student is reminded before the deadline.
 - The teacher cannot refuse a student on their own: they give an administrator a reason, and the administrator decides.
-- The 24 hours and the 2 hours are §3.14 settings, read from `settings` (R-MONEY-12; the owner's decision of
-  2026-11-10 on B37's conflict check, Q3).
+- The 48 hours are a §3.14 setting, read from `settings` (R-MONEY-12; the owner's decision of 2026-11-10 on B37's
+  conflict check, Q3).
+- *(Changed 2026-11-10, the owner's decision of the same day, before this ADR reached `develop`:)* the period was
+  24 hours, with the first regular session's start less 2 hours as the deadline when sooner and a session less than
+  2 hours after the assessment not counted as the first; that margin and its setting are removed.
 
 ### D2 — Instalments, on the ijazah track only
 
@@ -44,8 +46,9 @@ session length once it has an enrollment.
   by design: an order carries its kind (the assessment, the rest in full, an instalment), and a paid order of an
   expected kind is never a second payment (FR-PAYG-19 as amended).
 - Instalments go through the gateway's subscription service; the payee split applies there too (ADR 0007 D1's
-  settlement to the teacher stands). What the gateway documents and what it said only verbally are recorded in
-  OPEN-11 and in the open point on the gateway's answers (`PLAN.md`, «The road to the store»).
+  settlement to the teacher stands). That the split applies under the subscription service is the gateway's verbal
+  answer only; its written answer is awaited (SRS OPEN-11). What the gateway documents and what it said only verbally
+  are recorded in OPEN-11 and in the open point on the gateway's answers (`PLAN.md`, «The road to the store»).
 
 ### D3 — Renewal: the grace stays open, and only an administrator closes
 
@@ -82,7 +85,7 @@ whatever OPEN-12 decides.
   it may slide past 12/6 into Phase 6 (R-PROC-6; `PLAN.md`, «The road to the store»).
 - The cycle writes what the build needs from this ADR: the order's kind and FR-375 in `specs/003-booking/spec.md`, the
   offer's count and length beside FR-312, the pause, the stop request and the reminders in the ERD and the
-  programme's data model, and the three new settings in the seed.
+  programme's data model, and the two new settings (48 hours, 7 days) in the seed.
 - The session code already reads the number and length of sessions from the enrollment's snapshot and assumes no
   one-time generation (FR-424 of `specs/004-sessions/spec.md`), which D2 and D3 rely on.
 - ADR 0007 D1 and R-MONEY-6 are unchanged by this ADR. The commission (T104) and the share released per session (T105)
