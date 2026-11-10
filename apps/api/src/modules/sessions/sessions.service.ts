@@ -16,7 +16,9 @@
 // read. `cancellation`, `remedy`, `dispute`, `canRaiseDispute` and `disputeClosesAt` are T021's,
 // T028's and T026's. T021: `cancellation` is the session's latest request, read on the same
 // transaction, a stored `pending` answered `expired` from the start and once the session is no
-// longer `scheduled` (`cancellation.service.ts`, `cancellationViewOf`).
+// longer `scheduled` (`cancellation.service.ts`, `cancellationViewOf`). T026 (joined at B37's
+// integration, after T021's): `dispute`, `canRaiseDispute` and `disputeClosesAt` for the caller, read
+// on the same transaction through the dispute view (`dispute-view.ts`), with no lock.
 //
 // T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
 // so the surface reaches them as `services.sessions.cancellation`.
@@ -70,6 +72,7 @@ import {
   createCancellationServices,
 } from './cancellation.service.js';
 import { createDisputeRaise, type DisputeRaise, type DisputeRaiseStore } from './dispute-raise.service.js';
+import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
@@ -150,6 +153,8 @@ export interface SessionsDependencies {
   readonly cancellationStore?: CancellationStore;
   /** T026: the raise's store; `disputeRaiseStore` unless a spec narrows it. */
   readonly disputeStore?: DisputeRaiseStore;
+  /** T026: `sessions.get`'s dispute fields; `createDisputeView({ settings })` unless a spec fakes it. */
+  readonly disputeView?: DisputeView;
   readonly now?: () => Date;
 }
 
@@ -220,6 +225,7 @@ export function createSessionsServices({
   idempotency,
   cancellationStore,
   disputeStore,
+  disputeView = createDisputeView({ settings }),
   now = () => new Date(),
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
@@ -247,6 +253,8 @@ export function createSessionsServices({
         // `sessions.enrollment_id` is a foreign key to the enrollment (ERD `sessions`).
         if (terms === null) throw new Error('sessions: a session without its enrollment');
         const request = await store.latestCancellationOf(tx, session.id);
+        const { id, status, endsAt } = session;
+        const disputes = await disputeView.ofSessions(tx, [{ id, status, endsAt }], userId);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -272,6 +280,7 @@ export function createSessionsServices({
           ...(request === null
             ? {}
             : { cancellation: cancellationViewOf(request, session, userId, now()) }),
+          ...disputes.get(session.id),
         };
       });
     },

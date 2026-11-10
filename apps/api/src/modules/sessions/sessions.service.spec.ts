@@ -30,6 +30,7 @@ import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import { bindJoinToken, type VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CancellationRequestRow } from './cancellation.repository.js';
+import type { DisputeView, SessionDisputeFields } from './dispute-view.js';
 import type { EnrollmentSide, EnrollmentTerms } from './enrollment-side.port.js';
 import type { PartySessionRow } from './sessions.repository.js';
 import {
@@ -92,6 +93,10 @@ let parties: Map<string, PartyStanding>;
 let underLock: (() => void) | undefined;
 /** T021: each session's latest cancellation request, as `sessions.get` reads it. */
 let cancellations: Map<string, CancellationRequestRow>;
+/** T026: each viewer's dispute fields, as the dispute view answers them; none disputable by default. */
+let disputeFields: Map<string, SessionDisputeFields>;
+/** T026: what the dispute view was asked, in order. */
+let disputeAsked: unknown[][];
 /** The provider's address this spec's port answers with every token. */
 const SERVER_URL = 'wss://video.spec.invalid';
 
@@ -196,6 +201,17 @@ const terms: EnrollmentTerms = {
   sessionCount: 8,
 };
 
+/** T026: the dispute view (`dispute-view.ts`) as this spec fakes it; what it reads is its own spec's. */
+const disputeView: DisputeView = {
+  ofSessions: async (_tx, asked, viewerUserId) => {
+    trace.push(`read disputes of ${asked.map(({ id }) => id).join(',')} for ${viewerUserId}`);
+    disputeAsked.push([asked, viewerUserId]);
+    return new Map(
+      asked.map(({ id }) => [id, disputeFields.get(viewerUserId) ?? { canRaiseDispute: false }]),
+    );
+  },
+};
+
 const enrollmentSide = {
   enrollmentFor: async (_tx: Transaction, id: string) => (id === ENROLLMENT ? terms : null),
 } as unknown as EnrollmentSide;
@@ -210,6 +226,8 @@ beforeEach(() => {
   ]);
   underLock = undefined;
   cancellations = new Map();
+  disputeFields = new Map();
+  disputeAsked = [];
   video = new RecordingVideo();
   lines = [];
   log = createLogger({
@@ -232,6 +250,7 @@ beforeEach(() => {
     idempotency: {
       run: () => Promise.reject(new Error('no cancellation or dispute is keyed here')),
     },
+    disputeView,
     now: () => now,
   });
 });
@@ -267,6 +286,7 @@ const studentSees: SessionsGetOutput = {
   status: 'scheduled',
   counterparty: { displayName: 'المعلمة سارة', deleted: false },
   join: { opensAt: OPENS.toISOString(), closesAt: ENDS.toISOString() },
+  canRaiseDispute: false,
 };
 
 describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
@@ -332,6 +352,7 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
       `read session as ${STUDENT}`,
       `read parties ${STUDENT},${TEACHER}`,
       `read cancellation of ${SESSION}`,
+      `read disputes of ${SESSION} for ${STUDENT}`,
       'commit',
     ]);
   });
@@ -596,5 +617,49 @@ describe('sessions.join: refused, with no video call (FR-431, FR-432, FR-482, R-
     now = ENDS;
     await refused(STUDENT);
     expect(trace.at(-1)).toBe('rollback');
+  });
+});
+
+// T026: `dispute`, `canRaiseDispute` and `disputeClosesAt` (FR-473, FR-495; app-surface.md,
+// `sessions.get`), read for the caller through the dispute view in the read's own transaction, after
+// the cancellation; what the view decides (the window, the latest dispute, a cancelled session's
+// none) is `dispute-view.spec.ts`'.
+describe('sessions.get: the dispute (T026)', () => {
+  const CLOSES = '2026-11-11T15:45:00.000Z';
+
+  it('asks the view for the session as stored and the caller, and answers each party its own fields', async () => {
+    sessions.set(SESSION, row({ status: 'disputed' }));
+    disputeFields.set(STUDENT, {
+      dispute: { status: 'open', raisedByMe: true, closesAt: CLOSES },
+      canRaiseDispute: false,
+      disputeClosesAt: CLOSES,
+    });
+    disputeFields.set(TEACHER, {
+      dispute: { status: 'open', raisedByMe: false, closesAt: CLOSES },
+      canRaiseDispute: false,
+      disputeClosesAt: CLOSES,
+    });
+    const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(byStudent).toEqual({ ...studentSees, status: 'disputed', ...disputeFields.get(STUDENT) });
+    expect(byTeacher.dispute).toEqual({ status: 'open', raisedByMe: false, closesAt: CLOSES });
+    expect(disputeAsked).toEqual([
+      [[{ id: SESSION, status: 'disputed', endsAt: ENDS }], STUDENT],
+      [[{ id: SESSION, status: 'disputed', endsAt: ENDS }], TEACHER],
+    ]);
+  });
+
+  it('answers a session the caller may dispute now with its window, and no dispute', async () => {
+    sessions.set(SESSION, row({ status: 'done' }));
+    disputeFields.set(STUDENT, { canRaiseDispute: true, disputeClosesAt: CLOSES });
+    const seen = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(seen.canRaiseDispute).toBe(true);
+    expect(seen.disputeClosesAt).toBe(CLOSES);
+    expect('dispute' in seen).toBe(false);
+  });
+
+  it('asks nothing of the view for a session refused NOT_FOUND', async () => {
+    await refusalOf(services.get({ userId: STRANGER }, { sessionId: SESSION }, log));
+    expect(disputeAsked).toEqual([]);
   });
 });
