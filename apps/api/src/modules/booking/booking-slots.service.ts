@@ -240,7 +240,7 @@ export function createBookingServices({
 }): BookingServices {
   const transactions = transactionsOver(database);
   return {
-    ...createEnrollmentListServices({ database, settings, now }),
+    ...createEnrollmentListServices({ database, settings }),
     slots: async (student, input) => {
       const leadHours = await settings.read(FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours);
       const clock: DiscoveryClock = {

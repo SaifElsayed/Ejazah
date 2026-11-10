@@ -31,7 +31,8 @@
 // birth, a minor flag, a document or a dispute is read. The output schemas strip any other field.
 //
 // A PENDING CANCELLATION (004:T021; FR-456, FR-495). Each session carries `pendingCancellation`,
-// sessions' `pendingCancellationsAmong` over the sessions the list answers at the read's instant,
+// sessions' `pendingCancellationsAmong` over the sessions the list answers at the read's instant (the
+// database's clock on the read's transaction, the follow-up under 004:T021),
 // through sessions' entry (R-API-6): sessions decides what is pending. `disputed` (004:T026): the
 // session's status is `disputed`, as sessions' `isDisputed` answers it.
 //
@@ -60,6 +61,7 @@ import type {
 import { endOfLocalDay, localDateIn, startOfLocalDay } from '@ijazah/time';
 import { z } from 'zod';
 
+import { clockTimestamp } from '../../platform/db/db-clock.js';
 import { idsWithFoldedNamePrefix } from '../../platform/db/folded-name.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
@@ -509,37 +511,52 @@ export interface EnrollmentListServices {
   today(teacherUserId: string): Promise<TeacherTodayOutput>;
 }
 
-/** The lists' services; the page size is read before the transaction. */
+/**
+ * The lists' services; the page size is read before the transaction, the read's instant on it: the
+ * database's clock (`clockTimestamp`), as `sessions.get` and every decision path read it, so around
+ * a session's start no list shows a request pending that every path refuses `CANCELLATION_EXPIRED`
+ * (the follow-up under 004:T021, PR #131's review, round 2). The same instant feeds
+ * `sessionProgress`.
+ */
 export function createEnrollmentListServices({
   database,
   settings,
-  now = () => new Date(),
+  clock = clockTimestamp,
   store = enrollmentListsStore,
 }: {
   readonly database: Database;
   readonly settings: SettingsReader;
-  readonly now?: () => Date;
+  /** The read's instant on its transaction; the database's clock unless a spec sets one. */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: EnrollmentListsStore;
 }): EnrollmentListServices {
   const transactions = transactionsOver(database);
-  const clock = async (): Promise<ListClock> => ({
-    now: now(),
-    pageSize: await settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole),
-  });
+  const pageSize = () => settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
   return {
     enrollments: async (studentUserId, input) => {
-      const read = await clock();
-      return transactions.run((tx) => studentEnrollmentsOf(tx, store, studentUserId, input, read));
+      const size = await pageSize();
+      return transactions.run(async (tx) =>
+        studentEnrollmentsOf(tx, store, studentUserId, input, {
+          now: await clock(tx),
+          pageSize: size,
+        }),
+      );
     },
     enrollment: (studentUserId, input) =>
-      transactions.run((tx) => studentEnrollmentOf(tx, store, studentUserId, input, now())),
+      transactions.run(async (tx) =>
+        studentEnrollmentOf(tx, store, studentUserId, input, await clock(tx)),
+      ),
     students: async (teacherUserId, input) => {
-      const read = await clock();
-      return transactions.run((tx) => teacherStudentsOf(tx, store, teacherUserId, input, read));
+      const size = await pageSize();
+      return transactions.run(async (tx) =>
+        teacherStudentsOf(tx, store, teacherUserId, input, { now: await clock(tx), pageSize: size }),
+      );
     },
     student: (teacherUserId, input) =>
-      transactions.run((tx) => teacherStudentOf(tx, store, teacherUserId, input, now())),
+      transactions.run(async (tx) =>
+        teacherStudentOf(tx, store, teacherUserId, input, await clock(tx)),
+      ),
     today: (teacherUserId) =>
-      transactions.run((tx) => teacherTodayOf(tx, store, teacherUserId, now())),
+      transactions.run(async (tx) => teacherTodayOf(tx, store, teacherUserId, await clock(tx))),
   };
 }
