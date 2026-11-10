@@ -77,8 +77,10 @@ it, the development build is rebuilt on EAS with the `development` profile
 for an option this app does not use.
 
 **The build with the video packages (Phase 3, T017).** LiveKit's packages are native, so the
-phone needs EAS build `4edc58c4-11b4-4f75-b9ae-09fe26cc2958` (`development` profile, versionCode 1)
-or a later one; an older build fails when the room first calls the SDK. Install it over the old one
+phone needs EAS build `725d593f-1f7d-4bd0-ad0e-fbc80737f685` (`development` profile, the build
+T019's device check passed on, with the service that keeps the room alive while sharing) or a later
+one. A build before the video packages fails when the room first calls the SDK; one before the
+service loses the room while the screen is shared. Install it over the old one
 with `adb install -r`, which keeps the app's data. A signature mismatch is reported, never answered
 with an uninstall, which would erase that data.
 

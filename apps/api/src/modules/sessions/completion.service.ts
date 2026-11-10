@@ -46,8 +46,9 @@
 // The completion is an automatic final action with one info line, `{ enrollmentId }` only, which
 // the caller writes once `completeIfDue` answers true: the sweep after its transaction has
 // committed (`evaluation.service.ts`), so a rolled-back session leaves no line; the outage record on
-// its transaction for now (`outages.service.ts`; after its commit with T063). This writes none. A
-// completion postponed writes none, since the check runs every minute. The enrollment's
+// its transaction (`outages.service.ts`; after its commit waits in the Not-scheduled row's item
+// (13), the note under T063). This writes none. A completion postponed writes none, since the
+// check runs every minute. The enrollment's
 // `enrollment_events` row `completed` is its durable evidence.
 import { addHours } from '@ijazah/time';
 import { z } from 'zod';

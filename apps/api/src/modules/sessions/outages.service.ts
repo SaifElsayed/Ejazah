@@ -40,7 +40,8 @@
 // THE LOG (the owner's rule). A refusal writes one info line with the administrator's id and the
 // reason code; a record writes one with the window's id and the sessions it reclassified, and one
 // «Enrollment completed» `{ enrollmentId }` per enrollment T015's check completed, on its
-// transaction as before (PR #129's review, Minor 3: after its commit with T063).
+// transaction as before (PR #129's review, Minor 3). Moving it after the commit waits in the
+// Not-scheduled row's item (13), before launch (the note under T063).
 import { addHours, resolveLocalDateTime, TimeError } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -240,7 +241,7 @@ export function createOutageServices({
           })),
         );
         for (const enrollmentId of sortedUnique(moved.map(({ enrollmentId: id }) => id))) {
-          // On the record's transaction until T063's after-commit point (the follow-up under T063).
+          // On the record's transaction; after its commit waits in the Not-scheduled row's item (13).
           if (await completion.completeIfDue(tx, enrollmentId)) {
             log.info({ enrollmentId }, 'Enrollment completed');
           }
