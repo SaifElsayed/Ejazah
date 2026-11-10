@@ -87,6 +87,8 @@ const SEEDED: Record<string, unknown> = {
   video_departure_timeout_seconds: 20,
   idempotency_key_ttl_hours: 24,
   first_session_lead_hours: 24,
+  // T026: `sessions.get` reads the dispute window (B37's integration).
+  dispute_window_hours: 72,
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
