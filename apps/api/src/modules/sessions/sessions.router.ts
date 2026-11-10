@@ -5,7 +5,15 @@
 // (R-GENDER-4), and the output parsed by its schema, which strips a field it does not name
 // (R-HONEST-4). A session the caller is not a party of answers NOT_FOUND with no field. `join` is a
 // mutation: it creates the provider's room. Mounted under `sessions` by `app.router.ts`.
+//
+// T021: `sessions.cancellation.request` (keyed by the kernel's idempotency) and `.answer`, the same
+// kind, one service call each with the caller's own account (contracts/app-surface.md,
+// "`sessions.cancellation`").
 import {
+  sessionsCancellationAnswerInput,
+  sessionsCancellationAnswerOutput,
+  sessionsCancellationRequestInput,
+  sessionsCancellationRequestOutput,
   sessionsGetInput,
   sessionsGetOutput,
   sessionsJoinInput,
@@ -22,4 +30,20 @@ export const sessionsRouter = createAppRouter({
   join: participantProcedure({ input: sessionsJoinInput, output: sessionsJoinOutput }).mutation(
     ({ ctx, input }) => ctx.services.sessions.join({ userId: ctx.caller.userId }, input, ctx.log),
   ),
+
+  // T021.
+  cancellation: createAppRouter({
+    request: participantProcedure({
+      input: sessionsCancellationRequestInput,
+      output: sessionsCancellationRequestOutput,
+    }).mutation(({ ctx, input }) =>
+      ctx.services.sessions.cancellation.request({ userId: ctx.caller.userId }, input, ctx.log),
+    ),
+    answer: participantProcedure({
+      input: sessionsCancellationAnswerInput,
+      output: sessionsCancellationAnswerOutput,
+    }).mutation(({ ctx, input }) =>
+      ctx.services.sessions.cancellation.answer({ userId: ctx.caller.userId }, input, ctx.log),
+    ),
+  }),
 });

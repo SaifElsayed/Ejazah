@@ -119,6 +119,7 @@ const sessions: ListedSession[] = WEEKS.map(([localDate, startsAt, endsAt], inde
   startsAt,
   endsAt,
   status: index < 2 ? 'done' : 'scheduled',
+  pendingCancellation: false,
 }));
 const third = sessions[2]!;
 const last = sessions[7]!;

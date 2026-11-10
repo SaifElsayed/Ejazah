@@ -215,3 +215,17 @@ export {
   type SessionsStore,
   sessionsStore,
 } from './sessions.service.js';
+
+/**
+ * T021 of specs/004-sessions (FR-456 to FR-458; research R-310): cancellation requests.
+ * `sessions.cancellation.request` and `.answer` reach the surface through `createSessionsServices`
+ * (`services.sessions.cancellation`); `cancellationStore` is their store over sessions' tables, the
+ * kernel's locks and identity's accounts, which a probe may narrow. `pendingCancellationsAmong` is
+ * the lists' read (`pendingCancellation`): of some sessions, those with a request pending now.
+ */
+export {
+  type CancellationServices,
+  type CancellationStore,
+  cancellationStore,
+} from './cancellation.service.js';
+export { pendingCancellationsAmong } from './cancellation.repository.js';

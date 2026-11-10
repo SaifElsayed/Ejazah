@@ -75,6 +75,8 @@ const SEEDED: Record<string, unknown> = {
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
+/** T021: the join keys nothing; `sessions.cancellation.request` is cancellation-requests.spec.ts'. */
+const UNKEYED = { run: () => Promise.reject(new Error('nothing is keyed here')) };
 
 beforeAll(async () => {
   [db, watcher] = await Promise.all([connectAsApplication(), connectAsApplication()]);
@@ -123,6 +125,7 @@ function servicesWith(video: VideoPort): SessionsServices {
     video,
     enrollmentSide: createEnrollmentSide({ settings }),
     store: sessionsStore,
+    idempotency: UNKEYED,
   });
 }
 
@@ -333,6 +336,7 @@ describe('the join’s one lock (contracts/kernel.md, the `sessions.join` row)',
       video: recordedVideo(),
       enrollmentSide: createEnrollmentSide({ settings }),
       store: sessionsStore,
+      idempotency: UNKEYED,
     });
 
     // The higher id held elsewhere: the join takes the lower one, then waits on it.
