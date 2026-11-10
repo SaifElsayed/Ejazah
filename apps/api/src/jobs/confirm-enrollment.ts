@@ -28,8 +28,12 @@
 //   4. an enrollment R-219 cancelled takes the refusal at once, its reason kept, `party_restricted`;
 //   5. its hold active: converted, confirmed, its sessions generated (FR-361), no party checked;
 //   6. its hold released (a late payment): the parties checked with no new rule, through identity's
-//      `isBookablePair` (`party_restricted` when false); then FR-PAYG-19's re-hold, confirmed and
-//      generated.
+//      `isBookablePair` (`party_restricted` when false); then the times open remedies reserve for
+//      either party read, under the accounts' locks already held, over the sessions generation would
+//      write (T027 of specs/004-sessions, FR-466, H3; the note under T027, Q2 (a)): the database's
+//      exclusions see no reservation, so a session over one takes the refusal (`slot_unavailable`),
+//      with one info line of ids and a reason; then FR-PAYG-19's re-hold, confirmed and generated.
+//      Branch 5 reads none: no reservation is made over an open hold (F5, H2).
 // A refusal (4, 6) releases what the enrollment holds, cancels it with one `cancelled` row, and
 // opens one case through moderation's entry (FR-362).
 //
@@ -46,6 +50,7 @@ import { z } from 'zod';
 
 import { isExclusionViolation, isUniqueViolation } from '../platform/db/db-errors.js';
 import type { Database, Transaction } from '../platform/db/prisma.repository.js';
+import type { Logger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import * as booking from '../modules/booking/index.js';
 import type {
@@ -70,7 +75,14 @@ import {
   type PaidOrder,
   paidOrderOf,
 } from '../modules/payments/index.js';
-import { type EnrollmentToSchedule, generateForEnrollment } from '../modules/sessions/index.js';
+import {
+  type EnrollmentToSchedule,
+  generateForEnrollment,
+  type ReservationReads,
+  type ReservedTime,
+  reservedTimesOf,
+  sessionsFor,
+} from '../modules/sessions/index.js';
 import { covers } from './case-cover.js';
 import { defineJob, type Job } from './job.js';
 
@@ -101,6 +113,13 @@ export interface ConfirmationSteps {
     at: Date,
   ): Promise<unknown>;
   slotOf(tx: Transaction, slotId: string): Promise<SlotTime | null>;
+  /** Sessions' reserved times of `userIds` overlapping `window` (T027). */
+  reservedTimesOf(
+    tx: Transaction,
+    userIds: readonly string[],
+    window: { readonly from: Date; readonly to: Date },
+    reads: ReservationReads,
+  ): Promise<readonly ReservedTime[]>;
   generate(
     tx: Transaction,
     enrollment: EnrollmentToSchedule,
@@ -124,6 +143,7 @@ export const confirmationSteps: ConfirmationSteps = {
   refuse: (tx, enrollment, refusal, at) =>
     booking.refuseEnrollment(tx, enrollment, refusal, { at, orders: orderStandingsOf }),
   slotOf: readSlot,
+  reservedTimesOf,
   generate: generateForEnrollment,
 };
 
@@ -134,6 +154,10 @@ export interface ConfirmEnrollmentOptions {
   readonly steps?: ConfirmationSteps;
   /** The clock; the system clock unless a spec sets one. */
   readonly clock?: () => Date;
+  /** The enrollments' terms a reservation is resolved with; booking's `EnrollmentSide` by default. */
+  readonly enrollments?: ReservationReads;
+  /** Where the late branch's refusal over a reservation is logged (ids and a reason only). */
+  readonly log?: Pick<Logger, 'info'>;
 }
 
 /** What one transaction does once the locks are taken: confirm where it can, or only refuse. */
@@ -149,13 +173,36 @@ function refusedByDatabase(error: unknown): boolean {
   );
 }
 
+/** Whether one of `sessions` overlaps one of `reserved`; each range holds its start, not its end. */
+function overlapsReserved(
+  sessions: readonly { readonly scheduledStartAt: string; readonly scheduledEndAt: string }[],
+  reserved: readonly ReservedTime[],
+): boolean {
+  return sessions.some(({ scheduledStartAt, scheduledEndAt }) => {
+    const start = Date.parse(scheduledStartAt);
+    const end = Date.parse(scheduledEndAt);
+    return reserved.some(
+      ({ startsAt, endsAt }) => start < endsAt.getTime() && startsAt.getTime() < end,
+    );
+  });
+}
+
 class Confirmer {
   readonly #steps: ConfirmationSteps;
   readonly #terms: HoldTerms;
+  readonly #reads: ReservationReads;
+  readonly #log: Pick<Logger, 'info'> | undefined;
 
-  constructor(steps: ConfirmationSteps, terms: HoldTerms) {
+  constructor(
+    steps: ConfirmationSteps,
+    terms: HoldTerms,
+    reads: ReservationReads,
+    log: Pick<Logger, 'info'> | undefined,
+  ) {
     this.#steps = steps;
     this.#terms = terms;
+    this.#reads = reads;
+    this.#log = log;
   }
 
   /** One transaction of the job: the locks, then the decision (this file's head). */
@@ -193,10 +240,21 @@ class Confirmer {
     const steps = this.#steps;
     const at = this.#terms.now;
     const confirmation = { enrollmentId: enrollment.id, paymentId, at };
+    const slot = await steps.slotOf(tx, enrollment.slotId);
+    if (slot === null) throw new Error(`No slot has the id ${enrollment.slotId}`);
+    const schedule = scheduleOf(enrollment, slot);
     if ((await steps.confirm(tx, confirmation)) === 'no_active_hold') {
       const { studentUserId, teacherUserId } = enrollment;
       if (!(await steps.bookablePair(tx, studentUserId, teacherUserId))) {
         await this.#refuse(tx, enrollment, 'party_restricted');
+        return;
+      }
+      if (await this.#overReservation(tx, schedule)) {
+        await this.#refuse(tx, enrollment, 'slot_unavailable');
+        this.#log?.info(
+          { enrollmentId: enrollment.id, paymentId, reason: 'reservation_overlap' },
+          'Late payment refused: a session would overlap a reserved time',
+        );
         return;
       }
       const { id, slotId } = enrollment;
@@ -205,9 +263,22 @@ class Confirmer {
         throw new Error(`Enrollment ${enrollment.id} has no hold after its re-hold`);
       }
     }
-    const slot = await steps.slotOf(tx, enrollment.slotId);
-    if (slot === null) throw new Error(`No slot has the id ${enrollment.slotId}`);
-    await steps.generate(tx, scheduleOf(enrollment, slot), at, this.#terms.leadHours);
+    await steps.generate(tx, schedule, at, this.#terms.leadHours);
+  }
+
+  /** Whether a session generation would write overlaps a time reserved for either party (T027). */
+  async #overReservation(tx: Transaction, schedule: EnrollmentToSchedule): Promise<boolean> {
+    const sessions = sessionsFor(schedule, this.#terms.now, this.#terms.leadHours);
+    const first = sessions.at(0);
+    const last = sessions.at(-1);
+    if (first === undefined || last === undefined) return false;
+    const reserved = await this.#steps.reservedTimesOf(
+      tx,
+      [schedule.studentUserId, schedule.teacherUserId],
+      { from: new Date(first.scheduledStartAt), to: new Date(last.scheduledEndAt) },
+      this.#reads,
+    );
+    return overlapsReserved(sessions, reserved);
   }
 
   /** FR-362's refusal: booking's release and cancellation, then one case of `refusal`. */
@@ -235,12 +306,15 @@ export function confirmEnrollment({
   settings,
   steps = confirmationSteps,
   clock = () => new Date(),
+  enrollments = booking.createEnrollmentSide({ settings }),
+  log,
 }: ConfirmEnrollmentOptions): Job {
   return defineJob({
     name: CONFIRM_ENROLLMENT,
     payload: z.object({ paymentId: z.uuid() }),
     run: async ({ paymentId }) => {
-      const confirmer = new Confirmer(steps, await booking.readHoldTerms(settings, clock()));
+      const terms = await booking.readHoldTerms(settings, clock());
+      const confirmer = new Confirmer(steps, terms, enrollments, log);
       const settle = (attempt: Attempt) =>
         database.$transaction((tx) => confirmer.settle(tx, paymentId, attempt));
       try {

@@ -92,4 +92,25 @@ describe('occupancyFrom and isFreeOn (R-205)', () => {
     const both = use({ taken: true, confirmed: [{ enrollmentId: FIRST, timezone: CAIRO }] });
     expect(occupancyFrom(both, new Map([[FIRST, LAST]]), 0)).toEqual({ kind: 'taken' });
   });
+
+  it('keeps the slot of an enrollment with an open remedy past its release, until the remedy settles (T027, Q1 (a), R-207)', () => {
+    const confirmed = use({
+      confirmed: [
+        { enrollmentId: FIRST, timezone: CAIRO },
+        { enrollmentId: SECOND, timezone: CAIRO },
+      ],
+    });
+    const lastDates = new Map([
+      [FIRST, LAST],
+      [SECOND, LAST],
+    ]);
+    const occupancy = occupancyFrom(confirmed, lastDates, 0, new Set([SECOND]));
+    expect(occupancy).toEqual({ kind: 'taken' });
+    expect(isFreeOn(occupancy, '2027-06-03')).toBe(false);
+    expect(occupancyFrom(confirmed, lastDates, 0, new Set())).toEqual({
+      kind: 'until',
+      releasedOn: '2026-12-03',
+      timezone: CAIRO,
+    });
+  });
 });
