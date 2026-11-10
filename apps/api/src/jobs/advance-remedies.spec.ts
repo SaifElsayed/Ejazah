@@ -17,7 +17,15 @@ function recorded(): { readonly calls: string[]; readonly advance: RemedyAdvance
     advance: {
       run: async () => {
         calls.push('run');
-        return { offered: [], reoffered: [], completed: [], failed: [] };
+        return {
+          offered: [],
+          reoffered: [],
+          handedOff: [],
+          booked: [],
+          retried: [],
+          completed: [],
+          failed: [],
+        };
       },
     },
   };

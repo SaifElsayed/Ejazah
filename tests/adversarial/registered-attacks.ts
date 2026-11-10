@@ -6,7 +6,8 @@
 // enrollments procedures. T036 adds `checkout.hold` and `checkout.retry` as their router lands, and
 // T049 `enrollments.list` and `enrollments.get`; T011 of specs/004-sessions `sessions.get` and
 // `sessions.join`; T063 `live.events`; T021 `sessions.cancellation.request` and `.answer`; T026
-// `sessions.dispute.raise`; T031 `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`.
+// `sessions.dispute.raise`; T031 `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`;
+// T032 `sessions.remedy.answerCounter`.
 import { bookingAttacks } from './booking.attacks.js';
 import { checkoutAttacks } from './checkout.attacks.js';
 import { discoveryAttacks } from './discovery.attacks.js';

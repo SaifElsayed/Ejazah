@@ -1,12 +1,15 @@
-// T031 of specs/004-sessions/tasks.md: the student's choice (FR-463, FR-465, FR-466, FR-495; research
-// R-311, "The student"; plan.md decisions 9 and 14 (i); contracts/app-surface.md, "`sessions.remedy`";
-// the notes under T031, Q5 (a), Q9 (a), Q14 (a); Q8 (a) and Q11 (a) under T028).
+// T031 and T032 of specs/004-sessions/tasks.md: the student's choice, the teacher's answer and the
+// windows' ends (FR-463 to FR-469, FR-495; research R-311, "The student", "The teacher", "Windows
+// ending" and "Booking a make-up"; plan.md decisions 9 and 14 (i); contracts/app-surface.md,
+// "`sessions.remedy`"; the notes under T031 (Q5 (a), Q9 (a), Q14 (a)), T032 (Q4 (a), Q11 (a)), T029
+// (Q4 (a)) and T028 (Q8 (a), Q11 (a))).
 //
 // WHO MAY ASK (contracts/README.md, «Callers»; R-GENDER-2). The caller's own id finds the session
-// with its party; `choose`, `accept`, `counterOptions` and `counter` are the student's, so a stranger,
-// an id that never existed and the session's teacher answer one `NOT_FOUND`, and so does a student
-// whose teacher is of the other gender by the server's records (R-GENDER-4), checked before any
-// remedy is read, so no refusal tells a forbidden session from a nonexistent one.
+// with its party; `choose`, `accept`, `counterOptions` and `counter` are the student's and
+// `answerCounter` the teacher's, so a stranger, an id that never existed and the other party answer
+// one `NOT_FOUND`, and so does a caller whose counterparty is of the other gender by the server's
+// records (R-GENDER-4), checked before any remedy is read, so no refusal tells a forbidden session
+// from a nonexistent one.
 //
 // THE REFUSALS, in order, each one info line of ids and a reason code and nothing written (the
 // owner's rule, Q11 (a)): `NOT_FOUND`; a session with no remedy, or one `frozen`, `booked`,
@@ -26,6 +29,8 @@
 //     `COUNTER_PENDING` (one at a time); `counter` names one of the options as they are read under
 //     its locks, else `SLOT_NOT_OFFERED`. The options are read with no lock (a preview the counter
 //     decides again).
+//   - `answerCounter` (T032): no counter pending, or one whose answer window has closed by the
+//     database's clock (`answerClosesAt`, D1, the remedy's own A), `REMEDY_NOT_OPEN`.
 //
 // THE OPTIONS (H2, H4; Q5 (a)). Per active slot of the teacher of the session's length (catalog's
 // entry), its first occurrence at or after max(now + A + L, `choice_closes_at`), A and L the remedy's
@@ -39,19 +44,54 @@
 // row carrying the slot, date, start and zone. The answer window's close is never stored:
 // `answerClosesAt` (D1) computes it when read. The proposal never moves (H1).
 //
-// THE LOCKS (contracts/kernel.md; `003:T005`'s rules; Phase 3's general rule). `choose` and `counter`
-// take the row «remedy offer … a counter-proposal» / «`sessions.remedy.choose`»: `users` (both, one
-// call, id order), the teacher's `lockKey('teacher-slots')`, the enrollment, the session, the
-// session's remedy, and a refund's `disputes` after them (T030). `accept` takes «make-up booking»'s:
-// the same with the enrollment's slot after the key, before the enrollment, so T029's `bookOn`, which
-// takes them again, waits on nothing it does not hold. Every decision is read again under the locks,
-// the database's clock after them (Q8 (a)). A counter's `counter_slot_id` key-shares the teacher's
-// slot while the session is held, which kernel.md shows safe (L2 of the sixth analysis).
+// THE TEACHER'S ANSWER (T032; decision 9; A3, A1, A7; Q4 (a)). Accept: one `counter_accepted` row and
+// T029 books the counter (`sessions.remedy.answerCounter`). A booking the database refuses (an
+// exclusion it names, `sessions_teacher_no_overlap` or `sessions_student_no_overlap`) answers T029's
+// `MAKEUP_REFUSED` and, in a second transaction under the same locks, releases the counter as a
+// decline does: its columns cleared, `proposed`, one `counter_booking_refused` row (never
+// `counter_withdrawn`), and one warn line `{ sessionId, enrollmentId, constraint }` and nothing else;
+// so the sweep never reads it as unanswered. A reserved time or a second deadlock refuses with the
+// counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
+// the counter released, `proposed`, one `counter_declined` row. After either release, once the
+// choice window has closed, the proposal is booked in a transaction of its own (T029's `book`); its
+// refusal leaves the remedy `proposed` past `choice_closes_at`, which the sweep books or retries
+// (H5), and the teacher's decline is answered all the same.
+//
+// THE WINDOWS' ENDS (T032; `advance-remedies`, `remedy-offer.sweep.ts`; H3, H5; A3; Q4 (a), Q11 (a)),
+// each remedy on its own transaction, decided again under its locks at the database's clock:
+//   - `endAnswerWindow`: a `counter_proposed` remedy whose `answerClosesAt` has come is handed to a
+//     `counter_unanswered` case (T030), the choice window open or closed; one info line after the
+//     commit (`logRemedyHandedOff`).
+//   - `bookAtChoiceEnd`: a `proposed` or `awaiting_choice` remedy past `choice_closes_at` (none
+//     pending, by its status) has its proposal booked (H5) through `runRetryingDeadlockOnce` as
+//     `advance-remedies` (Q4 (a)), one info line `{ remedyId, sessionId, enrollmentId, action }`
+//     after the commit. Under the booking's locks it reads the open holds of both parties
+//     (`heldTimesOf`) over the proposal, an overlap a refusal; T029 reads the reservations again and
+//     the database its exclusions. Each refusal is one warn line `{ remedyId, sessionId, constraint }`
+//     and nothing more: the constraint the database named, or `hold` or `reservation`. A second
+//     deadlock is no refusal: the next run tries again. Retried while the proposal starts at least L
+//     after the run's instant (`bookingRetriedUntil`, the remedy's own L); once it would start within
+//     L, handed to a `makeup_refused` case (T030, `kind` left `makeup`), one info line and one
+//     report to error tracking, the only one for that remedy.
+//
+// THE LOCKS (contracts/kernel.md; `003:T005`'s rules; Phase 3's general rule). `choose`, `counter`,
+// a decline and the answer window's end take the rows «remedy offer … a counter-proposal, its
+// decline» / «`sessions.remedy.choose` … a counter left unanswered»: `users` (both, one call, id
+// order), the teacher's `lockKey('teacher-slots')`, the enrollment, the session, the session's
+// remedy, and a hand-off's `disputes` after them (T030). `accept`, a counter's acceptance, its release
+// and the choice window's end take «make-up booking»'s: the same with the slots after the key and
+// before the enrollment (the enrollment's own, and for a counter the counter's, read under the
+// accounts and the key, in one call, id order, L2), so T029's `bookOn`, which takes them again, waits
+// on nothing it does not hold. Every decision is read again under the locks, the database's clock
+// after them (Q8 (a)). A counter's `counter_slot_id` key-shares the teacher's slot while the session
+// is held, which kernel.md shows safe (L2 of the sixth analysis).
 import {
   type CounterOption,
   type RemedyView,
   type SessionsRemedyAcceptInput,
   type SessionsRemedyAcceptOutput,
+  type SessionsRemedyAnswerCounterInput,
+  type SessionsRemedyAnswerCounterOutput,
   type SessionsRemedyChooseInput,
   type SessionsRemedyChooseOutput,
   type SessionsRemedyCounterInput,
@@ -63,12 +103,14 @@ import {
 import {
   addDays,
   addHours,
+  addMinutes,
   calendarDateOf,
   dateColumnOf,
   type DayOfWeek,
   type LocalDate,
   localDateIn,
   type Occurrence,
+  resolveLocalDateTime,
   resolveOccurrences,
   timeColumnOf,
 } from '@ijazah/time';
@@ -78,6 +120,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError, type ErrorCode } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import { reportError } from '../../platform/errors/reporting.js';
 import type {
   IdempotencyService,
   JsonValue,
@@ -91,9 +134,12 @@ import {
   createMakeupBooking,
   type MakeupBooking,
   type MakeupOperation,
+  type MakeupRefusal,
+  makeupRefusalOf,
 } from './makeup-booking.service.js';
 import { lockSessions, lockTeacherSlots } from './remedy-case.repository.js';
-import { createRemedyCase, type RemedyCase } from './remedy-case.service.js';
+import { createRemedyCase, logRemedyHandedOff, type RemedyCase } from './remedy-case.service.js';
+import { answerClosesAt, bookingRetriedUntil } from './remedy-deadlines.js';
 import {
   lockRemedyOfSession,
   type RemedyRowStatus,
@@ -106,7 +152,9 @@ import {
   type CounterWrite,
   releaseCounter,
   type RemedyRow,
+  remedyRowById,
   remedyRowOf,
+  type RemedyWithParties,
   writeCounter,
 } from './remedy.repository.js';
 import {
@@ -123,7 +171,7 @@ import {
   sessionOfParty,
 } from './sessions.repository.js';
 
-/** What the procedures read, lock and write, each on the caller's transaction; faked in a spec. */
+/** What the procedures and the windows read, lock and write, on the caller's transaction; faked in a spec. */
 export interface RemedyStore {
   /** The session when `userId` is one of its two parties, else null; no lock. */
   sessionOfParty(
@@ -138,6 +186,8 @@ export interface RemedyStore {
   ): Promise<ReadonlyMap<string, { readonly gender: 'male' | 'female' }>>;
   /** The session's remedy; no lock. */
   remedyOf(tx: Transaction, sessionId: string): Promise<RemedyRow | null>;
+  /** The remedy by its id, with its session's parties; no lock (T032's windows). */
+  remedyById(tx: Transaction, remedyId: string): Promise<RemedyWithParties | null>;
   /** Both accounts, `FOR UPDATE`, in one call. */
   lockAccounts(tx: Transaction, userIds: readonly string[]): Promise<void>;
   /** The teacher's `lockKey('teacher-slots')`. */
@@ -179,6 +229,7 @@ export const remedyStore: RemedyStore = {
   sessionOfParty,
   partiesOf: sessionPartiesOf,
   remedyOf: remedyRowOf,
+  remedyById: remedyRowById,
   lockAccounts: lockSessionParties,
   lockTeacherSlots,
   lockSlots,
@@ -200,7 +251,7 @@ export interface RemedyCaller {
   readonly userId: string;
 }
 
-/** The student's procedures of `sessions.remedy` (T031). */
+/** `sessions.remedy`: the student's four (T031) and the teacher's answer (T032). */
 export interface RemedyServices {
   choose(
     caller: RemedyCaller,
@@ -222,9 +273,14 @@ export interface RemedyServices {
     input: SessionsRemedyCounterInput,
     log: Logger,
   ): Promise<SessionsRemedyCounterOutput>;
+  answerCounter(
+    caller: RemedyCaller,
+    input: SessionsRemedyAnswerCounterInput,
+    log: Logger,
+  ): Promise<SessionsRemedyAnswerCounterOutput>;
 }
 
-/** The booking's three entries a procedure uses (T029). */
+/** The booking's three entries a path uses (T029). */
 export type RemedyBooking = Pick<MakeupBooking, 'bookOn' | 'run' | 'book'>;
 
 export interface RemedyDependencies {
@@ -239,12 +295,15 @@ export interface RemedyDependencies {
   readonly bookingOf?: (log: Logger) => RemedyBooking;
   /** T030's hand-off over a call's log; `createRemedyCase` unless a spec fakes it. */
   readonly casesOf?: (log: Logger) => Pick<RemedyCase, 'handOff'>;
+  /** What refused a booking (T029's `makeupRefusalOf`), unless a spec reads its own fakes. */
+  readonly makeupRefusalOf?: (error: unknown) => MakeupRefusal | null;
 }
 
 /** Why a procedure was refused, as its one log line names it. */
 type RefusalReason =
   | 'not_a_party'
   | 'not_the_student'
+  | 'not_the_teacher'
   | 'gender_differs'
   | 'no_remedy'
   | 'not_open'
@@ -252,7 +311,9 @@ type RefusalReason =
   | 'not_awaiting_choice'
   | 'refund_not_owed'
   | 'counter_pending'
-  | 'not_offered';
+  | 'not_offered'
+  | 'no_counter'
+  | 'answer_closed';
 
 interface RefusalIds {
   readonly sessionId: string;
@@ -276,9 +337,13 @@ function refusal(
 
 const COUNTER_SCOPE = 'sessions.remedy.counter';
 const ACCEPT: MakeupOperation = 'sessions.remedy.accept';
+const ANSWER: MakeupOperation = 'sessions.remedy.answerCounter';
+const SWEEP: MakeupOperation = 'advance-remedies';
 
 /** The open states (data-model.md §3) but `frozen`, which accepts nothing. */
 const ACTIVE: readonly RemedyRowStatus[] = ['awaiting_choice', 'proposed', 'counter_proposed'];
+/** The states whose proposal H5 books once the choice window has closed (none pending). */
+const BOOKED_AT_CHOICE_END: readonly RemedyRowStatus[] = ['proposed', 'awaiting_choice'];
 
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
@@ -351,6 +416,67 @@ function refundOwed(session: PartySessionRow, terms: EnrollmentTerms): boolean {
   );
 }
 
+/** Which slots a path locks after the key (this file's head, THE LOCKS). */
+type SlotLocks = 'none' | 'own' | 'own_and_counter';
+
+/** A session's id, enrollment and parties, as the locks need them. */
+interface Lockable {
+  readonly sessionId: string;
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+}
+
+/** The locks of a remedy's paths, in kernel.md's one order (this file's head, THE LOCKS). */
+function lockerOver(
+  store: RemedyStore,
+  enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments'>,
+) {
+  return async (tx: Transaction, seen: Lockable, slots: SlotLocks): Promise<void> => {
+    await store.lockAccounts(tx, [seen.studentUserId, seen.teacherUserId].sort());
+    await store.lockTeacherSlots(tx, seen.teacherUserId);
+    if (slots !== 'none') {
+      const terms = await enrollments.enrollmentFor(tx, seen.enrollmentId);
+      // `sessions.enrollment_id` is a foreign key to the enrollment (ERD `sessions`).
+      if (terms === null) throw new Error('sessions: a session without its enrollment');
+      const ids = [terms.slotId];
+      if (slots === 'own_and_counter') {
+        // Read under the accounts and the key: no counter is written or withdrawn meanwhile.
+        const counter = (await store.remedyOf(tx, seen.sessionId))?.counter;
+        if (counter !== undefined && counter !== null) ids.push(counter.slotId);
+      }
+      await store.lockSlots(tx, [...new Set(ids)].sort());
+    }
+    await enrollments.lockEnrollments(tx, [seen.enrollmentId]);
+    await store.lockSessions(tx, [seen.sessionId]);
+    await store.lockRemedyOfSession(tx, seen.sessionId);
+  };
+}
+
+/** The proposal's time: its date at the enrollment's slot's local start, in the enrollment's zone. */
+function proposalTime(
+  proposedDate: Date,
+  slot: SlotRow,
+  terms: EnrollmentTerms,
+): { readonly startsAt: Date; readonly endsAt: Date } {
+  const startsAt = new Date(
+    resolveLocalDateTime({
+      localDate: calendarDateOf(proposedDate),
+      localTime: slot.startTimeLocal,
+      timezone: terms.timezone,
+    }).startsAt,
+  );
+  return { startsAt, endsAt: new Date(addMinutes(startsAt, terms.durationMinutes)) };
+}
+
+/** Whether `error` is a refusal another path's state explains, already logged by T029. */
+function leftForTheSweep(error: unknown): boolean {
+  return (
+    error instanceof DomainError &&
+    (error.code === 'MAKEUP_REFUSED' || error.code === 'REMEDY_NOT_OPEN')
+  );
+}
+
 export function createRemedyServices({
   transactions,
   idempotency,
@@ -359,26 +485,38 @@ export function createRemedyServices({
   store = remedyStore,
   bookingOf = (log) => createMakeupBooking({ transactions, enrollments, log, clock }),
   casesOf = (log) => createRemedyCase({ log, clock }),
+  makeupRefusalOf: refusalOf = makeupRefusalOf,
 }: RemedyDependencies): RemedyServices {
-  /** The session of the student `userId`, else `NOT_FOUND` (this file's head). */
-  async function studentsSession(
+  const lockRemedy = lockerOver(store, enrollments);
+
+  /** The session of `userId` as its `role`, else `NOT_FOUND` (this file's head). */
+  async function partysSession(
     tx: Transaction,
     sessionId: string,
     userId: string,
+    role: 'student' | 'teacher',
     log: Logger,
   ): Promise<PartySessionRow> {
     const ids = { sessionId, userId };
     const session = await store.sessionOfParty(tx, sessionId, userId);
     if (session === null) throw refusal(log, ids, 'NOT_FOUND', 'not_a_party');
-    if (session.studentUserId !== userId) throw refusal(log, ids, 'NOT_FOUND', 'not_the_student');
-    const parties = await store.partiesOf(
-      tx,
-      [session.studentUserId, session.teacherUserId].sort(),
-    );
-    const own = parties.get(userId);
-    const other = parties.get(session.teacherUserId);
-    if (own === undefined) throw refusal(log, ids, 'NOT_FOUND', 'not_a_party');
-    if (other !== undefined && other.gender !== own.gender) {
+    const [own, other] =
+      role === 'student'
+        ? [session.studentUserId, session.teacherUserId]
+        : [session.teacherUserId, session.studentUserId];
+    if (own !== userId) {
+      throw refusal(
+        log,
+        ids,
+        'NOT_FOUND',
+        role === 'student' ? 'not_the_student' : 'not_the_teacher',
+      );
+    }
+    const parties = await store.partiesOf(tx, [own, other].sort());
+    const ownParty = parties.get(own);
+    const otherParty = parties.get(other);
+    if (ownParty === undefined) throw refusal(log, ids, 'NOT_FOUND', 'not_a_party');
+    if (otherParty !== undefined && otherParty.gender !== ownParty.gender) {
       throw refusal(log, ids, 'NOT_FOUND', 'gender_differs');
     }
     return session;
@@ -392,28 +530,43 @@ export function createRemedyServices({
   }
 
   /**
-   * The student's session under the kernel's locks (this file's head), read again under them, its
-   * remedy, its enrollment's terms and the database's clock read after them. `withSlot` adds the
-   * enrollment's slot after the key, as a make-up's booking takes it.
+   * The party's session under the locks `slots` names (this file's head), read again under them,
+   * its remedy, its enrollment's terms and the database's clock read after them.
    */
-  async function decidedAsStudent(
+  async function decided(
     tx: Transaction,
     sessionId: string,
     userId: string,
+    role: 'student' | 'teacher',
     log: Logger,
-    withSlot: boolean,
+    slots: SlotLocks,
   ) {
-    const seen = await studentsSession(tx, sessionId, userId, log);
-    await store.lockAccounts(tx, [seen.studentUserId, seen.teacherUserId].sort());
-    await store.lockTeacherSlots(tx, seen.teacherUserId);
-    const terms = await termsOf(tx, seen);
-    if (withSlot) await store.lockSlots(tx, [terms.slotId]);
-    await enrollments.lockEnrollments(tx, [seen.enrollmentId]);
-    await store.lockSessions(tx, [seen.id]);
-    await store.lockRemedyOfSession(tx, seen.id);
-    const session = await studentsSession(tx, sessionId, userId, log);
+    const seen = await partysSession(tx, sessionId, userId, role, log);
+    await lockRemedy(tx, { ...seen, sessionId: seen.id }, slots);
+    const session = await partysSession(tx, sessionId, userId, role, log);
+    const terms = await termsOf(tx, session);
     const remedy = await store.remedyOf(tx, session.id);
     return { session, terms, remedy, now: await clock(tx) };
+  }
+
+  /**
+   * The remedy's id, read with no lock for the booking's deadlock lines (L5) once the caller is
+   * checked, so no refusal here tells a forbidden session from a nonexistent one.
+   */
+  async function remedyIdOf(
+    sessionId: string,
+    userId: string,
+    role: 'student' | 'teacher',
+    log: Logger,
+  ): Promise<string> {
+    const remedyId = await transactions.run(async (tx) => {
+      const seen = await partysSession(tx, sessionId, userId, role, log);
+      return (await store.remedyOf(tx, seen.id))?.id;
+    });
+    if (remedyId === undefined) {
+      throw refusal(log, { sessionId, userId }, 'REMEDY_NOT_OPEN', 'no_remedy');
+    }
+    return remedyId;
   }
 
   /** The remedy, if it accepts anything; else `REMEDY_NOT_OPEN` (this file's head). */
@@ -439,6 +592,29 @@ export function createRemedyServices({
     }
     if (active.status === 'counter_proposed') {
       throw refusal(log, named, 'COUNTER_PENDING', 'counter_pending');
+    }
+    return active;
+  }
+
+  /** The remedy, if its counter may be answered now (D1); else `REMEDY_NOT_OPEN`. */
+  function answerable(
+    remedy: RemedyRow | null,
+    now: Date,
+    ids: RefusalIds,
+    log: Logger,
+  ): RemedyRow {
+    const active = activeRemedy(remedy, ids, log);
+    const named = { ...ids, remedyId: active.id };
+    const { counter } = active;
+    if (active.status !== 'counter_proposed' || counter === null) {
+      throw refusal(log, named, 'REMEDY_NOT_OPEN', 'no_counter');
+    }
+    const closes = answerClosesAt({
+      counterProposedAt: counter.proposedAt,
+      snapshotAnswerWindowHours: active.snapshotAnswerWindowHours,
+    });
+    if (now.getTime() >= closes.getTime()) {
+      throw refusal(log, named, 'REMEDY_NOT_OPEN', 'answer_closed');
     }
     return active;
   }
@@ -517,20 +693,122 @@ export function createRemedyServices({
       row === null
         ? undefined
         : remedyViewOf(row, { startTimeLocal: slot.startTimeLocal, timezone: terms.timezone });
-    // Read under the remedy's lock after this call's own write, so it is there and not lapsed.
+    // Read after this call's own write, so it is there and not lapsed.
     if (view === undefined) throw new Error('sessions: a remedy just written is not there to show');
     return view;
+  }
+
+  /**
+   * Releases the pending counter as a decline does, under `slots`' locks: `proposed`, its columns
+   * cleared, one `kind` row. A decline is first checked answerable (its refusals); a refused
+   * acceptance's release answers null when no counter is pending any more (another path moved it).
+   */
+  async function released(
+    tx: Transaction,
+    sessionId: string,
+    userId: string,
+    log: Logger,
+    slots: SlotLocks,
+    kind: 'counter_declined' | 'counter_booking_refused',
+  ) {
+    const { session, remedy, now } = await decided(tx, sessionId, userId, 'teacher', log, slots);
+    if (kind === 'counter_declined') answerable(remedy, now, { sessionId, userId }, log);
+    if (remedy?.status !== 'counter_proposed') return null;
+    if (!(await store.releaseCounter(tx, remedy.id))) {
+      throw new Error('sessions: a locked remedy left counter_proposed before its release');
+    }
+    await store.recordEvents(tx, [
+      { enrollmentId: session.enrollmentId, sessionId: session.id, kind, occurredAt: now },
+    ]);
+    return {
+      remedyId: remedy.id,
+      enrollmentId: session.enrollmentId,
+      choiceClosed: now.getTime() >= remedy.choiceClosesAt.getTime(),
+    };
+  }
+
+  /**
+   * Once the choice window has closed, the proposal booked in its own transaction (decision 9); a
+   * refusal, logged by T029, leaves the remedy `proposed` for the sweep (H5).
+   */
+  async function bookProposalAfterAnswer(booking: RemedyBooking, remedyId: string) {
+    try {
+      await booking.book({ remedyId, booking: 'proposal', operation: ANSWER });
+    } catch (error: unknown) {
+      if (!leftForTheSweep(error)) throw error;
+    }
+  }
+
+  /** The remedy as it now reads, for the teacher's answer. */
+  const viewAfter = (sessionId: string, userId: string, log: Logger) =>
+    transactions.run(async (tx) => {
+      const session = await partysSession(tx, sessionId, userId, 'teacher', log);
+      return viewOf(tx, session, await termsOf(tx, session));
+    });
+
+  async function answerCounter(
+    { userId }: RemedyCaller,
+    { sessionId, accept }: SessionsRemedyAnswerCounterInput,
+    log: Logger,
+  ): Promise<RemedyView> {
+    const booking = bookingOf(log);
+    const remedyId = await remedyIdOf(sessionId, userId, 'teacher', log);
+    if (!accept) {
+      const declined = await transactions.run((tx) =>
+        released(tx, sessionId, userId, log, 'none', 'counter_declined'),
+      );
+      if (declined?.choiceClosed === true) await bookProposalAfterAnswer(booking, remedyId);
+      return viewAfter(sessionId, userId, log);
+    }
+    try {
+      return await booking.run({ remedyId, operation: ANSWER }, async (tx) => {
+        const { session, terms, remedy, now } = await decided(
+          tx,
+          sessionId,
+          userId,
+          'teacher',
+          log,
+          'own_and_counter',
+        );
+        const active = answerable(remedy, now, { sessionId, userId }, log);
+        await store.recordEvents(tx, [
+          {
+            enrollmentId: session.enrollmentId,
+            sessionId: session.id,
+            kind: 'counter_accepted',
+            occurredAt: now,
+          },
+        ]);
+        await booking.bookOn(tx, { remedyId: active.id, booking: 'counter', operation: ANSWER });
+        return viewOf(tx, session, terms);
+      });
+    } catch (error: unknown) {
+      const refused = refusalOf(error);
+      if (refused?.cause !== 'overlap') throw error;
+      const release = await transactions.run((tx) =>
+        released(tx, sessionId, userId, log, 'own_and_counter', 'counter_booking_refused'),
+      );
+      if (release !== null) {
+        log.warn(
+          { sessionId, enrollmentId: release.enrollmentId, constraint: refused.constraint },
+          "A counter-proposal's booking was refused by the database",
+        );
+        if (release.choiceClosed) await bookProposalAfterAnswer(booking, remedyId);
+      }
+      throw error;
+    }
   }
 
   return {
     choose: ({ userId }, { sessionId, choice }, log) =>
       transactions.run(async (tx) => {
-        const { session, terms, remedy, now } = await decidedAsStudent(
+        const { session, terms, remedy, now } = await decided(
           tx,
           sessionId,
           userId,
+          'student',
           log,
-          false,
+          'none',
         );
         const ids = { sessionId, userId };
         const active = activeRemedy(remedy, ids, log);
@@ -555,22 +833,15 @@ export function createRemedyServices({
 
     accept: async ({ userId }, { sessionId }, log) => {
       const booking = bookingOf(log);
-      // The remedy's id for the booking's deadlock lines (L5), read with no lock; the caller
-      // checked first, so no refusal here tells a forbidden session from a nonexistent one.
-      const remedyId = await transactions.run(async (tx) => {
-        const seen = await studentsSession(tx, sessionId, userId, log);
-        return (await store.remedyOf(tx, seen.id))?.id;
-      });
-      if (remedyId === undefined) {
-        throw refusal(log, { sessionId, userId }, 'REMEDY_NOT_OPEN', 'no_remedy');
-      }
+      const remedyId = await remedyIdOf(sessionId, userId, 'student', log);
       return booking.run({ remedyId, operation: ACCEPT }, async (tx) => {
-        const { session, terms, remedy, now } = await decidedAsStudent(
+        const { session, terms, remedy, now } = await decided(
           tx,
           sessionId,
           userId,
+          'student',
           log,
-          true,
+          'own',
         );
         const active = activeRemedy(remedy, { sessionId, userId }, log);
         if (active.status === 'counter_proposed') {
@@ -594,7 +865,7 @@ export function createRemedyServices({
 
     counterOptions: ({ userId }, { sessionId }, log) =>
       transactions.run(async (tx) => {
-        const session = await studentsSession(tx, sessionId, userId, log);
+        const session = await partysSession(tx, sessionId, userId, 'student', log);
         const terms = await termsOf(tx, session);
         const remedy = await store.remedyOf(tx, session.id);
         const now = await clock(tx);
@@ -610,12 +881,13 @@ export function createRemedyServices({
         await idempotency.run(
           { scope: COUNTER_SCOPE, key: idempotencyKey, actorId: userId, input: asked },
           async (tx) => {
-            const { session, terms, remedy, now } = await decidedAsStudent(
+            const { session, terms, remedy, now } = await decided(
               tx,
               asked.sessionId,
               userId,
+              'student',
               log,
-              false,
+              'none',
             );
             const ids = { sessionId: asked.sessionId, userId };
             const active = counterable(remedy, now, ids, log);
@@ -659,6 +931,8 @@ export function createRemedyServices({
           },
         ),
       ),
+
+    answerCounter,
   };
 }
 
@@ -669,5 +943,179 @@ function storedOf({ proposal, counter, makeupSessionId, ...view }: RemedyView): 
     ...(proposal === undefined ? {} : { proposal }),
     ...(counter === undefined ? {} : { counter }),
     ...(makeupSessionId === undefined ? {} : { makeupSessionId }),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// T032: the windows' ends, one remedy at a time, for `advance-remedies` (this file's head).
+// ---------------------------------------------------------------------------------------------
+
+/** What the choice window's end did to one remedy. */
+export type ChoiceEndOutcome = 'booked' | 'refused' | 'deadlocked' | 'handed_off' | 'not_due';
+
+export interface RemedyWindows {
+  /** A counter whose answer window has closed handed to a `counter_unanswered` case. */
+  endAnswerWindow(remedyId: string): Promise<'handed_off' | 'not_due'>;
+  /** A proposal past `choice_closes_at` booked, retried, or handed to a `makeup_refused` case. */
+  bookAtChoiceEnd(remedyId: string): Promise<ChoiceEndOutcome>;
+}
+
+/** What the windows write: info lines for their automatic actions, warn lines for refused retries. */
+export type WindowsLog = Pick<Logger, 'info' | 'warn'>;
+
+export interface RemedyWindowsDependencies {
+  readonly transactions: Transactions;
+  readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf'>;
+  /** The automatic actions' info lines and the refused retries' warn lines (Q11 (a)). */
+  readonly log: WindowsLog;
+  /** Error tracking, told once per remedy handed to a `makeup_refused` case. */
+  readonly report?: (error: Error) => void;
+  readonly clock?: (tx: Transaction) => Promise<Date>;
+  readonly store?: RemedyStore;
+  readonly bookingOf?: (log: WindowsLog) => RemedyBooking;
+  readonly casesOf?: (log: WindowsLog) => Pick<RemedyCase, 'handOff'>;
+  readonly makeupRefusalOf?: (error: unknown) => MakeupRefusal | null;
+}
+
+/** What one choice-window end decided inside its transaction. */
+type ChoiceEnd =
+  | { readonly outcome: 'not_due' }
+  | { readonly outcome: 'refused'; readonly constraint: 'hold' }
+  | { readonly outcome: 'booked'; readonly enrollmentId: string }
+  | {
+      readonly outcome: 'handed_off';
+      readonly handed: Awaited<ReturnType<RemedyCase['handOff']>>;
+    };
+
+export function createRemedyWindows({
+  transactions,
+  enrollments,
+  log,
+  report = reportError,
+  clock = clockTimestamp,
+  store = remedyStore,
+  bookingOf = (logger) => createMakeupBooking({ transactions, enrollments, log: logger, clock }),
+  casesOf = (logger) => createRemedyCase({ log: logger, clock }),
+  makeupRefusalOf: refusalOf = makeupRefusalOf,
+}: RemedyWindowsDependencies): RemedyWindows {
+  const lockRemedy = lockerOver(store, enrollments);
+  const booking = bookingOf(log);
+  const cases = casesOf(log);
+
+  /** The remedy under the locks `slots` names, read again under them, and the database's clock. */
+  async function lockedRemedy(
+    tx: Transaction,
+    remedyId: string,
+    from: readonly RemedyRowStatus[],
+    slots: SlotLocks,
+  ): Promise<{ readonly remedy: RemedyWithParties; readonly now: Date } | null> {
+    const seen = await store.remedyById(tx, remedyId);
+    if (seen === null || !from.includes(seen.status)) return null;
+    await lockRemedy(tx, seen, slots);
+    const remedy = await store.remedyById(tx, remedyId);
+    if (remedy === null || !from.includes(remedy.status)) return null;
+    return { remedy, now: await clock(tx) };
+  }
+
+  return {
+    endAnswerWindow: async (remedyId) => {
+      const handed = await transactions.run(async (tx) => {
+        const locked = await lockedRemedy(tx, remedyId, ['counter_proposed'], 'none');
+        const counter = locked?.remedy.counter;
+        if (locked === null || counter === undefined || counter === null) return null;
+        const closes = answerClosesAt({
+          counterProposedAt: counter.proposedAt,
+          snapshotAnswerWindowHours: locked.remedy.snapshotAnswerWindowHours,
+        });
+        if (locked.now.getTime() < closes.getTime()) return null;
+        return cases.handOff(tx, { remedyId, reason: 'counter_unanswered' });
+      });
+      if (handed === null) return 'not_due';
+      logRemedyHandedOff(log, { ...handed, reason: 'counter_unanswered' });
+      return 'handed_off';
+    },
+
+    bookAtChoiceEnd: async (remedyId) => {
+      // The session made up, kept for the refusal's warn line (Q11 (a)).
+      let sessionId: string | undefined;
+      let ended: ChoiceEnd;
+      try {
+        ended = await booking.run(
+          { remedyId, operation: SWEEP },
+          async (tx): Promise<ChoiceEnd> => {
+            const locked = await lockedRemedy(tx, remedyId, BOOKED_AT_CHOICE_END, 'own');
+            if (locked === null) return { outcome: 'not_due' };
+            const { remedy, now } = locked;
+            sessionId = remedy.sessionId;
+            if (now.getTime() < remedy.choiceClosesAt.getTime() || remedy.proposedDate === null) {
+              return { outcome: 'not_due' };
+            }
+            const terms = await enrollments.enrollmentFor(tx, remedy.enrollmentId);
+            if (terms === null) throw new Error('sessions: a remedy without its enrollment');
+            const slot = await store.slotOf(tx, terms.slotId);
+            if (slot === null) throw new Error('sessions: an enrollment without its slot');
+            const proposal = proposalTime(remedy.proposedDate, slot, terms);
+            const retriedUntil = bookingRetriedUntil(
+              {
+                status: remedy.status,
+                choiceClosesAt: remedy.choiceClosesAt,
+                proposalStartsAt: proposal.startsAt,
+                snapshotFirstSessionLeadHours: remedy.snapshotFirstSessionLeadHours,
+              },
+              now,
+            );
+            if (retriedUntil === undefined || now.getTime() > retriedUntil.getTime()) {
+              const handed = await cases.handOff(tx, { remedyId, reason: 'makeup_refused' });
+              return { outcome: 'handed_off', handed };
+            }
+            const held = await enrollments.heldTimesOf(
+              tx,
+              [remedy.studentUserId, remedy.teacherUserId],
+              { from: proposal.startsAt, to: proposal.endsAt },
+            );
+            if (overlapsAny(proposal, held)) return { outcome: 'refused', constraint: 'hold' };
+            await booking.bookOn(tx, { remedyId, booking: 'proposal', operation: SWEEP });
+            return { outcome: 'booked', enrollmentId: remedy.enrollmentId };
+          },
+        );
+      } catch (error: unknown) {
+        const refused = refusalOf(error);
+        if (refused === null) throw error;
+        if (refused.cause === 'deadlock') return 'deadlocked';
+        log.warn(
+          {
+            remedyId,
+            sessionId,
+            constraint: refused.cause === 'overlap' ? refused.constraint : 'reservation',
+          },
+          'A make-up booking was refused',
+        );
+        return 'refused';
+      }
+      switch (ended.outcome) {
+        case 'not_due':
+          return 'not_due';
+        case 'refused':
+          log.warn(
+            { remedyId, sessionId, constraint: ended.constraint },
+            'A make-up booking was refused',
+          );
+          return 'refused';
+        case 'booked':
+          log.info(
+            { remedyId, sessionId, enrollmentId: ended.enrollmentId, action: 'booked' },
+            'A remedy was booked',
+          );
+          return 'booked';
+        case 'handed_off':
+          logRemedyHandedOff(log, { ...ended.handed, reason: 'makeup_refused' });
+          report(
+            new Error(
+              `advance-remedies: remedy ${remedyId} was refused until its lead and handed to a case`,
+            ),
+          );
+          return 'handed_off';
+      }
+    },
   };
 }

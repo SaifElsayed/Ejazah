@@ -168,6 +168,8 @@ import type {
   SessionsJoinOutput,
   SessionsRemedyAcceptInput,
   SessionsRemedyAcceptOutput,
+  SessionsRemedyAnswerCounterInput,
+  SessionsRemedyAnswerCounterOutput,
   SessionsRemedyChooseInput,
   SessionsRemedyChooseOutput,
   SessionsRemedyCounterInput,
@@ -418,6 +420,10 @@ export interface AppCaller {
         input: SessionsRemedyCounterOptionsInput,
       ): Promise<SessionsRemedyCounterOptionsOutput>;
       counter(input: SessionsRemedyCounterInput): Promise<SessionsRemedyCounterOutput>;
+      /** T032: the teacher's answer to a counter-proposal. */
+      answerCounter(
+        input: SessionsRemedyAnswerCounterInput,
+      ): Promise<SessionsRemedyAnswerCounterOutput>;
     };
   };
 }

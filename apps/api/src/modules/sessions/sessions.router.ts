@@ -8,7 +8,8 @@
 //
 // T021: `sessions.cancellation.request` (keyed by the kernel's idempotency) and `.answer`, the same
 // kind, one service call each with the caller's own account (contracts/app-surface.md,
-// "`sessions.cancellation`"). T026: `sessions.dispute.raise`, below. T031: `sessions.remedy`, below.
+// "`sessions.cancellation`"). T026: `sessions.dispute.raise`, below. T031 and T032: `sessions.remedy`,
+// below.
 import {
   sessionsCancellationAnswerInput,
   sessionsCancellationAnswerOutput,
@@ -22,6 +23,8 @@ import {
   sessionsJoinOutput,
   sessionsRemedyAcceptInput,
   sessionsRemedyAcceptOutput,
+  sessionsRemedyAnswerCounterInput,
+  sessionsRemedyAnswerCounterOutput,
   sessionsRemedyChooseInput,
   sessionsRemedyChooseOutput,
   sessionsRemedyCounterInput,
@@ -73,6 +76,14 @@ const remedyRouter = createAppRouter({
     output: sessionsRemedyCounterOutput,
   }).mutation(({ ctx, input }) =>
     ctx.services.sessions.remedy.counter({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+  // T032: the teacher's answer to the pending counter-proposal, a mutation of the same kind (the
+  // student's refusal is the service's `NOT_FOUND`).
+  answerCounter: participantProcedure({
+    input: sessionsRemedyAnswerCounterInput,
+    output: sessionsRemedyAnswerCounterOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.remedy.answerCounter({ userId: ctx.caller.userId }, input, ctx.log),
   ),
 });
 

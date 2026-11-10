@@ -9,10 +9,11 @@
 // What every attack holds: a remedy's session the caller is not the right party of, the other
 // gender's pair's above all, answers exactly as an id that never existed (404, `NOT_FOUND`, no
 // field); the caller's own is answered, by a result or by a refusal that only a found remedy gives
-// (`CHOICE_NOT_ALLOWED`, `SLOT_NOT_OFFERED`), so no attack passes on a refusal of everything.
+// (`CHOICE_NOT_ALLOWED`, `SLOT_NOT_OFFERED`, `REMEDY_NOT_OPEN`), so no attack passes on a refusal of
+// everything. The student's four are attacked as the student, `answerCounter` as the teacher.
 //
-//   directCall            the student on their own remedy answered; the other gender's remedy, and
-//                         for the student's four the pair's own teacher, as a nonexistent one.
+//   directCall            the caller on their own remedy answered; the other gender's remedy, and
+//                         the pair's other party on the caller's procedure, as a nonexistent one.
 //   forgedId              the other gender's remedy session, the enrollment's id and a party's own
 //                         user id, sent as the session.
 //   guessedId             ids never handed out: random ones, the other's neighbour and its upper-case
@@ -27,7 +28,8 @@
 //   choose          `CHOICE_NOT_ALLOWED` (the remedy is `proposed`, no longer awaiting a choice);
 //   accept          the proposal booked, on a remedy made for that one call;
 //   counterOptions  the options;
-//   counter         `SLOT_NOT_OFFERED` (a date years before the bound), nothing written.
+//   counter         `SLOT_NOT_OFFERED` (a date years before the bound), nothing written;
+//   answerCounter   `REMEDY_NOT_OPEN` (no counter pending), nothing written (T032).
 import { randomUUID } from 'node:crypto';
 
 import { expect } from 'vitest';
@@ -68,9 +70,10 @@ async function codeOf(attempt: () => Promise<unknown>): Promise<unknown> {
   throw new Error('answered where it must be refused');
 }
 
-/** One procedure's call on a remedy's session, and how the caller's own is answered. */
+/** One procedure's call on a remedy's session, its caller's role, and how its own is answered. */
 interface Procedure {
   readonly path: string;
+  readonly role: 'student' | 'teacher';
   readonly call: (caller: AppCaller, sessionId: string, extra?: object) => Promise<unknown>;
   /** The caller's own remedy answered: a result, or a refusal only a found remedy gives. */
   readonly ownAnswered: (
@@ -80,9 +83,10 @@ interface Procedure {
   ) => Promise<void>;
 }
 
-const studentProcedures: readonly Procedure[] = [
+const procedures: readonly Procedure[] = [
   {
     path: 'sessions.remedy.choose',
+    role: 'student',
     call: (caller, sessionId, extra = {}) =>
       caller.sessions.remedy.choose({ sessionId, choice: 'refund', ...extra } as never),
     ownAnswered: async (pair, sessionId) => {
@@ -95,6 +99,7 @@ const studentProcedures: readonly Procedure[] = [
   },
   {
     path: 'sessions.remedy.accept',
+    role: 'student',
     call: (caller, sessionId, extra = {}) =>
       caller.sessions.remedy.accept({ sessionId, ...extra } as never),
     ownAnswered: async (pair, _sessionId, gender) => {
@@ -107,6 +112,7 @@ const studentProcedures: readonly Procedure[] = [
   },
   {
     path: 'sessions.remedy.counterOptions',
+    role: 'student',
     call: (caller, sessionId, extra = {}) =>
       caller.sessions.remedy.counterOptions({ sessionId, ...extra } as never),
     ownAnswered: async (pair, sessionId) => {
@@ -116,6 +122,7 @@ const studentProcedures: readonly Procedure[] = [
   },
   {
     path: 'sessions.remedy.counter',
+    role: 'student',
     call: (caller, sessionId, extra = {}) =>
       caller.sessions.remedy.counter({
         sessionId,
@@ -137,11 +144,28 @@ const studentProcedures: readonly Procedure[] = [
       ).toBe('SLOT_NOT_OFFERED');
     },
   },
+  {
+    path: 'sessions.remedy.answerCounter',
+    role: 'teacher',
+    call: (caller, sessionId, extra = {}) =>
+      caller.sessions.remedy.answerCounter({ sessionId, accept: false, ...extra } as never),
+    ownAnswered: async (pair, sessionId) => {
+      expect(
+        await codeOf(() =>
+          pair.teacher.caller.sessions.remedy.answerCounter({ sessionId, accept: false }),
+        ),
+      ).toBe('REMEDY_NOT_OPEN');
+    },
+  },
 ];
 
-/** The five attack kinds of a procedure the student calls (the header). */
-function studentAttacks(procedure: Procedure): ProcedureAttacks {
-  const { call, ownAnswered } = procedure;
+/** The five attack kinds of one procedure, as its caller's role makes them (the header). */
+function attacksOn(procedure: Procedure): ProcedureAttacks {
+  const { call, ownAnswered, role } = procedure;
+  /** The caller of the procedure's role in `pair`. */
+  const callerIn = (pair: SessionPair) => (role === 'student' ? pair.student : pair.teacher);
+  /** The pair's other party. */
+  const counterpartIn = (pair: SessionPair) => (role === 'student' ? pair.teacher : pair.student);
   return {
     path: procedure.path,
     holds: HOLDS,
@@ -155,14 +179,16 @@ function studentAttacks(procedure: Procedure): ProcedureAttacks {
             () => call(party.caller, randomUUID()),
           );
         }
-        // The teacher is no student of the remedy: the same answer as a nonexistent one.
+        // The other party is not the caller the procedure admits: as a nonexistent one.
+        const counterpart = counterpartIn(own);
         await expectAnswersAsNonexistent(
-          () => call(own.teacher.caller, ownRemedy),
-          () => call(own.teacher.caller, randomUUID()),
+          () => call(counterpart.caller, ownRemedy),
+          () => call(counterpart.caller, randomUUID()),
         );
       },
       async forgedId(direction) {
         const { own, theirRemedy } = await remediesFor(direction);
+        const mine = callerIn(own);
         for (const forged of [
           theirRemedy,
           own.enrollmentId,
@@ -170,17 +196,18 @@ function studentAttacks(procedure: Procedure): ProcedureAttacks {
           own.teacher.userId,
         ]) {
           await expectAnswersAsNonexistent(
-            () => call(own.student.caller, forged),
-            () => call(own.student.caller, randomUUID()),
+            () => call(mine.caller, forged),
+            () => call(mine.caller, randomUUID()),
           );
         }
       },
       async guessedId(direction) {
         const { own, theirRemedy } = await remediesFor(direction);
+        const mine = callerIn(own);
         for (const guessed of [randomUUID(), neighbourOf(theirRemedy), theirRemedy.toUpperCase()]) {
           await expectAnswersAsNonexistent(
-            () => call(own.student.caller, guessed),
-            () => call(own.student.caller, randomUUID()),
+            () => call(mine.caller, guessed),
+            () => call(mine.caller, randomUUID()),
           );
         }
       },
@@ -188,8 +215,8 @@ function studentAttacks(procedure: Procedure): ProcedureAttacks {
         const { surface, own, theirs, ownRemedy } = await remediesFor(direction);
         for (const token of tamperedTokens(
           direction,
-          own.student.accessToken,
-          theirs.student.sessionId,
+          callerIn(own).accessToken,
+          callerIn(theirs).sessionId,
         )) {
           const tampered = await surface.bearing(token);
           await expectUnauthenticated(() => call(tampered, ownRemedy));
@@ -197,20 +224,22 @@ function studentAttacks(procedure: Procedure): ProcedureAttacks {
       },
       async clientSuppliedGender(direction) {
         const { surface, own, ownRemedy, theirRemedy } = await remediesFor(direction);
+        const mine = callerIn(own);
+        const counterpart = counterpartIn(own);
         const gendered = { gender: direction.other };
         await expectAnswersAsNonexistent(
-          () => call(own.student.caller, theirRemedy, gendered),
-          () => call(own.student.caller, randomUUID(), gendered),
+          () => call(mine.caller, theirRemedy, gendered),
+          () => call(mine.caller, randomUUID(), gendered),
         );
-        // After an administrator's correction of the teacher's gender (K2): the server's record.
-        await surface.setGender(own.teacher.userId, direction.other);
+        // After an administrator's correction of the counterparty's gender (K2): the server's record.
+        await surface.setGender(counterpart.userId, direction.other);
         try {
           await expectAnswersAsNonexistent(
-            () => call(own.student.caller, ownRemedy, gendered),
-            () => call(own.student.caller, randomUUID(), gendered),
+            () => call(mine.caller, ownRemedy, gendered),
+            () => call(mine.caller, randomUUID(), gendered),
           );
         } finally {
-          await surface.setGender(own.teacher.userId, direction.requester);
+          await surface.setGender(counterpart.userId, direction.requester);
         }
         await ownAnswered(own, ownRemedy, direction.requester);
       },
@@ -218,5 +247,4 @@ function studentAttacks(procedure: Procedure): ProcedureAttacks {
   };
 }
 
-export const sessionsRemedyAttacks: readonly ProcedureAttacks[] =
-  studentProcedures.map(studentAttacks);
+export const sessionsRemedyAttacks: readonly ProcedureAttacks[] = procedures.map(attacksOn);

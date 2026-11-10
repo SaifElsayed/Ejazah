@@ -27,11 +27,18 @@ import type { IdempotentRequest } from '../../platform/idempotency/idempotency.s
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import type { SlotRow } from '../catalog/index.js';
 import type { EnrollmentTerms, HeldTime } from './enrollment-side.port.js';
-import type { MakeupBookingInput } from './makeup-booking.service.js';
+import type { MakeupBookingInput, MakeupRefusal } from './makeup-booking.service.js';
 import type { RemedyCaseInput } from './remedy-case.service.js';
 import type { RemedyViewRow } from './remedy-offer.repository.js';
 import type { CounterWrite, RemedyRow } from './remedy.repository.js';
-import { createRemedyServices, type RemedyServices, type RemedyStore } from './remedy.service.js';
+import {
+  createRemedyServices,
+  createRemedyWindows,
+  type RemedyDependencies,
+  type RemedyServices,
+  type RemedyStore,
+  type RemedyWindows,
+} from './remedy.service.js';
 import type { ReservedTime } from './reservations.service.js';
 import type { SessionEventRecord } from './session-events.repository.js';
 import type { PartySessionRow, SessionTime } from './sessions.repository.js';
@@ -146,7 +153,9 @@ let now: Date;
 let busy: { sessions: SessionTime[]; held: HeldTime[]; reserved: ReservedTime[] };
 let booked: { input: MakeupBookingInput; tx: Transaction }[];
 let bookRefusal: unknown;
+let proposalRefusal: unknown;
 let handedOff: RemedyCaseInput[];
+let reported: Error[];
 let lines: { level: string; msg: string; [field: string]: unknown }[];
 let log: Logger;
 let keyed: IdempotentRequest[];
@@ -177,6 +186,12 @@ const store: RemedyStore = {
   remedyOf: async (_tx, sessionId) => {
     calls.push(['remedyOf', sessionId]);
     return remedy?.sessionId === sessionId ? remedy : null;
+  },
+  remedyById: async (_tx, remedyId) => {
+    calls.push(['remedyById', remedyId]);
+    return remedy?.id === remedyId
+      ? { ...remedy, enrollmentId: ENROLLMENT, studentUserId: STUDENT, teacherUserId: TEACHER }
+      : null;
   },
   lockAccounts: async (_tx, ids) => {
     calls.push(['lockAccounts', ids]);
@@ -250,8 +265,34 @@ const transactions: Transactions = {
   },
 };
 
+/** A recorded refusal of T029's booking: what `makeupRefusalOf` would read from the real one. */
+class RefusedBooking extends DomainError {
+  constructor(readonly made: MakeupRefusal) {
+    super('MAKEUP_REFUSED');
+  }
+}
+
+const refusedBy = (error: unknown): MakeupRefusal | null =>
+  error instanceof RefusedBooking ? error.made : null;
+
+const OVERLAP: MakeupRefusal = { cause: 'overlap', constraint: 'sessions_teacher_no_overlap' };
+
 function services(): RemedyServices {
-  return createRemedyServices({
+  return createRemedyServices(dependencies());
+}
+
+function windows(): RemedyWindows {
+  return createRemedyWindows({
+    ...dependencies(),
+    log,
+    report: (error) => {
+      reported.push(error);
+    },
+  });
+}
+
+function dependencies() {
+  return {
     transactions,
     idempotency: {
       run: async (request, effect) => {
@@ -290,10 +331,21 @@ function services(): RemedyServices {
         calls.push(['run', trace]);
         return transactions.run(work);
       },
-      book: async () => {
-        throw new Error('this spec books on the caller’s transaction');
+      book: async (input) => {
+        calls.push(['book', input]);
+        if (proposalRefusal !== undefined) throw proposalRefusal;
+        if (remedy !== null) remedy = { ...remedy, status: 'booked', counter: null };
+        return {
+          remedyId: input.remedyId,
+          sessionId: SESSION,
+          enrollmentId: ENROLLMENT,
+          makeupSessionId: MAKEUP,
+          startsAt: new Date('2026-12-06T07:00:00.000Z'),
+          endsAt: new Date('2026-12-06T08:00:00.000Z'),
+        };
       },
     }),
+    makeupRefusalOf: refusedBy,
     casesOf: () => ({
       handOff: async (tx, input) => {
         calls.push(['handOff', input]);
@@ -307,11 +359,10 @@ function services(): RemedyServices {
           caseId: NOWHERE,
           caseOpened: true,
           kind: 'refund' as const,
-          tx,
         };
       },
     }),
-  });
+  } satisfies RemedyDependencies;
 }
 
 beforeEach(() => {
@@ -327,7 +378,9 @@ beforeEach(() => {
   busy = { sessions: [], held: [], reserved: [] };
   booked = [];
   bookRefusal = undefined;
+  proposalRefusal = undefined;
   handedOff = [];
+  reported = [];
   lines = [];
   keyed = [];
   log = createLogger({
@@ -869,5 +922,355 @@ describe('sessions.remedy.counter (T031; FR-465; D1; H2)', () => {
     ).toBe('SLOT_NOT_OFFERED');
     await services().counter({ userId: STUDENT }, asked('2026-11-16'), log);
     expect(calls.filter(([name]) => name === 'writeCounter')).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T032: the teacher's answer and the windows' ends.
+// ---------------------------------------------------------------------------------------------
+
+/** The pending counter of this file's head: Monday 2026-11-16 18:00 in Cairo, proposed COUNTER_AT. */
+const counterPending = (values: Partial<RemedyRow> = {}) =>
+  remedyRow({ status: 'counter_proposed', counter: PENDING_COUNTER, ...values });
+
+/** The lines the teacher's answer or the sweep wrote, by level, their standard fields left out. */
+function linesAt(level: string): Record<string, unknown>[] {
+  return lines
+    .filter((line) => line.level === level)
+    .map(({ msg: _msg, level: _level, time: _time, pid: _pid, hostname: _host, ...rest }) => rest);
+}
+
+/** The booking's locks for a counter: both slots after the key, in id order (L2). */
+const COUNTER_LOCKS = [
+  ['lockAccounts', [TEACHER, STUDENT]],
+  ['lockTeacherSlots', TEACHER],
+  ['lockSlots', [OWN_SLOT, MONDAY_SLOT]],
+  ['lockEnrollments', [ENROLLMENT]],
+  ['lockSessions', [SESSION]],
+  ['lockRemedyOfSession', SESSION],
+];
+
+const answer = (accept: boolean, userId = TEACHER) =>
+  services().answerCounter({ userId }, { sessionId: SESSION, accept }, log);
+
+describe('sessions.remedy.answerCounter: who and when (T032; D1)', () => {
+  beforeEach(() => {
+    remedy = counterPending();
+  });
+
+  it('the student, a stranger, an id that never existed and the other gender answer NOT_FOUND, writing nothing', async () => {
+    for (const userId of [STUDENT, STRANGER]) {
+      expect((await refusalOf(answer(true, userId))).code).toBe('NOT_FOUND');
+    }
+    expect(
+      (
+        await refusalOf(
+          services().answerCounter({ userId: TEACHER }, { sessionId: NOWHERE, accept: true }, log),
+        )
+      ).code,
+    ).toBe('NOT_FOUND');
+    genders.set(STUDENT, 'male');
+    expect((await refusalOf(answer(false))).code).toBe('NOT_FOUND');
+    expect(writes()).toEqual([]);
+  });
+
+  it('no counter pending, or a frozen remedy, REMEDY_NOT_OPEN, writing nothing', async () => {
+    for (const status of ['proposed', 'awaiting_choice', 'frozen', 'booked'] as const) {
+      remedy = remedyRow({ status });
+      for (const accept of [true, false]) {
+        expect((await refusalOf(answer(accept))).code).toBe('REMEDY_NOT_OPEN');
+      }
+    }
+    expect(writes()).toEqual([]);
+  });
+
+  it('at answerClosesAt REMEDY_NOT_OPEN, from the snapshot A and not a later setting; one millisecond before, admitted (D1)', async () => {
+    now = ANSWER_CLOSES;
+    expect((await refusalOf(answer(false))).code).toBe('REMEDY_NOT_OPEN');
+    expect(writes()).toEqual([]);
+    now = new Date('2026-11-07T09:59:59.999Z');
+    await answer(false);
+    expect(writes()[0]).toEqual(['releaseCounter', REMEDY]);
+  });
+});
+
+describe('sessions.remedy.answerCounter: accept (T032; FR-465, FR-468; A3, A7)', () => {
+  beforeEach(() => {
+    remedy = counterPending();
+  });
+
+  it('books the counter through T029 as sessions.remedy.answerCounter, both slots locked after the key, one counter_accepted row first', async () => {
+    const view = await answer(true);
+    expect(calls.find(([name]) => name === 'run')).toEqual([
+      'run',
+      { remedyId: REMEDY, operation: 'sessions.remedy.answerCounter' },
+    ]);
+    expect(locks()).toEqual(COUNTER_LOCKS);
+    expect(writes()).toEqual([
+      [
+        'recordEvents',
+        [
+          {
+            enrollmentId: ENROLLMENT,
+            sessionId: SESSION,
+            kind: 'counter_accepted',
+            occurredAt: NOW,
+          },
+        ],
+      ],
+      [
+        'bookOn',
+        { remedyId: REMEDY, booking: 'counter', operation: 'sessions.remedy.answerCounter' },
+      ],
+    ]);
+    expect(view.status).toBe('booked');
+    expect(view.makeupSessionId).toBe(MAKEUP);
+  });
+
+  it('refused by the database inside the choice window: MAKEUP_REFUSED, the counter released in a second transaction under the same locks, one counter_booking_refused row and one warn line naming the constraint', async () => {
+    bookRefusal = new RefusedBooking(OVERLAP);
+    expect((await refusalOf(answer(true))).code).toBe('MAKEUP_REFUSED');
+    const second = calls.slice(
+      calls.lastIndexOf(calls.findLast(([name]) => name === 'begin') ?? []),
+    );
+    expect(
+      second.filter(([name]) => String(name).startsWith('lock')).map(([name, ids]) => [name, ids]),
+    ).toEqual(COUNTER_LOCKS);
+    expect(writes().slice(-2)).toEqual([
+      ['releaseCounter', REMEDY],
+      [
+        'recordEvents',
+        [
+          {
+            enrollmentId: ENROLLMENT,
+            sessionId: SESSION,
+            kind: 'counter_booking_refused',
+            occurredAt: NOW,
+          },
+        ],
+      ],
+    ]);
+    expect(
+      calls.filter(
+        ([name, events]) =>
+          name === 'recordEvents' &&
+          (events as SessionEventRecord[]).some(({ kind }) => kind === 'counter_withdrawn'),
+      ),
+    ).toEqual([]);
+    expect(linesAt('warn')).toEqual([
+      { sessionId: SESSION, enrollmentId: ENROLLMENT, constraint: 'sessions_teacher_no_overlap' },
+    ]);
+    expect(remedy?.status).toBe('proposed');
+    expect(calls.filter(([name]) => name === 'book')).toEqual([]);
+  });
+
+  it('refused by the database after the choice window: released, then the proposal booked, never a counter_unanswered refund', async () => {
+    now = new Date('2026-11-08T09:00:00.000Z');
+    remedy = counterPending({
+      counter: { ...PENDING_COUNTER, proposedAt: new Date('2026-11-07T12:00:00.000Z') },
+    });
+    bookRefusal = new RefusedBooking({
+      cause: 'overlap',
+      constraint: 'sessions_student_no_overlap',
+    });
+    expect((await refusalOf(answer(true))).code).toBe('MAKEUP_REFUSED');
+    expect(calls.filter(([name]) => name === 'book')).toEqual([
+      [
+        'book',
+        { remedyId: REMEDY, booking: 'proposal', operation: 'sessions.remedy.answerCounter' },
+      ],
+    ]);
+    expect(handedOff).toEqual([]);
+    expect(linesAt('warn')).toEqual([
+      { sessionId: SESSION, enrollmentId: ENROLLMENT, constraint: 'sessions_student_no_overlap' },
+    ]);
+  });
+
+  it('a reserved time or a second deadlock refuses with the counter left pending, nothing released and no warn line of its own (Q4 (a))', async () => {
+    for (const made of [{ cause: 'reserved' }, { cause: 'deadlock' }] as const) {
+      remedy = counterPending();
+      bookRefusal = new RefusedBooking(made);
+      expect((await refusalOf(answer(true))).code).toBe('MAKEUP_REFUSED');
+      expect(remedy?.status).toBe('counter_proposed');
+    }
+    expect(calls.filter(([name]) => name === 'releaseCounter')).toEqual([]);
+    expect(linesAt('warn')).toEqual([]);
+  });
+});
+
+describe('sessions.remedy.answerCounter: decline (T032; FR-465; H4; decision 9)', () => {
+  beforeEach(() => {
+    remedy = counterPending();
+  });
+
+  it('inside the choice window: the counter released, one counter_declined row, the remedy proposed, nothing booked; the kernel’s counter row', async () => {
+    const view = await answer(false);
+    expect(locks()).toEqual(CHOICE_LOCKS);
+    expect(writes()).toEqual([
+      ['releaseCounter', REMEDY],
+      [
+        'recordEvents',
+        [
+          {
+            enrollmentId: ENROLLMENT,
+            sessionId: SESSION,
+            kind: 'counter_declined',
+            occurredAt: NOW,
+          },
+        ],
+      ],
+    ]);
+    expect(view.status).toBe('proposed');
+    expect(view.counter).toBeUndefined();
+  });
+
+  it('after the choice window: released, then the proposal booked; a refused booking leaves the remedy proposed for the sweep and the decline answered', async () => {
+    now = new Date('2026-11-08T09:00:00.000Z');
+    remedy = counterPending({
+      counter: { ...PENDING_COUNTER, proposedAt: new Date('2026-11-07T12:00:00.000Z') },
+    });
+    expect((await answer(false)).status).toBe('booked');
+    expect(calls.filter(([name]) => name === 'book')).toHaveLength(1);
+    remedy = counterPending({
+      counter: { ...PENDING_COUNTER, proposedAt: new Date('2026-11-07T12:00:00.000Z') },
+    });
+    proposalRefusal = new RefusedBooking(OVERLAP);
+    expect((await answer(false)).status).toBe('proposed');
+  });
+});
+
+describe('advance-remedies: a counter’s answer window ends (T032; FR-465; D1)', () => {
+  beforeEach(() => {
+    remedy = counterPending();
+  });
+
+  it('before answerClosesAt nothing; at it, handed to a counter_unanswered case under the kernel’s row, one info line after the commit', async () => {
+    now = new Date('2026-11-07T09:59:59.999Z');
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('not_due');
+    expect(handedOff).toEqual([]);
+    now = ANSWER_CLOSES;
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('handed_off');
+    expect(handedOff).toEqual([{ remedyId: REMEDY, reason: 'counter_unanswered' }]);
+    const lastRun = calls.slice(calls.findLastIndex(([name]) => name === 'begin'));
+    expect(
+      lastRun.filter(([name]) => String(name).startsWith('lock')).map(([name, ids]) => [name, ids]),
+    ).toEqual(CHOICE_LOCKS);
+    expect(lastRun.at(-1)).toEqual(['commit']);
+    expect(linesAt('info')).toEqual([
+      {
+        remedyId: REMEDY,
+        sessionId: SESSION,
+        enrollmentId: ENROLLMENT,
+        action: 'counter_unanswered',
+      },
+    ]);
+  });
+
+  it('a remedy no longer counter_proposed, frozen among them, is left as it is', async () => {
+    for (const status of ['proposed', 'frozen', 'booked'] as const) {
+      remedy = remedyRow({ status });
+      expect(await windows().endAnswerWindow(REMEDY)).toBe('not_due');
+    }
+    expect(handedOff).toEqual([]);
+  });
+});
+
+describe('advance-remedies: the choice window ends, and a refused proposal is retried (T032; H5; A3; Q4 (a), Q11 (a))', () => {
+  /** The proposal starts 2026-12-06T07:00Z; L = 24 h: retried until 2026-12-05T07:00Z. */
+  const RETRIED_UNTIL = new Date('2026-12-05T07:00:00.000Z');
+  const PROPOSAL_LOCKS = [
+    ['lockAccounts', [TEACHER, STUDENT]],
+    ['lockTeacherSlots', TEACHER],
+    ['lockSlots', [OWN_SLOT]],
+    ['lockEnrollments', [ENROLLMENT]],
+    ['lockSessions', [SESSION]],
+    ['lockRemedyOfSession', SESSION],
+  ];
+
+  beforeEach(() => {
+    now = CHOICE_CLOSES;
+  });
+
+  it('before choice_closes_at nothing; at it, the proposal booked as advance-remedies under the booking’s locks, one info line after the commit', async () => {
+    now = new Date('2026-11-08T07:59:59.999Z');
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('not_due');
+    expect(booked).toEqual([]);
+    now = CHOICE_CLOSES;
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('booked');
+    expect(calls.find(([name]) => name === 'run')).toEqual([
+      'run',
+      { remedyId: REMEDY, operation: 'advance-remedies' },
+    ]);
+    expect(booked.map(({ input }) => input)).toEqual([
+      { remedyId: REMEDY, booking: 'proposal', operation: 'advance-remedies' },
+    ]);
+    expect(locks().slice(-PROPOSAL_LOCKS.length)).toEqual(PROPOSAL_LOCKS);
+    expect(linesAt('info')).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, enrollmentId: ENROLLMENT, action: 'booked' },
+    ]);
+  });
+
+  it('an awaiting_choice remedy is booked as well; a counter_proposed or frozen one is left', async () => {
+    remedy = remedyRow({ status: 'awaiting_choice' });
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('booked');
+    for (const values of [
+      { status: 'frozen' as const },
+      { status: 'counter_proposed' as const, counter: PENDING_COUNTER },
+    ]) {
+      remedy = remedyRow(values);
+      expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('not_due');
+    }
+    expect(booked).toHaveLength(1);
+  });
+
+  it('a refusal by the database is one warn line { remedyId, sessionId, constraint } and nothing else, nothing reported', async () => {
+    bookRefusal = new RefusedBooking(OVERLAP);
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('refused');
+    expect(linesAt('warn')).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, constraint: 'sessions_teacher_no_overlap' },
+    ]);
+    expect(linesAt('info')).toEqual([]);
+    expect(reported).toEqual([]);
+    expect(remedy?.status).toBe('proposed');
+  });
+
+  it('a retry over an open hold or a reservation of either party is refused too, the hold read under the booking’s locks', async () => {
+    busy.held = [
+      {
+        startsAt: new Date('2026-12-06T07:30:00.000Z'),
+        endsAt: new Date('2026-12-06T08:30:00.000Z'),
+      },
+    ];
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('refused');
+    expect(booked).toEqual([]);
+    busy.held = [];
+    bookRefusal = new RefusedBooking({ cause: 'reserved' });
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('refused');
+    expect(linesAt('warn')).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, constraint: 'hold' },
+      { remedyId: REMEDY, sessionId: SESSION, constraint: 'reservation' },
+    ]);
+  });
+
+  it('a second deadlock is no refusal: nothing written, no line of its own, tried again next run', async () => {
+    bookRefusal = new RefusedBooking({ cause: 'deadlock' });
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('deadlocked');
+    expect(linesAt('warn')).toEqual([]);
+    expect(handedOff).toEqual([]);
+  });
+
+  it('retried up to the last instant L before the proposal’s start; past it, handed to a makeup_refused case, one info line, error tracking told once', async () => {
+    bookRefusal = new RefusedBooking(OVERLAP);
+    now = RETRIED_UNTIL;
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('refused');
+    expect(handedOff).toEqual([]);
+    now = new Date('2026-12-05T07:00:00.001Z');
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('handed_off');
+    expect(handedOff).toEqual([{ remedyId: REMEDY, reason: 'makeup_refused' }]);
+    expect(booked).toHaveLength(1);
+    expect(linesAt('info')).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, enrollmentId: ENROLLMENT, action: 'makeup_refused' },
+    ]);
+    expect(reported).toHaveLength(1);
   });
 });

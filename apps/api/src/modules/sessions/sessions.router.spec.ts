@@ -183,6 +183,12 @@ const sessions: SessionsServices = {
       if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
       return { ...remedied, snapshotAnswerWindowHours: 72 } as never;
     },
+    // T032.
+    answerCounter: async (caller, input) => {
+      calls.push(['answerCounter', caller, input]);
+      if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+      return { ...remedied, counterProposedAt: 'now' } as never;
+    },
   },
 };
 
@@ -266,6 +272,9 @@ const procedures = {
       localDate: '2026-11-16',
       idempotencyKey: COUNTER_KEY,
     }),
+  // T032.
+  'sessions.remedy.answerCounter': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.remedy.answerCounter({ sessionId, accept: true }),
 } as const;
 
 const metaOf = (path: string): unknown =>
@@ -889,5 +898,51 @@ describe("'sessions.remedy.counter' (T031)", () => {
     expect(calls).toEqual([]);
     expect(metaOf('sessions.remedy.counter')).toEqual({ surface: 'app', caller: 'participant' });
     expect(typeOf('sessions.remedy.counter')).toBe('mutation');
+  });
+});
+
+// T032 of specs/004-sessions: `sessions.remedy.answerCounter`, the participant kind (the student's
+// own refusal is the service's NOT_FOUND), a mutation handing the service the caller's own account
+// and the validated input only.
+describe("'sessions.remedy.answerCounter' (T032)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted one ACCOUNT_RESTRICTED before the service: 'sessions.remedy.answerCounter'", async () => {
+    await expect(procedures['sessions.remedy.answerCounter'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(
+        procedures['sessions.remedy.answerCounter'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the input only, and answers the remedy stripped: 'sessions.remedy.answerCounter'", async () => {
+    const answered = await callerAs(sessionOf('teacher')).sessions.remedy.answerCounter({
+      sessionId: SESSION,
+      accept: false,
+      userId: OTHER,
+      role: 'teacher',
+    } as never);
+    expect(calls).toEqual([
+      ['answerCounter', { userId: CALLER }, { sessionId: SESSION, accept: false }],
+    ]);
+    expect(answered).toEqual(remedied);
+  });
+
+  it("refuses an input without its answer VALIDATION_FAILED before the service, and is a participant mutation: 'sessions.remedy.answerCounter'", async () => {
+    const thrown: unknown = await callerAs(sessionOf('teacher'))
+      .sessions.remedy.answerCounter({ sessionId: SESSION } as never)
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+    expect(metaOf('sessions.remedy.answerCounter')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+    });
+    expect(typeOf('sessions.remedy.answerCounter')).toBe('mutation');
   });
 });

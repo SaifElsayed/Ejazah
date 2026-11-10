@@ -156,7 +156,7 @@ export interface SessionsServices extends DisputeRaise {
   join(caller: SessionsCaller, input: SessionsJoinInput, log: Logger): Promise<SessionsJoinOutput>;
   /** T021: `sessions.cancellation.request` and `.answer`. */
   readonly cancellation: CancellationServices;
-  /** T031: `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`. */
+  /** T031: `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`; T032 `.answerCounter`. */
   readonly remedy: RemedyServices;
 }
 

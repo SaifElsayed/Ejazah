@@ -395,3 +395,14 @@ export {
   type RemedyStore,
   remedyStore,
 } from './remedy.service.js';
+/**
+ * T032 of specs/004-sessions (FR-465 to FR-468; research R-311, "Windows ending"; D1; H5; A3;
+ * Q4 (a), Q11 (a)): the windows' ends, one remedy at a time, which `advance-remedies`' run calls
+ * (`createRemedyAdvance`'s `windows`).
+ */
+export {
+  type ChoiceEndOutcome,
+  createRemedyWindows,
+  type RemedyWindows,
+  type RemedyWindowsDependencies,
+} from './remedy.service.js';

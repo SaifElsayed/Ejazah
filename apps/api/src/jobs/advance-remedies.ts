@@ -7,7 +7,8 @@
 // sessions with none, offered; each frozen remedy of a reinstated student offered again; T015's
 // completion check over the confirmed enrollments whose sessions all have an outcome. Each item on its
 // own transaction, its failure caught on its own; every read paged by `REMEDY_PAGE_SIZE`. T032 adds
-// the windows' ends to the same run.
+// the windows' ends to the same run (`createRemedyWindows`, over the same transactions, side, log and
+// error tracking).
 //
 // Run twice, it leaves what one run leaves (R-API-14): one remedy per session (its unique key, read
 // again under the offer's locks), one completion per enrollment (one move from `confirmed`).
@@ -17,6 +18,7 @@ import {
   type Completion,
   createRemedyAdvance,
   createRemedyOffer,
+  createRemedyWindows,
   type EnrollmentSide,
   type RemedyAdvance,
   type RemedyAdvanceStore,
@@ -43,7 +45,8 @@ export interface AdvanceRemediesDependencies {
   readonly enrollments: EnrollmentSide;
   /** T015's completion over the same side (`createCompletion`). */
   readonly completion: Completion;
-  readonly log: Pick<Logger, 'info' | 'error'>;
+  /** The sweep's lines, and T032's windows' (info and warn). */
+  readonly log: Pick<Logger, 'info' | 'warn' | 'error'>;
   /** Error tracking; `reportError` unless a spec sets one. */
   readonly report?: (error: Error) => void;
   /** The offer's and the sweep's stores; the module's unless a spec narrows them. */
@@ -61,12 +64,20 @@ function advanceOver({
   offerStore,
   store,
 }: AdvanceRemediesDependencies): RemedyAdvance {
+  const transactions = transactionsOver(database);
   return createRemedyAdvance({
-    transactions: transactionsOver(database),
+    transactions,
     offer: createRemedyOffer({
       enrollments,
       settings,
       ...(offerStore === undefined ? {} : { store: offerStore }),
+    }),
+    // T032: the windows' ends, over the same transactions, side, log and error tracking.
+    windows: createRemedyWindows({
+      transactions,
+      enrollments,
+      log,
+      ...(report === undefined ? {} : { report }),
     }),
     completion,
     enrollments,
