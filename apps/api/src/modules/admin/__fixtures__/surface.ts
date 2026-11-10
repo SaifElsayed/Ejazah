@@ -97,6 +97,9 @@ export function surfaceOf(
     payments: unusedAdminServices.payments,
     // The outage windows have their own router spec (`sessions/sessions-admin.router.spec.ts`).
     outages: unusedAdminServices.outages,
+    // The sessions module's cancellation and monitor have their own router spec (the same file).
+    sessionCancel: unusedAdminServices.sessionCancel,
+    monitor: unusedAdminServices.monitor,
   };
   const administration = {
     transactions: transactionsOver(database),
