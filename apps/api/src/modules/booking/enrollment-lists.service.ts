@@ -32,7 +32,8 @@
 //
 // A PENDING CANCELLATION (004:T021; FR-456, FR-495). Each session carries `pendingCancellation`,
 // sessions' `pendingCancellationsAmong` over the sessions the list answers at the read's instant,
-// through sessions' entry (R-API-6): sessions decides what is pending.
+// through sessions' entry (R-API-6): sessions decides what is pending. `disputed` (004:T026): the
+// session's status is `disputed`, as sessions' `isDisputed` answers it.
 //
 // A DELETED PARTY (T007, `003:T090`; FR-426). Identity's names leave out a deleted account (the
 // client's extension, its name erased, FR-141), and a live account always has its name (ERD §15
@@ -67,11 +68,12 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import { type PackageRow, subjectSummariesOf } from '../catalog/index.js';
 import { accountTimezone, displayNamesOf } from '../identity/index.js';
 import {
+  type DaySession,
   type EnrollmentSessionRow,
+  isDisputed,
+  pendingCancellationsAmong,
   sessionProgress,
   sessionsOfEnrollments,
-  type DaySession,
-  pendingCancellationsAmong,
   teacherSessionsBetween,
 } from '../sessions/index.js';
 import {
@@ -172,8 +174,8 @@ export interface ListClock {
 const SECONDS = ':00';
 
 /**
- * The session as the lists answer it, `pendingCancellation` from `pending` (004:T021); a disputed
- * one's frozen outcome is left out (R-308).
+ * The session as the lists answer it, `pendingCancellation` from `pending` (004:T021) and `disputed`
+ * from its status (004:T026); a disputed one's frozen outcome is left out (R-308).
  */
 function listedSessionOf(
   session: EnrollmentSessionRow,
@@ -189,6 +191,7 @@ function listedSessionOf(
     endsAt: session.endsAt.toISOString(),
     status: session.status,
     pendingCancellation: pending.has(session.id),
+    disputed: isDisputed(session.status),
   };
 }
 

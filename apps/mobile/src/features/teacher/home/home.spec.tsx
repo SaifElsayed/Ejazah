@@ -71,6 +71,7 @@ function session(
     endsAt: of.endsAt,
     status,
     pendingCancellation: false,
+    disputed: false,
   };
 }
 

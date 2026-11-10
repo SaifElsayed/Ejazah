@@ -45,6 +45,9 @@ export const listedSession = enrollmentSession.extend({
   // 004:T021 (FR-456, FR-495): a cancellation request is pending on the session now, its session
   // still scheduled and not started (specs/004-sessions/contracts/app-surface.md, "Phase 2's lists").
   pendingCancellation: z.boolean(),
+  // 004:T026 (FR-473, FR-495): the session is disputed, its status `disputed`
+  // (specs/004-sessions/contracts/app-surface.md, "Phase 2's lists").
+  disputed: z.boolean(),
 });
 
 /** The package line an enrollment shows, from its snapshot: subject, track, sessions, minutes. */

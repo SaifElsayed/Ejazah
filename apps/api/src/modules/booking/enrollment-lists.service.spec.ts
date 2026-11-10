@@ -15,7 +15,8 @@
 //   - a party absent from identity's names (a deleted account) is answered deleted, with no name
 //     and the deprecated name empty, on every list and detail (T007, FR-426);
 //   - every session carries `pendingCancellation`, sessions' read of its sessions at the read's
-//     instant (004:T021, FR-456, FR-495; contracts/app-surface.md, "Phase 2's lists").
+//     instant (004:T021, FR-456, FR-495; contracts/app-surface.md, "Phase 2's lists");
+//   - every session carries `disputed`, its status `disputed` (004:T026, FR-473, FR-495).
 import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
@@ -95,6 +96,7 @@ const LISTED = {
   endsAt: '2026-11-17T13:00:00.000Z',
   status: 'scheduled',
   pendingCancellation: false,
+  disputed: false,
 };
 
 /** A live party's name as every list answers it (T007, FR-426): both fields, not deleted. */
@@ -551,5 +553,26 @@ describe('pendingCancellation (004:T021)', () => {
     });
     const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
     expect(detail.sessions.every(({ pendingCancellation }) => !pendingCancellation)).toBe(true);
+  });
+});
+
+// 004:T026 (FR-473, FR-495; contracts/app-surface.md, "Phase 2's lists, widened additively"): each
+// session's `disputed`, its status `disputed` (sessions' `isDisputed`), joined at B37's integration.
+describe('disputed (004:T026)', () => {
+  it('marks a disputed session and no other: the next session in a list item, the student’s and the teacher’s details', async () => {
+    const DISPUTED = session(1, '2026-11-10T09:00:00Z', 'disputed');
+    const NEXT = session(2, '2026-11-17T12:00:00Z');
+    const { store } = storeOf({
+      active: [row(E1)],
+      listed: row(E1),
+      sessions: { [E1]: [DISPUTED, NEXT] },
+      names: { [TEACHER]: 'أحمد سالم', [STUDENT]: 'يوسف علي' },
+    });
+    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    expect(item?.next).toEqual(LISTED);
+    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(detail.sessions.map(({ disputed }) => disputed)).toEqual([true, false]);
+    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    expect(taught.sessions.map(({ disputed }) => disputed)).toEqual([true, false]);
   });
 });
