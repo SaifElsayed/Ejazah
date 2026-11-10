@@ -887,6 +887,24 @@
           },
           "$.enrollment.completed": { "required": true, "type": "integer" },
           "$.enrollment.enrollmentId": { "required": true, "type": "string" },
+          "$.enrollment.holds": { "required": true, "type": "array" },
+          "$.enrollment.holds[]": { "type": "object" },
+          "$.enrollment.holds[].expiresAt": { "required": true, "type": "string" },
+          "$.enrollment.holds[].holdId": { "required": true, "type": "string" },
+          "$.enrollment.holds[].placedAt": { "required": true, "type": "string" },
+          "$.enrollment.holds[].releaseReason": {
+            "type": "string",
+            "values": [
+              "account_deleted",
+              "admin",
+              "checkout_abandoned",
+              "converted",
+              "expired",
+              "slot_unavailable",
+              "teacher_suspended"
+            ]
+          },
+          "$.enrollment.holds[].releasedAt": { "type": "string" },
           "$.enrollment.status": {
             "required": true,
             "type": "string",
@@ -1000,6 +1018,343 @@
           },
           "$.items[].student": { "required": true, "type": "object" },
           "$.items[].student.displayName": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "sessions.cancel": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["cancelled_by_admin"] }
+        }
+      },
+      "sessions.monitor.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.cancellationRequests": { "required": true, "type": "array" },
+          "$.cancellationRequests[]": { "type": "object" },
+          "$.cancellationRequests[].createdAt": { "required": true, "type": "string" },
+          "$.cancellationRequests[].reason": { "required": true, "type": "string" },
+          "$.cancellationRequests[].requestId": { "required": true, "type": "string" },
+          "$.cancellationRequests[].requestedBy": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.cancellationRequests[].respondedAt": { "type": "string" },
+          "$.cancellationRequests[].sessionId": { "required": true, "type": "string" },
+          "$.cancellationRequests[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["accepted", "declined", "expired", "pending"]
+          },
+          "$.cases": { "required": true, "type": "array" },
+          "$.cases[]": { "type": "object" },
+          "$.cases[].caseId": { "required": true, "type": "string" },
+          "$.cases[].reason": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "absence_termination",
+              "admin_cancellation",
+              "admin_opened_for_student",
+              "admin_opened_for_teacher",
+              "counter_unanswered",
+              "duplicate_payment",
+              "makeup_refused",
+              "party_restricted",
+              "refund_choice",
+              "slot_unavailable",
+              "student_banned",
+              "student_fault_confirmed",
+              "student_suspended",
+              "teacher_ended"
+            ]
+          },
+          "$.cases[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["dismissed", "open", "resolved"]
+          },
+          "$.enrollment": { "required": true, "type": "object" },
+          "$.enrollment.completed": { "required": true, "type": "integer" },
+          "$.enrollment.enrollmentId": { "required": true, "type": "string" },
+          "$.enrollment.remaining": { "required": true, "type": "integer" },
+          "$.enrollment.repeatedAbsence": { "required": true, "type": "boolean" },
+          "$.enrollment.restorableUntil": { "type": "string" },
+          "$.enrollment.sessionCount": { "required": true, "type": "integer" },
+          "$.enrollment.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.enrollment.student": { "required": true, "type": "object" },
+          "$.enrollment.student.deleted": { "required": true, "type": "boolean" },
+          "$.enrollment.student.displayName": { "required": true, "type": "null|string" },
+          "$.enrollment.student.userId": { "required": true, "type": "string" },
+          "$.enrollment.teacher": { "required": true, "type": "object" },
+          "$.enrollment.teacher.deleted": { "required": true, "type": "boolean" },
+          "$.enrollment.teacher.displayName": { "required": true, "type": "null|string" },
+          "$.enrollment.teacher.userId": { "required": true, "type": "string" },
+          "$.enrollment.teacherNoShows": { "required": true, "type": "integer" },
+          "$.enrollment.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.events": { "required": true, "type": "array" },
+          "$.events[]": { "type": "object" },
+          "$.events[].cancellationReason": {
+            "type": "string",
+            "values": [
+              "account_deleted",
+              "admin",
+              "checkout_abandoned",
+              "gender_correction",
+              "payment_expired",
+              "payment_failed",
+              "slot_unavailable",
+              "teacher_suspended"
+            ]
+          },
+          "$.events[].caseId": { "type": "string" },
+          "$.events[].kind": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancellation_accepted",
+              "cancellation_declined",
+              "cancellation_expired",
+              "cancellation_requested",
+              "cancelled",
+              "cancelled_by_admin",
+              "complaint_decided",
+              "complaint_raised",
+              "completed",
+              "confirmed",
+              "counter_accepted",
+              "counter_booking_refused",
+              "counter_declined",
+              "counter_proposed",
+              "counter_withdrawn",
+              "dispute_raised",
+              "dispute_resolved",
+              "dispute_revised",
+              "instants_reresolved",
+              "makeup_booked",
+              "order_failed",
+              "outage_reclassified",
+              "outcome_corrected",
+              "remedy_frozen",
+              "remedy_handed_to_case",
+              "remedy_lapsed",
+              "remedy_offered",
+              "restored",
+              "review_resolved",
+              "settled",
+              "terminated_no_show"
+            ]
+          },
+          "$.events[].occurredAt": { "required": true, "type": "string" },
+          "$.events[].outcomeAfter": {
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.events[].outcomeBefore": {
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.events[].previousStartAt": { "type": "string" },
+          "$.events[].sessionId": { "type": "string" },
+          "$.events[].source": {
+            "required": true,
+            "type": "string",
+            "values": ["enrollment", "session"]
+          },
+          "$.sessions": { "required": true, "type": "array" },
+          "$.sessions[]": { "type": "object" },
+          "$.sessions[].cancellable": { "required": true, "type": "boolean" },
+          "$.sessions[].correctable": { "required": true, "type": "boolean" },
+          "$.sessions[].endsAt": { "required": true, "type": "string" },
+          "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].makeupFor": { "type": "object" },
+          "$.sessions[].makeupFor.sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].makeupFor.sessionId": { "required": true, "type": "string" },
+          "$.sessions[].outcomeUnderDispute": {
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.sessions[].remedy": { "type": "object" },
+          "$.sessions[].remedy.bookingRetriedUntil": { "type": "string" },
+          "$.sessions[].remedy.caseId": { "type": "string" },
+          "$.sessions[].remedy.choiceClosesAt": { "required": true, "type": "string" },
+          "$.sessions[].remedy.counter": { "type": "object" },
+          "$.sessions[].remedy.counter.answerClosesAt": { "required": true, "type": "string" },
+          "$.sessions[].remedy.counter.localDate": { "required": true, "type": "string" },
+          "$.sessions[].remedy.counter.proposedAt": { "required": true, "type": "string" },
+          "$.sessions[].remedy.counter.startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].remedy.counter.startsAt": { "required": true, "type": "string" },
+          "$.sessions[].remedy.counter.timezone": { "required": true, "type": "string" },
+          "$.sessions[].remedy.decidedAt": { "type": "string" },
+          "$.sessions[].remedy.kind": {
+            "required": true,
+            "type": "string",
+            "values": ["makeup", "refund"]
+          },
+          "$.sessions[].remedy.offeredAt": { "required": true, "type": "string" },
+          "$.sessions[].remedy.proposal": { "type": "object" },
+          "$.sessions[].remedy.proposal.localDate": { "required": true, "type": "string" },
+          "$.sessions[].remedy.proposal.startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].remedy.proposal.startsAt": { "required": true, "type": "string" },
+          "$.sessions[].remedy.proposal.timezone": { "required": true, "type": "string" },
+          "$.sessions[].remedy.remedyId": { "required": true, "type": "string" },
+          "$.sessions[].remedy.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "lapsed",
+              "proposed",
+              "refund_case"
+            ]
+          },
+          "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessions[].sessionId": { "required": true, "type": "string" },
+          "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
+          "$.sessions[].startsAt": { "required": true, "type": "string" },
+          "$.sessions[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.sessions[].timezone": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.monitor.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.from": { "type": "string" },
+          "$.status": {
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.student": { "type": "string" },
+          "$.teacher": { "type": "string" },
+          "$.to": { "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].completed": { "required": true, "type": "integer" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].nextSession": { "type": "object" },
+          "$.items[].nextSession.localDate": { "required": true, "type": "string" },
+          "$.items[].nextSession.sessionId": { "required": true, "type": "string" },
+          "$.items[].nextSession.startTimeLocal": { "required": true, "type": "string" },
+          "$.items[].nextSession.startsAt": { "required": true, "type": "string" },
+          "$.items[].nextSession.timezone": { "required": true, "type": "string" },
+          "$.items[].remaining": { "required": true, "type": "integer" },
+          "$.items[].repeatedAbsence": { "required": true, "type": "boolean" },
+          "$.items[].sessionCount": { "required": true, "type": "integer" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.deleted": { "required": true, "type": "boolean" },
+          "$.items[].student.displayName": { "required": true, "type": "null|string" },
+          "$.items[].student.userId": { "required": true, "type": "string" },
+          "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.deleted": { "required": true, "type": "boolean" },
+          "$.items[].teacher.displayName": { "required": true, "type": "null|string" },
+          "$.items[].teacher.userId": { "required": true, "type": "string" },
+          "$.items[].teacherNoShows": { "required": true, "type": "integer" },
+          "$.items[].track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
           "$.nextCursor": { "type": "string" }
         }
       },
@@ -1751,8 +2106,10 @@
           "$.completed": { "required": true, "type": "integer" },
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.last": { "type": "object" },
+          "$.last.disputed": { "required": true, "type": "boolean" },
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
+          "$.last.pendingCancellation": { "required": true, "type": "boolean" },
           "$.last.sequenceNumber": { "required": true, "type": "integer" },
           "$.last.sessionId": { "required": true, "type": "string" },
           "$.last.startTimeLocal": { "required": true, "type": "string" },
@@ -1775,8 +2132,10 @@
           },
           "$.last.timezone": { "required": true, "type": "string" },
           "$.next": { "type": "object" },
+          "$.next.disputed": { "required": true, "type": "boolean" },
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
+          "$.next.pendingCancellation": { "required": true, "type": "boolean" },
           "$.next.sequenceNumber": { "required": true, "type": "integer" },
           "$.next.sessionId": { "required": true, "type": "string" },
           "$.next.startTimeLocal": { "required": true, "type": "string" },
@@ -1801,8 +2160,10 @@
           "$.remaining": { "required": true, "type": "integer" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
+          "$.sessions[].disputed": { "required": true, "type": "boolean" },
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
           "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
@@ -1874,8 +2235,10 @@
           "$.items[].completed": { "required": true, "type": "integer" },
           "$.items[].enrollmentId": { "required": true, "type": "string" },
           "$.items[].last": { "type": "object" },
+          "$.items[].last.disputed": { "required": true, "type": "boolean" },
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
+          "$.items[].last.pendingCancellation": { "required": true, "type": "boolean" },
           "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].last.sessionId": { "required": true, "type": "string" },
           "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
@@ -1898,8 +2261,10 @@
           },
           "$.items[].last.timezone": { "required": true, "type": "string" },
           "$.items[].next": { "type": "object" },
+          "$.items[].next.disputed": { "required": true, "type": "boolean" },
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
+          "$.items[].next.pendingCancellation": { "required": true, "type": "boolean" },
           "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].next.sessionId": { "required": true, "type": "string" },
           "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
@@ -2023,6 +2388,67 @@
           "$.checkout.processingPollSeconds": { "required": true, "type": "integer" },
           "$.supportEmail": { "required": true, "type": "string" },
           "$.termsVersion": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.cancellation.answer": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.accept": { "required": true, "type": "boolean" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.requestId": { "required": true, "type": "string" },
+          "$.sessionStatus": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.status": { "required": true, "type": "string", "values": ["accepted", "declined"] }
+        }
+      },
+      "sessions.cancellation.request": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.requestId": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["pending"] }
+        }
+      },
+      "sessions.dispute.raise": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["open"] }
         }
       },
       "sessions.get": {
@@ -2550,8 +2976,10 @@
           "$.completed": { "required": true, "type": "integer" },
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.last": { "type": "object" },
+          "$.last.disputed": { "required": true, "type": "boolean" },
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
+          "$.last.pendingCancellation": { "required": true, "type": "boolean" },
           "$.last.sequenceNumber": { "required": true, "type": "integer" },
           "$.last.sessionId": { "required": true, "type": "string" },
           "$.last.startTimeLocal": { "required": true, "type": "string" },
@@ -2574,8 +3002,10 @@
           },
           "$.last.timezone": { "required": true, "type": "string" },
           "$.next": { "type": "object" },
+          "$.next.disputed": { "required": true, "type": "boolean" },
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
+          "$.next.pendingCancellation": { "required": true, "type": "boolean" },
           "$.next.sequenceNumber": { "required": true, "type": "integer" },
           "$.next.sessionId": { "required": true, "type": "string" },
           "$.next.startTimeLocal": { "required": true, "type": "string" },
@@ -2600,8 +3030,10 @@
           "$.remaining": { "required": true, "type": "integer" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
+          "$.sessions[].disputed": { "required": true, "type": "boolean" },
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
           "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
@@ -2673,8 +3105,10 @@
           "$.items[].completed": { "required": true, "type": "integer" },
           "$.items[].enrollmentId": { "required": true, "type": "string" },
           "$.items[].last": { "type": "object" },
+          "$.items[].last.disputed": { "required": true, "type": "boolean" },
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
+          "$.items[].last.pendingCancellation": { "required": true, "type": "boolean" },
           "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].last.sessionId": { "required": true, "type": "string" },
           "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
@@ -2697,8 +3131,10 @@
           },
           "$.items[].last.timezone": { "required": true, "type": "string" },
           "$.items[].next": { "type": "object" },
+          "$.items[].next.disputed": { "required": true, "type": "boolean" },
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
+          "$.items[].next.pendingCancellation": { "required": true, "type": "boolean" },
           "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].next.sessionId": { "required": true, "type": "string" },
           "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
@@ -2765,9 +3201,11 @@
           "$.localDate": { "required": true, "type": "string" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
+          "$.sessions[].disputed": { "required": true, "type": "boolean" },
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].enrollmentId": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
+          "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
           "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
