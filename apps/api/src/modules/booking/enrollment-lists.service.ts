@@ -30,6 +30,11 @@
 // FIELDS (FR-395, R-HONEST-4). The student is named by display name alone; nothing of a date of
 // birth, a minor flag, a document or a dispute is read. The output schemas strip any other field.
 //
+// A PENDING CANCELLATION (004:T021; FR-456, FR-495). Each session carries `pendingCancellation`,
+// sessions' `pendingCancellationsAmong` over the sessions the list answers at the read's instant,
+// through sessions' entry (R-API-6): sessions decides what is pending. `disputed` (004:T026): the
+// session's status is `disputed`, as sessions' `isDisputed` answers it.
+//
 // A DELETED PARTY (T007, `003:T090`; FR-426). Identity's names leave out a deleted account (the
 // client's extension, its name erased, FR-141), and a live account always has its name (ERD §15
 // rule 32), while the enrollment's foreign key keeps the row: a party absent from the names is a
@@ -63,10 +68,12 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import { type PackageRow, subjectSummariesOf } from '../catalog/index.js';
 import { accountTimezone, displayNamesOf } from '../identity/index.js';
 import {
+  type DaySession,
   type EnrollmentSessionRow,
+  isDisputed,
+  pendingCancellationsAmong,
   sessionProgress,
   sessionsOfEnrollments,
-  type DaySession,
   teacherSessionsBetween,
 } from '../sessions/index.js';
 import {
@@ -132,6 +139,12 @@ export interface EnrollmentListsStore {
     typed: string,
   ): Promise<readonly string[]>;
   timezoneOf(tx: Transaction, userId: string): Promise<string | null>;
+  /** 004:T021: of `sessionIds`, those with a cancellation request pending at `at`. */
+  pendingCancellationsOf(
+    tx: Transaction,
+    sessionIds: readonly string[],
+    at: Date,
+  ): Promise<ReadonlySet<string>>;
 }
 
 /** The store over booking's own queries and the owners' entries (R-API-6). */
@@ -148,6 +161,7 @@ export const enrollmentListsStore: EnrollmentListsStore = {
   subjectsOf: subjectSummariesOf,
   namePrefixMatches: idsWithFoldedNamePrefix,
   timezoneOf: accountTimezone,
+  pendingCancellationsOf: pendingCancellationsAmong,
 };
 
 /** The read's instant, and the ended tab's page size read before the transaction. */
@@ -159,8 +173,14 @@ export interface ListClock {
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
 
-/** The session as the lists answer it; a disputed one's frozen outcome is left out (R-308). */
-function listedSessionOf(session: EnrollmentSessionRow): ListedSession {
+/**
+ * The session as the lists answer it, `pendingCancellation` from `pending` (004:T021) and `disputed`
+ * from its status (004:T026); a disputed one's frozen outcome is left out (R-308).
+ */
+function listedSessionOf(
+  session: EnrollmentSessionRow,
+  pending: ReadonlySet<string>,
+): ListedSession {
   return {
     sessionId: session.id,
     sequenceNumber: session.sequenceNumber,
@@ -170,6 +190,8 @@ function listedSessionOf(session: EnrollmentSessionRow): ListedSession {
     startsAt: session.startsAt.toISOString(),
     endsAt: session.endsAt.toISOString(),
     status: session.status,
+    pendingCancellation: pending.has(session.id),
+    disputed: isDisputed(session.status),
   };
 }
 
@@ -207,6 +229,8 @@ interface ItemContext {
   readonly sessions: ReadonlyMap<string, readonly EnrollmentSessionRow[]>;
   readonly names: ReadonlyMap<string, string>;
   readonly subjects: ReadonlyMap<string, SubjectSummary>;
+  /** 004:T021: the sessions with a cancellation request pending at `now`. */
+  readonly pending: ReadonlySet<string>;
   readonly now: Date;
 }
 
@@ -225,7 +249,9 @@ async function contextOf(
     store.namesOf(tx, [...new Set(rows.map(otherParty))]),
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
   ]);
-  return { sessions, names, subjects, now };
+  const sessionIds = [...sessions.values()].flatMap((rows) => rows.map(({ id }) => id));
+  const pending = await store.pendingCancellationsOf(tx, sessionIds, now);
+  return { sessions, names, subjects, pending, now };
 }
 
 function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
@@ -237,8 +263,12 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
     enrollmentId: row.id,
     summary: termsOf(row, context.subjects),
     status: row.status,
-    ...(progress.next === undefined ? {} : { next: listedSessionOf(progress.next) }),
-    ...(progress.last === undefined ? {} : { last: listedSessionOf(progress.last) }),
+    ...(progress.next === undefined
+      ? {}
+      : { next: listedSessionOf(progress.next, context.pending) }),
+    ...(progress.last === undefined
+      ? {}
+      : { last: listedSessionOf(progress.last, context.pending) }),
     upcoming: progress.upcoming,
     completed: progress.completed,
     remaining: progress.remaining,
@@ -325,7 +355,9 @@ export async function studentEnrollmentOf(
   const context = await contextOf(tx, store, [row], ofTeacher, now);
   return {
     ...studentItemOf(row, context),
-    sessions: (context.sessions.get(row.id) ?? []).map(listedSessionOf),
+    sessions: (context.sessions.get(row.id) ?? []).map((one) =>
+      listedSessionOf(one, context.pending),
+    ),
   };
 }
 
@@ -412,7 +444,9 @@ export async function teacherStudentOf(
   const context = await contextOf(tx, store, [row], ofStudent, now);
   return {
     ...teacherItemOf(row, context),
-    sessions: (context.sessions.get(row.id) ?? []).map(listedSessionOf),
+    sessions: (context.sessions.get(row.id) ?? []).map((one) =>
+      listedSessionOf(one, context.pending),
+    ),
   };
 }
 
@@ -436,9 +470,14 @@ export async function teacherTodayOf(
     ...new Set(day.map(({ enrollmentId }) => enrollmentId)),
   ]);
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const [names, subjects] = await Promise.all([
+  const [names, subjects, pending] = await Promise.all([
     store.namesOf(tx, [...new Set(rows.map(ofStudent))]),
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
+    store.pendingCancellationsOf(
+      tx,
+      day.map(({ id }) => id),
+      now,
+    ),
   ]);
   return {
     localDate,
@@ -448,7 +487,7 @@ export async function teacherTodayOf(
       if (row === undefined) return [];
       return [
         {
-          ...listedSessionOf(session),
+          ...listedSessionOf(session, pending),
           enrollmentId: row.id,
           student: partyNameOf(names, row.studentUserId),
           summary: termsOf(row, subjects),

@@ -13,7 +13,10 @@
 //     local date, local start, zone, instants and status, a disputed one `disputed` with no frozen
 //     outcome beside it (R-308);
 //   - a party absent from identity's names (a deleted account) is answered deleted, with no name
-//     and the deprecated name empty, on every list and detail (T007, FR-426).
+//     and the deprecated name empty, on every list and detail (T007, FR-426);
+//   - every session carries `pendingCancellation`, sessions' read of its sessions at the read's
+//     instant (004:T021, FR-456, FR-495; contracts/app-surface.md, "Phase 2's lists");
+//   - every session carries `disputed`, its status `disputed` (004:T026, FR-473, FR-495).
 import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
@@ -92,6 +95,8 @@ const LISTED = {
   startsAt: '2026-11-17T12:00:00.000Z',
   endsAt: '2026-11-17T13:00:00.000Z',
   status: 'scheduled',
+  pendingCancellation: false,
+  disputed: false,
 };
 
 /** A live party's name as every list answers it (T007, FR-426): both fields, not deleted. */
@@ -105,6 +110,8 @@ interface Asked {
   readonly listed: { enrollmentId: string; party: ListParty }[];
   readonly prefix: { candidates: readonly string[]; typed: string }[];
   readonly day: { teacherUserId: string; from: string; to: string }[];
+  /** 004:T021: the sessions and the instant `pendingCancellation` was read for. */
+  readonly pending: { sessionIds: readonly string[]; at: string }[];
 }
 
 function storeOf(
@@ -118,9 +125,11 @@ function storeOf(
     names?: Record<string, string>;
     matches?: readonly string[];
     timezone?: string | null;
+    /** 004:T021: the session ids with a request pending. */
+    pending?: readonly string[];
   } = {},
 ): { store: EnrollmentListsStore; asked: Asked } {
-  const asked: Asked = { ended: [], listed: [], prefix: [], day: [] };
+  const asked: Asked = { ended: [], listed: [], prefix: [], day: [], pending: [] };
   const store: EnrollmentListsStore = {
     activeOfStudent: async () => data.active ?? [],
     activeOfTeacher: async () => data.active ?? [],
@@ -153,6 +162,10 @@ function storeOf(
       return data.matches ?? [];
     },
     timezoneOf: async () => (data.timezone === undefined ? 'Africa/Cairo' : data.timezone),
+    pendingCancellationsOf: async (_tx, sessionIds, at) => {
+      asked.pending.push({ sessionIds, at: at.toISOString() });
+      return new Set(sessionIds.filter((id) => (data.pending ?? []).includes(id)));
+    },
   };
   return { store, asked };
 }
@@ -478,5 +491,88 @@ describe('«اليوم» (FR-391, FR-393)', () => {
     const answer = await teacherTodayOf(tx, store, TEACHER, new Date('2026-11-09T03:00:00Z'));
     expect(answer.localDate).toBe('2026-11-08');
     expect(asked.day[0]).toMatchObject({ from: '2026-11-08T05:00:00.000Z' });
+  });
+});
+
+// 004:T021 (FR-456, FR-495; contracts/app-surface.md, "Phase 2's lists, widened additively"): each
+// session's `pendingCancellation`, read from sessions' entry for the sessions the list answers, at
+// the read's instant; sessions decides what is pending (a stored request, its session scheduled and
+// not started).
+describe('pendingCancellation (004:T021)', () => {
+  const NEXT = session(2, '2026-11-17T12:00:00Z');
+  const LATER = session(3, '2026-11-24T12:00:00Z');
+
+  it('marks the student’s sessions with a request pending, in a list item and in a detail', async () => {
+    const { store, asked } = storeOf({
+      active: [row(E1)],
+      listed: row(E1),
+      sessions: { [E1]: [session(1, '2026-11-10T09:00:00Z', 'done'), NEXT, LATER] },
+      names: { [TEACHER]: 'أحمد سالم' },
+      pending: [NEXT.id],
+    });
+    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    expect(item?.next).toEqual({ ...LISTED, pendingCancellation: true });
+    expect(item?.last?.pendingCancellation).toBe(false);
+    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(detail.sessions.map(({ pendingCancellation }) => pendingCancellation)).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(asked.pending).toEqual([
+      { sessionIds: [sessionIdOf('2026-11-10T09:00:00Z'), NEXT.id, LATER.id], at: NOW.toISOString() },
+      { sessionIds: [sessionIdOf('2026-11-10T09:00:00Z'), NEXT.id, LATER.id], at: NOW.toISOString() },
+    ]);
+  });
+
+  it('marks the teacher’s students’ sessions and the day’s sessions', async () => {
+    const { store } = storeOf({
+      active: [row(E1)],
+      listed: row(E1),
+      sessions: { [E1]: [NEXT, LATER] },
+      day: [{ enrollmentId: E1, ...NEXT }],
+      names: { [STUDENT]: 'يوسف علي' },
+      pending: [NEXT.id],
+    });
+    const [item] = (await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK)).items;
+    expect(item?.next?.pendingCancellation).toBe(true);
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    expect(detail.sessions.map(({ pendingCancellation }) => pendingCancellation)).toEqual([
+      true,
+      false,
+    ]);
+    const today = await teacherTodayOf(tx, store, TEACHER, NOW);
+    expect(today.sessions.map(({ pendingCancellation }) => pendingCancellation)).toEqual([true]);
+  });
+
+  it('answers false on every session when none has a request pending', async () => {
+    const { store } = storeOf({
+      listed: row(E1),
+      sessions: { [E1]: [NEXT, LATER] },
+      names: { [TEACHER]: 'أحمد سالم' },
+    });
+    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(detail.sessions.every(({ pendingCancellation }) => !pendingCancellation)).toBe(true);
+  });
+});
+
+// 004:T026 (FR-473, FR-495; contracts/app-surface.md, "Phase 2's lists, widened additively"): each
+// session's `disputed`, its status `disputed` (sessions' `isDisputed`), joined at B37's integration.
+describe('disputed (004:T026)', () => {
+  it('marks a disputed session and no other: the next session in a list item, the student’s and the teacher’s details', async () => {
+    const DISPUTED = session(1, '2026-11-10T09:00:00Z', 'disputed');
+    const NEXT = session(2, '2026-11-17T12:00:00Z');
+    const { store } = storeOf({
+      active: [row(E1)],
+      listed: row(E1),
+      sessions: { [E1]: [DISPUTED, NEXT] },
+      names: { [TEACHER]: 'أحمد سالم', [STUDENT]: 'يوسف علي' },
+    });
+    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    expect(item?.next).toEqual(LISTED);
+    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    expect(detail.sessions.map(({ disputed }) => disputed)).toEqual([true, false]);
+    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    expect(taught.sessions.map(({ disputed }) => disputed)).toEqual([true, false]);
   });
 });

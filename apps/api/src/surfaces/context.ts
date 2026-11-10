@@ -96,6 +96,12 @@ import type {
   paymentsGetOutput,
   paymentsListInput,
   paymentsListOutput,
+  sessionsCancelInput,
+  sessionsCancelOutput,
+  sessionsMonitorGetInput,
+  sessionsMonitorGetOutput,
+  sessionsMonitorListInput,
+  sessionsMonitorListOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -467,6 +473,36 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       input: z.output<typeof outagesListInput>,
     ): Answer<typeof outagesListOutput>;
+  };
+  /**
+   * An administrator's cancellation of a session not yet settled (FR-460; T023 of
+   * specs/004-sessions), the sessions module's, composed by the admin module: the session
+   * `cancelled_by_admin` on the call's transaction under the enrollment's and the session's locks,
+   * its enrollment's `admin_cancellation` case opened or joined.
+   */
+  readonly sessionCancel: {
+    cancel(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsCancelInput>,
+    ): Answer<typeof sessionsCancelOutput>;
+  };
+  /**
+   * The enrollment and session monitor (FR-479; T024 of specs/004-sessions), the sessions module's,
+   * composed by the admin module: two reads on the call's transaction, nothing written but the
+   * call's audit entry.
+   */
+  readonly monitor: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsMonitorListInput>,
+    ): Answer<typeof sessionsMonitorListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsMonitorGetInput>,
+    ): Answer<typeof sessionsMonitorGetOutput>;
   };
 }
 

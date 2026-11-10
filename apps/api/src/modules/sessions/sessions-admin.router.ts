@@ -8,11 +8,24 @@
 // `sessions.outages.record` audits `provider_outage.recorded` on the window recorded, with the
 // mandatory reason; `sessions.outages.list` audits `provider_outages.listed` on the reader, a list
 // having no single target, as `payments.listed` does.
+//
+// T023 (FR-460, FR-480; SC-413): `sessions.cancel` audits `session.cancelled` on the session, with
+// the mandatory reason. T024 (FR-479, FR-480; R-SEC-6): `sessions.monitor.list` audits
+// `sessions.monitor.listed` on the reader and declares Phase 1's `rate_limit_search`, the
+// administrator as subject, checked before the transaction and failing closed (T062's kind; the
+// owner's decision of 2026-11-06 on the fourth analysis, C2); `sessions.monitor.get` audits
+// `sessions.monitor.viewed` on the enrollment. A refusal rolls the call back, its audit entry with it.
 import {
   outagesListInput,
   outagesListOutput,
   outagesRecordInput,
   outagesRecordOutput,
+  sessionsCancelInput,
+  sessionsCancelOutput,
+  sessionsMonitorGetInput,
+  sessionsMonitorGetOutput,
+  sessionsMonitorListInput,
+  sessionsMonitorListOutput,
 } from '@ijazah/contracts/admin';
 
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
@@ -48,4 +61,52 @@ const outagesRouter = createAdminRouter({
   ),
 });
 
-export const sessionsAdminRouter = createAdminRouter({ outages: outagesRouter });
+const monitorRouter = createAdminRouter({
+  list: adminProcedure({
+    input: sessionsMonitorListInput,
+    output: sessionsMonitorListOutput,
+    rateLimit: { key: 'rate_limit_search', subject: 'caller' },
+  }).query(async ({ ctx, input }) => {
+    const { adminId } = ctx.administrator;
+    const page = await ctx.services.monitor.list(ctx.tx, adminId, input);
+    ctx.audit.record({
+      action: 'sessions.monitor.listed',
+      targetType: 'admin',
+      targetId: adminId,
+    });
+    return page;
+  }),
+
+  get: adminProcedure({ input: sessionsMonitorGetInput, output: sessionsMonitorGetOutput }).query(
+    async ({ ctx, input }) => {
+      const answer = await ctx.services.monitor.get(ctx.tx, ctx.administrator.adminId, input);
+      ctx.audit.record({
+        action: 'sessions.monitor.viewed',
+        targetType: 'enrollment',
+        targetId: input.enrollmentId,
+      });
+      return answer;
+    },
+  ),
+});
+
+export const sessionsAdminRouter = createAdminRouter({
+  outages: outagesRouter,
+  monitor: monitorRouter,
+  cancel: adminProcedure({ input: sessionsCancelInput, output: sessionsCancelOutput }).mutation(
+    async ({ ctx, input }) => {
+      const cancelled = await ctx.services.sessionCancel.cancel(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      ctx.audit.record({
+        action: 'session.cancelled',
+        targetType: 'session',
+        targetId: cancelled.sessionId,
+        reason: input.reason,
+      });
+      return cancelled;
+    },
+  ),
+});

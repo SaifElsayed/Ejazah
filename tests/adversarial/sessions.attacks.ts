@@ -29,7 +29,11 @@ import { randomUUID } from 'node:crypto';
 
 import { expect } from 'vitest';
 
-import type { SessionsGetInput, SessionsJoinInput } from '../../packages/contracts/src/index.js';
+import type {
+  SessionsDisputeRaiseInput,
+  SessionsGetInput,
+  SessionsJoinInput,
+} from '../../packages/contracts/src/index.js';
 import { expectUnauthenticated, neighbourOf, tamperedTokens } from './discovery.attacks.js';
 import { type AppCaller, discoverySurface, type SessionPair } from './discovery-world.js';
 import {
@@ -195,3 +199,123 @@ function attacksOn(procedure: Procedure): ProcedureAttacks {
 }
 
 export const sessionsAttacks: readonly ProcedureAttacks[] = [attacksOn('get'), attacksOn('join')];
+
+// T026 of specs/004-sessions — `sessions.dispute.raise`'s attacks (FR-496, SC-407; FR-473; R-GENDER-2,
+// R-GENDER-4), in the same world, on each pair's `ended` session, which no other registration reads:
+// a session of the other gender's pair, a forged or a guessed id, raised by either party, answers
+// exactly as an id that never existed; the requester's own session is never answered so: raised, or
+// refused DISPUTE_OPEN once raised, or DISPUTE_WINDOW_CLOSED before its end.
+//
+//   directCall            either party raises their own ended session (the second DISPUTE_OPEN);
+//                         a session not yet ended DISPUTE_WINDOW_CLOSED; the other gender's ended
+//                         session by its id, from either party.
+//   forgedId              the other pair's sessions, the enrollment's id and the parties' user ids.
+//   guessedId             random ids, the other ended session's neighbour and its upper-case spelling.
+//   tamperedToken         a tampered bearer token: unauthenticated before any service.
+//   clientSuppliedGender  the input carrying the other gender is ignored; after an administrator's
+//                         correction of the teacher's gender, the student's own session answers as a
+//                         nonexistent one, and again as their own once restored.
+const DISPUTE_HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, FR-473, FR-496, SC-407';
+
+/** One raise of `sessionId`, as the phone sends it, under a fresh key. */
+function raise(caller: AppCaller, sessionId: string, extra: Record<string, unknown> = {}) {
+  return caller.sessions.dispute.raise({
+    sessionId,
+    reason: 'سبب الفحص',
+    idempotencyKey: `attack-${randomUUID()}`,
+    ...extra,
+  } as SessionsDisputeRaiseInput);
+}
+
+/** The session answers the raise as one that never existed. */
+function expectDisputeHidden(caller: AppCaller, sessionId: string): Promise<void> {
+  return expectAnswersAsNonexistent(
+    () => raise(caller, sessionId),
+    () => raise(caller, randomUUID()),
+  );
+}
+
+/** The requester's own session is answered as theirs: raised, or refused as already raised. */
+async function expectOwnDispute(attempt: () => Promise<unknown>): Promise<void> {
+  try {
+    const raised = (await attempt()) as { status?: unknown };
+    expect(raised.status).toBe('open');
+  } catch (error) {
+    const cause: unknown = error instanceof Error ? error.cause : undefined;
+    expect(typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'code') : error).toBe(
+      'DISPUTE_OPEN',
+    );
+  }
+}
+
+const disputeAttacks: ProcedureAttacks = {
+  path: 'sessions.dispute.raise',
+  holds: DISPUTE_HOLDS,
+  attacks: {
+    async directCall(direction) {
+      const { own, theirs } = await pairsFor(direction);
+      await expectOwnDispute(() => raise(own.student.caller, own.sessions.ended));
+      const second = await refusalOf(() => raise(own.teacher.caller, own.sessions.ended));
+      expect(second.code).toBe('DISPUTE_OPEN');
+      const early = await refusalOf(() => raise(own.student.caller, own.sessions.later));
+      expect(early.code).toBe('DISPUTE_WINDOW_CLOSED');
+      for (const party of partiesOf(own)) {
+        await expectDisputeHidden(party.caller, theirs.sessions.ended);
+      }
+    },
+    async forgedId(direction) {
+      const { own, theirs } = await pairsFor(direction);
+      for (const party of partiesOf(own)) {
+        for (const forged of [
+          theirs.sessions.ended,
+          theirs.sessions.past,
+          own.enrollmentId,
+          own.student.userId,
+          own.teacher.userId,
+        ]) {
+          await expectDisputeHidden(party.caller, forged);
+        }
+      }
+    },
+    async guessedId(direction) {
+      const { own, theirs } = await pairsFor(direction);
+      for (const guessed of [
+        randomUUID(),
+        neighbourOf(theirs.sessions.ended),
+        theirs.sessions.ended.toUpperCase(),
+      ]) {
+        await expectDisputeHidden(own.student.caller, guessed);
+      }
+    },
+    async tamperedToken(direction) {
+      const { surface, own, theirs } = await pairsFor(direction);
+      for (const token of tamperedTokens(
+        direction,
+        own.student.accessToken,
+        theirs.student.sessionId,
+      )) {
+        const tampered = await surface.bearing(token);
+        await expectUnauthenticated(() => raise(tampered, own.sessions.ended));
+      }
+    },
+    async clientSuppliedGender(direction) {
+      const { surface, own, theirs } = await pairsFor(direction);
+      const withGender = { gender: direction.other };
+      await expectAnswersAsNonexistent(
+        () => raise(own.student.caller, theirs.sessions.ended, withGender),
+        () => raise(own.student.caller, randomUUID(), withGender),
+      );
+      await expectOwnDispute(() => raise(own.student.caller, own.sessions.ended, withGender));
+      // After an administrator's correction of the teacher's gender (K2): the server's record.
+      await surface.setGender(own.teacher.userId, direction.other);
+      try {
+        await expectDisputeHidden(own.student.caller, own.sessions.ended);
+      } finally {
+        await surface.setGender(own.teacher.userId, direction.requester);
+      }
+      await expectOwnDispute(() => raise(own.student.caller, own.sessions.ended));
+    },
+  },
+};
+
+export const sessionDisputeAttacks: readonly ProcedureAttacks[] = [disputeAttacks];

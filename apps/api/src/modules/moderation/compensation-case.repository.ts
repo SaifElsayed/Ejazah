@@ -110,3 +110,54 @@ export async function caseInstantsOf(
 ): Promise<CaseInstants | null> {
   return (await caseInstantsAmong(tx, [enrollmentId])).get(enrollmentId) ?? null;
 }
+
+/** One compensation case of an enrollment as the sessions monitor shows it (T024 of specs/004-sessions). */
+export interface EnrollmentCase {
+  readonly caseId: string;
+  /** One of `COMPENSATION_REASONS`. */
+  readonly reason: string;
+  readonly status: 'open' | 'resolved' | 'dismissed';
+  /** The opening, the database's instant: the restore window counts from it (R-322). */
+  readonly createdAt: Date;
+}
+
+/**
+ * The enrollment's compensation cases, newest first by their time-ordered id, with no lock (T024 of
+ * specs/004-sessions, FR-479; R-API-6: sessions reads `disputes` through this entry). A complaint
+ * (`absence_complaint`) and a session dispute are not cases and are left out. One statement over
+ * `disputes_enrollment_id_idx`, bounded by one enrollment.
+ */
+export async function compensationCasesOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<EnrollmentCase[]> {
+  const rows = await tx.dispute.findMany({
+    where: { enrollmentId, kind: 'compensation_case' },
+    orderBy: { id: 'desc' },
+    select: { id: true, reason: true, status: true, createdAt: true },
+  });
+  return rows.map(({ id, reason, status, createdAt }) => ({
+    caseId: id,
+    reason,
+    status,
+    createdAt,
+  }));
+}
+
+/**
+ * Of `sessionIds`, those with any session dispute, open, resolved or dismissed, with no lock (T024 of
+ * specs/004-sessions, FR-439: an outcome ever disputed is not corrected, its ruling revised instead).
+ * One statement over `disputes_session_id_idx`, bounded by the ids asked.
+ */
+export async function sessionsEverDisputedAmong(
+  tx: Client,
+  sessionIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (sessionIds.length === 0) return new Set();
+  const rows = await tx.dispute.findMany({
+    where: { sessionId: { in: [...sessionIds] }, kind: 'session_dispute' },
+    distinct: ['sessionId'],
+    select: { sessionId: true },
+  });
+  return new Set(rows.flatMap(({ sessionId }) => (sessionId === null ? [] : [sessionId])));
+}

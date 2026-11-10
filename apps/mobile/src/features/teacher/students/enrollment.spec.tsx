@@ -64,6 +64,8 @@ function wednesday(n: number, timezone = CAIRO): ListedSession {
     startsAt: `${date}T16:00:00.000Z`,
     endsAt: `${date}T16:45:00.000Z`,
     status: 'scheduled',
+    pendingCancellation: false,
+    disputed: false,
   };
 }
 

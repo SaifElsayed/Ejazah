@@ -65,6 +65,7 @@ const DETAIL = {
     status: 'pending_payment',
     completed: 0,
     total: 8,
+    holds: [],
   },
   events: [],
   outcomes: [],

@@ -200,6 +200,14 @@ The owner decided on 2026-11-06 (`plan.md`, «Decisions on the fourth analysis»
 - The kernel's and the phone's transport and protection numbers (the limiter's 60 s settings cache, 100 ms timeout and 10 s breaker, the live channel's 25 s ping, the phone's reconnect backoff; and, since constitution 2.6.1 on the fifth analysis, the live channel's 60 s inactivity restart, its per-stream queue bound, the phone's coalescing of re-reads to one per query key per second and the phone's 60 s after `RATE_LIMITED`, since the sixth analysis the fallback when the refusal gives no time) are named constants under R-MONEY-12 as amended (constitution 2.6.0, its list completed in 2.6.1); the work's own windows and limits stay settings (FR-498).
 - A deleted account's held files are readable by an administrator only inside an open dispute, case or complaint of the enrollment that holds them, through a short signed link per press, each press audit-logged; holding files nobody can read keeps personal data that serves as no evidence (FR-487; SRS FR-AUTH-14; ADR 0015's amendment).
 
+### The decisions of 2026-11-09 and 2026-11-10, the room's end
+
+The owner decided on 2026-11-09, after B36's review found that nothing ends a room at the scheduled end, and on 2026-11-10 on B37's conflict check (Q5):
+
+- A session's room closes by itself when its time ends, 30, 45 or 60 minutes after its start; any grace is an administrator's setting, default 0 (FR-501; SRS FR-SESS-21, §3.14). A disputed session is not left out, and since a dispute can be raised from the scheduled end, before the evaluation, the close does not choose its sessions by the `scheduled` status.
+- At 0 grace the call is cut at the end with no warning, and the phone shows the session as over; the phone needs no change (past the end the room reads as ended, and a join answers `JOIN_CLOSED`).
+- The task, T067, is in B40a, after B37's T026, and its text states its effect on the provider's calls, the rate limits, the sweep's speed and the index.
+
 ## User Scenarios & Testing _(mandatory)_
 
 The people served by this phase are a student and a teacher meeting for their
@@ -519,6 +527,7 @@ a §3.14 setting, named where it is used (R-MONEY-12).
 - **FR-435**: A participant whose connection drops MUST be able to rejoin the same session's room until its scheduled end (FR-SESS-18).
 - **FR-500**: Before a participant shares their whole screen, the app MUST warn them, every time and in both roles, before the operating system's own permission prompt: «إذا شاركت الشاشة كاملة، سيرى الطرف الآخر كل ما يظهر عليها، بما في ذلك الإشعارات. أغلق ما لا تريد مشاركته قبل المتابعة.», with «متابعة» and «إلغاء»; a cancel MUST send nothing to the server and start no share (SRS §3.7.2, added 2026-11-08, the owner's decision on B36's conflict check).
 - **FR-436**: A room MUST admit at most the session's two participants.
+- **FR-501**: A session's video room MUST be ended at the session's scheduled end plus the configured grace (§3.14 "Session room close grace after the scheduled end (minutes)", default 0), whatever the session's status, a disputed session included, by the every-minute job that evaluates sessions (FR-441), so the close can land up to about a minute after; the provider MUST be asked only for a session someone joined whose room has no reported end, and only within a bounded period after the end, so a lost room-ended event never means a call every minute without end; each close MUST write one log line with the session's id and the reason only (SRS FR-SESS-21, added 2026-11-10, the owner's decision of 2026-11-09).
 
 **Attendance evidence and evaluation**
 

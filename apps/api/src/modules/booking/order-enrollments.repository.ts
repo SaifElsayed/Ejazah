@@ -80,3 +80,54 @@ export async function outcomesOf(
   });
   return rows.filter(isOutcome);
 }
+
+/**
+ * One `slot_holds` row of an enrollment as the payments monitor's enrollment summary shows it (T024
+ * of specs/004-sessions; research R-323 GAP-8): when it was placed and when it expires, and its
+ * release with its reason, each null while not recorded (a hold released before `release_reason`
+ * existed keeps NULL, read «not recorded»).
+ */
+export interface EnrollmentHoldRow {
+  readonly id: string;
+  readonly placedAt: Date;
+  readonly expiresAt: Date;
+  readonly releasedAt: Date | null;
+  readonly releaseReason:
+    | 'converted'
+    | 'expired'
+    | 'checkout_abandoned'
+    | 'slot_unavailable'
+    | 'admin'
+    | 'teacher_suspended'
+    | 'account_deleted'
+    | null;
+}
+
+/**
+ * The enrollment's holds (`slot_holds.enrollment_id`), oldest first by their time-ordered id, in one
+ * statement over `slot_holds_enrollment_id_idx`. Bounded by one enrollment: a hold gains its
+ * enrollment at Pay, and each Retry or late payment's new hold is one more.
+ */
+export async function holdsOfEnrollment(
+  tx: Pick<Transaction, 'slotHold'>,
+  enrollmentId: string,
+): Promise<EnrollmentHoldRow[]> {
+  const rows = await tx.slotHold.findMany({
+    where: { enrollmentId },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      createdAt: true,
+      expiresAt: true,
+      releasedAt: true,
+      releaseReason: true,
+    },
+  });
+  return rows.map(({ id, createdAt, expiresAt, releasedAt, releaseReason }) => ({
+    id,
+    placedAt: createdAt,
+    expiresAt,
+    releasedAt,
+    releaseReason,
+  }));
+}

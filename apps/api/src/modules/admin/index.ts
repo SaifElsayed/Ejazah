@@ -23,8 +23,12 @@ import { createPaymentsMonitorService } from '../payments/index.js';
 import {
   createCompletion,
   createOutageServices,
+  createSessionCancel,
+  createSessionsMonitor,
   type EnrollmentSide,
   type OutageServices,
+  type SessionCancel,
+  type SessionsMonitor,
 } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
@@ -98,6 +102,16 @@ export interface AdminServices {
    * recorders' names read from this module's `admin_users` (`AdminNames`, Q6).
    */
   readonly outages: Pick<OutageServices, 'record' | 'list'>;
+  /**
+   * The sessions module's cancellation by an administrator, composed here for the surface (T023 of
+   * specs/004-sessions, FR-460): over the bound `EnrollmentSide`'s lock and the process's logger.
+   */
+  readonly sessionCancel: SessionCancel;
+  /**
+   * The sessions module's enrollment and session monitor, composed here for the surface (T024 of
+   * specs/004-sessions, FR-479): over the bound `EnrollmentSide`'s reads and the settings.
+   */
+  readonly monitor: SessionsMonitor;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -162,6 +176,15 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       // sessions' outage list as its `AdminNames` (T016; the eighth dependency handed in against
       // the arrows, docs/ARCHITECTURE.md): one read for the page's recorders (PR #129's review, nit 4).
       adminNames: readAdministratorNames,
+    }),
+    sessionCancel: createSessionCancel({
+      enrollments: dependencies.enrollmentSide,
+      log: dependencies.log,
+    }),
+    monitor: createSessionsMonitor({
+      enrollments: dependencies.enrollmentSide,
+      settings: dependencies.settings,
+      log: dependencies.log,
     }),
   };
 }

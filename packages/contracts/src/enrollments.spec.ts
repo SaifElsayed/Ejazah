@@ -35,6 +35,8 @@ const session = {
   startsAt: '2026-11-08T15:00:00.000Z',
   endsAt: '2026-11-08T15:45:00.000Z',
   status: 'scheduled',
+  pendingCancellation: false,
+  disputed: false,
 } as const;
 
 const summary = {
@@ -105,6 +107,14 @@ describe('the tabs and the session statuses', () => {
   it('answers a disputed session as `disputed`, with no frozen outcome beside it (004:T020, R-308)', () => {
     const disputed = { ...session, status: 'disputed', outcomeUnderDispute: 'student_no_show' };
     expect(listedSession.parse(disputed)).toEqual({ ...session, status: 'disputed' });
+  });
+
+  it('carries pendingCancellation, required, true while a request is pending (004:T021, FR-456)', () => {
+    const { pendingCancellation: _pending, ...without } = session;
+    expect(listedSession.safeParse(without).success).toBe(false);
+    expect(listedSession.parse({ ...session, pendingCancellation: true }).pendingCancellation).toBe(
+      true,
+    );
   });
 });
 

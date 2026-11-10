@@ -29,6 +29,8 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import { bindJoinToken, type VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import type { CancellationRequestRow } from './cancellation.repository.js';
+import type { DisputeView, SessionDisputeFields } from './dispute-view.js';
 import type { EnrollmentSide, EnrollmentTerms } from './enrollment-side.port.js';
 import type { PartySessionRow } from './sessions.repository.js';
 import {
@@ -89,6 +91,12 @@ let sessions: Map<string, PartySessionRow>;
 let parties: Map<string, PartyStanding>;
 /** Applied once the accounts are locked: what another transaction committed meanwhile. */
 let underLock: (() => void) | undefined;
+/** T021: each session's latest cancellation request, as `sessions.get` reads it. */
+let cancellations: Map<string, CancellationRequestRow>;
+/** T026: each viewer's dispute fields, as the dispute view answers them; none disputable by default. */
+let disputeFields: Map<string, SessionDisputeFields>;
+/** T026: what the dispute view was asked, in order. */
+let disputeAsked: unknown[][];
 /** The provider's address this spec's port answers with every token. */
 const SERVER_URL = 'wss://video.spec.invalid';
 
@@ -138,6 +146,8 @@ let video: RecordingVideo;
 let lines: Record<string, unknown>[];
 let log: Logger;
 let now: Date;
+/** The database's clock as `get` reads it on its transaction (`clockTimestamp` in production). */
+let databaseNow: Date;
 let services: SessionsServices;
 
 const tx = {} as Transaction;
@@ -177,6 +187,10 @@ const store: SessionsStore = {
       }),
     );
   },
+  latestCancellationOf: async (_tx, sessionId) => {
+    trace.push(`read cancellation of ${sessionId}`);
+    return cancellations.get(sessionId) ?? null;
+  },
 };
 
 const terms: EnrollmentTerms = {
@@ -187,6 +201,17 @@ const terms: EnrollmentTerms = {
   timezone: 'Africa/Cairo',
   durationMinutes: 45,
   sessionCount: 8,
+};
+
+/** T026: the dispute view (`dispute-view.ts`) as this spec fakes it; what it reads is its own spec's. */
+const disputeView: DisputeView = {
+  ofSessions: async (_tx, asked, viewerUserId) => {
+    trace.push(`read disputes of ${asked.map(({ id }) => id).join(',')} for ${viewerUserId}`);
+    disputeAsked.push([asked, viewerUserId]);
+    return new Map(
+      asked.map(({ id }) => [id, disputeFields.get(viewerUserId) ?? { canRaiseDispute: false }]),
+    );
+  },
 };
 
 const enrollmentSide = {
@@ -202,6 +227,9 @@ beforeEach(() => {
     [STRANGER, active('female', 'زينب حسن')],
   ]);
   underLock = undefined;
+  cancellations = new Map();
+  disputeFields = new Map();
+  disputeAsked = [];
   video = new RecordingVideo();
   lines = [];
   log = createLogger({
@@ -214,13 +242,20 @@ beforeEach(() => {
     }),
   });
   now = new Date('2026-11-08T14:50:00.000Z');
+  databaseNow = now;
   services = createSessionsServices({
     transactions,
     settings,
     video,
     enrollmentSide,
     store,
+    // T021 and T026: no cancellation is requested and no dispute is raised here.
+    idempotency: {
+      run: () => Promise.reject(new Error('no cancellation or dispute is keyed here')),
+    },
+    disputeView,
     now: () => now,
+    clock: async () => databaseNow,
   });
 });
 
@@ -255,6 +290,7 @@ const studentSees: SessionsGetOutput = {
   status: 'scheduled',
   counterparty: { displayName: 'المعلمة سارة', deleted: false },
   join: { opensAt: OPENS.toISOString(), closesAt: ENDS.toISOString() },
+  canRaiseDispute: false,
 };
 
 describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
@@ -319,9 +355,85 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
       'begin',
       `read session as ${STUDENT}`,
       `read parties ${STUDENT},${TEACHER}`,
+      `read cancellation of ${SESSION}`,
+      `read disputes of ${SESSION} for ${STUDENT}`,
       'commit',
     ]);
   });
+});
+
+// T021: `cancellation`, the session's latest request as each party reads it (FR-456, FR-458,
+// FR-495; app-surface.md, `sessions.get`). A stored `pending` reads as `expired` from the start
+// and once the session is no longer `scheduled` (the owner's decision of 2026-11-06 on PR #126's
+// review, follow-up 3), its expiry the session's start; the reason is shown to both parties.
+describe('sessions.get: the cancellation request (T021)', () => {
+  const REQUEST = '0199d0a0-0000-7000-8000-00000000d001';
+  const pending = (overrides: Partial<CancellationRequestRow> = {}): CancellationRequestRow => ({
+    id: REQUEST,
+    sessionId: SESSION,
+    requestedByUserId: STUDENT,
+    reason: 'سفر طارئ',
+    status: 'pending',
+    ...overrides,
+  });
+  const statusSeenBy = async (userId: string) =>
+    (await services.get({ userId }, { sessionId: SESSION }, log)).cancellation?.status;
+
+  it('answers no cancellation on a session with no request', async () => {
+    const seen = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect('cancellation' in seen).toBe(false);
+  });
+
+  it('answers the pending request to its requester and to the counterparty, expiring at the start', async () => {
+    cancellations.set(SESSION, pending());
+    const shown = {
+      requestId: REQUEST,
+      reason: 'سفر طارئ',
+      status: 'pending',
+      expiresAt: STARTS.toISOString(),
+    };
+    const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(byStudent.cancellation).toEqual({ ...shown, requestedByMe: true });
+    expect(byTeacher.cancellation).toEqual({ ...shown, requestedByMe: false });
+  });
+
+  it('reads a pending request as pending one millisecond before the start, and expired at it (FR-458)', async () => {
+    cancellations.set(SESSION, pending());
+    databaseNow = new Date('2026-11-08T14:59:59.999Z');
+    expect(await statusSeenBy(TEACHER)).toBe('pending');
+    databaseNow = STARTS;
+    expect(await statusSeenBy(TEACHER)).toBe('expired');
+  });
+
+  // PR #131's review, round 1, nit 2: the answer reads the request at the database's clock, as the
+  // dispute fields beside it and every decision path read it, never the process's.
+  it('reads the request at the database clock: expired at the start though the process clock is before it', async () => {
+    cancellations.set(SESSION, pending());
+    now = new Date('2026-11-08T14:59:59.999Z');
+    databaseNow = STARTS;
+    expect(await statusSeenBy(TEACHER)).toBe('expired');
+    now = STARTS;
+    databaseNow = new Date('2026-11-08T14:59:59.999Z');
+    expect(await statusSeenBy(TEACHER)).toBe('pending');
+  });
+
+  it.each(['cancelled_by_admin', 'done'] as const)(
+    'reads a pending request on a session %s as over: expired',
+    async (status) => {
+      sessions.set(SESSION, row({ status }));
+      cancellations.set(SESSION, pending());
+      expect(await statusSeenBy(TEACHER)).toBe('expired');
+    },
+  );
+
+  it.each(['accepted', 'declined', 'expired'] as const)(
+    'answers a request %s as stored',
+    async (status) => {
+      cancellations.set(SESSION, pending({ status }));
+      expect(await statusSeenBy(STUDENT)).toBe(status);
+    },
+  );
 });
 
 describe('sessions.join: admitted (FR-431, FR-435, R-GENDER-7)', () => {
@@ -521,5 +633,49 @@ describe('sessions.join: refused, with no video call (FR-431, FR-432, FR-482, R-
     now = ENDS;
     await refused(STUDENT);
     expect(trace.at(-1)).toBe('rollback');
+  });
+});
+
+// T026: `dispute`, `canRaiseDispute` and `disputeClosesAt` (FR-473, FR-495; app-surface.md,
+// `sessions.get`), read for the caller through the dispute view in the read's own transaction, after
+// the cancellation; what the view decides (the window, the latest dispute, a cancelled session's
+// none) is `dispute-view.spec.ts`'.
+describe('sessions.get: the dispute (T026)', () => {
+  const CLOSES = '2026-11-11T15:45:00.000Z';
+
+  it('asks the view for the session as stored and the caller, and answers each party its own fields', async () => {
+    sessions.set(SESSION, row({ status: 'disputed' }));
+    disputeFields.set(STUDENT, {
+      dispute: { status: 'open', raisedByMe: true, closesAt: CLOSES },
+      canRaiseDispute: false,
+      disputeClosesAt: CLOSES,
+    });
+    disputeFields.set(TEACHER, {
+      dispute: { status: 'open', raisedByMe: false, closesAt: CLOSES },
+      canRaiseDispute: false,
+      disputeClosesAt: CLOSES,
+    });
+    const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(byStudent).toEqual({ ...studentSees, status: 'disputed', ...disputeFields.get(STUDENT) });
+    expect(byTeacher.dispute).toEqual({ status: 'open', raisedByMe: false, closesAt: CLOSES });
+    expect(disputeAsked).toEqual([
+      [[{ id: SESSION, status: 'disputed', endsAt: ENDS }], STUDENT],
+      [[{ id: SESSION, status: 'disputed', endsAt: ENDS }], TEACHER],
+    ]);
+  });
+
+  it('answers a session the caller may dispute now with its window, and no dispute', async () => {
+    sessions.set(SESSION, row({ status: 'done' }));
+    disputeFields.set(STUDENT, { canRaiseDispute: true, disputeClosesAt: CLOSES });
+    const seen = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(seen.canRaiseDispute).toBe(true);
+    expect(seen.disputeClosesAt).toBe(CLOSES);
+    expect('dispute' in seen).toBe(false);
+  });
+
+  it('asks nothing of the view for a session refused NOT_FOUND', async () => {
+    await refusalOf(services.get({ userId: STRANGER }, { sessionId: SESSION }, log));
+    expect(disputeAsked).toEqual([]);
   });
 });

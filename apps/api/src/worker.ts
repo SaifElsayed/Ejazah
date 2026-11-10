@@ -56,6 +56,7 @@ const [
   { jobRunsOver },
   sessions,
   { evaluateSessions },
+  { expireCancellationRequests },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -89,6 +90,7 @@ const [
   import('./platform/idempotency/job-runs.repository.js'),
   import('./modules/sessions/index.js'),
   import('./jobs/evaluate-sessions.js'),
+  import('./jobs/expire-cancellation-requests.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -216,6 +218,9 @@ const jobs: readonly Job[] = [
     video: ports.video,
     log,
   }),
+  // The cancellation requests' expiry (T022 of specs/004-sessions, FR-458), every minute: a request
+  // still pending at its session's start written expired under its enrollment's lock.
+  expireCancellationRequests({ database, enrollments: enrollmentSide, log }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);

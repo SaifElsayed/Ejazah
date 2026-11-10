@@ -89,6 +89,17 @@ export {
 } from './repeated-absence.service.js';
 export type { EnrollmentNoShowCount } from './repeated-absence.repository.js';
 /**
+ * T025 (FR-459; SRS FR-CANCEL-5): the cancellation requests a user made, in total and within
+ * `cancellation_requests_recent_days`, counted from sessions' own table when read and never stored
+ * (R-DB-4), for the user directory's `users.get` (T058). No lock, no write.
+ */
+export {
+  CANCELLATION_REQUESTS_RECENT_DAYS_SETTING,
+  type CancellationRequestCounts,
+  type CancellationRequestCountsReader,
+  createCancellationRequestCounts,
+} from './cancellation-request-counts.service.js';
+/**
  * T015 (FR-449, R-309): an enrollment's completion, checked on the settling transaction by every
  * path that settles (T014, T016, T033, T034) and again by `advance-remedies` (T028), after the
  * enrollment's lock the caller holds; bound by the composition root over `EnrollmentSide`.
@@ -115,6 +126,36 @@ export {
   outageStore,
 } from './outages.service.js';
 export { sessionsAdminRouter } from './sessions-admin.router.js';
+/**
+ * T023 (FR-460, FR-485; kernel.md, the row «an administrator's `sessions.cancel`»): an
+ * administrator's cancellation of a `scheduled` session on the call's transaction, under the
+ * enrollment's and the session's locks, its `admin_cancellation` case opened or joined and one
+ * `cancelled_by_admin` event naming it; composed by the admin module for `sessions.cancel`.
+ */
+export {
+  createSessionCancel,
+  type SessionCancel,
+  type SessionCancelInput,
+  type SessionCancelled,
+  type SessionCancelStore,
+  sessionCancelStore,
+} from './session-cancel.service.js';
+/**
+ * T024 (FR-479, FR-451, FR-439, FR-454; R-323 GAP-1, GAP-4): the enrollment and session monitor,
+ * `sessions.monitor.list` and `.get`, read on the call's transaction, composed by the admin module;
+ * and the derived values other tasks read through the same one function: a counter-proposal's
+ * `answerClosesAt` (D1; T031, T032), a refused booking's `bookingRetriedUntil`, an outcome's
+ * `correctable` (T059) and the restore window's end (T061).
+ */
+export {
+  createSessionsMonitor,
+  type SessionsMonitor,
+  type SessionsMonitorStore,
+  sessionsMonitorStore,
+} from './sessions-monitor.service.js';
+export { answerClosesAt, bookingRetriedUntil } from './remedy-deadlines.js';
+export { isCorrectable } from './outcome-correction.js';
+export { ENROLLMENT_RESTORE_WINDOW_SETTING, restorableUntil } from './restore-window.js';
 /**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
@@ -207,6 +248,21 @@ export {
  * `EnrollmentSide`, with the store over this module's reads and identity's accounts.
  */
 export { sessionsRouter } from './sessions.router.js';
+/**
+ * T026 (FR-473, FR-474, FR-495; R-308): `sessions.dispute.raise` is `SessionsServices.raiseDispute`
+ * (its store narrowable by the race probe); and the dispute fields of `sessions.get` and the lists,
+ * which the integration joins after T021's: `createDisputeView({ settings }).ofSessions(tx, sessions,
+ * viewerUserId)` for `dispute`, `canRaiseDispute` and `disputeClosesAt`, and `isDisputed(status)`
+ * for the lists' `disputed`.
+ */
+export { type DisputeRaiseStore, disputeRaiseStore } from './dispute-raise.service.js';
+export {
+  createDisputeView,
+  disputeFieldsOf,
+  type DisputeView,
+  isDisputed,
+  type SessionDisputeFields,
+} from './dispute-view.js';
 export {
   createSessionsServices,
   type PartyStanding,
@@ -215,3 +271,30 @@ export {
   type SessionsStore,
   sessionsStore,
 } from './sessions.service.js';
+
+/**
+ * T021 of specs/004-sessions (FR-456 to FR-458; research R-310): cancellation requests.
+ * `sessions.cancellation.request` and `.answer` reach the surface through `createSessionsServices`
+ * (`services.sessions.cancellation`); `cancellationStore` is their store over sessions' tables, the
+ * kernel's locks and identity's accounts, which a probe may narrow. `pendingCancellationsAmong` is
+ * the lists' read (`pendingCancellation`): of some sessions, those with a request pending now.
+ */
+export {
+  type CancellationServices,
+  type CancellationStore,
+  cancellationStore,
+} from './cancellation.service.js';
+export { pendingCancellationsAmong } from './cancellation.repository.js';
+/**
+ * T022 of specs/004-sessions (FR-458, SC-411): what the `expire-cancellation-requests` sweep runs,
+ * each pending request whose session has started expired on its own transaction under
+ * contracts/kernel.md's row, and its store over sessions' tables, which a spec narrows to its rows.
+ */
+export {
+  type CancellationExpiry,
+  type CancellationExpiryStore,
+  cancellationExpiryStore,
+  createCancellationExpiry,
+  type DueRequest,
+  type ExpiryRun,
+} from './cancellation-expiry.service.js';

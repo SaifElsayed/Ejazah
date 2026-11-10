@@ -5,14 +5,16 @@
 // is not listed here fails it. T032 adds `booking.slots` as its router lands; T043 the checkout and
 // enrollments procedures. T036 adds `checkout.hold` and `checkout.retry` as their router lands, and
 // T049 `enrollments.list` and `enrollments.get`; T011 of specs/004-sessions `sessions.get` and
-// `sessions.join`; T063 `live.events`.
+// `sessions.join`; T063 `live.events`; T021 `sessions.cancellation.request` and `.answer`; T026
+// `sessions.dispute.raise`.
 import { bookingAttacks } from './booking.attacks.js';
 import { checkoutAttacks } from './checkout.attacks.js';
 import { discoveryAttacks } from './discovery.attacks.js';
 import { enrollmentsAttacks } from './enrollments.attacks.js';
 import { liveAttacks } from './live.attacks.js';
 import type { ProcedureAttacks } from './procedure-harness.js';
-import { sessionsAttacks } from './sessions.attacks.js';
+import { sessionDisputeAttacks, sessionsAttacks } from './sessions.attacks.js';
+import { sessionsCancellationAttacks } from './sessions-cancellation.attacks.js';
 
 export const registeredAttacks: readonly ProcedureAttacks[] = [
   ...discoveryAttacks,
@@ -20,5 +22,7 @@ export const registeredAttacks: readonly ProcedureAttacks[] = [
   ...checkoutAttacks,
   ...enrollmentsAttacks,
   ...sessionsAttacks,
+  ...sessionsCancellationAttacks,
+  ...sessionDisputeAttacks,
   ...liveAttacks,
 ];

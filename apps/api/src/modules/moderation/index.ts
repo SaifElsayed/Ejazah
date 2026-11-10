@@ -37,3 +37,27 @@ export { enrollmentsWithOpenMatterAmong } from './open-matters.repository.js';
  * sessions' completion asks whether a `student_suspended` case is open, under the enrollment's lock.
  */
 export { openCaseOf } from './compensation-case.repository.js';
+
+/**
+ * T026 of specs/004-sessions (FR-473, FR-474, R-308): a participant's dispute of a session, opened on
+ * the caller's transaction after the raiser's, the enrollment's and the session's locks, at most one
+ * open per session by rule 46 (null when one is); and each session's latest session dispute, for
+ * the parties' screens (`sessions.get`'s `dispute`), with no lock.
+ */
+export { openSessionDispute } from './session-dispute.service.js';
+export {
+  latestSessionDisputesOf,
+  type NewSessionDispute,
+  type SessionDisputeState,
+} from './session-dispute.repository.js';
+
+/**
+ * T024 of specs/004-sessions (FR-479, FR-439, FR-454): the sessions monitor's two reads of
+ * `disputes`, with no lock: an enrollment's compensation cases, newest first, with their openings
+ * (the restore window counts from one), and of some sessions those ever disputed.
+ */
+export {
+  compensationCasesOf,
+  type EnrollmentCase,
+  sessionsEverDisputedAmong,
+} from './compensation-case.repository.js';

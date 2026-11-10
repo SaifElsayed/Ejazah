@@ -91,6 +91,8 @@ const item = {
     startsAt: '2026-11-12T07:00:00.000Z',
     endsAt: '2026-11-12T08:00:00.000Z',
     status: 'scheduled' as const,
+    pendingCancellation: false,
+    disputed: false,
   },
   upcoming: 4,
   completed: 0,

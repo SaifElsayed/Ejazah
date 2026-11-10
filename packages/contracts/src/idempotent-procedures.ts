@@ -20,6 +20,10 @@ export const idempotentProcedures = [
   'checkout.hold',
   'checkout.pay',
   'checkout.retry',
+  // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.cancellation`"; T021).
+  'sessions.cancellation.request',
+  // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.dispute`"; T026).
+  'sessions.dispute.raise',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

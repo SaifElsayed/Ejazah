@@ -16,13 +16,16 @@
 // status and progress through booking's entry, the order's signed events, the enrollment's
 // outcomes that concern this order (its own confirmation or failure, and any cancellation), and
 // every paid order of the enrollment: a compensation case covers each of them and records none, so
-// the monitor lists them all (the note under T052, the owner's decision of 2026-11-03).
+// the monitor lists them all (the note under T052, the owner's decision of 2026-11-03). The
+// enrollment's holds, oldest first, each with its release and its reason where recorded, through
+// booking's `monitoredEnrollmentOf` (T024 of specs/004-sessions; research R-323 GAP-8).
 //
 // AMOUNTS. `gross_piasters` always; `gatewayFee_piasters` and `net_piasters` only once the gateway
 // reported them (FR-PAYG-7): a gateway that reports neither on its paid event leaves both absent.
 // Each leaves the database's integer as `Piasters` (R-MONEY-1) and is never computed from another
 // (R-MONEY-5).
 import type {
+  PaymentEnrollmentHold,
   PaymentsGetOutput,
   PaymentsListInput,
   PaymentsListItem,
@@ -228,6 +231,7 @@ export class PaymentsMonitorService {
                 : { cancellationReason: enrollment.cancellationReason }),
               completed: enrollment.completed,
               total: enrollment.total,
+              holds: enrollment.holds.map(holdOf),
             },
           }),
       events: events.map(({ eventType, receivedAt }) => ({
@@ -251,6 +255,17 @@ export class PaymentsMonitorService {
       })),
     };
   }
+}
+
+/** A hold as the enrollment summary shows it: a release and its reason only where recorded. */
+function holdOf(hold: MonitoredEnrollment['holds'][number]): PaymentEnrollmentHold {
+  return {
+    holdId: hold.id,
+    placedAt: hold.placedAt.toISOString(),
+    expiresAt: hold.expiresAt.toISOString(),
+    ...(hold.releasedAt === null ? {} : { releasedAt: hold.releasedAt.toISOString() }),
+    ...(hold.releaseReason === null ? {} : { releaseReason: hold.releaseReason }),
+  };
 }
 
 function partyOf(

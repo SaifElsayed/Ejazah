@@ -14,7 +14,14 @@
 // (FR-424; sessions reads no booking table), the join period, and the counterparty's display name
 // and nothing else of them (R-HONEST-4): no date of birth, minor flag, document or dispute history is
 // read. `cancellation`, `remedy`, `dispute`, `canRaiseDispute` and `disputeClosesAt` are T021's,
-// T028's and T026's.
+// T028's and T026's. T021: `cancellation` is the session's latest request, read on the same
+// transaction, a stored `pending` answered `expired` from the start and once the session is no
+// longer `scheduled` (`cancellation.service.ts`, `cancellationViewOf`). T026 (joined at B37's
+// integration, after T021's): `dispute`, `canRaiseDispute` and `disputeClosesAt` for the caller, read
+// on the same transaction through the dispute view (`dispute-view.ts`), with no lock.
+//
+// T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
+// so the surface reaches them as `services.sessions.cancellation`.
 //
 // THE JOIN (FR-431, FR-432, FR-482, R-SESS-5; kernel.md, the `sessions.join` row: `users` (both, one
 // call) only, no `sessions` row locked and none written). The session is read once to learn its
@@ -26,7 +33,8 @@
 // longer `scheduled` `SESSION_NOT_SCHEDULED`; before `startsAt − early_join_lead_minutes`
 // `JOIN_NOT_OPEN` with `opensAt`; from `endsAt` `JOIN_CLOSED`. Each refusal throws inside the
 // transaction, which rolls back, and writes one info line with the session's and the caller's ids,
-// the code and the reason, nothing else. The transaction writes nothing: no attendance, no
+// the code and the reason, nothing else, its error marked «logged» (`markRefusalLogged`) so the
+// handler's one-place refusal log writes no second line (PR #130's review, Minor 4). The transaction writes nothing: no attendance, no
 // `provider_room_id` (the room is named for the session's id; M1).
 //
 // After the commit, never holding a lock across a provider call: `createRoom` with the timeouts the
@@ -43,6 +51,7 @@ import type {
 import { addMinutes } from '@ijazah/time';
 import { z } from 'zod';
 
+import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import {
@@ -50,10 +59,21 @@ import {
   type ErrorCode,
   type FieldIssue,
 } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { sessionPartiesOf } from '../identity/index.js';
+import { type CancellationRequestRow, latestRequestOf } from './cancellation.repository.js';
+import {
+  type CancellationServices,
+  type CancellationStore,
+  cancellationViewOf,
+  createCancellationServices,
+} from './cancellation.service.js';
+import { createDisputeRaise, type DisputeRaise, type DisputeRaiseStore } from './dispute-raise.service.js';
+import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
@@ -94,6 +114,8 @@ export interface SessionsStore {
     tx: Transaction,
     userIds: readonly string[],
   ): Promise<ReadonlyMap<string, PartyStanding>>;
+  /** T021: the session's latest cancellation request, whatever its status, else null; no lock. */
+  latestCancellationOf(tx: Transaction, sessionId: string): Promise<CancellationRequestRow | null>;
 }
 
 /** The store over this module's reads and lock and identity's accounts (R-API-6), as `main.ts` binds it. */
@@ -101,6 +123,7 @@ export const sessionsStore: SessionsStore = {
   sessionOfParty,
   lockAccounts: lockSessionParties,
   partiesOf: sessionPartiesOf,
+  latestCancellationOf: latestRequestOf,
 };
 
 /** The person asking, from the server-held session. */
@@ -109,9 +132,11 @@ export interface SessionsCaller {
 }
 
 /** `sessions.get` and `sessions.join`, each one transaction on the process's client. */
-export interface SessionsServices {
+export interface SessionsServices extends DisputeRaise {
   get(caller: SessionsCaller, input: SessionsGetInput, log: Logger): Promise<SessionsGetOutput>;
   join(caller: SessionsCaller, input: SessionsJoinInput, log: Logger): Promise<SessionsJoinOutput>;
+  /** T021: `sessions.cancellation.request` and `.answer`. */
+  readonly cancellation: CancellationServices;
 }
 
 export interface SessionsDependencies {
@@ -120,7 +145,20 @@ export interface SessionsDependencies {
   readonly video: VideoPort;
   readonly enrollmentSide: EnrollmentSide;
   readonly store: SessionsStore;
+  /**
+   * The kernel's idempotency, which keys `sessions.cancellation.request` (T021) and runs
+   * `sessions.dispute.raise` in its transaction (T026).
+   */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /** T021: the cancellation's store; the module's unless a spec fakes it. */
+  readonly cancellationStore?: CancellationStore;
+  /** T026: the raise's store; `disputeRaiseStore` unless a spec narrows it. */
+  readonly disputeStore?: DisputeRaiseStore;
+  /** T026: `sessions.get`'s dispute fields; `createDisputeView({ settings })` unless a spec fakes it. */
+  readonly disputeView?: DisputeView;
   readonly now?: () => Date;
+  /** `sessions.get`'s `cancellation` read at the database's clock (`clockTimestamp`), as decided. */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
 }
 
 /** Why a read or a join was refused, as its one log line names it. */
@@ -136,7 +174,10 @@ type RefusalReason =
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
 
-/** Logs the refusal with ids and its reason only, and answers the error to throw. */
+/**
+ * Logs the refusal with ids and its reason only, and answers the error to throw, marked as logged so
+ * the handler's one-place refusal log writes no second line (PR #130's review, Minor 4).
+ */
 function refusal(
   log: Logger,
   ids: { readonly sessionId: string; readonly userId: string },
@@ -146,7 +187,7 @@ function refusal(
   details?: { readonly details?: readonly FieldIssue[]; readonly cause?: unknown },
 ): DomainError {
   log.info({ ...ids, errorCode, reason }, 'A session read or join was refused');
-  return new DomainError(errorCode, undefined, details);
+  return markRefusalLogged(new DomainError(errorCode, undefined, details));
 }
 
 /** The session and its two parties as the server's records hold them, or the refusal. */
@@ -184,13 +225,26 @@ export function createSessionsServices({
   video,
   enrollmentSide,
   store,
+  idempotency,
+  cancellationStore,
+  disputeStore,
+  disputeView = createDisputeView({ settings }),
   now = () => new Date(),
+  clock = clockTimestamp,
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
     new Date(addMinutes(session.startsAt, -lead));
+  // T026: `sessions.dispute.raise` (`dispute-raise.service.ts`).
+  const { raiseDispute } = createDisputeRaise({
+    idempotency,
+    settings,
+    enrollments: enrollmentSide,
+    ...(disputeStore === undefined ? {} : { store: disputeStore }),
+  });
 
   return {
+    raiseDispute,
     get: async ({ userId }, { sessionId }, log) => {
       const lead = await leadMinutes();
       return transactions.run(async (tx) => {
@@ -202,6 +256,9 @@ export function createSessionsServices({
         const terms = await enrollmentSide.enrollmentFor(tx, session.enrollmentId);
         // `sessions.enrollment_id` is a foreign key to the enrollment (ERD `sessions`).
         if (terms === null) throw new Error('sessions: a session without its enrollment');
+        const request = await store.latestCancellationOf(tx, session.id);
+        const { id, status, endsAt } = session;
+        const disputes = await disputeView.ofSessions(tx, [{ id, status, endsAt }], userId);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -224,9 +281,20 @@ export function createSessionsServices({
             opensAt: opensAtOf(session, lead).toISOString(),
             closesAt: session.endsAt.toISOString(),
           },
+          ...(request === null
+            ? {}
+            : { cancellation: cancellationViewOf(request, session, userId, await clock(tx)) }),
+          ...disputes.get(session.id),
         };
       });
     },
+
+    cancellation: createCancellationServices({
+      transactions,
+      idempotency,
+      enrollments: enrollmentSide,
+      ...(cancellationStore === undefined ? {} : { store: cancellationStore }),
+    }),
 
     join: async ({ userId }, { sessionId }, log) => {
       const lead = await leadMinutes();

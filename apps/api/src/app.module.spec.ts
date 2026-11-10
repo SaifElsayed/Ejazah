@@ -486,3 +486,160 @@ describe('every expected refusal is logged once, in one place (T062, the B34 fol
     expect(written).not.toContain('201001234567');
   });
 });
+
+// PR #130's review, round 1, Minor 4 (the follow-ups under T062 in specs/004-sessions/tasks.md; the
+// owner's decision of 2026-11-10, Q6): a refusal a module logs itself, with its reason, carries the
+// mark «logged» (`markRefusalLogged`, `platform/errors/logged-refusal.ts`), the input guard's mark
+// widened, so `onError` writes no second line for the one call. Through the whole handler, with the
+// real routers and services over stores that refuse: a refused `sessions.get`, `sessions.join` and
+// outage record each write exactly one refusal line, the module's; an unmarked refusal still gets
+// `onError`'s (the describe above).
+describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => {
+  const STUDENT_ID = '0199d0a0-0000-7000-8000-0000000000c1';
+  const ADMIN_ID = '0199d0a0-0000-7000-8000-0000000000c2';
+  const SESSION_ID = '0199d0a0-0000-7000-8000-0000000000c3';
+  const REFUSAL_MESSAGES = new Set([
+    'A procedure call was refused',
+    'A session read or join was refused',
+    'Outage window refused',
+  ]);
+  const lines: string[] = [];
+  let refusing: INestApplication;
+  let refusingOrigin: string;
+
+  beforeAll(async () => {
+    const { sessionsRouter, sessionsAdminRouter, createSessionsServices, createOutageServices } =
+      await import('./modules/sessions/index.js');
+    const log = createLogger({ level: 'info', destination: { write: (line) => lines.push(line) } });
+    const sessionsServices = createSessionsServices({
+      transactions: { run: (work) => work({} as never) },
+      settings: { read: async (_key, schema) => schema.parse(15) },
+      video: {} as never,
+      enrollmentSide: {} as never,
+      // No session is the caller's: `sessions.get` and `sessions.join` refuse NOT_FOUND.
+      store: {
+        sessionOfParty: async () => null,
+        lockAccounts: async () => undefined,
+        partiesOf: async () => new Map(),
+        latestCancellationOf: async () => null,
+      },
+      idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
+    });
+    const outages = createOutageServices({
+      enrollments: { lockEnrollments: async () => undefined },
+      completion: { completeIfDue: async () => false },
+      settings: { read: async () => Promise.reject(new Error('no setting is read here')) },
+      log,
+      adminNames: async () => new Map(),
+    });
+    const adminServices = new Proxy(
+      { outages },
+      {
+        get: (target, key) =>
+          key in target
+            ? Reflect.get(target, key)
+            : Reflect.get(unusedAdminServices as object, key),
+      },
+    ) as typeof unusedAdminServices;
+    refusing = await createApplication({
+      log,
+      readiness: { databaseReachable: async () => {} },
+      securityHeaders: { allowedOrigins: [], mode: 'test' },
+      maxRequestBodyBytes: BODY_LIMIT,
+      administration: {
+        transactions: { run: (work) => work({} as never) },
+        auditWriter: { write: () => Promise.reject(new Error('nothing is audited here')) },
+      },
+      rateLimiter,
+      sessions: {
+        user: async (bearer) =>
+          bearer === 'student-token'
+            ? {
+                userId: STUDENT_ID,
+                sessionId: '0199d0a0-0000-7000-8000-0000000000d1',
+                role: 'student',
+                gender: 'female',
+                preferredLanguage: 'ar',
+                accountStatus: 'active',
+              }
+            : null,
+        admin: async (bearer) =>
+          bearer === 'admin-token'
+            ? { adminId: ADMIN_ID, sessionId: '0199d0a0-0000-7000-8000-0000000000d2', mfaVerified: true }
+            : null,
+      },
+      services: { ...services, sessions: sessionsServices },
+      adminServices,
+      surfaces: {
+        app: createAppRouter({ sessions: sessionsRouter }),
+        admin: createAdminRouter({ sessions: sessionsAdminRouter }),
+      },
+    });
+    await refusing.listen(0, '127.0.0.1');
+    refusingOrigin = (await refusing.getUrl()).replace('[::1]', '127.0.0.1');
+  });
+
+  afterAll(async () => {
+    await refusing?.close();
+  });
+
+  async function call(path: string, bearer: string, input: unknown, method: 'GET' | 'POST') {
+    const headers = { 'content-type': 'application/json', authorization: `Bearer ${bearer}` };
+    const response =
+      method === 'GET'
+        ? await fetch(`${refusingOrigin}${path}?input=${encodeURIComponent(JSON.stringify(input))}`, {
+            headers,
+          })
+        : await fetch(`${refusingOrigin}${path}`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(input),
+          });
+    await response.arrayBuffer();
+    return response.status;
+  }
+
+  /** The refusal lines, of any writer, written since `from`. */
+  function refusalLines(from: number): Array<Record<string, unknown>> {
+    return lines
+      .slice(from)
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((record) => REFUSAL_MESSAGES.has(String(record['msg'])));
+  }
+
+  it('writes one line for a refused sessions.get, the module’s with its reason', async () => {
+    const from = lines.length;
+    expect(
+      await call(`${surfacePaths.app}/sessions.get`, 'student-token', { sessionId: SESSION_ID }, 'GET'),
+    ).toBe(404);
+    const written = refusalLines(from);
+    expect(written.map((record) => record['msg'])).toEqual(['A session read or join was refused']);
+    expect(written[0]).toMatchObject({ errorCode: 'NOT_FOUND', reason: 'not_a_party' });
+  });
+
+  it('writes one line for a refused sessions.join, the module’s with its reason', async () => {
+    const from = lines.length;
+    expect(
+      await call(`${surfacePaths.app}/sessions.join`, 'student-token', { sessionId: SESSION_ID }, 'POST'),
+    ).toBe(404);
+    const written = refusalLines(from);
+    expect(written.map((record) => record['msg'])).toEqual(['A session read or join was refused']);
+    expect(written[0]).toMatchObject({ errorCode: 'NOT_FOUND', reason: 'not_a_party' });
+  });
+
+  it('writes one line for a refused outage record, the module’s with its reason', async () => {
+    const from = lines.length;
+    const at = { localDate: '2026-11-10', localTime: '10:00' };
+    expect(
+      await call(
+        `${surfacePaths.admin}/sessions.outages.record`,
+        'admin-token',
+        { start: at, end: at, timezone: 'Africa/Cairo', reason: 'Probe outage' },
+        'POST',
+      ),
+    ).toBe(400);
+    const written = refusalLines(from);
+    expect(written.map((record) => record['msg'])).toEqual(['Outage window refused']);
+    expect(written[0]).toMatchObject({ adminId: ADMIN_ID, reason: 'end_not_after_start' });
+  });
+});

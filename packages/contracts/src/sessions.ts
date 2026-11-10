@@ -20,6 +20,7 @@
 // connection: the session's scheduled end (R-302). The token is never logged (R-SEC-2).
 import { z } from 'zod';
 
+import { idempotencyKey } from './idempotency-key.js';
 import { calendarDate, timeZone } from './onboarding.js';
 import { sessionStatus } from './enrollments.js';
 import { sessionLengthMinutes } from './packages.js';
@@ -131,3 +132,72 @@ export type SessionParty = z.infer<typeof sessionParty>;
 export type RemedyView = z.infer<typeof remedyView>;
 export type SessionsGetOutput = z.infer<typeof sessionsGetOutput>;
 export type SessionsJoinOutput = z.infer<typeof sessionsJoinOutput>;
+
+// ---------------------------------------------------------------------------------------------
+// T021: `sessions.cancellation` (contracts/app-surface.md, "`sessions.cancellation`"; FR-456 to
+// FR-458). Either party asks to cancel a scheduled session not yet started, with a reason, keyed by
+// the kernel's idempotency (`idempotent-procedures.ts`); the counterparty accepts or declines.
+// The request expires at the session's start (`expiresAt`), read so from that instant whatever its
+// row says (FR-458). The caller names the session or the request and nothing else (R-GENDER-4).
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A participant's reason, at most: a cancellation request's (FR-CANCEL-1) and a dispute's (T026),
+ * one bound for both; never blank (ERD §15 rule 45).
+ */
+export const PARTICIPANT_REASON_MAX_LENGTH = 500;
+
+export const sessionsCancellationRequestInput = z.object({
+  sessionId: z.uuid(),
+  reason: z.string().trim().min(1).max(PARTICIPANT_REASON_MAX_LENGTH),
+  idempotencyKey,
+});
+
+/** The request, pending until it is answered or the session starts. */
+export const sessionsCancellationRequestOutput = z.object({
+  requestId: z.uuid(),
+  status: z.literal('pending'),
+  expiresAt: z.iso.datetime(),
+});
+
+export const sessionsCancellationAnswerInput = z.object({
+  requestId: z.uuid(),
+  accept: z.boolean(),
+});
+
+/** The answer: accepted cancels the session by agreement (FR-457); declined leaves it (FR-458). */
+export const sessionsCancellationAnswerOutput = z.object({
+  requestId: z.uuid(),
+  status: z.enum(['accepted', 'declined']),
+  sessionStatus: sessionStatus,
+});
+
+export type SessionsCancellationRequestInput = z.infer<typeof sessionsCancellationRequestInput>;
+export type SessionsCancellationRequestOutput = z.infer<typeof sessionsCancellationRequestOutput>;
+export type SessionsCancellationAnswerInput = z.infer<typeof sessionsCancellationAnswerInput>;
+export type SessionsCancellationAnswerOutput = z.infer<typeof sessionsCancellationAnswerOutput>;
+
+// T026 of specs/004-sessions: `sessions.dispute.raise` (contracts/app-surface.md, "`sessions.dispute`";
+// FR-473, FR-474; research R-308). Either participant disputes a session of theirs with a reason,
+// from its scheduled end, before the evaluation too, until `dispute_window_hours` after it; keyed by
+// the client's idempotency key (`idempotent-procedures.ts`), so a retry answers the first result.
+// The reason is the participant's own text, bounded as a cancellation request's is
+// (`PARTICIPANT_REASON_MAX_LENGTH`, 1 to 500 characters), and trimmed before its bounds as a
+// cancellation request's is, so a reason of spaces only is refused (the owner's decision of
+// 2026-11-10).
+
+/** The session disputed, the participant's reason and the client's idempotency key. */
+export const sessionsDisputeRaiseInput = z.object({
+  sessionId: z.uuid(),
+  reason: z.string().trim().min(1).max(PARTICIPANT_REASON_MAX_LENGTH),
+  idempotencyKey,
+});
+
+/** The dispute opened: `open` until an administrator resolves it (T034). */
+export const sessionsDisputeRaiseOutput = z.object({
+  disputeId: z.uuid(),
+  status: z.literal('open'),
+});
+
+export type SessionsDisputeRaiseInput = z.infer<typeof sessionsDisputeRaiseInput>;
+export type SessionsDisputeRaiseOutput = z.infer<typeof sessionsDisputeRaiseOutput>;
