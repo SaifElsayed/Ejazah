@@ -822,3 +822,108 @@ describe('RoomScreen: the service that keeps the room alive while sharing (the o
     expect(stopKeepAlive).not.toHaveBeenCalled();
   });
 });
+
+describe('RoomScreen: a share while one starts, and a stop that fails (PR #130’s review, round 1, the notes under T019)', () => {
+  const inRoom = async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+  };
+  const askShare = async () => {
+    await press('rtl', 'session.room.shareScreen');
+    await press('rtl', 'common.action.continue');
+    await advance(0);
+  };
+  const local = () => room().localParticipant;
+  const shareButton = () =>
+    screen.getByRole('button', { name: said('rtl', 'session.room.shareScreen') });
+  const warning = () => screen.queryByText(said('rtl', 'session.room.screenShare.warning'));
+
+  it('offers no second share while the first starts: one capture, one service, released on leaving', async () => {
+    await inRoom();
+    const publishing = deferred<object>();
+    local().publishTrack.mockReturnValueOnce(publishing.promise);
+    await askShare();
+    expect(shareButton().props.accessibilityState?.disabled).toBe(true);
+    await fireEvent.press(shareButton());
+    expect(warning()).toBeNull();
+    expect(local().createScreenTracks).toHaveBeenCalledTimes(1);
+    expect(startKeepAlive).toHaveBeenCalledTimes(1);
+    const { release } = local().screenTrack.mediaStreamTrack;
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts one share when «متابعة» is pressed twice', async () => {
+    await inRoom();
+    local().publishTrack.mockReturnValueOnce(deferred<object>().promise);
+    await press('rtl', 'session.room.shareScreen');
+    const proceed = screen.getByRole('button', { name: said('rtl', 'common.action.continue') });
+    // Both presses before the screen draws again: the dialog is still there for the second.
+    await act(async () => {
+      await Promise.all([fireEvent.press(proceed), fireEvent.press(proceed)]);
+    });
+    await advance(0);
+    expect(local().createScreenTracks).toHaveBeenCalledTimes(1);
+    expect(startKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'Android’s prompt is cancelled',
+      () => local().createScreenTracks.mockRejectedValueOnce(new Error('NotAllowedError')),
+    ],
+    [
+      'the service fails to start',
+      () => startKeepAlive.mockRejectedValueOnce(new Error('refused')),
+    ],
+  ])('offers the share again once %s', async (_case, fail) => {
+    await inRoom();
+    fail();
+    await askShare();
+    expect(shareButton().props.accessibilityState?.disabled).toBe(false);
+    await askShare();
+    expect(local().publishTrack).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('button', { name: said('rtl', 'session.room.stopShare') }),
+    ).toBeTruthy();
+  });
+
+  it('releases the track once and stops the service when leaving while the share starts', async () => {
+    await inRoom();
+    const publishing = deferred<object>();
+    local().publishTrack.mockReturnValueOnce(publishing.promise);
+    const left = room();
+    await askShare();
+    await press('rtl', 'session.room.leave');
+    await advance(0);
+    publishing.resolve({});
+    await advance(0);
+    expect(left.localParticipant.screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the capture and stops the service when the SDK refuses the stop', async () => {
+    await inRoom();
+    await askShare();
+    local().setScreenShareEnabled.mockRejectedValueOnce(new Error('negotiation'));
+    await press('rtl', 'session.room.stopShare');
+    await advance(0);
+    expect(local().screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the capture and stops the service 5 s after a stop that never answers', async () => {
+    await inRoom();
+    await askShare();
+    local().setScreenShareEnabled.mockReturnValueOnce(new Promise<undefined>(() => undefined));
+    await press('rtl', 'session.room.stopShare');
+    await advance(4_999);
+    expect(local().screenTrack.mediaStreamTrack.release).not.toHaveBeenCalled();
+    expect(stopKeepAlive).not.toHaveBeenCalled();
+    await advance(1);
+    expect(local().screenTrack.mediaStreamTrack.release).toHaveBeenCalledTimes(1);
+    expect(stopKeepAlive).toHaveBeenCalledTimes(1);
+  });
+});

@@ -275,6 +275,7 @@ function Controls({
   const t = useT();
   const cameraOn = room.view?.cameraOn === true;
   const sharing = room.view?.sharing === true;
+  const startingShare = room.view?.startingShare === true;
   return (
     <View style={{ gap: tokens.space['2'] }}>
       <Button
@@ -290,7 +291,7 @@ function Controls({
         variant="secondary"
         layout="block"
         icon={{ name: 'share' }}
-        disabled={!connected}
+        disabled={!connected || startingShare}
         onPress={sharing ? room.stopShare : room.askToShare}
       />
       <Button
