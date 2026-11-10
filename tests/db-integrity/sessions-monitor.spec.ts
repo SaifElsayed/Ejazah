@@ -48,10 +48,14 @@ import {
 } from './harness';
 
 const CAIRO = 'Africa/Cairo';
-/** This run's own days: from 2033-01-02 (a Sunday) plus a random number of weeks. */
+/**
+ * This run's own days: from 2050-01-02 (a Sunday) plus a random number of weeks, apart from the
+ * days other specs commit sessions on (`outages.spec.ts` 2028 to 2036, `outage-evaluation-race.spec.ts`
+ * 2040 to 2048; the follow-up under T024 of B37's integration).
+ */
 const RUN_OFFSET = randomInt(0, 300) * 7;
 const dayOf = (offset: number): string =>
-  addDays(new Date('2033-01-02T00:00:00Z'), RUN_OFFSET + offset).slice(0, 10);
+  addDays(new Date('2050-01-02T00:00:00Z'), RUN_OFFSET + offset).slice(0, 10);
 const instant = (day: string, time: string): Date =>
   new Date(resolveLocalDateTime({ localDate: day, localTime: time, timezone: CAIRO }).startsAt);
 
