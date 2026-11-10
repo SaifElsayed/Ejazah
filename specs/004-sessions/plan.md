@@ -464,7 +464,7 @@ quickstart, tasks, SRS, ERD, ADR 0018 and the note under `003:T005` were brought
    FR-478 too). S1 (decision 1 above and the spec's line marked as changed by C1). S2 (ADR 0018's amendment names
    the second analysis's C1). A3 (a refused make-up, below). S3 (T021's locks point at the kernel's row).
 7. **A3, a refused make-up.** An acceptance of a counter-proposal that the database refuses releases the counter as a
-   decline does (`counter_withdrawn`): the remedy `proposed` while the choice window is open, the proposal booked once
+   decline does (`counter_withdrawn`, superseded by A1 below: `counter_booking_refused`; B38's conflict check, Q13): the remedy `proposed` while the choice window is open, the proposal booked once
    it has closed. A booking of the system's proposal that the rules decided (H5, a decline after the choice window, a
    refused counter after it) and that the database refused is tried again by `advance-remedies` only while the
    occurrence starts at least L after the attempt's instant and overlaps no open hold or reservation of either party,
