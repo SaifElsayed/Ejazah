@@ -220,6 +220,8 @@ beforeEach(() => {
     video,
     enrollmentSide,
     store,
+    // T026: no dispute is raised here.
+    idempotency: { run: () => Promise.reject(new Error('no dispute is raised here')) },
     now: () => now,
   });
 });

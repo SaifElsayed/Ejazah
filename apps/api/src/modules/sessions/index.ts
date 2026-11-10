@@ -218,6 +218,21 @@ export {
  * `EnrollmentSide`, with the store over this module's reads and identity's accounts.
  */
 export { sessionsRouter } from './sessions.router.js';
+/**
+ * T026 (FR-473, FR-474, FR-495; R-308): `sessions.dispute.raise` is `SessionsServices.raiseDispute`
+ * (its store narrowable by the race probe); and the dispute fields of `sessions.get` and the lists,
+ * which the integration joins after T021's: `createDisputeView({ settings }).ofSessions(tx, sessions,
+ * viewerUserId)` for `dispute`, `canRaiseDispute` and `disputeClosesAt`, and `isDisputed(status)`
+ * for the lists' `disputed`.
+ */
+export { type DisputeRaiseStore, disputeRaiseStore } from './dispute-raise.service.js';
+export {
+  createDisputeView,
+  disputeFieldsOf,
+  type DisputeView,
+  isDisputed,
+  type SessionDisputeFields,
+} from './dispute-view.js';
 export {
   createSessionsServices,
   type PartyStanding,

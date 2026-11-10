@@ -123,6 +123,8 @@ function servicesWith(video: VideoPort): SessionsServices {
     video,
     enrollmentSide: createEnrollmentSide({ settings }),
     store: sessionsStore,
+    // T026: no dispute is raised here.
+    idempotency: { run: () => Promise.reject(new Error('no dispute is raised here')) },
   });
 }
 
@@ -333,6 +335,7 @@ describe('the join’s one lock (contracts/kernel.md, the `sessions.join` row)',
       video: recordedVideo(),
       enrollmentSide: createEnrollmentSide({ settings }),
       store: sessionsStore,
+      idempotency: { run: () => Promise.reject(new Error('no dispute is raised here')) },
     });
 
     // The higher id held elsewhere: the join takes the lower one, then waits on it.

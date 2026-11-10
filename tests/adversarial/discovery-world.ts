@@ -156,6 +156,8 @@ import type {
   EnrollmentsGetOutput,
   EnrollmentsListInput,
   EnrollmentsListOutput,
+  SessionsDisputeRaiseInput,
+  SessionsDisputeRaiseOutput,
   SessionsGetInput,
   SessionsGetOutput,
   SessionsJoinInput,
@@ -177,6 +179,8 @@ const OPEN_SESSION_STARTS_IN_MINUTES = 5;
 const LATER_SESSION_STARTS_IN_MINUTES = 4_320;
 /** T011: the session over started three hours ago, so it ended two hours ago. */
 const PAST_SESSION_STARTS_IN_MINUTES = -180;
+/** T026: the session ended for disputes started six hours ago, so it ended five hours ago. */
+const ENDED_SESSION_STARTS_IN_MINUTES = -360;
 
 /** The stand-in the configuration chooses, as `ports.module.ts` builds it, its calls recorded. */
 function recordedVideo(encryptionKey: string): RecordedVideo {
@@ -330,6 +334,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   early_join_lead_minutes: 15,
   video_empty_timeout_seconds: 300,
   video_departure_timeout_seconds: 20,
+  // T026: `sessions.dispute.raise`'s window.
+  dispute_window_hours: 72,
 };
 
 const settings: SettingsReader = {
@@ -383,6 +389,10 @@ export interface AppCaller {
   readonly sessions: {
     get(input: SessionsGetInput): Promise<SessionsGetOutput>;
     join(input: SessionsJoinInput): Promise<SessionsJoinOutput>;
+    /** T026: a dispute raised, attacked in `sessions.attacks.ts`. */
+    readonly dispute: {
+      raise(input: SessionsDisputeRaiseInput): Promise<SessionsDisputeRaiseOutput>;
+    };
   };
 }
 
@@ -403,11 +413,17 @@ export interface SessionParty {
  * T011 of specs/004-sessions: a student and a lone visible teacher of one gender, both signed in,
  * with a confirmed enrollment and three of its sessions: `open` inside its join period (starting
  * five minutes after the pair was made), `later` not yet open (three days on) and `past` over (it
- * ended two hours before).
+ * ended two hours before); T026's `ended`, over five hours before, inside its dispute window and
+ * raised by `sessions.attacks.ts`' dispute registration alone, so no other attack reads its status.
  */
 export interface SessionPair {
   readonly enrollmentId: string;
-  readonly sessions: { readonly open: string; readonly later: string; readonly past: string };
+  readonly sessions: {
+    readonly open: string;
+    readonly later: string;
+    readonly past: string;
+    readonly ended: string;
+  };
   readonly student: SessionParty;
   readonly teacher: SessionParty;
 }
@@ -646,6 +662,8 @@ async function build(): Promise<Built> {
       video,
       enrollmentSide: createEnrollmentSide({ settings }),
       store: sessionsStore,
+      // T026: `sessions.dispute.raise` keyed through the world's idempotency.
+      idempotency,
     }),
   };
   const rateLimiter = new RateLimiter({
@@ -772,6 +790,7 @@ async function build(): Promise<Built> {
       past: await session(1, PAST_SESSION_STARTS_IN_MINUTES),
       open: await session(2, OPEN_SESSION_STARTS_IN_MINUTES),
       later: await session(3, LATER_SESSION_STARTS_IN_MINUTES),
+      ended: await session(4, ENDED_SESSION_STARTS_IN_MINUTES),
     };
     return {
       enrollmentId,

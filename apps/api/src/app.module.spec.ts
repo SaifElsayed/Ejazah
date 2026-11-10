@@ -522,6 +522,7 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
         lockAccounts: async () => undefined,
         partiesOf: async () => new Map(),
       },
+      idempotency: { run: () => Promise.reject(new Error('no dispute is raised here')) },
     });
     const outages = createOutageServices({
       enrollments: { lockEnrollments: async () => undefined },

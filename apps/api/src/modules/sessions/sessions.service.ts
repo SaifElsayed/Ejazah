@@ -56,6 +56,12 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { sessionPartiesOf } from '../identity/index.js';
+import {
+  createDisputeRaise,
+  type DisputeRaise,
+  type DisputeRaiseDependencies,
+  type DisputeRaiseStore,
+} from './dispute-raise.service.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
@@ -111,7 +117,7 @@ export interface SessionsCaller {
 }
 
 /** `sessions.get` and `sessions.join`, each one transaction on the process's client. */
-export interface SessionsServices {
+export interface SessionsServices extends DisputeRaise {
   get(caller: SessionsCaller, input: SessionsGetInput, log: Logger): Promise<SessionsGetOutput>;
   join(caller: SessionsCaller, input: SessionsJoinInput, log: Logger): Promise<SessionsJoinOutput>;
 }
@@ -122,6 +128,10 @@ export interface SessionsDependencies {
   readonly video: VideoPort;
   readonly enrollmentSide: EnrollmentSide;
   readonly store: SessionsStore;
+  /** T026: `sessions.dispute.raise` runs in the kernel's idempotency transaction. */
+  readonly idempotency: DisputeRaiseDependencies['idempotency'];
+  /** T026: the raise's store; `disputeRaiseStore` unless a spec narrows it. */
+  readonly disputeStore?: DisputeRaiseStore;
   readonly now?: () => Date;
 }
 
@@ -189,13 +199,23 @@ export function createSessionsServices({
   video,
   enrollmentSide,
   store,
+  idempotency,
+  disputeStore,
   now = () => new Date(),
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
     new Date(addMinutes(session.startsAt, -lead));
+  // T026: `sessions.dispute.raise` (`dispute-raise.service.ts`).
+  const { raiseDispute } = createDisputeRaise({
+    idempotency,
+    settings,
+    enrollments: enrollmentSide,
+    ...(disputeStore === undefined ? {} : { store: disputeStore }),
+  });
 
   return {
+    raiseDispute,
     get: async ({ userId }, { sessionId }, log) => {
       const lead = await leadMinutes();
       return transactions.run(async (tx) => {

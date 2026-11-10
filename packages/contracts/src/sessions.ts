@@ -20,6 +20,7 @@
 // connection: the session's scheduled end (R-302). The token is never logged (R-SEC-2).
 import { z } from 'zod';
 
+import { idempotencyKey } from './idempotency-key.js';
 import { calendarDate, timeZone } from './onboarding.js';
 import { sessionStatus } from './enrollments.js';
 import { sessionLengthMinutes } from './packages.js';
@@ -131,3 +132,26 @@ export type SessionParty = z.infer<typeof sessionParty>;
 export type RemedyView = z.infer<typeof remedyView>;
 export type SessionsGetOutput = z.infer<typeof sessionsGetOutput>;
 export type SessionsJoinOutput = z.infer<typeof sessionsJoinOutput>;
+
+// T026 of specs/004-sessions: `sessions.dispute.raise` (contracts/app-surface.md, "`sessions.dispute`";
+// FR-473, FR-474; research R-308). Either participant disputes a session of theirs with a reason,
+// from its scheduled end, before the evaluation too, until `dispute_window_hours` after it; keyed by
+// the client's idempotency key (`idempotent-procedures.ts`), so a retry answers the first result.
+// The reason is the participant's own text, bounded as this file's other participant reason is
+// (`cancellation.reason`, 1 to 500 characters).
+
+/** The session disputed, the participant's reason and the client's idempotency key. */
+export const sessionsDisputeRaiseInput = z.object({
+  sessionId: z.uuid(),
+  reason: z.string().min(1).max(500),
+  idempotencyKey,
+});
+
+/** The dispute opened: `open` until an administrator resolves it (T034). */
+export const sessionsDisputeRaiseOutput = z.object({
+  disputeId: z.uuid(),
+  status: z.literal('open'),
+});
+
+export type SessionsDisputeRaiseInput = z.infer<typeof sessionsDisputeRaiseInput>;
+export type SessionsDisputeRaiseOutput = z.infer<typeof sessionsDisputeRaiseOutput>;
