@@ -193,6 +193,11 @@ export interface RemedyOfferDependencies {
   /** The database's clock on a transaction (`clockTimestamp`), Q8. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: RemedyOfferStore;
+  /**
+   * The warn line of a search that found no free week (the decision under T028); the sweep's logger.
+   * A caller with none (an acceptance's offer) leaves the session to the sweep, which writes it.
+   */
+  readonly log?: Pick<Logger, 'warn'>;
 }
 
 export function createRemedyOffer({
@@ -200,6 +205,7 @@ export function createRemedyOffer({
   settings,
   clock = clockTimestamp,
   store = remedyOfferStore,
+  log,
 }: RemedyOfferDependencies): RemedyOffer {
   /** Whether `session` owes a remedy now, its window and status read under the locks. */
   async function owes(session: OfferSession, now: Date, options: OfferOptions): Promise<boolean> {
@@ -210,13 +216,17 @@ export function createRemedyOffer({
     return new Date(addHours(session.scheduledEndAt, hours)).getTime() <= now.getTime();
   }
 
-  /** The first free week of the enrollment's slot from the latest of its time, at or after `bound`. */
+  /**
+   * The first free week of the enrollment's slot from the latest of its time, at or after `bound`,
+   * among the snapshot's count of weeks from there (the decision under T028: a guard against bugs
+   * only, the slot being kept until the package is completed); null when none is free.
+   */
   async function proposalOf(
     tx: Transaction,
     session: OfferSession,
     terms: EnrollmentTerms,
     bound: Date,
-  ): Promise<LocalDate> {
+  ): Promise<LocalDate | null> {
     const slot = await store.slotOf(tx, terms.slotId);
     // `enrollments.slot_id` is a foreign key to the slot (ERD `enrollments`).
     if (slot === null) throw new Error('remedy offer: an enrollment without its slot');
@@ -234,7 +244,7 @@ export function createRemedyOffer({
     let from = after !== null && after >= boundDate ? after : boundDate;
     const parties = { studentUserId: session.studentUserId, teacherUserId: session.teacherUserId };
     const people = [session.studentUserId, session.teacherUserId];
-    for (;;) {
+    for (let weeks = 0; weeks < terms.sessionCount;) {
       const [occurrence] = resolveOccurrences(weekly, { fromLocalDate: from, count: 1 });
       if (occurrence === undefined) throw new Error('resolveOccurrences answered no occurrence');
       const date = occurrence.requestedLocalDate;
@@ -245,6 +255,7 @@ export function createRemedyOffer({
         endsAt: new Date(addMinutes(new Date(occurrence.startsAt), terms.durationMinutes)),
       };
       if (time.startsAt.getTime() < bound.getTime()) continue;
+      weeks += 1;
       const window = { from: time.startsAt, to: time.endsAt };
       const [taken, own, reserved, held] = await Promise.all([
         enrollments.slotWeekTaken(tx, terms.slotId, date, session.enrollmentId),
@@ -258,6 +269,7 @@ export function createRemedyOffer({
       }
       return date;
     }
+    return null;
   }
 
   async function offerLocked(
@@ -282,6 +294,14 @@ export function createRemedyOffer({
     const choiceClosesAt = new Date(addDays(now, days));
     const bound = new Date(addHours(choiceClosesAt, answerHours + leadHours));
     const proposedDate = await proposalOf(tx, session, terms, bound);
+    if (proposedDate === null) {
+      // Nothing written: the next run of `advance-remedies` tries again (the decision under T028).
+      log?.warn(
+        { sessionId: session.id, enrollmentId: session.enrollmentId, reason: 'no_free_week' },
+        'A remedy offer found no free week for its proposal',
+      );
+      return null;
+    }
     const refundable =
       terms.track === 'recitation' &&
       (session.status === 'teacher_no_show' || options.clearedSuspension === true);

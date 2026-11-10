@@ -70,6 +70,7 @@ function advanceOver({
     offer: createRemedyOffer({
       enrollments,
       settings,
+      log,
       ...(offerStore === undefined ? {} : { store: offerStore }),
     }),
     // T032: the windows' ends, over the same transactions, side, log and error tracking.

@@ -43,6 +43,9 @@ let terms: EnrollmentTerms | null;
 let suspended: boolean;
 let lastReached: Date | null;
 let takenDates: Set<string>;
+/** Every week of the slot taken: the bug the search's bound guards against. */
+let everyWeekTaken: boolean;
+let warnings: { readonly fields: unknown; readonly message: string }[];
 let ownSessions: SessionTime[];
 let held: HeldTime[];
 let reserved: ReservedTime[];
@@ -94,7 +97,8 @@ const enrollments = {
   enrollmentFor: async () => terms,
   lockEnrollments: async (_tx: Transaction, ids: readonly string[]) =>
     void trace.push(`lock enrollments ${ids.join(',')}`),
-  slotWeekTaken: async (_tx: Transaction, _slot: string, date: string) => takenDates.has(date),
+  slotWeekTaken: async (_tx: Transaction, _slot: string, date: string) =>
+    everyWeekTaken || takenDates.has(date),
   heldTimesOf: async (
     _tx: Transaction,
     _users: readonly string[],
@@ -108,6 +112,9 @@ function offerOf() {
     settings: { read: async (key, schema) => schema.parse(SETTINGS[key]) },
     clock: async () => now,
     store: { ...store },
+    log: {
+      warn: (fields: unknown, message: string) => void warnings.push({ fields, message }),
+    } as unknown as NonNullable<Parameters<typeof createRemedyOffer>[0]['log']>,
   });
 }
 
@@ -135,6 +142,8 @@ beforeEach(() => {
   suspended = false;
   lastReached = new Date('2026-11-26T00:00:00Z');
   takenDates = new Set();
+  everyWeekTaken = false;
+  warnings = [];
   ownSessions = [];
   held = [];
   reserved = [];
@@ -262,6 +271,8 @@ describe('remedy offer: the proposal (H1, F5, R-TIME-2)', () => {
   });
 
   it('skips a week the slot is taken, one over a session, one over a reservation or a hold of either party', async () => {
+    // Eight weeks, so the four skipped fit inside the search's bound (the decision under T028).
+    terms = terms === null ? null : { ...terms, sessionCount: 8 };
     takenDates = new Set(['2026-12-17']);
     ownSessions = [
       { startsAt: new Date('2026-12-24T07:30:00Z'), endsAt: new Date('2026-12-24T08:30:00Z') },
@@ -279,6 +290,23 @@ describe('remedy offer: the proposal (H1, F5, R-TIME-2)', () => {
     ];
     expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2027-01-14');
   });
+
+  // The decision under T028 (the owner's, 2026-11-10): a guard against bugs only, the slot being kept
+  // until the package is completed. Four weeks from H1 (the snapshot's count), then nothing now.
+  it('stops after the snapshot’s count of weeks from H1 and offers nothing now, with one warn line', async () => {
+    everyWeekTaken = true;
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+    expect([inserted, reoffered, events]).toEqual([[], [], []]);
+    expect(warnings).toEqual([
+      {
+        fields: { sessionId: SESSION, enrollmentId: ENROLLMENT, reason: 'no_free_week' },
+        message: expect.any(String),
+      },
+    ]);
+    everyWeekTaken = false;
+    takenDates = new Set(['2026-12-17', '2026-12-24', '2026-12-31']);
+    expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2027-01-07');
+  }, 3_000);
 
   it('takes a week a hold only touches, end to start', async () => {
     held = [
