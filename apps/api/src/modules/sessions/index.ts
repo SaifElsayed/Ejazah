@@ -116,6 +116,20 @@ export {
 } from './outages.service.js';
 export { sessionsAdminRouter } from './sessions-admin.router.js';
 /**
+ * T023 (FR-460, FR-485; kernel.md, the row «an administrator's `sessions.cancel`»): an
+ * administrator's cancellation of a `scheduled` session on the call's transaction, under the
+ * enrollment's and the session's locks, its `admin_cancellation` case opened or joined and one
+ * `cancelled_by_admin` event naming it; composed by the admin module for `sessions.cancel`.
+ */
+export {
+  createSessionCancel,
+  type SessionCancel,
+  type SessionCancelInput,
+  type SessionCancelled,
+  type SessionCancelStore,
+  sessionCancelStore,
+} from './session-cancel.service.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */

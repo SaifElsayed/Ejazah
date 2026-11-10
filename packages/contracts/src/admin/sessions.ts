@@ -50,3 +50,21 @@ export const outagesListOutput = z.object({
   /** Present while more windows follow the page. */
   nextCursor: outagesListCursor.optional(),
 });
+
+// T023 of specs/004-sessions (FR-460, FR-480, FR-485; SC-413; admin-surface.md, `sessions.cancel`):
+// an administrator's cancellation of a session not yet settled, with a mandatory reason. The
+// session becomes `cancelled_by_admin` with no penalty, and one `admin_cancellation` compensation
+// case on its enrollment is opened or joined; its id is answered as `caseId`. Only a `scheduled`
+// session is cancelled: any other, a `disputed` one included (its ruling is FR-476's path), is
+// refused `SESSION_NOT_SCHEDULED`; a session that does not exist is `NOT_FOUND`.
+export const sessionsCancelInput = z.object({ sessionId: z.uuid(), reason: adminReason });
+
+export const sessionsCancelOutput = z.object({
+  sessionId: z.uuid(),
+  status: z.literal('cancelled_by_admin'),
+  /** The `admin_cancellation` case opened, or the open one joined. */
+  caseId: z.uuid(),
+});
+
+export type SessionsCancelInput = z.infer<typeof sessionsCancelInput>;
+export type SessionsCancelOutput = z.infer<typeof sessionsCancelOutput>;
