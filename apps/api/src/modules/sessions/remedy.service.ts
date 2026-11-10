@@ -36,8 +36,13 @@
 // entry), its first occurrence at or after max(now + A + L, `choice_closes_at`), A and L the remedy's
 // own snapshots, never the live settings, that overlaps no session, open hold
 // (`EnrollmentSide.heldTimesOf`) or reservation (T027, the remedy's own proposal among them, so the
-// proposal is never an option) of either party; each resolved on its own date in the slot's own zone
-// by `packages/time` (R-TIME-2, `003:T077`). The search ends: what can make a week busy is finite.
+// proposal is never an option) of either party, on a week no other package keeps the slot
+// (`EnrollmentSide.slotsFreeFrom`, read once for every slot, the remedy's own enrollment left out, as
+// T028's proposal reads `slotWeekTaken`: the owner's rule of 2026-11-10, a package's slot returns only
+// once it is completed, and decision (a) on the follow-up under T031 and T029): a slot taken on every
+// date is no option, one a completed package holds is searched from its release. Each resolved on
+// its own date in the slot's own zone by `packages/time` (R-TIME-2, `003:T077`). The search ends:
+// what can make a week busy is finite.
 //
 // WHAT A COUNTER WRITES. The five `counter_*` columns (the slot, its local date and start, the slot's
 // zone, `counter_proposed_at` the database's clock), `counter_proposed`, and one `counter_proposed`
@@ -50,8 +55,8 @@
 // `MAKEUP_REFUSED` and, in a second transaction under the same locks, releases the counter as a
 // decline does: its columns cleared, `proposed`, one `counter_booking_refused` row (never
 // `counter_withdrawn`), and one warn line `{ sessionId, enrollmentId, constraint }` and nothing else;
-// so the sweep never reads it as unanswered. A reserved time or a second deadlock refuses with the
-// counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
+// so the sweep never reads it as unanswered. A reserved time, a week another package keeps the
+// counter's slot (T029's `slot_taken`) or a second deadlock refuses with the counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
 // the counter released, `proposed`, one `counter_declined` row. After either release, once the
 // choice window has closed, the proposal is booked in a transaction of its own (T029's `book`); its
 // refusal leaves the remedy `proposed` past `choice_closes_at`, which the sweep books or retries
@@ -287,7 +292,10 @@ export interface RemedyDependencies {
   readonly transactions: Transactions;
   /** The kernel's idempotency, which keys `sessions.remedy.counter` (Q14 (a)). */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
-  readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf'>;
+  readonly enrollments: Pick<
+    EnrollmentSide,
+    'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf' | 'slotWeekTaken' | 'slotsFreeFrom'
+  >;
   /** The database's clock on a transaction (Q8 (a)). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: RemedyStore;
@@ -632,16 +640,34 @@ export function createRemedyServices({
     );
     const bound =
       fromNow.getTime() > remedy.choiceClosesAt.getTime() ? fromNow : remedy.choiceClosesAt;
-    const slots = (await store.teacherSlotsOf(tx, session.teacherUserId)).filter(
+    const active = (await store.teacherSlotsOf(tx, session.teacherUserId)).filter(
       ({ isActive, durationMinutes }) => isActive && durationMinutes === terms.durationMinutes,
+    );
+    // Another package's slot, in one read for every slot (this file's head, THE OPTIONS): a slot
+    // taken on every date is no option; one a completed package holds is free from its release.
+    const freeFrom = await enrollments.slotsFreeFrom(
+      tx,
+      active.map(({ id }) => id),
+      session.enrollmentId,
     );
     const parties = { studentUserId: session.studentUserId, teacherUserId: session.teacherUserId };
     const people = [session.studentUserId, session.teacherUserId];
     const found: Candidate[] = [];
-    let pending: Candidate[] = slots.map((slot) => ({
-      slot,
-      occurrence: firstAtOrAfter(slot, bound),
-    }));
+    let pending: Candidate[] = active.flatMap((slot): Candidate[] => {
+      const from = freeFrom.get(slot.id);
+      if (from === null) return [];
+      const first = firstAtOrAfter(slot, bound);
+      // Canonical local dates order as text; every date from the release on is free.
+      return [
+        {
+          slot,
+          occurrence:
+            from === undefined || first.requestedLocalDate >= from
+              ? first
+              : occurrenceFrom(slot, from),
+        },
+      ];
+    });
     while (pending.length > 0) {
       const times = pending.map(({ occurrence }) => timeOf(occurrence));
       const window = {
@@ -965,7 +991,10 @@ export type WindowsLog = Pick<Logger, 'info' | 'warn'>;
 
 export interface RemedyWindowsDependencies {
   readonly transactions: Transactions;
-  readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf'>;
+  readonly enrollments: Pick<
+    EnrollmentSide,
+    'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf' | 'slotWeekTaken'
+  >;
   /** The automatic actions' info lines and the refused retries' warn lines (Q11 (a)). */
   readonly log: WindowsLog;
   /** Error tracking, told once per remedy handed to a `makeup_refused` case. */

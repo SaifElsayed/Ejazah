@@ -151,6 +151,9 @@ let genders: Map<string, 'male' | 'female'>;
 let terms: EnrollmentTerms;
 let now: Date;
 let busy: { sessions: SessionTime[]; held: HeldTime[]; reserved: ReservedTime[] };
+/** The slots another package keeps (`slotsFreeFrom`): null on every date, else free from that date. */
+let freeFrom: Map<string, string | null>;
+let freeFromReads: { slotIds: readonly string[]; enrollmentId: string }[];
 let booked: { input: MakeupBookingInput; tx: Transaction }[];
 let bookRefusal: unknown;
 let proposalRefusal: unknown;
@@ -306,6 +309,11 @@ function dependencies() {
         calls.push(['lockEnrollments', ids]);
       },
       heldTimesOf: async (_tx, _userIds, window) => overlapping(busy.held, window),
+      slotWeekTaken: async () => false,
+      slotsFreeFrom: async (_tx, slotIds, enrollmentId) => {
+        freeFromReads.push({ slotIds, enrollmentId });
+        return new Map([...freeFrom].filter(([id]) => slotIds.includes(id)));
+      },
     },
     clock: async () => {
       calls.push(['clock']);
@@ -376,6 +384,8 @@ beforeEach(() => {
   terms = TERMS;
   now = NOW;
   busy = { sessions: [], held: [], reserved: [] };
+  freeFrom = new Map();
+  freeFromReads = [];
   booked = [];
   bookRefusal = undefined;
   proposalRefusal = undefined;
@@ -735,6 +745,30 @@ describe('sessions.remedy.counterOptions (T031; H2, H4; Q5 (a))', () => {
         },
       ],
     };
+  });
+
+  it("another package's slot (the owner's rule of 2026-11-10): one read for every slot, its own enrollment left out; a slot kept on every date no option, one held until a release searched from it", async () => {
+    // The Monday slot another confirmed package keeps; the Riyadh slot a completed one holds
+    // until Tuesday 2026-11-24, so its first Thursday from then, 2026-11-26.
+    freeFrom = new Map([
+      [MONDAY_SLOT, null],
+      [RIYADH_SLOT, '2026-11-24'],
+    ]);
+    const { options } = await services().counterOptions(
+      { userId: STUDENT },
+      { sessionId: SESSION },
+      log,
+    );
+    expect(options).toEqual([
+      OWN_FREE,
+      { ...RIYADH_FREE, localDate: '2026-11-26', startsAt: '2026-11-26T17:00:00Z' },
+    ]);
+    expect(freeFromReads).toEqual([
+      {
+        slotIds: expect.arrayContaining([OWN_SLOT, MONDAY_SLOT, RIYADH_SLOT]),
+        enrollmentId: ENROLLMENT,
+      },
+    ]);
   });
 
   it('per active slot of the session’s length, its first free occurrence at or after max(now + A + L, C), by start, in each slot’s zone', async () => {

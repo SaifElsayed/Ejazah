@@ -83,6 +83,8 @@ interface Options {
     endsAt: Date;
   }[];
   readonly insertThrows?: unknown;
+  /** Whether another package keeps the counter's slot on its week (`slotWeekTaken`). */
+  readonly slotTaken?: boolean;
 }
 
 function world({
@@ -90,6 +92,7 @@ function world({
   decided = first,
   reserved = [],
   insertThrows,
+  slotTaken = false,
 }: Options) {
   const journal: string[] = [];
   const logged: { fields: Record<string, unknown>; message: string }[] = [];
@@ -169,6 +172,10 @@ function world({
       },
       lockEnrollments: async (_tx, ids) => {
         journal.push(`lock enrollments ${ids.join(',')}`);
+      },
+      slotWeekTaken: async (_tx, slotId, localDate, enrollmentId) => {
+        journal.push(`slot week ${slotId} ${localDate} ${enrollmentId}`);
+        return slotTaken;
       },
     },
     log: {
@@ -277,6 +284,49 @@ describe("a make-up's booking (T029, FR-469)", () => {
         scheduledEndAt: new Date('2026-12-08T09:30:00Z'),
       }),
     ]);
+  });
+
+  it("reads the counter's week on its slot after the reservations, its own enrollment left out", async () => {
+    const { booking, journal } = world({ first: remedyIn('counter_proposed') });
+    await booking.bookOn(tx, COUNTER_INPUT);
+    expect(journal.slice(9, 11)).toEqual([
+      `reservations ${TEACHER},${STUDENT} 2026-12-08T08:30:00.000Z..2026-12-08T09:30:00.000Z`,
+      `slot week ${COUNTER_SLOT} 2026-12-08 ${ENROLLMENT}`,
+    ]);
+  });
+
+  it("refuses a counter on a week another package keeps its slot MAKEUP_REFUSED, cause slot_taken, one line, nothing written (the owner's rule of 2026-11-10)", async () => {
+    const { booking, journal, logged } = world({
+      first: remedyIn('counter_proposed'),
+      slotTaken: true,
+    });
+    const refused = await refusalOf(booking.bookOn(tx, COUNTER_INPUT));
+    expect(refused.code).toBe('MAKEUP_REFUSED');
+    expect(makeupRefusalOf(refused)).toEqual({ cause: 'slot_taken' });
+    expect(journal).not.toContain('insert');
+    expect(journal.some((entry) => entry.startsWith('booked') || entry.startsWith('events'))).toBe(
+      false,
+    );
+    expect(logged).toEqual([
+      {
+        fields: {
+          remedyId: REMEDY,
+          sessionId: SESSION,
+          enrollmentId: ENROLLMENT,
+          operation: 'sessions.remedy.answerCounter',
+          errorCode: 'MAKEUP_REFUSED',
+          reason: 'slot_taken',
+        },
+        message: 'A make-up booking was refused',
+      },
+    ]);
+  });
+
+  it("never reads the slot's week for the proposal: its week was read at its offer (T028)", async () => {
+    const { booking, journal } = world({ slotTaken: true });
+    await booking.bookOn(tx, PROPOSAL);
+    expect(journal.some((entry) => entry.startsWith('slot week'))).toBe(false);
+    expect(journal).toContain('insert');
   });
 
   it("locks one slot when the counter's slot is the enrollment's own", async () => {
@@ -440,7 +490,11 @@ describe("the booking's transaction (T029, L5: runRetryingDeadlockOnce)", () => 
           return work(tx);
         },
       },
-      enrollments: { enrollmentFor: async () => TERMS, lockEnrollments: async () => undefined },
+      enrollments: {
+        enrollmentFor: async () => TERMS,
+        lockEnrollments: async () => undefined,
+        slotWeekTaken: async () => false,
+      },
       log: {
         info: () => undefined,
         warn: (...args: unknown[]) => {
@@ -468,7 +522,11 @@ describe("the booking's transaction (T029, L5: runRetryingDeadlockOnce)", () => 
           throw deadlock();
         },
       },
-      enrollments: { enrollmentFor: async () => TERMS, lockEnrollments: async () => undefined },
+      enrollments: {
+        enrollmentFor: async () => TERMS,
+        lockEnrollments: async () => undefined,
+        slotWeekTaken: async () => false,
+      },
       log: {
         info: (...args: unknown[]) => {
           lines.push({ fields: args[0], message: args[1] });

@@ -22,7 +22,11 @@
 // overlap with any other session of either party (`isExclusionViolation`); the transaction is then
 // rolled back by the throw. Both answer `MAKEUP_REFUSED`, the remedy left open, and carry what refused
 // it (`makeupRefusalOf`): the constraint the database named, which T032's `counter_booking_refused`
-// line names (A7), or the reservation.
+// line names (A7), or the reservation. A counter is also refused, before any write, on a week
+// another package keeps the counter's slot (`EnrollmentSide.slotWeekTaken`, the remedy's own
+// enrollment left out; the owner's rule of 2026-11-10 and decision (a) on the follow-up under T031
+// and T029): `MAKEUP_REFUSED`, cause `slot_taken`, the counter left pending as a reserved time leaves
+// it. The proposal's week was read so at its offer (T028).
 //
 // THE DEADLOCK (L5; research R-321). `reresolve-session-instants`' deferred overlap check can
 // deadlock against this insert at its commit. `run` opens the booking's transaction through T002's
@@ -122,6 +126,7 @@ export interface MakeupBooked {
 export type MakeupRefusal =
   | { readonly cause: 'overlap'; readonly constraint: ExclusionConstraint }
   | { readonly cause: 'reserved' }
+  | { readonly cause: 'slot_taken' }
   | { readonly cause: 'deadlock' };
 
 /** The `cause` a `MAKEUP_REFUSED` carries; never sent to a client (the error filter sends the code). */
@@ -214,7 +219,7 @@ export interface MakeupBooking {
 }
 
 /** Why a booking was refused, as its one log line names it. */
-type RefusalReason = 'not_found' | 'not_open' | 'reserved' | 'overlap';
+type RefusalReason = 'not_found' | 'not_open' | 'reserved' | 'slot_taken' | 'overlap';
 
 interface RefusalIds {
   readonly remedyId: string;
@@ -256,7 +261,7 @@ export function createMakeupBooking({
   store = makeupBookingStore,
 }: {
   readonly transactions: Transactions;
-  readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments'>;
+  readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments' | 'slotWeekTaken'>;
   /** The refusals' lines (info) and T002's deadlock lines (warn). */
   readonly log: Pick<Logger, 'info' | 'warn'>;
   /** The database's clock on the call's transaction (Q8). */
@@ -357,6 +362,13 @@ export function createMakeupBooking({
     );
     if (reserved.some((taken) => taken.remedyId !== remedyId)) {
       throw refusal(ids, 'MAKEUP_REFUSED', 'reserved', { cause: 'reserved' });
+    }
+    if (
+      booking === 'counter' &&
+      remedy.counter !== null &&
+      (await enrollments.slotWeekTaken(tx, remedy.counter.slotId, time.localDate, enrollmentId))
+    ) {
+      throw refusal(ids, 'MAKEUP_REFUSED', 'slot_taken', { cause: 'slot_taken' });
     }
 
     const at = await clock(tx);

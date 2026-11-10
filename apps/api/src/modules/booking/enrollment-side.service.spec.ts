@@ -285,12 +285,34 @@ describe("EnrollmentSide.slotWeekTaken (T008, R-205; the owner's decision of 202
     expect(await side.slotWeekTaken(tx, id(2), '2027-06-06', id(1))).toBe(true);
   });
 
-  it("another confirmed enrollment's slot is taken before its release date and free from it", async () => {
+  it("a completed enrollment's slot is taken before its release date and free from it", async () => {
     const { side } = world({
       occupancy: { kind: 'until', releasedOn: '2026-12-06', timezone: 'Africa/Cairo' },
     });
     expect(await side.slotWeekTaken(tx, id(2), '2026-11-29', id(1))).toBe(true);
     expect(await side.slotWeekTaken(tx, id(2), '2026-12-06', id(1))).toBe(false);
+  });
+});
+
+describe("EnrollmentSide.slotsFreeFrom (T031's counter options; the owner's rule of 2026-11-10)", () => {
+  it('reads every slot in one occupancy read, the asking enrollment left out; a free slot absent', async () => {
+    const { side, recorded } = world({});
+    expect(await side.slotsFreeFrom(tx, [id(2), id(3)], id(1))).toEqual(new Map());
+    expect(recorded.occupancy).toEqual([
+      { slotIds: [id(2), id(3)], except: id(1), bufferWeeks: 1 },
+    ]);
+  });
+
+  it('a slot taken on every date answers null', async () => {
+    const { side } = world({ occupancy: { kind: 'taken' } });
+    expect(await side.slotsFreeFrom(tx, [id(2)], id(1))).toEqual(new Map([[id(2), null]]));
+  });
+
+  it('a slot a completed enrollment holds answers its release date', async () => {
+    const { side } = world({
+      occupancy: { kind: 'until', releasedOn: '2026-12-06', timezone: 'Africa/Cairo' },
+    });
+    expect(await side.slotsFreeFrom(tx, [id(2)], id(1))).toEqual(new Map([[id(2), '2026-12-06']]));
   });
 });
 

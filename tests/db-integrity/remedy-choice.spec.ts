@@ -168,6 +168,7 @@ async function world(
     teacherId: offer.teacherId,
     ownSlotId: offer.slotId,
     mondaySlotId,
+    offer,
   };
 }
 
@@ -374,6 +375,73 @@ describe('sessions.remedy.counter over the real tables (T031, FR-465, D1, Q14 (a
     const closedBefore = await committed(closed);
     expect(await codeOf(counter(closed, '2026-11-16'))).toBe('REMEDY_NOT_OPEN');
     expect(await committed(closed)).toEqual(closedBefore);
+  });
+});
+
+/**
+ * Another student's package on the teacher's Monday slot, confirmed, its final session 2026-11-02
+ * disputed and still open, so it is not completed: under the owner's rule of 2026-11-10 the slot is
+ * its own on every week until it completes, with no session or reservation on the weeks after.
+ */
+async function otherPackageOnMonday(w: World) {
+  const otherStudentId = await makeUser(db);
+  const enrollmentId = await insertRow(db, 'enrollments', {
+    ...enrollmentValues(w.offer, otherStudentId),
+    slot_id: w.mondaySlotId,
+    status: 'confirmed',
+    confirmed_at: '2026-10-04T07:01:00Z',
+    snapshot_session_count: 1,
+    quoted_first_session_local_date: '2026-11-02',
+  });
+  await insertRow(db, 'sessions', {
+    enrollment_id: enrollmentId,
+    teacher_user_id: w.teacherId,
+    student_user_id: otherStudentId,
+    sequence_number: 1,
+    scheduled_date_local: '2026-11-02',
+    scheduled_start_time_local: '18:00:00',
+    timezone: 'Africa/Cairo',
+    scheduled_start_at: '2026-11-02T16:00:00Z',
+    scheduled_end_at: '2026-11-02T17:00:00Z',
+    status: 'disputed',
+  });
+}
+
+describe("the counter and another package's slot (the owner's rule of 2026-11-10; the follow-up under T031 and T029)", () => {
+  it('the options leave out every week of a slot another confirmed package keeps, and a counter on it is SLOT_NOT_OFFERED, nothing written', async () => {
+    const w = await world({ status: 'proposed' });
+    await otherPackageOnMonday(w);
+    const { options } = await services.remedy.counterOptions(
+      { userId: w.studentId },
+      { sessionId: w.sessionId },
+      log,
+    );
+    expect(options.map(({ slotId, localDate }) => [slotId, localDate])).toEqual([
+      [w.ownSlotId, '2026-11-22'],
+    ]);
+    const before = await committed(w);
+    expect(await codeOf(counter(w, '2026-11-16'))).toBe('SLOT_NOT_OFFERED');
+    expect(await committed(w)).toEqual(before);
+  });
+
+  it('a counter written before the other package took the slot is never booked on it: MAKEUP_REFUSED, no make-up, the counter left pending', async () => {
+    const w = await world({ status: 'proposed' });
+    await counter(w, '2026-11-16');
+    await otherPackageOnMonday(w);
+    const before = await committed(w);
+    expect(
+      await codeOf(
+        services.remedy.answerCounter(
+          { userId: w.teacherId },
+          { sessionId: w.sessionId, accept: true },
+          log,
+        ),
+      ),
+    ).toBe('MAKEUP_REFUSED');
+    const after = await committed(w);
+    expect(after.makeups).toEqual([]);
+    expect(after.remedy).toMatchObject({ status: 'counter_proposed', counter_date: '2026-11-16' });
+    expect(after).toEqual(before);
   });
 });
 

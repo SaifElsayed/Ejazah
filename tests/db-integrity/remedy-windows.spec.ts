@@ -204,12 +204,25 @@ async function world(remedy: Readonly<Record<string, unknown>> = {}) {
 
 type World = Awaited<ReturnType<typeof world>>;
 
-/** Another student of the teacher with a session at `[startsAt, endsAt)`: the teacher's overlap only. */
+/**
+ * Another student of the teacher with a session at `[startsAt, endsAt)`: the teacher's overlap only.
+ * Its enrollment is on a slot of its own, inactive, never the counter's: a confirmed package keeps
+ * its slot on every week (the owner's rule of 2026-11-10), which would refuse the counter before the
+ * database's exclusion these cases test (the follow-up under T032).
+ */
 async function teacherBusy(w: World, startsAt: string, endsAt: string): Promise<void> {
   const other = await makeUser(db);
+  const slotId = await insertRow(db, 'availability_slots', {
+    teacher_user_id: w.teacherId,
+    day_of_week: 2,
+    start_time_local: '18:00:00',
+    duration_minutes: 60,
+    timezone: 'Africa/Cairo',
+    is_active: false,
+  });
   const id = await insertRow(db, 'enrollments', {
     ...enrollmentValues(w.offer, other),
-    slot_id: w.mondaySlotId,
+    slot_id: slotId,
     status: 'confirmed',
     confirmed_at: '2026-10-04T07:01:00Z',
   });
