@@ -118,6 +118,11 @@ const answered = {
   sessionStatus: 'cancelled_by_agreement' as const,
 };
 
+// T026.
+const DISPUTE = '0199d0a0-0000-7000-8000-00000000d0d1';
+const DISPUTE_KEY = 'dispute-key-0000000001';
+const raised = { disputeId: DISPUTE, status: 'open' as const };
+
 let calls: unknown[][];
 
 const sessions: SessionsServices = {
@@ -148,6 +153,13 @@ const sessions: SessionsServices = {
       if (input.requestId !== REQUEST) throw new DomainError('NOT_FOUND');
       return { ...answered, sessionId: SESSION, respondedAt: 'now' } as never;
     },
+  },
+  // T026.
+  raiseDispute: async (caller, input) => {
+    calls.push(['raiseDispute', caller, input]);
+    if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+    // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
+    return { ...raised, raisedByUserId: CALLER } as never;
   },
 };
 
@@ -186,6 +198,12 @@ const procedures = {
     caller.sessions.cancellation.request({ sessionId, reason: 'سفر طارئ', idempotencyKey: KEY }),
   'sessions.cancellation.answer': (caller: Caller, requestId = REQUEST) =>
     caller.sessions.cancellation.answer({ requestId, accept: true }),
+  'sessions.dispute.raise': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.dispute.raise({
+      sessionId,
+      reason: 'لم يحضر المعلم',
+      idempotencyKey: DISPUTE_KEY,
+    }),
 } as const;
 
 const metaOf = (path: string): unknown =>
@@ -331,7 +349,12 @@ describe("'sessions.join' (T011)", () => {
       video,
       enrollmentSide: {} as never,
       store: {} as SessionsStore,
-      idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
+      idempotency: {
+        run: async () => {
+          opened();
+          throw new Error('no transaction is opened here');
+        },
+      },
     });
     const read: string[] = [];
     // The caller already made the window's one call: this one is the limit plus one.
@@ -528,6 +551,79 @@ describe("'sessions.cancellation.answer' (T021)", () => {
     const procedure = (
       surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
     )['sessions.cancellation.answer'];
+    expect(procedure?._def.type).toBe('mutation');
+  });
+});
+
+describe("'sessions.dispute.raise' (T026)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED before the service: 'sessions.dispute.raise'", async () => {
+    await expect(procedures['sessions.dispute.raise'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended or banned student or teacher ACCOUNT_RESTRICTED before the service: 'sessions.dispute.raise'", async () => {
+    for (const who of [
+      'suspended student',
+      'banned student',
+      'suspended teacher',
+      'banned teacher',
+    ] as const) {
+      await expect(
+        procedures['sessions.dispute.raise'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the session's own account and the input, whatever else it says: 'sessions.dispute.raise'", async () => {
+    for (const who of ['student', 'teacher'] as const) {
+      await callerAs(sessionOf(who)).sessions.dispute.raise({
+        sessionId: SESSION,
+        reason: 'لم يحضر المعلم',
+        idempotencyKey: DISPUTE_KEY,
+        userId: OTHER,
+        gender: 'male',
+      } as never);
+    }
+    const handed = [
+      'raiseDispute',
+      { userId: CALLER },
+      { sessionId: SESSION, reason: 'لم يحضر المعلم', idempotencyKey: DISPUTE_KEY },
+    ];
+    expect(calls).toEqual([handed, handed]);
+  });
+
+  it("answers the dispute parsed by the output schema, which strips a field it does not name: 'sessions.dispute.raise'", async () => {
+    expect(await procedures['sessions.dispute.raise'](callerAs(sessionOf('student')))).toEqual(
+      raised,
+    );
+  });
+
+  it("refuses an empty or over-long reason, a malformed key or session id VALIDATION_FAILED before the service: 'sessions.dispute.raise'", async () => {
+    for (const input of [
+      { sessionId: SESSION, reason: '', idempotencyKey: DISPUTE_KEY },
+      { sessionId: SESSION, reason: 'x'.repeat(501), idempotencyKey: DISPUTE_KEY },
+      { sessionId: SESSION, reason: 'سبب', idempotencyKey: 'short' },
+      { sessionId: 'not-an-id', reason: 'سبب', idempotencyKey: DISPUTE_KEY },
+    ]) {
+      const thrown: unknown = await callerAs(sessionOf('student'))
+        .sessions.dispute.raise(input)
+        .catch((error: unknown) => error);
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("is a mutation stamped with the participant kind: 'sessions.dispute.raise'", () => {
+    expect(metaOf('sessions.dispute.raise')).toEqual({ surface: 'app', caller: 'participant' });
+    const procedure = (
+      surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
+    )['sessions.dispute.raise'];
     expect(procedure?._def.type).toBe('mutation');
   });
 });

@@ -89,6 +89,7 @@ import type { AuditEntry, AuditTrail } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
+import { isRefusalLogged, markRefusalLogged } from '../platform/errors/logged-refusal.js';
 import {
   type CallerSubject,
   type IdentifierRateLimit,
@@ -487,21 +488,19 @@ async function readInput(getRawInput: () => Promise<unknown>, log: Logger): Prom
       code: 'BAD_REQUEST',
       cause: new DomainError('VALIDATION_FAILED'),
     });
-    loggedRefusals.add(refusal);
-    throw refusal;
+    throw markRefusalLogged(refusal);
   }
 }
 
-/** The refusals a kind already logged itself, held weakly by the error (T062). */
-const loggedRefusals = new WeakSet<object>();
-
 /**
- * Whether a kind already wrote this refusal's line (the input guard's unreadable input, T108), so
- * the handler's one-place refusal log writes no second line for the one call (T062's follow-up from
- * B34; `app.module.ts`' `onError`).
+ * Whether this refusal's line was already written where it was refused (T062's follow-up from B34;
+ * `app.module.ts`' `onError`), so the handler's one-place refusal log writes no second line for the
+ * one call: the input guard's unreadable input (T108), marked on the error it throws, or a module's
+ * own logged refusal, marked on the error tRPC wraps as this error's cause (PR #130's review, round
+ * 1, Minor 4; `platform/errors/logged-refusal.ts`).
  */
-export function isRefusalLoggedByKind(error: object): boolean {
-  return loggedRefusals.has(error);
+export function isRefusalLoggedByKind(error: TRPCError): boolean {
+  return isRefusalLogged(error) || isRefusalLogged(error.cause);
 }
 
 /** The user surface's input guard: after the kind's authentication, before its schema (T108). */

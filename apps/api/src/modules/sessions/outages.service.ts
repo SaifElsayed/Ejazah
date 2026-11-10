@@ -38,7 +38,8 @@
 // (docs/ARCHITECTURE.md; the owner's decision of 2026-11-08 on lane D's questions, Q6).
 //
 // THE LOG (the owner's rule). A refusal writes one info line with the administrator's id and the
-// reason code; a record writes one with the window's id and the sessions it reclassified, and one
+// reason code, its error marked «logged» so the handler's one-place refusal log writes no second
+// (PR #130's review, Minor 4); a record writes one with the window's id and the sessions it reclassified, and one
 // «Enrollment completed» `{ enrollmentId }` per enrollment T015's check completed, on its
 // transaction as before (PR #129's review, Minor 3). Moving it after the commit waits in the
 // Not-scheduled row's item (13), before launch (the note under T063).
@@ -48,6 +49,7 @@ import { z } from 'zod';
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Completion } from './completion.service.js';
@@ -188,15 +190,19 @@ export function createOutageServices({
     } catch (error: unknown) {
       if (!(error instanceof TimeError)) throw error;
       log.info({ adminId, reason: 'unknown_zone' }, 'Outage window refused');
-      throw new DomainError('VALIDATION_FAILED', undefined, {
-        details: [{ path: 'timezone', code: 'unknown' }],
-      });
+      throw markRefusalLogged(
+        new DomainError('VALIDATION_FAILED', undefined, {
+          details: [{ path: 'timezone', code: 'unknown' }],
+        }),
+      );
     }
     if (window.endsAt.getTime() <= window.startsAt.getTime()) {
       log.info({ adminId, reason: 'end_not_after_start' }, 'Outage window refused');
-      throw new DomainError('VALIDATION_FAILED', undefined, {
-        details: [{ path: 'end', code: 'not_after_start' }],
-      });
+      throw markRefusalLogged(
+        new DomainError('VALIDATION_FAILED', undefined, {
+          details: [{ path: 'end', code: 'not_after_start' }],
+        }),
+      );
     }
     return window;
   };

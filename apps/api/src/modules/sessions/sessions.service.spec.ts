@@ -228,8 +228,9 @@ beforeEach(() => {
     video,
     enrollmentSide,
     store,
+    // T021 and T026: no cancellation is requested and no dispute is raised here.
     idempotency: {
-      run: () => Promise.reject(new Error('no cancellation is requested here')),
+      run: () => Promise.reject(new Error('no cancellation or dispute is keyed here')),
     },
     now: () => now,
   });

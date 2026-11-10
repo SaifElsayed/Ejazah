@@ -31,7 +31,8 @@
 // longer `scheduled` `SESSION_NOT_SCHEDULED`; before `startsAt − early_join_lead_minutes`
 // `JOIN_NOT_OPEN` with `opensAt`; from `endsAt` `JOIN_CLOSED`. Each refusal throws inside the
 // transaction, which rolls back, and writes one info line with the session's and the caller's ids,
-// the code and the reason, nothing else. The transaction writes nothing: no attendance, no
+// the code and the reason, nothing else, its error marked «logged» (`markRefusalLogged`) so the
+// handler's one-place refusal log writes no second line (PR #130's review, Minor 4). The transaction writes nothing: no attendance, no
 // `provider_room_id` (the room is named for the session's id; M1).
 //
 // After the commit, never holding a lock across a provider call: `createRoom` with the timeouts the
@@ -55,6 +56,7 @@ import {
   type ErrorCode,
   type FieldIssue,
 } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
@@ -67,6 +69,7 @@ import {
   cancellationViewOf,
   createCancellationServices,
 } from './cancellation.service.js';
+import { createDisputeRaise, type DisputeRaise, type DisputeRaiseStore } from './dispute-raise.service.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
@@ -125,7 +128,7 @@ export interface SessionsCaller {
 }
 
 /** `sessions.get` and `sessions.join`, each one transaction on the process's client. */
-export interface SessionsServices {
+export interface SessionsServices extends DisputeRaise {
   get(caller: SessionsCaller, input: SessionsGetInput, log: Logger): Promise<SessionsGetOutput>;
   join(caller: SessionsCaller, input: SessionsJoinInput, log: Logger): Promise<SessionsJoinOutput>;
   /** T021: `sessions.cancellation.request` and `.answer`. */
@@ -138,10 +141,15 @@ export interface SessionsDependencies {
   readonly video: VideoPort;
   readonly enrollmentSide: EnrollmentSide;
   readonly store: SessionsStore;
-  /** T021: the kernel's idempotency, which keys `sessions.cancellation.request`. */
+  /**
+   * The kernel's idempotency, which keys `sessions.cancellation.request` (T021) and runs
+   * `sessions.dispute.raise` in its transaction (T026).
+   */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   /** T021: the cancellation's store; the module's unless a spec fakes it. */
   readonly cancellationStore?: CancellationStore;
+  /** T026: the raise's store; `disputeRaiseStore` unless a spec narrows it. */
+  readonly disputeStore?: DisputeRaiseStore;
   readonly now?: () => Date;
 }
 
@@ -158,7 +166,10 @@ type RefusalReason =
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
 
-/** Logs the refusal with ids and its reason only, and answers the error to throw. */
+/**
+ * Logs the refusal with ids and its reason only, and answers the error to throw, marked as logged so
+ * the handler's one-place refusal log writes no second line (PR #130's review, Minor 4).
+ */
 function refusal(
   log: Logger,
   ids: { readonly sessionId: string; readonly userId: string },
@@ -168,7 +179,7 @@ function refusal(
   details?: { readonly details?: readonly FieldIssue[]; readonly cause?: unknown },
 ): DomainError {
   log.info({ ...ids, errorCode, reason }, 'A session read or join was refused');
-  return new DomainError(errorCode, undefined, details);
+  return markRefusalLogged(new DomainError(errorCode, undefined, details));
 }
 
 /** The session and its two parties as the server's records hold them, or the refusal. */
@@ -208,13 +219,22 @@ export function createSessionsServices({
   store,
   idempotency,
   cancellationStore,
+  disputeStore,
   now = () => new Date(),
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
     new Date(addMinutes(session.startsAt, -lead));
+  // T026: `sessions.dispute.raise` (`dispute-raise.service.ts`).
+  const { raiseDispute } = createDisputeRaise({
+    idempotency,
+    settings,
+    enrollments: enrollmentSide,
+    ...(disputeStore === undefined ? {} : { store: disputeStore }),
+  });
 
   return {
+    raiseDispute,
     get: async ({ userId }, { sessionId }, log) => {
       const lead = await leadMinutes();
       return transactions.run(async (tx) => {

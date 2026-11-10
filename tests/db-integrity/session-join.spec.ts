@@ -75,7 +75,8 @@ const SEEDED: Record<string, unknown> = {
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
-/** T021: the join keys nothing; `sessions.cancellation.request` is cancellation-requests.spec.ts'. */
+/** The join keys nothing: T021's request is cancellation-requests.spec.ts', T026's raise
+ * session-dispute.spec.ts'. */
 const UNKEYED = { run: () => Promise.reject(new Error('nothing is keyed here')) };
 
 beforeAll(async () => {

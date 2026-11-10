@@ -27,3 +27,5 @@ The rules live in the services: `compensation-case.service.ts` (the system's com
 FR-362, FR-375, FR-DISPUTE-5 (`openCompensationCase`: one open case per enrollment and reason, `slot_unavailable`, `party_restricted` or `duplicate_payment`; T035).
 
 FR-375, FR-PAYG-19 as amended 2026-11-04 (an enrollment's cases as the covering rule reads them: whether one is open, the latest opening and the latest closing, the database's instants; T082): `caseInstantsOf`, `caseInstantsAmong` in `compensation-case.repository.ts`.
+
+FR-473, FR-474 (a participant's dispute of a session, opened after the caller's locks of the raiser, the enrollment and the session, at most one open per session by rule 46's `disputes_one_open_per_session_key`; each session's latest session dispute for the parties' screens; T026 of specs/004-sessions): `openSessionDispute` in `session-dispute.service.ts`, `latestSessionDisputesOf` in `session-dispute.repository.ts`.
