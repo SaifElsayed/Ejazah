@@ -146,6 +146,8 @@ let video: RecordingVideo;
 let lines: Record<string, unknown>[];
 let log: Logger;
 let now: Date;
+/** The database's clock as `get` reads it on its transaction (`clockTimestamp` in production). */
+let databaseNow: Date;
 let services: SessionsServices;
 
 const tx = {} as Transaction;
@@ -240,6 +242,7 @@ beforeEach(() => {
     }),
   });
   now = new Date('2026-11-08T14:50:00.000Z');
+  databaseNow = now;
   services = createSessionsServices({
     transactions,
     settings,
@@ -252,6 +255,7 @@ beforeEach(() => {
     },
     disputeView,
     now: () => now,
+    clock: async () => databaseNow,
   });
 });
 
@@ -396,10 +400,22 @@ describe('sessions.get: the cancellation request (T021)', () => {
 
   it('reads a pending request as pending one millisecond before the start, and expired at it (FR-458)', async () => {
     cancellations.set(SESSION, pending());
-    now = new Date('2026-11-08T14:59:59.999Z');
+    databaseNow = new Date('2026-11-08T14:59:59.999Z');
     expect(await statusSeenBy(TEACHER)).toBe('pending');
-    now = STARTS;
+    databaseNow = STARTS;
     expect(await statusSeenBy(TEACHER)).toBe('expired');
+  });
+
+  // PR #131's review, round 1, nit 2: the answer reads the request at the database's clock, as the
+  // dispute fields beside it and every decision path read it, never the process's.
+  it('reads the request at the database clock: expired at the start though the process clock is before it', async () => {
+    cancellations.set(SESSION, pending());
+    now = new Date('2026-11-08T14:59:59.999Z');
+    databaseNow = STARTS;
+    expect(await statusSeenBy(TEACHER)).toBe('expired');
+    now = STARTS;
+    databaseNow = new Date('2026-11-08T14:59:59.999Z');
+    expect(await statusSeenBy(TEACHER)).toBe('pending');
   });
 
   it.each(['cancelled_by_admin', 'done'] as const)(

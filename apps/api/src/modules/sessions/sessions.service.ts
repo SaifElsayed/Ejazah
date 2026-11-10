@@ -51,6 +51,7 @@ import type {
 import { addMinutes } from '@ijazah/time';
 import { z } from 'zod';
 
+import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import {
@@ -156,6 +157,8 @@ export interface SessionsDependencies {
   /** T026: `sessions.get`'s dispute fields; `createDisputeView({ settings })` unless a spec fakes it. */
   readonly disputeView?: DisputeView;
   readonly now?: () => Date;
+  /** `sessions.get`'s `cancellation` read at the database's clock (`clockTimestamp`), as decided. */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
 }
 
 /** Why a read or a join was refused, as its one log line names it. */
@@ -227,6 +230,7 @@ export function createSessionsServices({
   disputeStore,
   disputeView = createDisputeView({ settings }),
   now = () => new Date(),
+  clock = clockTimestamp,
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
@@ -279,7 +283,7 @@ export function createSessionsServices({
           },
           ...(request === null
             ? {}
-            : { cancellation: cancellationViewOf(request, session, userId, now()) }),
+            : { cancellation: cancellationViewOf(request, session, userId, await clock(tx)) }),
           ...disputes.get(session.id),
         };
       });
