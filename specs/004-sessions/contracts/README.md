@@ -34,7 +34,8 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `remedyId` and `userId` (admin only): never `gender` or `role`, and a user procedure never takes a `userId` (R-GENDER-4).
 - **Errors.** Added: `JOIN_NOT_OPEN` (with `opensAt` in details), `JOIN_CLOSED`, `SESSION_NOT_SCHEDULED`,
   `CANCELLATION_PENDING` (the other party's request is open; with `requestId`), `CANCELLATION_EXPIRED`,
-  `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `NOT_DISPUTABLE` (any cancelled session, by
+  `CONFLICT` with `details.cause` `not_pending` (`sessions.cancellation.answer` to a request no longer pending, nothing
+  written; the owner's decision of 2026-11-10 on B37, T021), `DISPUTE_WINDOW_CLOSED`, `DISPUTE_OPEN`, `SESSION_UNDER_REVIEW`, `NOT_DISPUTABLE` (any cancelled session, by
   agreement or by an administrator; a Cancelled-By-Agreement one is final at acceptance), `REMEDY_NOT_OPEN`, `COUNTER_PENDING` (a counter-proposal is
   already waiting for the teacher's answer), `CHOICE_NOT_ALLOWED` (a refund
   where only a make-up is owed), `SLOT_NOT_OFFERED` (a counter outside the options), `MAKEUP_REFUSED` (the database

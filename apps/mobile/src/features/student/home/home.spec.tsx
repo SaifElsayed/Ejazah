@@ -70,6 +70,7 @@ const next: ListedSession = {
   startsAt: '2026-11-26T18:00:00Z',
   endsAt: '2026-11-26T18:45:00Z',
   status: 'scheduled',
+  pendingCancellation: false,
 };
 const ongoing: StudentEnrollmentItem = {
   enrollmentId: ENROLLMENT_ID,

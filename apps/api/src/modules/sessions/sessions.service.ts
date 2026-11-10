@@ -14,7 +14,12 @@
 // (FR-424; sessions reads no booking table), the join period, and the counterparty's display name
 // and nothing else of them (R-HONEST-4): no date of birth, minor flag, document or dispute history is
 // read. `cancellation`, `remedy`, `dispute`, `canRaiseDispute` and `disputeClosesAt` are T021's,
-// T028's and T026's.
+// T028's and T026's. T021: `cancellation` is the session's latest request, read on the same
+// transaction, a stored `pending` answered `expired` from the start and once the session is no
+// longer `scheduled` (`cancellation.service.ts`, `cancellationViewOf`).
+//
+// T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
+// so the surface reaches them as `services.sessions.cancellation`.
 //
 // THE JOIN (FR-431, FR-432, FR-482, R-SESS-5; kernel.md, the `sessions.join` row: `users` (both, one
 // call) only, no `sessions` row locked and none written). The session is read once to learn its
@@ -50,10 +55,18 @@ import {
   type ErrorCode,
   type FieldIssue,
 } from '../../platform/errors/domain-error.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { sessionPartiesOf } from '../identity/index.js';
+import { type CancellationRequestRow, latestRequestOf } from './cancellation.repository.js';
+import {
+  type CancellationServices,
+  type CancellationStore,
+  cancellationViewOf,
+  createCancellationServices,
+} from './cancellation.service.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
@@ -94,6 +107,8 @@ export interface SessionsStore {
     tx: Transaction,
     userIds: readonly string[],
   ): Promise<ReadonlyMap<string, PartyStanding>>;
+  /** T021: the session's latest cancellation request, whatever its status, else null; no lock. */
+  latestCancellationOf(tx: Transaction, sessionId: string): Promise<CancellationRequestRow | null>;
 }
 
 /** The store over this module's reads and lock and identity's accounts (R-API-6), as `main.ts` binds it. */
@@ -101,6 +116,7 @@ export const sessionsStore: SessionsStore = {
   sessionOfParty,
   lockAccounts: lockSessionParties,
   partiesOf: sessionPartiesOf,
+  latestCancellationOf: latestRequestOf,
 };
 
 /** The person asking, from the server-held session. */
@@ -112,6 +128,8 @@ export interface SessionsCaller {
 export interface SessionsServices {
   get(caller: SessionsCaller, input: SessionsGetInput, log: Logger): Promise<SessionsGetOutput>;
   join(caller: SessionsCaller, input: SessionsJoinInput, log: Logger): Promise<SessionsJoinOutput>;
+  /** T021: `sessions.cancellation.request` and `.answer`. */
+  readonly cancellation: CancellationServices;
 }
 
 export interface SessionsDependencies {
@@ -120,6 +138,10 @@ export interface SessionsDependencies {
   readonly video: VideoPort;
   readonly enrollmentSide: EnrollmentSide;
   readonly store: SessionsStore;
+  /** T021: the kernel's idempotency, which keys `sessions.cancellation.request`. */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /** T021: the cancellation's store; the module's unless a spec fakes it. */
+  readonly cancellationStore?: CancellationStore;
   readonly now?: () => Date;
 }
 
@@ -184,6 +206,8 @@ export function createSessionsServices({
   video,
   enrollmentSide,
   store,
+  idempotency,
+  cancellationStore,
   now = () => new Date(),
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
@@ -202,6 +226,7 @@ export function createSessionsServices({
         const terms = await enrollmentSide.enrollmentFor(tx, session.enrollmentId);
         // `sessions.enrollment_id` is a foreign key to the enrollment (ERD `sessions`).
         if (terms === null) throw new Error('sessions: a session without its enrollment');
+        const request = await store.latestCancellationOf(tx, session.id);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -224,9 +249,19 @@ export function createSessionsServices({
             opensAt: opensAtOf(session, lead).toISOString(),
             closesAt: session.endsAt.toISOString(),
           },
+          ...(request === null
+            ? {}
+            : { cancellation: cancellationViewOf(request, session, userId, now()) }),
         };
       });
     },
+
+    cancellation: createCancellationServices({
+      transactions,
+      idempotency,
+      enrollments: enrollmentSide,
+      ...(cancellationStore === undefined ? {} : { store: cancellationStore }),
+    }),
 
     join: async ({ userId }, { sessionId }, log) => {
       const lead = await leadMinutes();

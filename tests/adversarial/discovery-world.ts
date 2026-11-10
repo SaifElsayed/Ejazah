@@ -156,6 +156,10 @@ import type {
   EnrollmentsGetOutput,
   EnrollmentsListInput,
   EnrollmentsListOutput,
+  SessionsCancellationAnswerInput,
+  SessionsCancellationAnswerOutput,
+  SessionsCancellationRequestInput,
+  SessionsCancellationRequestOutput,
   SessionsGetInput,
   SessionsGetOutput,
   SessionsJoinInput,
@@ -383,6 +387,11 @@ export interface AppCaller {
   readonly sessions: {
     get(input: SessionsGetInput): Promise<SessionsGetOutput>;
     join(input: SessionsJoinInput): Promise<SessionsJoinOutput>;
+    /** T021: a cancellation asked and answered, attacked in `sessions-cancellation.attacks.ts`. */
+    readonly cancellation: {
+      request(input: SessionsCancellationRequestInput): Promise<SessionsCancellationRequestOutput>;
+      answer(input: SessionsCancellationAnswerInput): Promise<SessionsCancellationAnswerOutput>;
+    };
   };
 }
 
@@ -646,6 +655,8 @@ async function build(): Promise<Built> {
       video,
       enrollmentSide: createEnrollmentSide({ settings }),
       store: sessionsStore,
+      // T021: `sessions.cancellation.request` keyed as `main.ts` keys it.
+      idempotency,
     }),
   };
   const rateLimiter = new RateLimiter({

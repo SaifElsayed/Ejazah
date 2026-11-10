@@ -29,6 +29,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import { bindJoinToken, type VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import type { CancellationRequestRow } from './cancellation.repository.js';
 import type { EnrollmentSide, EnrollmentTerms } from './enrollment-side.port.js';
 import type { PartySessionRow } from './sessions.repository.js';
 import {
@@ -89,6 +90,8 @@ let sessions: Map<string, PartySessionRow>;
 let parties: Map<string, PartyStanding>;
 /** Applied once the accounts are locked: what another transaction committed meanwhile. */
 let underLock: (() => void) | undefined;
+/** T021: each session's latest cancellation request, as `sessions.get` reads it. */
+let cancellations: Map<string, CancellationRequestRow>;
 /** The provider's address this spec's port answers with every token. */
 const SERVER_URL = 'wss://video.spec.invalid';
 
@@ -177,6 +180,10 @@ const store: SessionsStore = {
       }),
     );
   },
+  latestCancellationOf: async (_tx, sessionId) => {
+    trace.push(`read cancellation of ${sessionId}`);
+    return cancellations.get(sessionId) ?? null;
+  },
 };
 
 const terms: EnrollmentTerms = {
@@ -202,6 +209,7 @@ beforeEach(() => {
     [STRANGER, active('female', 'زينب حسن')],
   ]);
   underLock = undefined;
+  cancellations = new Map();
   video = new RecordingVideo();
   lines = [];
   log = createLogger({
@@ -220,6 +228,9 @@ beforeEach(() => {
     video,
     enrollmentSide,
     store,
+    idempotency: {
+      run: () => Promise.reject(new Error('no cancellation is requested here')),
+    },
     now: () => now,
   });
 });
@@ -319,9 +330,72 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
       'begin',
       `read session as ${STUDENT}`,
       `read parties ${STUDENT},${TEACHER}`,
+      `read cancellation of ${SESSION}`,
       'commit',
     ]);
   });
+});
+
+// T021: `cancellation`, the session's latest request as each party reads it (FR-456, FR-458,
+// FR-495; app-surface.md, `sessions.get`). A stored `pending` reads as `expired` from the start
+// and once the session is no longer `scheduled` (the owner's decision of 2026-11-06 on PR #126's
+// review, follow-up 3), its expiry the session's start; the reason is shown to both parties.
+describe('sessions.get: the cancellation request (T021)', () => {
+  const REQUEST = '0199d0a0-0000-7000-8000-00000000d001';
+  const pending = (overrides: Partial<CancellationRequestRow> = {}): CancellationRequestRow => ({
+    id: REQUEST,
+    sessionId: SESSION,
+    requestedByUserId: STUDENT,
+    reason: 'سفر طارئ',
+    status: 'pending',
+    ...overrides,
+  });
+  const statusSeenBy = async (userId: string) =>
+    (await services.get({ userId }, { sessionId: SESSION }, log)).cancellation?.status;
+
+  it('answers no cancellation on a session with no request', async () => {
+    const seen = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect('cancellation' in seen).toBe(false);
+  });
+
+  it('answers the pending request to its requester and to the counterparty, expiring at the start', async () => {
+    cancellations.set(SESSION, pending());
+    const shown = {
+      requestId: REQUEST,
+      reason: 'سفر طارئ',
+      status: 'pending',
+      expiresAt: STARTS.toISOString(),
+    };
+    const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(byStudent.cancellation).toEqual({ ...shown, requestedByMe: true });
+    expect(byTeacher.cancellation).toEqual({ ...shown, requestedByMe: false });
+  });
+
+  it('reads a pending request as pending one millisecond before the start, and expired at it (FR-458)', async () => {
+    cancellations.set(SESSION, pending());
+    now = new Date('2026-11-08T14:59:59.999Z');
+    expect(await statusSeenBy(TEACHER)).toBe('pending');
+    now = STARTS;
+    expect(await statusSeenBy(TEACHER)).toBe('expired');
+  });
+
+  it.each(['cancelled_by_admin', 'done'] as const)(
+    'reads a pending request on a session %s as over: expired',
+    async (status) => {
+      sessions.set(SESSION, row({ status }));
+      cancellations.set(SESSION, pending());
+      expect(await statusSeenBy(TEACHER)).toBe('expired');
+    },
+  );
+
+  it.each(['accepted', 'declined', 'expired'] as const)(
+    'answers a request %s as stored',
+    async (status) => {
+      cancellations.set(SESSION, pending({ status }));
+      expect(await statusSeenBy(STUDENT)).toBe(status);
+    },
+  );
 });
 
 describe('sessions.join: admitted (FR-431, FR-435, R-GENDER-7)', () => {

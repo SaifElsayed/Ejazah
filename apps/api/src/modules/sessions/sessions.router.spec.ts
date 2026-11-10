@@ -104,6 +104,20 @@ const joined = {
   validUntil: '2026-11-12T08:00:00.000Z',
 };
 
+// T021.
+const REQUEST = '0199d0a0-0000-7000-8000-00000000d0c1';
+const KEY = 'cancel-key-0199d0a0-0001';
+const requested = {
+  requestId: REQUEST,
+  status: 'pending' as const,
+  expiresAt: '2026-11-12T07:00:00.000Z',
+};
+const answered = {
+  requestId: REQUEST,
+  status: 'accepted' as const,
+  sessionStatus: 'cancelled_by_agreement' as const,
+};
+
 let calls: unknown[][];
 
 const sessions: SessionsServices = {
@@ -121,6 +135,19 @@ const sessions: SessionsServices = {
     calls.push(['join', caller, input]);
     if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
     return { ...joined, participantUserId: CALLER } as never;
+  },
+  // T021.
+  cancellation: {
+    request: async (caller, input) => {
+      calls.push(['request', caller, input]);
+      if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
+      return { ...requested, reason: input.reason, requestedByUserId: CALLER } as never;
+    },
+    answer: async (caller, input) => {
+      calls.push(['answer', caller, input]);
+      if (input.requestId !== REQUEST) throw new DomainError('NOT_FOUND');
+      return { ...answered, sessionId: SESSION, respondedAt: 'now' } as never;
+    },
   },
 };
 
@@ -155,6 +182,10 @@ const refused = (code: string) =>
 const procedures = {
   'sessions.get': (caller: Caller, sessionId = SESSION) => caller.sessions.get({ sessionId }),
   'sessions.join': (caller: Caller, sessionId = SESSION) => caller.sessions.join({ sessionId }),
+  'sessions.cancellation.request': (caller: Caller, sessionId = SESSION) =>
+    caller.sessions.cancellation.request({ sessionId, reason: 'سفر طارئ', idempotencyKey: KEY }),
+  'sessions.cancellation.answer': (caller: Caller, requestId = REQUEST) =>
+    caller.sessions.cancellation.answer({ requestId, accept: true }),
 } as const;
 
 const metaOf = (path: string): unknown =>
@@ -300,6 +331,7 @@ describe("'sessions.join' (T011)", () => {
       video,
       enrollmentSide: {} as never,
       store: {} as SessionsStore,
+      idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
     });
     const read: string[] = [];
     // The caller already made the window's one call: this one is the limit plus one.
@@ -346,5 +378,156 @@ describe("'sessions.join' (T011)", () => {
     expect(opened).not.toHaveBeenCalled();
     expect(video.createRoom).not.toHaveBeenCalled();
     expect(video.createSessionToken).not.toHaveBeenCalled();
+  });
+});
+
+// T021 of specs/004-sessions: `sessions.cancellation.request` and `.answer`, the participant kind,
+// each a mutation handing the service the caller's own account and the validated input only.
+describe("'sessions.cancellation.request' (T021)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED before the service: 'sessions.cancellation.request'", async () => {
+    await expect(procedures['sessions.cancellation.request'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended or banned student or teacher ACCOUNT_RESTRICTED before the service: 'sessions.cancellation.request'", async () => {
+    for (const who of [
+      'suspended student',
+      'banned student',
+      'suspended teacher',
+      'banned teacher',
+    ] as const) {
+      await expect(
+        procedures['sessions.cancellation.request'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the trimmed input, whatever else it says: 'sessions.cancellation.request'", async () => {
+    for (const who of ['student', 'teacher'] as const) {
+      await callerAs(sessionOf(who)).sessions.cancellation.request({
+        sessionId: SESSION,
+        reason: '  سفر طارئ ',
+        idempotencyKey: KEY,
+        userId: OTHER,
+        gender: 'male',
+      } as never);
+    }
+    const handed = [
+      'request',
+      { userId: CALLER },
+      { sessionId: SESSION, reason: 'سفر طارئ', idempotencyKey: KEY },
+    ];
+    expect(calls).toEqual([handed, handed]);
+  });
+
+  it("answers the request parsed by the output schema, which strips a field it does not name: 'sessions.cancellation.request'", async () => {
+    expect(
+      await procedures['sessions.cancellation.request'](callerAs(sessionOf('student'))),
+    ).toEqual(requested);
+  });
+
+  it("refuses a blank reason or a missing key VALIDATION_FAILED before the service: 'sessions.cancellation.request'", async () => {
+    const caller = callerAs(sessionOf('student'));
+    for (const input of [
+      { sessionId: SESSION, reason: '   ', idempotencyKey: KEY },
+      { sessionId: SESSION, reason: 'سفر' },
+    ]) {
+      const thrown: unknown = await caller.sessions.cancellation
+        .request(input as never)
+        .catch((error: unknown) => error);
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("answers the service's NOT_FOUND with no field: 'sessions.cancellation.request'", async () => {
+    const thrown: unknown = await procedures['sessions.cancellation.request'](
+      callerAs(sessionOf('teacher')),
+      OTHER,
+    ).catch((error: unknown) => error);
+    const { status, body } = toErrorShape(thrown as Parameters<typeof toErrorShape>[0]);
+    expect(status).toBe(404);
+    expect(Object.keys(body).sort()).toEqual(['code', 'message']);
+  });
+
+  it("is a mutation stamped with the participant kind: 'sessions.cancellation.request'", () => {
+    expect(metaOf('sessions.cancellation.request')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+    });
+    const procedure = (
+      surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
+    )['sessions.cancellation.request'];
+    expect(procedure?._def.type).toBe('mutation');
+  });
+});
+
+describe("'sessions.cancellation.answer' (T021)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED before the service: 'sessions.cancellation.answer'", async () => {
+    await expect(procedures['sessions.cancellation.answer'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended or banned student or teacher ACCOUNT_RESTRICTED before the service: 'sessions.cancellation.answer'", async () => {
+    for (const who of [
+      'suspended student',
+      'banned student',
+      'suspended teacher',
+      'banned teacher',
+    ] as const) {
+      await expect(
+        procedures['sessions.cancellation.answer'](callerAs(sessionOf(who))),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the request and the answer, whatever else the input says: 'sessions.cancellation.answer'", async () => {
+    for (const who of ['student', 'teacher'] as const) {
+      await callerAs(sessionOf(who)).sessions.cancellation.answer({
+        requestId: REQUEST,
+        accept: false,
+        userId: OTHER,
+        sessionId: SESSION,
+      } as never);
+    }
+    const handed = ['answer', { userId: CALLER }, { requestId: REQUEST, accept: false }];
+    expect(calls).toEqual([handed, handed]);
+  });
+
+  it("answers the answer parsed by the output schema, which strips a field it does not name: 'sessions.cancellation.answer'", async () => {
+    expect(
+      await procedures['sessions.cancellation.answer'](callerAs(sessionOf('teacher'))),
+    ).toEqual(answered);
+  });
+
+  it("answers the service's NOT_FOUND with no field: 'sessions.cancellation.answer'", async () => {
+    const thrown: unknown = await procedures['sessions.cancellation.answer'](
+      callerAs(sessionOf('student')),
+      OTHER,
+    ).catch((error: unknown) => error);
+    const { status, body } = toErrorShape(thrown as Parameters<typeof toErrorShape>[0]);
+    expect(status).toBe(404);
+    expect(Object.keys(body).sort()).toEqual(['code', 'message']);
+  });
+
+  it("is a mutation stamped with the participant kind: 'sessions.cancellation.answer'", () => {
+    expect(metaOf('sessions.cancellation.answer')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+    });
+    const procedure = (
+      surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
+    )['sessions.cancellation.answer'];
+    expect(procedure?._def.type).toBe('mutation');
   });
 });

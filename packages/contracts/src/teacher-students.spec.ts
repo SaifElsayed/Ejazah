@@ -33,6 +33,7 @@ const session = {
   startsAt: '2026-11-08T15:00:00.000Z',
   endsAt: '2026-11-08T15:45:00.000Z',
   status: 'scheduled',
+  pendingCancellation: false,
 } as const;
 
 const summary = {

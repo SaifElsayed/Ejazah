@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { calendarDate, timeZone } from './onboarding.js';
 import { sessionStatus } from './enrollments.js';
 import { sessionLengthMinutes } from './packages.js';
+import { idempotencyKey } from './idempotency-key.js';
 import { slotStartTimeLocal } from './slots.js';
 
 /** A session, as the caller names it. */
@@ -131,3 +132,44 @@ export type SessionParty = z.infer<typeof sessionParty>;
 export type RemedyView = z.infer<typeof remedyView>;
 export type SessionsGetOutput = z.infer<typeof sessionsGetOutput>;
 export type SessionsJoinOutput = z.infer<typeof sessionsJoinOutput>;
+
+// ---------------------------------------------------------------------------------------------
+// T021: `sessions.cancellation` (contracts/app-surface.md, "`sessions.cancellation`"; FR-456 to
+// FR-458). Either party asks to cancel a scheduled session not yet started, with a reason, keyed by
+// the kernel's idempotency (`idempotent-procedures.ts`); the counterparty accepts or declines.
+// The request expires at the session's start (`expiresAt`), read so from that instant whatever its
+// row says (FR-458). The caller names the session or the request and nothing else (R-GENDER-4).
+// ---------------------------------------------------------------------------------------------
+
+/** A cancellation request's reason, at most (FR-CANCEL-1); never blank (ERD §15 rule 45). */
+export const CANCELLATION_REASON_MAX_LENGTH = 500;
+
+export const sessionsCancellationRequestInput = z.object({
+  sessionId: z.uuid(),
+  reason: z.string().trim().min(1).max(CANCELLATION_REASON_MAX_LENGTH),
+  idempotencyKey,
+});
+
+/** The request, pending until it is answered or the session starts. */
+export const sessionsCancellationRequestOutput = z.object({
+  requestId: z.uuid(),
+  status: z.literal('pending'),
+  expiresAt: z.iso.datetime(),
+});
+
+export const sessionsCancellationAnswerInput = z.object({
+  requestId: z.uuid(),
+  accept: z.boolean(),
+});
+
+/** The answer: accepted cancels the session by agreement (FR-457); declined leaves it (FR-458). */
+export const sessionsCancellationAnswerOutput = z.object({
+  requestId: z.uuid(),
+  status: z.enum(['accepted', 'declined']),
+  sessionStatus: sessionStatus,
+});
+
+export type SessionsCancellationRequestInput = z.infer<typeof sessionsCancellationRequestInput>;
+export type SessionsCancellationRequestOutput = z.infer<typeof sessionsCancellationRequestOutput>;
+export type SessionsCancellationAnswerInput = z.infer<typeof sessionsCancellationAnswerInput>;
+export type SessionsCancellationAnswerOutput = z.infer<typeof sessionsCancellationAnswerOutput>;

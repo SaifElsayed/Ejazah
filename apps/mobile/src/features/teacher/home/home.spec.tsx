@@ -70,6 +70,7 @@ function session(
     startsAt: of.startsAt,
     endsAt: of.endsAt,
     status,
+    pendingCancellation: false,
   };
 }
 

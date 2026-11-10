@@ -17,6 +17,7 @@ function session(sequenceNumber: number, status: SessionStatus = 'scheduled'): L
     startsAt: `2026-12-${day}T16:00:00.000Z`,
     endsAt: `2026-12-${day}T16:45:00.000Z`,
     status,
+    pendingCancellation: false,
   };
 }
 

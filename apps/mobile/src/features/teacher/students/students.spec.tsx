@@ -57,6 +57,7 @@ function listed(n: number, startsAt: string, timezone = CAIRO): ListedSession {
     startsAt,
     endsAt: startsAt,
     status: 'scheduled',
+    pendingCancellation: false,
   };
 }
 
