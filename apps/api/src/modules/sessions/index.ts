@@ -305,6 +305,25 @@ export {
   type RemedyHandedOff,
 } from './remedy-case.service.js';
 /**
+ * T029 of specs/004-sessions (FR-423, FR-468, FR-469; L5; Q4 (a)): the one booking of a remedy's
+ * proposal or pending counter under contracts/kernel.md's row, on the caller's transaction
+ * (`bookOn`) or in its own through `runRetryingDeadlockOnce` (`run`, `book`), for T031's `accept`,
+ * T032's `answerCounter` and `advance-remedies`; `makeupRefusalOf` names what refused a
+ * `MAKEUP_REFUSED` (an exclusion's constraint, a reservation, a second deadlock).
+ */
+export {
+  createMakeupBooking,
+  type MakeupBooked,
+  type MakeupBooking,
+  type MakeupBookingInput,
+  type MakeupBookingKind,
+  type MakeupBookingStore,
+  makeupBookingStore,
+  type MakeupOperation,
+  type MakeupRefusal,
+  makeupRefusalOf,
+} from './makeup-booking.service.js';
+/**
  * T022 of specs/004-sessions (FR-458, SC-411): what the `expire-cancellation-requests` sweep runs,
  * each pending request whose session has started expired on its own transaction under
  * contracts/kernel.md's row, and its store over sessions' tables, which a spec narrows to its rows.
