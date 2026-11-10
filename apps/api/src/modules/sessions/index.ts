@@ -229,3 +229,16 @@ export {
   cancellationStore,
 } from './cancellation.service.js';
 export { pendingCancellationsAmong } from './cancellation.repository.js';
+/**
+ * T022 of specs/004-sessions (FR-458, SC-411): what the `expire-cancellation-requests` sweep runs,
+ * each pending request whose session has started expired on its own transaction under
+ * contracts/kernel.md's row, and its store over sessions' tables, which a spec narrows to its rows.
+ */
+export {
+  type CancellationExpiry,
+  type CancellationExpiryStore,
+  cancellationExpiryStore,
+  createCancellationExpiry,
+  type DueRequest,
+  type ExpiryRun,
+} from './cancellation-expiry.service.js';

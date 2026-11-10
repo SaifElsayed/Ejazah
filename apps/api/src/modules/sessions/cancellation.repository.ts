@@ -198,3 +198,88 @@ export async function lockTeacherSlots(tx: Transaction, teacherUserId: string): 
   await lockKey(tx, 'teacher-slots', teacherUserId);
 }
 
+// ---------------------------------------------------------------------------------------------
+// T022: `expire-cancellation-requests`' queries (FR-458; contracts/kernel.md, its row).
+// ---------------------------------------------------------------------------------------------
+
+/** A pending request whose session has started, as the sweep reads it with no lock. */
+export interface DueRequest {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly enrollmentId: string;
+}
+
+/**
+ * The pending requests whose session started at or before `at`, in id order after `after`, at most
+ * `limit`; no lock. Over rule 45's partial unique index (the pending requests, one per session) and
+ * the sessions' primary key; a session's start whatever its status, since a request is expired from
+ * the start (FR-458).
+ */
+export async function dueForExpiry(
+  tx: Pick<Client, 'cancellationRequest'>,
+  at: Date,
+  after: string | undefined,
+  limit: number,
+): Promise<readonly DueRequest[]> {
+  const rows = await tx.cancellationRequest.findMany({
+    where: {
+      status: 'pending',
+      session: { deletedAt: null, scheduledStartAt: { lte: at } },
+      ...(after === undefined ? {} : { id: { gt: after } }),
+    },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: { id: true, sessionId: true, session: { select: { enrollmentId: true } } },
+  });
+  return rows.map(({ id, sessionId, session }) => ({
+    id,
+    sessionId,
+    enrollmentId: session.enrollmentId,
+  }));
+}
+
+/** A request as the sweep decides on it under its locks: its status and its session's start. */
+export interface RequestToExpire extends DueRequest {
+  readonly status: CancellationRequestStatus;
+  readonly startsAt: Date;
+}
+
+/** The request `id` with its session's start, read again under the caller's locks. */
+export async function requestToExpire(
+  tx: Pick<Client, 'cancellationRequest'>,
+  id: string,
+): Promise<RequestToExpire | null> {
+  const found = await tx.cancellationRequest.findFirst({
+    where: { id, session: { deletedAt: null } },
+    select: {
+      id: true,
+      sessionId: true,
+      status: true,
+      session: { select: { enrollmentId: true, scheduledStartAt: true } },
+    },
+  });
+  return found === null
+    ? null
+    : {
+        id: found.id,
+        sessionId: found.sessionId,
+        enrollmentId: found.session.enrollmentId,
+        status: found.status,
+        startsAt: found.session.scheduledStartAt,
+      };
+}
+
+/**
+ * Writes `expired` where the request is still `pending`; whether it moved the row. No
+ * `responded_at`: an expiry is no answer (ERD §15 rule 45).
+ */
+export async function expireRequest(
+  tx: Pick<Client, 'cancellationRequest'>,
+  id: string,
+): Promise<boolean> {
+  const { count } = await tx.cancellationRequest.updateMany({
+    where: { id, status: 'pending' },
+    data: { status: 'expired' },
+  });
+  return count === 1;
+}
