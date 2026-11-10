@@ -1,6 +1,6 @@
 # Ijazah — Phase Plan
 
-One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15 and constitution v2.6.2. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change), ADR 0010 (the database refuses double booking) and ADR 0012 (sign-in with Google, Apple or email; sign-in before onboarding). The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
+One Spec Kit spec per phase. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15 and constitution v2.6.2. Amended by ADR 0005 (managed escrow retired), ADR 0007 (direct gateway checkout, 0% commission, zero custody), ADR 0008 (checkout experience and idempotency keys), ADR 0009 (sessions re-resolved on time zone data change), ADR 0010 (the database refuses double booking), ADR 0012 (sign-in with Google, Apple or email; sign-in before onboarding) and ADR 0024 (the assessment and the ijazah programme paid by instalments, built before the server). The dated road to the store (the owner's decisions of 2026-11-09) sets the calendar from Phase 3's last batches to the store: see «The road to the store». The schedule below was revised on 2026-10-08 for a team of one; each phase's objective, deliverables and definition of done are unchanged, and the decisions taken since the phase list was written are added under the phase that carries them out.
 
 | Phase | Spec | Working days | Day numbers | Depends on |
 |---|---|---|---|---|
@@ -18,7 +18,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 
 ## Schedule and working method (revised 2026-10-08)
 
-**The commitment.** Thirty working days after Phase 0 closes, the whole MVP — Phases 1, 2, 3, 4 and 6 — is complete and submitted. Time after day 30 is for improvement and is not planned here.
+**The commitment.** Thirty working days after Phase 0 closes, the whole MVP — Phases 1, 2, 3, 4 and 6 — is complete and submitted. Time after day 30 is for improvement and is not planned here. *(Amended 2026-11-10, the owner's decisions of 2026-11-09 and of 2026-11-10 on B37's conflict check, Q1: «The road to the store» below replaces this commitment's dates and Phase 6's day numbers in the table above. The first release is Android only; the closed test starts by 2026-12-06 and the app is on Google Play by 2027-01-01; the programme of ADR 0024 is built before the server, inside that road.)*
 
 **How a phase is sized.** Each phase's days above were set from its share of SRS requirement ids (44 for Phase 1, 38 for Phase 2, 39 for Phase 3, 29 for Phase 4; FR-ADMIN-4 was added to Phase 3 on 2026-11-05, on Phase 3's analysis, and its days did not change) and from its weight: Phase 1 carries the first mobile surface (design tokens, RTL, the three feature trees, the admin shell); Phase 2 carries the real gateway, the webhooks, the two-axis booking guards and Cairo DST; Phase 3 carries the session state machine and the video adapter; Phase 4 carries the certificate itself; Phase 6 is proving and packaging, and most of its hands-on steps are the owner's (store accounts, hosting, two physical devices, the restore drill).
 
@@ -31,6 +31,61 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 **When a phase slips anyway.** The descope ladder at the end of this file is applied in its order, cut by cut, before any later phase gives up days. Nothing under "Never cut" is touched.
 
 **Order between Phases 3 and 4.** Both depend only on Phase 2. The plan runs 3 before 4. If the video baseline spike (Phase 0, T123) is still open or concludes against the assumed approach when Phase 2 closes, Phase 4 runs first and Phase 3 is specified once the spike has an outcome.
+
+---
+
+## The road to the store («الطريق للمتجر»; the owner's decisions of 2026-11-09, recorded 2026-11-10)
+
+**The target.** The app is on Google Play by **2027-01-01**, Android only (SRS DEC-62), through a personal Google Play account, so a closed test of at least 12 testers opted in for 14 days in a row comes before production. The closed test starts by **Sunday 2026-12-06** at the latest. The dates are the implementer's estimate, given to the owner on 2026-11-09 with no slack: they assume work on Fridays and Saturdays and the design running beside the backend. The owner asked for this date, so progress is reported against it.
+
+**The code, in order.**
+
+| Date | Work |
+|---|---|
+| 11/10 | B37's tasks commit records this road, the programme's rules (ADR 0024, SRS §3.5.1) and Android first |
+| to 11/16 | The rest of Phase 3, B37 to B43 (`specs/004-sessions/tasks.md`, «Batches»); Phase 4's Spec Kit cycle on the last day |
+| 11/17–11/23 | Phase 4: certification, reviews, notifications and push |
+| 11/23 | The programme's Spec Kit cycle (R-PROC-1) |
+| 11/24–11/30 | The assessment and the ijazah programme by instalments (ADR 0024); with it `specs/003-booking/tasks.md` T104 (the commission), T101, T102 and T105, under the conditions noted under T104 and T105 |
+| 12/1–12/5 | Beside each other: the design and the logo, about three days by the owner's estimate (open point 6 below); `specs/002-identity/tasks.md` T148 (the live sign-in) and T147 (nothing development-only on a hosted server); the email sender; the server up; the privacy policy and the terms hosted; a new EAS build with the logo, carrying `specs/004-sessions/tasks.md` T068 (the keep-alive service's stop and the microphone check), tried on a phone before 12/6 |
+| **12/6 Sun** | **The closed test starts: the latest date** |
+| 12/6–12/20 | The 14 days, beside the rest of Phase 6: the full-codebase review, the adversarial and performance passes, the restore drill, the week on the panel, the store screenshots |
+| 12/21 | Apply for production access |
+| about 12/28 | Google's answer (usually seven days or less, by its own page) |
+| **2027-01-01** | **On the store** |
+
+Nothing of the programme or of T104 may slide past 12/6 into Phase 6, which adds no feature (R-PROC-6).
+
+**The owner's own steps.**
+
+| By | Step |
+|---|---|
+| 11/10 | Send the gateway's questions (the owner's paper of 2026-11-09: ten questions, four confirmations) to the account manager |
+| 11/12 | Decide whose name, and open the Google Play account |
+| 11/16 | Decide the commission: rate, fixed or a setting, taken from whom, how it shows (T104) |
+| 11/23 | The sheikh's view on returning after a close (SRS OPEN-12) |
+| 11/24 | Submit the gateway's contract request |
+| 11/26 | The lawyer's answer on the server's region (PDPL), and the video's routing (`specs/004-sessions/tasks.md`, Not scheduled, item 8) |
+| 11/29 | Buy the server, 4 GB (Phase 6's estimates below) |
+| 11/30 | The logo as a 1024×1024 PNG |
+| 12/1 | 15 to 20 testers with a Gmail account and an Android phone |
+| 12/25 | The gateway's contract done and its live keys ready |
+
+**What binds the order.**
+
+- Play Console's app content asks, for each foreground service type, a declaration with its use, the user's impact and a video of the user starting it: `mediaProjection` and `microphone` (the follow-up under `specs/004-sessions/tasks.md` T019, 2026-11-09), prepared before the closed test.
+- The closed test needs a hosted API: the configuration refuses every stand-in outside development and test, and refuses the gateway outside them until T101 lands.
+- Testers pay with the gateway's test keys in a non-production mode; real money only after the contract and the lawyer's answer.
+- A new build during the test: the store's text counts testers, but sources disagree on whether a build restarts the 14 days, so the test starts on a stable build.
+
+**Open points, not decided** (the owner's decision of 2026-11-10: written as open points, never as rules).
+
+1. **Returning after a close** of the programme (SRS OPEN-12; ADR 0024 D4): the owner reviews it with their sheikh and answers before 11/23.
+2. **The 66 old open tasks**: their triage into security, money and launch is proposed and not confirmed.
+3. **The gateway's answers**: everything the gateway said about the split, holding a share and subscriptions is verbal so far; the SRS requires it in writing (OPEN-11). T105 is not built 11/24–11/30 without a written answer (the note under T105).
+4. **The room's quality**: after B36's trial the owner heard the sound and saw the picture late, with few frames (the follow-up under `specs/004-sessions/tasks.md` T019, 2026-11-09). Proposed as its own task, not approved: the room made with no options (dynacast and adaptive stream off), the screen captured at full size, and SRS NFR-PERF-3's audio-only fallback named nowhere in `specs/004-sessions`; measured on real 4G without adb first.
+5. **The owner's requests for the room**, not decided in detail: a mute button (SRS FR-SESS-4 gives every participant audio, so the SRS decides first); the video like a phone call, one large picture and one small movable one, a tap swapping them; the camera, the share, leaving and mute as icons side by side.
+6. **The design days against ADR 0020**: ADR 0020 says the design in the repository is implemented and none redesigns (`docs/adr/0020-design-files-in-the-repository.md:102`), and 12/1–12/5 redesigns screens. The ADR that allows it is written after the review of the design directions and before any code (the owner's decision of 2026-11-10 on B37's conflict check, Q4).
 
 ---
 
@@ -311,7 +366,7 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
 - Hosted infrastructure live from Week 14
 - Full adversarial suite green
 - Manual penetration pass on gender rules
-- Eight use cases walked on both platforms, both languages
+- Eight use cases walked on Android for the first release, both languages; on iOS before the first App Store submission *(amended 2026-11-10, SRS DEC-62)*
 - Performance verified on real 3G and 4G
 - Backup restore drill
 - Staging dataset operated as admins for a week
@@ -325,8 +380,8 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
 
 - Most hands-on steps of this phase are the owner's, not the implementer's: store accounts and submissions, the hosted environment, operating the staging dataset, the walk-through on two physical devices and the restore drill. The implementer's three days cover the adversarial suite, the manual pass on the gender rules, the performance verification, the store copy in both languages and the reviewer account.
 - The always-on staging environment and its deploy on merge (Phase 0's T092, FR-066, SC-008: live within fifteen minutes of a merge to `main`), deferred here by the owner on 2026-10-13. Staging holds synthetic data only. The production host is planned on a Hostinger VPS, its region decided once counsel answers on Egypt's Personal Data Protection Law (research R-19).
-- Phase 1's SC-101 run on iOS (the note under T090 in `specs/002-identity/tasks.md`): deferred by the owner on 2026-10-27, since a build for an iPhone needs a paid Apple Developer account; it is run before the first store submission, when that account exists.
-- Phase 1's SC-105 run on iOS (the note under T091 in `specs/002-identity/tasks.md`): every screen of the phase in Arabic and in English on an iPhone against its board, before the first store submission; B19b walked them on Android only, by the owner's decision of 2026-10-28.
+- Phase 1's SC-101 run on iOS (the note under T090 in `specs/002-identity/tasks.md`): deferred by the owner on 2026-10-27, since a build for an iPhone needs a paid Apple Developer account; it is run before the first App Store submission, when that account exists *(re-tied 2026-11-10: the first store submission is Google Play's, SRS DEC-62)*.
+- Phase 1's SC-105 run on iOS (the note under T091 in `specs/002-identity/tasks.md`): every screen of the phase in Arabic and in English on an iPhone against its board, before the first App Store submission *(re-tied 2026-11-10, SRS DEC-62)*; B19b walked them on Android only, by the owner's decision of 2026-10-28.
 - `expo doctor` clean before the first store submission (the note under T101): the SDK 58 packages it reports behind their expected patch versions brought up, as a task of its own (the owner, 2026-10-27).
 - The live channel behind the hosted proxy (the owner's decision of 2026-11-05; `specs/004-sessions/research.md` R-324; the configuration itself in `docs/RUNBOOK.md`, «Reverse proxy and the live channel»). `GET /trpc/live.events` is a Server-Sent Events stream, pinged every 25 s:
   - nginx: `proxy_http_version 1.1`, `proxy_buffering off`, `gzip off`, `proxy_read_timeout 120s` (longer than the 25 s ping), and `worker_connections` raised (8192; each stream holds two);
@@ -347,23 +402,15 @@ Because no new features are added here, and every team that breaks that rule res
 
 - Reviewers can open and use the app from their own network
 - A backup has been restored, not merely taken
-- Submitted to both stores
+- Submitted to Google Play, through its closed test, for the first release; the App Store at its own first submission *(amended 2026-11-10, SRS DEC-62; «The road to the store»)*
 
 ---
 
 ## After the MVP
 
-Features decided for after the MVP. None is built before every phase has closed.
+Features decided for after the MVP. None is built before every phase has closed, except what «The road to the store» moves before the server *(amended 2026-11-10, the owner's decisions of 2026-11-09 and of 2026-11-10 on B37's conflict check, Q1)*.
 
-- **An assessment first, then a program paid in stages** (the owner's decision of 2026-11-03). A package whose first session is an assessment:
-  - the first payment is for the assessment session only;
-  - after it, the teacher sets the level, the program's length, the number of sessions and their length (30, 45 or 60 minutes), and the student receives an offer with one total price, the session's price derived from it;
-  - the second payment is the rest, in full or in instalments through Paymob's subscription service (a charge every period the platform sets), the split to the teacher applying there too (OPEN-11's answers of 2026-11-03);
-  - the student continues with the same teacher to the khatma, and the teacher grants the ijazah and issues the sanad.
-
-  What it changes when it is built: (1) an enrollment is confirmed in stages, the assessment after the first payment and the rest after the second; (2) several paid orders on one enrollment become normal, so an order has a kind (assessment, rest, instalment) and FR-375 is amended to tell them apart; (3) the number of sessions and the price are set after the assessment, not by the package; (4) new rules: the time allowed between the assessment and the second payment, and what happens when the student does not pay or stops partway through the instalments.
-
-  Note for Phase 3's Spec Kit cycle (D19): the session code reads the number and the length of sessions from the enrollment's snapshot, never from the package, and nowhere hard to change later assumes that all of an enrollment's sessions are generated at once.
+- **An assessment first, then a program paid in stages** — **moved before the server** (the owner's decision of 2026-11-09): its rules are SRS §3.5.1 (FR-BOOK-13 to FR-BOOK-19) and ADR 0024, its cycle runs on 11/23 and its build 11/24–11/30 («The road to the store»); returning after a close is SRS OPEN-12. The first wording here (the owner's decision of 2026-11-03: the first payment for the assessment only; the rest in full or by instalments charged every period the platform sets) is superseded: the assessment's fee is part of the package's price, the instalments are monthly and on the ijazah track only. What its build changes, from this section's first wording and still true: an enrollment confirmed in stages; several paid orders on one enrollment, each with its kind, FR-375 amended to tell them apart (SRS FR-PAYG-19 as amended); the number and length of sessions set after the assessment. Phase 3 already reads the number and length of sessions from the enrollment's snapshot and assumes no one-time generation (`specs/004-sessions/spec.md` FR-424).
 
 ---
 
