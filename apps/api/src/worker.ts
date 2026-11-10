@@ -57,6 +57,7 @@ const [
   sessions,
   { evaluateSessions },
   { expireCancellationRequests },
+  { advanceRemedies },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -91,6 +92,7 @@ const [
   import('./modules/sessions/index.js'),
   import('./jobs/evaluate-sessions.js'),
   import('./jobs/expire-cancellation-requests.js'),
+  import('./jobs/advance-remedies.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -199,7 +201,7 @@ const jobs: readonly Job[] = [
   deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
   // A paid order's confirmation (T039, R-215): the modules' entries on the job's transactions, the
   // hold's terms and the first session's lead read through the settings reader.
-  confirmEnrollment({ database, settings }),
+  confirmEnrollment({ database, settings, log }),
   // The expiry sweeps (T040, FR-364), every minute: the holds with no enrollment, booking's; the
   // orders past their expiry, the holds with an enrollment, and the hand-off of a paid order whose
   // confirmation was lost, payments', reading `checkout_confirmation_timeout_seconds`.
@@ -221,6 +223,10 @@ const jobs: readonly Job[] = [
   // The cancellation requests' expiry (T022 of specs/004-sessions, FR-458), every minute: a request
   // still pending at its session's start written expired under its enrollment's lock.
   expireCancellationRequests({ database, enrollments: enrollmentSide, log }),
+  // The remedies' sweep (T028 of specs/004-sessions, FR-462 to FR-464), every minute: each session owed
+  // a make-up offered its remedy once its outcome is final, frozen remedies offered again, and the
+  // completion check, which an open student_suspended or admin_cancellation case holds (Q3 (a)).
+  advanceRemedies({ database, settings, enrollments: enrollmentSide, completion, log }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);
