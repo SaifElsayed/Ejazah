@@ -62,8 +62,12 @@ import type { RemedyWindows } from './remedy.service.js';
 import { answerClosesAt } from './remedy-deadlines.js';
 
 /**
- * The enrollments T015's check is asked about: a read filter, never a write (the confirmation gate,
- * `tests/pipeline/confirmation-path.spec.ts`, reads a `status` literal as a write).
+ * The enrollments T015's check is asked about. This is a read filter (`EnrollmentPageFilter`, the
+ * `where` of `EnrollmentSide.enrollmentPage`), never a write: the confirmation gate
+ * (`tests/pipeline/confirmation-path.spec.ts`) reads any `status: 'confirmed'` literal as a write, so
+ * the value is a named constant, and the typecheck holds what that gate cannot read (its own «NOT
+ * SEEN»: a `status` key whose value is a variable is the typecheck's, `:45-48`). The gate is left as
+ * it is (the owner's decision of 2026-11-10).
  */
 const CONFIRMED: EnrollmentStatus = 'confirmed';
 const CONFIRMED_ENROLLMENTS: EnrollmentPageFilter = { status: CONFIRMED };
