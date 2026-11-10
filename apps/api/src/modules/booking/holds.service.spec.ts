@@ -60,6 +60,7 @@ const thursday: OfferedSlot = {
 
 interface Hold extends HeldRow {
   releasedAt: Date | null;
+  releaseReason?: string;
 }
 
 interface World {
@@ -113,9 +114,11 @@ function storeOf(world: World) {
           active(hold) &&
           (hold.slotId === scope.slotId || hold.studentUserId === scope.studentUserId),
       ),
-    markReleased: async (_tx, ids, at) => {
+    markReleased: async (_tx, ids, at, reason) => {
       log.push(['release', [...ids]]);
-      for (const hold of holds) if (ids.includes(hold.id)) hold.releasedAt = at;
+      for (const hold of holds) {
+        if (ids.includes(hold.id)) Object.assign(hold, { releasedAt: at, releaseReason: reason });
+      }
     },
     pendingAmong: async (_tx, ids) => ids.filter((one) => pending.has(one)),
     cancelPending: async (_tx, ids, reason) => {
@@ -409,6 +412,26 @@ describe('releaseHolds: FR-363 and the paid order (the owner’s decision of 202
     expect(released.events).toEqual([]);
   });
 
+  it.each([
+    'expired',
+    'checkout_abandoned',
+    'slot_unavailable',
+    'admin',
+    'teacher_suspended',
+    'account_deleted',
+  ] as const)(
+    'writes the release reason %s with released_at (T027 of specs/004-sessions, GAP-8)',
+    async (reason) => {
+      const released = release(
+        { holds: [hold(id(1), { slotId: SLOT, studentUserId: STUDENT })] },
+        [id(1)],
+        reason,
+      );
+      await released.answer;
+      expect(released.holds[0]).toMatchObject({ releasedAt: NOW, releaseReason: reason });
+    },
+  );
+
   it('takes the holds, then their enrollments, then their orders, each in one call', async () => {
     const released = release(
       {
@@ -442,6 +465,7 @@ describe('releaseExpiredHolds: a slot’s and a student’s', () => {
       { at: NOW, orders: fake.orders, store: fake.store },
     );
     expect(released.released).toEqual([id(1), id(2)]);
+    expect(fake.holds.filter(({ releaseReason }) => releaseReason === 'expired')).toHaveLength(2);
     expect(fake.holds.find((one) => one.id === id(3))?.releasedAt).toBeNull();
   });
 });
@@ -472,5 +496,6 @@ describe('reholdEnrollment: FR-PAYG-19’s new hold (for T039)', () => {
       }),
     ]);
     expect(holdId).toBe(fake.inserted[0]?.id);
+    expect(fake.holds.find((one) => one.id === id(1))?.releaseReason).toBe('expired');
   });
 });

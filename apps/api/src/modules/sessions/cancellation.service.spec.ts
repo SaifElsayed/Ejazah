@@ -38,6 +38,7 @@ import {
   type CancellationStore,
   createCancellationServices,
 } from './cancellation.service.js';
+import type { Offered } from './remedy-offer.service.js';
 import type { SessionEventRecord } from './session-events.repository.js';
 import type { PartySessionRow } from './sessions.repository.js';
 
@@ -96,6 +97,9 @@ let insertRefusal: Error | undefined;
 let now: Date;
 let keyed: IdempotentRequest[];
 let lines: Record<string, unknown>[];
+/** T028: what the offer at an acceptance answers. */
+let offerAnswer: Offered | null;
+const REMEDY = '0199d0a0-0000-7000-8000-00000000c0de';
 let log: Logger;
 let services: CancellationServices;
 
@@ -234,11 +238,26 @@ beforeEach(() => {
       },
     }),
   });
+  offerAnswer = {
+    remedyId: REMEDY,
+    sessionId: SESSION,
+    enrollmentId: ENROLLMENT,
+    status: 'proposed',
+    proposedDate: '2026-12-03',
+    reoffered: false,
+  };
   services = createCancellationServices({
     transactions,
     idempotency,
     enrollments,
     store,
+    // T028: the make-up an acceptance owes, offered on its transaction under its locks.
+    offer: {
+      offerLocked: async (_tx, sessionId) => {
+        trace.push(`offer ${sessionId}`);
+        return offerAnswer;
+      },
+    },
     clock: async () => {
       trace.push('clock');
       return now;
@@ -550,8 +569,35 @@ describe('sessions.cancellation.answer: admitted (FR-457, FR-458, R-310)', () =>
       `answer ${REQUEST} accepted`,
       `cancel session ${SESSION}`,
       'record cancellation_accepted',
+      // T028: the make-up it owes, offered in its transaction, under the same locks.
+      `offer ${SESSION}`,
       'commit',
     ]);
+  });
+
+  it('an acceptance offers the make-up it owes in its transaction and writes one line after the commit (T028, decision 5, Q11)', async () => {
+    await answer(TEACHER, true);
+    const offeredLines = lines
+      .filter(({ msg }) => msg === 'Remedy offered')
+      .map(({ remedyId, sessionId, enrollmentId, action }) => ({
+        remedyId,
+        sessionId,
+        enrollmentId,
+        action,
+      }));
+    expect(offeredLines).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, enrollmentId: ENROLLMENT, action: 'offered' },
+    ]);
+  });
+
+  it('an acceptance that owes nothing yet (a suspended student) writes no offer line, and a decline offers nothing (T028)', async () => {
+    offerAnswer = null;
+    await answer(TEACHER, true);
+    expect(lines.filter(({ msg }) => msg === 'Remedy offered')).toEqual([]);
+    requests.set(REQUEST, request());
+    trace = [];
+    await answer(TEACHER, false).catch(() => undefined);
+    expect(trace.some((step) => step.startsWith('offer'))).toBe(false);
   });
 
   it("the student answers the teacher's request", async () => {

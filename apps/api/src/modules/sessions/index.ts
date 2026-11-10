@@ -298,3 +298,51 @@ export {
   type DueRequest,
   type ExpiryRun,
 } from './cancellation-expiry.service.js';
+/**
+ * T027 of specs/004-sessions (FR-466; research R-311, "Reservation"; H3; Q1 (a), Q7 (a)): the times
+ * open remedies reserve for some people, each `{ remedyId, sessionId, startsAt, endsAt }`, read by
+ * booking's one overlap check, the confirmation's new hold for a released one, the proposal, the
+ * counter options and a make-up's booking; and the enrollments whose open remedy keeps their slot
+ * in use (booking's occupancy). No lock, no write.
+ */
+export {
+  type ReservationReads,
+  type ReservationStore,
+  reservationStore,
+  type ReservedTime,
+  reservedTimesOf,
+} from './reservations.service.js';
+export { enrollmentsWithOpenRemedyAmong } from './reservations.repository.js';
+/** T027: the sessions a confirmation would generate, for the late payment's reservation read. */
+export { sessionsFor } from './generation.service.js';
+/**
+ * T028 of specs/004-sessions (FR-462 to FR-464, FR-449; research R-311; decisions 5 and 9; Q3, Q8,
+ * Q11): a remedy's offer and its proposal (H1), the function an accepted cancellation, the sweep
+ * and a cleared suspension's case (T036) call, a re-offer of a frozen one (T061) among them; what
+ * `advance-remedies` runs (the offers, the frozen remedies' new offers and T015's completion check);
+ * a remedy as its parties read it (`RemedyView`, T031); and the lists' `remedyStatus`.
+ */
+export {
+  createRemedyOffer,
+  MAKEUP_CHOICE_WINDOW_SETTING,
+  MAKEUP_COUNTER_ANSWER_SETTING,
+  type Offered,
+  offeredLine,
+  type OfferOptions,
+  type RemedyOffer,
+  type RemedyOfferStore,
+  remedyOfferStore,
+} from './remedy-offer.service.js';
+export {
+  type AdvanceRun,
+  createRemedyAdvance,
+  type RemedyAdvance,
+  type RemedyAdvanceStore,
+  remedyAdvanceStore,
+} from './remedy-offer.sweep.js';
+export { remedyViewOf } from './remedy-offer.view.js';
+export {
+  type RemedyViewRow,
+  remedyStatusesAmong,
+  remedyViewRowOf,
+} from './remedy-offer.repository.js';

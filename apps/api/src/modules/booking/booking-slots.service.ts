@@ -10,7 +10,8 @@
 // those, the ones free on their first session's date by T026's occupancy (`offerableOccurrences`:
 // no active hold, no enrollment awaiting payment, a confirmed one's slot again from the week after
 // its final session plus the buffer, FR-394); of those, the ones none of whose sessions overlaps
-// one of the student's or the teacher's own sessions, by the one check the hold applies too
+// one of the student's or the teacher's own sessions or a time their open remedies reserve (T027 of
+// specs/004-sessions, H3), by the one check the hold applies too
 // (`session-overlap.service.ts`, T033: every one of the package's sessions, not its first alone;
 // FR-351, FR-BOOK-5, R-205). The first session is `firstOccurrenceAfter` with `first_session_lead_hours`
 // from now in the slot's own zone, the call generation makes from the confirmation (T034); the last
@@ -51,7 +52,6 @@ import {
   offeredSlotsOf,
 } from '../catalog/index.js';
 import { accountTimezone, visibleTeachers } from '../identity/index.js';
-import { partiesSessionsBetween } from '../sessions/index.js';
 import {
   createEnrollmentListServices,
   type EnrollmentListServices,
@@ -68,6 +68,7 @@ import {
   freeOfPartiesSessions,
   type PackageSlot,
   packageSessionsOn,
+  partiesBusyBetween,
   type SessionsBetween,
 } from './session-overlap.service.js';
 import {
@@ -106,7 +107,8 @@ export const bookingSlotsStore: BookingSlotsStore = {
       .length === 1,
   offeredSlotsOf,
   occupancyOf,
-  sessionsBetween: partiesSessionsBetween,
+  // T027: the parties' sessions and the times their open remedies reserve (H3).
+  sessionsBetween: partiesBusyBetween,
   teacherTimezone: accountTimezone,
 };
 
@@ -238,7 +240,7 @@ export function createBookingServices({
 }): BookingServices {
   const transactions = transactionsOver(database);
   return {
-    ...createEnrollmentListServices({ database, settings, now }),
+    ...createEnrollmentListServices({ database, settings }),
     slots: async (student, input) => {
       const leadHours = await settings.read(FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours);
       const clock: DiscoveryClock = {

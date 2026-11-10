@@ -20,8 +20,9 @@
 //     `proposed`, `counter_proposed`, `frozen`); a `booked` remedy's make-up is a session of the
 //     enrollment, so it is settled first; a `refund_case` is the case's to decide, no longer owed by
 //     the enrollment, and `lapsed` owes nothing;
-//   - no `student_suspended` compensation case is open on it (FR-486, plan.md decision 1),
-//     moderation's rows read through its entry (R-301).
+//   - no `student_suspended` compensation case is open on it (FR-486, plan.md decision 1), nor an
+//     `admin_cancellation` one (B38, the owner's decision of 2026-11-10 under T023, Q3 (a): a hold
+//     can be undone, a completion cannot), moderation's rows read through its entry (R-301).
 // An enrollment in any other state, or with no session, is left as it is.
 //
 // NO COUNT (FR-448, R-322, the owner's decision of 2026-11-05). Nothing here reads the
@@ -102,12 +103,16 @@ export interface CompletionStore {
   sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly CompletionSession[]>;
   /** Whether a `student_suspended` compensation case is open on the enrollment (moderation's). */
   studentSuspendedCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  /** Whether an `admin_cancellation` compensation case is open on the enrollment (Q3 (a)). */
+  adminCancellationCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
 }
 
 const completionStore: CompletionStore = {
   sessionsOf: completionSessionsOf,
   studentSuspendedCaseOpen: async (tx, enrollmentId) =>
     (await openCaseOf(tx, enrollmentId, 'student_suspended')) !== null,
+  adminCancellationCaseOpen: async (tx, enrollmentId) =>
+    (await openCaseOf(tx, enrollmentId, 'admin_cancellation')) !== null,
 };
 
 export interface Completion {
@@ -164,6 +169,7 @@ export function createCompletion({
         if (at.getTime() < new Date(addHours(lastEnd, hours)).getTime()) return false;
       }
       if (await store.studentSuspendedCaseOpen(tx, enrollmentId)) return false;
+      if (await store.adminCancellationCaseOpen(tx, enrollmentId)) return false;
       return enrollments.complete(tx, enrollmentId);
     },
   };

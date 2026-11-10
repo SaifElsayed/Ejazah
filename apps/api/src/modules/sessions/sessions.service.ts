@@ -18,7 +18,9 @@
 // transaction, a stored `pending` answered `expired` from the start and once the session is no
 // longer `scheduled` (`cancellation.service.ts`, `cancellationViewOf`). T026 (joined at B37's
 // integration, after T021's): `dispute`, `canRaiseDispute` and `disputeClosesAt` for the caller, read
-// on the same transaction through the dispute view (`dispute-view.ts`), with no lock.
+// on the same transaction through the dispute view (`dispute-view.ts`), with no lock. T028: `remedy`,
+// the session's remedy read on the same transaction (`remedy-offer.view.ts`), its proposal at the
+// enrollment's slot's local start (catalog's entry) in the enrollment's zone; a lapsed one is absent.
 //
 // T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
 // so the surface reaches them as `services.sessions.cancellation`.
@@ -64,6 +66,7 @@ import type { IdempotencyService } from '../../platform/idempotency/idempotency.
 import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { readSlot } from '../catalog/index.js';
 import { sessionPartiesOf } from '../identity/index.js';
 import { type CancellationRequestRow, latestRequestOf } from './cancellation.repository.js';
 import {
@@ -72,9 +75,16 @@ import {
   cancellationViewOf,
   createCancellationServices,
 } from './cancellation.service.js';
-import { createDisputeRaise, type DisputeRaise, type DisputeRaiseStore } from './dispute-raise.service.js';
+import {
+  createDisputeRaise,
+  type DisputeRaise,
+  type DisputeRaiseStore,
+} from './dispute-raise.service.js';
 import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
+import { type RemedyViewRow, remedyViewRowOf } from './remedy-offer.repository.js';
+import { createRemedyOffer, type RemedyOffer } from './remedy-offer.service.js';
+import { remedyViewOf } from './remedy-offer.view.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
 /** Minutes before a session's start its join opens (FR-431; SRS §3.14). */
@@ -116,6 +126,10 @@ export interface SessionsStore {
   ): Promise<ReadonlyMap<string, PartyStanding>>;
   /** T021: the session's latest cancellation request, whatever its status, else null; no lock. */
   latestCancellationOf(tx: Transaction, sessionId: string): Promise<CancellationRequestRow | null>;
+  /** T028: the session's remedy with its booked make-up, else null; no lock. */
+  remedyOf(tx: Transaction, sessionId: string): Promise<RemedyViewRow | null>;
+  /** T028: the enrollment's slot's local start, `HH:MM:SS` (catalog's entry). */
+  slotOf(tx: Transaction, slotId: string): Promise<{ readonly startTimeLocal: string } | null>;
 }
 
 /** The store over this module's reads and lock and identity's accounts (R-API-6), as `main.ts` binds it. */
@@ -124,6 +138,8 @@ export const sessionsStore: SessionsStore = {
   lockAccounts: lockSessionParties,
   partiesOf: sessionPartiesOf,
   latestCancellationOf: latestRequestOf,
+  remedyOf: remedyViewRowOf,
+  slotOf: readSlot,
 };
 
 /** The person asking, from the server-held session. */
@@ -159,6 +175,11 @@ export interface SessionsDependencies {
   readonly now?: () => Date;
   /** `sessions.get`'s `cancellation` read at the database's clock (`clockTimestamp`), as decided. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
+  /**
+   * T028: the offer an accepted cancellation makes on its transaction;
+   * `createRemedyOffer({ enrollments: enrollmentSide, settings })` unless a spec fakes it.
+   */
+  readonly remedyOffer?: Pick<RemedyOffer, 'offerLocked'>;
 }
 
 /** Why a read or a join was refused, as its one log line names it. */
@@ -231,6 +252,7 @@ export function createSessionsServices({
   disputeView = createDisputeView({ settings }),
   now = () => new Date(),
   clock = clockTimestamp,
+  remedyOffer = createRemedyOffer({ enrollments: enrollmentSide, settings }),
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
@@ -242,6 +264,20 @@ export function createSessionsServices({
     enrollments: enrollmentSide,
     ...(disputeStore === undefined ? {} : { store: disputeStore }),
   });
+
+  /** T028: the session's remedy as its parties read it, absent when none or lapsed. */
+  const remedyOf = async (
+    tx: Transaction,
+    sessionId: string,
+    terms: { readonly slotId: string; readonly timezone: string },
+  ) => {
+    const row = await store.remedyOf(tx, sessionId);
+    if (row === null) return undefined;
+    const slot = await store.slotOf(tx, terms.slotId);
+    // `enrollments.slot_id` is a foreign key to the slot (ERD `enrollments`).
+    if (slot === null) throw new Error('sessions: an enrollment without its slot');
+    return remedyViewOf(row, { startTimeLocal: slot.startTimeLocal, timezone: terms.timezone });
+  };
 
   return {
     raiseDispute,
@@ -259,6 +295,7 @@ export function createSessionsServices({
         const request = await store.latestCancellationOf(tx, session.id);
         const { id, status, endsAt } = session;
         const disputes = await disputeView.ofSessions(tx, [{ id, status, endsAt }], userId);
+        const remedy = await remedyOf(tx, session.id, terms);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -285,6 +322,7 @@ export function createSessionsServices({
             ? {}
             : { cancellation: cancellationViewOf(request, session, userId, await clock(tx)) }),
           ...disputes.get(session.id),
+          ...(remedy === undefined ? {} : { remedy }),
         };
       });
     },
@@ -293,6 +331,8 @@ export function createSessionsServices({
       transactions,
       idempotency,
       enrollments: enrollmentSide,
+      offer: remedyOffer,
+      clock,
       ...(cancellationStore === undefined ? {} : { store: cancellationStore }),
     }),
 

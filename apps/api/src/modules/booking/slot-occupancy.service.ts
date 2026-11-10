@@ -11,12 +11,19 @@
 // last session cannot be read keeps its slot taken: the side that refuses a teacher's edit, and
 // offers nothing, rather than the side that double-books.
 //
+// T027 of specs/004-sessions (Q1 (a), R-207): an enrollment with an open remedy, `frozen` included,
+// keeps its slot taken until the remedy settles (booked, or handed to a case), past its release:
+// the proposal stands on the slot's local start (`session_remedies` keeps only its date), so the
+// slot's day and time are neither editable (`slotInUse`) nor offered (the sheet, the hold and
+// discovery's card). Booking learns of it through sessions' entry
+// (`enrollmentsWithOpenRemedyAmong`), never by reading `session_remedies` (R-API-6).
+//
 // No lock: discovery only reads, and `slotInUse`'s callers lock before they ask (T005's rule 1).
 import { calendarWeeksAfter, type LocalDate, localDateIn, type TimeZoneId } from '@ijazah/time';
 import { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { lastSessionDateOf } from '../sessions/index.js';
+import { enrollmentsWithOpenRemedyAmong, lastSessionDateOf } from '../sessions/index.js';
 import { slotUses } from './slot-occupancy.repository.js';
 
 /** The weeks a slot stays held after the week following its final session (FR-BOOK-10). */
@@ -50,15 +57,20 @@ export function releaseDateOf(lastSessionDate: LocalDate, bufferWeeks: number): 
   return calendarWeeksAfter(lastSessionDate, bufferWeeks + 1);
 }
 
-/** A slot's occupancy from its use and its confirmed enrollments' final session dates. */
+/**
+ * A slot's occupancy from its use, its confirmed enrollments' final session dates and which of them
+ * has an open remedy, which takes the slot (T027, Q1 (a)).
+ */
 export function occupancyFrom(
   use: SlotUse,
   lastSessionDates: ReadonlyMap<string, LocalDate>,
   bufferWeeks: number,
+  withOpenRemedy: ReadonlySet<string> = new Set(),
 ): SlotOccupancy | undefined {
   if (use.taken) return { kind: 'taken' };
   let latest: SlotOccupancy | undefined;
   for (const { enrollmentId, timezone } of use.confirmed) {
+    if (withOpenRemedy.has(enrollmentId)) return { kind: 'taken' };
     const last = lastSessionDates.get(enrollmentId);
     if (last === undefined) return { kind: 'taken' };
     const releasedOn = releaseDateOf(last, bufferWeeks);
@@ -75,7 +87,7 @@ export function isFreeOn(occupancy: SlotOccupancy | undefined, localDate: LocalD
   return occupancy.kind === 'until' && localDate >= occupancy.releasedOn;
 }
 
-type Client = Pick<Transaction, 'slotHold' | 'enrollment' | 'session'>;
+type Client = Pick<Transaction, 'slotHold' | 'enrollment' | 'session' | 'sessionRemedy'>;
 
 /**
  * Of `slotIds`, each used slot's occupancy; a free slot is absent. The buffer is read only when a
@@ -92,13 +104,17 @@ export async function occupancyOf(
   const confirmedIds = uses.flatMap(({ taken, confirmed }) =>
     taken ? [] : confirmed.map(({ enrollmentId }) => enrollmentId),
   );
-  const [lastDates, buffer] =
+  const [lastDates, buffer, withOpenRemedy] =
     confirmedIds.length === 0
-      ? [new Map<string, LocalDate>(), 0]
-      : await Promise.all([lastSessionDateOf(tx, confirmedIds), bufferWeeks()]);
+      ? [new Map<string, LocalDate>(), 0, new Set<string>()]
+      : await Promise.all([
+          lastSessionDateOf(tx, confirmedIds),
+          bufferWeeks(),
+          enrollmentsWithOpenRemedyAmong(tx, confirmedIds),
+        ]);
   const occupancy = new Map<string, SlotOccupancy>();
   for (const use of uses) {
-    const occupied = occupancyFrom(use, lastDates, buffer);
+    const occupied = occupancyFrom(use, lastDates, buffer, withOpenRemedy);
     if (occupied !== undefined) occupancy.set(use.slotId, occupied);
   }
   return occupancy;

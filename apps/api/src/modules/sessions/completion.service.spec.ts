@@ -1,7 +1,8 @@
 // T015 of specs/004-sessions/tasks.md (FR-448, FR-449, FR-486; research R-309, R-322) —
 // `createCompletion().completeIfDue` over a recorded store and enrollment side: an enrollment is
 // completed only when every session is settled and not frozen, no remedy is owed, the last
-// session's dispute window has closed and no `student_suspended` case is open, and then once,
+// session's dispute window has closed and no `student_suspended` or `admin_cancellation` case is
+// open (the latter B38's decision under T023, Q3 (a)), and then once,
 // through `EnrollmentSide.complete`, answering true; it writes no log line itself, its caller
 // writing «Enrollment completed» (PR #129's review, Minor 3: the sweep after its commit, the outage
 // record on its transaction). No count is read, and five or more
@@ -52,12 +53,14 @@ function world({
   status = 'confirmed',
   sessions = DELIVERED,
   suspendedCase = false,
+  adminCancellationCase = false,
   at = CLOSES,
   moves = true,
 }: {
   status?: EnrollmentStatus | null;
   sessions?: readonly CompletionSession[];
   suspendedCase?: boolean;
+  adminCancellationCase?: boolean;
   at?: Date;
   moves?: boolean;
 } = {}) {
@@ -75,6 +78,10 @@ function world({
       return sessions;
     },
     studentSuspendedCaseOpen: async () => suspendedCase,
+    adminCancellationCaseOpen: async (_tx, id) => {
+      expect(id).toBe(ENROLLMENT);
+      return adminCancellationCase;
+    },
   };
   const completion = createCompletion({
     enrollments: {
@@ -127,9 +134,15 @@ describe('completeIfDue (T015, FR-449)', () => {
     ['a Teacher-No-Show not yet offered its remedy', settled('teacher_no_show')],
     ['a Both-No-Show not yet offered its remedy', settled('both_no_show')],
     ['a Cancelled-By-Agreement session with no remedy', settled('cancelled_by_agreement')],
-    ['a remedy awaiting the choice', settled('teacher_no_show', { remedyStatus: 'awaiting_choice' })],
+    [
+      'a remedy awaiting the choice',
+      settled('teacher_no_show', { remedyStatus: 'awaiting_choice' }),
+    ],
     ['a remedy proposed', settled('both_no_show', { remedyStatus: 'proposed' })],
-    ['a counter-proposal pending', settled('teacher_no_show', { remedyStatus: 'counter_proposed' })],
+    [
+      'a counter-proposal pending',
+      settled('teacher_no_show', { remedyStatus: 'counter_proposed' }),
+    ],
     ['a frozen remedy', settled('cancelled_by_admin', { remedyStatus: 'frozen' })],
   ])('holds it while there is %s (postponed)', async (_name, session) => {
     const { completion, completed } = world({ sessions: [...DELIVERED, session] });
@@ -150,6 +163,12 @@ describe('completeIfDue (T015, FR-449)', () => {
 
   it('holds it while a student_suspended case is open on it (FR-486)', async () => {
     const { completion, completed } = world({ suspendedCase: true });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+
+  it('holds it while an admin_cancellation case is open on it (the decision under T023, Q3 (a)): a hold can be undone, a completion cannot', async () => {
+    const { completion, completed } = world({ adminCancellationCase: true });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
     expect(completed).toEqual([]);
   });
