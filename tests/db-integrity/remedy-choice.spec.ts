@@ -423,26 +423,8 @@ describe("the counter and another package's slot (the owner's rule of 2026-11-10
     expect(await codeOf(counter(w, '2026-11-16'))).toBe('SLOT_NOT_OFFERED');
     expect(await committed(w)).toEqual(before);
   });
-
-  it('a counter written before the other package took the slot is never booked on it: MAKEUP_REFUSED, no make-up, the counter left pending', async () => {
-    const w = await world({ status: 'proposed' });
-    await counter(w, '2026-11-16');
-    await otherPackageOnMonday(w);
-    const before = await committed(w);
-    expect(
-      await codeOf(
-        services.remedy.answerCounter(
-          { userId: w.teacherId },
-          { sessionId: w.sessionId, accept: true },
-          log,
-        ),
-      ),
-    ).toBe('MAKEUP_REFUSED');
-    const after = await committed(w);
-    expect(after.makeups).toEqual([]);
-    expect(after.remedy).toMatchObject({ status: 'counter_proposed', counter_date: '2026-11-16' });
-    expect(after).toEqual(before);
-  });
+  // A counter written before the other package took the slot, refused at its booking and released
+  // (the owner's decision (b) under T032): `remedy-windows.spec.ts`.
 });
 
 describe('sessions.remedy.accept over the real tables (T031, FR-469)', () => {

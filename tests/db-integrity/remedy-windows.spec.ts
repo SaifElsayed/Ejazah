@@ -5,7 +5,8 @@
 //
 //   - `answerCounter`: accept books the counter; decline releases it (`proposed`) inside the choice
 //     window, the student countering again on options read again (H4), and books the proposal after
-//     it; an acceptance the database refuses answers `MAKEUP_REFUSED`, releases the counter in a
+//     it; an acceptance the database refuses, or T029 refuses on a week another package keeps
+//     (`slot_taken`, the owner's decision (b) under T032), answers `MAKEUP_REFUSED`, releases the counter in a
 //     second transaction (one `counter_booking_refused` row, never `counter_withdrawn`, never a
 //     `counter_unanswered` case), one warn line `{ sessionId, enrollmentId, constraint }`, and books
 //     the proposal once the choice window has closed.
@@ -235,6 +236,30 @@ async function teacherBusy(w: World, startsAt: string, endsAt: string): Promise<
   );
 }
 
+/**
+ * Another student's package on the counter's Monday slot, confirmed, its final session 2026-11-02
+ * disputed and still open, so not completed: under the owner's rule of 2026-11-10 the slot is its
+ * own on every week, with no session or reservation on the counter's week.
+ */
+async function otherPackageKeepsMonday(w: World): Promise<void> {
+  const other = await makeUser(db);
+  const id = await insertRow(db, 'enrollments', {
+    ...enrollmentValues(w.offer, other),
+    slot_id: w.mondaySlotId,
+    status: 'confirmed',
+    confirmed_at: '2026-10-04T07:01:00Z',
+    snapshot_session_count: 1,
+    quoted_first_session_local_date: '2026-11-02',
+  });
+  await sessionOf(
+    { id, studentId: other, teacherId: w.teacherId },
+    1,
+    '2026-11-02T16:00:00Z',
+    '2026-11-02T17:00:00Z',
+    'disputed',
+  );
+}
+
 /** What is committed of the remedy and its session. */
 async function committed(w: World) {
   const remedy = await db.query<Record<string, unknown>>(
@@ -428,6 +453,47 @@ describe("a counter's acceptance the database refuses (T032; A3, A1, A7; FR-468)
     const w = await world();
     await counterOn(w, new Date('2026-11-07T12:00:00.000Z'));
     await teacherBusy(w, '2026-11-16T16:00:00Z', '2026-11-16T17:00:00Z');
+    expect(await codeOf(answer(w, true, new Date('2026-11-08T09:00:00.000Z')))).toBe(
+      'MAKEUP_REFUSED',
+    );
+    expect(await committed(w)).toMatchObject({
+      remedy: { status: 'booked' },
+      events: ['counter_proposed', 'counter_booking_refused', 'makeup_booked'],
+      makeups: ['2026-11-15T07:00'],
+      cases: [],
+    });
+  });
+
+  // The owner's decision (b) of 2026-11-10 under T032: a week another package keeps lasts, so the
+  // counter is released as the database's refusal releases it, never left pending to become a
+  // refund once its answer window closes (FR-MAKEUP-4).
+  it('a counter on a week another package then keeps, inside the choice window: MAKEUP_REFUSED, released to proposed, one counter_booking_refused row, one warn line naming slot_taken, never a case', async () => {
+    reset();
+    const w = await world();
+    await counterOn(w, AT);
+    await otherPackageKeepsMonday(w);
+    expect(await codeOf(answer(w, true, AT))).toBe('MAKEUP_REFUSED');
+    expect(await committed(w)).toEqual({
+      remedy: {
+        status: 'proposed',
+        kind: 'makeup',
+        counter_slot_id: null,
+        counter_proposed_at: null,
+      },
+      events: ['counter_proposed', 'counter_booking_refused'],
+      makeups: [],
+      cases: [],
+    });
+    expect(linesAt('warn')).toEqual([
+      { sessionId: w.sessionId, enrollmentId: w.enrollmentId, constraint: 'slot_taken' },
+    ]);
+  });
+
+  it('a counter on a week another package then keeps, after the choice window: released, then the proposal booked, never read as unanswered', async () => {
+    reset();
+    const w = await world();
+    await counterOn(w, new Date('2026-11-07T12:00:00.000Z'));
+    await otherPackageKeepsMonday(w);
     expect(await codeOf(answer(w, true, new Date('2026-11-08T09:00:00.000Z')))).toBe(
       'MAKEUP_REFUSED',
     );

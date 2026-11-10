@@ -1120,6 +1120,46 @@ describe('sessions.remedy.answerCounter: accept (T032; FR-465, FR-468; A3, A7)',
     ]);
   });
 
+  it("refused slot_taken (a week another package keeps), inside the choice window: released as the database's refusal is, one counter_booking_refused row, one warn line naming slot_taken (the owner's decision (b) under T032)", async () => {
+    bookRefusal = new RefusedBooking({ cause: 'slot_taken' });
+    expect((await refusalOf(answer(true))).code).toBe('MAKEUP_REFUSED');
+    expect(writes().slice(-2)).toEqual([
+      ['releaseCounter', REMEDY],
+      [
+        'recordEvents',
+        [
+          {
+            enrollmentId: ENROLLMENT,
+            sessionId: SESSION,
+            kind: 'counter_booking_refused',
+            occurredAt: NOW,
+          },
+        ],
+      ],
+    ]);
+    expect(linesAt('warn')).toEqual([
+      { sessionId: SESSION, enrollmentId: ENROLLMENT, constraint: 'slot_taken' },
+    ]);
+    expect(remedy?.status).toBe('proposed');
+    expect(calls.filter(([name]) => name === 'book')).toEqual([]);
+  });
+
+  it('refused slot_taken after the choice window: released, then the proposal booked, never a counter_unanswered refund', async () => {
+    now = new Date('2026-11-08T09:00:00.000Z');
+    remedy = counterPending({
+      counter: { ...PENDING_COUNTER, proposedAt: new Date('2026-11-07T12:00:00.000Z') },
+    });
+    bookRefusal = new RefusedBooking({ cause: 'slot_taken' });
+    expect((await refusalOf(answer(true))).code).toBe('MAKEUP_REFUSED');
+    expect(calls.filter(([name]) => name === 'book')).toEqual([
+      [
+        'book',
+        { remedyId: REMEDY, booking: 'proposal', operation: 'sessions.remedy.answerCounter' },
+      ],
+    ]);
+    expect(handedOff).toEqual([]);
+  });
+
   it('a reserved time or a second deadlock refuses with the counter left pending, nothing released and no warn line of its own (Q4 (a))', async () => {
     for (const made of [{ cause: 'reserved' }, { cause: 'deadlock' }] as const) {
       remedy = counterPending();

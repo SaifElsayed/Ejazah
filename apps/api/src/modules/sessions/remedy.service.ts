@@ -51,12 +51,14 @@
 //
 // THE TEACHER'S ANSWER (T032; decision 9; A3, A1, A7; Q4 (a)). Accept: one `counter_accepted` row and
 // T029 books the counter (`sessions.remedy.answerCounter`). A booking the database refuses (an
-// exclusion it names, `sessions_teacher_no_overlap` or `sessions_student_no_overlap`) answers T029's
-// `MAKEUP_REFUSED` and, in a second transaction under the same locks, releases the counter as a
-// decline does: its columns cleared, `proposed`, one `counter_booking_refused` row (never
-// `counter_withdrawn`), and one warn line `{ sessionId, enrollmentId, constraint }` and nothing else;
-// so the sweep never reads it as unanswered. A reserved time, a week another package keeps the
-// counter's slot (T029's `slot_taken`) or a second deadlock refuses with the counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
+// exclusion it names, `sessions_teacher_no_overlap` or `sessions_student_no_overlap`), or T029 refuses
+// on a week another package keeps the counter's slot (`slot_taken`, which lasts: the owner's decision
+// (b) under T032, FR-MAKEUP-4), answers T029's `MAKEUP_REFUSED` and, in a second transaction under the
+// same locks, releases the counter as a decline does: its columns cleared, `proposed`, one
+// `counter_booking_refused` row (never `counter_withdrawn`), and one warn line
+// `{ sessionId, enrollmentId, constraint }` (the exclusion's name, or `slot_taken`) and nothing else;
+// so the sweep never reads it as unanswered. A reserved time or a second deadlock refuses with the
+// counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
 // the counter released, `proposed`, one `counter_declined` row. After either release, once the
 // choice window has closed, the proposal is booked in a transaction of its own (T029's `book`); its
 // refusal leaves the remedy `proposed` past `choice_closes_at`, which the sweep books or retries
@@ -810,14 +812,18 @@ export function createRemedyServices({
       });
     } catch (error: unknown) {
       const refused = refusalOf(error);
-      if (refused?.cause !== 'overlap') throw error;
+      // A lasting refusal releases the counter: the database's exclusion, or a week another
+      // package keeps (`slot_taken`, the owner's decision (b) under T032). A reserved time or a
+      // second deadlock may pass, and leaves it pending (Q4 (a)).
+      if (refused?.cause !== 'overlap' && refused?.cause !== 'slot_taken') throw error;
+      const constraint = refused.cause === 'overlap' ? refused.constraint : 'slot_taken';
       const release = await transactions.run((tx) =>
         released(tx, sessionId, userId, log, 'own_and_counter', 'counter_booking_refused'),
       );
       if (release !== null) {
         log.warn(
-          { sessionId, enrollmentId: release.enrollmentId, constraint: refused.constraint },
-          "A counter-proposal's booking was refused by the database",
+          { sessionId, enrollmentId: release.enrollmentId, constraint },
+          "A counter-proposal's booking was refused",
         );
         if (release.choiceClosed) await bookProposalAfterAnswer(booking, remedyId);
       }

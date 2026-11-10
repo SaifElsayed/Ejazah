@@ -25,8 +25,9 @@
 // line names (A7), or the reservation. A counter is also refused, before any write, on a week
 // another package keeps the counter's slot (`EnrollmentSide.slotWeekTaken`, the remedy's own
 // enrollment left out; the owner's rule of 2026-11-10 and decision (a) on the follow-up under T031
-// and T029): `MAKEUP_REFUSED`, cause `slot_taken`, the counter left pending as a reserved time leaves
-// it. The proposal's week was read so at its offer (T028).
+// and T029): `MAKEUP_REFUSED`, cause `slot_taken`, which T032's `answerCounter` releases as it
+// releases an exclusion's refusal (the owner's decision (b) under T032). The proposal's week was read
+// so at its offer (T028).
 //
 // THE DEADLOCK (L5; research R-321). `reresolve-session-instants`' deferred overlap check can
 // deadlock against this insert at its commit. `run` opens the booking's transaction through T002's
