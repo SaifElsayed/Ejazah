@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type {
   EnrollmentEventEntry,
@@ -649,6 +650,8 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
     );
     expect(thrown).toBeInstanceOf(DomainError);
     expect((thrown as DomainError).code).toBe('NOT_FOUND');
+    // Logged once, here (PR #130's review, round 1, Minor 4): no second line from `onError`.
+    expect(isRefusalLogged(thrown)).toBe(true);
     expect(pages).toEqual([{ filter: { enrollmentIds: [id(1)] }, batchSize: 1 }]);
     expect(asked).toEqual([]);
     expect(logged).toEqual([

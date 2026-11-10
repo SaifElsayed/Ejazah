@@ -29,6 +29,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotentRequest } from '../../platform/idempotency/idempotency.service.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import type { CancellationRequestRow } from './cancellation.repository.js';
@@ -245,11 +246,18 @@ beforeEach(() => {
   });
 });
 
+/**
+ * The refusal `call` threw, each one marked «logged» where it was logged, so `onError` writes no
+ * second line (PR #130's review, round 1, Minor 4).
+ */
 async function refusalOf(call: Promise<unknown>): Promise<DomainError> {
   try {
     await call;
   } catch (error) {
-    if (error instanceof DomainError) return error;
+    if (error instanceof DomainError) {
+      expect(isRefusalLogged(error), `${error.code} marked «logged»`).toBe(true);
+      return error;
+    }
     throw error;
   }
   throw new Error('answered where it must be refused');

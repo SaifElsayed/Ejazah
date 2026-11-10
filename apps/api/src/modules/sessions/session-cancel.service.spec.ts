@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { SessionToCancel } from './session-cancel.repository.js';
 import { createSessionCancel, type SessionCancelStore } from './session-cancel.service.js';
 
@@ -83,6 +84,8 @@ async function refusalOf(call: Promise<unknown>): Promise<DomainError> {
     (error: unknown) => error,
   );
   if (!(thrown instanceof DomainError)) throw new Error('expected a DomainError');
+  // Logged once, where it was refused (PR #130's review, round 1, Minor 4).
+  expect(isRefusalLogged(thrown), `${thrown.code} marked «logged»`).toBe(true);
   return thrown;
 }
 

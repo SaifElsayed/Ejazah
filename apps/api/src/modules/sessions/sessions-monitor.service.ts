@@ -50,6 +50,7 @@ import { clockTimestamp } from '../../platform/db/db-clock.js';
 import { idsWithFoldedNamePrefix } from '../../platform/db/folded-name.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { readSlot } from '../catalog/index.js';
@@ -164,7 +165,10 @@ export interface SessionsMonitor {
 /** Why a monitor read was refused, as its one log line names it. */
 type RefusalReason = 'not_found';
 
-/** Logs the refusal with ids and its reason only, and answers the error to throw. */
+/**
+ * Logs the refusal with ids and its reason only, and answers the error to throw, marked «logged»
+ * so `onError` writes no second line (PR #130's review, round 1, Minor 4).
+ */
 function refusal(
   log: Pick<Logger, 'info'>,
   ids: { readonly adminId: string; readonly enrollmentId: string },
@@ -172,7 +176,7 @@ function refusal(
   reason: RefusalReason,
 ): DomainError {
   log.info({ ...ids, errorCode, reason }, 'An enrollment monitor read was refused');
-  return new DomainError(errorCode);
+  return markRefusalLogged(new DomainError(errorCode));
 }
 
 /** A local time column's `HH:MM:SS` as the contract's `HH:MM`. */

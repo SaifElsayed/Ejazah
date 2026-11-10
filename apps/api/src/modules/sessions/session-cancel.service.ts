@@ -30,6 +30,7 @@
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { type CompensationCase, openCompensationCase } from '../moderation/index.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
@@ -77,7 +78,10 @@ export interface SessionCancel {
 /** Why a cancellation was refused, as its one log line names it. */
 type RefusalReason = 'not_found' | 'not_scheduled';
 
-/** Logs the refusal with ids and its reason only, and answers the error to throw. */
+/**
+ * Logs the refusal with ids and its reason only, and answers the error to throw, marked «logged»
+ * so `onError` writes no second line (PR #130's review, round 1, Minor 4).
+ */
 function refusal(
   log: Pick<Logger, 'info'>,
   ids: { readonly adminId: string; readonly sessionId: string; readonly enrollmentId?: string },
@@ -85,7 +89,7 @@ function refusal(
   reason: RefusalReason,
 ): DomainError {
   log.info({ ...ids, errorCode, reason }, 'A session cancellation was refused');
-  return new DomainError(errorCode);
+  return markRefusalLogged(new DomainError(errorCode));
 }
 
 export function createSessionCancel({

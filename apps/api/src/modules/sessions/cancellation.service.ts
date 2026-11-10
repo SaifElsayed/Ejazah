@@ -69,6 +69,7 @@ import {
   type ErrorCode,
   type FieldIssue,
 } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { sessionPartiesOf } from '../identity/index.js';
@@ -203,7 +204,10 @@ interface RefusalIds {
   readonly userId: string;
 }
 
-/** Logs the refusal with ids and its reason only, and answers the error to throw. */
+/**
+ * Logs the refusal with ids and its reason only, and answers the error to throw, marked «logged»
+ * so `onError` writes no second line (PR #130's review, round 1, Minor 4).
+ */
 function refusal(
   log: Logger,
   ids: RefusalIds,
@@ -213,7 +217,7 @@ function refusal(
   details?: { readonly details?: readonly FieldIssue[]; readonly cause?: unknown },
 ): DomainError {
   log.info({ ...ids, errorCode, reason }, 'A cancellation request or answer was refused');
-  return new DomainError(errorCode, undefined, details);
+  return markRefusalLogged(new DomainError(errorCode, undefined, details));
 }
 
 const SCOPE = 'sessions.cancellation.request';
