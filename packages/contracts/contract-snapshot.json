@@ -3189,11 +3189,24 @@
         "output": {
           "$": { "type": "object" },
           "$.enrollmentId": { "required": true, "type": "string" },
+          "$.message": { "required": true, "type": "object" },
+          "$.message.attachment": { "type": "object" },
+          "$.message.attachment.filename": { "required": true, "type": "string" },
+          "$.message.attachment.mime": {
+            "required": true,
+            "type": "string",
+            "values": ["application/pdf", "text/plain"]
+          },
+          "$.message.body": { "type": "string" },
+          "$.message.messageId": { "required": true, "type": "string" },
+          "$.message.mine": { "required": true, "type": "boolean" },
+          "$.message.purged": { "required": true, "type": "boolean" },
+          "$.message.sentAt": { "required": true, "type": "string" },
           "$.sessionId": { "required": true, "type": "string" },
           "$.type": {
             "required": true,
             "type": "string",
-            "values": ["account", "enrollment", "session"]
+            "values": ["account", "chat", "enrollment", "session"]
           }
         }
       },
@@ -3347,6 +3360,7 @@
           "$.counterparty": { "required": true, "type": "object" },
           "$.counterparty.deleted": { "required": true, "type": "boolean" },
           "$.counterparty.displayName": { "required": true, "type": "null|string" },
+          "$.counterpartyInRoom": { "required": true, "type": "boolean" },
           "$.dispute": { "type": "object" },
           "$.dispute.closesAt": { "required": true, "type": "string" },
           "$.dispute.raisedByMe": { "required": true, "type": "boolean" },

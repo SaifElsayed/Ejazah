@@ -150,7 +150,7 @@ import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { DEFAULT_LOCALE, type Locale } from '../platform/http/locale.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
 import type { LiveBus } from '../platform/live/live-bus.js';
-import { RequestLive } from '../platform/live/live-publisher.js';
+import { RequestLive, unboundBus } from '../platform/live/live-publisher.js';
 import type { LiveRegistry } from '../platform/live/live-registry.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
@@ -320,12 +320,6 @@ export interface LiveChannel {
   readonly bus: LiveBus;
   readonly registry: LiveRegistry;
 }
-
-/** The bus of a context built without a channel: what it is handed goes nowhere. */
-const unboundBus: LiveBus = {
-  publish: () => undefined,
-  subscribe: () => () => undefined,
-};
 
 /** What the administrator caller kind needs to audit every call (T108). */
 export interface Administration {
