@@ -174,6 +174,8 @@ import type {
   SessionsCancellationAnswerOutput,
   SessionsCancellationRequestInput,
   SessionsCancellationRequestOutput,
+  SessionsComplaintRaiseInput,
+  SessionsComplaintRaiseOutput,
   SessionsDisputeRaiseInput,
   SessionsDisputeRaiseOutput,
   SessionsGetInput,
@@ -446,6 +448,10 @@ export interface AppCaller {
       answerCounter(
         input: SessionsRemedyAnswerCounterInput,
       ): Promise<SessionsRemedyAnswerCounterOutput>;
+    };
+    /** T060: the student's complaint of the teacher's absence, attacked in `sessions.attacks.ts`. */
+    readonly complaint: {
+      raise(input: SessionsComplaintRaiseInput): Promise<SessionsComplaintRaiseOutput>;
     };
   };
   /** T037 of specs/004-sessions: an enrollment's chat read and written, attacked in `chat.attacks.ts`. */

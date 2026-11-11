@@ -1062,6 +1062,7 @@ describe("'sessions.complaint.raise' (T060)", () => {
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
       sessions,
+      chat: unusedChatServices,
     };
     const caller = callerFor(
       createAppContext({
