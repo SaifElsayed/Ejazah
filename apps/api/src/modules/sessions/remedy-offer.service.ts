@@ -26,8 +26,10 @@
 // another enrollment (`EnrollmentSide.slotWeekTaken`) and overlaps no session, reservation (T027) or
 // open hold (`EnrollmentSide.heldTimesOf`) of either party. Each week is resolved on its own date by
 // `packages/time` (R-TIME-2). Fixed at the offer, never moved. The search reads week by week and
-// stops at the first free one (Q5: no bound is set; see the lane's report for a slot taken on every
-// date, which would not end).
+// stops at the first free one, or once the snapshot's count of weeks the slot is taken has been
+// passed: no offer now, one warn line `{ sessionId, enrollmentId, reason: 'no_free_week' }`, the next
+// run tries again (the decision under T028, a guard against bugs only, amended 2026-11-11: weeks
+// other sessions, reservations or holds block are finite and stepped over without counting).
 //
 // THE LOCKS (contracts/kernel.md, the offer row; `003:T005`'s rules). `offer` takes `users` (both,
 // one call), the teacher's `lockKey('teacher-slots')`, `enrollments`, `sessions`, then the session's
@@ -217,9 +219,10 @@ export function createRemedyOffer({
   }
 
   /**
-   * The first free week of the enrollment's slot from the latest of its time, at or after `bound`,
-   * among the snapshot's count of weeks from there (the decision under T028: a guard against bugs
-   * only, the slot being kept until the package is completed); null when none is free.
+   * The first free week of the enrollment's slot from the latest of its time, at or after `bound`;
+   * null once the snapshot's count of weeks the slot is taken has been passed (the decision under
+   * T028, amended 2026-11-11: a guard against bugs only, the slot being kept until the package is
+   * completed; weeks other sessions, reservations or holds block are stepped over, uncounted).
    */
   async function proposalOf(
     tx: Transaction,
@@ -255,7 +258,6 @@ export function createRemedyOffer({
         endsAt: new Date(addMinutes(new Date(occurrence.startsAt), terms.durationMinutes)),
       };
       if (time.startsAt.getTime() < bound.getTime()) continue;
-      weeks += 1;
       const window = { from: time.startsAt, to: time.endsAt };
       const [taken, own, reserved, held] = await Promise.all([
         enrollments.slotWeekTaken(tx, terms.slotId, date, session.enrollmentId),
@@ -263,7 +265,12 @@ export function createRemedyOffer({
         store.reservedTimesOf(tx, people, window, enrollments),
         enrollments.heldTimesOf(tx, people, window),
       ]);
-      if (taken) continue;
+      // Only a week the slot is taken counts toward the bound: sessions, reservations and holds are
+      // finite, a slot taken on every date is not (the owner's amendment of 2026-11-11 under T028).
+      if (taken) {
+        weeks += 1;
+        continue;
+      }
       if (overlapsAny(time, own) || overlapsAny(time, reserved) || overlapsAny(time, held)) {
         continue;
       }

@@ -271,8 +271,8 @@ describe('remedy offer: the proposal (H1, F5, R-TIME-2)', () => {
   });
 
   it('skips a week the slot is taken, one over a session, one over a reservation or a hold of either party', async () => {
-    // Eight weeks, so the four skipped fit inside the search's bound (the decision under T028).
-    terms = terms === null ? null : { ...terms, sessionCount: 8 };
+    // Four weeks, the snapshot's count: only the week the slot is taken counts toward the bound
+    // (PR #132's review, round 1, Minor 2; the owner's amendment of 2026-11-11 under T028).
     takenDates = new Set(['2026-12-17']);
     ownSessions = [
       { startsAt: new Date('2026-12-24T07:30:00Z'), endsAt: new Date('2026-12-24T08:30:00Z') },
@@ -307,6 +307,21 @@ describe('remedy offer: the proposal (H1, F5, R-TIME-2)', () => {
     takenDates = new Set(['2026-12-17', '2026-12-24', '2026-12-31']);
     expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2027-01-07');
   }, 3_000);
+
+  // PR #132's review, round 1, Minor 2 (the owner's amendment of 2026-11-11 under T028): the student
+  // on another teacher's package at the same weekly time. Weeks its sessions block are stepped over
+  // without counting toward the bound: they are finite, a slot taken on every date is not.
+  it('steps over the weeks other sessions block without counting them, past the snapshot’s count, and writes no warn line', async () => {
+    ownSessions = [
+      { startsAt: new Date('2026-12-17T07:00:00Z'), endsAt: new Date('2026-12-17T08:00:00Z') },
+      { startsAt: new Date('2026-12-24T07:00:00Z'), endsAt: new Date('2026-12-24T08:00:00Z') },
+      { startsAt: new Date('2026-12-31T07:00:00Z'), endsAt: new Date('2026-12-31T08:00:00Z') },
+      { startsAt: new Date('2027-01-07T07:00:00Z'), endsAt: new Date('2027-01-07T08:00:00Z') },
+      { startsAt: new Date('2027-01-14T07:00:00Z'), endsAt: new Date('2027-01-14T08:00:00Z') },
+    ];
+    expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2027-01-21');
+    expect(warnings).toEqual([]);
+  });
 
   it('takes a week a hold only touches, end to start', async () => {
     held = [
