@@ -20,7 +20,11 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { LiveMessage } from '../../platform/live/live-bus.js';
-import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
+import {
+  bindToTransaction,
+  type LivePublisher,
+  RequestLive,
+} from '../../platform/live/live-publisher.js';
 import type { CaseRecord } from '../moderation/index.js';
 import {
   type ComplaintDecisionStore,
@@ -392,7 +396,10 @@ describe('cases.decideComplaint refusals', () => {
 /**
  * The administrator kind's after-commit point as `procedures.ts` runs it: the request's list bound to
  * the call's transaction while it runs, flushed once it has committed, dropped on a rollback.
+ * What the call added to the list, sent or not, is kept in `added`.
  */
+let added: LiveMessage[] = [];
+
 async function asAdministratorKind(
   work: (tx: Transaction) => Promise<unknown>,
   commitFails = false,
@@ -403,7 +410,14 @@ async function asAdministratorKind(
     { warn: () => undefined },
   );
   const tx = {} as Transaction;
-  const unbind = bindToTransaction(tx, live);
+  added = [];
+  const recording: LivePublisher = {
+    afterCommit: (to, event, scope) => {
+      added.push({ to: [...to], event });
+      live.afterCommit(to, event, scope);
+    },
+  };
+  const unbind = bindToTransaction(tx, recording);
   try {
     await work(tx);
     if (commitFails) throw new Error('the audit write failed');
@@ -427,6 +441,7 @@ describe('cases.decideComplaint: the live event (T066)', () => {
   it('(a) sends nothing when the enrollment is not confirmed (CONFLICT) or the call rolls back', async () => {
     const refused = world({ statuses: ['completed'] });
     expect(await asAdministratorKind((tx) => refused.decide('end_enrollment', tx))).toEqual([]);
+    expect(added).toEqual([]);
     const rolledBack = world();
     expect(
       await asAdministratorKind((tx) => rolledBack.decide('end_enrollment', tx), true),
@@ -435,11 +450,14 @@ describe('cases.decideComplaint: the live event (T066)', () => {
 
   it('(b) and (c) add nothing of their own', async () => {
     expect(await asAdministratorKind((tx) => world().decide('suspend_teacher', tx))).toEqual([]);
+    expect(added).toEqual([]);
     expect(await asAdministratorKind((tx) => world().decide('close', tx))).toEqual([]);
+    expect(added).toEqual([]);
   });
 
   it('a complaint closed meanwhile (NOT_FOUND) sends nothing', async () => {
     const { decide } = world({ records: [record(), record({ status: 'resolved' })] });
     expect(await asAdministratorKind((tx) => decide('end_enrollment', tx))).toEqual([]);
+    expect(added).toEqual([]);
   });
 });

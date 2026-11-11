@@ -22,7 +22,11 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
 import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
-import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
+import {
+  bindToTransaction,
+  type LivePublisher,
+  RequestLive,
+} from '../../platform/live/live-publisher.js';
 import type { LiveRegistry } from '../../platform/live/live-registry.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
@@ -603,14 +607,24 @@ describe('sessions.restore: the live event (T066)', () => {
   /**
    * The administrator kind's after-commit point as `procedures.ts` runs it: the request's list bound to
    * the call's transaction while it runs, flushed once it has committed, dropped on a rollback.
+   * What the call added to the list, sent or not, is kept in `added`.
    */
+  let added: LiveMessage[] = [];
+
   async function asAdministratorKind(commitFails = false): Promise<LiveMessage[]> {
     const published: LiveMessage[] = [];
     const live = new RequestLive(
       { publish: (message) => void published.push(message) },
       { warn: () => undefined },
     );
-    const unbind = bindToTransaction(tx, live);
+    added = [];
+    const recording: LivePublisher = {
+      afterCommit: (to, event, scope) => {
+        added.push({ to: [...to], event });
+        live.afterCommit(to, event, scope);
+      },
+    };
+    const unbind = bindToTransaction(tx, recording);
     try {
       await restore();
       if (commitFails) throw new Error('the audit write failed');
@@ -638,10 +652,12 @@ describe('sessions.restore: the live event (T066)', () => {
       isActive: false,
     };
     expect(await asAdministratorKind()).toEqual([]);
+    expect(added).toEqual([]);
     given.slot = { dayOfWeek: 4, startTimeLocal: '09:00:00', timezone: CAIRO, isActive: true };
     expect(await asAdministratorKind(true)).toEqual([]);
     given.replayed = true;
     expect(await asAdministratorKind()).toEqual([]);
+    expect(added).toEqual([]);
   });
 
   it('inside the kind’s declared deadlock retry, sends the committed attempt’s event once', async () => {

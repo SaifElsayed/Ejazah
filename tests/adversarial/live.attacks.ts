@@ -433,6 +433,12 @@ async function chatAndCancellationStayBetween(direction: Direction): Promise<voi
         message: expect.objectContaining({ body, mine }),
       });
     const session = { type: 'session', sessionId, enrollmentId };
+    // Once A and B have each been sent their three, C's streams are read first: none reached them.
+    await vi.waitFor(() => {
+      expect(eventsOf(a).length).toBeGreaterThanOrEqual(3);
+      expect(eventsOf(b).length).toBeGreaterThanOrEqual(3);
+    });
+    for (const other of others) expect(eventsOf(other)).toEqual([]);
     // A: both messages (its own as mine), then the answer to its request.
     await vi.waitFor(() =>
       expect(eventsOf(a)).toEqual([
@@ -449,7 +455,6 @@ async function chatAndCancellationStayBetween(direction: Direction): Promise<voi
         session,
       ]),
     );
-    for (const other of others) expect(eventsOf(other)).toEqual([]);
   } finally {
     // Closed whatever the outcome, so a failure here never leaves a stream for the next attack.
     for (const stream of [a, b, ...others]) stream.close();

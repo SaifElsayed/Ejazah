@@ -844,6 +844,7 @@ describe('sessions.cancellation: the live events (T066)', () => {
     const answered = await asUserKind((live) => answer(STRANGER, true, REQUEST, live));
     expect([asked.error, answered.error].every((error) => error instanceof DomainError)).toBe(true);
     expect([...asked.published, ...answered.published]).toEqual([]);
+    expect(trace.some((step) => step.startsWith('add'))).toBe(false);
   });
 
   it('a transaction that fails after the event was added sends nothing: the list is dropped', async () => {

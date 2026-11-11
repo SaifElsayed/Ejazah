@@ -24,7 +24,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LiveMessage } from '../../platform/live/live-bus.js';
-import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
+import {
+  bindToTransaction,
+  type LivePublisher,
+  RequestLive,
+} from '../../platform/live/live-publisher.js';
 import type { TerminationCause } from '../identity/index.js';
 import type { EnrollmentOutcome } from './enrollment-events.repository.js';
 import type { OrderStandings, ReleaseDependencies, ReleaseReason } from './holds.service.js';
@@ -536,7 +540,12 @@ describe('one info line per account end, ids and counts only (the note under T00
 
 // T066 of specs/004-sessions (FR-427; research R-324, item 6; the note under T066, Q3 (a)).
 describe('an account’s end tells the other party of each enrollment it decided on (T066)', () => {
-  /** The action's after-commit list bound to its transaction, flushed on its commit, dropped otherwise. */
+  /**
+   * The action's after-commit list bound to its transaction, flushed on its commit, dropped
+   * otherwise; what the action added, sent or not, is kept in `added`.
+   */
+  let added: LiveMessage[] = [];
+
   async function boundTo(work: (call: Transaction) => Promise<void>, commitFails = false) {
     const published: LiveMessage[] = [];
     const live = new RequestLive(
@@ -544,7 +553,14 @@ describe('an account’s end tells the other party of each enrollment it decided
       { warn: () => undefined },
     );
     const call = {} as Transaction;
-    const unbind = bindToTransaction(call, live);
+    added = [];
+    const recording: LivePublisher = {
+      afterCommit: (to, event, scope) => {
+        added.push({ to: [...to], event });
+        live.afterCommit(to, event, scope);
+      },
+    };
+    const unbind = bindToTransaction(call, recording);
     try {
       await work(call);
       if (commitFails) throw new Error('the commit failed');
@@ -607,11 +623,14 @@ describe('an account’s end tells the other party of each enrollment it decided
     };
     const ended = terminationSubscriber({ orders, now: () => NOW, store, log: over.log });
     expect(await boundTo((call) => ended(call, TEACHER, 'suspended'))).toEqual([]);
+    expect(added).toEqual([]);
   });
 
   it('a released hold alone, with no confirmed enrollment, sends nothing', async () => {
-    const { subscriber } = world();
+    const { subscriber, released } = world();
     expect(await boundTo((call) => subscriber(call, TEACHER, 'suspended'))).toEqual([]);
+    expect(released).not.toEqual([]);
+    expect(added).toEqual([]);
   });
 
   it('on a transaction no action bound, sends nothing and still decides', async () => {

@@ -30,7 +30,11 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { LiveMessage } from '../../platform/live/live-bus.js';
-import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
+import {
+  bindToTransaction,
+  type LivePublisher,
+  RequestLive,
+} from '../../platform/live/live-publisher.js';
 import type { CaseClosing, CaseRecord } from '../moderation/index.js';
 import type { EnrollmentSide, EnrollmentStatus } from './enrollment-side.port.js';
 import type { Offered, OfferOptions } from './remedy-offer.service.js';
@@ -390,7 +394,10 @@ describe('the fault confirmed: cases.dismiss on a student_suspended case (R-313;
 /**
  * The administrator kind's after-commit point as `procedures.ts` runs it: the request's list bound to
  * the call's transaction while it runs, flushed once it has committed, dropped on a rollback.
+ * What the call added to the list, sent or not, is kept in `added`.
  */
+let added: LiveMessage[] = [];
+
 async function asAdministratorKind(
   work: (call: Transaction) => Promise<unknown>,
   commitFails = false,
@@ -401,7 +408,14 @@ async function asAdministratorKind(
     { warn: () => undefined },
   );
   const call = {} as Transaction;
-  const unbind = bindToTransaction(call, live);
+  added = [];
+  const recording: LivePublisher = {
+    afterCommit: (to, event, scope) => {
+      added.push({ to: [...to], event });
+      live.afterCommit(to, event, scope);
+    },
+  };
+  const unbind = bindToTransaction(call, recording);
   try {
     await work(call);
     if (commitFails) throw new Error('the audit write failed');
@@ -440,12 +454,14 @@ describe('the live event of a suspended student’s case closed (T066)', () => {
         notOpen.service.confirmFault(call, ADMIN, TARGET, DISMISSED.note),
       ),
     ).toEqual([]);
+    expect(added).toEqual([]);
     const ended = suspensionOver({ status: 'cancelled' });
     expect(
       await asAdministratorKind((call) =>
         ended.service.confirmFault(call, ADMIN, TARGET, DISMISSED.note),
       ),
     ).toEqual([]);
+    expect(added).toEqual([]);
   });
 
   it('cleared sends nothing of its own', async () => {
@@ -453,5 +469,6 @@ describe('the live event of a suspended student’s case closed (T066)', () => {
     expect(
       await asAdministratorKind((call) => service.clear(call, ADMIN, TARGET, RESOLVED.note)),
     ).toEqual([]);
+    expect(added).toEqual([]);
   });
 });
