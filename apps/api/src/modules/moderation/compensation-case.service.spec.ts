@@ -117,6 +117,8 @@ describe('closeCase', () => {
             resolutionNotes: 'رد قيمة الحصص',
             resolvedByAdminId: ADMIN,
             resolvedAt: CLOCK,
+            // No link on a closing that names none (ERD §15 rule 49; the note under T036).
+            coveredByCaseId: null,
           },
         },
       ],
