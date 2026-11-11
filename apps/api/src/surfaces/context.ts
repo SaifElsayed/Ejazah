@@ -88,6 +88,14 @@ import type {
   auditGetOutput,
   auditListInput,
   auditListOutput,
+  casesDismissInput,
+  casesDismissOutput,
+  casesGetInput,
+  casesGetOutput,
+  casesListInput,
+  casesListOutput,
+  casesResolveInput,
+  casesResolveOutput,
   homeSummaryOutput,
   outagesListInput,
   outagesListOutput,
@@ -503,6 +511,33 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof sessionsMonitorGetInput>,
     ): Answer<typeof sessionsMonitorGetOutput>;
+  };
+  /**
+   * The compensation-case queue (FR-478, FR-422; T035 and T036 of specs/004-sessions), the sessions
+   * module's, composed by the admin module: two reads and the two closings on the call's
+   * transaction, a `student_suspended` case's closing carrying its effect (T036).
+   */
+  readonly cases: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesListInput>,
+    ): Answer<typeof casesListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesGetInput>,
+    ): Answer<typeof casesGetOutput>;
+    resolve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesResolveInput>,
+    ): Answer<typeof casesResolveOutput>;
+    dismiss(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesDismissInput>,
+    ): Answer<typeof casesDismissOutput>;
   };
 }
 

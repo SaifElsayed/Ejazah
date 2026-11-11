@@ -61,3 +61,22 @@ export {
   type EnrollmentCase,
   sessionsEverDisputedAmong,
 } from './compensation-case.repository.js';
+
+/**
+ * T035 of specs/004-sessions (FR-422, FR-478; research R-312): an administrator's closing of a case
+ * (`closeCase`: the enrollment's lock, then one conditional update writing the closing and
+ * `resolved_at` by the database's clock), and the queue's reads of `disputes` for sessions'
+ * `cases.*`, with no lock.
+ */
+export { type CaseClosing, closeCase } from './compensation-case.service.js';
+export {
+  type CaseQueuePage,
+  caseQueuePage,
+  type CaseQueuePosition,
+  type CaseQueueQuery,
+  type CaseQueueRow,
+  type CaseRecord,
+  caseRecordOf,
+  type SuspensionCase,
+  suspensionCasesOf,
+} from './compensation-case.repository.js';

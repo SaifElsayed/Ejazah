@@ -5,6 +5,8 @@ export * from './admins.js';
 export * from './applications.js';
 export * from './audit.js';
 export * from './auth.js';
+// T035 of specs/004-sessions: the `cases` namespace.
+export * from './cases.js';
 export * from './credentials.js';
 export * from './documents.js';
 export * from './empty-input.js';

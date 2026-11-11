@@ -21,10 +21,16 @@ import {
 } from '../identity/index.js';
 import { createPaymentsMonitorService } from '../payments/index.js';
 import {
+  type CaseClosingService,
+  type CaseQueue,
+  createCaseClosing,
+  createCaseQueue,
   createCompletion,
   createOutageServices,
+  createRemedyOffer,
   createSessionCancel,
   createSessionsMonitor,
+  createSuspensionCase,
   type EnrollmentSide,
   type OutageServices,
   type SessionCancel,
@@ -112,6 +118,12 @@ export interface AdminServices {
    * specs/004-sessions, FR-479): over the bound `EnrollmentSide`'s reads and the settings.
    */
   readonly monitor: SessionsMonitor;
+  /**
+   * The sessions module's compensation-case queue and its closings, composed here for the surface
+   * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
+   * the process's logger.
+   */
+  readonly cases: CaseQueue & CaseClosingService;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -132,7 +144,7 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    */
   readonly enrollmentSide: EnrollmentSide;
   /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
-  readonly log: Pick<Logger, 'info'>;
+  readonly log: Pick<Logger, 'info' | 'warn'>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -186,6 +198,26 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       settings: dependencies.settings,
       log: dependencies.log,
     }),
+    cases: {
+      ...createCaseQueue({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      ...createCaseClosing({
+        log: dependencies.log,
+        // T036: a suspended student's case closed; T028's offer writes its no-free-week warn line.
+        suspension: createSuspensionCase({
+          enrollments: dependencies.enrollmentSide,
+          offers: createRemedyOffer({
+            enrollments: dependencies.enrollmentSide,
+            settings: dependencies.settings,
+            log: dependencies.log,
+          }),
+          log: dependencies.log,
+        }),
+      }),
+    },
   };
 }
 
