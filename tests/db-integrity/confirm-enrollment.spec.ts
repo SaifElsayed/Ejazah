@@ -607,3 +607,64 @@ describe('confirm-enrollment is idempotent (R-API-14, R-215)', () => {
     expect(twice).toEqual(once);
   });
 });
+
+// T064 of specs/004-sessions (FR-493; research R-326; the note under T064 on the covering rule's
+// tests, after the note under T004, PR #127's review, round 1, Minor 1): a manual case on an
+// enrollment awaiting payment, open or closed, does not change the late-payment rule, since Phase
+// 2's covering rule reads none of the manual reasons.
+describe('a manual case does not change the late-payment rule (T064, R-326)', () => {
+  const MANUAL = ['admin_opened_for_student', 'admin_opened_for_teacher'] as const;
+  const cases = MANUAL.flatMap((reason) =>
+    (['open', 'closed'] as const).map((state) => [reason, state] as const),
+  );
+
+  /** The manual case opened by moderation, committed, and closed a few minutes back when asked. */
+  async function manualCase(
+    enrollmentId: string,
+    reason: (typeof MANUAL)[number],
+    state: 'open' | 'closed',
+  ): Promise<void> {
+    const { caseId } = await database.$transaction((tx) =>
+      openCompensationCase(tx, enrollmentId, reason),
+    );
+    if (state === 'closed') await close(caseId, 'dismissed', true);
+  }
+
+  it.each(cases)(
+    'with a %s case %s, the paid order is confirmed with its hold active, no duplicate_payment case',
+    async (reason, state) => {
+      const on = await world();
+      await manualCase(on.enrollmentId, reason, state);
+      const paid = await order(on.enrollmentId);
+      await confirm(paid);
+      expect(await enrollmentOf(on.enrollmentId)).toEqual({
+        status: 'confirmed',
+        cancellationReason: null,
+        confirmedAt: NOW,
+      });
+      expect(await holdsOf(on.enrollmentId)).toEqual([{ id: on.holdId, releasedAt: NOW }]);
+      expect(await sessionsOf(on.enrollmentId)).toEqual(FOUR_THURSDAYS);
+      expect((await casesOf(on.enrollmentId)).map(({ reason: of }) => of)).toEqual([reason]);
+    },
+  );
+
+  it.each(cases)(
+    'with a %s case %s, a late paid order takes the late branch and is confirmed, no duplicate_payment case',
+    async (reason, state) => {
+      const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
+      await manualCase(on.enrollmentId, reason, state);
+      const paid = await order(on.enrollmentId);
+      await confirm(paid);
+      expect(await enrollmentOf(on.enrollmentId)).toEqual({
+        status: 'confirmed',
+        cancellationReason: null,
+        confirmedAt: NOW,
+      });
+      expect(await holdsOf(on.enrollmentId)).toHaveLength(2);
+      expect(await eventsOf(on.enrollmentId)).toEqual([
+        { kind: 'confirmed', cancellationReason: null, paymentId: paid, occurredAt: NOW },
+      ]);
+      expect((await casesOf(on.enrollmentId)).map(({ reason: of }) => of)).toEqual([reason]);
+    },
+  );
+});

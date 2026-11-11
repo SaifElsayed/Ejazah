@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { enrollmentStatus } from '../checkout.js';
 import { sessionStatus } from '../enrollments.js';
+import { idempotencyKey } from '../idempotency-key.js';
 import { packageTrack } from '../packages.js';
 import { adminReason } from './admins.js';
 import { compensationCaseReason, monitorParty, remedyMonitor } from './sessions.js';
@@ -124,6 +125,38 @@ export const casesResolveOutput = z.object({ caseId: z.uuid(), status: z.literal
 export const casesDismissInput = casesCloseInput;
 export const casesDismissOutput = z.object({ caseId: z.uuid(), status: z.literal('dismissed') });
 
+/**
+ * T064 (FR-471 (c), FR-493; research R-326; admin-surface.md, `cases.openManual`): an
+ * administrator opens a compensation case for a party of any enrollment, in any state; a second
+ * opening for the same party while its case is open joins it. With `remedyId` (a remedy is owed to
+ * the student, so only with `party: 'student'`), the open remedy is handed to the student's manual
+ * case. Keyed: a repeat with the same key answers the first result.
+ */
+export const casesOpenManualInput = z
+  .object({
+    enrollmentId: z.uuid(),
+    party: z.enum(['student', 'teacher']),
+    /** The administrator's reason, the audit entry's (R-326): 1 to 500 characters, not blank. */
+    reason: z.string().trim().min(1).max(500),
+    idempotencyKey,
+    remedyId: z.uuid().optional(),
+  })
+  .refine(({ party, remedyId }) => remedyId === undefined || party === 'student', {
+    message: 'A remedy is owed to the student.',
+    path: ['remedyId'],
+  });
+
+export const casesOpenManualOutput = z.object({
+  caseId: z.uuid(),
+  enrollmentId: z.uuid(),
+  party: z.enum(['student', 'teacher']),
+  status: z.literal('open'),
+  /** Whether the opening joined the party's case already open, writing no row. */
+  joined: z.boolean(),
+  /** The remedy handed to the case, with its session; absent with no `remedyId`. */
+  handedRemedy: z.object({ remedyId: z.uuid(), sessionId: z.uuid() }).optional(),
+});
+
 export type CaseStatus = z.infer<typeof caseStatus>;
 export type CaseKind = z.infer<typeof caseKind>;
 export type CasesListInput = z.infer<typeof casesListInput>;
@@ -137,3 +170,5 @@ export type ComplaintDecision = z.infer<typeof complaintDecision>;
 export type CasesCloseInput = z.infer<typeof casesCloseInput>;
 export type CasesResolveOutput = z.infer<typeof casesResolveOutput>;
 export type CasesDismissOutput = z.infer<typeof casesDismissOutput>;
+export type CasesOpenManualInput = z.infer<typeof casesOpenManualInput>;
+export type CasesOpenManualOutput = z.infer<typeof casesOpenManualOutput>;

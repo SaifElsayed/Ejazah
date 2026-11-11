@@ -50,7 +50,10 @@ export type EnrollmentTrack = 'recitation' | 'ijazah_track';
 export type EnrollmentEventKind =
   'confirmed' | 'order_failed' | 'cancelled' | 'completed' | 'terminated_no_show' | 'restored';
 
-/** What `enrollmentFor` answers: the enrollment's snapshot, its slot and its status (R-301). */
+/**
+ * What `enrollmentFor` answers: the enrollment's snapshot, its slot, its status (R-301) and its two
+ * parties (the note under T064, B34).
+ */
 export interface EnrollmentTerms {
   readonly id: string;
   readonly status: EnrollmentStatus;
@@ -64,6 +67,10 @@ export interface EnrollmentTerms {
   readonly durationMinutes: number;
   /** `snapshot_session_count`, the number of sessions bought (FR-424). */
   readonly sessionCount: number;
+  /** `student_user_id`, the enrollment's student; it never changes. */
+  readonly studentUserId: string;
+  /** `teacher_user_id`, the enrollment's teacher; it never changes. */
+  readonly teacherUserId: string;
 }
 
 /**

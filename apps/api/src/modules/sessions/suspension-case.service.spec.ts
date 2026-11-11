@@ -117,6 +117,8 @@ function suspensionOver(world: World = {}) {
         timezone: 'Africa/Cairo',
         durationMinutes: 60,
         sessionCount: 8,
+        studentUserId: STUDENT,
+        teacherUserId: TEACHER,
       };
     },
     lockEnrollments: async (_tx, ids) => void calls.push(['lockEnrollments', ids]),

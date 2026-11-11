@@ -2,7 +2,8 @@
 // Only the three composition files may import it (R-API-4, T143): main.ts, worker.ts, admin.router.ts.
 import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
-import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
@@ -26,12 +27,14 @@ import {
   createCaseClosing,
   createCaseQueue,
   createCompletion,
+  createManualCase,
   createOutageServices,
   createRemedyOffer,
   createSessionCancel,
   createSessionsMonitor,
   createSuspensionCase,
   type EnrollmentSide,
+  type ManualCaseService,
   type OutageServices,
   type SessionCancel,
   type SessionsMonitor,
@@ -123,7 +126,7 @@ export interface AdminServices {
    * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
    * the process's logger.
    */
-  readonly cases: CaseQueue & CaseClosingService;
+  readonly cases: CaseQueue & CaseClosingService & ManualCaseService;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -145,6 +148,8 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly enrollmentSide: EnrollmentSide;
   /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
   readonly log: Pick<Logger, 'info' | 'warn'>;
+  /** The kernel's idempotency, keyed on the administrator kind's transaction (`runOn`; B39). */
+  readonly idempotency: IdempotencyService<Transaction>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -216,6 +221,12 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
           }),
           log: dependencies.log,
         }),
+      }),
+      // T064: the manual case (R-326), keyed on the call's transaction.
+      ...createManualCase({
+        enrollments: dependencies.enrollmentSide,
+        idempotency: dependencies.idempotency,
+        log: dependencies.log,
       }),
     },
   };

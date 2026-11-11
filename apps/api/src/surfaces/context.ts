@@ -94,6 +94,8 @@ import type {
   casesGetOutput,
   casesListInput,
   casesListOutput,
+  casesOpenManualInput,
+  casesOpenManualOutput,
   casesResolveInput,
   casesResolveOutput,
   homeSummaryOutput,
@@ -538,6 +540,18 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof casesDismissInput>,
     ): Answer<typeof casesDismissOutput>;
+    /**
+     * T064: an administrator's manual case, keyed on the call's transaction; whether the answer
+     * was replayed from its key's row, for the kind to record no second entry.
+     */
+    openManual(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesOpenManualInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof casesOpenManualOutput>;
+      readonly replayed: boolean;
+    }>;
   };
 }
 

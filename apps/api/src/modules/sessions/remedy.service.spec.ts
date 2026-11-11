@@ -105,6 +105,8 @@ const TERMS: EnrollmentTerms = {
   timezone: 'Africa/Cairo',
   durationMinutes: 60,
   sessionCount: 4,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
 };
 
 const SESSION_ROW: PartySessionRow = {

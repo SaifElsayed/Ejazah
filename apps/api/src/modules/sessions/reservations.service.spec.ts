@@ -31,6 +31,8 @@ const TERMS: EnrollmentTerms = {
   timezone: CAIRO,
   durationMinutes: 60,
   sessionCount: 4,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
 };
 
 /** A whole year, so the window filters nothing unless a case narrows it. */
