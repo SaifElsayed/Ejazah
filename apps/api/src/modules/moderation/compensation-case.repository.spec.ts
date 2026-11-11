@@ -605,4 +605,26 @@ describe('latestCaseOf', () => {
     const { tx } = client();
     expect(await latestCaseOf(tx, ENROLLMENT, ['student_banned'])).toBeNull();
   });
+
+  // PR #133's review, round 2, Minor (the follow-up under T036): a cleared suspension reads only an
+  // end case opened after its own case, by the time-ordered id.
+  it('asks only for a case after the given one when bounded', async () => {
+    const { tx, asked } = client({ findFirst: { id: CASE_4 } });
+    expect(await latestCaseOf(tx, ENROLLMENT, ['teacher_ended'], CASE_2)).toBe(CASE_4);
+    expect(asked).toEqual([
+      [
+        'findFirst',
+        {
+          where: {
+            enrollmentId: ENROLLMENT,
+            kind: 'compensation_case',
+            reason: { in: ['teacher_ended'] },
+            id: { gt: CASE_2 },
+          },
+          orderBy: { id: 'desc' },
+          select: { id: true },
+        },
+      ],
+    ]);
+  });
 });

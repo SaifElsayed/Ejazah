@@ -376,15 +376,23 @@ export async function suspensionCasesCoveredBy(
 /**
  * The enrollment's latest compensation case of one of `reasons`, null for none, with no lock: the
  * caller holds the enrollment's, which every opening takes (`lockCasesOf`). Ids are uuidv7 from the
- * database, so the latest is the last opened. Over `disputes_enrollment_id_idx`.
+ * database, so the latest is the last opened. Over `disputes_enrollment_id_idx`. With `after`, only
+ * a case opened after that one (PR #133's review, round 2, Minor: a cleared suspension links no end
+ * case older than its own, such as one a restore closed).
  */
 export async function latestCaseOf(
   tx: Client,
   enrollmentId: string,
   reasons: readonly string[],
+  after?: string,
 ): Promise<string | null> {
   const row = await tx.dispute.findFirst({
-    where: { enrollmentId, kind: 'compensation_case', reason: { in: [...reasons] } },
+    where: {
+      enrollmentId,
+      kind: 'compensation_case',
+      reason: { in: [...reasons] },
+      ...(after === undefined ? {} : { id: { gt: after } }),
+    },
     orderBy: { id: 'desc' },
     select: { id: true },
   });

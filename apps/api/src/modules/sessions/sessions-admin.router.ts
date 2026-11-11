@@ -65,7 +65,11 @@ import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js'
 const outagesRouter = createAdminRouter({
   record: adminProcedure({ input: outagesRecordInput, output: outagesRecordOutput }).mutation(
     async ({ ctx, input }) => {
-      const recorded = await ctx.services.outages.record(ctx.tx, ctx.administrator.adminId, input);
+      const recorded = await ctx.services.outages.record(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
       ctx.audit.record({
         action: 'provider_outage.recorded',
         targetType: 'provider_outage',
