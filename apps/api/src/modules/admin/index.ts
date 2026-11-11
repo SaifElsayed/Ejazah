@@ -49,6 +49,12 @@ import {
   type SessionReview,
   type SessionsMonitor,
 } from '../sessions/index.js';
+// T040 of specs/004-sessions: the reads inside an open matter, over the held-files port.
+import {
+  createDisputeMatterReads,
+  type DisputeHeldFiles,
+  type DisputeMatterReads,
+} from '../sessions/index.js';
 import {
   type ApplicationReviewService,
   createVerificationAdminServices,
@@ -148,7 +154,9 @@ export interface AdminServices {
    * ruling and booking's `lockActiveHoldsOf` for the party's holds (kernel.md's `party_*` row).
    */
   readonly disputes: DisputeQueue &
-    DisputeResolution & { readonly revise: Revisions['reviseRuling'] };
+    DisputeResolution & { readonly revise: Revisions['reviseRuling'] } &
+    // T040: the reads inside an open matter (`disputes.heldFiles`, `disputes.heldFileLink`).
+    DisputeMatterReads;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -175,6 +183,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * under T059 and T064): `disputes.revise`, `sessions.review.revise` and `cases.openManual`.
    */
   readonly idempotency: IdempotencyService<Transaction>;
+  /**
+   * T040 of specs/004-sessions (spec FR-487, research R-327): sessions' `DisputeHeldFiles` port,
+   * bound by `main.ts` to verification's `createDisputeHeldFiles()` (contracts/kernel.md, "The
+   * composition root"), for `disputes.heldFiles` and `disputes.heldFileLink`.
+   */
+  readonly disputeHeldFiles: DisputeHeldFiles;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -303,6 +317,12 @@ function adminSessionServices(
         standing,
         lockActiveHolds: lockActiveHoldsOf,
         completion,
+        log: dependencies.log,
+      }),
+      // T040: the reads inside an open matter, over the bound held-files port.
+      ...createDisputeMatterReads({
+        enrollments: dependencies.enrollmentSide,
+        heldFiles: dependencies.disputeHeldFiles,
         log: dependencies.log,
       }),
     },

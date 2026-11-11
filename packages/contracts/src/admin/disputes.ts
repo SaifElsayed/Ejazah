@@ -154,3 +154,45 @@ export type DisputesResolveOutput = z.infer<typeof disputesResolveOutput>;
 export type DisputeRevision = z.infer<typeof disputeRevision>;
 export type DisputesReviseInput = z.infer<typeof disputesReviseInput>;
 export type DisputesReviseOutput = z.infer<typeof disputesReviseOutput>;
+
+// T040 of specs/004-sessions (spec FR-487; SRS FR-AUTH-14 as amended on 2026-11-06; research R-327,
+// «The administrator's read»; admin-surface.md, `disputes.heldFiles` and `disputes.heldFileLink`): a
+// deleted party's held files, read inside an open dispute, case or complaint of the enrollment. The
+// list is metadata only, never a link or a storage key; a file is named by its `fileRef`.
+export const disputesHeldFilesInput = z.object({ disputeId: z.uuid() });
+
+/** `document:<documentId>` or `photo:<userId>`, as the list answers it (U4). */
+export const heldFileRef = z
+  .string()
+  .regex(/^(document|photo):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+/** The photo, or the document's type. */
+export const heldFileKind = z.enum(['photo', 'national_id', 'passport', 'credential', 'other']);
+
+export const heldFile = z.object({
+  fileRef: heldFileRef,
+  kind: heldFileKind,
+  /** The deleted owner's role in the dispute's enrollment. */
+  ownerRole: z.enum(['student', 'teacher']),
+  /** A document's `uploaded_at`; absent for the photo, which records none. */
+  uploadedAt: z.iso.datetime().optional(),
+});
+
+export const disputesHeldFilesOutput = z.object({ files: z.array(heldFile) });
+
+/**
+ * Any text up to its bound: a reference of neither form is answered `NOT_FOUND`, as a file not
+ * held is, never told apart by its shape.
+ */
+export const disputesHeldFileLinkInput = z.object({
+  disputeId: z.uuid(),
+  fileRef: z.string().min(1).max(100),
+});
+
+export const disputesHeldFileLinkOutput = z.object({ url: z.url(), expiresAt: z.iso.datetime() });
+
+export type DisputesHeldFilesInput = z.infer<typeof disputesHeldFilesInput>;
+export type DisputesHeldFilesOutput = z.infer<typeof disputesHeldFilesOutput>;
+export type HeldFileItem = z.infer<typeof heldFile>;
+export type DisputesHeldFileLinkInput = z.infer<typeof disputesHeldFileLinkInput>;
+export type DisputesHeldFileLinkOutput = z.infer<typeof disputesHeldFileLinkOutput>;

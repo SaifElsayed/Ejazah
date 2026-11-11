@@ -128,6 +128,11 @@ import type {
   sessionsReviewReviseOutput,
   disputesReviseInput,
   disputesReviseOutput,
+  // T040 of specs/004-sessions: a deleted party's held files.
+  disputesHeldFilesInput,
+  disputesHeldFilesOutput,
+  disputesHeldFileLinkInput,
+  disputesHeldFileLinkOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -630,6 +635,18 @@ export interface AdminSurfaceServices {
       readonly outcome: z.input<typeof disputesReviseOutput>;
       readonly replayed: boolean;
     }>;
+    /** T040: a deleted party's held files inside the open matter, metadata only (FR-487, R-327). */
+    heldFiles(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesHeldFilesInput>,
+    ): Answer<typeof disputesHeldFilesOutput>;
+    /** T040: one signed link to one of them, per press. */
+    heldFileLink(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesHeldFileLinkInput>,
+    ): Answer<typeof disputesHeldFileLinkOutput>;
   };
 }
 
