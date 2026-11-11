@@ -4,6 +4,7 @@
       "accountStatus": ["active", "banned", "suspended", "verification_required"],
       "applicationStatus": ["approved", "in_review", "needs_document", "not_started", "rejected"],
       "authProvider": ["apple", "google"],
+      "chatAttachmentMime": ["application/pdf", "text/plain"],
       "credentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "deletionConfirmation": ["DELETE", "حذف"],
       "enrollmentCancellationReason": [
@@ -667,6 +668,36 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "cases.decideComplaint": {
+        "input": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.decision": {
+            "required": true,
+            "type": "string",
+            "values": ["close", "end_enrollment", "suspend_teacher"]
+          },
+          "$.note": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.enrollmentStatus": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.newCaseId": { "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["dismissed", "resolved"] }
+        }
+      },
       "cases.dismiss": {
         "input": {
           "$": { "type": "object" },
@@ -1014,6 +1045,36 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "disputes.chat": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.disputeId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.messages": { "required": true, "type": "array" },
+          "$.messages[]": { "type": "object" },
+          "$.messages[].attachment": { "type": "object" },
+          "$.messages[].attachment.filename": { "required": true, "type": "string" },
+          "$.messages[].attachment.mime": {
+            "required": true,
+            "type": "string",
+            "values": ["application/pdf", "text/plain"]
+          },
+          "$.messages[].body": { "type": "string" },
+          "$.messages[].messageId": { "required": true, "type": "string" },
+          "$.messages[].purged": { "required": true, "type": "boolean" },
+          "$.messages[].senderRole": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.messages[].sentAt": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
       "disputes.get": {
         "input": {
           "$": { "type": "object" },
@@ -1141,6 +1202,43 @@
               "under_threshold"
             ]
           }
+        }
+      },
+      "disputes.heldFileLink": {
+        "input": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" },
+          "$.fileRef": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.url": { "required": true, "type": "string" }
+        }
+      },
+      "disputes.heldFiles": {
+        "input": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.files": { "required": true, "type": "array" },
+          "$.files[]": { "type": "object" },
+          "$.files[].fileRef": { "required": true, "type": "string" },
+          "$.files[].kind": {
+            "required": true,
+            "type": "string",
+            "values": ["credential", "national_id", "other", "passport", "photo"]
+          },
+          "$.files[].ownerRole": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.files[].uploadedAt": { "type": "string" }
         }
       },
       "disputes.list": {
@@ -1864,6 +1962,30 @@
           "$.startsAt": { "required": true, "type": "string" }
         }
       },
+      "sessions.restore": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.remediesOffered": { "required": true, "type": "integer" },
+          "$.sessionsCreated": { "required": true, "type": "array" },
+          "$.sessionsCreated[]": { "type": "object" },
+          "$.sessionsCreated[].localDate": { "required": true, "type": "string" },
+          "$.sessionsCreated[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.sessionsCreated[].sessionId": { "required": true, "type": "string" },
+          "$.sessionsCreated[].startTimeLocal": { "required": true, "type": "string" },
+          "$.sessionsCreated[].startsAt": { "required": true, "type": "string" },
+          "$.sessionsCreated[].timezone": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["confirmed"] }
+        }
+      },
       "sessions.review.get": {
         "input": {
           "$": { "type": "object" },
@@ -2392,6 +2514,71 @@
           "$[].nameEn": { "required": true, "type": "string" }
         }
       },
+      "chat.attachmentLink": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.messageId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.url": { "required": true, "type": "string" }
+        }
+      },
+      "chat.list": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.messages": { "required": true, "type": "array" },
+          "$.messages[]": { "type": "object" },
+          "$.messages[].attachment": { "type": "object" },
+          "$.messages[].attachment.filename": { "required": true, "type": "string" },
+          "$.messages[].attachment.mime": {
+            "required": true,
+            "type": "string",
+            "values": ["application/pdf", "text/plain"]
+          },
+          "$.messages[].body": { "type": "string" },
+          "$.messages[].messageId": { "required": true, "type": "string" },
+          "$.messages[].mine": { "required": true, "type": "boolean" },
+          "$.messages[].purged": { "required": true, "type": "boolean" },
+          "$.messages[].sentAt": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "chat.send": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.body": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.attachment": { "type": "object" },
+          "$.attachment.filename": { "required": true, "type": "string" },
+          "$.attachment.mime": {
+            "required": true,
+            "type": "string",
+            "values": ["application/pdf", "text/plain"]
+          },
+          "$.body": { "type": "string" },
+          "$.messageId": { "required": true, "type": "string" },
+          "$.mine": { "required": true, "type": "boolean" },
+          "$.purged": { "required": true, "type": "boolean" },
+          "$.sentAt": { "required": true, "type": "string" }
+        }
+      },
       "checkout.continue": {
         "caller": "student",
         "input": {
@@ -2719,6 +2906,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.complaintOpen": { "required": true, "type": "boolean" },
           "$.completed": { "required": true, "type": "integer" },
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.last": { "type": "object" },
@@ -3105,6 +3293,20 @@
           "$.expiresAt": { "required": true, "type": "string" },
           "$.requestId": { "required": true, "type": "string" },
           "$.status": { "required": true, "type": "string", "values": ["pending"] }
+        }
+      },
+      "sessions.complaint.raise": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.complaintId": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["open"] }
         }
       },
       "sessions.dispute.raise": {
