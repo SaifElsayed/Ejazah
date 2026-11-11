@@ -319,7 +319,7 @@ dispute window has closed, and no `student_suspended` case is open on it (FR-486
 plan.md decisions 4 and 1: otherwise a dispute could reopen what a completed enrollment
 owes). Booking's occupancy then frees its slot from the week after the final session plus `slot_release_buffer_weeks`
 (FR-423): R-205's rule reads `confirmed` only, so T026's nit 6 is fixed by counting `completed` with the same release
-rule.
+rule. *(Amended 2026-11-10, the owner's rule of 2026-11-10: a package's slot does not return to the teacher until the package has fully ended, its make-ups part of it: a `confirmed` enrollment keeps its slot whatever the date, and only a `completed` one is released from the week after its final session plus the buffer, FR-394 and FR-423 as amended.)*
 
 **Rationale.** FR-NOSHOW-3/4 as rewritten on 2026-11-05, FR-449, the notes under T026.
 

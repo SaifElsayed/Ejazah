@@ -28,6 +28,14 @@
       "identityDocumentType": ["national_id", "passport"],
       "landing": ["restricted", "student_home", "teacher_application", "teacher_home"],
       "language": ["ar", "en"],
+      "listedRemedyStatus": [
+        "awaiting_choice",
+        "booked",
+        "counter_proposed",
+        "frozen",
+        "proposed",
+        "refund_case"
+      ],
       "packageTrack": ["ijazah_track", "recitation"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
@@ -2110,6 +2118,17 @@
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
           "$.last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.last.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.last.sequenceNumber": { "required": true, "type": "integer" },
           "$.last.sessionId": { "required": true, "type": "string" },
           "$.last.startTimeLocal": { "required": true, "type": "string" },
@@ -2136,6 +2155,17 @@
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
           "$.next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.next.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.next.sequenceNumber": { "required": true, "type": "integer" },
           "$.next.sessionId": { "required": true, "type": "string" },
           "$.next.startTimeLocal": { "required": true, "type": "string" },
@@ -2164,6 +2194,17 @@
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
+          "$.sessions[].remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
           "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
@@ -2239,6 +2280,17 @@
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
           "$.items[].last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].last.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].last.sessionId": { "required": true, "type": "string" },
           "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
@@ -2265,6 +2317,17 @@
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
           "$.items[].next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].next.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].next.sessionId": { "required": true, "type": "string" },
           "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
@@ -2557,6 +2620,185 @@
           "$.sessionId": { "required": true, "type": "string" },
           "$.token": { "required": true, "type": "string" },
           "$.validUntil": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.remedy.accept": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.canChooseRefund": { "required": true, "type": "boolean" },
+          "$.choiceClosesAt": { "required": true, "type": "string" },
+          "$.counter": { "type": "object" },
+          "$.counter.answerClosesAt": { "required": true, "type": "string" },
+          "$.counter.localDate": { "required": true, "type": "string" },
+          "$.counter.startTimeLocal": { "required": true, "type": "string" },
+          "$.counter.startsAt": { "required": true, "type": "string" },
+          "$.counter.timezone": { "required": true, "type": "string" },
+          "$.kind": { "required": true, "type": "string", "values": ["makeup", "refund"] },
+          "$.makeupSessionId": { "required": true, "type": "string" },
+          "$.offeredAt": { "required": true, "type": "string" },
+          "$.proposal": { "type": "object" },
+          "$.proposal.localDate": { "required": true, "type": "string" },
+          "$.proposal.startTimeLocal": { "required": true, "type": "string" },
+          "$.proposal.startsAt": { "required": true, "type": "string" },
+          "$.proposal.timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          }
+        }
+      },
+      "sessions.remedy.answerCounter": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.accept": { "required": true, "type": "boolean" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.canChooseRefund": { "required": true, "type": "boolean" },
+          "$.choiceClosesAt": { "required": true, "type": "string" },
+          "$.counter": { "type": "object" },
+          "$.counter.answerClosesAt": { "required": true, "type": "string" },
+          "$.counter.localDate": { "required": true, "type": "string" },
+          "$.counter.startTimeLocal": { "required": true, "type": "string" },
+          "$.counter.startsAt": { "required": true, "type": "string" },
+          "$.counter.timezone": { "required": true, "type": "string" },
+          "$.kind": { "required": true, "type": "string", "values": ["makeup", "refund"] },
+          "$.makeupSessionId": { "type": "string" },
+          "$.offeredAt": { "required": true, "type": "string" },
+          "$.proposal": { "type": "object" },
+          "$.proposal.localDate": { "required": true, "type": "string" },
+          "$.proposal.startTimeLocal": { "required": true, "type": "string" },
+          "$.proposal.startsAt": { "required": true, "type": "string" },
+          "$.proposal.timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          }
+        }
+      },
+      "sessions.remedy.choose": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.choice": { "required": true, "type": "string", "values": ["makeup", "refund"] },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.canChooseRefund": { "required": true, "type": "boolean" },
+          "$.choiceClosesAt": { "required": true, "type": "string" },
+          "$.counter": { "type": "object" },
+          "$.counter.answerClosesAt": { "required": true, "type": "string" },
+          "$.counter.localDate": { "required": true, "type": "string" },
+          "$.counter.startTimeLocal": { "required": true, "type": "string" },
+          "$.counter.startsAt": { "required": true, "type": "string" },
+          "$.counter.timezone": { "required": true, "type": "string" },
+          "$.kind": { "required": true, "type": "string", "values": ["makeup", "refund"] },
+          "$.makeupSessionId": { "type": "string" },
+          "$.offeredAt": { "required": true, "type": "string" },
+          "$.proposal": { "type": "object" },
+          "$.proposal.localDate": { "required": true, "type": "string" },
+          "$.proposal.startTimeLocal": { "required": true, "type": "string" },
+          "$.proposal.startsAt": { "required": true, "type": "string" },
+          "$.proposal.timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          }
+        }
+      },
+      "sessions.remedy.counter": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.localDate": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.slotId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.canChooseRefund": { "required": true, "type": "boolean" },
+          "$.choiceClosesAt": { "required": true, "type": "string" },
+          "$.counter": { "type": "object" },
+          "$.counter.answerClosesAt": { "required": true, "type": "string" },
+          "$.counter.localDate": { "required": true, "type": "string" },
+          "$.counter.startTimeLocal": { "required": true, "type": "string" },
+          "$.counter.startsAt": { "required": true, "type": "string" },
+          "$.counter.timezone": { "required": true, "type": "string" },
+          "$.kind": { "required": true, "type": "string", "values": ["makeup", "refund"] },
+          "$.makeupSessionId": { "type": "string" },
+          "$.offeredAt": { "required": true, "type": "string" },
+          "$.proposal": { "type": "object" },
+          "$.proposal.localDate": { "required": true, "type": "string" },
+          "$.proposal.startTimeLocal": { "required": true, "type": "string" },
+          "$.proposal.startsAt": { "required": true, "type": "string" },
+          "$.proposal.timezone": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          }
+        }
+      },
+      "sessions.remedy.counterOptions": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.options": { "required": true, "type": "array" },
+          "$.options[]": { "type": "object" },
+          "$.options[].localDate": { "required": true, "type": "string" },
+          "$.options[].slotId": { "required": true, "type": "string" },
+          "$.options[].startTimeLocal": { "required": true, "type": "string" },
+          "$.options[].startsAt": { "required": true, "type": "string" },
+          "$.options[].timezone": { "required": true, "type": "string" }
         }
       },
       "teacher.application.get": {
@@ -2980,6 +3222,17 @@
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
           "$.last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.last.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.last.sequenceNumber": { "required": true, "type": "integer" },
           "$.last.sessionId": { "required": true, "type": "string" },
           "$.last.startTimeLocal": { "required": true, "type": "string" },
@@ -3006,6 +3259,17 @@
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
           "$.next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.next.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.next.sequenceNumber": { "required": true, "type": "integer" },
           "$.next.sessionId": { "required": true, "type": "string" },
           "$.next.startTimeLocal": { "required": true, "type": "string" },
@@ -3034,6 +3298,17 @@
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
+          "$.sessions[].remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
           "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },
@@ -3109,6 +3384,17 @@
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
           "$.items[].last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].last.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.items[].last.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].last.sessionId": { "required": true, "type": "string" },
           "$.items[].last.startTimeLocal": { "required": true, "type": "string" },
@@ -3135,6 +3421,17 @@
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
           "$.items[].next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].next.remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.items[].next.sequenceNumber": { "required": true, "type": "integer" },
           "$.items[].next.sessionId": { "required": true, "type": "string" },
           "$.items[].next.startTimeLocal": { "required": true, "type": "string" },
@@ -3206,6 +3503,17 @@
           "$.sessions[].enrollmentId": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
+          "$.sessions[].remedyStatus": {
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "proposed",
+              "refund_case"
+            ]
+          },
           "$.sessions[].sequenceNumber": { "required": true, "type": "integer" },
           "$.sessions[].sessionId": { "required": true, "type": "string" },
           "$.sessions[].startTimeLocal": { "required": true, "type": "string" },

@@ -347,6 +347,17 @@ describe('booking.slots: the offerable slots (FR-350, R-205, FR-394)', () => {
       const who = studentOf((await person(tx)).id);
       expect(await slotIdsOf(tx, who, on.packageId)).toEqual([on.saturday]);
       const wednesday = new Date('2026-11-04T10:00:00Z');
+      // Still confirmed, the package keeps its slot past the week after its final session (the
+      // owner's rule of 2026-11-10; FR-394 as amended): offered again only once it is completed.
+      const confirmed = await bookingSlotsOf(
+        tx,
+        bookingSlotsStore,
+        who,
+        { packageId: on.packageId },
+        clock(wednesday),
+      );
+      expect(confirmed.slots.map(({ slotId }) => slotId)).toEqual([on.saturday]);
+      await tx.enrollment.update({ where: { id }, data: { status: 'completed' } });
       const answer = await bookingSlotsOf(
         tx,
         bookingSlotsStore,

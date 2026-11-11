@@ -386,7 +386,11 @@ describe('every expected refusal is logged once, in one place (T062, the B34 fol
             : null,
         admin: async (bearer) =>
           bearer === 'admin-token'
-            ? { adminId: ADMIN_ID, sessionId: '0199d0a0-0000-7000-8000-0000000000b2', mfaVerified: true }
+            ? {
+                adminId: ADMIN_ID,
+                sessionId: '0199d0a0-0000-7000-8000-0000000000b2',
+                mfaVerified: true,
+              }
             : null,
       },
       services,
@@ -401,11 +405,7 @@ describe('every expected refusal is logged once, in one place (T062, the B34 fol
     await refusing?.close();
   });
 
-  async function call(
-    path: string,
-    bearer: string | null,
-    input?: unknown,
-  ): Promise<number> {
+  async function call(path: string, bearer: string | null, input?: unknown): Promise<number> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (bearer !== null) headers['authorization'] = `Bearer ${bearer}`;
     const response =
@@ -522,6 +522,8 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
         lockAccounts: async () => undefined,
         partiesOf: async () => new Map(),
         latestCancellationOf: async () => null,
+        remedyOf: async () => null,
+        slotOf: async () => null,
       },
       idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
     });
@@ -565,7 +567,11 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
             : null,
         admin: async (bearer) =>
           bearer === 'admin-token'
-            ? { adminId: ADMIN_ID, sessionId: '0199d0a0-0000-7000-8000-0000000000d2', mfaVerified: true }
+            ? {
+                adminId: ADMIN_ID,
+                sessionId: '0199d0a0-0000-7000-8000-0000000000d2',
+                mfaVerified: true,
+              }
             : null,
       },
       services: { ...services, sessions: sessionsServices },
@@ -587,9 +593,12 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
     const headers = { 'content-type': 'application/json', authorization: `Bearer ${bearer}` };
     const response =
       method === 'GET'
-        ? await fetch(`${refusingOrigin}${path}?input=${encodeURIComponent(JSON.stringify(input))}`, {
-            headers,
-          })
+        ? await fetch(
+            `${refusingOrigin}${path}?input=${encodeURIComponent(JSON.stringify(input))}`,
+            {
+              headers,
+            },
+          )
         : await fetch(`${refusingOrigin}${path}`, {
             method: 'POST',
             headers,
@@ -610,7 +619,12 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
   it('writes one line for a refused sessions.get, the module’s with its reason', async () => {
     const from = lines.length;
     expect(
-      await call(`${surfacePaths.app}/sessions.get`, 'student-token', { sessionId: SESSION_ID }, 'GET'),
+      await call(
+        `${surfacePaths.app}/sessions.get`,
+        'student-token',
+        { sessionId: SESSION_ID },
+        'GET',
+      ),
     ).toBe(404);
     const written = refusalLines(from);
     expect(written.map((record) => record['msg'])).toEqual(['A session read or join was refused']);
@@ -620,7 +634,12 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
   it('writes one line for a refused sessions.join, the module’s with its reason', async () => {
     const from = lines.length;
     expect(
-      await call(`${surfacePaths.app}/sessions.join`, 'student-token', { sessionId: SESSION_ID }, 'POST'),
+      await call(
+        `${surfacePaths.app}/sessions.join`,
+        'student-token',
+        { sessionId: SESSION_ID },
+        'POST',
+      ),
     ).toBe(404);
     const written = refusalLines(from);
     expect(written.map((record) => record['msg'])).toEqual(['A session read or join was refused']);

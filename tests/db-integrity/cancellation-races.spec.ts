@@ -96,6 +96,9 @@ const SEEDED: Record<string, unknown> = {
   idempotency_key_ttl_hours: 24,
   first_session_lead_hours: 24,
   dispute_window_hours: 72,
+  // T028 (B38): an acceptance offers the make-up it owes, reading the choice and answer windows.
+  makeup_choice_window_days: 7,
+  makeup_counter_answer_hours: 72,
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal', destination: { write: () => undefined } });
@@ -610,7 +613,8 @@ describe.each(stagingsOver(['enrollments', 'sessions', 'requests']))(
             outcome: {
               session: 'cancelled_by_agreement',
               requests: ['accepted'],
-              events: ['cancellation_requested', 'cancellation_accepted'],
+              // T028 (B38): the acceptance offers the make-up it owes in its transaction.
+              events: ['cancellation_requested', 'cancellation_accepted', 'remedy_offered'],
               participants: [],
             },
           }

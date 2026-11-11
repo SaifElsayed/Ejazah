@@ -10,11 +10,24 @@
 // start and not its end, as the database's exclusions read it (ERD §15 rule 19), so sessions that
 // only touch do not overlap. No date is computed here (R-TIME-1); instants are only compared.
 //
-// No lock and no write: the sheet only reads, and the hold calls this under its locks (T005).
+// T027 of specs/004-sessions (FR-466; research R-311, "Reservation"; H3): the parties' own sessions
+// and the times their open remedies reserve (sessions' `reservedTimesOf`) are read together, by
+// `partiesBusyBetween`, so the sheet never offers and the hold refuses an occurrence over a
+// reserved time of the student or the teacher. The enrollment's terms a reservation is resolved
+// with are booking's own (`enrollmentTermsById`, the row `EnrollmentSide.enrollmentFor` answers).
+//
+// No lock and no write: the sheet only reads, and the hold calls this under its locks (T005); only
+// the hold holds both accounts' locks, and the hold decides (the note under T027, Q12 (a)).
 import { type DayOfWeek, type LocalTime, type Occurrence, resolveOccurrences } from '@ijazah/time';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import type { SessionTime } from '../sessions/index.js';
+import {
+  partiesSessionsBetween,
+  type ReservedTime,
+  reservedTimesOf,
+  type SessionTime,
+} from '../sessions/index.js';
+import { enrollmentTermsById } from './enrollment-side.repository.js';
 
 /** The two people whose sessions a booking must not overlap (FR-BOOK-5). */
 export interface SessionParties {
@@ -36,6 +49,34 @@ export type SessionsBetween = (
   parties: SessionParties,
   window: { readonly from: Date; readonly to: Date },
 ) => Promise<readonly SessionTime[]>;
+
+/** What the overlap check reads of sessions: the parties' sessions and their reserved times. */
+export interface BusyReads {
+  readonly sessionsBetween: SessionsBetween;
+  reservedTimesOf(
+    tx: Transaction,
+    userIds: readonly string[],
+    window: { readonly from: Date; readonly to: Date },
+  ): Promise<readonly ReservedTime[]>;
+}
+
+/** The parties' sessions and reserved times in a window, as one list of times (T027). */
+export function busyBetween(reads: BusyReads): SessionsBetween {
+  return async (tx, parties, window) => {
+    const [sessions, reserved] = await Promise.all([
+      reads.sessionsBetween(tx, parties, window),
+      reads.reservedTimesOf(tx, [parties.studentUserId, parties.teacherUserId], window),
+    ]);
+    return [...sessions, ...reserved];
+  };
+}
+
+/** The sheet's and the hold's read: sessions' entry, the reservations resolved by booking's terms. */
+export const partiesBusyBetween: SessionsBetween = busyBetween({
+  sessionsBetween: partiesSessionsBetween,
+  reservedTimesOf: (tx, userIds, window) =>
+    reservedTimesOf(tx, userIds, window, { enrollmentFor: enrollmentTermsById }),
+});
 
 /** The package's sessions on the slot: `sessionCount` consecutive weeks from `first` (R-209). */
 export function packageSessionsOn(

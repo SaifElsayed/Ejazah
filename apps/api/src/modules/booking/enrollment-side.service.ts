@@ -31,8 +31,10 @@
 // active while `released_at` is NULL, even past `expires_at` (`holds.repository.ts`), since a late
 // paid event can still convert it; spec.md's edge case says «an unexpired hold», and the owner chose
 // active. `slotWeekTaken` is R-205's occupancy (`slot-occupancy.service.ts`) without the asking
-// enrollment's own use: any active hold or enrollment awaiting payment takes the slot on every date,
-// another confirmed one until its release. `heldTimesOf` reads a student's own holds and, for a
+// enrollment's own use: any active hold, or another enrollment awaiting payment or confirmed, takes
+// the slot on every date, and a completed one until its release (the owner's rule of 2026-11-10: a
+// package's slot returns only once it is completed). `slotsFreeFrom` reads the same for many slots
+// at once (T031's counter options). `heldTimesOf` reads a student's own holds and, for a
 // teacher, the holds on every slot of the teacher (catalog's entry, active or not); each hold's
 // occurrences are its `session_count` weeks of its slot from the first at least
 // `first_session_lead_hours` after the read's instant, together with those from the first at least
@@ -163,6 +165,7 @@ export function createEnrollmentSide({
   readonly now?: () => Date;
   readonly store?: EnrollmentSideStore;
 }): EnrollmentSide {
+  const bufferWeeks = () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks);
   /** Only when the update moved the row, writes its one `enrollment_events` row. */
   const recorded = async (
     tx: Transaction,
@@ -211,9 +214,17 @@ export function createEnrollmentSide({
         occurredAt,
       })),
     slotWeekTaken: async (tx, slotId, localDate: LocalDate, enrollmentId) => {
-      const bufferWeeks = () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks);
       const occupancy = await store.occupancyOf(tx, [slotId], bufferWeeks, enrollmentId);
       return !isFreeOn(occupancy.get(slotId), localDate);
+    },
+    slotsFreeFrom: async (tx, slotIds, enrollmentId) => {
+      const occupancy = await store.occupancyOf(tx, slotIds, bufferWeeks, enrollmentId);
+      return new Map(
+        [...occupancy].map(([slotId, used]) => [
+          slotId,
+          used.kind === 'taken' ? null : used.releasedOn,
+        ]),
+      );
     },
     heldTimesOf: async (tx, userIds, window) => {
       const users = sortedUnique(userIds);

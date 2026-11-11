@@ -17,7 +17,8 @@
 // hold `PREVIOUS_CHECKOUT` (FR-BOOK-12's release of it is the caller's, before this is called); the
 // slot's occupancy (R-205) on its first session's date; the insert, for `slot_hold_ttl_minutes` plus
 // `slot_hold_grace_minutes` from now (FR-BOOK-9); then every one of the package's sessions against
-// the student's and the teacher's own (the check `booking.slots` shares, FR-BOOK-5). A refusal is
+// the student's and the teacher's own and the times their open remedies reserve (T027 of
+// specs/004-sessions, H3; the check `booking.slots` shares, FR-BOOK-5). A refusal is
 // thrown, so the caller's transaction keeps nothing, the releases included (FR-351).
 //
 // RELEASING (FR-363, the owner's decision of 2026-11-03). One function serves the placement here,
@@ -52,7 +53,7 @@ import {
   offeredSlotsOf,
 } from '../catalog/index.js';
 import { readStanding, type VisibilityPurpose, visibleTeachers } from '../identity/index.js';
-import { partiesSessionsBetween, type SessionTime } from '../sessions/index.js';
+import type { SessionTime } from '../sessions/index.js';
 import {
   type EnrollmentCancellationReason,
   type EnrollmentOutcome,
@@ -64,6 +65,7 @@ import {
   cancelPending,
   expiredHoldIds,
   type HeldRow,
+  type HoldReleaseReason,
   type HoldScope,
   enrollmentTermsOf,
   insertHold,
@@ -80,6 +82,7 @@ import {
 import {
   freeOfPartiesSessions,
   packageSessionsOn,
+  partiesBusyBetween,
   type SessionParties,
 } from './session-overlap.service.js';
 import {
@@ -96,13 +99,7 @@ export type { HeldRow, HoldScope, NewHold };
  * orders decide, or the reason the caller names (FR-BOOK-12's new checkout, FR-362's refusal,
  * R-219's terminations).
  */
-export type ReleaseReason =
-  | 'expired'
-  | 'checkout_abandoned'
-  | 'slot_unavailable'
-  | 'admin'
-  | 'teacher_suspended'
-  | 'account_deleted';
+export type ReleaseReason = HoldReleaseReason;
 
 /** An enrollment's gateway orders as a release needs them: one is paid; the last one failed. */
 export interface OrderStanding {
@@ -125,7 +122,12 @@ export interface HoldRows {
   expiredHoldIds(tx: Transaction, scope: HoldScope, at: Date): Promise<readonly string[]>;
   activeHoldsByIds(tx: Transaction, ids: readonly string[]): Promise<readonly HeldRow[]>;
   activeHoldsOf(tx: Transaction, scope: Required<HoldScope>): Promise<readonly HeldRow[]>;
-  markReleased(tx: Transaction, ids: readonly string[], at: Date): Promise<void>;
+  markReleased(
+    tx: Transaction,
+    ids: readonly string[],
+    at: Date,
+    reason: ReleaseReason,
+  ): Promise<void>;
   pendingAmong(tx: Transaction, enrollmentIds: readonly string[]): Promise<readonly string[]>;
   cancelPending(
     tx: Transaction,
@@ -189,7 +191,8 @@ export const holdsStore: HoldsStore = {
   studentActive: async (tx, userId) => (await readStanding(tx, userId))?.accountStatus === 'active',
   offeredSlotsOf,
   occupancyOf,
-  sessionsBetween: partiesSessionsBetween,
+  // T027: the parties' sessions and the times their open remedies reserve (H3).
+  sessionsBetween: partiesBusyBetween,
 };
 
 /** The gateway checkout's minutes, which the hold lasts before its grace (FR-BOOK-9, FR-PAYG-6). */
@@ -308,7 +311,7 @@ async function release(
       ? new Map<string, OrderStanding>()
       : await dependencies.orders(tx, pending);
   const released = held.map(({ id }) => id);
-  await store.markReleased(tx, released, at);
+  await store.markReleased(tx, released, at, reason);
   const keepsPaid = (enrollmentId: string) =>
     reason !== 'slot_unavailable' && standings.get(enrollmentId)?.paid === true;
   const keptPending = pending.filter(keepsPaid);

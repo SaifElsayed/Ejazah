@@ -149,6 +149,18 @@ export interface EnrollmentSide {
     enrollmentId: string,
   ): Promise<boolean>;
   /**
+   * `slotWeekTaken` for many slots in one read, for T031's counter options (the owner's decision of
+   * 2026-11-10 on the follow-up under T031 and T029): of `slotIds`, the first local date (in the
+   * slot's zone) each is free for `enrollmentId`'s make-up. A slot free on every date is absent; one
+   * taken on every date (an active hold, an enrollment awaiting payment or confirmed) answers null;
+   * one held only by completed enrollments answers the release date. No lock.
+   */
+  slotsFreeFrom(
+    tx: Transaction,
+    slotIds: readonly string[],
+    enrollmentId: string,
+  ): Promise<ReadonlyMap<string, LocalDate | null>>;
+  /**
    * The occurrences every active hold of `userIds` would generate that overlap `window` (the
    * analysis's F5; T028's proposal and counter options, T061's restore): a student's own holds and
    * the holds on a teacher's slots; per hold, its `session_count` weekly occurrences of its slot

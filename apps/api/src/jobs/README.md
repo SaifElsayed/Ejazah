@@ -8,6 +8,12 @@ Queued work executed by `src/worker.ts`. Arrives with the phase that needs it:
 `send-reminder`, `render-certificate`, `deliver-notification` (Phase 4; `send-reminder` moved from Phase 3 with the
 reminders, `specs/004-sessions/spec.md` Assumptions, amended 2026-11-05).
 
+`advance-remedies` (every minute; T028 and T032 of specs/004-sessions) runs sessions' remedy sweep through the
+module's entry: remedies offered and frozen ones offered again, the completion check, then the windows' ends (a
+counter left unanswered handed to a case; a proposal booked at the choice window's end, retried while it starts at
+least the remedy's lead away, then handed to a `makeup_refused` case and reported once). Each item is on its own
+transaction and its failure caught on its own; every read is paged.
+
 Every job is idempotent and proves it with a double-run assertion in its own test (R-API-14, FR-052).
 Push delivery is reachable only from the queued notification job (R-API-15).
 

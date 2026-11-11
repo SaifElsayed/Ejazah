@@ -1,15 +1,22 @@
 // T026 (R-205, FR-394, FR-BOOK-10; the note under T026): a slot's occupancy, the one rule both
 // catalog's question (`slotInUse`, through the `CatalogUse` port) and discovery's offer read.
 //
-// A slot is taken while an active hold or an enrollment `pending_payment` uses it. A `confirmed`
-// enrollment, and a `completed` one (T015 of specs/004-sessions; the note under 003:T026, nit 6;
-// FR-423), holds it on every local date before its release, the week after its final session plus
-// `slot_release_buffer_weeks`: the release date is the final session's local date plus that many
-// weeks and one more, on the wall calendar (`calendarWeeksAfter`, R-TIME-2), read in the zone the
-// enrollment snapshot its slot in. The final session's date is the sessions module's
-// (`lastSessionDateOf`), so booking never reads that table (R-API-6). A confirmed enrollment whose
-// last session cannot be read keeps its slot taken: the side that refuses a teacher's edit, and
-// offers nothing, rather than the side that double-books.
+// A slot is taken while an active hold or an enrollment `pending_payment` or `confirmed` uses it,
+// whatever the date: a package's slot returns only once the package is completed, its make-ups part
+// of it (FR-BOOK-10, FR-394, FR-423 as amended on 2026-11-10, the owner's rule; the follow-up under
+// T027 of specs/004-sessions). So a dispute or a review still open on the last session, a make-up
+// owed and not yet offered, or an open remedy (T027, Q1 (a), R-207: its proposal stands on the
+// slot's local start, `session_remedies` keeping only its date) all keep the slot, neither editable
+// (`slotInUse`) nor offered (the sheet, the hold and discovery's card): none of them lets the
+// enrollment complete (`completion.service.ts`, FR-449), and a remedy is offered only on a confirmed
+// enrollment. A `completed` enrollment (T015; the note under 003:T026, nit 6) holds it on every
+// local date before its release, the week after its final session plus `slot_release_buffer_weeks`:
+// the release date is the final session's local date plus that many weeks and one more, on the wall
+// calendar (`calendarWeeksAfter`, R-TIME-2), read in the zone the enrollment snapshot its slot in.
+// The final session's date is the sessions module's (`lastSessionDateOf`), so booking never reads
+// that table (R-API-6). A completed enrollment whose last session cannot be read keeps its slot
+// taken: the side that refuses a teacher's edit, and offers nothing, rather than the side that
+// double-books.
 //
 // No lock: discovery only reads, and `slotInUse`'s callers lock before they ask (T005's rule 1).
 import { calendarWeeksAfter, type LocalDate, localDateIn, type TimeZoneId } from '@ijazah/time';
@@ -28,29 +35,26 @@ export const slotReleaseBufferWeeks = z.int().nonnegative();
 /** What booking's rows say uses a slot (`slot-occupancy.repository.ts`). */
 export interface SlotUse {
   readonly slotId: string;
-  /** An active hold or an enrollment awaiting payment uses it. */
+  /** An active hold, or an enrollment awaiting payment or confirmed, uses it. */
   readonly taken: boolean;
-  /**
-   * Its confirmed and completed enrollments, each held until its release (T015), with the zone it
-   * snapshot the slot in.
-   */
-  readonly confirmed: readonly { readonly enrollmentId: string; readonly timezone: TimeZoneId }[];
+  /** Its completed enrollments, each held until its release (T015), with the zone it snapshot the slot in. */
+  readonly completed: readonly { readonly enrollmentId: string; readonly timezone: TimeZoneId }[];
 }
 
 /**
- * A used slot: taken on every date, or held by confirmed enrollments until `releasedOn`, a local
+ * A used slot: taken on every date, or held by completed enrollments until `releasedOn`, a local
  * date in `timezone`. A slot nothing uses has no occupancy.
  */
 export type SlotOccupancy =
   | { readonly kind: 'taken' }
   | { readonly kind: 'until'; readonly releasedOn: LocalDate; readonly timezone: TimeZoneId };
 
-/** The first local date a confirmed enrollment no longer holds its slot (FR-394). */
+/** The first local date a completed enrollment no longer holds its slot (FR-394). */
 export function releaseDateOf(lastSessionDate: LocalDate, bufferWeeks: number): LocalDate {
   return calendarWeeksAfter(lastSessionDate, bufferWeeks + 1);
 }
 
-/** A slot's occupancy from its use and its confirmed enrollments' final session dates. */
+/** A slot's occupancy from its use and its completed enrollments' final session dates. */
 export function occupancyFrom(
   use: SlotUse,
   lastSessionDates: ReadonlyMap<string, LocalDate>,
@@ -58,7 +62,7 @@ export function occupancyFrom(
 ): SlotOccupancy | undefined {
   if (use.taken) return { kind: 'taken' };
   let latest: SlotOccupancy | undefined;
-  for (const { enrollmentId, timezone } of use.confirmed) {
+  for (const { enrollmentId, timezone } of use.completed) {
     const last = lastSessionDates.get(enrollmentId);
     if (last === undefined) return { kind: 'taken' };
     const releasedOn = releaseDateOf(last, bufferWeeks);
@@ -79,7 +83,7 @@ type Client = Pick<Transaction, 'slotHold' | 'enrollment' | 'session'>;
 
 /**
  * Of `slotIds`, each used slot's occupancy; a free slot is absent. The buffer is read only when a
- * confirmed enrollment needs its release, so a free or a taken slot costs no settings read.
+ * completed enrollment needs its release, so a free or a taken slot costs no settings read.
  * `exceptEnrollmentId` leaves that enrollment's own use out (`slotUses`; T008 of specs/004-sessions).
  */
 export async function occupancyOf(
@@ -89,13 +93,13 @@ export async function occupancyOf(
   exceptEnrollmentId?: string,
 ): Promise<ReadonlyMap<string, SlotOccupancy>> {
   const uses = [...(await slotUses(tx, slotIds, exceptEnrollmentId)).values()];
-  const confirmedIds = uses.flatMap(({ taken, confirmed }) =>
-    taken ? [] : confirmed.map(({ enrollmentId }) => enrollmentId),
+  const completedIds = uses.flatMap(({ taken, completed }) =>
+    taken ? [] : completed.map(({ enrollmentId }) => enrollmentId),
   );
   const [lastDates, buffer] =
-    confirmedIds.length === 0
+    completedIds.length === 0
       ? [new Map<string, LocalDate>(), 0]
-      : await Promise.all([lastSessionDateOf(tx, confirmedIds), bufferWeeks()]);
+      : await Promise.all([lastSessionDateOf(tx, completedIds), bufferWeeks()]);
   const occupancy = new Map<string, SlotOccupancy>();
   for (const use of uses) {
     const occupied = occupancyFrom(use, lastDates, buffer);
@@ -112,7 +116,8 @@ export interface SlotRelease {
 
 /**
  * Whether a hold or an enrollment uses the slot now (T020, R-207, FR-318), with R-205's release: a
- * confirmed enrollment uses it until its release date begins in the zone it snapshot the slot in.
+ * confirmed enrollment uses it whatever the date, and a completed one until its release date begins
+ * in the zone it snapshot the slot in.
  */
 export async function slotInUse(
   tx: Client,

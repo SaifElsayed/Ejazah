@@ -33,6 +33,16 @@ export const sessionStatus = z.enum([
   'disputed',
 ]);
 
+/** A remedy's status as the lists show it: `RemedyView`'s, never `lapsed` (004:T028). */
+export const listedRemedyStatus = z.enum([
+  'awaiting_choice',
+  'proposed',
+  'counter_proposed',
+  'frozen',
+  'booked',
+  'refund_case',
+]);
+
 /**
  * One session as a list shows it: `checkout.status`' session with its status (FR-393), and its id
  * (004:T020; specs/004-sessions/contracts/app-surface.md, "Phase 2's lists, widened additively"), so
@@ -48,6 +58,9 @@ export const listedSession = enrollmentSession.extend({
   // 004:T026 (FR-473, FR-495): the session is disputed, its status `disputed`
   // (specs/004-sessions/contracts/app-surface.md, "Phase 2's lists").
   disputed: z.boolean(),
+  // 004:T028 (FR-495): the session's remedy, by its status, absent while it has none; a `lapsed`
+  // one is never shown (specs/004-sessions/contracts/app-surface.md, "Phase 2's lists", `remedyStatus?`).
+  remedyStatus: listedRemedyStatus.optional(),
 });
 
 /** The package line an enrollment shows, from its snapshot: subject, track, sessions, minutes. */

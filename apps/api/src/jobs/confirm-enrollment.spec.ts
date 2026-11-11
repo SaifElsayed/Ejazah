@@ -10,7 +10,11 @@
 // with its sessions, no party checked; a late one checks the parties (`party_restricted` when they
 // may not book), then re-holds and confirms; the database's four named refusals are refused in a
 // new transaction (`slot_unavailable`), anything else rethrown. The same steps over the real tables
-// are `tests/db-integrity/confirm-enrollment.spec.ts`.
+// are `tests/db-integrity/confirm-enrollment.spec.ts`. T027 of specs/004-sessions (FR-466, H3; the
+// note under T027, Q2 (a)): the late branch reads the reservations of both parties, under the locks
+// it already holds, over the sessions generation would write, and takes the refusal branch
+// (`slot_unavailable`, a case) when one would overlap, re-holding nothing; the branch converting a
+// still-active hold reads none. Over the real tables: `tests/db-integrity/remedy-reservations.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
 import type { LockedEnrollment } from '../modules/booking/index.js';
@@ -57,6 +61,8 @@ interface World {
   orderMissing?: boolean;
   /** Thrown by the step named, once, in the first transaction. */
   failAt?: { step: 'rehold' | 'generate' | 'confirm'; error: Error };
+  /** The times open remedies reserve for the parties (T027). */
+  reserved?: readonly { startsAt: Date; endsAt: Date }[];
 }
 
 interface Recorded {
@@ -85,6 +91,7 @@ function locked(overrides: Partial<LockedEnrollment>): LockedEnrollment {
 
 function harness(world: World) {
   const calls: string[] = [];
+  const logged: [object, string][] = [];
   let transactions = 0;
   let failed = false;
   const tx = {} as Transaction;
@@ -144,6 +151,16 @@ function harness(world: World) {
       expect(slotId).toBe(SLOT);
       return { dayOfWeek: 4, startTimeLocal: '09:00:00' };
     },
+    reservedTimesOf: async (_tx, userIds, window) => {
+      calls.push('reserved');
+      expect([...userIds].sort()).toEqual([STUDENT, TEACHER].sort());
+      // The four Thursdays generation would write from NOW with a lead of 24 hours.
+      expect(window).toEqual({
+        from: new Date('2026-11-05T07:00:00Z'),
+        to: new Date('2026-11-26T08:00:00Z'),
+      });
+      return (world.reserved ?? []).map((time) => ({ remedyId: 'r', sessionId: 's', ...time }));
+    },
     generate: async (_tx, enrollment, confirmedAt, leadHours) => {
       failing('generate');
       expect(enrollment).toEqual({
@@ -170,10 +187,16 @@ function harness(world: World) {
     settings,
     steps,
     clock: () => NOW,
+    enrollments: { enrollmentFor: async () => null },
+    log: {
+      // Two arguments only, as the job writes them: its fields and its message.
+      info: ((fields: object, message: string) => void logged.push([fields, message])) as never,
+    },
   });
   return {
     job,
     recorded: (): Recorded => ({ calls: [...calls], transactions }),
+    logged,
   };
 }
 
@@ -234,10 +257,51 @@ describe('confirm-enrollment: a late payment (FR-362, FR-PAYG-19)', () => {
       ...PREAMBLE,
       'confirm: no hold',
       'pair',
+      'reserved',
       'rehold',
       'confirm',
       'generate',
     ]);
+  });
+
+  it('takes the refusal branch, re-holding nothing, when a session it would generate overlaps a reservation of either party (T027, H3)', async () => {
+    const { job, recorded, logged } = harness(
+      paid({
+        enrollment: late,
+        // The third Thursday, 2026-11-19 09:00 Cairo, partly over a reserved time.
+        reserved: [
+          { startsAt: new Date('2026-11-19T07:30:00Z'), endsAt: new Date('2026-11-19T08:30:00Z') },
+        ],
+      }),
+    );
+    await job.handle({ paymentId: PAYMENT });
+    expect(recorded().calls).toEqual([
+      ...PREAMBLE,
+      'confirm: no hold',
+      'pair',
+      'reserved',
+      'refuse slot_unavailable',
+      'case slot_unavailable',
+    ]);
+    expect(recorded().transactions).toBe(1);
+    expect(logged).toEqual([
+      [
+        { enrollmentId: ENROLLMENT, paymentId: PAYMENT, reason: 'reservation_overlap' },
+        'Late payment refused: a session would overlap a reserved time',
+      ],
+    ]);
+  });
+
+  it('re-holds when a reserved time only touches a session it would generate, end to start', async () => {
+    const recorded = await run(
+      paid({
+        enrollment: late,
+        reserved: [
+          { startsAt: new Date('2026-11-19T08:00:00Z'), endsAt: new Date('2026-11-19T09:00:00Z') },
+        ],
+      }),
+    );
+    expect(recorded.calls).toContain('rehold');
   });
 
   it('refuses for a party when the pair may not book, re-holding nothing', async () => {
@@ -263,6 +327,7 @@ describe('confirm-enrollment: a late payment (FR-362, FR-PAYG-19)', () => {
       ...PREAMBLE,
       'confirm: no hold',
       'pair',
+      'reserved',
       ...PREAMBLE,
       'refuse slot_unavailable',
       'case slot_unavailable',

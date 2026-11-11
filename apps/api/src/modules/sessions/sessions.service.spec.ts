@@ -39,6 +39,7 @@ import {
   type SessionsServices,
   type SessionsStore,
 } from './sessions.service.js';
+import type { RemedyViewRow } from './remedy-offer.repository.js';
 
 const SESSION = '0199d0a0-0000-7000-8000-00000000a001';
 const ENROLLMENT = '0199d0a0-0000-7000-8000-00000000e001';
@@ -148,6 +149,7 @@ let log: Logger;
 let now: Date;
 /** The database's clock as `get` reads it on its transaction (`clockTimestamp` in production). */
 let databaseNow: Date;
+let remedies: Map<string, RemedyViewRow>;
 let services: SessionsServices;
 
 const tx = {} as Transaction;
@@ -191,6 +193,15 @@ const store: SessionsStore = {
     trace.push(`read cancellation of ${sessionId}`);
     return cancellations.get(sessionId) ?? null;
   },
+  // T028: the session's remedy and the enrollment's slot's local start.
+  remedyOf: async (_tx, sessionId) => {
+    trace.push(`read remedy of ${sessionId}`);
+    return remedies.get(sessionId) ?? null;
+  },
+  slotOf: async (_tx, slotId) => {
+    trace.push(`read slot ${slotId}`);
+    return { startTimeLocal: '16:30:00' };
+  },
 };
 
 const terms: EnrollmentTerms = {
@@ -228,6 +239,7 @@ beforeEach(() => {
   ]);
   underLock = undefined;
   cancellations = new Map();
+  remedies = new Map();
   disputeFields = new Map();
   disputeAsked = [];
   video = new RecordingVideo();
@@ -357,6 +369,8 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
       `read parties ${STUDENT},${TEACHER}`,
       `read cancellation of ${SESSION}`,
       `read disputes of ${SESSION} for ${STUDENT}`,
+      // T028: the remedy, on the same transaction.
+      `read remedy of ${SESSION}`,
       'commit',
     ]);
   });
@@ -657,7 +671,11 @@ describe('sessions.get: the dispute (T026)', () => {
     });
     const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
     const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
-    expect(byStudent).toEqual({ ...studentSees, status: 'disputed', ...disputeFields.get(STUDENT) });
+    expect(byStudent).toEqual({
+      ...studentSees,
+      status: 'disputed',
+      ...disputeFields.get(STUDENT),
+    });
     expect(byTeacher.dispute).toEqual({ status: 'open', raisedByMe: false, closesAt: CLOSES });
     expect(disputeAsked).toEqual([
       [[{ id: SESSION, status: 'disputed', endsAt: ENDS }], STUDENT],
@@ -677,5 +695,91 @@ describe('sessions.get: the dispute (T026)', () => {
   it('asks nothing of the view for a session refused NOT_FOUND', async () => {
     await refusalOf(services.get({ userId: STRANGER }, { sessionId: SESSION }, log));
     expect(disputeAsked).toEqual([]);
+  });
+});
+
+// T028 (FR-463, FR-464, FR-494; contracts/app-surface.md, `RemedyView`): `sessions.get`'s `remedy`,
+// read on the same transaction: the proposal at the enrollment's slot's local start in the
+// enrollment's zone, a pending counter with its `answerClosesAt` (D1), the refund offered while
+// `awaiting_choice`, a frozen one with no proposal, and a lapsed one never shown.
+describe('sessions.get: the remedy (T028)', () => {
+  const offered = (values: Partial<RemedyViewRow>): RemedyViewRow => ({
+    id: '0199d0a0-0000-7000-8000-00000000c001',
+    status: 'awaiting_choice',
+    kind: 'makeup',
+    offeredAt: new Date('2026-11-12T08:00:00Z'),
+    choiceClosesAt: new Date('2026-11-19T08:00:00Z'),
+    proposedDate: new Date('2026-12-03T00:00:00Z'),
+    counterDate: null,
+    counterStartTimeLocal: null,
+    counterTimezone: null,
+    counterProposedAt: null,
+    snapshotAnswerWindowHours: 72,
+    makeupSessionId: null,
+    ...values,
+  });
+
+  it('answers no remedy on a session with none, and reads no slot', async () => {
+    const answer = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(answer.remedy).toBeUndefined();
+    expect(trace.some((step) => step.startsWith('read slot'))).toBe(false);
+  });
+
+  it('answers a remedy awaiting the choice: the proposal in the enrollment’s zone, the refund offered', async () => {
+    remedies.set(SESSION, offered({}));
+    const answer = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(answer.remedy).toEqual({
+      status: 'awaiting_choice',
+      kind: 'makeup',
+      offeredAt: '2026-11-12T08:00:00.000Z',
+      choiceClosesAt: '2026-11-19T08:00:00.000Z',
+      proposal: {
+        localDate: '2026-12-03',
+        startTimeLocal: '16:30',
+        timezone: 'Africa/Cairo',
+        startsAt: '2026-12-03T14:30:00Z',
+      },
+      canChooseRefund: true,
+    });
+    expect(trace).toContain(`read slot ${terms.slotId}`);
+  });
+
+  it('answers a pending counter with its answer window’s close, and no refund once proposed', async () => {
+    remedies.set(
+      SESSION,
+      offered({
+        status: 'counter_proposed',
+        counterDate: new Date('2026-12-06T00:00:00Z'),
+        counterStartTimeLocal: new Date('1970-01-01T18:00:00Z'),
+        counterTimezone: 'Africa/Cairo',
+        counterProposedAt: new Date('2026-11-13T09:30:00Z'),
+      }),
+    );
+    const answer = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(answer.remedy?.counter).toEqual({
+      localDate: '2026-12-06',
+      startTimeLocal: '18:00',
+      timezone: 'Africa/Cairo',
+      startsAt: '2026-12-06T16:00:00Z',
+      answerClosesAt: '2026-11-16T09:30:00.000Z',
+    });
+    expect(answer.remedy?.canChooseRefund).toBe(false);
+  });
+
+  it('shows a frozen remedy with no proposal, a booked one with its make-up, and never a lapsed one', async () => {
+    remedies.set(SESSION, offered({ status: 'frozen' }));
+    const frozen = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(frozen.remedy?.status).toBe('frozen');
+    expect(frozen.remedy?.proposal).toBeUndefined();
+    remedies.set(
+      SESSION,
+      offered({ status: 'booked', makeupSessionId: '0199d0a0-0000-7000-8000-00000000d009' }),
+    );
+    const booked = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(booked.remedy?.makeupSessionId).toBe('0199d0a0-0000-7000-8000-00000000d009');
+    remedies.set(SESSION, offered({ status: 'lapsed' }));
+    expect(
+      (await services.get({ userId: STUDENT }, { sessionId: SESSION }, log)).remedy,
+    ).toBeUndefined();
   });
 });

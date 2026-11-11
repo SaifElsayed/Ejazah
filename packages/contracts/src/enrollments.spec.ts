@@ -99,9 +99,9 @@ describe('the tabs and the session statuses', () => {
     const { sessionId: _sessionId, ...withoutId } = session;
     expect(listedSession.safeParse(withoutId).success).toBe(false);
     expect(listedSession.safeParse({ ...session, sessionId: 'session-1' }).success).toBe(false);
-    expect(enrollmentsGetOutput.parse({ ...item, sessions: [session] }).sessions[0]?.sessionId).toBe(
-      session.sessionId,
-    );
+    expect(
+      enrollmentsGetOutput.parse({ ...item, sessions: [session] }).sessions[0]?.sessionId,
+    ).toBe(session.sessionId);
   });
 
   it('answers a disputed session as `disputed`, with no frozen outcome beside it (004:T020, R-308)', () => {
@@ -115,6 +115,14 @@ describe('the tabs and the session statuses', () => {
     expect(listedSession.parse({ ...session, pendingCancellation: true }).pendingCancellation).toBe(
       true,
     );
+  });
+
+  it('carries remedyStatus, optional, any status but lapsed (004:T028, FR-495)', () => {
+    expect(listedSession.parse(session).remedyStatus).toBeUndefined();
+    expect(listedSession.parse({ ...session, remedyStatus: 'awaiting_choice' }).remedyStatus).toBe(
+      'awaiting_choice',
+    );
+    expect(listedSession.safeParse({ ...session, remedyStatus: 'lapsed' }).success).toBe(false);
   });
 });
 

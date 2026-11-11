@@ -258,7 +258,7 @@ show the same sessions in both zones.
 4. **Given** the runtime's time zone data changes, **When** the worker's re-resolution job runs, **Then** the cached instants of scheduled sessions are recomputed under the rules of ERD §15 rule 19 (ADR 0009 D3, ADR 0010).
 5. **Given** an enrollment, **When** either person opens it, **Then** they see upcoming sessions, sessions completed and sessions remaining, derived and never stored, with every time shown in the teacher's zone and the viewer's (FR-BOOK-7, ADR 0009 D5, R-DB-4).
 6. **Given** «طلابي», **When** the teacher types a student's name, **Then** both the active and the ended tabs narrow by it (FR-BOOK-7, ADR 0021 D6).
-7. **Given** an enrollment's final session, **When** its week has passed plus the configured release buffer, **Then** its slot is offered to other students again (FR-BOOK-10).
+7. **Given** an enrollment's final session, **When** the enrollment is completed and its week has passed plus the configured release buffer, **Then** its slot is offered to other students again (FR-BOOK-10; amended 2026-11-10, the owner's rule of 2026-11-10: a package's slot does not return to the teacher until the package has fully ended, its make-ups part of it).
 
 ---
 
@@ -393,7 +393,7 @@ adds only what this phase decides about it.
 - **FR-391**: The teacher MUST see «طلابي», active and ended, searchable by the student's name in both tabs, each enrollment's detail with its sessions, and «اليوم» with the day's sessions (FR-BOOK-7, ADR 0021 D6, `TeacherStudents`, `TeacherEnrollment`, `TeacherHome`).
 - **FR-392**: Sessions remaining and completed MUST be derived, never stored (R-DB-4).
 - **FR-393**: Every session time MUST be shown in the teacher's zone and the viewer's zone (ADR 0009 D5).
-- **FR-394**: An enrollment's slot MUST be offered again from the week after its final session plus the configured release buffer (FR-BOOK-10).
+- **FR-394**: An enrollment's slot MUST be offered again from the week after its final session plus the configured release buffer (FR-BOOK-10), and only once the enrollment is completed: a confirmed enrollment keeps its slot whatever the date (amended 2026-11-10, the owner's rule of 2026-11-10: a package's slot does not return to the teacher until the package has fully ended, its make-ups part of it; `specs/004-sessions/spec.md` FR-423, FR-449).
 - **FR-395**: What a student and a teacher see of each other MUST be limited to what their screens draw; the student's date of birth, minor flag, documents and gender-dispute history MUST never reach the teacher (R-HONEST-4).
 
 **Admin payments monitor**
