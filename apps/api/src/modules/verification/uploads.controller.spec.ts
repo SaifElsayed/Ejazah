@@ -24,6 +24,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -78,6 +79,7 @@ const services = {
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
   sessions: unusedSessionsServices,
+  chat: unusedChatServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const cipher = new ColumnCipher(Buffer.alloc(32, 9).toString('base64'));

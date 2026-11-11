@@ -21,6 +21,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -65,6 +66,10 @@ const sessionsByBearer: Readonly<Record<string, UserSession>> = {
   't-fresh': session('u-fresh', 'active'),
   't-conflict': session('u-conflict', 'active'),
   't-live': session('u-live', 'active'),
+  // T038 of specs/004-sessions: the fields and the refusal hook.
+  't-fields': session('u-fields', 'active'),
+  't-hooked': session('u-hooked', 'active'),
+  't-hook-throws': session('u-hook-throws', 'active'),
 };
 const sessions = {
   user: async (bearer: string) => {
@@ -95,6 +100,7 @@ const services = {
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
   sessions: unusedSessionsServices,
+  chat: unusedChatServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });
@@ -107,6 +113,9 @@ const bus = new InProcessLiveBus();
 const published: unknown[] = [];
 bus.subscribe((message) => void published.push(message));
 const uploaded = { type: 'enrollment', enrollmentId: '0199d0a0-0000-7000-8000-00000000e0a1' } as const;
+
+// T038 of specs/004-sessions: what the refusal hook was handed, in order.
+const hooked: { code: unknown; userId: string; fields: Record<string, string> }[] = [];
 
 beforeAll(async () => {
   application = await createApplication({
@@ -138,6 +147,40 @@ beforeAll(async () => {
           refuses: ['suspended', 'banned'],
           handle: async () => {
             throw new DomainError('CONFLICT');
+          },
+        },
+      ),
+      // T038 of specs/004-sessions: a handler that echoes the fields, and refuses on `refuse`, with
+      // a hook that records each refusal.
+      '/uploads/fields': uploadRoute(
+        { sessions: sessions.user, guard: { settings, rateLimiter }, log },
+        {
+          kindOf: kindField(['identity']),
+          refuses: ['banned'],
+          handle: async ({ fields }) => {
+            if (fields.has('refuse')) throw new DomainError('CONFLICT');
+            return { fields: Object.fromEntries(fields) };
+          },
+          refused: (error, { uploader, fields }) => {
+            hooked.push({
+              code: error instanceof DomainError ? error.code : 'unexpected',
+              userId: uploader.userId,
+              fields: Object.fromEntries(fields),
+            });
+          },
+        },
+      ),
+      // T038: a hook that throws: the answer is the refusal still.
+      '/uploads/hook-throws': uploadRoute(
+        { sessions: sessions.user, guard: { settings, rateLimiter }, log },
+        {
+          kindOf: kindField(['identity']),
+          refuses: ['banned'],
+          handle: async () => {
+            throw new DomainError('CONFLICT');
+          },
+          refused: () => {
+            throw new Error('the hook failed');
           },
         },
       ),
@@ -230,6 +273,71 @@ describe('the upload route’s after-commit point (T063)', () => {
     expect(refused.status).toBe(409);
     await refused.arrayBuffer();
     expect(published).toEqual([]);
+  });
+});
+
+// T038 of specs/004-sessions: the fields reach the handler, and a route may hear its refusals (the
+// chat route logs `{ userId, enrollmentId, cause }`); the hook never changes the answer.
+describe('the upload route’s fields and refusal hook (T038 of specs/004-sessions)', () => {
+  const withFields = (extra: readonly { name: string; value: string }[], bytes = pdfBytes()) =>
+    multipart([
+      { name: 'kind', value: 'identity' },
+      ...extra,
+      { name: 'file', filename: 'id.pdf', type: 'application/pdf', bytes },
+    ]);
+
+  it('hands the handler the fields that preceded the file', async () => {
+    hooked.length = 0;
+    const response = await post(
+      '/uploads/fields',
+      't-fields',
+      withFields([{ name: 'note', value: 'تجويد' }]),
+    );
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      fields: { kind: 'identity', note: 'تجويد' },
+    });
+    expect(hooked).toEqual([]);
+  });
+
+  it("hands the hook a refusal by the guard and by the handler, with the uploader and the fields, the answer the refusal's", async () => {
+    hooked.length = 0;
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const byGuard = await post(
+      '/uploads/fields',
+      't-hooked',
+      withFields([{ name: 'note', value: 'a' }], png),
+    );
+    expect(byGuard.status).toBe(400);
+    await expect(byGuard.json()).resolves.toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+    const byHandler = await post(
+      '/uploads/fields',
+      't-hooked',
+      withFields([{ name: 'refuse', value: '1' }]),
+    );
+    expect(byHandler.status).toBe(409);
+    await expect(byHandler.json()).resolves.toMatchObject({ error: { code: 'CONFLICT' } });
+    expect(hooked).toEqual([
+      { code: 'VALIDATION_FAILED', userId: 'u-hooked', fields: { kind: 'identity', note: 'a' } },
+      { code: 'CONFLICT', userId: 'u-hooked', fields: { kind: 'identity', refuse: '1' } },
+    ]);
+  });
+
+  it('does not call the hook before the caller is known', async () => {
+    hooked.length = 0;
+    const response = await post('/uploads/fields', undefined, withFields([]));
+    expect(response.status).toBe(401);
+    await response.arrayBuffer();
+    expect(hooked).toEqual([]);
+  });
+
+  it('answers the refusal still when the hook throws, never a 500', async () => {
+    const response = await post('/uploads/hook-throws', 't-hook-throws', withFields([]));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'CONFLICT' } });
   });
 });
 

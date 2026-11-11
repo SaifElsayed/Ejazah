@@ -25,6 +25,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -234,6 +235,7 @@ function callerAs(session: UserSession | null): Caller {
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions,
+    chat: unusedChatServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = { check: vi.fn(async () => undefined) } as unknown as RateLimiter;
@@ -451,6 +453,7 @@ describe("'sessions.join' (T011)", () => {
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
       sessions: realSessions,
+      chat: unusedChatServices,
     };
     const log = createLogger({ level: 'info', destination: { write: () => undefined } });
     const caller = callerFor(

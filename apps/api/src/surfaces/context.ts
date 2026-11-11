@@ -143,6 +143,8 @@ import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
+// T037 of specs/004-sessions.
+import type { ChatServices } from '../modules/chat/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
@@ -276,6 +278,8 @@ export interface AppServices {
   readonly checkout: CheckoutServices;
   /** `sessions.get` and `sessions.join`: the sessions module's services (T011 of specs/004-sessions). */
   readonly sessions: SessionsServices;
+  /** T037 of specs/004-sessions: `chat.list` and `chat.send`, the chat module's services. */
+  readonly chat: ChatServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */

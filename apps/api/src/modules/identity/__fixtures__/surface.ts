@@ -16,6 +16,7 @@ import { createAppCallerFactory, createAppRouter } from '../../../surfaces/proce
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -87,6 +88,7 @@ export function surfaceOf(
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

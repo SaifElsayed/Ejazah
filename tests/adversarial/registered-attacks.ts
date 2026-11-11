@@ -9,6 +9,8 @@
 // `sessions.dispute.raise`; T031 `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`;
 // T032 `sessions.remedy.answerCounter`.
 import { bookingAttacks } from './booking.attacks.js';
+// T037 of specs/004-sessions: `chat.list` and `chat.send`; T038 `chat.attachmentLink`.
+import { chatAttacks, chatDocumentAttacks } from './chat.attacks.js';
 import { checkoutAttacks } from './checkout.attacks.js';
 import { discoveryAttacks } from './discovery.attacks.js';
 import { enrollmentsAttacks } from './enrollments.attacks.js';
@@ -28,4 +30,8 @@ export const registeredAttacks: readonly ProcedureAttacks[] = [
   ...sessionDisputeAttacks,
   ...sessionsRemedyAttacks,
   ...liveAttacks,
+  // T037 of specs/004-sessions.
+  ...chatAttacks,
+  // T038 of specs/004-sessions.
+  ...chatDocumentAttacks,
 ];

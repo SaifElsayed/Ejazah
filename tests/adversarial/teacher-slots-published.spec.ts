@@ -37,6 +37,7 @@ import { createAppContext } from '../../apps/api/src/surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -159,6 +160,7 @@ function teacherCaller(tx: Transaction, teacherId: string, gender: Gender) {
         booking: unusedBookingServices,
         checkout: unusedCheckoutServices,
         sessions: unusedSessionsServices,
+        chat: unusedChatServices,
         catalog: catalogOn(tx),
       },
     }),
