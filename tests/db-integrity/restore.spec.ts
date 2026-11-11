@@ -329,6 +329,64 @@ describe('sessions.restore (FR-455, SC-416)', () => {
   });
 });
 
+// The note under T061 (B40, settled by the review session on B39 Q5 (a)'s precedent, rule d): a
+// make-up the closing's case held for which T028's offer finds no free week refuses the whole
+// restore CONFLICT no_free_week, nothing written, the case open. The offer is narrowed to see the
+// slot taken from December on, every week its search reads after the recreated sessions; the
+// restore's own weeks (Nov 12 to 26) read the real tables.
+describe('sessions.restore: no free week for a held remedy (the note under T061)', () => {
+  it('answers CONFLICT no_free_week and writes nothing: the enrollment closed, the case open, no session, the remedy unchanged', async () => {
+    const w = await terminatedWorld();
+    const before = await stateOf(w.enrollmentId);
+    const takenFromDecember = {
+      ...enrollments,
+      slotWeekTaken: async (
+        tx: Transaction,
+        slotId: string,
+        localDate: string,
+        enrollmentId: string,
+      ) =>
+        localDate >= '2026-12-01' ||
+        (await enrollments.slotWeekTaken(tx, slotId, localDate, enrollmentId)),
+    };
+    const narrowed = createRestore({
+      enrollments,
+      idempotency: new IdempotencyService({ store: new IdempotencyRepository(database), settings }),
+      offers: createRemedyOffer({
+        enrollments: takenFromDecember,
+        settings,
+        clock: async () => RESTORED,
+        log: SILENT,
+      }),
+      settings,
+      log: SILENT,
+      clock: async () => RESTORED,
+    });
+    const thrown: unknown = await database
+      .$transaction((tx: Transaction) =>
+        narrowed.restore(tx, admin, {
+          enrollmentId: w.enrollmentId,
+          reason: 'خطأ',
+          idempotencyKey: 'restore-nfw-' + w.enrollmentId,
+        }),
+      )
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect([(thrown as DomainError).code, (thrown as DomainError).details]).toEqual([
+      'CONFLICT',
+      [{ path: 'cause', code: 'no_free_week' }],
+    ]);
+    expect(await stateOf(w.enrollmentId)).toEqual(before);
+    expect(before.enrollment.status).toBe('terminated_no_show');
+    expect(before.cases).toEqual([
+      { reason: 'absence_termination', status: 'open', resolutionNotes: null },
+    ]);
+  });
+});
+
 describe('SC-416: a restore against another student’s hold on the same slot', () => {
   async function racing() {
     const w = await terminatedWorld();

@@ -161,6 +161,21 @@ describe('a refusal writes no audit entry', () => {
   });
 });
 
+describe('no free week for a held remedy (the note under T061)', () => {
+  it('answers CONFLICT no_free_week as the service refused it, never retried as a deadlock, nothing kept', async () => {
+    const conflict = new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'no_free_week' }],
+    });
+    const { as, written, reached } = surface([conflict, RESTORED]);
+    expect(await shapeOf(as(VERIFIED).sessions.restore(ASKED))).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'no_free_week' }],
+    });
+    expect(reached).toHaveLength(1);
+    expect(written).toEqual([]);
+  });
+});
+
 describe('the deadlock (L5; research R-321)', () => {
   it('retries a deadlock once, the restore kept with one audit entry', async () => {
     const { as, written, reached } = surface([deadlock(), RESTORED]);

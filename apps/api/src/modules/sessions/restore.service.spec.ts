@@ -549,3 +549,35 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
     await expect(restore()).rejects.toBe(deadlock);
   });
 });
+
+// The note under T061 (B40, settled by the review session on B39 Q5 (a)'s precedent, rule d): a
+// remedy the closing's case held for which T028's offer finds no free week refuses the whole
+// restore `CONFLICT` `no_free_week` (no ninth `RESTORE_REFUSED` cause), the case left open; the
+// offer writes its own warn line, the refusal one line of ids and its cause, marked «logged».
+describe('sessions.restore: no free week for a held remedy (the note under T061)', () => {
+  it('answers CONFLICT no_free_week, logged, closing no case', async () => {
+    given.offered = false;
+    const thrown: unknown = await restore().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(DomainError);
+    const refusal = thrown as DomainError;
+    expect([refusal.code, refusal.details, isRefusalLogged(refusal)]).toEqual([
+      'CONFLICT',
+      [{ path: 'cause', code: 'no_free_week' }],
+      true,
+    ]);
+    expect(calls.some(([name]) => name === 'closeCase')).toBe(false);
+    expect(lines).toEqual([
+      {
+        adminId: ADMIN,
+        enrollmentId: ENROLLMENT,
+        sessionId: sid(3),
+        errorCode: 'CONFLICT',
+        cause: 'no_free_week',
+        msg: 'An enrollment restore was refused',
+      },
+    ]);
+  });
+});
