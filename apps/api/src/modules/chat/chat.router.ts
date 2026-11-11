@@ -6,7 +6,9 @@
 // `chat.send` is keyed by the kernel's idempotency in the service and counted under its own limit,
 // `rate_limit_chat_message`, per caller (FR-491); `chat.list` under the signed-in default (T062).
 // Mounted under `chat` by `app.router.ts`. T038: `chat.attachmentLink`, a read of the same kind under
-// the signed-in default, answering a signed link to a message's document.
+// the signed-in default, answering a signed link to a message's document. T066: `chat.send` hands
+// the service the request's after-commit list (`ctx.live`), which the kind sends once the handler
+// resolves and drops when it throws.
 import {
   chatAttachmentLinkInput,
   chatAttachmentLinkOutput,
@@ -32,7 +34,7 @@ export const chatRouter = createAppRouter({
     output: chatSendOutput,
     rateLimit: { key: CHAT_MESSAGE_RATE_LIMIT, subject: 'caller' },
   }).mutation(({ ctx, input }) =>
-    ctx.services.chat.send({ userId: ctx.caller.userId }, input, ctx.log),
+    ctx.services.chat.send({ userId: ctx.caller.userId }, input, ctx.log, ctx.live),
   ),
 
   // T038.

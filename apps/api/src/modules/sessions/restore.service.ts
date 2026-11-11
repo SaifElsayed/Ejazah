@@ -61,6 +61,13 @@
 // marked «logged»; each offer its `offeredLine`; the restore one line of ids and counts, on the
 // call's transaction (the administrator kind has no after-commit point for a log line). Never the
 // reason.
+//
+// THE LIVE EVENT (T066; FR-427; research R-324, item 6; the note under T066, Q3 (a)). Inside the
+// keyed effect, once the case is closed, `enrollment` for both parties, read under the locks, is
+// added to the administrator kind's after-commit list bound to this transaction (`publisherOn`):
+// sent once it commits, nothing on a replay (no effect runs) or a rollback, and inside the kind's
+// declared deadlock retry, which starts each attempt with an empty list, only the committed
+// attempt's event.
 import type { SessionsRestoreInput, SessionsRestoreOutput } from '@ijazah/contracts/admin';
 import { localTimeOf, type TimeZoneId } from '@ijazah/time';
 import { z } from 'zod';
@@ -70,6 +77,7 @@ import { isExclusionViolation } from '../../platform/db/db-errors.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
@@ -485,6 +493,11 @@ export function createRestore({
     });
     if (closed === null)
       throw new Error('restore: the closing’s case, open under its lock, did not close');
+    // T066: the enrollment restored, to both parties once this transaction commits.
+    publisherOn(tx)?.afterCommit([terms.studentUserId, terms.teacherUserId], {
+      type: 'enrollment',
+      enrollmentId,
+    });
     const created = await store.sessionIdsFrom(tx, enrollmentId, plan.firstSequenceNumber);
 
     for (const offer of offered) offeredLine(log, offer);

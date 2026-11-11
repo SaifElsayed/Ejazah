@@ -15,6 +15,8 @@ import {
   RateLimiter,
   SIGNED_IN_DEFAULT_RATE_LIMIT,
 } from '../../platform/guards/rate-limit.guard.js';
+import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
+import type { LiveRegistry } from '../../platform/live/live-registry.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../surfaces/context.js';
 import {
@@ -1084,4 +1086,79 @@ describe("'sessions.complaint.raise' (T060)", () => {
     expect(hits).toHaveLength(1);
     expect(calls).toEqual([]);
   });
+});
+
+// T066 of specs/004-sessions (the note under T066, Q3 (a)): `sessions.cancellation.request` and
+// `.answer` hand the service the request's own after-commit list, `ctx.live`, which the participant
+// kind sends once the handler resolves and drops when it throws.
+describe("'sessions.cancellation': the request's live list (T066)", () => {
+  const EVENT = { type: 'session', sessionId: SESSION, enrollmentId: ENROLLMENT } as const;
+
+  function liveCaller(fails: boolean) {
+    const published: LiveMessage[] = [];
+    const bus: LiveBus = {
+      publish: (message) => void published.push(message),
+      subscribe: () => () => undefined,
+    };
+    const adding: SessionsServices = {
+      ...sessions,
+      cancellation: {
+        request: async (caller, input, _log, live) => {
+          calls.push(['request', caller, input]);
+          live.afterCommit([caller.userId], EVENT);
+          if (fails) throw new DomainError('CANCELLATION_EXPIRED');
+          return requested as never;
+        },
+        answer: async (caller, input, _log, live) => {
+          calls.push(['answer', caller, input]);
+          live.afterCommit([caller.userId], EVENT);
+          if (fails) throw new DomainError('CANCELLATION_EXPIRED');
+          return answered as never;
+        },
+      },
+    };
+    const services: AppServices = {
+      settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+      publicConfig: { supportEmail: 'support@ijazah.invalid' },
+      subjects: { listActive: async () => [] },
+      identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
+      teacherProfile: unusedTeacherProfileServices,
+      catalog: unusedCatalogServices,
+      discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
+      sessions: adding,
+      chat: unusedChatServices,
+    };
+    const caller = callerFor(
+      createAppContext({
+        session: sessionOf('student'),
+        log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+        rateLimiter: { check: vi.fn(async () => undefined) } as unknown as RateLimiter,
+        clientAddress: '203.0.113.9',
+        services,
+        live: { bus, registry: {} as LiveRegistry },
+      }),
+    );
+    return { caller, published };
+  }
+
+  it.each(['sessions.cancellation.request', 'sessions.cancellation.answer'] as const)(
+    'sends what the service added once %s resolved',
+    async (path) => {
+      const { caller, published } = liveCaller(false);
+      await procedures[path](caller);
+      expect(published).toEqual([{ to: [CALLER], event: EVENT }]);
+    },
+  );
+
+  it.each(['sessions.cancellation.request', 'sessions.cancellation.answer'] as const)(
+    'drops what the service added when %s throws',
+    async (path) => {
+      const { caller, published } = liveCaller(true);
+      await expect(procedures[path](caller)).rejects.toEqual(refused('CANCELLATION_EXPIRED'));
+      expect(published).toEqual([]);
+    },
+  );
 });

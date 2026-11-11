@@ -69,8 +69,18 @@
 // only its enrollment, locked by the release or before the hand-off; a case and a `session_events`
 // row reference no account; the students of an ended teacher are not locked, and nothing
 // referencing them is written. They are told after the commit, from those rows (FR-385).
+//
+// THE LIVE EVENTS (T066 of specs/004-sessions; FR-427; research R-324, item 6; the note under T066,
+// Q3 (a)). Each confirmed enrollment the end decided on (its sessions cancelled, the enrollment
+// cancelled or, for a student's suspension, kept) tells its other party: `enrollment`, addressed
+// from the rows read under the enrollments' lock, added to the after-commit list the action bound
+// to its transaction (`publisherOn`): the administrator kind's for a standing action, the
+// deletion's own for a deletion. Sent once the action commits, nothing on a rollback; the person
+// whose account ended is told by their own `account` event. A transaction no action bound adds
+// nothing. No read is added and no lock taken for it.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { lockTeacherSlots, teacherSlotsOf } from '../catalog/index.js';
 import type { AccountConsequence, TerminationCause } from '../identity/index.js';
@@ -389,6 +399,7 @@ async function endConfirmed(
       })),
     );
   }
+  tellOtherParties(tx, userId, still);
   return {
     enrollments: ids.length,
     cancelledSessions: ended.cancelledSessionIds.length,
@@ -397,4 +408,24 @@ async function endConfirmed(
     lapsedRemedies: ended.lapsedRemedyIds.length,
     cases: new Set([...ended.caseOf.values()].filter((caseId) => caseId !== null)).size,
   };
+}
+
+/**
+ * T066 of specs/004-sessions: `enrollment` for the other party of each enrollment decided on, in id
+ * order, to the after-commit list bound to the action's transaction.
+ */
+function tellOtherParties(
+  tx: Transaction,
+  userId: string,
+  decided: readonly ConfirmedEnrollment[],
+): void {
+  const live = publisherOn(tx);
+  if (live === undefined) return;
+  for (const enrollment of [...decided].sort((one, other) => (one.id < other.id ? -1 : 1))) {
+    const other =
+      roleIn(userId, enrollment) === 'student'
+        ? enrollment.teacherUserId
+        : enrollment.studentUserId;
+    live.afterCommit([other], { type: 'enrollment', enrollmentId: enrollment.id });
+  }
 }

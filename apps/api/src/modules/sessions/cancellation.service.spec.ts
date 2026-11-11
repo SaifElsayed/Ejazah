@@ -31,6 +31,8 @@ import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotentRequest } from '../../platform/idempotency/idempotency.service.js';
+import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
+import { type LivePublisher, RequestLive } from '../../platform/live/live-publisher.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import type { CancellationRequestRow } from './cancellation.repository.js';
 import {
@@ -289,11 +291,18 @@ function refusalLines(): Record<string, unknown>[] {
     .map(({ msg: _msg, level: _level, time: _time, pid: _pid, hostname: _host, ...rest }) => rest);
 }
 
-const ask = (userId: string, sessionId = SESSION) =>
-  services.request({ userId }, { sessionId, reason: 'سفر طارئ', idempotencyKey: KEY }, log);
+/** T066: the request's after-commit list, for a case that reads no event. */
+const quiet: LivePublisher = { afterCommit: () => undefined };
 
-const answer = (userId: string, accept: boolean, requestId = REQUEST) =>
-  services.answer({ userId }, { requestId, accept }, log);
+const ask = (userId: string, sessionId = SESSION, live: LivePublisher = quiet) =>
+  services.request({ userId }, { sessionId, reason: 'سفر طارئ', idempotencyKey: KEY }, log, live);
+
+const answer = (
+  userId: string,
+  accept: boolean,
+  requestId = REQUEST,
+  live: LivePublisher = quiet,
+) => services.answer({ userId }, { requestId, accept }, log, live);
 
 describe('sessions.cancellation.request: admitted (FR-456, R-310)', () => {
   it('a party asks, keyed by the kernel under the request without its key, and is answered pending until the start', async () => {
@@ -743,5 +752,178 @@ describe('sessions.cancellation.answer: refused, nothing written', () => {
       expect((await refusalOf(answer(TEACHER, accept))).code).toBe('CONFLICT');
       expect(written).toEqual([]);
     });
+  });
+});
+
+// T066 of specs/004-sessions — the cancellation's live events (FR-427, FR-496; research R-324,
+// item 6; contracts/app-surface.md, `LiveEvent`; the note under T066, Q3 (a)): a request sends
+// `session` to the counterparty, an answer to the requester, each addressed from the session the
+// call read under its locks. The request adds its event inside the keyed effect, so a replay, which
+// runs no effect, adds none; the answer, not keyed, inside its own transaction. The user kind sends
+// the list once the handler resolves and drops it when it throws (`surfaces/procedures.ts`,
+// emulated here by `asUserKind`).
+describe('sessions.cancellation: the live events (T066)', () => {
+  /** The user kind's after-commit point as `procedures.ts` runs it: flushed on an answer, dropped on a throw. */
+  async function asUserKind<T>(call: (live: LivePublisher) => Promise<T>) {
+    const published: LiveMessage[] = [];
+    const bus: LiveBus = {
+      publish: (message) => {
+        trace.push('publish');
+        published.push(message);
+      },
+      subscribe: () => () => undefined,
+    };
+    const live = new RequestLive(bus, { warn: () => undefined });
+    const tracing: LivePublisher = {
+      afterCommit: (to, event, scope) => {
+        trace.push(`add ${event.type} for ${[...to].join(',')}`);
+        live.afterCommit(to, event, scope);
+      },
+    };
+    try {
+      const answered = await call(tracing);
+      live.flush();
+      return { answered, error: undefined, published };
+    } catch (error: unknown) {
+      live.drop();
+      return { answered: undefined, error, published };
+    }
+  }
+
+  const changed = { type: 'session', sessionId: SESSION, enrollmentId: ENROLLMENT } as const;
+
+  it.each([
+    ['the student', STUDENT, TEACHER],
+    ['the teacher', TEACHER, STUDENT],
+  ])(
+    'a request by %s sends session to the counterparty only, added before the commit and sent after it',
+    async (_name, asker, counterparty) => {
+      const { published } = await asUserKind((live) => ask(asker, SESSION, live));
+      expect(published).toEqual([{ to: [counterparty], event: changed }]);
+      expect(trace.indexOf(`add session for ${counterparty}`)).toBeLessThan(
+        trace.indexOf('commit'),
+      );
+      expect(trace.indexOf('publish')).toBeGreaterThan(trace.indexOf('commit'));
+    },
+  );
+
+  it.each([
+    ['accepted', true],
+    ['declined', false],
+  ])(
+    'an answer (%s) sends session to the requester only, after the commit',
+    async (_name, accept) => {
+      requests.set(REQUEST, request({ requestedByUserId: STUDENT }));
+      const { published } = await asUserKind((live) => answer(TEACHER, accept, REQUEST, live));
+      expect(published).toEqual([{ to: [STUDENT], event: changed }]);
+      expect(trace.indexOf(`add session for ${STUDENT}`)).toBeLessThan(trace.indexOf('commit'));
+      expect(trace.indexOf('publish')).toBeGreaterThan(trace.indexOf('commit'));
+    },
+  );
+
+  it('the teacher’s request answered by the student reaches the teacher', async () => {
+    requests.set(REQUEST, request({ requestedByUserId: TEACHER }));
+    const { published } = await asUserKind((live) => answer(STUDENT, false, REQUEST, live));
+    expect(published).toEqual([{ to: [TEACHER], event: changed }]);
+  });
+
+  it('a refused request or answer sends nothing: nothing added, the transaction rolled back', async () => {
+    sessions.set(SESSION, session({ status: 'cancelled_by_admin' }));
+    const refusedAsk = await asUserKind((live) => ask(STUDENT, SESSION, live));
+    expect(refusedAsk.error).toBeInstanceOf(DomainError);
+    requests.set(REQUEST, request());
+    const refusedAnswer = await asUserKind((live) => answer(TEACHER, true, REQUEST, live));
+    expect(refusedAnswer.error).toBeInstanceOf(DomainError);
+    expect([...refusedAsk.published, ...refusedAnswer.published]).toEqual([]);
+    expect(trace.some((step) => step.startsWith('add'))).toBe(false);
+  });
+
+  it('a stranger’s request and answer send nothing (NOT_FOUND)', async () => {
+    requests.set(REQUEST, request());
+    const asked = await asUserKind((live) => ask(STRANGER, SESSION, live));
+    const answered = await asUserKind((live) => answer(STRANGER, true, REQUEST, live));
+    expect([asked.error, answered.error].every((error) => error instanceof DomainError)).toBe(true);
+    expect([...asked.published, ...answered.published]).toEqual([]);
+    expect(trace.some((step) => step.startsWith('add'))).toBe(false);
+  });
+
+  it('a transaction that fails after the event was added sends nothing: the list is dropped', async () => {
+    const failing = createCancellationServices({
+      transactions: {
+        run: (work) =>
+          transactions.run(async (open) => {
+            await work(open);
+            throw new Error('the commit failed');
+          }),
+      },
+      idempotency: {
+        run: <T>(_request: IdempotentRequest, effect: (tx: Transaction) => Promise<T>) =>
+          transactions.run(async (open) => {
+            await effect(open);
+            throw new Error('the commit failed');
+          }),
+      },
+      enrollments,
+      store,
+      offer: { offerLocked: async () => offerAnswer },
+      clock: async () => now,
+    });
+    const asked = await asUserKind((live) =>
+      failing.request(
+        { userId: STUDENT },
+        { sessionId: SESSION, reason: 'سفر', idempotencyKey: KEY },
+        log,
+        live,
+      ),
+    );
+    requests.set(REQUEST, request());
+    const answered = await asUserKind((live) =>
+      failing.answer({ userId: TEACHER }, { requestId: REQUEST, accept: false }, log, live),
+    );
+    expect(trace.filter((step) => step.startsWith('add'))).toEqual([
+      `add session for ${TEACHER}`,
+      `add session for ${STUDENT}`,
+    ]);
+    expect([...asked.published, ...answered.published]).toEqual([]);
+  });
+
+  it('a replay of the same request key runs no effect and sends nothing', async () => {
+    const outcomes = new Map<string, unknown>();
+    const replaying = createCancellationServices({
+      transactions,
+      idempotency: {
+        run: async <T>(
+          keyedRequest: IdempotentRequest,
+          effect: (tx: Transaction) => Promise<T>,
+        ) => {
+          if (outcomes.has(keyedRequest.key)) return outcomes.get(keyedRequest.key) as T;
+          const outcome = await transactions.run(effect);
+          outcomes.set(keyedRequest.key, outcome);
+          return outcome;
+        },
+      },
+      enrollments,
+      store,
+      offer: { offerLocked: async () => offerAnswer },
+      clock: async () => now,
+    });
+    const call = (live: LivePublisher) =>
+      replaying.request(
+        { userId: STUDENT },
+        { sessionId: SESSION, reason: 'سفر', idempotencyKey: KEY },
+        log,
+        live,
+      );
+    expect((await asUserKind(call)).published).toEqual([{ to: [TEACHER], event: changed }]);
+    const replay = await asUserKind(call);
+    expect(replay.answered).toMatchObject({ requestId: NEW_REQUEST, status: 'pending' });
+    expect(replay.published).toEqual([]);
+  });
+
+  it('writes no reason in any log line', async () => {
+    sessions.set(SESSION, session({ status: 'cancelled_by_admin' }));
+    await asUserKind((live) => ask(STUDENT, SESSION, live));
+    expect(lines.length).toBeGreaterThan(0);
+    expect(JSON.stringify(lines)).not.toContain('سفر طارئ');
   });
 });

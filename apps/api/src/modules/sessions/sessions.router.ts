@@ -8,8 +8,9 @@
 //
 // T021: `sessions.cancellation.request` (keyed by the kernel's idempotency) and `.answer`, the same
 // kind, one service call each with the caller's own account (contracts/app-surface.md,
-// "`sessions.cancellation`"). T026: `sessions.dispute.raise`, below. T031 and T032: `sessions.remedy`,
-// below.
+// "`sessions.cancellation`"); T066: each hands the service the request's after-commit list
+// (`ctx.live`), which the kind sends once the handler resolves and drops when it throws. T026:
+// `sessions.dispute.raise`, below. T031 and T032: `sessions.remedy`, below.
 import {
   sessionsCancellationAnswerInput,
   sessionsCancellationAnswerOutput,
@@ -119,13 +120,23 @@ export const sessionsRouter = createAppRouter({
       input: sessionsCancellationRequestInput,
       output: sessionsCancellationRequestOutput,
     }).mutation(({ ctx, input }) =>
-      ctx.services.sessions.cancellation.request({ userId: ctx.caller.userId }, input, ctx.log),
+      ctx.services.sessions.cancellation.request(
+        { userId: ctx.caller.userId },
+        input,
+        ctx.log,
+        ctx.live,
+      ),
     ),
     answer: participantProcedure({
       input: sessionsCancellationAnswerInput,
       output: sessionsCancellationAnswerOutput,
     }).mutation(({ ctx, input }) =>
-      ctx.services.sessions.cancellation.answer({ userId: ctx.caller.userId }, input, ctx.log),
+      ctx.services.sessions.cancellation.answer(
+        { userId: ctx.caller.userId },
+        input,
+        ctx.log,
+        ctx.live,
+      ),
     ),
   }),
 

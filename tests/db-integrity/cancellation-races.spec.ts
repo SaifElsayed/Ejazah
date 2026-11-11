@@ -67,6 +67,7 @@ import {
   IdempotencyService,
   type JsonValue,
 } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
+import type { LivePublisher } from '../../apps/api/src/platform/live/live-publisher.js';
 import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
 import {
   createVideoPort,
@@ -357,15 +358,19 @@ async function requested(w: World, userId: string): Promise<string> {
   return requestId;
 }
 
+// T066: the request's after-commit list, which these probes do not read.
+const noLive: LivePublisher = { afterCommit: () => undefined };
+
 const ask = (w: World, userId: string) =>
   services.cancellation.request(
     { userId },
     { sessionId: w.sessionId, reason: 'سفر طارئ', idempotencyKey: `probe-${randomUUID()}` },
     log,
+    noLive,
   );
 
 const answer = (userId: string, requestId: string, accept: boolean) =>
-  services.cancellation.answer({ userId }, { requestId, accept }, log);
+  services.cancellation.answer({ userId }, { requestId, accept }, log, noLive);
 
 /** Resolves once backend `pid` waits on a lock; fails after about four seconds. */
 async function seenWaiting(pid: number): Promise<void> {
