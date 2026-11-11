@@ -37,6 +37,9 @@
 // enrollment `slot_taken`, an occurrence overlapping a session, an open hold or a reservation of
 // either party `time_taken`, and the database's exclusion refusing the insert `time_taken`. A
 // nonexistent enrollment answers `NOT_FOUND`, as every administrator read of an id does.
+// A make-up the closing's case held for which T028's offer finds no free week answers `CONFLICT`
+// `no_free_week` (the note under T061, on B39 Q5 (a)'s precedent): the whole transaction rolled
+// back, the case left open, the offer's own warn line `{ sessionId, enrollmentId, reason }` written.
 //
 // THE COUNT K (step 4): the snapshot's count less the sessions consumed (`done`, `student_no_show`,
 // make-ups included) and less every session owed or settling on its own path: a remedy
@@ -229,6 +232,23 @@ function refused(log: Pick<Logger, 'info'>, ids: RefusalIds, cause: RestoreCause
   );
 }
 
+/**
+ * The note under T061 (B40, the review session on B39 Q5 (a)'s precedent, rule d): a remedy the
+ * closing's case held finds no free week, an additive `CONFLICT` cause, not a ninth restore cause.
+ */
+function noFreeWeek(
+  log: Pick<Logger, 'info'>,
+  ids: RefusalIds & { readonly sessionId: string },
+): DomainError {
+  log.info(
+    { ...ids, errorCode: 'CONFLICT', cause: 'no_free_week' },
+    'An enrollment restore was refused',
+  );
+  return markRefusalLogged(
+    new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: 'no_free_week' }] }),
+  );
+}
+
 function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
   log.info(
     { ...ids, errorCode: 'NOT_FOUND', cause: 'not_found' },
@@ -238,6 +258,8 @@ function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
 }
 
 const SCOPE = 'sessions.restore';
+/** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
+const SECONDS = ':00';
 const positiveWhole = z.int().positive();
 const wholeHours = z.int().nonnegative();
 
@@ -444,9 +466,8 @@ export function createRestore({
     const offered: Offered[] = [];
     for (const { id } of held) {
       const offer = await offers.offerLocked(tx, id, { restoredCase: closingCase.caseId });
-      // Guarded by the offer's own warn line: under these locks only a bug leaves no free week.
-      if (offer === null)
-        throw new Error('restore: a remedy of the closing’s case was not offered');
+      // The note under T061 (B39 Q5 (a)'s precedent): the offer wrote its warn line; nothing is kept.
+      if (offer === null) throw noFreeWeek(log, { ...ids, sessionId: id });
       offered.push(offer);
     }
     const closed = await store.closeCase(tx, closingCase.caseId, {
@@ -481,7 +502,7 @@ export function createRestore({
           sessionId,
           sequenceNumber: week.sequenceNumber,
           localDate: week.scheduledDateLocal,
-          startTimeLocal: week.scheduledStartTimeLocal.slice(0, 5),
+          startTimeLocal: week.scheduledStartTimeLocal.slice(0, -SECONDS.length),
           timezone: week.timezone,
           startsAt: new Date(week.scheduledStartAt).toISOString(),
         };
