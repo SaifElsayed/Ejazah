@@ -88,7 +88,11 @@ interface Probe {
 }
 
 /** A committed enrollment in `status`, one session ending at `endAt`, a text and a document. */
-async function chatOf(status: Status, endAt: string = PAST_END): Promise<Probe> {
+async function chatOf(
+  status: Status,
+  endAt: string = PAST_END,
+  sessionStatus: string = 'scheduled',
+): Promise<Probe> {
   const offer = await makeOffer(db);
   const studentId = await makeUser(db);
   const enrollmentId = await insertRow(db, 'enrollments', {
@@ -107,7 +111,7 @@ async function chatOf(status: Status, endAt: string = PAST_END): Promise<Probe> 
     timezone: 'Africa/Cairo',
     scheduled_start_at: endAt.replace('07:00:00', '06:00:00'),
     scheduled_end_at: endAt,
-    status: 'scheduled',
+    status: sessionStatus,
   });
   const textId = await insertRow(db, 'chat_messages', {
     enrollment_id: enrollmentId,
@@ -331,6 +335,48 @@ describe('the chat purge over the real tables (T039, FR-492, ERD §15 rules 8 an
       messages: 2,
       files: 1,
     });
+  });
+});
+
+describe('the last session is the last disputable one (Q-B1 (b), the owner’s decision of 2026-11-11; FR-473)', () => {
+  /** A further committed session of the probe's enrollment, ending at `endAt`, in `status`. */
+  function sessionOf(probe: Probe, sequence: number, endAt: string, status: string) {
+    return insertRow(db, 'sessions', {
+      enrollment_id: probe.enrollmentId,
+      teacher_user_id: probe.teacherId,
+      student_user_id: probe.studentId,
+      sequence_number: sequence,
+      scheduled_date_local: endAt.slice(0, 10),
+      scheduled_start_time_local: '09:00:00',
+      timezone: 'Africa/Cairo',
+      scheduled_start_at: endAt.replace('07:00:00', '06:00:00'),
+      scheduled_end_at: endAt,
+      status,
+    });
+  }
+
+  it('a cancelled enrollment whose remaining sessions were cancelled is purged by its last disputable end', async () => {
+    const probe = await chatOf('cancelled');
+    await sessionOf(probe, 2, FUTURE_END, 'cancelled_by_admin');
+    await sessionOf(probe, 3, '2099-10-08T07:00:00Z', 'cancelled_by_agreement');
+    expect(await purgeOver().purge.purgeIfDue(probe.enrollmentId)).toEqual({
+      messages: 2,
+      files: 1,
+    });
+  });
+
+  it('an enrollment whose sessions were all cancelled falls back to the latest end of any session', async () => {
+    const past = await chatOf('cancelled', PAST_END, 'cancelled_by_admin');
+    await sessionOf(past, 2, '2026-09-24T07:00:00Z', 'cancelled_by_agreement');
+    expect(await purgeOver().purge.purgeIfDue(past.enrollmentId)).toEqual({
+      messages: 2,
+      files: 1,
+    });
+
+    const future = await chatOf('cancelled', PAST_END, 'cancelled_by_admin');
+    await sessionOf(future, 2, FUTURE_END, 'cancelled_by_agreement');
+    expect(await purgeOver().purge.purgeIfDue(future.enrollmentId)).toBeNull();
+    expect((await messagesOf(future.enrollmentId)).every(({ purged }) => !purged)).toBe(true);
   });
 });
 

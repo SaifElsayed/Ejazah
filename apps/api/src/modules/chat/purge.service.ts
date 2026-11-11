@@ -3,8 +3,10 @@
 // the notes under T039): the chat purge, run daily by `jobs/purge-chat.ts`.
 //
 // WHEN. An enrollment's chat is purged when, read under the enrollment's lock, it is `completed`,
-// `terminated_no_show` or `cancelled` (booking's entry), the latest scheduled end among its sessions
-// (sessions' entry) + `dispute_window_hours` + `chat_retention_days` has passed by the database's
+// `terminated_no_show` or `cancelled` (booking's entry), the latest scheduled end among its
+// disputable sessions, every one but the two cancellations, of any session when none is (sessions'
+// entry; the owner's decision of 2026-11-11 on Q-B1, (b)), + `dispute_window_hours` +
+// `chat_retention_days` has passed by the database's
 // clock (`clockTimestamp`), and no `disputes` row of any kind is open on it, a session dispute, a
 // compensation case or a complaint of the teacher's absence (moderation's
 // `enrollmentsWithOpenMatterAmong`, R-301). An enrollment no ordinary read returns, or with no
@@ -48,6 +50,7 @@ import {
   DISPUTE_WINDOW_SETTING,
   disputeWindowHours,
   sessionsOfEnrollments,
+  UNDISPUTABLE,
 } from '../sessions/index.js';
 import {
   clearPurgedKey,
@@ -85,7 +88,7 @@ export interface ChatPurgeStore {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<ReadonlyMap<string, EnrollmentStatus>>;
-  /** Sessions': each enrollment's latest scheduled end; one with no session is absent. */
+  /** Sessions': each enrollment's last end (Q-B1 (b)); one with no session is absent. */
   lastScheduledEndsAmong(
     tx: Transaction,
     enrollmentIds: readonly string[],
@@ -101,7 +104,20 @@ export interface ChatPurgeStore {
   clearKey(tx: Transaction, file: HeldChatFile): Promise<boolean>;
 }
 
-/** The latest scheduled end of each enrollment's sessions, every session counted. */
+/** The latest end among `rows`, or undefined when there is none. */
+function latestEnd(rows: readonly { readonly endsAt: Date }[]): Date | undefined {
+  let last: Date | undefined;
+  for (const { endsAt } of rows) {
+    if (last === undefined || endsAt > last) last = endsAt;
+  }
+  return last;
+}
+
+/**
+ * Each enrollment's last end (Q-B1 (b)): the latest scheduled end among its disputable sessions,
+ * every one but completion's two cancellations (`UNDISPUTABLE`, FR-473); of any session when none
+ * is disputable.
+ */
 async function lastScheduledEndsAmong(
   tx: Transaction,
   enrollmentIds: readonly string[],
@@ -109,10 +125,9 @@ async function lastScheduledEndsAmong(
   const sessions = await sessionsOfEnrollments(tx, enrollmentIds);
   const ends = new Map<string, Date>();
   for (const [enrollmentId, rows] of sessions) {
-    for (const { endsAt } of rows) {
-      const last = ends.get(enrollmentId);
-      if (last === undefined || endsAt > last) ends.set(enrollmentId, endsAt);
-    }
+    const disputable = rows.filter(({ status }) => !UNDISPUTABLE.has(status));
+    const end = latestEnd(disputable.length > 0 ? disputable : rows);
+    if (end !== undefined) ends.set(enrollmentId, end);
   }
   return ends;
 }
