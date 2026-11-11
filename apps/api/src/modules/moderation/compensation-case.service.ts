@@ -17,8 +17,33 @@
 // another enrollment's with a greater id, when it calls (rule 2, one order, id order in a table).
 // A path that closes a case (Phase 3's resolution) takes the enrollment's lock before it writes, or
 // a call could join a case the same moment it is closed.
+//
+// CLOSING A CASE (T035 of specs/004-sessions; FR-422; research R-312; contracts/kernel.md, the row
+// «closing a case or dispute»; the note under `003:T082`). `closeCase` takes the case's enrollment's
+// row lock first (`lockCasesOf`), the lock every opening and the confirm job take, then writes the
+// closing in one conditional update `WHERE status = 'open'`: `status`, `resolution` (an argument:
+// `compensation_ordered` for a case `cases.resolve` resolves, `enrollment_ended` or
+// `party_suspended` for a complaint T060 decides, none for a dismissal; R-322), `resolution_notes`,
+// `resolved_by_admin_id` and `resolved_at`, together. `resolved_at` is the database's
+// `clock_timestamp()`, read through the kernel's `clockTimestamp` once the lock is held and written
+// in that same update: raw SQL stays in the kernel (R-API-6), so the update cannot call the function
+// itself, and an instant read after the lock is granted is the closing's own, later than any paid
+// event committed while the closing waited. Never the transaction's `now()`, which is its start:
+// a paid event recorded while the closing runs would fall after it, and the covering rule
+// (`jobs/case-cover.ts`) would leave that order without its case once the case is closed. A case
+// no longer open changes no row and is answered null, for the caller to refuse. Nothing here checks
+// completion: closing a case that holds it releases the hold, and `advance-remedies`' completion
+// step completes the enrollment on its next run (the note under T035, F9).
+import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { insertCase, lockCasesOf, openCaseOf } from './compensation-case.repository.js';
+import {
+  type CaseClosingWrite,
+  caseEnrollmentOf,
+  closeOpenCase,
+  insertCase,
+  lockCasesOf,
+  openCaseOf,
+} from './compensation-case.repository.js';
 
 /** Why the system opened a case: the closed list `disputes.reason` takes for a compensation case. */
 export const COMPENSATION_REASONS = [
@@ -83,4 +108,24 @@ export async function openCompensationCase(
   const open = await openCaseOf(tx, enrollmentId, reason);
   if (open !== null) return { caseId: open, opened: false };
   return { caseId: await insertCase(tx, enrollmentId, reason), opened: true };
+}
+
+/** How an administrator closes a case (`closeCase`); the instant is the database's. */
+export type CaseClosing = Omit<CaseClosingWrite, 'resolvedAt'>;
+
+/**
+ * Closes the case on the caller's transaction (CLOSING A CASE above): the enrollment's lock, then
+ * the one conditional update; the closing instant, or null when the case is no longer open (or
+ * there is no such case, which the caller has refused before).
+ */
+export async function closeCase(
+  tx: Transaction,
+  caseId: string,
+  closing: CaseClosing,
+): Promise<Date | null> {
+  const enrollmentId = await caseEnrollmentOf(tx, caseId);
+  if (enrollmentId === null) return null;
+  await lockCasesOf(tx, enrollmentId);
+  const resolvedAt = await clockTimestamp(tx);
+  return (await closeOpenCase(tx, caseId, { ...closing, resolvedAt })) ? resolvedAt : null;
 }

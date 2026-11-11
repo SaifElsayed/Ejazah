@@ -47,6 +47,45 @@ export async function insertCase(
   return id;
 }
 
+/** The enrollment a case of any kind belongs to, with no lock; null for no such row. */
+export async function caseEnrollmentOf(tx: Client, caseId: string): Promise<string | null> {
+  const row = await tx.dispute.findUnique({ where: { id: caseId }, select: { enrollmentId: true } });
+  return row?.enrollmentId ?? null;
+}
+
+/** What closing a case writes, all in one statement (T035 of specs/004-sessions, FR-422). */
+export interface CaseClosingWrite {
+  readonly status: 'resolved' | 'dismissed';
+  readonly resolution: 'compensation_ordered' | 'enrollment_ended' | 'party_suspended' | null;
+  readonly note: string;
+  readonly adminId: string;
+  /** The database's clock, read under the enrollment's lock. */
+  readonly resolvedAt: Date;
+}
+
+/**
+ * Closes the case if it is still `open`, writing `status`, `resolution`, `resolution_notes`,
+ * `resolved_by_admin_id` and `resolved_at` together in one conditional update; whether it moved
+ * the row (false for a case no longer open).
+ */
+export async function closeOpenCase(
+  tx: Client,
+  caseId: string,
+  write: CaseClosingWrite,
+): Promise<boolean> {
+  const { count } = await tx.dispute.updateMany({
+    where: { id: caseId, status: 'open' },
+    data: {
+      status: write.status,
+      resolution: write.resolution,
+      resolutionNotes: write.note,
+      resolvedByAdminId: write.adminId,
+      resolvedAt: write.resolvedAt,
+    },
+  });
+  return count === 1;
+}
+
 /**
  * An enrollment's compensation cases as the covering rule reads them (T082, `jobs/case-cover.ts`),
  * of Phase 2's three reasons only (`COVERING_REASONS`, T004 of specs/004-sessions), every instant
@@ -160,4 +199,169 @@ export async function sessionsEverDisputedAmong(
     select: { sessionId: true },
   });
   return new Set(rows.flatMap(({ sessionId }) => (sessionId === null ? [] : [sessionId])));
+}
+
+// T035 of specs/004-sessions (FR-478, FR-452; research R-312, R-313; admin-surface.md, `cases.*`):
+// the reads of sessions' administrator queue, each on the caller's transaction with no lock.
+
+/** One `disputes` row as `cases.get` and `cases.resolve`/`dismiss` read it. */
+export interface CaseRecord {
+  readonly caseId: string;
+  readonly kind: 'session_dispute' | 'compensation_case' | 'absence_complaint';
+  readonly enrollmentId: string;
+  /** A compensation case's code (`COMPENSATION_REASONS`), or a complaint's text. */
+  readonly reason: string;
+  readonly status: 'open' | 'resolved' | 'dismissed';
+  readonly resolution: string | null;
+  readonly resolutionNotes: string | null;
+  readonly createdAt: Date;
+  readonly resolvedAt: Date | null;
+}
+
+/** A row of any kind by its id, with no lock; null for none. */
+export async function caseRecordOf(tx: Client, caseId: string): Promise<CaseRecord | null> {
+  const row = await tx.dispute.findUnique({
+    where: { id: caseId },
+    select: {
+      id: true,
+      kind: true,
+      enrollmentId: true,
+      reason: true,
+      status: true,
+      resolution: true,
+      resolutionNotes: true,
+      createdAt: true,
+      resolvedAt: true,
+    },
+  });
+  if (row === null) return null;
+  const { id, ...rest } = row;
+  return { caseId: id, ...rest };
+}
+
+/**
+ * Where a page of the queue starts: after `caseId` in its part, `first` (the open
+ * `student_suspended` cases) or the rest.
+ */
+export interface CaseQueuePosition {
+  readonly first: boolean;
+  readonly caseId: string;
+}
+
+export interface CaseQueueQuery {
+  readonly status?: 'open' | 'resolved' | 'dismissed';
+  readonly after?: CaseQueuePosition;
+  readonly limit: number;
+}
+
+/** One row of the queue: a compensation case or a complaint, and the part it is listed in. */
+export interface CaseQueueRow {
+  readonly caseId: string;
+  readonly kind: 'compensation_case' | 'absence_complaint';
+  readonly enrollmentId: string;
+  readonly reason: string;
+  readonly status: 'open' | 'resolved' | 'dismissed';
+  readonly createdAt: Date;
+  readonly resolvedAt: Date | null;
+  readonly first: boolean;
+}
+
+export interface CaseQueuePage {
+  readonly rows: readonly CaseQueueRow[];
+  /** The last row's position, present while more rows follow it. */
+  readonly next?: CaseQueuePosition;
+}
+
+/** The queue's first part: a suspended student's open case, settled fast (R-312). */
+const FIRST_PART = {
+  kind: 'compensation_case',
+  reason: 'student_suspended',
+  status: 'open',
+} as const;
+
+/**
+ * A page of `limit` rows of the queue (admin-surface.md, `cases.list`): every compensation case,
+ * Phase 2's reasons included, and every complaint (`absence_complaint`), of `status` when given; the
+ * open `student_suspended` cases first, then the rest, each part by its time-ordered id (its
+ * opening, the owner's decision of 2026-11-05 on the analysis), after `after`. At most two reads of
+ * `limit` + 1 rows each, keyed on the primary key (no index covers the order; measured in Phase 6,
+ * as the conflict check notes). A session dispute is `disputes.*`' and never listed here.
+ */
+export async function caseQueuePage(tx: Client, query: CaseQueueQuery): Promise<CaseQueuePage> {
+  const { status, after, limit } = query;
+  const readsFirst = (status === undefined || status === 'open') && (after?.first ?? true);
+  const firstRows = readsFirst
+    ? await tx.dispute.findMany({
+        where: { ...FIRST_PART, ...(after === undefined ? {} : { id: { gt: after.caseId } }) },
+        orderBy: { id: 'asc' },
+        take: limit + 1,
+        select: {
+          id: true,
+          kind: true,
+          enrollmentId: true,
+          reason: true,
+          status: true,
+          createdAt: true,
+          resolvedAt: true,
+        },
+      })
+    : [];
+  const restRows =
+    firstRows.length > limit
+      ? []
+      : await tx.dispute.findMany({
+          where: {
+            kind: { in: ['compensation_case', 'absence_complaint'] },
+            ...(status === undefined ? {} : { status }),
+            NOT: FIRST_PART,
+            ...(after === undefined || after.first ? {} : { id: { gt: after.caseId } }),
+          },
+          orderBy: { id: 'asc' },
+          take: limit + 1 - firstRows.length,
+          select: {
+            id: true,
+            kind: true,
+            enrollmentId: true,
+            reason: true,
+            status: true,
+            createdAt: true,
+            resolvedAt: true,
+          },
+        });
+  const rows = [
+    ...firstRows.map((row) => ({ row, first: true })),
+    ...restRows.map((row) => ({ row, first: false })),
+  ].flatMap(({ row: { id, kind, ...rest }, first }) =>
+    kind === 'session_dispute' ? [] : [{ caseId: id, kind, ...rest, first }],
+  );
+  const shown = rows.slice(0, limit);
+  const last = shown.at(-1);
+  return rows.length > limit && last !== undefined
+    ? { rows: shown, next: { first: last.first, caseId: last.caseId } }
+    : { rows: shown };
+}
+
+/** One `student_suspended` case of an enrollment, with its opening and closing instants. */
+export interface SuspensionCase {
+  readonly caseId: string;
+  readonly status: 'open' | 'resolved' | 'dismissed';
+  readonly createdAt: Date;
+  readonly resolvedAt: Date | null;
+}
+
+/**
+ * The enrollment's `student_suspended` cases, oldest first, with no lock: what `cases.get`'s
+ * `covers` reads for a confirmed fault (U1) and an enrollment's end (U2). Bounded by one enrollment,
+ * over `disputes_enrollment_id_idx`.
+ */
+export async function suspensionCasesOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<SuspensionCase[]> {
+  const rows = await tx.dispute.findMany({
+    where: { enrollmentId, kind: 'compensation_case', reason: 'student_suspended' },
+    orderBy: { id: 'asc' },
+    select: { id: true, status: true, createdAt: true, resolvedAt: true },
+  });
+  return rows.map(({ id, ...rest }) => ({ caseId: id, ...rest }));
 }

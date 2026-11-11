@@ -50,7 +50,9 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `party_restricted`, `slot_inactive`, `slot_changed` (the slot's day, local start or zone changed since the enrollment's
   sessions were generated: the owner's decision of 2026-11-05, an eighth cause), `slot_taken`, `time_taken` (an overlap, or a deadlock on the retry too: the sixth analysis, L5)); on the decisions answering the administrator's control inventory (2026-11-05),
   `REMEDY_NOT_OPEN` also on the administrator surface (`cases.openManual` naming a remedy no longer open), and
-  `CONFLICT` with `details.cause` `ruled` or `not_settled` (`sessions.review.revise`, `sessions.review.get`). Every
+  `CONFLICT` with `details.cause` `ruled` or `not_settled` (`sessions.review.revise`, `sessions.review.get`).
+  On B39's conflict check (the owner's decision of 2026-11-11, Q2; B37's precedent), `CONFLICT` with `details.cause`
+  `not_open` on `cases.resolve` and `cases.dismiss` (a case no longer open, T035). Every
   refusal writes nothing. Changed, additively (the owner's decision of 2026-11-06 on the sixth analysis, item 6; T062):
   Phase 1's `RATE_LIMITED` refusal from a rate limit's counter carries the time until its window ends,
   `details: [{ path: 'retryAfterSeconds', code: '<n>' }]`, a positive whole number of seconds as text, read from the

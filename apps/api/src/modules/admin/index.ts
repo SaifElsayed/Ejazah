@@ -21,6 +21,10 @@ import {
 } from '../identity/index.js';
 import { createPaymentsMonitorService } from '../payments/index.js';
 import {
+  type CaseClosingService,
+  type CaseQueue,
+  createCaseClosing,
+  createCaseQueue,
   createCompletion,
   createOutageServices,
   createSessionCancel,
@@ -112,6 +116,12 @@ export interface AdminServices {
    * specs/004-sessions, FR-479): over the bound `EnrollmentSide`'s reads and the settings.
    */
   readonly monitor: SessionsMonitor;
+  /**
+   * The sessions module's compensation-case queue and its closings, composed here for the surface
+   * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
+   * the process's logger.
+   */
+  readonly cases: CaseQueue & CaseClosingService;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -186,6 +196,14 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       settings: dependencies.settings,
       log: dependencies.log,
     }),
+    cases: {
+      ...createCaseQueue({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      ...createCaseClosing({ log: dependencies.log }),
+    },
   };
 }
 

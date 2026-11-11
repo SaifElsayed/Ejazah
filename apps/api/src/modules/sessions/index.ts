@@ -405,3 +405,14 @@ export {
   type RemedyWindows,
   type RemedyWindowsDependencies,
 } from './remedy.service.js';
+/**
+ * T035 (FR-478, FR-422; research R-312): the compensation-case queue's reads (`cases.list`,
+ * `cases.get` and its `covers`) and the closing of a case (`cases.resolve`, `cases.dismiss`), each
+ * on the administrator call's transaction; the `cases` namespace of the administrator surface.
+ */
+export { type CaseQueue, createCaseQueue } from './case-queue.service.js';
+export {
+  type CaseClosingService,
+  createCaseClosing,
+} from './case-closing.service.js';
+export { casesAdminRouter } from './cases-admin.router.js';
