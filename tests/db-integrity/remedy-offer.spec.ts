@@ -409,7 +409,10 @@ describe('P1: checkout.hold against the offer for the same teacher and student (
     return { confirmed, sessionId, slotId, packageId };
   }
 
-  async function race(first: 'hold' | 'offer') {
+  /** Where the first path is held: between its locks, or after all its work, before its commit. */
+  type Stop = 'between its locks' | 'before its commit';
+
+  async function race(first: 'hold' | 'offer', stop: Stop) {
     const { confirmed, sessionId, slotId, packageId } = await racing();
     const holdAt = new Date('2026-12-14T08:00:00Z');
     let release!: () => void;
@@ -420,7 +423,7 @@ describe('P1: checkout.hold against the offer for the same teacher and student (
     const second = new Promise<number>((resolve) => {
       secondPid = resolve;
     });
-    /** The first path, after its first lock, waits for the second to be seen waiting. */
+    /** The first path, held where `stop` says, waits for the second to be seen waiting. */
     const held = async (tx: Transaction, isFirst: boolean) => {
       if (isFirst) {
         release();
@@ -435,7 +438,7 @@ describe('P1: checkout.hold against the offer for the same teacher and student (
         if (first === 'hold') await gate;
         if (first === 'hold') await held(tx, false);
         await remedyOfferStore.lockAccounts(tx, ids);
-        if (first === 'offer') await held(tx, true);
+        if (first === 'offer' && stop === 'between its locks') await held(tx, true);
       },
     };
     const placing = {
@@ -450,37 +453,52 @@ describe('P1: checkout.hold against the offer for the same teacher and student (
           await held(tx, false);
         }
         await holdsStore.lockRows(tx, table, ids);
-        if (table === 'users' && first === 'hold') await held(tx, true);
+        if (table === 'users' && first === 'hold' && stop === 'between its locks') {
+          await held(tx, true);
+        }
       },
     };
     const enrollmentsAtHold = createEnrollmentSide({ settings, now: () => holdAt });
+    /** After all of `path`'s work, before its commit, when it is first and `stop` says so. */
+    const beforeCommit = async <T>(tx: Transaction, path: 'hold' | 'offer', done: T) => {
+      if (first === path && stop === 'before its commit') await held(tx, true);
+      return done;
+    };
     const offering = database.$transaction(
-      (tx) =>
-        createRemedyOffer({
-          enrollments: enrollmentsAtHold,
-          settings,
-          clock: async () => WINDOW_CLOSES,
-          store: offerStore,
-        }).offer(tx, sessionId),
+      async (tx) =>
+        beforeCommit(
+          tx,
+          'offer',
+          await createRemedyOffer({
+            enrollments: enrollmentsAtHold,
+            settings,
+            clock: async () => WINDOW_CLOSES,
+            store: offerStore,
+          }).offer(tx, sessionId),
+        ),
       { timeout: 30_000 },
     );
     const holding = database.$transaction(
-      (tx) =>
-        placeHold(
+      async (tx) =>
+        beforeCommit(
           tx,
-          { userId: confirmed.studentId, gender: FEMALE },
-          { packageId, slotId },
-          {
-            terms: {
-              now: holdAt,
-              ttlMinutes: 10,
-              graceMinutes: 5,
-              leadHours: 24,
-              bufferWeeks: async () => 0,
+          'hold',
+          await placeHold(
+            tx,
+            { userId: confirmed.studentId, gender: FEMALE },
+            { packageId, slotId },
+            {
+              terms: {
+                now: holdAt,
+                ttlMinutes: 10,
+                graceMinutes: 5,
+                leadHours: 24,
+                bufferWeeks: async () => 0,
+              },
+              orders: orderStandingsOf,
+              store: placing,
             },
-            orders: orderStandingsOf,
-            store: placing,
-          },
+          ),
         ),
       { timeout: 30_000 },
     );
@@ -491,10 +509,17 @@ describe('P1: checkout.hold against the offer for the same teacher and student (
     return { offered, placed, sessionId, slotId };
   }
 
-  it.each(['hold', 'offer'] as const)(
-    'the %s first: both end, no deadlock, and the hold’s session and the proposal never on the same time',
-    async (first) => {
-      const { offered, placed, sessionId } = await race(first);
+  // Each order held between its locks and, apart, before its commit (PR #132's review, round 1,
+  // Minor 1), as P4, P5 and P7 are.
+  it.each([
+    ['hold', 'between its locks'],
+    ['hold', 'before its commit'],
+    ['offer', 'between its locks'],
+    ['offer', 'before its commit'],
+  ] as const)(
+    'the %s first, held %s: both end, no deadlock, and the hold’s session and the proposal never on the same time',
+    async (first, stop) => {
+      const { offered, placed, sessionId } = await race(first, stop);
       expect(offered.status).toBe('fulfilled');
       const remedy = await remedyOf(sessionId);
       if (first === 'hold') {

@@ -15,9 +15,11 @@
 //
 // THE SLOT EDIT (`003:T019`, the note under T029). The edit takes the teacher's account, then
 // `lockKey('teacher-slots')`, then the slot; the booking takes both accounts, the same key, then the
-// slots. Staged both ways, the order the database's, as `teacher-slots.spec.ts` stages its races:
-// the booking first, the edit waits and then reads the make-up, its slot in use (`SLOT_IN_USE`); the
-// edit (a deactivation, which asks no use, FR-314) first, the booking waits and then books.
+// slots. Staged both ways, the first path held between its locks (the booking after both accounts,
+// the edit after the teacher's) and, apart, after all its work before its commit, the second seen
+// waiting on a lock, and no «Transaction deadlocked» line written (PR #132's review, round 1, Major
+// 1): the booking first, the edit waits and then reads the make-up, its slot in use (`SLOT_IN_USE`);
+// the edit (a deactivation, which asks no use, FR-314) first, the booking waits and then books.
 //
 // THE FORCED DEADLOCK (L5). A second connection holds a sentinel account row; the booking's insert,
 // through a narrowed store, waits on it; the second connection then asks for the remedy's row the
@@ -399,12 +401,37 @@ async function secondStudentOf(enrollment: Enrollment): Promise<Enrollment> {
   return { ...enrollment, id, studentId };
 }
 
-/** The slots service with every transaction it opens being `tx`. */
-function slotsOn(tx: Transaction) {
+/**
+ * The slots service with every transaction it opens being `tx`. `afterAccountLock`, when given, runs
+ * once just after the edit's lock of the teacher's account (identity's `lockAccount`, the first
+ * `users` row lock of `003:T019`'s update), so the edit is held between its locks.
+ */
+function slotsOn(tx: Transaction, afterAccountLock?: () => Promise<void>) {
+  let stopped = false;
+  const locking =
+    afterAccountLock === undefined
+      ? tx
+      : (new Proxy(tx, {
+          get: (target, member) => {
+            const value: unknown = Reflect.get(target, member);
+            if (typeof value !== 'function') return value;
+            const bound = (value as (...args: unknown[]) => unknown).bind(target);
+            if (member !== '$queryRaw') return bound;
+            return async (strings: TemplateStringsArray, ...values: unknown[]) => {
+              const rows = await (bound(strings, ...values) as Promise<unknown>);
+              const text = strings.join('?');
+              if (!stopped && text.includes('FROM users') && text.includes('FOR UPDATE')) {
+                stopped = true;
+                await afterAccountLock();
+              }
+              return rows;
+            };
+          },
+        }) as Transaction);
   const on = new Proxy(database, {
     get: (target, member) =>
       member === '$transaction'
-        ? (work: (inner: Transaction) => Promise<unknown>) => work(tx)
+        ? (work: (inner: Transaction) => Promise<unknown>) => work(locking)
         : Reflect.get(target, member),
   }) as Database;
   return createCatalogServices({
@@ -414,100 +441,139 @@ function slotsOn(tx: Transaction) {
   }).slots;
 }
 
+/** Where a probe holds its first path: between its locks, or after all its work, before its commit. */
+type Stop = 'between its locks' | 'before its commit';
+const STOPS: readonly Stop[] = ['between its locks', 'before its commit'];
+
+/** The booking's T002 deadlock lines (L5): a deadlock retried away still writes one. */
+const deadlockLines = (lines: readonly { message: unknown }[]) =>
+  lines.filter(({ message }) => message === 'Transaction deadlocked');
+
+// Each path held between its locks (the booking just after both accounts, the edit just after the
+// teacher's account) and before its commit, in both orders, the second seen waiting on a lock: a lock
+// taken out of kernel.md's order deadlocks and fails the probe, a retried deadlock by its line (PR
+// #132's review, round 1, Major 1; PR #131's Major 1).
 describe("the booking against `003:T019`'s slot edit (the note under T029; 003:T026 nit 5)", () => {
-  it('the booking first: the edit waits, then finds the slot in use (SLOT_IN_USE)', async () => {
-    const enrollment = await confirmed();
-    const { sessionId, remedyId } = await owedOn(enrollment);
-    const holding = signal();
-    const gate = signal();
-    let bookingPid = 0;
-    let editPid = 0;
-    const store: MakeupBookingStore = {
-      ...makeupBookingStore,
-      recordEvents: async (tx, events) => {
-        await makeupBookingStore.recordEvents(tx, events);
+  it.each(STOPS)(
+    'the booking first, held %s: the edit waits, then finds the slot in use (SLOT_IN_USE), no deadlock line',
+    async (stop) => {
+      const enrollment = await confirmed();
+      const { sessionId, remedyId } = await owedOn(enrollment);
+      const holding = signal();
+      const gate = signal();
+      let bookingPid = 0;
+      let editPid = 0;
+      const hold = async (tx: Transaction) => {
         bookingPid = await pidOf(tx);
         holding.give();
         await gate.given;
-      },
-    };
-    const booking = bookingOver(store).book({ remedyId, ...PROPOSAL });
-    let editing: Promise<unknown> | undefined;
-    try {
-      await Promise.race([holding.given, booking]);
-      editing = database.$transaction(async (tx) => {
-        editPid = await pidOf(tx);
-        return slotsOn(tx).update(enrollment.teacherId, {
-          slotId: enrollment.slotId,
-          startTimeLocal: '10:00',
-        });
-      }, OPTIONS);
-      await seenWaiting(() => editPid);
-    } finally {
-      gate.give();
-    }
-    const [booked, edited] = await Promise.allSettled([booking, editing]);
-    expect(bookingPid).not.toBe(0);
-    expect(booked.status).toBe('fulfilled');
-    expect(edited.status).toBe('rejected');
-    expect(edited.status === 'rejected' && (edited.reason as DomainError).code).toBe('SLOT_IN_USE');
-    expect(await committed(remedyId, sessionId)).toEqual({
-      status: 'booked',
-      decided: true,
-      makeups: 1,
-      events: ['makeup_booked'],
-    });
-    const slot = await db.query<{ start: string }>(
-      'SELECT start_time_local::text AS start FROM availability_slots WHERE id = $1::uuid',
-      [enrollment.slotId],
-    );
-    expect(slot.rows[0]?.start).toBe('09:00:00');
-  });
-
-  it('the edit first (a deactivation, which asks no use): the booking waits, then books', async () => {
-    const enrollment = await confirmed();
-    const { sessionId, remedyId } = await owedOn(enrollment);
-    const held = signal();
-    const gate = signal();
-    let bookingPid = 0;
-    const editing = database.$transaction(async (tx) => {
-      await slotsOn(tx).update(enrollment.teacherId, {
-        slotId: enrollment.slotId,
-        isActive: false,
-      });
-      held.give();
-      await gate.given;
-    }, OPTIONS);
-    let booking: Promise<unknown> | undefined;
-    try {
-      await Promise.race([held.given, editing]);
-      const store: MakeupBookingStore = {
-        ...makeupBookingStore,
-        remedyToBook: async (tx, id) => {
-          if (bookingPid === 0) bookingPid = await pidOf(tx);
-          return makeupBookingStore.remedyToBook(tx, id);
-        },
       };
-      booking = bookingOver(store).book({ remedyId, ...PROPOSAL });
-      await seenWaiting(() => bookingPid);
-    } finally {
-      gate.give();
-    }
-    const [edited, booked] = await Promise.allSettled([editing, booking]);
-    expect(edited.status).toBe('fulfilled');
-    expect(booked.status).toBe('fulfilled');
-    expect(await committed(remedyId, sessionId)).toEqual({
-      status: 'booked',
-      decided: true,
-      makeups: 1,
-      events: ['makeup_booked'],
-    });
-    const slot = await db.query<{ active: boolean; start: string }>(
-      'SELECT is_active AS active, start_time_local::text AS start FROM availability_slots WHERE id = $1::uuid',
-      [enrollment.slotId],
-    );
-    expect(slot.rows[0]).toEqual({ active: false, start: '09:00:00' });
-  });
+      const store: MakeupBookingStore =
+        stop === 'between its locks'
+          ? {
+              ...makeupBookingStore,
+              lockAccounts: async (tx, ids) => {
+                await makeupBookingStore.lockAccounts(tx, ids);
+                if (bookingPid === 0) await hold(tx);
+              },
+            }
+          : {
+              ...makeupBookingStore,
+              recordEvents: async (tx, events) => {
+                await makeupBookingStore.recordEvents(tx, events);
+                if (bookingPid === 0) await hold(tx);
+              },
+            };
+      const { lines, log } = recorder();
+      const booking = bookingOver(store, log).book({ remedyId, ...PROPOSAL });
+      let editing: Promise<unknown> | undefined;
+      try {
+        await Promise.race([holding.given, booking]);
+        editing = database.$transaction(async (tx) => {
+          editPid = await pidOf(tx);
+          return slotsOn(tx).update(enrollment.teacherId, {
+            slotId: enrollment.slotId,
+            startTimeLocal: '10:00',
+          });
+        }, OPTIONS);
+        await seenWaiting(() => editPid);
+      } finally {
+        gate.give();
+      }
+      const [booked, edited] = await Promise.allSettled([booking, editing]);
+      expect(bookingPid).not.toBe(0);
+      expect(booked.status).toBe('fulfilled');
+      expect(edited.status).toBe('rejected');
+      expect(edited.status === 'rejected' && (edited.reason as DomainError).code).toBe(
+        'SLOT_IN_USE',
+      );
+      expect(deadlockLines(lines)).toEqual([]);
+      expect(await committed(remedyId, sessionId)).toEqual({
+        status: 'booked',
+        decided: true,
+        makeups: 1,
+        events: ['makeup_booked'],
+      });
+      const slot = await db.query<{ start: string }>(
+        'SELECT start_time_local::text AS start FROM availability_slots WHERE id = $1::uuid',
+        [enrollment.slotId],
+      );
+      expect(slot.rows[0]?.start).toBe('09:00:00');
+    },
+  );
+
+  it.each(STOPS)(
+    'the edit first (a deactivation, which asks no use), held %s: the booking waits, then books, no deadlock line',
+    async (stop) => {
+      const enrollment = await confirmed();
+      const { sessionId, remedyId } = await owedOn(enrollment);
+      const held = signal();
+      const gate = signal();
+      let bookingPid = 0;
+      const hold = async () => {
+        held.give();
+        await gate.given;
+      };
+      const editing = database.$transaction(async (tx) => {
+        await slotsOn(tx, stop === 'between its locks' ? hold : undefined).update(
+          enrollment.teacherId,
+          { slotId: enrollment.slotId, isActive: false },
+        );
+        if (stop === 'before its commit') await hold();
+      }, OPTIONS);
+      const { lines, log } = recorder();
+      let booking: Promise<unknown> | undefined;
+      try {
+        await Promise.race([held.given, editing]);
+        const store: MakeupBookingStore = {
+          ...makeupBookingStore,
+          remedyToBook: async (tx, id) => {
+            if (bookingPid === 0) bookingPid = await pidOf(tx);
+            return makeupBookingStore.remedyToBook(tx, id);
+          },
+        };
+        booking = bookingOver(store, log).book({ remedyId, ...PROPOSAL });
+        await seenWaiting(() => bookingPid);
+      } finally {
+        gate.give();
+      }
+      const [edited, booked] = await Promise.allSettled([editing, booking]);
+      expect(edited.status).toBe('fulfilled');
+      expect(booked.status).toBe('fulfilled');
+      expect(deadlockLines(lines)).toEqual([]);
+      expect(await committed(remedyId, sessionId)).toEqual({
+        status: 'booked',
+        decided: true,
+        makeups: 1,
+        events: ['makeup_booked'],
+      });
+      const slot = await db.query<{ active: boolean; start: string }>(
+        'SELECT is_active AS active, start_time_local::text AS start FROM availability_slots WHERE id = $1::uuid',
+        [enrollment.slotId],
+      );
+      expect(slot.rows[0]).toEqual({ active: false, start: '09:00:00' });
+    },
+  );
 });
 
 describe('a forced deadlock on the booking (T029, L5, kernel.md runRetryingDeadlockOnce)', () => {
