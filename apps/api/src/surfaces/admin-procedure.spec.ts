@@ -21,6 +21,8 @@ import {
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import { DomainError } from '../platform/errors/domain-error.js';
+import type { LiveBus, LiveMessage } from '../platform/live/live-bus.js';
+import type { LiveRegistry } from '../platform/live/live-registry.js';
 import { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../platform/logging/logger.js';
 import { createAdminContext } from './context.js';
@@ -613,5 +615,65 @@ describe('the administrator kind retries a declared deadlock once (T061, L5)', (
     });
     expect(database.opened).toBe(1);
     expect(database.committed).toEqual([]);
+  });
+});
+
+// B40's fix round (found by B40a's preparation; the review session's ruling under rule 5): a declared
+// deadlock retry reruns the whole transaction, so what the first attempt queued for the live channel
+// is dropped with its rollback; only the committed attempt's events are sent (T063, T061).
+describe('a declared deadlock retry sends only the committed attempt’s live events (T061, T063)', () => {
+  const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000000e1';
+  const PARTY = '0199d0a0-0000-7000-8000-0000000000e2';
+
+  const deadlock = () =>
+    Object.assign(new Error('deadlock detected'), {
+      name: 'DriverAdapterError',
+      cause: { originalCode: '40P01', originalMessage: 'deadlock detected' },
+    });
+
+  it('a deadlock at a statement, retried and committed, publishes the event once', async () => {
+    const database = new FakeDatabase();
+    const published: LiveMessage[] = [];
+    const bus: LiveBus = {
+      publish: (message) => void published.push(message),
+      subscribe: () => () => undefined,
+    };
+    let failures = 1;
+    const router = createAdminRouter({
+      restore: adminProcedure({
+        input: z.object({ enrollmentId: z.string() }),
+        output: z.string(),
+        deadlock: {
+          operation: 'sessions.restore',
+          ids: (input: { enrollmentId: string }) => ({ enrollmentId: input.enrollmentId }),
+          refusal: () => new DomainError('RESTORE_REFUSED'),
+        },
+      }).mutation(({ input, ctx }) => {
+        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.enrollmentId });
+        ctx.audit.record(approval);
+        ctx.live.afterCommit([PARTY], { type: 'enrollment', enrollmentId: input.enrollmentId });
+        if (failures > 0) {
+          failures -= 1;
+          throw deadlock();
+        }
+        return 'restored';
+      }),
+    });
+    const context = createAdminContext({
+      session: { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: true },
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: { transactions: database, auditWriter: writerOver(database) },
+      services: unusedAdminServices,
+      rateLimiter: limiterAt(1_000),
+      clientAddress: '203.0.113.7',
+      live: { bus, registry: {} as LiveRegistry },
+    });
+
+    expect(await createAdminCallerFactory(router)(context).restore({ enrollmentId: ENROLLMENT })).toBe(
+      'restored',
+    );
+    expect(published).toEqual([
+      { to: [PARTY], event: { type: 'enrollment', enrollmentId: ENROLLMENT } },
+    ]);
   });
 });

@@ -708,6 +708,9 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
             ids: deadlock.ids(called as TInOut),
           });
     const result = await run(async (tx) => {
+      // Each attempt starts with an empty after-commit list: a declared deadlock's retry reruns the
+      // whole transaction, so what a rolled-back attempt queued is never sent (T061, T063).
+      ctx.live.drop();
       // A service handed only `tx` reaches this request's after-commit list through it (T063).
       const unbind = bindToTransaction(tx, ctx.live);
       try {
