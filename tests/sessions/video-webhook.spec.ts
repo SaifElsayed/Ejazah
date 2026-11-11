@@ -16,14 +16,21 @@
 //   - an event for no session (an unknown id, a room name that is no id) and an identity that is
 //     neither participant answer 200, write nothing and are reported; a non-party's join writes one
 //     warn line of exactly `{ sessionId, eventId }` (the note under T012 of 2026-11-07);
-//   - nothing of the event's identity, connection or signature is in any log line.
+//   - nothing of the event's identity, connection or signature is in any log line;
+//   - T065 (app-surface.md, the `session` event; research R-324, item 6): a recorded event publishes
+//     one `session` `{ sessionId, enrollmentId }` through the bus once its insert has committed, a
+//     participant's join or leave to the other participant and the room's end to both, never to
+//     anyone else; nothing for a replay, an event not recorded, an event that is not attendance or a
+//     transaction rolled back; a publish that fails is one warn line of the deletion's shape
+//     (`deletion.service.ts`, `#endLiveStreams`), no payload, never retried, and the answer 200.
 //
 // The planted rows are written through the integrity harness's builders as the application role.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import type { LiveEvent } from '@ijazah/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -37,8 +44,13 @@ import {
 } from '../../apps/api/src/platform/db/prisma.repository';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
 import { transactionsOver } from '../../apps/api/src/platform/db/transaction.repository';
+import type { LiveBus, LiveMessage } from '../../apps/api/src/platform/live/live-bus';
 import { createLogger } from '../../apps/api/src/platform/logging/logger';
-import { createVideoPort, type VideoConfig } from '../../apps/api/src/platform/ports/video/index';
+import {
+  createVideoPort,
+  standInVideoWebhookSecret,
+  type VideoConfig,
+} from '../../apps/api/src/platform/ports/video/index';
 import { connectAsApplication, type Db, makeSession, makeUser } from '../db-integrity/harness';
 import {
   VIDEO_FORGERIES,
@@ -66,6 +78,27 @@ let stand: VideoStandIn;
 const lines: string[] = [];
 const reported: Error[] = [];
 
+/**
+ * T065: what the route's transactions and its bus did, in order: `commit` once a transaction has
+ * committed, `rollback` once one has not, `publish` at each publish.
+ */
+const steps: string[] = [];
+/** T065: every message the route published, as the bus received it. */
+const published: LiveMessage[] = [];
+/** T065: what the bus does with a message; it fails on demand. */
+let publishing: (message: LiveMessage) => void;
+/** T065: when set, each transaction throws once its work has resolved, so nothing commits. */
+let refuseCommit = false;
+
+const bus: LiveBus = {
+  publish: (message) => {
+    steps.push('publish');
+    published.push(message);
+    publishing(message);
+  },
+  subscribe: () => () => undefined,
+};
+
 beforeAll(async () => {
   db = await connectAsApplication();
   database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
@@ -73,12 +106,29 @@ beforeAll(async () => {
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 30_000,
   });
+  const committing = transactionsOver(database);
   const route = createVideoWebhookRoute({
-    transactions: transactionsOver(database),
+    transactions: {
+      run: async (work) => {
+        try {
+          const answer = await committing.run(async (tx) => {
+            const done = await work(tx);
+            if (refuseCommit) throw new Error('the spec refuses the commit');
+            return done;
+          });
+          steps.push('commit');
+          return answer;
+        } catch (error) {
+          steps.push('rollback');
+          throw error;
+        }
+      },
+    },
     video: createVideoPort(CONFIG),
     log: createLogger({ level: 'info', destination: { write: (line) => void lines.push(line) } }),
     maxBodyBytes: 1_048_576,
     report: (error) => void reported.push(error),
+    live: bus,
   });
   server = createServer((request, response) => {
     const url = request.url ?? '/';
@@ -106,6 +156,10 @@ afterAll(async () => {
 beforeEach(() => {
   lines.length = 0;
   reported.length = 0;
+  steps.length = 0;
+  published.length = 0;
+  publishing = () => undefined;
+  refuseCommit = false;
 });
 
 interface Row {
@@ -354,5 +408,190 @@ describe('an event the webhook does not record answers 200, writes nothing and i
     expect(reported).toHaveLength(1);
     expect(parsed().map((line) => [line.level, line.reason])).toEqual([['warn', 'not_a_party']]);
     expectNothingLogged(stranger, session.sessionId, left.providerEventId);
+  });
+});
+
+// T065: the `session` signal after the insert commits (app-surface.md, `LiveEvent`'s `session` row;
+// research R-324, items 5 and 6). R-304's mapping: `participant_joined` is `joined`,
+// `participant_left` and `participant_connection_aborted` are both `left` (the adapter's, its own
+// spec's), `room_finished` is `room_ended`; so a stored type's recipients are the producers' own.
+describe('a recorded event signals the session over the live bus once committed (T065)', () => {
+  type Session = Awaited<ReturnType<typeof makeSession>>;
+
+  const signal = (session: Session): LiveEvent => ({
+    type: 'session',
+    sessionId: session.sessionId,
+    enrollmentId: session.enrollmentId,
+  });
+
+  /** Every recipient the bus was handed is one of the session's two parties (R-GENDER-1). */
+  function expectOnlyParties(session: Session): void {
+    for (const { to } of published) {
+      for (const userId of to) expect([session.studentId, session.teacherId]).toContain(userId);
+    }
+  }
+
+  it('a join by the student: one signal to the teacher alone, after the commit', async () => {
+    const session = await makeSession(db);
+    const joined = stand.joined(session.sessionId, session.studentId, { at: START });
+
+    expect(await stand.deliver(joined)).toBe(200);
+
+    expect(published).toEqual([{ to: [session.teacherId], event: signal(session) }]);
+    expect(steps).toEqual(['commit', 'publish']);
+    expect(lines).toEqual([]);
+  });
+
+  it('a join by the teacher: one signal to the student alone', async () => {
+    const session = await makeSession(db);
+
+    expect(
+      await stand.deliver(stand.joined(session.sessionId, session.teacherId, { at: START })),
+    ).toBe(200);
+
+    expect(published).toEqual([{ to: [session.studentId], event: signal(session) }]);
+  });
+
+  it('a leave (`participant_left` or `participant_connection_aborted`): one signal to the other participant', async () => {
+    const session = await makeSession(db);
+    const left = stand.left(session.sessionId, session.teacherId, { at: MIDDLE });
+
+    expect(await stand.deliver(left)).toBe(200);
+
+    expect(published).toEqual([{ to: [session.studentId], event: signal(session) }]);
+    expect(steps).toEqual(['commit', 'publish']);
+  });
+
+  it('the room’s end: one signal to both participants', async () => {
+    const session = await makeSession(db);
+
+    expect(await stand.deliver(stand.roomEnded(session.sessionId, { at: END }))).toBe(200);
+
+    expect(published).toHaveLength(1);
+    expect(published[0]?.event).toEqual(signal(session));
+    expect([...(published[0]?.to ?? [])].sort()).toEqual(
+      [session.studentId, session.teacherId].sort(),
+    );
+    expect(steps).toEqual(['commit', 'publish']);
+  });
+
+  it('one signal per recorded event: a sequence of four publishes four, each after its own commit', async () => {
+    const session = await makeSession(db);
+    const events = [
+      stand.joined(session.sessionId, session.studentId, { at: START, connection: 'PA_s' }),
+      stand.joined(session.sessionId, session.teacherId, { at: START, connection: 'PA_t' }),
+      stand.left(session.sessionId, session.studentId, { at: MIDDLE, connection: 'PA_s' }),
+      stand.roomEnded(session.sessionId, { at: END }),
+    ];
+
+    expect(await stand.deliverInOrder(events)).toEqual([200, 200, 200, 200]);
+
+    expect(published.map(({ to }) => [...to].sort())).toEqual([
+      [session.teacherId],
+      [session.studentId],
+      [session.teacherId],
+      [session.studentId, session.teacherId].sort(),
+    ]);
+    expect(steps).toEqual(Array.from({ length: 4 }, () => ['commit', 'publish']).flat());
+    expectOnlyParties(session);
+  });
+
+  it('a replay publishes nothing: one event delivered five times, one signal', async () => {
+    const session = await makeSession(db);
+    const joined = stand.joined(session.sessionId, session.studentId, { at: START });
+
+    expect(await stand.deliverTimes(joined, 5)).toEqual([200, 200, 200, 200, 200]);
+
+    expect(published).toEqual([{ to: [session.teacherId], event: signal(session) }]);
+    expect(steps).toEqual(['commit', 'publish', 'rollback', 'rollback', 'rollback', 'rollback']);
+  });
+
+  it('a rolled-back insert publishes nothing and answers 500, so the provider retries', async () => {
+    const session = await makeSession(db);
+    refuseCommit = true;
+    const joined = stand.joined(session.sessionId, session.studentId, { at: START });
+
+    expect(await stand.deliver(joined)).toBe(500);
+
+    expect(published).toEqual([]);
+    expect(steps).toEqual(['rollback']);
+    expect(await rowsOf(session.sessionId, [joined])).toEqual([]);
+  });
+
+  it('nothing for an event not recorded: no session, a room that is no session, or someone not a party', async () => {
+    const session = await makeSession(db);
+    const stranger = await makeUser(db);
+    const events = [
+      stand.joined(randomUUID(), stranger, { at: START }),
+      stand.joined('not-a-session', stranger, { at: START }),
+      stand.joined(session.sessionId, stranger, { at: START }),
+      stand.left(session.sessionId, stranger, { at: END }),
+    ];
+
+    expect(await stand.deliverInOrder(events)).toEqual([200, 200, 200, 200]);
+
+    expect(published).toEqual([]);
+    expect(steps).not.toContain('publish');
+  });
+
+  it('nothing for a signed event that is not attendance', async () => {
+    const session = await makeSession(db);
+    const rawBody = Buffer.from(
+      JSON.stringify({
+        id: `fake_vev_${randomUUID()}`,
+        type: 'track_published',
+        session: session.sessionId,
+      }),
+    );
+    const signature = createHmac('sha256', standInVideoWebhookSecret(CONFIG))
+      .update(rawBody)
+      .digest('hex');
+
+    expect(
+      await stand.deliver({
+        rawBody,
+        headers: { 'x-fake-signature': signature },
+        providerEventId: 'not attendance',
+      }),
+    ).toBe(200);
+
+    expect(published).toEqual([]);
+    expect(steps).toEqual([]);
+  });
+
+  it('a publish that fails: recorded, answered 200, one warn line of the event’s type and the error’s name, never retried', async () => {
+    const session = await makeSession(db);
+    publishing = () => {
+      throw new TypeError(`no stream for ${session.teacherId}`);
+    };
+    const joined = stand.joined(session.sessionId, session.studentId, {
+      at: START,
+      connection: 'PA_unpublished',
+    });
+
+    expect(await stand.deliver(joined)).toBe(200);
+
+    expect((await rowsOf(session.sessionId)).map((row) => row.provider_event_id)).toEqual([
+      joined.providerEventId,
+    ]);
+    expect(published).toHaveLength(1);
+    const warnings = parsed().filter((line) => line.level === 'warn');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ eventType: 'session', errorName: 'TypeError' });
+    expect(
+      Object.keys(warnings[0] ?? {})
+        .filter((key) => !PINO_FIELDS.includes(key))
+        .sort(),
+    ).toEqual(['errorName', 'eventType']);
+    expect(lines).toHaveLength(1);
+    expectNothingLogged(
+      session.sessionId,
+      session.enrollmentId,
+      session.studentId,
+      session.teacherId,
+      'PA_unpublished',
+      joined.providerEventId,
+    );
+    expect(reported).toEqual([]);
   });
 });

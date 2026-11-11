@@ -14,7 +14,11 @@
 //     nothing; anyone not one of the two parties is answered exactly as a nonexistent session;
 //   - R-SESS-5's CI test (SC-412's token part): a teacher suspended, whose approval is revoked, or
 //     banned through identity's real `StandingService` gets no token for a session in its join
-//     period or in progress, and the stand-in is asked for no room and no token.
+//     period or in progress, and the stand-in is asked for no room and no token;
+//   - T065: `sessions.get`'s `counterpartyInRoom` from the recorded participant events by R-304's
+//     per-connection rule (a `joined` connection of the counterparty with no later `left` for its
+//     `connection_ref` and no `room_ended` after it), so events out of order, recorded twice, on two
+//     connections, or around a room's end do not mislead it; the caller's own events never count.
 //
 // The rows are committed, each probe writing parents of its own, since the services open their own
 // transactions. Every connection is the application role, as `session-locks.spec.ts` stages a wait.
@@ -476,4 +480,145 @@ describe('R-SESS-5: a restricted teacher gets no token (FR-482, SC-412)', () => 
       }
     });
   }
+});
+
+// T065 (app-surface.md, `sessions.get`; research R-304, R-324 item 6): the counterparty's presence,
+// read by `sessions.get` from the rows the webhook records, as it records them (R-304's table). Each
+// case is one world's session, read by the student about the teacher unless it says otherwise. A
+// tie to the second is the attendance rules' (`attendance.rules.ts`, `connectionSpans`): a leave or a
+// room's end in the same second as a join ends that connection.
+describe('sessions.get: counterpartyInRoom by the per-connection rule (T065)', () => {
+  /** The provider's instants the cases use, a minute apart. */
+  const FIRST = new Date('2026-11-11T09:00:00.000Z');
+  const at = (minute: number) => new Date(addMinutes(FIRST, minute));
+
+  type World = Awaited<ReturnType<typeof sessionWorld>>;
+
+  /** One recorded event of the world's session, as the webhook writes it. */
+  async function recorded(
+    world: World,
+    kind: 'joined' | 'left' | 'room_ended',
+    when: Date,
+    who?: { readonly userId: string; readonly connection: string },
+  ): Promise<void> {
+    await insertRow(db, 'session_participant_events', {
+      session_id: world.sessionId,
+      user_id: who?.userId ?? null,
+      event_type: kind,
+      connection_ref: who?.connection ?? null,
+      occurred_at: when.toISOString(),
+      provider_event_id: `spec_t065_${randomUUID()}`,
+    });
+  }
+
+  /** What `userId` reads of the other party's presence. */
+  async function inRoomSeenBy(world: World, userId: string): Promise<boolean> {
+    const services = servicesWith(recordedVideo());
+    return (await services.get({ userId }, { sessionId: world.sessionId }, log)).counterpartyInRoom;
+  }
+
+  it('no event: not in the room, and nothing asked of the provider', async () => {
+    const world = await sessionWorld(5);
+    const video = recordedVideo();
+    const seen = await servicesWith(video).get(
+      { userId: world.studentId },
+      { sessionId: world.sessionId },
+      log,
+    );
+    expect(seen.counterpartyInRoom).toBe(false);
+    expect(video.calls).toEqual([]);
+  });
+
+  it('a join with no leave: in the room for the other party; the caller’s own join never counts', async () => {
+    const world = await sessionWorld(5);
+    const teacher = { userId: world.teacherId, connection: 'PA_teacher_1' };
+    await recorded(world, 'joined', at(0), teacher);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(true);
+    expect(await inRoomSeenBy(world, world.teacherId)).toBe(false);
+  });
+
+  it('out of order: a leave recorded before its join, later by the provider’s clock, ends it', async () => {
+    const world = await sessionWorld(5);
+    const teacher = { userId: world.teacherId, connection: 'PA_teacher_1' };
+    await recorded(world, 'left', at(10), teacher);
+    await recorded(world, 'joined', at(0), teacher);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(false);
+  });
+
+  it('out of order: a leave earlier than the join by the provider’s clock does not end it', async () => {
+    const world = await sessionWorld(5);
+    const teacher = { userId: world.teacherId, connection: 'PA_teacher_1' };
+    await recorded(world, 'joined', at(10), teacher);
+    await recorded(world, 'left', at(0), teacher);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(true);
+  });
+
+  it('duplicates: a join recorded twice and its one leave, or a leave recorded twice, leave no one in', async () => {
+    const world = await sessionWorld(5);
+    const teacher = { userId: world.teacherId, connection: 'PA_teacher_1' };
+    await recorded(world, 'joined', at(0), teacher);
+    await recorded(world, 'joined', at(0), teacher);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(true);
+    await recorded(world, 'left', at(10), teacher);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(false);
+    await recorded(world, 'left', at(10), teacher);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(false);
+  });
+
+  it('per connection: of two connections one left is still in; both left is out', async () => {
+    const world = await sessionWorld(5);
+    const first = { userId: world.teacherId, connection: 'PA_teacher_1' };
+    const second = { userId: world.teacherId, connection: 'PA_teacher_2' };
+    await recorded(world, 'joined', at(0), first);
+    await recorded(world, 'joined', at(5), second);
+    // The old connection's leave arriving after the new connection's join (R-304's replacement).
+    await recorded(world, 'left', at(6), first);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(true);
+    await recorded(world, 'left', at(20), second);
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(false);
+  });
+
+  it('a leave by the caller on a connection of the same name ends nothing of the counterparty’s', async () => {
+    const world = await sessionWorld(5);
+    await recorded(world, 'joined', at(0), { userId: world.teacherId, connection: 'PA_same' });
+    await recorded(world, 'joined', at(1), { userId: world.studentId, connection: 'PA_same' });
+    await recorded(world, 'left', at(2), { userId: world.studentId, connection: 'PA_same' });
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(true);
+    expect(await inRoomSeenBy(world, world.teacherId)).toBe(false);
+  });
+
+  it('a room’s end after the join: out of the room, for both parties', async () => {
+    const world = await sessionWorld(5);
+    await recorded(world, 'joined', at(0), { userId: world.teacherId, connection: 'PA_teacher_1' });
+    await recorded(world, 'joined', at(1), { userId: world.studentId, connection: 'PA_student_1' });
+    await recorded(world, 'room_ended', at(30));
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(false);
+    expect(await inRoomSeenBy(world, world.teacherId)).toBe(false);
+  });
+
+  it('a join after a room’s end (the room created again): in the room; the join before it is not', async () => {
+    const world = await sessionWorld(5);
+    const teacher = { userId: world.teacherId, connection: 'PA_teacher_1' };
+    await recorded(world, 'joined', at(0), teacher);
+    await recorded(world, 'room_ended', at(10));
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(false);
+    await recorded(world, 'joined', at(15), {
+      userId: world.teacherId,
+      connection: 'PA_teacher_2',
+    });
+    expect(await inRoomSeenBy(world, world.studentId)).toBe(true);
+  });
+
+  it('a tie to the second: a leave or a room’s end in the join’s own second ends it', async () => {
+    const leaving = await sessionWorld(5);
+    const teacher = { userId: leaving.teacherId, connection: 'PA_teacher_1' };
+    await recorded(leaving, 'joined', at(0), teacher);
+    await recorded(leaving, 'left', at(0), teacher);
+    expect(await inRoomSeenBy(leaving, leaving.studentId)).toBe(false);
+
+    const ending = await sessionWorld(5);
+    await recorded(ending, 'joined', at(0), { userId: ending.teacherId, connection: 'PA_one' });
+    await recorded(ending, 'room_ended', at(0));
+    expect(await inRoomSeenBy(ending, ending.studentId)).toBe(false);
+  });
 });

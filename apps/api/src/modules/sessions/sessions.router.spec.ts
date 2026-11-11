@@ -98,6 +98,8 @@ const got = {
   status: 'scheduled' as const,
   counterparty: { displayName: 'أحمد سالم', deleted: false },
   join: { opensAt: '2026-11-12T06:45:00.000Z', closesAt: '2026-11-12T08:00:00.000Z' },
+  // T065: required by the output schema.
+  counterpartyInRoom: false,
 };
 
 const joined = {

@@ -6,9 +6,11 @@
 // sent then. The caller kind that owns the request decides when the list goes out
 // (`surfaces/procedures.ts`): the administrator kind flushes it once its transaction has committed
 // and drops it on a rollback; the user kinds, which open no transaction (their services commit their
-// own), flush it when the handler resolves and drop it when it throws. The two paths outside the
-// kinds flush themselves: the account deletion through `deletion.service.ts`' own after-commit work,
-// and the upload route after its transaction commits. The shape is `deletion.service.ts`'
+// own), flush it when the handler resolves and drop it when it throws. The three paths outside the
+// kinds send after their own commit: the account deletion through `deletion.service.ts`' own
+// after-commit work, the upload route after its transaction commits, and `POST /webhooks/video`
+// (T065, `modules/sessions/video-webhook.controller.ts`) once its insert commits, straight through
+// the bus for an event it recorded. The shape is `deletion.service.ts`'
 // `#afterCommit`. A publish that fails loses a hint only: logged at warn without its payload, never
 // retried (R-SEC-2: no event's payload, no token, in any log).
 //

@@ -1,6 +1,8 @@
 // PUBLIC ENTRY of the sessions module (T017, ADR 0005 D2). Other modules import this file and nothing below it (R-API-3).
 // booking requests session generation through this entry; it never writes the sessions table itself.
 import type { Transactions } from '../../platform/db/transaction.repository.js';
+// T065: the webhook's live bus.
+import type { LiveBus } from '../../platform/live/live-bus.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
@@ -195,6 +197,7 @@ export function createVideoWebhookRoute({
   log,
   maxBodyBytes,
   report,
+  live,
 }: {
   readonly transactions: Transactions;
   readonly video: Pick<VideoPort, 'verifyAndParseParticipantEvent'>;
@@ -203,6 +206,11 @@ export function createVideoWebhookRoute({
   readonly maxBodyBytes: number;
   /** The process's error reporting by default (T111); a recorder in the specs. */
   readonly report?: (error: Error) => void;
+  /**
+   * T065: the process's live bus, through which a recorded event's `session` signal goes after its
+   * commit; with none, nothing is signalled.
+   */
+  readonly live?: LiveBus;
 }): NodeHandler {
   return videoWebhookRoute({
     verify: (rawBody, headers) => video.verifyAndParseParticipantEvent(rawBody, headers),
@@ -210,6 +218,7 @@ export function createVideoWebhookRoute({
       transactions,
       log,
       ...(report === undefined ? {} : { report }),
+      ...(live === undefined ? {} : { live }),
     }),
     log,
     maxBodyBytes,

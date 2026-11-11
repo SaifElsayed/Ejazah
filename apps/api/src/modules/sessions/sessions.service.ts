@@ -21,6 +21,9 @@
 // on the same transaction through the dispute view (`dispute-view.ts`), with no lock. T028: `remedy`,
 // the session's remedy read on the same transaction (`remedy-offer.view.ts`), its proposal at the
 // enrollment's slot's local start (catalog's entry) in the enrollment's zone; a lapsed one is absent.
+// T065: `counterpartyInRoom`, the counterparty's presence by R-304's per-connection rule over the
+// recorded participant events (`participant-events.repository.ts`, `inRoomOf`), on the same
+// transaction with no lock and no provider call; a hint, never a decision.
 //
 // T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
 // so the surface reaches them as `services.sessions.cancellation`. T031: `sessions.remedy.*` are
@@ -85,6 +88,7 @@ import {
 } from './dispute-raise.service.js';
 import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
+import { inRoomOf } from './participant-events.repository.js';
 import { type RemedyViewRow, remedyViewRowOf } from './remedy-offer.repository.js';
 import { createRemedyOffer, type RemedyOffer } from './remedy-offer.service.js';
 import { remedyViewOf } from './remedy-offer.view.js';
@@ -190,6 +194,12 @@ export interface SessionsDependencies {
   readonly remedyOffer?: Pick<RemedyOffer, 'offerLocked'>;
   /** T031: the remedy procedures' store; `remedyStore` unless a spec narrows it. */
   readonly remedyStore?: RemedyStore;
+  /**
+   * T065: whether a person is in the session's room by the recorded participant events, on the
+   * read's transaction with no lock; `inRoomOf` (`participant-events.repository.ts`) unless a spec
+   * fakes it.
+   */
+  readonly inRoom?: (tx: Transaction, sessionId: string, userId: string) => Promise<boolean>;
 }
 
 /** Why a read or a join was refused, as its one log line names it. */
@@ -264,6 +274,7 @@ export function createSessionsServices({
   clock = clockTimestamp,
   remedyOffer = createRemedyOffer({ enrollments: enrollmentSide, settings }),
   remedyStore,
+  inRoom = inRoomOf,
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
@@ -301,7 +312,7 @@ export function createSessionsServices({
         if (session === null) {
           throw refusal(log, { sessionId, userId }, 'NOT_FOUND', 'not_a_party');
         }
-        const { counterparty } = await partiesSeen(tx, store, session, userId, log);
+        const { counterparty, counterpartyId } = await partiesSeen(tx, store, session, userId, log);
         const terms = await enrollmentSide.enrollmentFor(tx, session.enrollmentId);
         // `sessions.enrollment_id` is a foreign key to the enrollment (ERD `sessions`).
         if (terms === null) throw new Error('sessions: a session without its enrollment');
@@ -309,6 +320,8 @@ export function createSessionsServices({
         const { id, status, endsAt } = session;
         const disputes = await disputeView.ofSessions(tx, [{ id, status, endsAt }], userId);
         const remedy = await remedyOf(tx, session.id, terms);
+        // T065: the counterparty's, never the caller's; a hint from the recorded events.
+        const counterpartyInRoom = await inRoom(tx, session.id, counterpartyId);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -336,6 +349,7 @@ export function createSessionsServices({
             : { cancellation: cancellationViewOf(request, session, userId, await clock(tx)) }),
           ...disputes.get(session.id),
           ...(remedy === undefined ? {} : { remedy }),
+          counterpartyInRoom,
         };
       });
     },

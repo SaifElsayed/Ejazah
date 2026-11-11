@@ -46,6 +46,8 @@ const got = {
   status: 'scheduled',
   counterparty: { displayName: 'أحمد سالم', deleted: false },
   join: { opensAt: '2026-11-08T14:50:00.000Z', closesAt: '2026-11-08T15:45:00.000Z' },
+  // T065: the counterparty's presence, a hint from the recorded participant events.
+  counterpartyInRoom: false,
 } as const;
 
 describe('sessions.get', () => {
@@ -118,6 +120,15 @@ describe('sessions.get', () => {
   it('refuses a status the database does not hold and a length no package sells', () => {
     expect(sessionsGetOutput.safeParse({ ...got, status: 'lapsed' }).success).toBe(false);
     expect(sessionsGetOutput.safeParse({ ...got, lengthMinutes: 50 }).success).toBe(false);
+  });
+
+  it('always answers whether the counterparty is in the room, a boolean (T065)', () => {
+    expect(sessionsGetOutput.parse({ ...got, counterpartyInRoom: true }).counterpartyInRoom).toBe(
+      true,
+    );
+    const { counterpartyInRoom: _absent, ...without } = got;
+    expect(sessionsGetOutput.safeParse(without).success).toBe(false);
+    expect(sessionsGetOutput.safeParse({ ...got, counterpartyInRoom: 'yes' }).success).toBe(false);
   });
 
   it('never shows a lapsed remedy', () => {

@@ -25,7 +25,13 @@ with 200 and records nowhere.
 3. `ignored` → 200. A session that does not exist, or an identity that is not one of its two participants → 200,
    written nowhere, reported to error tracking.
 4. In one transaction: insert into `session_participant_events` under `provider_event_id`; a duplicate writes nothing
-   and answers 200 (R-SESS-1, SC-405). Nothing else: the evaluation reads the events later (R-SESS-2).
+   and answers 200 (R-SESS-1, SC-405). Nothing else is written: the evaluation reads the events later (R-SESS-2).
+   Once that transaction has committed, and only for an event it recorded (T065; research R-324, item 6; the owner's
+   decision of 2026-11-11 on B40a's conflict check, Q14 (a)), one `session` `{ sessionId, enrollmentId }` is published
+   through the live bus, a hint, to the other participant for a `joined` or a `left` and to both for a `room_ended`;
+   nothing for a duplicate, an `ignored` event, an unknown session or an identity that is no participant, and nothing
+   on a rollback. A publish that fails is logged at warn, `{ eventType, errorName }` without its payload, never
+   retried, and changes no answer.
 5. 200 `{ received: true }`; a failure while recording 500, so the provider retries.
 
 The public tunnel used for device runs passes only `POST /webhooks/payment` and `POST /webhooks/video` through its
