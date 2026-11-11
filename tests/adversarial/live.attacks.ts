@@ -27,10 +27,13 @@ import { expect, vi } from 'vitest';
 import { addHours } from '../../packages/time/src/index.js';
 import { createApplication } from '../../apps/api/src/app.module.js';
 import {
+  type ChatDependencies,
   type ChatEnrollments,
-  type ChatStore,
   createChatServices,
 } from '../../apps/api/src/modules/chat/index.js';
+
+/** The chat store the services take, through the module's public entry (R-API-3). */
+type ChatStore = NonNullable<ChatDependencies['store']>;
 import {
   type CancellationStore,
   createSessionsServices,

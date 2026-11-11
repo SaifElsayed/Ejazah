@@ -42,7 +42,7 @@ function world(first: Status | null, again: Status | null = first, opened = true
     partiesOf: async (_tx, sessionId) => {
       expect(sessionId).toBe(SESSION);
       journal.push('read parties');
-      return { studentUserId: STUDENT, teacherUserId: TEACHER };
+      return { studentUserId: STUDENT, teacherUserId: TEACHER, enrollmentId: ENROLLMENT };
     },
     sessionToCancel: async (_tx, sessionId) => {
       expect(sessionId).toBe(SESSION);
