@@ -332,3 +332,332 @@ describe('sessions.monitor (T024, FR-479, FR-480)', () => {
     expect(opened).toBe(0);
   });
 });
+
+// T033 (FR-446, FR-450, FR-477, FR-480; R-SESS-6): `sessions.review.list` audited
+// `sessions.review.listed` on the reader, `sessions.review.get` `sessions.review.viewed` on the
+// session, `sessions.review.resolve` `session.review_resolved` on the session with its mandatory
+// reason; each refused to an anonymous caller and an unverified second factor, a service's refusal
+// rolling its audit entry back. What each does is `review.service.spec.ts`' and
+// `tests/db-integrity/session-review.spec.ts`'.
+const REVIEW_PAGE = {
+  items: [
+    {
+      sessionId: SESSION,
+      enrollmentId: ENROLLMENT,
+      status: 'under_threshold' as const,
+      startsAt: '2026-11-01T06:00:00.000Z',
+      endsAt: '2026-11-01T07:00:00.000Z',
+      simultaneousSeconds: 900,
+      parties: {
+        student: party('0199d0a0-0000-7000-8000-0000000000b1', 'آمال'),
+        teacher: {
+          userId: '0199d0a0-0000-7000-8000-0000000000b2',
+          displayName: null,
+          deleted: true,
+        },
+      },
+    },
+  ],
+};
+const TELEMETRY = {
+  sessionId: SESSION,
+  schedule: {
+    localDate: '2026-11-01',
+    startTimeLocal: '08:00',
+    timezone: 'Africa/Cairo',
+    startsAt: '2026-11-01T06:00:00.000Z',
+    endsAt: '2026-11-01T07:00:00.000Z',
+  },
+  status: 'under_threshold' as const,
+  events: [
+    {
+      party: 'teacher' as const,
+      type: 'joined' as const,
+      occurredAt: '2026-11-01T06:00:05.000Z',
+      connectionRef: 'PA_t1',
+    },
+    { party: 'room' as const, type: 'room_ended' as const, occurredAt: '2026-11-01T07:00:00.000Z' },
+  ],
+  intervals: {
+    student: [],
+    teacher: [{ startsAt: '2026-11-01T06:00:05.000Z', endsAt: '2026-11-01T07:00:00.000Z' }],
+    together: [],
+  },
+  simultaneousSeconds: 0,
+  joined: { student: false, teacher: true },
+  outages: [],
+};
+const RESOLVE = {
+  sessionId: SESSION,
+  outcome: 'done' as const,
+  reason: 'انقطع الاتصال عند الطالب',
+};
+const SCHEDULED = '0199d0a0-0000-7000-8000-000000000052';
+
+function reviewSurface() {
+  const reached: unknown[][] = [];
+  const contexts = adminContextsOver({
+    review: {
+      // T059's `revise` has its own surface below.
+      revise: async () => {
+        throw new Error('revise is not reached here');
+      },
+      list: async (_tx, adminId, input) => {
+        reached.push(['list', adminId, input]);
+        return REVIEW_PAGE;
+      },
+      get: async (_tx, adminId, input) => {
+        reached.push(['get', adminId, input]);
+        if (input.sessionId === SCHEDULED) {
+          throw new DomainError('CONFLICT', undefined, {
+            details: [{ path: 'cause', code: 'not_settled' }],
+          });
+        }
+        return TELEMETRY;
+      },
+      resolve: async (_tx, adminId, input) => {
+        reached.push(['resolve', adminId, input]);
+        if (input.sessionId === SCHEDULED) {
+          throw new DomainError('CONFLICT', undefined, {
+            details: [{ path: 'cause', code: 'not_under_review' }],
+          });
+        }
+        return { sessionId: input.sessionId, status: input.outcome };
+      },
+    },
+  });
+  return {
+    reached,
+    written: contexts.written,
+    as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+      callerFor(contexts.contextFor(session)),
+  };
+}
+
+describe('sessions.review (T033, FR-477, FR-480)', () => {
+  it('list answers the page and audits sessions.review.listed on the reader', async () => {
+    const { as, written, reached } = reviewSurface();
+    expect(await as(VERIFIED).sessions.review.list({ cursor: SESSION })).toEqual(REVIEW_PAGE);
+    expect(reached).toEqual([['list', SPEC_ADMIN, { cursor: SESSION }]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'sessions.review.listed',
+        targetType: 'admin',
+        targetId: SPEC_ADMIN,
+      },
+    ]);
+  });
+
+  it('get answers the telemetry as the schema names it and audits sessions.review.viewed on the session', async () => {
+    const { as, written } = reviewSurface();
+    expect(await as(VERIFIED).sessions.review.get({ sessionId: SESSION })).toEqual(TELEMETRY);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'sessions.review.viewed',
+        targetType: 'session',
+        targetId: SESSION,
+      },
+    ]);
+  });
+
+  it('get of a scheduled session is CONFLICT and audits nothing', async () => {
+    const { as, written } = reviewSurface();
+    expect(await codeOf(as(VERIFIED).sessions.review.get({ sessionId: SCHEDULED }))).toBe(
+      'CONFLICT',
+    );
+    expect(written).toEqual([]);
+  });
+
+  it('resolve writes the outcome as the session’s administrator and audits session.review_resolved on the session with the reason', async () => {
+    const { as, written, reached } = reviewSurface();
+    expect(await as(VERIFIED).sessions.review.resolve(RESOLVE)).toEqual({
+      sessionId: SESSION,
+      status: 'done',
+    });
+    expect(reached).toEqual([['resolve', SPEC_ADMIN, RESOLVE]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'session.review_resolved',
+        targetType: 'session',
+        targetId: SESSION,
+        reason: RESOLVE.reason,
+      },
+    ]);
+  });
+
+  it('resolve of a session not under review is CONFLICT and audits nothing', async () => {
+    const { as, written } = reviewSurface();
+    expect(
+      await codeOf(as(VERIFIED).sessions.review.resolve({ ...RESOLVE, sessionId: SCHEDULED })),
+    ).toBe('CONFLICT');
+    expect(written).toEqual([]);
+  });
+
+  it.each([
+    ['a blank reason', { ...RESOLVE, reason: ' ' }],
+    ['no reason', { ...RESOLVE, reason: undefined }],
+    ['an outcome under review', { ...RESOLVE, outcome: 'under_threshold' }],
+    ['a disputed outcome', { ...RESOLVE, outcome: 'disputed' }],
+    ['no outcome', { ...RESOLVE, outcome: undefined }],
+  ])('resolve refuses %s VALIDATION_FAILED, reaching and writing nothing', async (_name, input) => {
+    const { as, written, reached } = reviewSurface();
+    expect(
+      await codeOf(as(VERIFIED).sessions.review.resolve(input as unknown as typeof RESOLVE)),
+    ).toBe('VALIDATION_FAILED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('list, get and resolve refuse an anonymous caller and an unverified second factor, reaching and writing nothing', async () => {
+    const { as, written, reached } = reviewSurface();
+    const unverified = as({ ...VERIFIED, mfaVerified: false });
+    expect(await codeOf(as(null).sessions.review.list({}))).toBe('UNAUTHENTICATED');
+    expect(await codeOf(unverified.sessions.review.list({}))).toBe('MFA_REQUIRED');
+    expect(await codeOf(as(null).sessions.review.get({ sessionId: SESSION }))).toBe(
+      'UNAUTHENTICATED',
+    );
+    expect(await codeOf(unverified.sessions.review.get({ sessionId: SESSION }))).toBe(
+      'MFA_REQUIRED',
+    );
+    expect(await codeOf(as(null).sessions.review.resolve(RESOLVE))).toBe('UNAUTHENTICATED');
+    expect(await codeOf(unverified.sessions.review.resolve(RESOLVE))).toBe('MFA_REQUIRED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+});
+
+// T059: `sessions.review.revise`, keyed on the kind's transaction and counted under its own limit
+// (`rate_limit_outcome_correction`), audited `session.outcome_corrected` on its first run only, a replay recording no entry.
+const CORRECT = {
+  sessionId: SESSION,
+  outcome: 'both_no_show' as const,
+  reason: 'لم يحضر أحد',
+  idempotencyKey: 'spec-revise-key-0001',
+};
+
+function correctSurface(replayed = false) {
+  const reached: unknown[][] = [];
+  const contexts = adminContextsOver({
+    review: {
+      revise: async (_tx: unknown, adminId: string, given: { readonly reason: string }) => {
+        reached.push(['revise', adminId, given]);
+        if (given.reason === 'refuse') {
+          throw new DomainError('RULING_FINAL', undefined, {
+            details: [{ path: 'cause', code: 'remedy_offered' }],
+          });
+        }
+        return {
+          outcome: { sessionId: SESSION, sessionStatus: 'both_no_show', previousStatus: 'done' },
+          replayed,
+        };
+      },
+    } as never,
+  });
+  return {
+    reached,
+    written: contexts.written,
+    as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+      callerFor(contexts.contextFor(session)),
+  };
+}
+
+describe('sessions.review.revise (T059)', () => {
+  it('answers the first run’s result and audits session.outcome_corrected on the session with the reason', async () => {
+    const { as, written, reached } = correctSurface();
+    expect(await as(VERIFIED).sessions.review.revise(CORRECT)).toEqual({
+      sessionId: SESSION,
+      sessionStatus: 'both_no_show',
+      previousStatus: 'done',
+    });
+    expect(reached).toEqual([['revise', SPEC_ADMIN, CORRECT]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'session.outcome_corrected',
+        targetType: 'session',
+        targetId: SESSION,
+        reason: CORRECT.reason,
+      },
+    ]);
+  });
+
+  it('answers a replay from the key’s row and records no second entry, the kind admitting it', async () => {
+    const { as, written } = correctSurface(true);
+    expect(await as(VERIFIED).sessions.review.revise(CORRECT)).toEqual({
+      sessionId: SESSION,
+      sessionStatus: 'both_no_show',
+      previousStatus: 'done',
+    });
+    expect(written).toEqual([]);
+  });
+
+  it('a refusal of the service audits nothing', async () => {
+    const { as, written } = correctSurface();
+    expect(
+      await codeOf(as(VERIFIED).sessions.review.revise({ ...CORRECT, reason: 'refuse' })),
+    ).toBe('RULING_FINAL');
+    expect(written).toEqual([]);
+  });
+
+  it.each([
+    ['no key', { ...CORRECT, idempotencyKey: undefined }],
+    ['a blank reason', { ...CORRECT, reason: ' ' }],
+    ['a disputed outcome', { ...CORRECT, outcome: 'disputed' }],
+  ])('refuses %s VALIDATION_FAILED, reaching and writing nothing', async (_name, given) => {
+    const { as, written, reached } = correctSurface();
+    expect(
+      await codeOf(as(VERIFIED).sessions.review.revise(given as unknown as typeof CORRECT)),
+    ).toBe('VALIDATION_FAILED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('refuses an anonymous caller and an unverified second factor, reaching and writing nothing', async () => {
+    const { as, written, reached } = correctSurface();
+    expect(await codeOf(as(null).sessions.review.revise(CORRECT))).toBe('UNAUTHENTICATED');
+    expect(
+      await codeOf(as({ ...VERIFIED, mfaVerified: false }).sessions.review.revise(CORRECT)),
+    ).toBe('MFA_REQUIRED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('over rate_limit_outcome_correction is refused RATE_LIMITED, opening no transaction and writing nothing (FR-470)', async () => {
+    const counted: unknown[][] = [];
+    let opened = 0;
+    const rateLimiter = {
+      check: async (key: string, subject: unknown, procedure: string) => {
+        counted.push([key, subject, procedure]);
+        throw new DomainError('RATE_LIMITED');
+      },
+    } as unknown as RateLimiter;
+    const context = createAdminContext({
+      session: VERIFIED,
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: {
+          run: async () => {
+            opened += 1;
+            throw new Error('no transaction may open');
+          },
+        },
+        auditWriter: { write: async () => undefined },
+      },
+      services: unusedAdminServices,
+      rateLimiter,
+      clientAddress: '203.0.113.9',
+    });
+    expect(await codeOf(callerFor(context).sessions.review.revise(CORRECT))).toBe('RATE_LIMITED');
+    expect(counted).toEqual([
+      [
+        'rate_limit_outcome_correction',
+        { kind: 'administrator', adminId: SPEC_ADMIN },
+        'sessions.review.revise',
+      ],
+    ]);
+    expect(opened).toBe(0);
+  });
+});

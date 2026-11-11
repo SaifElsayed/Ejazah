@@ -14,3 +14,5 @@ export * from './payments.js';
 export * from './sessions.js';
 export * from './students.js';
 export * from './teachers.js';
+// T034 of specs/004-sessions: the disputes queue and its resolution.
+export * from './disputes.js';

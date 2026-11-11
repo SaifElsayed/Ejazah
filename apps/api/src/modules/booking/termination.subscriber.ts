@@ -245,6 +245,36 @@ export function terminationSubscriber({
 
 const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
 
+/** An account's active holds, locked, and the enrollments they were placed for (T034). */
+export interface LockedHolds {
+  readonly holdIds: readonly string[];
+  readonly enrollmentIds: readonly string[];
+}
+
+/**
+ * T034 of specs/004-sessions (kernel.md's `party_*` row; the owner's decision of 2026-11-11 on
+ * lane A's questions, item 3): the active holds this subscriber would release for the account, the
+ * holds on its slots and its own hold (the same two reads as above), locked in one statement in id
+ * order, and the enrollments they were placed for, read under that lock with no lock of their own.
+ * A dispute's `party_*` ruling takes them after the slots' keys and before the enrollments, so the
+ * subscriber, running on the ruling's transaction, finds its holds and their enrollments already
+ * held. The caller holds the account's `users` row, so no hold of the account appears after this.
+ */
+export async function lockActiveHoldsOf(
+  tx: Transaction,
+  userId: string,
+  store: TerminationStore = terminationStore,
+): Promise<LockedHolds> {
+  const slotIds = await store.teacherSlotIds(tx, userId);
+  const holdIds = sortedUnique([
+    ...(await store.activeHoldIds(tx, { slotIds })),
+    ...(await store.activeHoldIds(tx, { studentUserId: userId })),
+  ]);
+  if (holdIds.length === 0) return { holdIds, enrollmentIds: [] };
+  await store.lockRows(tx, 'slot_holds', holdIds);
+  return { holdIds, enrollmentIds: await store.holdEnrollmentIds(tx, holdIds) };
+}
+
 type Role = 'student' | 'teacher';
 
 /** The account's role in the enrollment (an account is a student or a teacher, ADR 0016). */

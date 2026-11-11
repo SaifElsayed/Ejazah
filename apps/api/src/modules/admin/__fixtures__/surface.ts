@@ -102,6 +102,9 @@ export function surfaceOf(
     monitor: unusedAdminServices.monitor,
     // T035: the case queue has its own router spec (`sessions/cases-admin.router.spec.ts`).
     cases: unusedAdminServices.cases,
+    // The review queue and the disputes queue have their own router specs (T033, T034).
+    review: unusedAdminServices.review,
+    disputes: unusedAdminServices.disputes,
   };
   const administration = {
     transactions: transactionsOver(database),

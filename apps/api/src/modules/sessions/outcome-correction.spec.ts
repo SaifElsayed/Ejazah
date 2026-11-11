@@ -5,7 +5,7 @@
 // `dispute_window_hours`, open until that instant), no remedy, never disputed. Each condition apart.
 import { describe, expect, it } from 'vitest';
 
-import { isCorrectable } from './outcome-correction.js';
+import { correctionRefusal, isCorrectable } from './outcome-correction.js';
 
 const END = new Date('2026-11-08T10:00:00Z');
 const WINDOW = { disputeWindowHours: 72 };
@@ -54,5 +54,58 @@ describe('isCorrectable (FR-439)', () => {
     expect(isCorrectable({ ...correctable, everDisputed: true }, { ...WINDOW, now: OPEN })).toBe(
       false,
     );
+  });
+});
+
+// T059 (B39's conflict check, F2): the refusal the correction answers, by the one function
+// `isCorrectable` reads, in the note's order: `not_settled`, `SESSION_UNDER_REVIEW`,
+// `DISPUTE_OPEN`, `RULING_FINAL` (`window_closed`, then `remedy_offered`), then `ruled`.
+describe('correctionRefusal (T059, F2)', () => {
+  const at = { ...WINDOW, now: OPEN };
+
+  it.each([
+    ['scheduled', { code: 'CONFLICT', cause: 'not_settled' }],
+    ['cancelled_by_agreement', { code: 'CONFLICT', cause: 'not_settled' }],
+    ['cancelled_by_admin', { code: 'CONFLICT', cause: 'not_settled' }],
+    ['under_threshold', { code: 'SESSION_UNDER_REVIEW' }],
+    ['provider_outage', { code: 'SESSION_UNDER_REVIEW' }],
+    ['disputed', { code: 'DISPUTE_OPEN' }],
+  ] as const)('refuses a %s session %o, whatever else holds', (status, refusal) => {
+    expect(
+      correctionRefusal(
+        { status, scheduledEndAt: END, hasRemedy: true, everDisputed: true },
+        { ...WINDOW, now: CLOSES },
+      ),
+    ).toEqual(refusal);
+  });
+
+  it('refuses RULING_FINAL window_closed before remedy_offered, and both before ruled', () => {
+    const closed = { ...WINDOW, now: CLOSES };
+    expect(
+      correctionRefusal({ ...correctable, hasRemedy: true, everDisputed: true }, closed),
+    ).toEqual({ code: 'RULING_FINAL', cause: 'window_closed' });
+    expect(correctionRefusal({ ...correctable, hasRemedy: true, everDisputed: true }, at)).toEqual({
+      code: 'RULING_FINAL',
+      cause: 'remedy_offered',
+    });
+    expect(correctionRefusal({ ...correctable, everDisputed: true }, at)).toEqual({
+      code: 'CONFLICT',
+      cause: 'ruled',
+    });
+  });
+
+  it('answers null where isCorrectable admits, and a refusal wherever it does not', () => {
+    const cases = [
+      { ...correctable },
+      { ...correctable, status: 'under_threshold' as const },
+      { ...correctable, hasRemedy: true },
+      { ...correctable, everDisputed: true },
+    ];
+    for (const session of cases) {
+      for (const now of [OPEN, CLOSES]) {
+        const when = { ...WINDOW, now };
+        expect(correctionRefusal(session, when) === null).toBe(isCorrectable(session, when));
+      }
+    }
   });
 });

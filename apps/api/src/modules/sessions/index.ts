@@ -436,3 +436,59 @@ export {
   type ManualCaseDependencies,
   type ManualCaseService,
 } from './manual-case.service.js';
+/**
+ * T033 of specs/004-sessions (FR-446, FR-450, FR-477; R-SESS-6; research R-323 GAP-2): the review
+ * queue (`sessions.review.list/get/resolve`), composed into the administrator surface's services;
+ * the telemetry reader `disputes.get` reads too (T034); and the one writer of an administrator's
+ * outcome, which T034's resolution and T059's revision and correction write through.
+ */
+export {
+  createSessionReview,
+  type SessionReview,
+  type SessionReviewStore,
+  sessionReviewStore,
+} from './review.service.js';
+export { createTelemetryReader, type TelemetryReader, type TelemetryStore } from './telemetry.js';
+export {
+  type AdminOutcomeEvent,
+  type AdminOutcomeStore,
+  type AdminOutcomeWrite,
+  writeAdminOutcome,
+} from './admin-outcome.service.js';
+/**
+ * T034 of specs/004-sessions (FR-421, FR-474 to FR-476; research R-308): the administrator's
+ * disputes queue (`disputes.list/get`) and its resolution (`disputes.resolve`), composed into the
+ * administrator surface's services, with the standing moves a `party_*` ruling calls handed in
+ * (`DisputeStanding`, identity's `StandingService`); and the router `admin.router.ts` mounts at
+ * `disputes`.
+ */
+export {
+  createDisputeQueue,
+  type DisputeQueue,
+  type DisputeQueueStore,
+  disputeQueueStore,
+} from './dispute-queue.service.js';
+export {
+  createDisputeResolution,
+  type DisputeResolution,
+  type DisputeResolutionStore,
+  disputeResolutionStore,
+  type DisputeStanding,
+  type LockActiveHolds,
+  type LockedHolds,
+} from './dispute-resolution.service.js';
+export { disputesAdminRouter } from './disputes-admin.router.js';
+/**
+ * T059 of specs/004-sessions (SRS FR-DISPUTE-7; FR-439, FR-472; research R-308, R-323 GAP-3): a
+ * ruling's revision (`disputes.revise`) and the correction of an outcome nobody disputed
+ * (`sessions.review.revise`), each keyed through the kernel's `IdempotencyService.runOn` on the
+ * administrator call's transaction, composed into the administrator surface's services; and
+ * `disputes.get`'s `revisable` and `revisions` (`revisionView`).
+ */
+export {
+  createRevisions,
+  type Keyed,
+  type Revisions,
+  type RevisionStore,
+  revisionStore,
+} from './revision.service.js';

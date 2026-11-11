@@ -4,13 +4,14 @@
 // whole second after the scheduled start of a sixty-minute session, under the seed's defaults
 // (`prisma/seed.ts:96-99`: threshold 70 %, join window 10 minutes, minimum connection 60 seconds,
 // early-join lead 15 minutes), so the threshold is ⌈0.7 × 3600⌉ = 2520 seconds.
-import { addSeconds } from '@ijazah/time';
+import { addSeconds, measureSeconds } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import {
   type AttendanceEvent,
   type AttendanceSettings,
   type AttendanceWindow,
+  connectedIntervals,
   evaluateAttendance,
 } from './attendance.rules.js';
 
@@ -428,5 +429,52 @@ describe('evaluateAttendance: a connection at or after the scheduled end (R-SESS
         studentJoined: false,
       });
     }
+  });
+});
+
+// T033 of specs/004-sessions/tasks.md (FR-477, FR-SESS-9; the owner's decision of 2026-11-11 on lane
+// A's questions, item 2): the intervals the telemetry shows are the ones the evaluation measures,
+// each party's connected time and the two together clipped to the schedule, so the record and the
+// figure the outcome was decided on cannot disagree.
+describe('connectedIntervals: the telemetry’s intervals (T033)', () => {
+  const span = (from: number, to: number) => ({ startsAt: at(from), endsAt: at(to) });
+
+  it('answers each party’s union and the two together, clipped to the schedule', () => {
+    const events = [
+      ...connection(TEACHER, 't1', -120, 600),
+      ...connection(TEACHER, 't2', 600, 1_800),
+      ...connection(STUDENT, 's1', 300, 900),
+      joined(STUDENT, 's2', 1_200),
+      roomEnded(3_000),
+    ];
+    expect(connectedIntervals(events, window())).toEqual({
+      teacher: [span(-120, 1_800)],
+      student: [span(300, 900), span(1_200, 3_000)],
+      together: [span(300, 900), span(1_200, 1_800)],
+    });
+  });
+
+  it.each<[string, AttendanceEvent[]]>([
+    ['whole attendance', [...TEACHER_WHOLE, ...connection(STUDENT, 's1', 0, LENGTH)]],
+    [
+      'a reconnection and an early join',
+      [
+        ...connection(TEACHER, 't1', -300, 1_000),
+        ...connection(TEACHER, 't2', 1_000, LENGTH),
+        ...connection(STUDENT, 's1', 120, 700),
+        ...connection(STUDENT, 's2', 900, 2_400),
+      ],
+    ],
+    [
+      'a lost final leave closed by the room’s end',
+      [...TEACHER_WHOLE, joined(STUDENT, 's1', 60), roomEnded(2_000)],
+    ],
+    ['a join after the end', [...TEACHER_WHOLE, joined(STUDENT, 's1', LENGTH + 5)]],
+    ['nobody', []],
+  ])('agrees with evaluateAttendance on the simultaneous seconds: %s', (_name, events) => {
+    const { together } = connectedIntervals(events, window());
+    expect(measureSeconds(together)).toBe(
+      evaluateAttendance(events, window(), SETTINGS).simultaneousSeconds,
+    );
   });
 });
