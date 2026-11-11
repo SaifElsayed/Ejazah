@@ -20,8 +20,9 @@ import {
   insertCase,
   lockCasesOf,
   openCaseOf,
+  latestCaseOf,
   sessionsEverDisputedAmong,
-  suspensionCasesOf,
+  suspensionCasesCoveredBy,
 } from './compensation-case.repository.js';
 import { COVERING_REASONS } from './compensation-case.service.js';
 
@@ -182,6 +183,30 @@ describe('closeOpenCase', () => {
             resolutionNotes: 'رد قيمة الحصص',
             resolvedByAdminId: ADMIN,
             resolvedAt: T3,
+            coveredByCaseId: null,
+          },
+        },
+      ],
+    ]);
+  });
+
+  it('writes the link a suspension case’s closing names (rule 49; the note under T036)', async () => {
+    const { tx, asked } = client({ updateMany: { count: 1 } });
+    expect(
+      await closeOpenCase(tx, CASE, { ...WRITE, status: 'dismissed', resolution: null, coveredBy: CASE_2 }),
+    ).toBe(true);
+    expect(asked).toEqual([
+      [
+        'updateMany',
+        {
+          where: { id: CASE, status: 'open' },
+          data: {
+            status: 'dismissed',
+            resolution: null,
+            resolutionNotes: 'رد قيمة الحصص',
+            resolvedByAdminId: ADMIN,
+            resolvedAt: T3,
+            coveredByCaseId: CASE_2,
           },
         },
       ],
@@ -525,33 +550,59 @@ describe('caseQueuePage', () => {
   });
 });
 
-describe('suspensionCasesOf', () => {
-  it("asks the enrollment's student_suspended cases oldest first and answers them by case id", async () => {
+describe('suspensionCasesCoveredBy', () => {
+  it('asks the student_suspended cases whose link names the case, oldest first, and answers them by case id', async () => {
     const { tx, asked } = client({
       findMany: [
         [
-          { id: CASE, status: 'resolved', createdAt: T0, resolvedAt: T1 },
-          { id: CASE_2, status: 'open', createdAt: T2, resolvedAt: null },
+          { id: CASE, status: 'resolved' },
+          { id: CASE_2, status: 'dismissed' },
         ],
       ],
     });
-    expect(await suspensionCasesOf(tx, ENROLLMENT)).toEqual([
-      { caseId: CASE, status: 'resolved', createdAt: T0, resolvedAt: T1 },
-      { caseId: CASE_2, status: 'open', createdAt: T2, resolvedAt: null },
+    expect(await suspensionCasesCoveredBy(tx, CASE_3)).toEqual([
+      { caseId: CASE, status: 'resolved' },
+      { caseId: CASE_2, status: 'dismissed' },
     ]);
     expect(asked).toEqual([
       [
         'findMany',
         {
           where: {
-            enrollmentId: ENROLLMENT,
+            coveredByCaseId: CASE_3,
             kind: 'compensation_case',
             reason: 'student_suspended',
           },
           orderBy: { id: 'asc' },
-          select: { id: true, status: true, createdAt: true, resolvedAt: true },
+          select: { id: true, status: true },
         },
       ],
     ]);
+  });
+});
+
+describe('latestCaseOf', () => {
+  it("asks the enrollment's latest compensation case of the reasons and answers its id", async () => {
+    const { tx, asked } = client({ findFirst: { id: CASE_4 } });
+    expect(await latestCaseOf(tx, ENROLLMENT, ['student_banned', 'teacher_ended'])).toBe(CASE_4);
+    expect(asked).toEqual([
+      [
+        'findFirst',
+        {
+          where: {
+            enrollmentId: ENROLLMENT,
+            kind: 'compensation_case',
+            reason: { in: ['student_banned', 'teacher_ended'] },
+          },
+          orderBy: { id: 'desc' },
+          select: { id: true },
+        },
+      ],
+    ]);
+  });
+
+  it('answers null for none', async () => {
+    const { tx } = client();
+    expect(await latestCaseOf(tx, ENROLLMENT, ['student_banned'])).toBeNull();
   });
 });

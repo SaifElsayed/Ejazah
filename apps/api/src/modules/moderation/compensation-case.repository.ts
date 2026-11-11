@@ -61,11 +61,17 @@ export interface CaseClosingWrite {
   readonly adminId: string;
   /** The database's clock, read under the enrollment's lock. */
   readonly resolvedAt: Date;
+  /**
+   * On a `student_suspended` case only (ERD §15 rule 49): the case that owes the sessions its
+   * suspension cancelled, `covered_by_case_id` (the note under T036 of specs/004-sessions/tasks.md);
+   * absent, NULL.
+   */
+  readonly coveredBy?: string;
 }
 
 /**
  * Closes the case if it is still `open`, writing `status`, `resolution`, `resolution_notes`,
- * `resolved_by_admin_id` and `resolved_at` together in one conditional update; whether it moved
+ * `resolved_by_admin_id`, `resolved_at` and `covered_by_case_id` together in one conditional update; whether it moved
  * the row (false for a case no longer open).
  */
 export async function closeOpenCase(
@@ -81,6 +87,7 @@ export async function closeOpenCase(
       resolutionNotes: write.note,
       resolvedByAdminId: write.adminId,
       resolvedAt: write.resolvedAt,
+      coveredByCaseId: write.coveredBy ?? null,
     },
   });
   return count === 1;
@@ -341,27 +348,45 @@ export async function caseQueuePage(tx: Client, query: CaseQueueQuery): Promise<
     : { rows: shown };
 }
 
-/** One `student_suspended` case of an enrollment, with its opening and closing instants. */
+/** A closed `student_suspended` case whose sessions another case owes. */
 export interface SuspensionCase {
   readonly caseId: string;
   readonly status: 'open' | 'resolved' | 'dismissed';
-  readonly createdAt: Date;
-  readonly resolvedAt: Date | null;
 }
 
 /**
- * The enrollment's `student_suspended` cases, oldest first, with no lock: what `cases.get`'s
- * `covers` reads for a confirmed fault (U1) and an enrollment's end (U2). Bounded by one enrollment,
- * over `disputes_enrollment_id_idx`.
+ * The `student_suspended` cases whose `covered_by_case_id` names `caseId` (ERD §15 rule 49), oldest
+ * first, with no lock: what `cases.get`'s `covers` reads for a confirmed fault (U1) and an
+ * enrollment's end (U2). The cases are linked by id, so no instant is compared (the note under
+ * T036 of specs/004-sessions/tasks.md, the owner's decision (c) on PR #133's Major 1). Over
+ * `disputes_covered_by_case_id_idx`.
  */
-export async function suspensionCasesOf(
+export async function suspensionCasesCoveredBy(
   tx: Client,
-  enrollmentId: string,
+  caseId: string,
 ): Promise<SuspensionCase[]> {
   const rows = await tx.dispute.findMany({
-    where: { enrollmentId, kind: 'compensation_case', reason: 'student_suspended' },
+    where: { coveredByCaseId: caseId, kind: 'compensation_case', reason: 'student_suspended' },
     orderBy: { id: 'asc' },
-    select: { id: true, status: true, createdAt: true, resolvedAt: true },
+    select: { id: true, status: true },
   });
-  return rows.map(({ id, ...rest }) => ({ caseId: id, ...rest }));
+  return rows.map(({ id, status }) => ({ caseId: id, status }));
+}
+
+/**
+ * The enrollment's latest compensation case of one of `reasons`, null for none, with no lock: the
+ * caller holds the enrollment's, which every opening takes (`lockCasesOf`). Ids are uuidv7 from the
+ * database, so the latest is the last opened. Over `disputes_enrollment_id_idx`.
+ */
+export async function latestCaseOf(
+  tx: Client,
+  enrollmentId: string,
+  reasons: readonly string[],
+): Promise<string | null> {
+  const row = await tx.dispute.findFirst({
+    where: { enrollmentId, kind: 'compensation_case', reason: { in: [...reasons] } },
+    orderBy: { id: 'desc' },
+    select: { id: true },
+  });
+  return row?.id ?? null;
 }

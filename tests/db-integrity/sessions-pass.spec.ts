@@ -1,5 +1,6 @@
 // T001 of specs/004-sessions/tasks.md — the sessions pass (ERD §15 rules 40 to 48;
-// specs/004-sessions/data-model.md §2.1 to §2.12 and §6; migration `20261108120000_sessions_pass`).
+// specs/004-sessions/data-model.md §2.1 to §2.12 and §6; migration `20261108120000_sessions_pass`),
+// and rule 49 beside them (B39, the note under T036; migration `20261111120000_case_covered_by`).
 //
 // One describe per rule. Each probe first writes the rows the rule admits, so a refusal is the rule
 // and not a broken row, then each forbidden one, expecting its SQLSTATE: 23514 for a check, 23505
@@ -993,6 +994,8 @@ describe('ERD §15 rule 46: a dispute, a case and a complaint (T001)', () => {
     expect(await constraintsOf('disputes', 'c')).toEqual([
       'disputes_closed_check',
       'disputes_complaint_raiser_check',
+      // Rule 49's (B39, the note under T036), its own describe below.
+      'disputes_covered_by_check',
       'disputes_enrollment_ended_check',
       'disputes_resolved_at_check',
       'disputes_session_check',
@@ -1132,6 +1135,87 @@ describe('ERD §15 rule 48: a hold’s release reason only on a released hold (T
   it('holds its check by name', async () => {
     expect(await constraintsOf('slot_holds', 'c')).toEqual(
       expect.arrayContaining(['slot_holds_release_reason_check']),
+    );
+  });
+});
+
+describe('ERD §15 rule 49: a suspension case’s link to the case that owes its sessions (B39, the note under T036)', () => {
+  /** A compensation case of a new enrollment, and its closing's columns. */
+  async function caseRow(): Promise<{
+    row: (values: Record<string, unknown>) => Record<string, unknown>;
+    closed: Record<string, unknown>;
+  }> {
+    const { enrollmentId } = await makeEnrollment(db);
+    const admin = await makeAdmin(db);
+    return {
+      row: (values) => ({ enrollment_id: enrollmentId, kind: 'compensation_case', ...values }),
+      closed: {
+        resolution_notes: 'Probe closing',
+        resolved_by_admin_id: admin,
+        resolved_at: '2026-10-05T07:00:00Z',
+      },
+    };
+  }
+
+  it('admits the link on a closed student_suspended case, resolved or dismissed; refuses it open, on another reason, or to itself', async () => {
+    await inRollback(db, async () => {
+      const { row, closed } = await caseRow();
+      const owed = await insertRow(db, 'disputes', row({ reason: 'student_fault_confirmed', status: 'open' }));
+      expect(
+        await tryInsert(
+          'disputes',
+          row({ reason: 'student_suspended', status: 'dismissed', covered_by_case_id: owed, ...closed }),
+        ),
+      ).toBeNull();
+      expect(
+        await tryInsert(
+          'disputes',
+          row({
+            reason: 'student_suspended',
+            status: 'resolved',
+            resolution: 'compensation_ordered',
+            covered_by_case_id: owed,
+            ...closed,
+          }),
+        ),
+      ).toBeNull();
+      expect(
+        await tryInsert('disputes', row({ reason: 'student_suspended', status: 'dismissed', ...closed })),
+      ).toBeNull();
+      expect(
+        await tryInsert(
+          'disputes',
+          row({ reason: 'student_suspended', status: 'open', covered_by_case_id: owed }),
+        ),
+      ).toBe(SQLSTATE.checkViolation);
+      expect(
+        await tryInsert(
+          'disputes',
+          row({ reason: 'student_banned', status: 'dismissed', covered_by_case_id: owed, ...closed }),
+        ),
+      ).toBe(SQLSTATE.checkViolation);
+      const itself = randomUUID();
+      expect(
+        await tryInsert(
+          'disputes',
+          row({
+            id: itself,
+            reason: 'student_suspended',
+            status: 'dismissed',
+            covered_by_case_id: itself,
+            ...closed,
+          }),
+        ),
+      ).toBe(SQLSTATE.checkViolation);
+    });
+  });
+
+  it('holds its check and its foreign key by name', async () => {
+    expect(await constraintsOf('disputes', 'c')).toEqual(
+      expect.arrayContaining(['disputes_covered_by_check']),
+    );
+    expect(await constraintsOf('disputes', 'f')).toEqual(
+      expect.arrayContaining(['disputes_covered_by_case_id_fkey']),
     );
   });
 });

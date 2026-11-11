@@ -22,12 +22,17 @@
 // whose `caseOf` opens the new `student_fault_confirmed` case through moderation's
 // `openCompensationCase`: every make-up still scheduled (booked after the reinstatement)
 // `cancelled_by_admin` with the new case on its event, and every open or `frozen` remedy handed to
-// the new case (its default `'hand'`), never to the case dismissed. The sessions owed a remedy never
-// offered and the make-ups the suspension cancelled are the new case's through T035's `covers`.
+// the new case (its default `'hand'`), never to the case dismissed. The case is closed naming the
+// new case (opened or joined) in `covered_by_case_id` (ERD §15 rule 49; the note under T036, the
+// owner's decision (c) on PR #133's Major 1), so the sessions owed a remedy never offered and the
+// make-ups the suspension cancelled are the new case's through T035's `covers`, by id (U1).
 //
 // ON AN ENROLLMENT THAT ENDED ANOTHER WAY meanwhile (a ban, a teacher's end; U2): no second end.
-// Cleared offers nothing (the sessions join the first end's case through T035's `covers`); the
-// fault confirmed cancels nothing and opens no case. The case is closed either way.
+// Cleared offers nothing and closes the case naming the end's case, the enrollment's latest case of
+// an end's reason (`END_REASONS`), read under the enrollment's lock, which every opening takes; the
+// sessions join that case through T035's `covers`, by id. None (a deletion opens none): no link.
+// The fault confirmed cancels nothing, opens no case and names none (owed nothing). The case is
+// closed either way.
 //
 // THE LOCKS (contracts/kernel.md, the row «a `student_suspended` case closed»; `003:T005`'s rules).
 // Cleared: `users` (both, one call, id order, the parties read with no lock from the sessions' own
@@ -54,11 +59,13 @@ import { readStanding } from '../identity/index.js';
 import {
   type CaseClosing,
   closeCase,
+  latestCaseOf,
   type CaseRecord,
   caseRecordOf,
   type CompensationCase,
   openCompensationCase,
 } from '../moderation/index.js';
+import { END_REASONS } from './case-queue.service.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { lockAccounts, lockSessions, lockTeacherSlots } from './remedy-case.repository.js';
 import { type Offered, offeredLine, type RemedyOffer } from './remedy-offer.service.js';
@@ -93,6 +100,8 @@ export interface SuspensionCaseStore {
   closeCase(tx: Transaction, caseId: string, closing: CaseClosing): Promise<Date | null>;
   /** Moderation's: the enrollment's `student_fault_confirmed` case, opened (or joined). */
   openFaultCase(tx: Transaction, enrollmentId: string): Promise<CompensationCase>;
+  /** Moderation's: the case of the enrollment's end, its latest of `END_REASONS`; null for none. */
+  endCaseOf(tx: Transaction, enrollmentId: string): Promise<string | null>;
   /** T004's hand-off: the remaining sessions cancelled, the open remedies handed to `caseOf`. */
   cancelRemaining(
     tx: Transaction,
@@ -115,6 +124,7 @@ export const suspensionCaseStore: SuspensionCaseStore = {
   closeCase,
   openFaultCase: (tx, enrollmentId) =>
     openCompensationCase(tx, enrollmentId, 'student_fault_confirmed'),
+  endCaseOf: (tx, enrollmentId) => latestCaseOf(tx, enrollmentId, [...END_REASONS]),
   cancelRemaining: (tx, enrollmentIds, now, caseOf) =>
     cancelRemainingSessions(tx, enrollmentIds, now, caseOf),
 };
@@ -224,7 +234,8 @@ export function createSuspensionCase({
       };
       const terms = await enrollments.enrollmentFor(tx, enrollmentId);
       if (terms?.status !== 'confirmed') {
-        await close(tx, ids, closing);
+        const endCase = await store.endCaseOf(tx, enrollmentId);
+        await close(tx, ids, endCase === null ? closing : { ...closing, coveredBy: endCase });
         endedAnotherWay(ids, terms?.status ?? 'none', 'resolved');
         return;
       }
@@ -264,11 +275,12 @@ export function createSuspensionCase({
         await clock(tx),
         async () => (await store.openFaultCase(tx, enrollmentId)).caseId,
       );
-      await close(tx, ids, closing);
+      const faultCaseId = ended.caseOf.get(enrollmentId) ?? null;
+      await close(tx, ids, faultCaseId === null ? closing : { ...closing, coveredBy: faultCaseId });
       log.info(
         {
           ...ids,
-          faultCaseId: ended.caseOf.get(enrollmentId) ?? null,
+          faultCaseId,
           cancelledSessions: ended.cancelledSessionIds.length,
           handedRemedies: ended.handedRemedyIds.length,
         },

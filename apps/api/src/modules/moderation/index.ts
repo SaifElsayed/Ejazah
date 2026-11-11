@@ -77,8 +77,9 @@ export {
   type CaseQueueRow,
   type CaseRecord,
   caseRecordOf,
+  latestCaseOf,
   type SuspensionCase,
-  suspensionCasesOf,
+  suspensionCasesCoveredBy,
 } from './compensation-case.repository.js';
 /**
  * T034 of specs/004-sessions (FR-474 to FR-476, FR-422; research R-308): the administrator's

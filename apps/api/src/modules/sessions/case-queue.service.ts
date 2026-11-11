@@ -23,14 +23,12 @@
 //   - for the case an enrollment's end opened (`absence_termination`, `teacher_ended`,
 //     `student_banned`, `student_fault_confirmed`): every session of the enrollment owed a remedy
 //     never offered (`teacher_no_show`, `both_no_show`, `cancelled_by_agreement` with no remedy row;
-//     C1, I1), and the sessions cancelled by a `student_suspended` case of the enrollment that was
-//     open at the end and resolved after it (U2: closed `resolved` after this case's opening; a case
-//     resolved before it was not open at the end, and one still open covers nothing yet);
-//   - for a `student_fault_confirmed` case, each make-up session the dismissed suspension case
-//     cancelled (U1): the `student_suspended` case dismissed at this case's opening, in the same
-//     transaction, so the first dismissed one whose closing (`clock_timestamp()`, later than the
-//     transaction's start) is no earlier than this case's `created_at` (the transaction's `now()`);
-//     a suspension dismissed before, under an earlier fault since restored, is not this one.
+//     C1, I1), and the sessions cancelled by each `student_suspended` case whose
+//     `covered_by_case_id` names this case (ERD §15 rule 49; the note under T036, the owner's
+//     decision (c) on PR #133's Major 1): one resolved, cleared on an enrollment already ended, every
+//     session (U2); one dismissed, its fault confirmed into this case opened or joined, only the
+//     make-ups (U1). T036 writes the link with the closing, so no instant is compared: the database
+//     writes `resolved_at` and the application `created_at`.
 // A complaint answers its text, its raising and its decision, read from its closing (T060 writes
 // it): `resolved` with `enrollment_ended` is `end_enrollment`, with `party_suspended`
 // `suspend_teacher`; `dismissed` is `close`.
@@ -62,7 +60,7 @@ import {
   type CaseRecord,
   caseRecordOf,
   type SuspensionCase,
-  suspensionCasesOf,
+  suspensionCasesCoveredBy,
 } from '../moderation/index.js';
 import {
   type CoveredSessionRow,
@@ -81,7 +79,7 @@ const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
 const positiveWhole = z.int().positive();
 
 /** The reasons of the case an enrollment's end opens (R-312, as T004 lists them). */
-const END_REASONS: ReadonlySet<string> = new Set([
+export const END_REASONS: ReadonlySet<string> = new Set([
   'absence_termination',
   'teacher_ended',
   'student_banned',
@@ -94,8 +92,8 @@ export interface CaseQueueStore {
   caseQueuePage(tx: Transaction, query: CaseQueueQuery): Promise<CaseQueuePage>;
   /** Moderation's: a `disputes` row by id. */
   caseRecordOf(tx: Transaction, caseId: string): Promise<CaseRecord | null>;
-  /** Moderation's: the enrollment's `student_suspended` cases. */
-  suspensionCasesOf(tx: Transaction, enrollmentId: string): Promise<readonly SuspensionCase[]>;
+  /** Moderation's: the `student_suspended` cases whose sessions the case owes (rule 49's link). */
+  suspensionCasesCoveredBy(tx: Transaction, caseId: string): Promise<readonly SuspensionCase[]>;
   teacherNoShowCountsOf(
     tx: Transaction,
     enrollmentIds: readonly string[],
@@ -115,7 +113,7 @@ export interface CaseQueueStore {
 export const caseQueueStore: CaseQueueStore = {
   caseQueuePage,
   caseRecordOf,
-  suspensionCasesOf,
+  suspensionCasesCoveredBy,
   teacherNoShowCountsOf,
   namesOf: displayNamesOf,
   sessionsOfCaseRemedies,
@@ -245,27 +243,9 @@ export function createCaseQueue({
   /** The sessions the case covers, each once, by sequence number (this file's head). */
   const coversOf = async (tx: Transaction, record: CaseRecord): Promise<CaseCoveredSession[]> => {
     const ends = END_REASONS.has(record.reason) && record.kind === 'compensation_case';
-    const suspensions = ends ? await store.suspensionCasesOf(tx, record.enrollmentId) : [];
-    const resolvedAfterTheEnd = suspensions
-      .filter(
-        ({ status, resolvedAt }) =>
-          status === 'resolved' &&
-          resolvedAt !== null &&
-          resolvedAt.getTime() > record.createdAt.getTime(),
-      )
-      .map(({ caseId }) => caseId);
-    const dismissedHere =
-      record.reason === 'student_fault_confirmed'
-        ? suspensions
-            .filter(
-              ({ status, resolvedAt }) =>
-                status === 'dismissed' &&
-                resolvedAt !== null &&
-                resolvedAt.getTime() >= record.createdAt.getTime(),
-            )
-            .toSorted((one, other) => one.resolvedAt!.getTime() - other.resolvedAt!.getTime())
-            .at(0)
-        : undefined;
+    const linked = ends ? await store.suspensionCasesCoveredBy(tx, record.caseId) : [];
+    const linkedThat = (closed: 'resolved' | 'dismissed') =>
+      linked.filter(({ status }) => status === closed).map(({ caseId }) => caseId);
     // A dismissed suspension case keeps the ordinary sessions it cancelled, owed nothing, and
     // leaves out the make-ups, owed under the fault case (T036; the owner's decision of 2026-11-11
     // on lane B's questions, item 2, (c)).
@@ -278,11 +258,9 @@ export function createCaseQueue({
       store.sessionsCancelledByCases(tx, [record.caseId], {
         makeups: faultConfirmed ? 'none' : 'any',
       }),
-      store.sessionsCancelledByCases(tx, resolvedAfterTheEnd, { makeups: 'any' }),
+      store.sessionsCancelledByCases(tx, linkedThat('resolved'), { makeups: 'any' }),
       ends ? store.owedNeverOfferedOf(tx, record.enrollmentId) : [],
-      dismissedHere === undefined
-        ? []
-        : store.sessionsCancelledByCases(tx, [dismissedHere.caseId], { makeups: 'only' }),
+      store.sessionsCancelledByCases(tx, linkedThat('dismissed'), { makeups: 'only' }),
     ]);
     const bySession = new Map<string, CoveredSessionRow>();
     for (const row of parts.flat()) {

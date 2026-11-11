@@ -27,6 +27,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import {
   addMinutes,
+  addSeconds,
   dateColumnOf,
   type LocalDate,
   resolveLocalDateTime,
@@ -357,6 +358,28 @@ describe('cleared: suspend, reinstate and resolve (quickstart.md §6; FR-486; R-
     const covers = await database.$transaction((tx) => queue.get(tx, admin, { caseId: banCase }));
     expect(covers.covers.map(({ sessionId }) => sessionId)).toEqual(cancelled.map(({ id }) => id));
   });
+
+  it('the student_banned case covers them by the link, whatever its created_at says (PR #133’s Major 1, the owner’s (c))', async () => {
+    const on = await confirmedWorld();
+    await suspend(on.studentId);
+    const caseId = await suspensionCaseOf(on.enrollmentId);
+    const cancelled = await sessionsOf(on.enrollmentId);
+    await database.$transaction((tx) => standing.banStudent(tx, admin, on.studentId));
+    await resolve(caseId);
+    const { id: banCase } = await database.dispute.findFirstOrThrow({
+      where: { enrollmentId: on.enrollmentId, reason: 'student_banned' },
+      select: { id: true },
+    });
+    // Saif's mutant as a world: the end case's opening read from an application clock a second ahead
+    // of the database's, so after the suspension case's closing.
+    const { resolvedAt } = await caseRow(caseId);
+    await database.dispute.update({
+      where: { id: banCase },
+      data: { createdAt: new Date(addSeconds(resolvedAt!, 1)) },
+    });
+    const covers = await database.$transaction((tx) => queue.get(tx, admin, { caseId: banCase }));
+    expect(covers.covers.map(({ sessionId }) => sessionId)).toEqual(cancelled.map(({ id }) => id));
+  });
 });
 
 /** Whether completion would complete the enrollment with the case closed (rolled back). */
@@ -469,6 +492,32 @@ describe('the fault confirmed: suspend, reinstate, a make-up booked, and dismiss
     // The dismissed case keeps only the ordinary sessions its suspension cancelled (item 2, (c)).
     const dismissed = await database.$transaction((tx) => queue.get(tx, admin, { caseId }));
     expect(dismissed.covers.map(({ sessionId }) => sessionId)).toEqual([s3, s4]);
+  });
+
+  it('the new case covers the make-up by the link, whatever its created_at says (PR #133’s Major 1, the owner’s (c))', async () => {
+    const on = await confirmedWorld();
+    const [s1, s2] = await Promise.all([1, 2].map((n) => sessionNumbered(on.enrollmentId, n)));
+    await setSession(s1!, 'teacher_no_show');
+    await remedyFor(s1!, 'booked');
+    const makeup = await makeupOf(on, s1!, 5, '2026-12-03');
+    await setSession(s2!, 'both_no_show');
+    await suspend(on.studentId);
+    const caseId = await suspensionCaseOf(on.enrollmentId);
+    await reinstate(on.studentId);
+    await dismiss(caseId);
+    const { id: faultCase } = await database.dispute.findFirstOrThrow({
+      where: { enrollmentId: on.enrollmentId, reason: 'student_fault_confirmed' },
+      select: { id: true },
+    });
+    // Saif's mutant as a world: the fault case's opening read from an application clock a second
+    // ahead of the database's, so after the dismissed case's closing.
+    const { resolvedAt } = await caseRow(caseId);
+    await database.dispute.update({
+      where: { id: faultCase },
+      data: { createdAt: new Date(addSeconds(resolvedAt!, 1)) },
+    });
+    const covers = await database.$transaction((tx) => queue.get(tx, admin, { caseId: faultCase }));
+    expect(covers.covers.map(({ sessionId }) => sessionId)).toEqual([s2, makeup]);
   });
 
   it('on an enrollment a teacher’s end ended meanwhile cancels nothing and opens no case (U2)', async () => {

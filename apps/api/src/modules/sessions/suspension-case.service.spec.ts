@@ -36,6 +36,7 @@ const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')
 const ADMIN = id(1);
 const CASE = id(500);
 const FAULT_CASE = id(501);
+const END_CASE = id(502);
 const ENROLLMENT = id(800);
 const STUDENT = id(902);
 const TEACHER = id(901);
@@ -50,6 +51,8 @@ interface World {
   readonly cancelledSessions?: readonly string[];
   /** The sessions whose offer answers null (no free week). */
   readonly noFreeWeek?: readonly string[];
+  /** The case of the enrollment's end; null for an end that opened none. */
+  readonly endCase?: string | null;
 }
 
 function suspensionOver(world: World = {}) {
@@ -94,6 +97,10 @@ function suspensionOver(world: World = {}) {
     openFaultCase: async (_tx, enrollmentId) => {
       calls.push(['openFaultCase', enrollmentId]);
       return { caseId: FAULT_CASE, opened: true };
+    },
+    endCaseOf: async (_tx, enrollmentId) => {
+      calls.push(['endCaseOf', enrollmentId]);
+      return world.endCase === undefined ? END_CASE : world.endCase;
     },
     cancelRemaining: async (_tx, enrollmentIds, now, caseOf: CaseOf): Promise<EnrollmentsEnded> => {
       calls.push(['cancelRemaining', enrollmentIds, now]);
@@ -273,12 +280,15 @@ describe('cleared: cases.resolve on a student_suspended case (FR-486; R-313)', (
   });
 
   it.each(['cancelled', 'terminated_no_show', 'completed'] as const)(
-    'offers nothing on an enrollment %s meanwhile and closes the case (U2)',
+    'offers nothing on an enrollment %s meanwhile and closes the case naming the end’s case (U2; the note under T036)',
     async (status) => {
       const { service, calls, lines } = suspensionOver({ status });
       await service.clear(tx, ADMIN, TARGET, RESOLVED.note);
       expect(calls.some(([name]) => name === 'sessionsToOffer' || name === 'offerLocked')).toBe(false);
-      expect(calls.filter(([name]) => name === 'closeCase')).toEqual([['closeCase', CASE, RESOLVED]]);
+      expect(calls.filter(([name]) => name === 'endCaseOf' || name === 'closeCase')).toEqual([
+        ['endCaseOf', ENROLLMENT],
+        ['closeCase', CASE, { ...RESOLVED, coveredBy: END_CASE }],
+      ]);
       expect(lines).toEqual([
         [
           'A suspension case closed on an enrollment that ended another way',
@@ -287,6 +297,18 @@ describe('cleared: cases.resolve on a student_suspended case (FR-486; R-313)', (
       ]);
     },
   );
+
+  it('closes the case with no link on an enrollment whose end opened no case (a deletion)', async () => {
+    const { service, calls } = suspensionOver({ status: 'cancelled', endCase: null });
+    await service.clear(tx, ADMIN, TARGET, RESOLVED.note);
+    expect(calls.filter(([name]) => name === 'closeCase')).toEqual([['closeCase', CASE, RESOLVED]]);
+  });
+
+  it('reads no end’s case on a confirmed enrollment, whose sessions it offers', async () => {
+    const { service, calls } = suspensionOver();
+    await service.clear(tx, ADMIN, TARGET, RESOLVED.note);
+    expect(calls.some(([name]) => name === 'endCaseOf')).toBe(false);
+  });
 
   it('refuses a case no longer open, read again under the locks, CONFLICT not_open, offering nothing', async () => {
     const { service, calls } = suspensionOver({ caseStatus: 'dismissed' });
@@ -301,7 +323,7 @@ describe('cleared: cases.resolve on a student_suspended case (FR-486; R-313)', (
 });
 
 describe('the fault confirmed: cases.dismiss on a student_suspended case (R-313; C1, U1)', () => {
-  it('locks the enrollment, cancels it admin, ends what remains into a new fault case, then closes the case dismissed', async () => {
+  it('locks the enrollment, cancels it admin, ends what remains into a new fault case, then closes the case dismissed naming it (the note under T036)', async () => {
     const { service, calls, lines } = suspensionOver();
     await service.confirmFault(tx, ADMIN, TARGET, DISMISSED.note);
     expect(calls.filter(([name]) => name !== 'log')).toEqual([
@@ -311,7 +333,7 @@ describe('the fault confirmed: cases.dismiss on a student_suspended case (R-313;
       ['cancel', ENROLLMENT, 'admin'],
       ['cancelRemaining', [ENROLLMENT], NOW],
       ['openFaultCase', ENROLLMENT],
-      ['closeCase', CASE, DISMISSED],
+      ['closeCase', CASE, { ...DISMISSED, coveredBy: FAULT_CASE }],
     ]);
     expect(lines).toEqual([
       [

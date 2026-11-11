@@ -66,6 +66,7 @@ function covered(n: number, overrides: Partial<CoveredSessionRow> = {}): Covered
 
 interface World {
   readonly records?: Readonly<Record<string, CaseRecord>>;
+  /** The `student_suspended` cases whose `covered_by_case_id` names the case read (rule 49). */
   readonly suspensions?: readonly SuspensionCase[];
   readonly ofRemedies?: readonly CoveredSessionRow[];
   /** The sessions each case's `cancelled_by_admin` events name, by case id. */
@@ -110,7 +111,10 @@ function queueOver(world: World) {
   const store: CaseQueueStore = {
     caseQueuePage: (_tx, query) => page(query),
     caseRecordOf: async (_tx, caseId) => world.records?.[caseId] ?? null,
-    suspensionCasesOf: async () => world.suspensions ?? [],
+    suspensionCasesCoveredBy: async (_tx, caseId) => {
+      reads.push(['linked', caseId]);
+      return world.suspensions ?? [];
+    },
     teacherNoShowCountsOf: async (_tx, ids) => {
       reads.push(['counts', ids]);
       return world.counts ?? new Map();
@@ -348,34 +352,25 @@ describe('cases.get (FR-478; R-312, R-313)', () => {
     },
   );
 
-  it('a confirmed fault covers the make-ups the dismissed suspension case cancelled, not an earlier one’s (U1)', async () => {
-    const dismissedHere = id(510);
-    const dismissedBefore = id(509);
-    const { queue } = queueOver({
+  it('a confirmed fault covers the make-ups of each dismissed suspension case linked to it, a joined case’s two included, and no unlinked one’s (U1; the note under T036)', async () => {
+    const dismissedFirst = id(509);
+    const dismissedThen = id(510);
+    const unlinked = id(514);
+    const { queue, reads } = queueOver({
       records: { [CASE]: record({ reason: 'student_fault_confirmed' }) },
       suspensions: [
-        {
-          caseId: dismissedBefore,
-          status: 'dismissed',
-          createdAt: new Date('2026-10-01T10:00:00Z'),
-          resolvedAt: new Date('2026-10-05T10:00:00Z'),
-        },
-        {
-          caseId: dismissedHere,
-          status: 'dismissed',
-          createdAt: new Date('2026-10-20T10:00:00Z'),
-          // The dismissal's own `clock_timestamp()`, after its transaction's `now()` that the new
-          // case's `created_at` holds.
-          resolvedAt: new Date('2026-11-01T10:00:00.005Z'),
-        },
+        { caseId: dismissedFirst, status: 'dismissed' },
+        { caseId: dismissedThen, status: 'dismissed' },
       ],
       cancelledBy: {
-        [dismissedHere]: [covered(1), covered(105)],
-        [dismissedBefore]: [covered(106)],
+        [dismissedFirst]: [covered(2), covered(107)],
+        [dismissedThen]: [covered(1), covered(105)],
+        [unlinked]: [covered(106)],
       },
     });
     const answer = await queue.get(tx, ADMIN, { caseId: CASE });
-    expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(105)]);
+    expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(105), id(107)]);
+    expect(reads).toContainEqual(['linked', CASE]);
   });
 
   it.each([
@@ -394,35 +389,30 @@ describe('cases.get (FR-478; R-312, R-313)', () => {
     },
   );
 
-  it('the case an enrollment’s end opened covers what a suspension case open at the end, later resolved, cancelled (U2)', async () => {
+  it('the case an enrollment’s end opened covers every session of a resolved suspension case linked to it, and no unlinked one’s (U2; the note under T036)', async () => {
     const resolvedLater = id(511);
-    const resolvedBefore = id(512);
-    const stillOpen = id(513);
-    const { queue } = queueOver({
+    const unlinked = id(512);
+    const { queue, reads } = queueOver({
       records: { [CASE]: record({ reason: 'student_banned' }) },
-      suspensions: [
-        {
-          caseId: resolvedLater,
-          status: 'resolved',
-          createdAt: new Date('2026-10-20T10:00:00Z'),
-          resolvedAt: new Date('2026-11-05T10:00:00Z'),
-        },
-        {
-          caseId: resolvedBefore,
-          status: 'resolved',
-          createdAt: new Date('2026-09-20T10:00:00Z'),
-          resolvedAt: new Date('2026-10-01T10:00:00Z'),
-        },
-        { caseId: stillOpen, status: 'open', createdAt: new Date('2026-10-25T10:00:00Z'), resolvedAt: null },
-      ],
+      suspensions: [{ caseId: resolvedLater, status: 'resolved' }],
       cancelledBy: {
-        [resolvedLater]: [covered(6), covered(7)],
-        [resolvedBefore]: [covered(2)],
-        [stillOpen]: [covered(9)],
+        [resolvedLater]: [covered(6), covered(107)],
+        [unlinked]: [covered(2)],
       },
     });
     const answer = await queue.get(tx, ADMIN, { caseId: CASE });
-    expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(6), id(7)]);
+    expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(6), id(107)]);
+    expect(reads).toContainEqual(['linked', CASE]);
+  });
+
+  it('a case no end opened reads no link', async () => {
+    const { queue, reads } = queueOver({
+      records: { [CASE]: record({ reason: 'admin_cancellation' }) },
+      suspensions: [{ caseId: id(515), status: 'resolved' }],
+      cancelledBy: { [id(515)]: [covered(4)] },
+    });
+    expect((await queue.get(tx, ADMIN, { caseId: CASE })).covers).toEqual([]);
+    expect(reads.some(([read]) => read === 'linked')).toBe(false);
   });
 
   it('lists a session several parts name once, by sequence number', async () => {

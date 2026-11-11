@@ -8,12 +8,14 @@
 //   run's committed rows, so each probe starts its part after a marker case of its own: the rows
 //   after it are this probe's, ids being time-ordered (uuidv7).
 // - Each part of `covers`, the reads of `case-covers.repository.ts` and moderation's
-//   `suspensionCasesOf`: the remedies the case holds; the sessions whose `cancelled_by_admin` event
-//   names it; for an enrollment's end, a session owed a remedy never offered (a Teacher-No-Show, a
-//   Both-No-Show and a never-offered Cancelled-By-Agreement session, the third analysis's I1) and
-//   none owed or offered; for a confirmed fault, a make-up the dismissed suspension case cancelled
-//   (U1) and not the ordinary session it cancelled; for the first end, the sessions a suspension
-//   case open at the end, resolved after it, cancelled (U2), and none of one resolved before.
+//   `suspensionCasesCoveredBy`: the remedies the case holds; the sessions whose `cancelled_by_admin`
+//   event names it; for an enrollment's end, a session owed a remedy never offered (a
+//   Teacher-No-Show, a Both-No-Show and a never-offered Cancelled-By-Agreement session, the third
+//   analysis's I1) and none owed or offered; for a confirmed fault, a make-up the dismissed
+//   suspension case linked to it cancelled (U1) and not the ordinary session it cancelled; for an
+//   end, the sessions a resolved suspension case linked to it cancelled (U2), and none of one not
+//   linked. The link is `covered_by_case_id` (ERD §15 rule 49; the note under T036), so the
+//   instants do not matter: each probe's are set against the link.
 //
 // The rows are written and committed by the harness, each probe with its own enrollment.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
@@ -124,6 +126,8 @@ function caseOf(
     readonly resolvedAt?: Date;
     readonly sessionId?: string;
     readonly raisedBy?: string;
+    /** On a closed `student_suspended` case: the case that owes its sessions (rule 49). */
+    readonly coveredBy?: string;
   },
 ): Promise<string> {
   const status = values.status ?? 'open';
@@ -135,6 +139,7 @@ function caseOf(
     ...(values.sessionId === undefined ? {} : { session_id: values.sessionId }),
     ...(values.raisedBy === undefined ? {} : { raised_by_user_id: values.raisedBy }),
     ...(values.createdAt === undefined ? {} : { created_at: values.createdAt }),
+    ...(values.coveredBy === undefined ? {} : { covered_by_case_id: values.coveredBy }),
     ...(status === 'open'
       ? {}
       : {
@@ -293,20 +298,19 @@ describe('cases.get: each part of covers (R-312, R-313; C1, I1, U1, U2)', () => 
     expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([noShow, both, agreed]);
   });
 
-  it('a confirmed fault covers each make-up the dismissed suspension case cancelled, not its ordinary sessions (U1)', async () => {
+  it('a confirmed fault covers each make-up the dismissed suspension case linked to it cancelled, not its ordinary sessions (U1)', async () => {
     const enrollment = await confirmed();
-    const suspendedAt = new Date('2026-10-20T08:00:00Z');
-    const faultAt = new Date('2026-11-01T08:00:00.000Z');
+    const fault = await caseOf(enrollment.id, {
+      reason: 'student_fault_confirmed',
+      // An application clock ahead of the database's: opened after the dismissal's closing.
+      createdAt: new Date('2026-11-01T08:00:00.050Z'),
+    });
     const suspended = await caseOf(enrollment.id, {
       reason: 'student_suspended',
       status: 'dismissed',
-      createdAt: suspendedAt,
-      // The dismissal's clock_timestamp(), after its transaction's now(), the new case's opening.
-      resolvedAt: new Date('2026-11-01T08:00:00.003Z'),
-    });
-    const fault = await caseOf(enrollment.id, {
-      reason: 'student_fault_confirmed',
-      createdAt: faultAt,
+      createdAt: new Date('2026-10-20T08:00:00Z'),
+      resolvedAt: new Date('2026-11-01T08:00:00.000Z'),
+      coveredBy: fault,
     });
     const ordinary = await sessionOf(enrollment, 1, { status: 'teacher_no_show' });
     const cancelledOrdinary = await sessionOf(enrollment, 2, { status: 'cancelled_by_admin' });
@@ -326,25 +330,28 @@ describe('cases.get: each part of covers (R-312, R-313; C1, I1, U1, U2)', () => 
     expect(dismissed.covers.map(({ sessionId }) => sessionId)).toEqual([cancelledOrdinary]);
   });
 
-  it('the first end’s case covers what a suspension case open at the end, resolved after it, cancelled (U2), and not one resolved before', async () => {
+  it('the end’s case covers what a resolved suspension case linked to it cancelled (U2), and not an unlinked one’s', async () => {
     const enrollment = await confirmed();
     const before = await caseOf(enrollment.id, {
       reason: 'student_suspended',
       status: 'resolved',
       createdAt: new Date('2026-10-05T08:00:00Z'),
-      resolvedAt: new Date('2026-10-06T08:00:00Z'),
+      // After the ban's opening by the instants, but cleared on a confirmed enrollment: no link.
+      resolvedAt: new Date('2026-11-06T08:00:00Z'),
     });
     const earlier = await sessionOf(enrollment, 1, { status: 'cancelled_by_admin' });
     await cancelledEvent(enrollment.id, earlier, before);
+    const ban = await caseOf(enrollment.id, {
+      reason: 'student_banned',
+      createdAt: new Date('2026-11-01T08:00:00Z'),
+    });
     const during = await caseOf(enrollment.id, {
       reason: 'student_suspended',
       status: 'resolved',
       createdAt: new Date('2026-10-20T08:00:00Z'),
-      resolvedAt: new Date('2026-11-05T08:00:00Z'),
-    });
-    const ban = await caseOf(enrollment.id, {
-      reason: 'student_banned',
-      createdAt: new Date('2026-11-01T08:00:00Z'),
+      // Before the ban's opening by the instants (an application clock ahead), linked all the same.
+      resolvedAt: new Date('2026-10-31T08:00:00Z'),
+      coveredBy: ban,
     });
     const later = await sessionOf(enrollment, 3, { status: 'cancelled_by_admin' });
     await cancelledEvent(enrollment.id, later, during);
