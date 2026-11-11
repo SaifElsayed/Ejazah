@@ -55,6 +55,7 @@ import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
 import { ApiProvider, useApi } from '../lib/api';
 import { retryNetworkFailure } from '../lib/client';
+import { genericErrorKey } from '../lib/error-message';
 import { followAppState } from '../lib/focus';
 import { useLiveChannel } from '../lib/live-channel';
 import { registerVideoGlobals } from '../lib/livekit';
@@ -110,7 +111,7 @@ function SessionGuard({ queries }: { readonly queries: QueryClient }) {
   const destination = destinationFor(session);
   if (destination === null) {
     return me.isError || me.isPaused ? (
-      <LaunchFailed onRetry={() => void me.refetch()} />
+      <LaunchFailed error={me.error} onRetry={() => void me.refetch()} />
     ) : (
       <Waiting />
     );
@@ -214,9 +215,19 @@ function Waiting() {
   return <View style={{ flex: 1, backgroundColor: color.bg }} />;
 }
 
-/** The launch when `account.me` could not be read (offline, the server down): say so, retry. */
-function LaunchFailed({ onRetry }: { readonly onRetry: () => void }) {
+/**
+ * The launch when `account.me` could not be read (offline, the server down): say so, retry. A read
+ * refused RATE_LIMITED says when to try again (T065, `genericErrorKey`).
+ */
+function LaunchFailed({
+  error,
+  onRetry,
+}: {
+  readonly error: unknown;
+  readonly onRetry: () => void;
+}) {
   const t = useT();
+  const message = genericErrorKey(error, 'common.state.loadError');
   const { color } = useTheme();
   return (
     <View
@@ -229,7 +240,7 @@ function LaunchFailed({ onRetry }: { readonly onRetry: () => void }) {
       }}
     >
       <Banner icon={{ name: 'wifi-off' }} tone="danger">
-        {t('common.state.loadError')}
+        {t(message.key, message.values)}
       </Banner>
       <Button label={t('common.action.retry')} variant="secondary" onPress={onRetry} />
     </View>

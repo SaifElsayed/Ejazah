@@ -38,11 +38,8 @@ import { useSessionRead } from '../api';
 import { ZoneLines } from '../components/ZoneLines';
 import { type PreSession, SESSION_STATUS_LABEL, usePreSession } from '../pre-session';
 
-/**
- * `sessions.get`'s answer with T065's `counterpartyInRoom` (lane A1 adds it to the contract,
- * required; read as optional until the integration merges it).
- */
-type SessionRead = SessionsGetOutput & { readonly counterpartyInRoom?: boolean };
+/** `sessions.get`'s answer, `counterpartyInRoom` (T065) among it. */
+type SessionRead = SessionsGetOutput;
 
 /** The route's `id`, or '' when the link carries none. */
 function useSessionParam(): string {
@@ -79,6 +76,7 @@ export function PreSessionScreen({
         ) : (
           <NotLoaded
             failed={read.isError || me.isError}
+            error={read.error ?? me.error}
             onRetry={() => {
               if (read.isError) void read.refetch();
               if (me.isError) void me.refetch();

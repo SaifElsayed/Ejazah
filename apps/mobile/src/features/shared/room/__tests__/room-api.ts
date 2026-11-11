@@ -41,11 +41,8 @@ export const ENROLLMENT_ID = '0193a6f0-0000-7000-8000-0000000000e1';
 export const CAIRO = 'Africa/Cairo';
 export const DUBAI = 'Asia/Dubai';
 
-/**
- * `sessions.get`'s answer with T065's `counterpartyInRoom`, which lane A1 adds to the contract;
- * read as optional here until the integration merges it.
- */
-export type SessionRead = SessionsGetOutput & { readonly counterpartyInRoom?: boolean };
+/** `sessions.get`'s answer, `counterpartyInRoom` (T065) among it. */
+export type SessionRead = SessionsGetOutput;
 
 /** A scheduled 45-minute session on Wednesday 2026-11-11 at 18:00 in Cairo (16:00 UTC). */
 export function session(of: Partial<SessionRead> = {}): SessionRead {

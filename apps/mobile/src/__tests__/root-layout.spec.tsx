@@ -297,6 +297,27 @@ describe('the root layout', () => {
     expect(mockApi.account.me.query).toHaveBeenCalledTimes(1);
   });
 
+  // T065 (the owner's decision of 2026-11-06, the RATE_LIMITED message): the launch's own read,
+  // refused by a limit, says when to try again, as every generic-error path does.
+  it('says when to try again when the launch read is refused RATE_LIMITED (T065)', async () => {
+    mockApi.account.me.query.mockRejectedValue(
+      apiError('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(
+      await screen.findByText(translate('ar', 'common.state.rateLimitedIn', { count: 2 })),
+    ).toBeTruthy();
+    expect(screen.queryByText(ar('common.state.loadError'))).toBeNull();
+  });
+
+  it('says to wait a little when the launch read is refused RATE_LIMITED with no time (T065)', async () => {
+    mockApi.account.me.query.mockRejectedValue(apiError('RATE_LIMITED'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText(ar('common.state.rateLimited'))).toBeTruthy();
+  });
+
   // T065 (research R-324, item 3): one live channel at the root while the person is signed in.
   it('opens the live channel once signed in, and closes it on signing out (T065)', async () => {
     // React Native's Jest mock of AppState holds no state; the app is in the foreground here.

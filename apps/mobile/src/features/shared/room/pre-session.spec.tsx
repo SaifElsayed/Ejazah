@@ -241,6 +241,20 @@ describe('PreSessionScreen (FR-434, FR-494)', () => {
     expect(await screen.findByText('يوسف أحمد')).toBeTruthy();
   });
 
+  // T065 (the owner's decision of 2026-11-06, the RATE_LIMITED message): the screen's failed read
+  // hands its error to `NotLoaded`, which says when to try again.
+  it('says when to try again when sessions.get is refused RATE_LIMITED (T065)', async () => {
+    mockApi.sessions.get.query.mockRejectedValue(
+      apiError('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    await inBothDirections(ui, async (_rendered, direction) => {
+      expect(
+        await screen.findByText(said(direction, 'common.state.rateLimitedIn', { count: 2 })),
+      ).toBeTruthy();
+      expect(absent(said(direction, 'common.state.loadError'))).toBeNull();
+    });
+  });
+
   it('goes back where it was opened from', async () => {
     mockApi.sessions.get.query.mockResolvedValue(session());
     await renderIn('rtl', ui());
