@@ -19,10 +19,10 @@ export function PendingOrderBadge({
   readonly onReport: (enrollmentId: string, report: OrderReport) => void;
 }) {
   const t = useT();
-  const { state, failed } = usePendingOrder(enrollmentId, everyMs);
+  const { state, failed, error } = usePendingOrder(enrollmentId, everyMs);
   useEffect(
-    () => onReport(enrollmentId, { state, failed }),
-    [onReport, enrollmentId, state, failed],
+    () => onReport(enrollmentId, { state, failed, error }),
+    [onReport, enrollmentId, state, failed, error],
   );
   if (state === 'unknown') return null;
   const badge = ORDER_BADGE[state];

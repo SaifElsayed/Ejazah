@@ -26,6 +26,8 @@ export interface ConfirmingSchedule {
   readonly over: boolean;
   /** The schedule's numbers could not be read. */
   readonly failed: boolean;
+  /** The failed read's error while `failed`, else null (T065 of specs/004-sessions). */
+  readonly error: unknown;
   readonly retry: () => void;
   /** Whether the screen's last answer holds an enrollment Confirming (`useScheduledRead`). */
   readonly setConfirming: (confirming: boolean) => void;
@@ -38,6 +40,7 @@ export interface ConfirmingSchedule {
 export function useConfirmingSchedule(): ConfirmingSchedule {
   const [confirming, setConfirming] = useState(false);
   const config = usePublicConfig();
+  const failed = confirming && config.isError;
   const numbers = config.data?.checkout;
   const windowMs =
     numbers === undefined
@@ -56,7 +59,8 @@ export function useConfirmingSchedule(): ConfirmingSchedule {
         ? numbers.confirmingPollSeconds * SECOND_MS
         : false,
     over: confirming && over,
-    failed: confirming && config.isError,
+    failed,
+    error: failed ? config.error : null,
     retry: () => void config.refetch(),
     setConfirming,
   };
@@ -69,6 +73,8 @@ export interface ConfirmingRead<T> {
   readonly answered: boolean;
   /** The last read, or the schedule's numbers, failed: the screen draws its retry state. */
   readonly failed: boolean;
+  /** The failed read's error while `failed`, the screen's own read first, else null (T065). */
+  readonly error: unknown;
   /** FR-384: the window ended with an enrollment still Confirming. */
   readonly over: boolean;
   /** When the answer drawn was stored (the `MainOffline` line). */
@@ -97,6 +103,7 @@ export function useScheduledRead<T>(
     data: answered || !online ? query.data : undefined,
     answered,
     failed: query.isError || schedule.failed,
+    error: query.isError ? query.error : schedule.error,
     over: schedule.over && confirming,
     updatedAt: query.dataUpdatedAt,
     retry: () => {

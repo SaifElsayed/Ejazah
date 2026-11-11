@@ -9,7 +9,8 @@
 // failed read on opening draws the retry state, never the cached answer; a failed read inside the
 // window draws the retry state over the answer and claims nothing. Once Phase 3 settles them
 // (004:T020, FR-495), the detail draws each session's status after settlement in both languages, a
-// disputed session as «محل نزاع», never the outcome frozen beside it (R-308).
+// disputed session as «محل نزاع», never the outcome frozen beside it (R-308). T065 of
+// specs/004-sessions: a read refused `RATE_LIMITED` says when to try again, whichever read it was.
 import type {
   CheckoutStatusOutput,
   EnrollmentsGetOutput,
@@ -209,6 +210,9 @@ const said = (direction: Direction, key: MessageKey, values?: MessageValues) =>
   translate(localeOf(direction), key, values);
 const ar = (key: MessageKey, values?: MessageValues) => translate('ar', key, values);
 const named = (direction: Direction) => (direction === 'rtl' ? QURAN.nameAr : QURAN.nameEn);
+/** A `RATE_LIMITED` refusal, with the seconds until its window ends (T065 of specs/004-sessions). */
+const rateLimited = (seconds: string) =>
+  apiError('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: seconds }]);
 
 /** A session's line in `zone`, as the cards, the home and the detail write it (FR-393). */
 const when = (direction: Direction, session: ListedSession, zone: string) => {
@@ -796,6 +800,31 @@ describe.each<[string, () => ReactElement]>([
     expect(reads()).toBe(before);
     expect(mockApi.api.checkout.status.query.mock.calls.length).toBe(orderReads);
     expect(screen.queryByText(ar('student.enrollments.confirming.title'))).toBeNull();
+  });
+
+  // T065 of specs/004-sessions: the order's read and the schedule's numbers are reads of their
+  // own, each refused under a limit; the retry state says when to try again.
+  it('an order read refused RATE_LIMITED: the retry state says when to try again (T065)', async () => {
+    answer(confirming);
+    mockApi.api.checkout.status.query.mockRejectedValue(rateLimited('61'));
+    await inBothDirections(within(ui()), async (_rendered, direction) => {
+      expect(
+        await screen.findByText(said(direction, 'common.state.rateLimitedIn', { count: 2 })),
+      ).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'common.state.loadError'))).toBeNull();
+    });
+  });
+
+  it('the schedule’s numbers refused RATE_LIMITED while Confirming: the retry state says when to try again (T065)', async () => {
+    answer(confirming);
+    mockApi.value.client.publicConfig.mockRejectedValue(rateLimited('61'));
+    await inBothDirections(within(ui()), async (_rendered, direction) => {
+      expect(await screen.findByText(said(direction, 'status.enrollment.confirming'))).toBeTruthy();
+      expect(
+        await screen.findByText(said(direction, 'common.state.rateLimitedIn', { count: 2 })),
+      ).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'common.state.loadError'))).toBeNull();
+    });
   });
 
   // T091: after a failed order the student retries; Processing reads the new order into the same

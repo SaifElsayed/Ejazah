@@ -37,7 +37,13 @@ export function PaymentSlotUnavailable() {
   useLeaveFor(outcome, 'slotUnavailable', enrollmentId);
 
   if (status.data === undefined || outcome !== 'slotUnavailable') {
-    return <OutcomeLoading failed={status.isError} onRetry={() => void status.refetch()} />;
+    return (
+      <OutcomeLoading
+        failed={status.isError}
+        error={status.error}
+        onRetry={() => void status.refetch()}
+      />
+    );
   }
   const { summary, lastOrder } = status.data;
   return (
