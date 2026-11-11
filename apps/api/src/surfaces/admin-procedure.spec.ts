@@ -445,3 +445,173 @@ describe('the audit writer must be bound before the process starts (T108)', () =
     expect(requireAuditWriter(writer)).toBe(writer);
   });
 });
+
+// T061 of specs/004-sessions (L5; research R-321, «The deferred overlap check and a deadlock»;
+// contracts/kernel.md, `runRetryingDeadlockOnce` and `adminProcedure`): the kind's optional
+// deadlock declaration, which only `sessions.restore` makes. Declared, the call's whole transaction,
+// its audit entry with it, runs through T002's `runRetryingDeadlockOnce`: a deadlock at a statement
+// (thrown by the handler) or at the commit is retried once in a new transaction, each writing one
+// warn line `{ operation, attempt, enrollmentId }`; a second answers the declared refusal with
+// nothing kept and one line more. Undeclared, or any other failure, nothing is retried.
+describe('the administrator kind retries a declared deadlock once (T061, L5)', () => {
+  const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000000e1';
+
+  /** The adapter's deadlock refusal, as `db-errors.ts` reads it. */
+  const deadlock = () =>
+    Object.assign(new Error('deadlock detected'), {
+      name: 'DriverAdapterError',
+      cause: { originalCode: '40P01', originalMessage: 'deadlock detected' },
+    });
+
+  /** Refuses at the commit while `failCommits` lasts, as a deferred check would. */
+  class CommitFailingDatabase extends FakeDatabase {
+    failCommits = 0;
+    override async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+      if (this.failCommits === 0) return super.run(work);
+      this.failCommits -= 1;
+      // The work runs; its commit is refused, so nothing it staged is kept.
+      return super.run(async (tx) => {
+        await work(tx);
+        throw deadlock();
+      });
+    }
+  }
+
+  const call = { input: z.object({ enrollmentId: z.string() }), output: z.string() };
+  const declaration = {
+    operation: 'sessions.restore',
+    ids: (input: { enrollmentId: string }) => ({ enrollmentId: input.enrollmentId }),
+    refusal: () =>
+      new DomainError('RESTORE_REFUSED', undefined, {
+        details: [{ path: 'cause', code: 'time_taken' }],
+      }),
+  };
+
+  function surfaceFor(database: FakeDatabase, failStatements: { count: number }) {
+    return createAdminRouter({
+      restore: adminProcedure({ ...call, deadlock: declaration }).mutation(({ input, ctx }) => {
+        handlerRan();
+        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.enrollmentId });
+        ctx.audit.record(approval);
+        if (failStatements.count > 0) {
+          failStatements.count -= 1;
+          throw deadlock();
+        }
+        return 'restored';
+      }),
+      undeclared: adminProcedure(call).mutation(({ input, ctx }) => {
+        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.enrollmentId });
+        ctx.audit.record(approval);
+        if (failStatements.count > 0) {
+          failStatements.count -= 1;
+          throw deadlock();
+        }
+        return 'restored';
+      }),
+      conflict: adminProcedure({ ...call, deadlock: declaration }).mutation(({ ctx }) => {
+        database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: 'x' });
+        throw new DomainError('CONFLICT');
+      }),
+    });
+  }
+
+  function callerFor(database: FakeDatabase, failStatements: { count: number }) {
+    const lines: Record<string, unknown>[] = [];
+    const context = createAdminContext({
+      session: { adminId: 'admin-1', sessionId: 'session-1', mfaVerified: true },
+      log: createLogger({
+        level: 'info',
+        destination: { write: (line) => lines.push(JSON.parse(line) as Record<string, unknown>) },
+      }),
+      administration: { transactions: database, auditWriter: writerOver(database) },
+      services: unusedAdminServices,
+      rateLimiter: limiterAt(1_000),
+      clientAddress: '203.0.113.7',
+    });
+    return {
+      lines,
+      caller: createAdminCallerFactory(surfaceFor(database, failStatements))(context),
+    };
+  }
+
+  const deadlockLines = (lines: readonly Record<string, unknown>[]) =>
+    lines
+      .filter(({ operation }) => operation !== undefined)
+      .map(({ operation, attempt, attempts, enrollmentId, msg }) => ({
+        operation,
+        attempt,
+        attempts,
+        enrollmentId,
+        msg,
+      }));
+
+  const line = (attempt: number | undefined, attempts: number | undefined, msg: string) => ({
+    operation: 'sessions.restore',
+    attempt,
+    attempts,
+    enrollmentId: ENROLLMENT,
+    msg,
+  });
+
+  it('retries a deadlock at a statement once in a new transaction, keeping one action and one audit entry', async () => {
+    handlerRan.mockClear();
+    const database = new FakeDatabase();
+    const { caller, lines } = callerFor(database, { count: 1 });
+    expect(await caller.restore({ enrollmentId: ENROLLMENT })).toBe('restored');
+    expect(handlerRan).toHaveBeenCalledTimes(2);
+    expect(database.opened).toBe(2);
+    expect(database.committed).toEqual([
+      { table: 'teacher_approvals', teacherId: ENROLLMENT },
+      { table: 'audit_logs', record: { ...approval, adminId: 'admin-1' } },
+    ]);
+    expect(deadlockLines(lines)).toEqual([line(1, undefined, 'Transaction deadlocked')]);
+  });
+
+  it('retries a deadlock at the commit once', async () => {
+    const database = new CommitFailingDatabase();
+    database.failCommits = 1;
+    const { caller, lines } = callerFor(database, { count: 0 });
+    expect(await caller.restore({ enrollmentId: ENROLLMENT })).toBe('restored');
+    expect(database.opened).toBe(2);
+    expect(database.committed).toHaveLength(2);
+    expect(deadlockLines(lines)).toEqual([line(1, undefined, 'Transaction deadlocked')]);
+  });
+
+  it('answers a second deadlock the declared refusal, nothing kept, the two deadlock lines and the refusal’s', async () => {
+    const database = new FakeDatabase();
+    const { caller, lines } = callerFor(database, { count: 2 });
+    const thrown: unknown = await caller
+      .restore({ enrollmentId: ENROLLMENT })
+      .catch((error: unknown) => error);
+    const { status, body } = toErrorShape(thrown as TRPCError);
+    expect([status, body.code]).toEqual([409, 'RESTORE_REFUSED']);
+    expect(body).toMatchObject({ details: [{ path: 'cause', code: 'time_taken' }] });
+    expect(database.opened).toBe(2);
+    expect(database.committed).toEqual([]);
+    expect(deadlockLines(lines)).toEqual([
+      line(1, undefined, 'Transaction deadlocked'),
+      line(2, undefined, 'Transaction deadlocked'),
+      line(undefined, 2, 'Refused after a second deadlock'),
+    ]);
+  });
+
+  it('does not retry a deadlock on a procedure that declares none', async () => {
+    const database = new FakeDatabase();
+    const { caller, lines } = callerFor(database, { count: 1 });
+    expect(await refusal(() => caller.undeclared({ enrollmentId: ENROLLMENT }))).toEqual(internal);
+    expect(database.opened).toBe(1);
+    expect(database.committed).toEqual([]);
+    expect(deadlockLines(lines)).toEqual([]);
+  });
+
+  it('does not retry any other failure of a declared procedure', async () => {
+    const database = new FakeDatabase();
+    const { caller } = callerFor(database, { count: 0 });
+    expect(await refusal(() => caller.conflict({ enrollmentId: ENROLLMENT }))).toEqual({
+      status: 409,
+      code: 'CONFLICT',
+    });
+    expect(database.opened).toBe(1);
+    expect(database.committed).toEqual([]);
+  });
+});

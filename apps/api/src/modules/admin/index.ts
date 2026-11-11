@@ -31,6 +31,9 @@ import {
   createCaseClosing,
   createCaseQueue,
   createCompletion,
+  // T061.
+  createRestore,
+  type Restore,
   createDisputeQueue,
   createDisputeResolution,
   createManualCase,
@@ -156,6 +159,8 @@ export interface AdminServices {
    */
   readonly disputes: DisputeQueue &
     DisputeResolution & { readonly revise: Revisions['reviseRuling'] };
+  /** T061 of specs/004-sessions: the sessions module's restore, keyed on the call's transaction. */
+  readonly restore: Restore;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -269,6 +274,18 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       }),
     },
     ...adminSessionServices(dependencies, standing),
+    // T061: the restore (R-322), keyed on the call's transaction, T028's offer widened for it.
+    restore: createRestore({
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
+      offers: createRemedyOffer({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      settings: dependencies.settings,
+      log: dependencies.log,
+    }),
   };
 }
 

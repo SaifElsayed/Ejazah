@@ -131,6 +131,9 @@ import type {
   sessionsReviewReviseOutput,
   disputesReviseInput,
   disputesReviseOutput,
+  // T061.
+  sessionsRestoreInput,
+  sessionsRestoreOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -637,6 +640,20 @@ export interface AdminSurfaceServices {
       input: z.output<typeof disputesReviseInput>,
     ): Promise<{
       readonly outcome: z.input<typeof disputesReviseOutput>;
+      readonly replayed: boolean;
+    }>;
+  };
+  /**
+   * T061 of specs/004-sessions (FR-454, FR-455): an administrator's restore, the sessions module's,
+   * keyed on the call's transaction; `replayed` from the key's row.
+   */
+  readonly restore: {
+    restore(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsRestoreInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof sessionsRestoreOutput>;
       readonly replayed: boolean;
     }>;
   };

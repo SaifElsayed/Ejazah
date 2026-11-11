@@ -26,6 +26,14 @@
 // opens and apart from the key; keyed on the kind's transaction (`IdempotencyService.runOn`), it
 // audits `session.outcome_corrected` on the session with the reason on its first run only, a
 // replay recording none (`ctx.audit.replayed()`). What it does is `revision.service.ts`'.
+//
+// T061 (FR-454, FR-455, FR-470; L5): `sessions.restore` declares its own limit,
+// `rate_limit_enrollment_restore`, the administrator as subject, checked before the transaction
+// opens and apart from the key, and the kind's deadlock retry: the whole transaction, the key's claim
+// and the audit entry with it, rerun once on a deadlock, a second answering `RESTORE_REFUSED`
+// `time_taken` (T002's lines are the refusal's log, so the error is marked «logged»). Keyed on the
+// kind's transaction (`runOn`), it audits `enrollment.restored` on the enrollment with the reason on
+// its first run only. What it does is `restore.service.ts`'.
 import {
   outagesListInput,
   outagesListOutput,
@@ -45,18 +53,19 @@ import {
   sessionsReviewResolveOutput,
   sessionsReviewReviseInput,
   sessionsReviewReviseOutput,
+  // T061.
+  sessionsRestoreInput,
+  sessionsRestoreOutput,
 } from '@ijazah/contracts/admin';
 
+import { DomainError } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
 
 const outagesRouter = createAdminRouter({
   record: adminProcedure({ input: outagesRecordInput, output: outagesRecordOutput }).mutation(
     async ({ ctx, input }) => {
-      const recorded = await ctx.services.outages.record(
-        ctx.tx,
-        ctx.administrator.adminId,
-        input,
-      );
+      const recorded = await ctx.services.outages.record(ctx.tx, ctx.administrator.adminId, input);
       ctx.audit.record({
         action: 'provider_outage.recorded',
         targetType: 'provider_outage',
@@ -193,4 +202,38 @@ export const sessionsAdminRouter = createAdminRouter({
       return cancelled;
     },
   ),
+
+  // T061.
+  restore: adminProcedure({
+    input: sessionsRestoreInput,
+    output: sessionsRestoreOutput,
+    rateLimit: { key: 'rate_limit_enrollment_restore', subject: 'caller' },
+    deadlock: {
+      operation: 'sessions.restore',
+      ids: (input) => ({ enrollmentId: input.enrollmentId }),
+      refusal: () =>
+        markRefusalLogged(
+          new DomainError('RESTORE_REFUSED', undefined, {
+            details: [{ path: 'cause', code: 'time_taken' }],
+          }),
+        ),
+    },
+  }).mutation(async ({ ctx, input }) => {
+    const { answer, replayed } = await ctx.services.restore.restore(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return answer;
+    }
+    ctx.audit.record({
+      action: 'enrollment.restored',
+      targetType: 'enrollment',
+      targetId: input.enrollmentId,
+      reason: input.reason,
+    });
+    return answer;
+  }),
 });

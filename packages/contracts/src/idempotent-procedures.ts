@@ -32,6 +32,9 @@ export const idempotentProcedures = [
   // the administrator surface's first keyed procedures, keyed on the kind's transaction (runOn).
   'disputes.revise',
   'sessions.review.revise',
+  // T061 of specs/004-sessions (admin-surface.md, `sessions.restore`): keyed on the kind's
+  // transaction (runOn), as T059's are.
+  'sessions.restore',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

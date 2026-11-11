@@ -512,3 +512,8 @@ export {
   createComplaintDecision,
 } from './complaint-decision.service.js';
 export { lockForStanding, type StandingLockStore } from './standing-locks.js';
+/**
+ * T061 of specs/004-sessions (FR-454, FR-455; research R-322, «The restore»): an administrator's
+ * restore, keyed on the call's transaction, composed into the administrator surface's `restore`.
+ */
+export { createRestore, type Restore, type RestoreStore, restoreStore } from './restore.service.js';
