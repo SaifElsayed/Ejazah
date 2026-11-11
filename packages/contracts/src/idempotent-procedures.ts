@@ -26,6 +26,10 @@ export const idempotentProcedures = [
   'sessions.dispute.raise',
   // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.remedy`"; T031, Q14 (a)).
   'sessions.remedy.counter',
+  // T059 of specs/004-sessions (admin-surface.md, `disputes.revise` and `sessions.review.revise`):
+  // the administrator surface's first keyed procedures, keyed on the kind's transaction (runOn).
+  'disputes.revise',
+  'sessions.review.revise',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

@@ -114,6 +114,10 @@ import type {
   disputesListOutput,
   disputesResolveInput,
   disputesResolveOutput,
+  sessionsReviewReviseInput,
+  sessionsReviewReviseOutput,
+  disputesReviseInput,
+  disputesReviseOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -537,6 +541,15 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof sessionsReviewResolveInput>,
     ): Answer<typeof sessionsReviewResolveOutput>;
+    /** T059: the correction, keyed on the call's transaction; `replayed` from the key's row. */
+    revise(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewReviseInput>,
+    ): Promise<{
+      readonly outcome: z.input<typeof sessionsReviewReviseOutput>;
+      readonly replayed: boolean;
+    }>;
   };
   /**
    * The disputes queue and its resolution (FR-421, FR-474 to FR-476; T034 of specs/004-sessions),
@@ -559,6 +572,15 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof disputesResolveInput>,
     ): Answer<typeof disputesResolveOutput>;
+    /** T059: a ruling's revision, keyed on the call's transaction; `replayed` from the key's row. */
+    revise(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesReviseInput>,
+    ): Promise<{
+      readonly outcome: z.input<typeof disputesReviseOutput>;
+      readonly replayed: boolean;
+    }>;
   };
 }
 

@@ -6,8 +6,9 @@
 import { z } from 'zod';
 
 import { sessionStatus } from '../enrollments.js';
+import { idempotencyKey } from '../idempotency-key.js';
 import { adminReason } from './admins.js';
-import { telemetry } from './sessions.js';
+import { adminOutcome, telemetry } from './sessions.js';
 
 /** A page of the list starts after this dispute. */
 export const disputesListCursor = z.uuid();
@@ -65,11 +66,22 @@ export const disputeDetail = z.object({
   resolvedAt: z.iso.datetime().optional(),
 });
 
+/** One revision of a ruling, from its `dispute_revised` row (T059); the reason is the audit's. */
+export const disputeRevision = z.object({
+  outcomeBefore: adminOutcome,
+  outcomeAfter: adminOutcome,
+  revisedAt: z.iso.datetime(),
+});
+
 export const disputesGetOutput = z.object({
   dispute: disputeDetail,
   telemetry,
   /** The dispute is open, so `disputes.chat` reads the enrollment's chat (FR-475). */
   chatAvailable: z.boolean(),
+  /** `disputes.revise` would be admitted now (T059). */
+  revisable: z.boolean(),
+  /** The ruling's revisions, oldest first (T059). */
+  revisions: z.array(disputeRevision),
 });
 
 /**
@@ -103,6 +115,27 @@ export const disputesResolveInput = z
 
 export const disputesResolveOutput = z.object({ disputeId: z.uuid(), sessionStatus });
 
+// T059 of specs/004-sessions (SRS FR-DISPUTE-7; FR-472, FR-480, FR-495; research R-308, «A ruling's
+// revision»; admin-surface.md, `disputes.revise`): the session's outcome revised after a ruling,
+// inside the dispute window and before any remedy; the ruling itself is never rewritten. Keyed by
+// `idempotencyKey` (scope `disputes.revise`).
+export const disputesReviseInput = z.object({
+  disputeId: z.uuid(),
+  outcome: adminOutcome,
+  reason: adminReason,
+  idempotencyKey,
+});
+
+/** What the earlier ruling did that the revision leaves as it is. */
+export const notUndone = z.enum(['party_suspended', 'party_banned', 'enrollment_ended']);
+
+export const disputesReviseOutput = z.object({
+  disputeId: z.uuid(),
+  sessionStatus: adminOutcome,
+  previousStatus: adminOutcome,
+  notUndone: z.array(notUndone),
+});
+
 export type DisputesListInput = z.infer<typeof disputesListInput>;
 export type DisputesListItem = z.infer<typeof disputesListItem>;
 export type DisputesListOutput = z.infer<typeof disputesListOutput>;
@@ -112,3 +145,6 @@ export type DisputeDetail = z.infer<typeof disputeDetail>;
 export type DisputeResolution = z.infer<typeof disputeResolution>;
 export type DisputesResolveInput = z.infer<typeof disputesResolveInput>;
 export type DisputesResolveOutput = z.infer<typeof disputesResolveOutput>;
+export type DisputeRevision = z.infer<typeof disputeRevision>;
+export type DisputesReviseInput = z.infer<typeof disputesReviseInput>;
+export type DisputesReviseOutput = z.infer<typeof disputesReviseOutput>;

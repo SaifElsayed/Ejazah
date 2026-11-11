@@ -12,7 +12,9 @@
 //
 // THE DETAIL. The dispute, its session's telemetry (`telemetry.ts`, T033), and `chatAvailable`, from
 // the open dispute alone: the chat itself is read by `disputes.chat` (T040) through the
-// `DisputeChat` port. A dispute that is not a session dispute, or none, is `NOT_FOUND`.
+// `DisputeChat` port. A dispute that is not a session dispute, or none, is `NOT_FOUND`. T059 adds
+// `revisable`, `disputes.revise`'s one rule read with no lock (`ruling-revision.ts`), and
+// `revisions`, the ruling's `dispute_revised` rows oldest first (`revision.service.ts`).
 //
 // THE LOG (the owner's rule). A refusal writes one info line of ids and its cause, marked
 // «logged»; a read writes none.
@@ -42,6 +44,7 @@ import {
   repeatedAbsenceFlagCount,
 } from './repeated-absence.service.js';
 import { type TelemetrySession, telemetrySession } from './review.repository.js';
+import type { Revisions } from './revision.service.js';
 import type { TelemetryReader } from './telemetry.js';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
@@ -108,11 +111,14 @@ function notFound(log: Pick<Logger, 'info'>, adminId: string, disputeId: string)
 
 export function createDisputeQueue({
   telemetry,
+  revisions,
   settings,
   log,
   store = disputeQueueStore,
 }: {
   readonly telemetry: TelemetryReader;
+  /** T059: a ruling's `revisable` and `revisions`. */
+  readonly revisions: Pick<Revisions, 'revisionView'>;
   readonly settings: SettingsReader;
   readonly log: Pick<Logger, 'info'>;
   readonly store?: DisputeQueueStore;
@@ -193,10 +199,17 @@ export function createDisputeQueue({
         ...(dispute.resolutionNotes === null ? {} : { resolutionNotes: dispute.resolutionNotes }),
         ...(dispute.resolvedAt === null ? {} : { resolvedAt: dispute.resolvedAt.toISOString() }),
       };
+      const view = await revisions.revisionView(tx, dispute);
       return {
         dispute: detail,
         telemetry: await telemetry.of(tx, session),
         chatAvailable: dispute.status === 'open',
+        revisable: view.revisable,
+        revisions: view.revisions.map(({ outcomeBefore, outcomeAfter, revisedAt }) => ({
+          outcomeBefore,
+          outcomeAfter,
+          revisedAt: revisedAt.toISOString(),
+        })),
       };
     },
   };

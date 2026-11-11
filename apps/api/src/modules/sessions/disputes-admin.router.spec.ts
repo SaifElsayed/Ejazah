@@ -10,12 +10,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import { createLogger } from '../../platform/logging/logger.js';
 import { adminContextsOver, SPEC_ADMIN, VERIFIED } from '../../surfaces/admin-surface.fixtures.js';
+import { createAdminContext } from '../../surfaces/context.js';
 import {
   createAdminCallerFactory,
   createAdminRouter,
   toErrorShape,
 } from '../../surfaces/procedures.js';
+import { unusedAdminServices } from '../../surfaces/services.fixtures.js';
 import { disputesAdminRouter } from './disputes-admin.router.js';
 
 const callerFor = createAdminCallerFactory(createAdminRouter({ disputes: disputesAdminRouter }));
@@ -65,6 +69,8 @@ const VIEWED = {
     outages: [],
   },
   chatAvailable: true,
+  revisable: false,
+  revisions: [],
 };
 const RESOLVE = { disputeId: DISPUTE, resolution: 'upheld' as const, reason: 'ثبت غياب المعلم' };
 
@@ -72,6 +78,10 @@ function surface() {
   const reached: unknown[][] = [];
   const contexts = adminContextsOver({
     disputes: {
+      // T059's `revise` has its own surface below.
+      revise: async () => {
+        throw new Error('revise is not reached here');
+      },
       list: async (_tx, adminId, input) => {
         reached.push(['list', adminId, input]);
         return PAGE;
@@ -202,5 +212,146 @@ describe('the administrator kind', () => {
     expect(await codeOf(unverified.disputes.resolve(RESOLVE))).toBe('MFA_REQUIRED');
     expect(written).toEqual([]);
     expect(reached).toEqual([]);
+  });
+});
+
+// T059: `disputes.revise`, keyed on the kind's transaction and counted under its own limit
+// (`rate_limit_dispute_revision`), audited `dispute.revised` on its first run only, a replay recording no entry.
+const REVISE = {
+  disputeId: DISPUTE,
+  outcome: 'done' as const,
+  reason: 'أخطأ الحكم',
+  idempotencyKey: 'spec-revise-key-0001',
+};
+
+function reviseSurface(replayed = false) {
+  const reached: unknown[][] = [];
+  const contexts = adminContextsOver({
+    disputes: {
+      revise: async (_tx: unknown, adminId: string, given: { readonly reason: string }) => {
+        reached.push(['revise', adminId, given]);
+        if (given.reason === 'refuse') {
+          throw new DomainError('RULING_FINAL', undefined, {
+            details: [{ path: 'cause', code: 'window_closed' }],
+          });
+        }
+        return {
+          outcome: {
+            disputeId: DISPUTE,
+            sessionStatus: 'done',
+            previousStatus: 'teacher_no_show',
+            notUndone: ['party_suspended'],
+          },
+          replayed,
+        };
+      },
+    } as never,
+  });
+  return {
+    reached,
+    written: contexts.written,
+    as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+      callerFor(contexts.contextFor(session)),
+  };
+}
+
+describe('disputes.revise (T059)', () => {
+  it('answers the first run’s result and audits dispute.revised on the dispute with the reason', async () => {
+    const { as, written, reached } = reviseSurface();
+    expect(await as(VERIFIED).disputes.revise(REVISE)).toEqual({
+      disputeId: DISPUTE,
+      sessionStatus: 'done',
+      previousStatus: 'teacher_no_show',
+      notUndone: ['party_suspended'],
+    });
+    expect(reached).toEqual([['revise', SPEC_ADMIN, REVISE]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'dispute.revised',
+        targetType: 'dispute',
+        targetId: DISPUTE,
+        reason: REVISE.reason,
+      },
+    ]);
+  });
+
+  it('answers a replay from the key’s row and records no second entry, the kind admitting it', async () => {
+    const { as, written } = reviseSurface(true);
+    expect(await as(VERIFIED).disputes.revise(REVISE)).toEqual({
+      disputeId: DISPUTE,
+      sessionStatus: 'done',
+      previousStatus: 'teacher_no_show',
+      notUndone: ['party_suspended'],
+    });
+    expect(written).toEqual([]);
+  });
+
+  it('a refusal of the service audits nothing', async () => {
+    const { as, written } = reviseSurface();
+    expect(await codeOf(as(VERIFIED).disputes.revise({ ...REVISE, reason: 'refuse' }))).toBe(
+      'RULING_FINAL',
+    );
+    expect(written).toEqual([]);
+  });
+
+  it.each([
+    ['no key', { ...REVISE, idempotencyKey: undefined }],
+    ['a short key', { ...REVISE, idempotencyKey: 'short' }],
+    ['a blank reason', { ...REVISE, reason: ' ' }],
+    ['an outcome under review', { ...REVISE, outcome: 'under_threshold' }],
+  ])('refuses %s VALIDATION_FAILED, reaching and writing nothing', async (_name, given) => {
+    const { as, written, reached } = reviseSurface();
+    expect(await codeOf(as(VERIFIED).disputes.revise(given as unknown as typeof REVISE))).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('refuses an anonymous caller and an unverified second factor, reaching and writing nothing', async () => {
+    const { as, written, reached } = reviseSurface();
+    expect(await codeOf(as(null).disputes.revise(REVISE))).toBe('UNAUTHENTICATED');
+    expect(await codeOf(as({ ...VERIFIED, mfaVerified: false }).disputes.revise(REVISE))).toBe(
+      'MFA_REQUIRED',
+    );
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('over rate_limit_dispute_revision is refused RATE_LIMITED, opening no transaction and writing nothing (FR-470)', async () => {
+    const counted: unknown[][] = [];
+    let opened = 0;
+    const rateLimiter = {
+      check: async (key: string, subject: unknown, procedure: string) => {
+        counted.push([key, subject, procedure]);
+        throw new DomainError('RATE_LIMITED');
+      },
+    } as unknown as RateLimiter;
+    const context = createAdminContext({
+      session: VERIFIED,
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: {
+          run: async () => {
+            opened += 1;
+            throw new Error('no transaction may open');
+          },
+        },
+        auditWriter: { write: async () => undefined },
+      },
+      services: unusedAdminServices,
+      rateLimiter,
+      clientAddress: '203.0.113.9',
+    });
+    expect(await codeOf(callerFor(context).disputes.revise(REVISE))).toBe('RATE_LIMITED');
+    expect(counted).toEqual([
+      [
+        'rate_limit_dispute_revision',
+        { kind: 'administrator', adminId: SPEC_ADMIN },
+        'disputes.revise',
+      ],
+    ]);
+    expect(opened).toBe(0);
   });
 });

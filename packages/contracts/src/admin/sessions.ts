@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { enrollmentCancellationReason, enrollmentStatus } from '../checkout.js';
 import { sessionStatus } from '../enrollments.js';
+import { idempotencyKey } from '../idempotency-key.js';
 import { calendarDate, timeZone } from '../onboarding.js';
 import { packageTrack } from '../packages.js';
 import { slotStartTimeLocal } from '../slots.js';
@@ -427,3 +428,23 @@ export type TelemetryInterval = z.infer<typeof telemetryInterval>;
 export type AdminOutcome = z.infer<typeof adminOutcome>;
 export type SessionsReviewResolveInput = z.infer<typeof sessionsReviewResolveInput>;
 export type SessionsReviewResolveOutput = z.infer<typeof sessionsReviewResolveOutput>;
+
+// T059 of specs/004-sessions (spec FR-439; SRS FR-ADMIN-20 (b); research R-323 GAP-3;
+// admin-surface.md, `sessions.review.revise`): an administrator's correction of an outcome nobody
+// disputed, inside the dispute window and before any remedy. Keyed by `idempotencyKey` (scope
+// `sessions.review.revise`).
+export const sessionsReviewReviseInput = z.object({
+  sessionId: z.uuid(),
+  outcome: adminOutcome,
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export const sessionsReviewReviseOutput = z.object({
+  sessionId: z.uuid(),
+  sessionStatus: adminOutcome,
+  previousStatus: adminOutcome,
+});
+
+export type SessionsReviewReviseInput = z.infer<typeof sessionsReviewReviseInput>;
+export type SessionsReviewReviseOutput = z.infer<typeof sessionsReviewReviseOutput>;

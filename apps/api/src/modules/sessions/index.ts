@@ -447,3 +447,17 @@ export {
   type LockedHolds,
 } from './dispute-resolution.service.js';
 export { disputesAdminRouter } from './disputes-admin.router.js';
+/**
+ * T059 of specs/004-sessions (SRS FR-DISPUTE-7; FR-439, FR-472; research R-308, R-323 GAP-3): a
+ * ruling's revision (`disputes.revise`) and the correction of an outcome nobody disputed
+ * (`sessions.review.revise`), each keyed through the kernel's `IdempotencyService.runOn` on the
+ * administrator call's transaction, composed into the administrator surface's services; and
+ * `disputes.get`'s `revisable` and `revisions` (`revisionView`).
+ */
+export {
+  createRevisions,
+  type Keyed,
+  type Revisions,
+  type RevisionStore,
+  revisionStore,
+} from './revision.service.js';

@@ -20,6 +20,12 @@
 // `sessions.review.listed` on the reader; `sessions.review.get` audits `sessions.review.viewed` on the
 // session; `sessions.review.resolve` audits `session.review_resolved` on the session, with the
 // mandatory reason. What each does is `review.service.ts`'.
+//
+// T059 (spec FR-439; FR-470, FR-480): `sessions.review.revise` declares its own limit,
+// `rate_limit_outcome_correction`, the administrator as subject, checked before the transaction
+// opens and apart from the key; keyed on the kind's transaction (`IdempotencyService.runOn`), it
+// audits `session.outcome_corrected` on the session with the reason on its first run only, a
+// replay recording none (`ctx.audit.replayed()`). What it does is `revision.service.ts`'.
 import {
   outagesListInput,
   outagesListOutput,
@@ -37,6 +43,8 @@ import {
   sessionsReviewListOutput,
   sessionsReviewResolveInput,
   sessionsReviewResolveOutput,
+  sessionsReviewReviseInput,
+  sessionsReviewReviseOutput,
 } from '@ijazah/contracts/admin';
 
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
@@ -139,6 +147,29 @@ const reviewRouter = createAdminRouter({
       reason: input.reason,
     });
     return resolved;
+  }),
+
+  revise: adminProcedure({
+    input: sessionsReviewReviseInput,
+    output: sessionsReviewReviseOutput,
+    rateLimit: { key: 'rate_limit_outcome_correction', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { outcome, replayed } = await ctx.services.review.revise(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+    } else {
+      ctx.audit.record({
+        action: 'session.outcome_corrected',
+        targetType: 'session',
+        targetId: outcome.sessionId,
+        reason: input.reason,
+      });
+    }
+    return outcome;
   }),
 });
 

@@ -77,3 +77,8 @@ export {
   sessionDisputeOf,
   sessionDisputesPage,
 } from './session-dispute.repository.js';
+/**
+ * T059 of specs/004-sessions (FR-472, FR-439): a session's session disputes, oldest first, with no
+ * lock, which a ruling's revision and an outcome's correction read under the session's lock.
+ */
+export { sessionDisputesOfSession } from './session-dispute.repository.js';

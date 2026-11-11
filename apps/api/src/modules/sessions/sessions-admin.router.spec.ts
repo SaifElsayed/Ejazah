@@ -398,6 +398,10 @@ function reviewSurface() {
   const reached: unknown[][] = [];
   const contexts = adminContextsOver({
     review: {
+      // T059's `revise` has its own surface below.
+      revise: async () => {
+        throw new Error('revise is not reached here');
+      },
       list: async (_tx, adminId, input) => {
         reached.push(['list', adminId, input]);
         return REVIEW_PAGE;
@@ -522,5 +526,138 @@ describe('sessions.review (T033, FR-477, FR-480)', () => {
     expect(await codeOf(unverified.sessions.review.resolve(RESOLVE))).toBe('MFA_REQUIRED');
     expect(written).toEqual([]);
     expect(reached).toEqual([]);
+  });
+});
+
+// T059: `sessions.review.revise`, keyed on the kind's transaction and counted under its own limit
+// (`rate_limit_outcome_correction`), audited `session.outcome_corrected` on its first run only, a replay recording no entry.
+const CORRECT = {
+  sessionId: SESSION,
+  outcome: 'both_no_show' as const,
+  reason: 'لم يحضر أحد',
+  idempotencyKey: 'spec-revise-key-0001',
+};
+
+function correctSurface(replayed = false) {
+  const reached: unknown[][] = [];
+  const contexts = adminContextsOver({
+    review: {
+      revise: async (_tx: unknown, adminId: string, given: { readonly reason: string }) => {
+        reached.push(['revise', adminId, given]);
+        if (given.reason === 'refuse') {
+          throw new DomainError('RULING_FINAL', undefined, {
+            details: [{ path: 'cause', code: 'remedy_offered' }],
+          });
+        }
+        return {
+          outcome: { sessionId: SESSION, sessionStatus: 'both_no_show', previousStatus: 'done' },
+          replayed,
+        };
+      },
+    } as never,
+  });
+  return {
+    reached,
+    written: contexts.written,
+    as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+      callerFor(contexts.contextFor(session)),
+  };
+}
+
+describe('sessions.review.revise (T059)', () => {
+  it('answers the first run’s result and audits session.outcome_corrected on the session with the reason', async () => {
+    const { as, written, reached } = correctSurface();
+    expect(await as(VERIFIED).sessions.review.revise(CORRECT)).toEqual({
+      sessionId: SESSION,
+      sessionStatus: 'both_no_show',
+      previousStatus: 'done',
+    });
+    expect(reached).toEqual([['revise', SPEC_ADMIN, CORRECT]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'session.outcome_corrected',
+        targetType: 'session',
+        targetId: SESSION,
+        reason: CORRECT.reason,
+      },
+    ]);
+  });
+
+  it('answers a replay from the key’s row and records no second entry, the kind admitting it', async () => {
+    const { as, written } = correctSurface(true);
+    expect(await as(VERIFIED).sessions.review.revise(CORRECT)).toEqual({
+      sessionId: SESSION,
+      sessionStatus: 'both_no_show',
+      previousStatus: 'done',
+    });
+    expect(written).toEqual([]);
+  });
+
+  it('a refusal of the service audits nothing', async () => {
+    const { as, written } = correctSurface();
+    expect(
+      await codeOf(as(VERIFIED).sessions.review.revise({ ...CORRECT, reason: 'refuse' })),
+    ).toBe('RULING_FINAL');
+    expect(written).toEqual([]);
+  });
+
+  it.each([
+    ['no key', { ...CORRECT, idempotencyKey: undefined }],
+    ['a blank reason', { ...CORRECT, reason: ' ' }],
+    ['a disputed outcome', { ...CORRECT, outcome: 'disputed' }],
+  ])('refuses %s VALIDATION_FAILED, reaching and writing nothing', async (_name, given) => {
+    const { as, written, reached } = correctSurface();
+    expect(
+      await codeOf(as(VERIFIED).sessions.review.revise(given as unknown as typeof CORRECT)),
+    ).toBe('VALIDATION_FAILED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('refuses an anonymous caller and an unverified second factor, reaching and writing nothing', async () => {
+    const { as, written, reached } = correctSurface();
+    expect(await codeOf(as(null).sessions.review.revise(CORRECT))).toBe('UNAUTHENTICATED');
+    expect(
+      await codeOf(as({ ...VERIFIED, mfaVerified: false }).sessions.review.revise(CORRECT)),
+    ).toBe('MFA_REQUIRED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('over rate_limit_outcome_correction is refused RATE_LIMITED, opening no transaction and writing nothing (FR-470)', async () => {
+    const counted: unknown[][] = [];
+    let opened = 0;
+    const rateLimiter = {
+      check: async (key: string, subject: unknown, procedure: string) => {
+        counted.push([key, subject, procedure]);
+        throw new DomainError('RATE_LIMITED');
+      },
+    } as unknown as RateLimiter;
+    const context = createAdminContext({
+      session: VERIFIED,
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: {
+          run: async () => {
+            opened += 1;
+            throw new Error('no transaction may open');
+          },
+        },
+        auditWriter: { write: async () => undefined },
+      },
+      services: unusedAdminServices,
+      rateLimiter,
+      clientAddress: '203.0.113.9',
+    });
+    expect(await codeOf(callerFor(context).sessions.review.revise(CORRECT))).toBe('RATE_LIMITED');
+    expect(counted).toEqual([
+      [
+        'rate_limit_outcome_correction',
+        { kind: 'administrator', adminId: SPEC_ADMIN },
+        'sessions.review.revise',
+      ],
+    ]);
+    expect(opened).toBe(0);
   });
 });

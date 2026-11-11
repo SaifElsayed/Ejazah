@@ -212,3 +212,32 @@ export async function closeSessionDispute(
   });
   return count === 1;
 }
+
+/**
+ * T059 of specs/004-sessions/tasks.md (FR-472, FR-439; research R-308, «A ruling's revision»): a
+ * session's session disputes, open or closed, in id order (time-ordered, the oldest first), with no
+ * lock; a revision and a correction read them under the session's lock, which a dispute's raising
+ * takes before its insert. Over `disputes_session_id_idx`, bounded by one session's disputes.
+ */
+export async function sessionDisputesOfSession(
+  tx: Client,
+  sessionId: string,
+): Promise<readonly SessionDisputeRow[]> {
+  const rows = await tx.dispute.findMany({
+    where: { sessionId, kind: 'session_dispute' },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      enrollmentId: true,
+      sessionId: true,
+      raisedByUserId: true,
+      reason: true,
+      status: true,
+      createdAt: true,
+      resolution: true,
+      resolutionNotes: true,
+      resolvedAt: true,
+    },
+  });
+  return rows.map(disputeRowOf);
+}

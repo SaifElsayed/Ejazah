@@ -3,6 +3,8 @@
 import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
@@ -26,6 +28,7 @@ import {
   createDisputeQueue,
   createDisputeResolution,
   createOutageServices,
+  createRevisions,
   createSessionCancel,
   createSessionReview,
   createSessionsMonitor,
@@ -34,6 +37,7 @@ import {
   type DisputeResolution,
   type EnrollmentSide,
   type OutageServices,
+  type Revisions,
   type SessionCancel,
   type SessionReview,
   type SessionsMonitor,
@@ -124,13 +128,14 @@ export interface AdminServices {
    * The sessions module's review queue, composed here for the surface (T033 of specs/004-sessions,
    * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
    */
-  readonly review: SessionReview;
+  readonly review: SessionReview & { readonly revise: Revisions['correctOutcome'] };
   /**
    * The sessions module's disputes queue and ruling, composed here for the surface (T034 of
    * specs/004-sessions, FR-474 to FR-476): with this module's `StandingService` for a `party_*`
    * ruling and booking's `lockActiveHoldsOf` for the party's holds (kernel.md's `party_*` row).
    */
-  readonly disputes: DisputeQueue & DisputeResolution;
+  readonly disputes: DisputeQueue &
+    DisputeResolution & { readonly revise: Revisions['reviseRuling'] };
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -152,6 +157,11 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly enrollmentSide: EnrollmentSide;
   /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
   readonly log: Pick<Logger, 'info'>;
+  /**
+   * The kernel's idempotency, keyed on the administrator kind's transaction (`runOn`; B39, the notes
+   * under T059 and T064): `disputes.revise`, `sessions.review.revise` and `cases.openManual`.
+   */
+  readonly idempotency: IdempotencyService<Transaction>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -223,16 +233,32 @@ function adminSessionServices(
     settings: dependencies.settings,
   });
   const telemetry = createTelemetryReader({ settings: dependencies.settings });
+  // T059: the revision and the correction, keyed through the shared idempotency.
+  const revisions = createRevisions({
+    enrollments: dependencies.enrollmentSide,
+    idempotency: dependencies.idempotency,
+    settings: dependencies.settings,
+    log: dependencies.log,
+  });
   return {
-    review: createSessionReview({
-      enrollments: dependencies.enrollmentSide,
-      completion,
-      telemetry,
-      settings: dependencies.settings,
-      log: dependencies.log,
-    }),
+    review: {
+      ...createSessionReview({
+        enrollments: dependencies.enrollmentSide,
+        completion,
+        telemetry,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      revise: revisions.correctOutcome,
+    },
     disputes: {
-      ...createDisputeQueue({ telemetry, settings: dependencies.settings, log: dependencies.log }),
+      ...createDisputeQueue({
+        telemetry,
+        revisions,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      revise: revisions.reviseRuling,
       ...createDisputeResolution({
         enrollments: dependencies.enrollmentSide,
         standing,

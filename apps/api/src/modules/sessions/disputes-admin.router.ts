@@ -9,6 +9,13 @@
 // the dispute; `disputes.resolve` audits `dispute.resolved` on the dispute, with the mandatory
 // reason. A refusal rolls the call back, its audit entry with it. What each does is
 // `dispute-queue.service.ts`' and `dispute-resolution.service.ts`'.
+//
+// T059 (SRS FR-DISPUTE-7; FR-470, FR-472, FR-480): `disputes.revise` declares its own limit,
+// `rate_limit_dispute_revision`, the administrator as subject, checked by the kind before its
+// transaction opens and apart from the key; the call is keyed on the kind's transaction
+// (`IdempotencyService.runOn`, the note under T059), and audits `dispute.revised` on the dispute
+// with the reason on its first run only: a replay records no entry (`ctx.audit.replayed()`), the
+// first call's being the record. What it does is `revision.service.ts`'.
 import {
   disputesGetInput,
   disputesGetOutput,
@@ -16,6 +23,8 @@ import {
   disputesListOutput,
   disputesResolveInput,
   disputesResolveOutput,
+  disputesReviseInput,
+  disputesReviseOutput,
 } from '@ijazah/contracts/admin';
 
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
@@ -58,4 +67,27 @@ export const disputesAdminRouter = createAdminRouter({
       return resolved;
     },
   ),
+
+  revise: adminProcedure({
+    input: disputesReviseInput,
+    output: disputesReviseOutput,
+    rateLimit: { key: 'rate_limit_dispute_revision', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { outcome, replayed } = await ctx.services.disputes.revise(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+    } else {
+      ctx.audit.record({
+        action: 'dispute.revised',
+        targetType: 'dispute',
+        targetId: outcome.disputeId,
+        reason: input.reason,
+      });
+    }
+    return outcome;
+  }),
 });

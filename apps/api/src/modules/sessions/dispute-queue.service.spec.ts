@@ -106,6 +106,23 @@ function world({ pageSize = 3, flag = 2 } = {}) {
         return TELEMETRY;
       },
     },
+    revisions: {
+      revisionView: async (_tx, dispute) => {
+        journal.push(`revisions ${dispute.id}`);
+        return dispute.status === 'open'
+          ? { revisable: false, revisions: [] }
+          : {
+              revisable: true,
+              revisions: [
+                {
+                  outcomeBefore: 'teacher_no_show',
+                  outcomeAfter: 'done',
+                  revisedAt: new Date('2026-11-09T11:00:00Z'),
+                },
+              ],
+            };
+      },
+    },
     settings,
     log: {
       info: (...args: unknown[]) => {
@@ -183,14 +200,28 @@ describe('disputes.get (FR-475)', () => {
       },
       telemetry: TELEMETRY,
       chatAvailable: true,
+      revisable: false,
+      revisions: [],
     });
-    expect(journal).toEqual([`telemetry ${String(OPEN[0]?.sessionId)}`]);
+    expect(journal).toEqual([
+      `revisions ${String(OPEN[0]?.id)}`,
+      `telemetry ${String(OPEN[0]?.sessionId)}`,
+    ]);
   });
 
   it('answers a resolved dispute with its ruling, the chat no longer available', async () => {
     const { service } = world();
     const answer = await service.get(tx, ADMIN, { disputeId: String(CLOSED[0]?.id) });
     expect(answer.chatAvailable).toBe(false);
+    // T059: the ruling's revisions, oldest first, and whether `disputes.revise` would admit one now.
+    expect(answer.revisable).toBe(true);
+    expect(answer.revisions).toEqual([
+      {
+        outcomeBefore: 'teacher_no_show',
+        outcomeAfter: 'done',
+        revisedAt: '2026-11-09T11:00:00.000Z',
+      },
+    ]);
     expect(answer.dispute).toMatchObject({
       status: 'resolved',
       resolution: 'upheld',
