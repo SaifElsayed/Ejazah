@@ -297,3 +297,15 @@ describe('the after-commit publisher (T063, R-324 item 5)', () => {
     expect(publisherOn(tx)).toBeUndefined();
   });
 });
+
+// Nit 8 of PR #130's review, round 1 (B40a; the owner's decision of 2026-11-11, Q1 (a)): a
+// sign-out reaches its sign-in session's streams through the bus with a session scope (the case
+// above), which a bus between processes keeps; the registry has no `endSession` of its own.
+describe('the registry’s ways to end streams (B40a, nit 8)', () => {
+  it('ends streams by user and for shutdown only: no endSession bypassing the bus', () => {
+    const { registry } = fixture();
+    expect(typeof registry.endUser).toBe('function');
+    expect(typeof registry.endAll).toBe('function');
+    expect('endSession' in registry).toBe(false);
+  });
+});

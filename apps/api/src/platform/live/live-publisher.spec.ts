@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { InProcessLiveBus } from './live-bus.js';
-import { bindToTransaction, publisherOn, RequestLive } from './live-publisher.js';
+import { bindToTransaction, publisherOn, RequestLive, unboundBus } from './live-publisher.js';
 
 const USER = '0199d0a0-0000-7000-8000-00000000a0a1';
 const OTHER = '0199d0a0-0000-7000-8000-00000000a0a2';
@@ -56,4 +56,24 @@ describe('the after-commit publisher (T063)', () => {
       expect(() => unbind()).not.toThrow();
     },
   );
+});
+
+// Nit 8 of PR #130's review, round 1 (B40a; the review session's Q2 (a)): one `unboundBus`, beside
+// `RequestLive`, for a context or a route built without the process's bus.
+describe('the unbound bus (B40a, nit 8)', () => {
+  it('sends what it is handed nowhere, hears nothing, and its stop does nothing', () => {
+    const heard = vi.fn();
+    const stop = unboundBus.subscribe(heard);
+    unboundBus.publish({ to: [USER], event: { type: 'account' } });
+    expect(heard).not.toHaveBeenCalled();
+    expect(() => stop()).not.toThrow();
+  });
+
+  it('is what a request’s list over no bus flushes into, without a warn line', () => {
+    const warn = vi.fn();
+    const live = new RequestLive(unboundBus, { warn });
+    live.afterCommit([USER], { type: 'account' });
+    expect(() => live.flush()).not.toThrow();
+    expect(warn).not.toHaveBeenCalled();
+  });
 });

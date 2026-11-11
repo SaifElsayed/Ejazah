@@ -16,7 +16,9 @@
 // or a token): `connection_cap`, `queue_overflow` or `account_restricted`; shutdown writes one line
 // `{ streamsEnded }`. A token's expiry and a sign-out write none: both happen in the normal course
 // (an access token lives `session_access_ttl_minutes`) and would flood the log (the owner's
-// decision of 2026-11-06 before the push).
+// decision of 2026-11-06 before the push). A sign-out reaches its sign-in session's streams through
+// the bus, an `account` scoped to that session (`#deliver`), which a bus between processes keeps; the
+// registry has no way of its own to end one session's streams (nit 8 of PR #130's review, B40a).
 //
 // SHUTDOWN, THE OWNER'S HARD CONDITION. `endAll` ends every stream at once, synchronously, and every
 // open after it ends at once too, so `application.close()` (Node's `server.close()`, which waits on
@@ -210,18 +212,6 @@ export class LiveRegistry {
       this.#log.info({ userId, reason: 'account_restricted' }, 'A live stream was ended by the server');
     }
     return streams.length;
-  }
-
-  /** One sign-in session's streams sent `account` and ended: a sign-out, not logged. */
-  endSession(sessionId: string): number {
-    let ended = 0;
-    for (const streams of [...this.#byUser.values()]) {
-      for (const stream of streams.filter((open) => open.sessionId === sessionId)) {
-        this.#remove(stream, () => stream.closeAfter({ type: 'account' }));
-        ended += 1;
-      }
-    }
-    return ended;
   }
 
   /**
