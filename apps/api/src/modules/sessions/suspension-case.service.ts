@@ -29,8 +29,10 @@
 //
 // ON AN ENROLLMENT THAT ENDED ANOTHER WAY meanwhile (a ban, a teacher's end; U2): no second end.
 // Cleared offers nothing and closes the case naming the end's case, the enrollment's latest case of
-// an end's reason (`END_REASONS`), read under the enrollment's lock, which every opening takes; the
-// sessions join that case through T035's `covers`, by id. None (a deletion opens none): no link.
+// an end's reason (`END_REASONS`) opened after the suspension case (its id greater: PR #133's
+// review, round 2, Minor, so an end case a restore closed before the suspension is never named),
+// read under the enrollment's lock, which every opening takes; the sessions join that case through
+// T035's `covers`, by id. None (a deletion opens none, a completion none): no link.
 // The fault confirmed cancels nothing, opens no case and names none (owed nothing). The case is
 // closed either way.
 //
@@ -100,8 +102,11 @@ export interface SuspensionCaseStore {
   closeCase(tx: Transaction, caseId: string, closing: CaseClosing): Promise<Date | null>;
   /** Moderation's: the enrollment's `student_fault_confirmed` case, opened (or joined). */
   openFaultCase(tx: Transaction, enrollmentId: string): Promise<CompensationCase>;
-  /** Moderation's: the case of the enrollment's end, its latest of `END_REASONS`; null for none. */
-  endCaseOf(tx: Transaction, enrollmentId: string): Promise<string | null>;
+  /**
+   * Moderation's: the case of the enrollment's end, its latest of `END_REASONS` opened after
+   * `afterCaseId` (the suspension case); null for none.
+   */
+  endCaseOf(tx: Transaction, enrollmentId: string, afterCaseId: string): Promise<string | null>;
   /** T004's hand-off: the remaining sessions cancelled, the open remedies handed to `caseOf`. */
   cancelRemaining(
     tx: Transaction,
@@ -124,7 +129,8 @@ export const suspensionCaseStore: SuspensionCaseStore = {
   closeCase,
   openFaultCase: (tx, enrollmentId) =>
     openCompensationCase(tx, enrollmentId, 'student_fault_confirmed'),
-  endCaseOf: (tx, enrollmentId) => latestCaseOf(tx, enrollmentId, [...END_REASONS]),
+  endCaseOf: (tx, enrollmentId, afterCaseId) =>
+    latestCaseOf(tx, enrollmentId, [...END_REASONS], afterCaseId),
   cancelRemaining: (tx, enrollmentIds, now, caseOf) =>
     cancelRemainingSessions(tx, enrollmentIds, now, caseOf),
 };
@@ -205,10 +211,15 @@ export function createSuspensionCase({
     }
   };
 
-  /** The one line of a closing on an enrollment that ended another way (U2). */
-  const endedAnotherWay = (ids: RefusalIds, enrollmentStatus: string, closing: string): void => {
+  /** The one line of a closing on an enrollment that ended another way (U2), with its link (nit 4). */
+  const endedAnotherWay = (
+    ids: RefusalIds,
+    enrollmentStatus: string,
+    closing: string,
+    coveredByCaseId: string | null,
+  ): void => {
     log.info(
-      { ...ids, enrollmentStatus, closing },
+      { ...ids, enrollmentStatus, closing, coveredByCaseId },
       'A suspension case closed on an enrollment that ended another way',
     );
   };
@@ -234,9 +245,9 @@ export function createSuspensionCase({
       };
       const terms = await enrollments.enrollmentFor(tx, enrollmentId);
       if (terms?.status !== 'confirmed') {
-        const endCase = await store.endCaseOf(tx, enrollmentId);
+        const endCase = await store.endCaseOf(tx, enrollmentId, caseId);
         await close(tx, ids, endCase === null ? closing : { ...closing, coveredBy: endCase });
-        endedAnotherWay(ids, terms?.status ?? 'none', 'resolved');
+        endedAnotherWay(ids, terms?.status ?? 'none', 'resolved', endCase);
         return;
       }
       const sessionIds = sortedUnique(await store.sessionsToOffer(tx, caseId));
@@ -266,7 +277,7 @@ export function createSuspensionCase({
       const terms = await enrollments.enrollmentFor(tx, enrollmentId);
       if (terms?.status !== 'confirmed' || !(await enrollments.cancel(tx, enrollmentId, 'admin'))) {
         await close(tx, ids, closing);
-        endedAnotherWay(ids, terms?.status ?? 'none', 'dismissed');
+        endedAnotherWay(ids, terms?.status ?? 'none', 'dismissed', null);
         return;
       }
       const ended = await store.cancelRemaining(

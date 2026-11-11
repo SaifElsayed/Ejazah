@@ -38,6 +38,9 @@ export interface OfferSession {
 export interface ExistingRemedy {
   readonly id: string;
   readonly status: RemedyRowStatus;
+  /** T061: what is owed (a make-up or a refund chosen) and the case it was handed to, if any. */
+  readonly kind: 'makeup' | 'refund';
+  readonly caseId: string | null;
 }
 
 /** A session, by its id, with its parties and status; null for none or a soft-deleted one. */
@@ -62,7 +65,7 @@ export async function remedyOfSession(
 ): Promise<ExistingRemedy | null> {
   return tx.sessionRemedy.findUnique({
     where: { sessionId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, kind: true, caseId: true },
   });
 }
 
@@ -125,15 +128,27 @@ export async function insertRemedy(
   return id;
 }
 
-/** Offers a `frozen` remedy again as a new offer (R-311, "Frozen"); whether it moved. */
+/**
+ * Offers a `frozen` remedy again as a new offer (R-311, "Frozen"); whether it moved. T061: with
+ * `fromCase`, a make-up the closing's case held (`refund_case`, kind `makeup`, `case_id` that case)
+ * offered again by a restore instead, its `case_id` and `decided_at` cleared (R-322, ADR 0023's
+ * second exit from a final state; rule 42 holds: `case_id` only on `refund_case`).
+ */
 export async function reofferFrozen(
   tx: Client,
   remedyId: string,
   row: OfferedRow,
+  fromCase?: string,
 ): Promise<boolean> {
   const { count } = await tx.sessionRemedy.updateMany({
-    where: { id: remedyId, status: 'frozen' },
-    data: { kind: 'makeup', ...row },
+    where:
+      fromCase === undefined
+        ? { id: remedyId, status: 'frozen' }
+        : { id: remedyId, status: 'refund_case', kind: 'makeup', caseId: fromCase },
+    data:
+      fromCase === undefined
+        ? { kind: 'makeup', ...row }
+        : { kind: 'makeup', ...row, caseId: null, decidedAt: null },
   });
   return count === 1;
 }

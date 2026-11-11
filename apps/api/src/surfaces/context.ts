@@ -88,6 +88,9 @@ import type {
   auditGetOutput,
   auditListInput,
   auditListOutput,
+  // T060.
+  casesDecideComplaintInput,
+  casesDecideComplaintOutput,
   casesDismissInput,
   casesDismissOutput,
   casesGetInput,
@@ -135,6 +138,9 @@ import type {
   disputesHeldFileLinkOutput,
   disputesChatInput,
   disputesChatOutput,
+  // T061.
+  sessionsRestoreInput,
+  sessionsRestoreOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -579,6 +585,12 @@ export interface AdminSurfaceServices {
       readonly answer: z.input<typeof casesOpenManualOutput>;
       readonly replayed: boolean;
     }>;
+    // T060: an open complaint of a teacher's absence decided on the call's transaction.
+    decideComplaint(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesDecideComplaintInput>,
+    ): Answer<typeof casesDecideComplaintOutput>;
   };
   /**
    * The review queue (FR-446, FR-450, FR-477; T033 of specs/004-sessions), the sessions module's,
@@ -661,6 +673,20 @@ export interface AdminSurfaceServices {
     ): Promise<{
       readonly enrollmentId: string;
       readonly page: z.input<typeof disputesChatOutput>;
+    }>;
+  };
+  /**
+   * T061 of specs/004-sessions (FR-454, FR-455): an administrator's restore, the sessions module's,
+   * keyed on the call's transaction; `replayed` from the key's row.
+   */
+  readonly restore: {
+    restore(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsRestoreInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof sessionsRestoreOutput>;
+      readonly replayed: boolean;
     }>;
   };
 }

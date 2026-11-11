@@ -265,3 +265,53 @@ describe('generateForEnrollment: the rows written (ADR 0009 D1–D2)', () => {
     expect(createMany).toHaveBeenCalledTimes(1);
   });
 });
+
+// T061 of specs/004-sessions (FR-424, FR-455; research R-322, step 4): the generation widened
+// additively with a count and a first sequence number, so a restore creates the sessions it still
+// owes, numbered after the last; nothing assumes every session was generated at once.
+describe('sessionsFor and generateForEnrollment: a count and a first sequence number (T061)', () => {
+  const thursdayTen = enrollment({ dayOfWeek: 4, startTimeLocal: '10:00:00' });
+  const restoredAt = new Date('2026-11-04T08:00:00Z');
+
+  it('places `count` consecutive weekly sessions from the first after the lead, numbered from the first number given', () => {
+    const plan = { count: 2, firstSequenceNumber: 6 };
+    expect(sessionsFor(thursdayTen, restoredAt, LEAD, plan).map(scheduleOf)).toEqual([
+      [6, '2026-11-05 10:00:00', '2026-11-05T08:00:00Z', '2026-11-05T09:00:00Z'],
+      [7, '2026-11-12 10:00:00', '2026-11-12T08:00:00Z', '2026-11-12T09:00:00Z'],
+    ]);
+  });
+
+  it('places none and writes nothing for a count of none', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 0 });
+    const plan = { count: 0, firstSequenceNumber: 5 };
+    expect(sessionsFor(thursdayTen, restoredAt, LEAD, plan)).toEqual([]);
+    expect(
+      await generateForEnrollment(transactionWith(createMany), thursdayTen, restoredAt, LEAD, plan),
+    ).toEqual([]);
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it('writes the planned rows in one statement, numbered after the last', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const written = await generateForEnrollment(
+      transactionWith(createMany),
+      thursdayTen,
+      restoredAt,
+      LEAD,
+      { count: 1, firstSequenceNumber: 9 },
+    );
+    expect(written.map(({ sequenceNumber }) => sequenceNumber)).toEqual([9]);
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(
+      (createMany.mock.calls[0]?.[0] as { data: { sequenceNumber: number }[] }).data.map(
+        ({ sequenceNumber }) => sequenceNumber,
+      ),
+    ).toEqual([9]);
+  });
+
+  it('keeps the snapshot’s count from one with no plan, as before', () => {
+    expect(
+      sessionsFor(thursdayTen, restoredAt, LEAD).map(({ sequenceNumber }) => sequenceNumber),
+    ).toEqual([1, 2, 3, 4]);
+  });
+});

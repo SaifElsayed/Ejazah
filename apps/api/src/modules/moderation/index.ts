@@ -101,3 +101,11 @@ export {
  * lock, which a ruling's revision and an outcome's correction read under the session's lock.
  */
 export { sessionDisputesOfSession } from './session-dispute.repository.js';
+/**
+ * T060 of specs/004-sessions (FR-452; research R-322, «The complaint»): a student's complaint of the
+ * teacher's absence, opened on the caller's transaction after the student's and the enrollment's
+ * locks, at most one open per enrollment by rule 46 (null when one is); and the enrollment's open
+ * complaint, with no lock, for `enrollments.get`'s `complaintOpen` and the raising's refusal.
+ */
+export { openAbsenceComplaint } from './absence-complaint.service.js';
+export { openComplaintOf } from './absence-complaint.repository.js';

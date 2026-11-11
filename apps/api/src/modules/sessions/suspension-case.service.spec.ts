@@ -98,8 +98,8 @@ function suspensionOver(world: World = {}) {
       calls.push(['openFaultCase', enrollmentId]);
       return { caseId: FAULT_CASE, opened: true };
     },
-    endCaseOf: async (_tx, enrollmentId) => {
-      calls.push(['endCaseOf', enrollmentId]);
+    endCaseOf: async (_tx, enrollmentId, afterCaseId) => {
+      calls.push(['endCaseOf', enrollmentId, afterCaseId]);
       return world.endCase === undefined ? END_CASE : world.endCase;
     },
     cancelRemaining: async (_tx, enrollmentIds, now, caseOf: CaseOf): Promise<EnrollmentsEnded> => {
@@ -286,13 +286,22 @@ describe('cleared: cases.resolve on a student_suspended case (FR-486; R-313)', (
       await service.clear(tx, ADMIN, TARGET, RESOLVED.note);
       expect(calls.some(([name]) => name === 'sessionsToOffer' || name === 'offerLocked')).toBe(false);
       expect(calls.filter(([name]) => name === 'endCaseOf' || name === 'closeCase')).toEqual([
-        ['endCaseOf', ENROLLMENT],
+        // Only an end case opened after the suspension case (PR #133's review, round 2, Minor).
+        ['endCaseOf', ENROLLMENT, CASE],
         ['closeCase', CASE, { ...RESOLVED, coveredBy: END_CASE }],
       ]);
       expect(lines).toEqual([
         [
           'A suspension case closed on an enrollment that ended another way',
-          { adminId: ADMIN, caseId: CASE, enrollmentId: ENROLLMENT, enrollmentStatus: status, closing: 'resolved' },
+          {
+            adminId: ADMIN,
+            caseId: CASE,
+            enrollmentId: ENROLLMENT,
+            enrollmentStatus: status,
+            closing: 'resolved',
+            // PR #133's review, round 2, nit 4: the link written.
+            coveredByCaseId: END_CASE,
+          },
         ],
       ]);
     },

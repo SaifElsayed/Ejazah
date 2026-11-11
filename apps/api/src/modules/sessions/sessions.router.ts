@@ -15,6 +15,8 @@ import {
   sessionsCancellationAnswerOutput,
   sessionsCancellationRequestInput,
   sessionsCancellationRequestOutput,
+  sessionsComplaintRaiseInput,
+  sessionsComplaintRaiseOutput,
   sessionsDisputeRaiseInput,
   sessionsDisputeRaiseOutput,
   sessionsGetInput,
@@ -34,6 +36,21 @@ import {
 } from '@ijazah/contracts';
 
 import { createAppRouter, participantProcedure } from '../../surfaces/procedures.js';
+
+// T060 (contracts/app-surface.md, "`sessions.complaint`"; FR-452; the note under T060, F2):
+// `sessions.complaint.raise`, a mutation of the participant kind, the service deciding the caller
+// is the enrollment's student, under its own declared limit, `rate_limit_absence_complaint`, the
+// student as subject, applied by the kind after the input and before any transaction, apart from
+// the one-open rule (R-321, item 6). The caller's own account and the input handed to one call.
+const complaintRouter = createAppRouter({
+  raise: participantProcedure({
+    input: sessionsComplaintRaiseInput,
+    output: sessionsComplaintRaiseOutput,
+    rateLimit: { key: 'rate_limit_absence_complaint', subject: 'caller' },
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.complaint.raise({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+});
 
 // T026 (contracts/app-surface.md, "`sessions.dispute`"; FR-473, FR-474): `sessions.dispute.raise`,
 // a keyed mutation of the participant kind, with no limit of its own (the signed-in default counts
@@ -117,4 +134,7 @@ export const sessionsRouter = createAppRouter({
 
   // T031.
   remedy: remedyRouter,
+
+  // T060.
+  complaint: complaintRouter,
 });

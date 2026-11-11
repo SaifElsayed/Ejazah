@@ -265,3 +265,26 @@ export type SessionsRemedyCounterInput = z.infer<typeof sessionsRemedyCounterInp
 export type SessionsRemedyCounterOutput = z.infer<typeof sessionsRemedyCounterOutput>;
 export type SessionsRemedyAnswerCounterInput = z.infer<typeof sessionsRemedyAnswerCounterInput>;
 export type SessionsRemedyAnswerCounterOutput = z.infer<typeof sessionsRemedyAnswerCounterOutput>;
+
+// T060 of specs/004-sessions: `sessions.complaint.raise` (contracts/app-surface.md,
+// "`sessions.complaint`"; FR-452; research R-322, «The complaint»). The student of a `confirmed`
+// enrollment complains of the teacher's absence with a mandatory reason, the participant's own
+// text bounded as a dispute's is (1 to 500 characters, trimmed first). One open per enrollment, the
+// database holding it: a second is refused `COMPLAINT_OPEN`, the open one's id in `details`. Not
+// keyed: the one-open rule answers a retry. The procedure declares its own limit,
+// `rate_limit_absence_complaint`, the student as subject.
+
+/** The enrollment complained of and the student's reason. */
+export const sessionsComplaintRaiseInput = z.object({
+  enrollmentId: z.uuid(),
+  reason: z.string().trim().min(1).max(PARTICIPANT_REASON_MAX_LENGTH),
+});
+
+/** The complaint opened: `open` until an administrator decides it (`cases.decideComplaint`). */
+export const sessionsComplaintRaiseOutput = z.object({
+  complaintId: z.uuid(),
+  status: z.literal('open'),
+});
+
+export type SessionsComplaintRaiseInput = z.infer<typeof sessionsComplaintRaiseInput>;
+export type SessionsComplaintRaiseOutput = z.infer<typeof sessionsComplaintRaiseOutput>;

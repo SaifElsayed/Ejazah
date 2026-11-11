@@ -25,9 +25,15 @@ import { createPaymentsMonitorService } from '../payments/index.js';
 import {
   type CaseClosingService,
   type CaseQueue,
+  // T060.
+  type ComplaintDecision,
+  createComplaintDecision,
   createCaseClosing,
   createCaseQueue,
   createCompletion,
+  // T061.
+  createRestore,
+  type Restore,
   createDisputeQueue,
   createDisputeResolution,
   createManualCase,
@@ -143,7 +149,11 @@ export interface AdminServices {
    * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
    * the process's logger.
    */
-  readonly cases: CaseQueue & CaseClosingService & ManualCaseService;
+  readonly cases: CaseQueue &
+    CaseClosingService &
+    ManualCaseService &
+    // T060: a complaint of a teacher's absence decided.
+    ComplaintDecision;
   /**
    * The sessions module's review queue, composed here for the surface (T033 of specs/004-sessions,
    * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
@@ -159,6 +169,8 @@ export interface AdminServices {
     // T040: the reads inside an open matter (`disputes.heldFiles`, `disputes.heldFileLink`,
     // `disputes.chat`).
     DisputeMatterReads;
+  /** T061 of specs/004-sessions: the sessions module's restore, keyed on the call's transaction. */
+  readonly restore: Restore;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -275,8 +287,27 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
         idempotency: dependencies.idempotency,
         log: dependencies.log,
       }),
+      // T060: a complaint decided (R-322), (b) over this module's standing and booking's holds lock.
+      ...createComplaintDecision({
+        enrollments: dependencies.enrollmentSide,
+        standing,
+        lockActiveHolds: lockActiveHoldsOf,
+        log: dependencies.log,
+      }),
     },
     ...adminSessionServices(dependencies, standing),
+    // T061: the restore (R-322), keyed on the call's transaction, T028's offer widened for it.
+    restore: createRestore({
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
+      offers: createRemedyOffer({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      settings: dependencies.settings,
+      log: dependencies.log,
+    }),
   };
 }
 

@@ -13,6 +13,12 @@
 // session (`session_remedies_session_id_key`); a `frozen` one is offered again as a new offer (its
 // row rewritten), every other existing one leaves the session as it is.
 //
+// A RESTORE (T061; research R-322, «The restore»; B40's conflict check, F8). `restoredCase` names the
+// closing's case: a remedy it held (`refund_case`, kind `makeup`, `case_id` that case) is owed again
+// and offered as a frozen one is at reinstatement, through the same row's re-offer, which clears its
+// `case_id` and `decided_at`; refundable on recitation for a Teacher-No-Show or a cleared
+// suspension's session, as it was offered first. Any other remedy is offered nothing then.
+//
 // THE OFFER. `offered_at` is the database's clock (Q8); `choice_closes_at` = `offered_at` +
 // `makeup_choice_window_days`; A (`makeup_counter_answer_hours`) and L (`first_session_lead_hours`)
 // snapshot on the row, so a later settings change moves no bound of it. `awaiting_choice` on a
@@ -119,7 +125,13 @@ export interface RemedyOfferStore {
     reads: ReservationReads,
   ): Promise<readonly ReservedTime[]>;
   insertRemedy(tx: Transaction, sessionId: string, row: OfferedRow): Promise<string>;
-  reofferFrozen(tx: Transaction, remedyId: string, row: OfferedRow): Promise<boolean>;
+  /** A `frozen` remedy, or with `fromCase` one the closing's case held (T061), offered again. */
+  reofferFrozen(
+    tx: Transaction,
+    remedyId: string,
+    row: OfferedRow,
+    fromCase?: string,
+  ): Promise<boolean>;
   recordEvents(tx: Transaction, events: readonly SessionEventRecord[]): Promise<void>;
 }
 
@@ -156,6 +168,8 @@ export interface Offered {
 /** T036's cleared suspension: its cancelled session is owed, and refundable on recitation. */
 export interface OfferOptions {
   readonly clearedSuspension?: boolean;
+  /** T061: the closing's case a restore closes; the remedy it held is offered again. */
+  readonly restoredCase?: string;
 }
 
 export interface RemedyOffer {
@@ -211,6 +225,8 @@ export function createRemedyOffer({
 }: RemedyOfferDependencies): RemedyOffer {
   /** Whether `session` owes a remedy now, its window and status read under the locks. */
   async function owes(session: OfferSession, now: Date, options: OfferOptions): Promise<boolean> {
+    // T061: the remedy the closing's case held was owed when it was handed; the restore reopens it.
+    if (options.restoredCase !== undefined) return true;
     if (session.status === 'cancelled_by_agreement') return true;
     if (session.status === 'cancelled_by_admin') return options.clearedSuspension === true;
     if (session.status !== 'teacher_no_show' && session.status !== 'both_no_show') return false;
@@ -287,7 +303,7 @@ export function createRemedyOffer({
     const session = await store.offerSessionOf(tx, sessionId);
     if (session === null) return null;
     const existing = await store.remedyOfSession(tx, sessionId);
-    if (existing !== null && existing.status !== 'frozen') return null;
+    if (!offerable(existing, options)) return null;
     const terms = await enrollments.enrollmentFor(tx, session.enrollmentId);
     if (terms?.status !== 'confirmed') return null;
     if (await store.studentSuspended(tx, session.studentUserId)) return null;
@@ -311,7 +327,10 @@ export function createRemedyOffer({
     }
     const refundable =
       terms.track === 'recitation' &&
-      (session.status === 'teacher_no_show' || options.clearedSuspension === true);
+      (session.status === 'teacher_no_show' ||
+        options.clearedSuspension === true ||
+        // T061: a cleared suspension's session, handed to the case before the restore.
+        (options.restoredCase !== undefined && session.status === 'cancelled_by_admin'));
     const row: OfferedRow = {
       status: refundable ? 'awaiting_choice' : 'proposed',
       proposedDate: dateColumnOf(proposedDate),
@@ -324,7 +343,7 @@ export function createRemedyOffer({
     if (existing === null) {
       remedyId = await store.insertRemedy(tx, session.id, row);
     } else {
-      if (!(await store.reofferFrozen(tx, existing.id, row))) return null;
+      if (!(await store.reofferFrozen(tx, existing.id, row, options.restoredCase))) return null;
       remedyId = existing.id;
     }
     await store.recordEvents(tx, [
@@ -363,6 +382,29 @@ export function createRemedyOffer({
       return offerLocked(tx, sessionId, options);
     },
   };
+}
+
+/**
+ * Whether the session's remedy, if any, may be offered now: none or `frozen` (R-311), or with
+ * `restoredCase` (T061) only a make-up that case holds (`refund_case`, kind `makeup`).
+ */
+function offerable(
+  existing: {
+    readonly status: string;
+    readonly kind: string;
+    readonly caseId: string | null;
+  } | null,
+  { restoredCase }: OfferOptions,
+): boolean {
+  if (restoredCase !== undefined) {
+    return (
+      existing !== null &&
+      existing.status === 'refund_case' &&
+      existing.kind === 'makeup' &&
+      existing.caseId === restoredCase
+    );
+  }
+  return existing === null || existing.status === 'frozen';
 }
 
 /** The local date after `date`: a step on the wall calendar (R-TIME-2). */

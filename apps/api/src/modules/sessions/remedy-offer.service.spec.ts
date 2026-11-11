@@ -51,7 +51,7 @@ let held: HeldTime[];
 let reserved: ReservedTime[];
 let now: Date;
 let inserted: { sessionId: string; row: OfferedRow }[];
-let reoffered: { remedyId: string; row: OfferedRow }[];
+let reoffered: { remedyId: string; row: OfferedRow; fromCase?: string }[];
 let events: SessionEventRecord[];
 
 const store: RemedyOfferStore = {
@@ -82,9 +82,9 @@ const store: RemedyOfferStore = {
     inserted.push({ sessionId, row });
     return REMEDY;
   },
-  reofferFrozen: async (_tx, remedyId, row) => {
+  reofferFrozen: async (_tx, remedyId, row, fromCase) => {
     trace.push('re-offer remedy');
-    reoffered.push({ remedyId, row });
+    reoffered.push({ remedyId, row, ...(fromCase === undefined ? {} : { fromCase }) });
     return true;
   },
   recordEvents: async (_tx, records) => {
@@ -197,7 +197,7 @@ describe('remedy offer: what is owed and when (FR-462, G1, A2, C1, C3)', () => {
   });
 
   it('offers nothing to a session that already has an open or settled remedy', async () => {
-    existing = { id: REMEDY, status: 'proposed' };
+    existing = { id: REMEDY, status: 'proposed', kind: 'makeup', caseId: null };
     expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
     expect([inserted, reoffered]).toEqual([[], []]);
   });
@@ -241,7 +241,7 @@ describe('remedy offer: the row (I3, A1, Q8)', () => {
   });
 
   it('offers a frozen remedy again as a new offer: a new offered_at, a full choice window, a new proposal', async () => {
-    existing = { id: REMEDY, status: 'frozen' };
+    existing = { id: REMEDY, status: 'frozen', kind: 'makeup', caseId: null };
     now = new Date('2027-01-05T10:00:00Z');
     const offered = await offerOf().offerLocked(tx, SESSION);
     expect(offered).toMatchObject({ reoffered: true, proposedDate: '2027-01-21' });
@@ -402,5 +402,78 @@ describe('remedy offer: a settings change after the offer moves no bound of it (
       SETTINGS['first_session_lead_hours'] = 24;
       SETTINGS['makeup_choice_window_days'] = 7;
     }
+  });
+});
+
+// T061 of specs/004-sessions (FR-455; research R-322, «The restore»; R-320's two rows of 2026-11-05;
+// B40's conflict check, F8): a remedy the closing's case held (`refund_case`, kind `makeup`) offered
+// again by a restore as a frozen remedy is at reinstatement: a new offer with a full choice window, A
+// and L read again, a new proposal after the latest of the enrollment's sessions (the recreated ones),
+// `case_id` and `decided_at` cleared by the re-offer, one `remedy_offered` row with no case. Any other
+// remedy, or one of another case, is offered nothing.
+describe('remedy offer: a remedy a restore offers again (T061)', () => {
+  const CLOSING = '0199d0a0-0000-7000-8000-0000000000c9';
+
+  it('offers the closing case’s refund_case make-up again: a new offer, a full window, a proposal after the recreated sessions, the case cleared', async () => {
+    existing = { id: REMEDY, status: 'refund_case', kind: 'makeup', caseId: CLOSING };
+    now = new Date('2027-01-05T10:00:00Z');
+    // The last recreated session: Thursday 2027-02-04.
+    lastReached = new Date('2027-02-04T00:00:00Z');
+    const offered = await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING });
+    expect(offered).toEqual({
+      remedyId: REMEDY,
+      sessionId: SESSION,
+      enrollmentId: ENROLLMENT,
+      status: 'awaiting_choice',
+      proposedDate: '2027-02-11',
+      reoffered: true,
+    });
+    expect(reoffered).toEqual([
+      {
+        remedyId: REMEDY,
+        fromCase: CLOSING,
+        row: {
+          status: 'awaiting_choice',
+          proposedDate: new Date('2027-02-11T00:00:00Z'),
+          offeredAt: now,
+          choiceClosesAt: new Date('2027-01-12T10:00:00Z'),
+          snapshotAnswerWindowHours: 72,
+          snapshotFirstSessionLeadHours: 24,
+        },
+      },
+    ]);
+    expect(inserted).toEqual([]);
+    expect(events).toEqual([
+      { enrollmentId: ENROLLMENT, sessionId: SESSION, kind: 'remedy_offered', occurredAt: now },
+    ]);
+  });
+
+  it('is proposed after a Both-No-Show, and awaiting a choice for a cleared suspension’s session on recitation', async () => {
+    existing = { id: REMEDY, status: 'refund_case', kind: 'makeup', caseId: CLOSING };
+    session = { ...session, status: 'both_no_show' };
+    expect(await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING })).toMatchObject({
+      status: 'proposed',
+    });
+    session = { ...session, status: 'cancelled_by_admin' };
+    expect(await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING })).toMatchObject({
+      status: 'awaiting_choice',
+    });
+  });
+
+  it.each([
+    ['of another case', { id: REMEDY, status: 'refund_case', kind: 'makeup', caseId: REMEDY }],
+    ['of kind refund', { id: REMEDY, status: 'refund_case', kind: 'refund', caseId: CLOSING }],
+    ['booked', { id: REMEDY, status: 'booked', kind: 'makeup', caseId: null }],
+    ['none', null],
+  ] as const)('offers nothing for a remedy %s, writing nothing', async (_name, remedy) => {
+    existing = remedy === null ? null : { ...remedy };
+    expect(await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING })).toBeNull();
+    expect([inserted, reoffered, events]).toEqual([[], [], []]);
+  });
+
+  it('offers a refund_case remedy nothing without a restore', async () => {
+    existing = { id: REMEDY, status: 'refund_case', kind: 'makeup', caseId: CLOSING };
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+    expect([inserted, reoffered]).toEqual([[], []]);
   });
 });
