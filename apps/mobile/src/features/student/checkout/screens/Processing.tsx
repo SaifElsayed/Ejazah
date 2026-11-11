@@ -63,7 +63,15 @@ export function Processing() {
     void status.refetch();
   };
   if (!isEnrollmentId(enrollmentId) || config.isError || (status.isError && !status.data)) {
-    return <OutcomeLoading failed onRetry={retry} />;
+    return (
+      <OutcomeLoading
+        failed
+        error={
+          config.isError ? config.error : status.isError && !status.data ? status.error : undefined
+        }
+        onRetry={retry}
+      />
+    );
   }
   if (released) return <Released />;
   return (

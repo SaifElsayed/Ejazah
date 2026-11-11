@@ -20,6 +20,8 @@ export interface OrderReport {
   readonly state: OrderState;
   /** The order's last read failed: the screen draws its retry state. */
   readonly failed: boolean;
+  /** The failed read's error while `failed`, else null (T065 of specs/004-sessions). */
+  readonly error: unknown;
 }
 
 export const ORDER_BADGE: Readonly<
@@ -50,6 +52,7 @@ export function usePendingOrder(enrollmentId: string, everyMs: number | false): 
   return {
     state: read === undefined ? 'unknown' : orderStateOf(read.lastOrder.status),
     failed: status.isError,
+    error: status.isError ? status.error : null,
   };
 }
 
@@ -60,7 +63,7 @@ export function useOrderStates() {
   const report = useCallback((enrollmentId: string, next: OrderReport) => {
     setReports((before) => {
       const was = before[enrollmentId];
-      return was?.state === next.state && was.failed === next.failed
+      return was?.state === next.state && was.failed === next.failed && was.error === next.error
         ? before
         : { ...before, [enrollmentId]: next };
     });
@@ -72,6 +75,9 @@ export function useOrderStates() {
     isConfirming: (enrollmentId: string) => stateOf(enrollmentId) === 'confirming',
     failed: (enrollmentIds: readonly string[]) =>
       enrollmentIds.some((id) => reports[id]?.failed === true),
+    /** The first failed order's error, in the ids' order, else null (T065). */
+    error: (enrollmentIds: readonly string[]): unknown =>
+      enrollmentIds.map((id) => reports[id]).find((was) => was?.failed === true)?.error ?? null,
     /** Reads every order again (the screen's retry). */
     retry: () => void queries.refetchQueries({ queryKey: ['student', 'checkout', 'status'] }),
   };

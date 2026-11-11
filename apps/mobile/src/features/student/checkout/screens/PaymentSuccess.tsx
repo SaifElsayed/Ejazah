@@ -51,6 +51,7 @@ export function PaymentSuccess() {
     return (
       <OutcomeLoading
         failed={status.isError || me.isError}
+        error={status.error ?? me.error}
         onRetry={() => {
           void status.refetch();
           void me.refetch();
