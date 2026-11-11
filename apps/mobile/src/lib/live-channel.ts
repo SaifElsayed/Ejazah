@@ -312,9 +312,15 @@ export class Rereads {
 // ---------------------------------------------------------------------------------------------
 // The root's hook.
 
-/** The channel while signed in, following AppState; `app/_layout.tsx` mounts it once. */
+/**
+ * The channel while signed in, following AppState; `app/_layout.tsx` mounts it once. A restricted
+ * account opens none: the server refuses the channel to a restricted standing, so it would only be
+ * refused at the backoff's cap; it opens once the account leaves the restricted screen (the
+ * owner's decision of 2026-11-11, beyond T065's text).
+ */
 export function useLiveChannel(client: Pick<ApiClient, 'api'>, queries: QueryClient): void {
-  const signedIn = useSession().kind === 'signed-in';
+  const session = useSession();
+  const signedIn = session.kind === 'signed-in' && session.landing !== 'restricted';
   useEffect(() => {
     if (!signedIn) return;
     const rereads = new Rereads(queries);

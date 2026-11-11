@@ -330,6 +330,27 @@ describe('the root layout', () => {
     }
   });
 
+  // T065, beyond its text (the owner's decision of 2026-11-11 on lane A2's Q3, (b)): the server
+  // refuses the channel to a restricted standing, so a restricted account opens none, and one opens
+  // once the account leaves the restricted screen.
+  it('opens no live channel while the account is restricted, and one once it is not (T065)', async () => {
+    const foreground = AppState.currentState;
+    Object.assign(AppState, { currentState: 'active' });
+    try {
+      setSession({ kind: 'signed-in', landing: 'restricted', role: 'student' });
+      await renderRouter(routes, { initialUrl: '/(student)/(tabs)' });
+      expect(await screen.findByText('restricted')).toBeTruthy();
+      expect(mockApi.live.events.subscribe).not.toHaveBeenCalled();
+      await act(async () => setSession({ kind: 'signed-in', landing: 'student_home' }));
+      expect(await screen.findByText('اختر معلمًا وباقة تناسبك')).toBeTruthy();
+      // As in the case above, a layout mounted again closes its stream first: one is open.
+      expect(mockApi.live.events.subscribe).toHaveBeenCalled();
+      expect(openStreams()).toBe(1);
+    } finally {
+      Object.assign(AppState, { currentState: foreground });
+    }
+  });
+
   async function liveChannelOpensAndCloses() {
     setSession({ kind: 'signed-in', landing: 'student_home' });
     await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
