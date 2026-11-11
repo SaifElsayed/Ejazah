@@ -405,3 +405,22 @@ export {
   type RemedyWindows,
   type RemedyWindowsDependencies,
 } from './remedy.service.js';
+/**
+ * T033 of specs/004-sessions (FR-446, FR-450, FR-477; R-SESS-6; research R-323 GAP-2): the review
+ * queue (`sessions.review.list/get/resolve`), composed into the administrator surface's services;
+ * the telemetry reader `disputes.get` reads too (T034); and the one writer of an administrator's
+ * outcome, which T034's resolution and T059's revision and correction write through.
+ */
+export {
+  createSessionReview,
+  type SessionReview,
+  type SessionReviewStore,
+  sessionReviewStore,
+} from './review.service.js';
+export { createTelemetryReader, type TelemetryReader, type TelemetryStore } from './telemetry.js';
+export {
+  type AdminOutcomeEvent,
+  type AdminOutcomeStore,
+  type AdminOutcomeWrite,
+  writeAdminOutcome,
+} from './admin-outcome.service.js';

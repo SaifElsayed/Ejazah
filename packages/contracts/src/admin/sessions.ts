@@ -316,3 +316,114 @@ export type MonitorEnrollment = z.infer<typeof monitorEnrollment>;
 export type MonitorSession = z.infer<typeof monitorSession>;
 export type RemedyMonitor = z.infer<typeof remedyMonitor>;
 export type TimelineEvent = z.infer<typeof timelineEvent>;
+
+// T033 of specs/004-sessions (FR-446, FR-450, FR-477, FR-480; R-SESS-6; research R-323 GAP-2;
+// admin-surface.md, `sessions.review.list/get/resolve` and `Telemetry`): the review queue. The queue
+// lists the sessions `under_threshold` or `provider_outage`, which wait for an administrator's
+// outcome (no automatic transition leaves them); the telemetry is read for any session no longer
+// `scheduled` (a `scheduled` one is refused `CONFLICT`, `details.cause` `not_settled`); the
+// resolution writes one of the four outcomes with a mandatory reason, a session not under review
+// refused `CONFLICT`, `details.cause` `not_under_review` (the owner's decision of 2026-11-11, Q2).
+
+/** A page of the queue starts after this session; sessions are listed by their time-ordered id. */
+export const sessionsReviewCursor = z.uuid();
+
+export const sessionsReviewListInput = z.object({ cursor: sessionsReviewCursor.optional() });
+
+/** The two statuses the queue holds (R-SESS-6). */
+export const reviewStatus = z.enum(['under_threshold', 'provider_outage']);
+
+/** A session's two parties, each named as this phase names one (FR-426). */
+export const sessionParties = z.object({ student: monitorParty, teacher: monitorParty });
+
+export const sessionsReviewListItem = z.object({
+  sessionId: z.uuid(),
+  enrollmentId: z.uuid(),
+  status: reviewStatus,
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  /** The figure the evaluation decided the outcome on (ADR 0022). */
+  simultaneousSeconds: z.int().nonnegative(),
+  parties: sessionParties,
+});
+
+export const sessionsReviewListOutput = z.object({
+  items: z.array(sessionsReviewListItem),
+  /** Present while more sessions follow the page. */
+  nextCursor: sessionsReviewCursor.optional(),
+});
+
+export const sessionsReviewGetInput = z.object({ sessionId: z.uuid() });
+
+/** One recorded participant event or the room's end (`session_participant_events`). */
+export const telemetryEvent = z.object({
+  party: z.enum(['student', 'teacher', 'room']),
+  type: z.enum(['joined', 'left', 'room_ended']),
+  occurredAt: z.iso.datetime(),
+  /** The provider's connection; absent on `room_ended`. */
+  connectionRef: z.string().optional(),
+});
+
+/** A span of connected time, start included, end excluded. */
+export const telemetryInterval = z.object({
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+});
+
+/** A recorded provider outage window overlapping the session (FR-445). */
+export const telemetryOutage = z.object({
+  outageId: z.uuid(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+});
+
+/**
+ * A session's connection record (admin-surface.md, `Telemetry`; FR-SESS-9): its schedule, every
+ * recorded join and leave and the room's end, oldest first, each party's connected intervals and
+ * the two together from T013's rules, the simultaneous seconds the evaluation recorded, who joined
+ * by FR-442, and the outage windows overlapping it.
+ */
+export const telemetry = z.object({
+  sessionId: z.uuid(),
+  schedule: z.object({
+    localDate: calendarDate,
+    startTimeLocal: slotStartTimeLocal,
+    timezone: timeZone,
+    startsAt: z.iso.datetime(),
+    endsAt: z.iso.datetime(),
+  }),
+  status: sessionStatus,
+  events: z.array(telemetryEvent),
+  intervals: z.object({
+    student: z.array(telemetryInterval),
+    teacher: z.array(telemetryInterval),
+    together: z.array(telemetryInterval),
+  }),
+  simultaneousSeconds: z.int().nonnegative(),
+  joined: z.object({ student: z.boolean(), teacher: z.boolean() }),
+  outages: z.array(telemetryOutage),
+});
+
+export const sessionsReviewGetOutput = telemetry;
+
+/** The four outcomes an administrator writes (R-SESS-6, FR-446). */
+export const adminOutcome = z.enum(['done', 'student_no_show', 'teacher_no_show', 'both_no_show']);
+
+export const sessionsReviewResolveInput = z.object({
+  sessionId: z.uuid(),
+  outcome: adminOutcome,
+  reason: adminReason,
+});
+
+export const sessionsReviewResolveOutput = z.object({ sessionId: z.uuid(), status: adminOutcome });
+
+export type SessionsReviewListInput = z.infer<typeof sessionsReviewListInput>;
+export type SessionsReviewListItem = z.infer<typeof sessionsReviewListItem>;
+export type SessionsReviewListOutput = z.infer<typeof sessionsReviewListOutput>;
+export type SessionsReviewGetInput = z.infer<typeof sessionsReviewGetInput>;
+export type Telemetry = z.infer<typeof telemetry>;
+export type TelemetryEvent = z.infer<typeof telemetryEvent>;
+export type TelemetryInterval = z.infer<typeof telemetryInterval>;
+export type AdminOutcome = z.infer<typeof adminOutcome>;
+export type SessionsReviewResolveInput = z.infer<typeof sessionsReviewResolveInput>;
+export type SessionsReviewResolveOutput = z.infer<typeof sessionsReviewResolveOutput>;

@@ -102,6 +102,12 @@ import type {
   sessionsMonitorGetOutput,
   sessionsMonitorListInput,
   sessionsMonitorListOutput,
+  sessionsReviewGetInput,
+  sessionsReviewGetOutput,
+  sessionsReviewListInput,
+  sessionsReviewListOutput,
+  sessionsReviewResolveInput,
+  sessionsReviewResolveOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -503,6 +509,28 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof sessionsMonitorGetInput>,
     ): Answer<typeof sessionsMonitorGetOutput>;
+  };
+  /**
+   * The review queue (FR-446, FR-450, FR-477; T033 of specs/004-sessions), the sessions module's,
+   * composed by the admin module: the queue and a session's telemetry read, and an outcome written
+   * on the call's transaction under the enrollment's and the session's locks.
+   */
+  readonly review: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewListInput>,
+    ): Answer<typeof sessionsReviewListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewGetInput>,
+    ): Answer<typeof sessionsReviewGetOutput>;
+    resolve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewResolveInput>,
+    ): Answer<typeof sessionsReviewResolveOutput>;
   };
 }
 

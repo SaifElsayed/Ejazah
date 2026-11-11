@@ -15,6 +15,11 @@
 // administrator as subject, checked before the transaction and failing closed (T062's kind; the
 // owner's decision of 2026-11-06 on the fourth analysis, C2); `sessions.monitor.get` audits
 // `sessions.monitor.viewed` on the enrollment. A refusal rolls the call back, its audit entry with it.
+//
+// T033 (FR-446, FR-450, FR-477, FR-480; R-SESS-6): `sessions.review.list` audits
+// `sessions.review.listed` on the reader; `sessions.review.get` audits `sessions.review.viewed` on the
+// session; `sessions.review.resolve` audits `session.review_resolved` on the session, with the
+// mandatory reason. What each does is `review.service.ts`'.
 import {
   outagesListInput,
   outagesListOutput,
@@ -26,6 +31,12 @@ import {
   sessionsMonitorGetOutput,
   sessionsMonitorListInput,
   sessionsMonitorListOutput,
+  sessionsReviewGetInput,
+  sessionsReviewGetOutput,
+  sessionsReviewListInput,
+  sessionsReviewListOutput,
+  sessionsReviewResolveInput,
+  sessionsReviewResolveOutput,
 } from '@ijazah/contracts/admin';
 
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
@@ -90,9 +101,51 @@ const monitorRouter = createAdminRouter({
   ),
 });
 
+const reviewRouter = createAdminRouter({
+  list: adminProcedure({ input: sessionsReviewListInput, output: sessionsReviewListOutput }).query(
+    async ({ ctx, input }) => {
+      const { adminId } = ctx.administrator;
+      const page = await ctx.services.review.list(ctx.tx, adminId, input);
+      ctx.audit.record({
+        action: 'sessions.review.listed',
+        targetType: 'admin',
+        targetId: adminId,
+      });
+      return page;
+    },
+  ),
+
+  get: adminProcedure({ input: sessionsReviewGetInput, output: sessionsReviewGetOutput }).query(
+    async ({ ctx, input }) => {
+      const answer = await ctx.services.review.get(ctx.tx, ctx.administrator.adminId, input);
+      ctx.audit.record({
+        action: 'sessions.review.viewed',
+        targetType: 'session',
+        targetId: input.sessionId,
+      });
+      return answer;
+    },
+  ),
+
+  resolve: adminProcedure({
+    input: sessionsReviewResolveInput,
+    output: sessionsReviewResolveOutput,
+  }).mutation(async ({ ctx, input }) => {
+    const resolved = await ctx.services.review.resolve(ctx.tx, ctx.administrator.adminId, input);
+    ctx.audit.record({
+      action: 'session.review_resolved',
+      targetType: 'session',
+      targetId: resolved.sessionId,
+      reason: input.reason,
+    });
+    return resolved;
+  }),
+});
+
 export const sessionsAdminRouter = createAdminRouter({
   outages: outagesRouter,
   monitor: monitorRouter,
+  review: reviewRouter,
   cancel: adminProcedure({ input: sessionsCancelInput, output: sessionsCancelOutput }).mutation(
     async ({ ctx, input }) => {
       const cancelled = await ctx.services.sessionCancel.cancel(

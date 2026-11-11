@@ -24,10 +24,13 @@ import {
   createCompletion,
   createOutageServices,
   createSessionCancel,
+  createSessionReview,
   createSessionsMonitor,
+  createTelemetryReader,
   type EnrollmentSide,
   type OutageServices,
   type SessionCancel,
+  type SessionReview,
   type SessionsMonitor,
 } from '../sessions/index.js';
 import {
@@ -112,6 +115,11 @@ export interface AdminServices {
    * specs/004-sessions, FR-479): over the bound `EnrollmentSide`'s reads and the settings.
    */
   readonly monitor: SessionsMonitor;
+  /**
+   * The sessions module's review queue, composed here for the surface (T033 of specs/004-sessions,
+   * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
+   */
+  readonly review: SessionReview;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -183,6 +191,30 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     }),
     monitor: createSessionsMonitor({
       enrollments: dependencies.enrollmentSide,
+      settings: dependencies.settings,
+      log: dependencies.log,
+    }),
+    ...adminSessionServices(dependencies),
+  };
+}
+
+/**
+ * T033 of specs/004-sessions: the review queue, over one completion check and one telemetry reader
+ * (the owner's decision of 2026-11-11 on lane A's question: each lane its own composition lines).
+ */
+function adminSessionServices(
+  dependencies: AdminServiceDependencies,
+): Pick<AdminServices, 'review'> {
+  const completion = createCompletion({
+    enrollments: dependencies.enrollmentSide,
+    settings: dependencies.settings,
+  });
+  const telemetry = createTelemetryReader({ settings: dependencies.settings });
+  return {
+    review: createSessionReview({
+      enrollments: dependencies.enrollmentSide,
+      completion,
+      telemetry,
       settings: dependencies.settings,
       log: dependencies.log,
     }),
