@@ -196,6 +196,14 @@ branch (the owner's decision of 2026-11-05; R-326). A manual case's written reas
 compensation case with no session, which the checks admit (to be counted on `ijazah` before the migration, as B26's
 were).
 
+`covered_by_case_id` (B39, the owner's decision (c) of 2026-11-11 on PR #133's review, round 1, Major 1; the note under
+T036): FK → `disputes`, nullable, plain index. A closed `student_suspended` case names the case that owes the sessions
+its suspension cancelled, written by `closeCase` in the closing's one update: dismissed on a `confirmed` enrollment, the
+`student_fault_confirmed` case opened or joined then (U1, only the make-ups covered); resolved on an enrollment already
+ended, that end's case (U2, every session covered). NULL otherwise. Rule 49: `covered_by_case_id IS NULL OR (kind =
+'compensation_case' AND reason = 'student_suspended' AND status <> 'open' AND covered_by_case_id <> id)`. `cases.get`'s
+`covers` reads the link and compares no instant: `resolved_at` is the database's clock, `created_at` the application's.
+
 ### 2.8 `enrollment_events`
 
 `enrollment_event_kind` gains `completed`, `terminated_no_show` and `restored` (an administrator's restore, R-322). Rule
@@ -399,7 +407,8 @@ takes the slot's teacher's `users` row first, which the counter's path already h
 
 One forward, additive migration in the first batch, `20261108120000_sessions_pass`: §2.1 to §2.9, the enum values, the
 two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx`, the checks, the seventeen settings rows in the seed (and `chat_retention_days`' new default, §4), and the deletion of the `teacher_no_show_threshold` row; §2.12's enum and column on booking's `slot_holds` and rule 48. Probes in
-`tests/db-integrity` for rules 40 to 48. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
+`tests/db-integrity` for rules 40 to 48. B39 adds a second, additive migration, `20261111120000_case_covered_by`:
+§2.7's `covered_by_case_id`, its index and rule 49; every existing row NULL, which the check admits. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
 that rule 46 would refuse, and `session_participant_events` rows (none expected).
 
 ## 7. ERD amendments (v1.14 → v1.15)
@@ -462,3 +471,5 @@ batch's migration, which builds them.
 19. On the sixth analysis (the owner's decision of 2026-11-06, M1; the ERD's changelog row 33): `sessions.provider_room_id`
     noted unused, since the room is named for the session's id; nothing writes it (§2.1), and its removal is Not
     scheduled (tasks.md). No migration in this phase.
+20. On PR #133's review, round 1, Major 1 (the owner's decision (c) of 2026-11-11; the ERD's changelog row 34):
+    `disputes.covered_by_case_id` and rule 49 (§2.7, §6).

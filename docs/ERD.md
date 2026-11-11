@@ -642,6 +642,7 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | resolution_notes | text, nullable | Mandatory on resolve |
 | resolved_by_admin_id | FK → admin_users, nullable | |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution, by the database's `clock_timestamp()` in the update that closes the row, the enrollment's row locked first (note under T082 of `specs/003-booking/tasks.md`; v1.15) |
+| covered_by_case_id | FK → disputes, nullable | On a closed `student_suspended` case only: the case that owes the sessions its suspension cancelled, written with the closing (rule 49). Dismissed on a confirmed enrollment, the fault confirmed: the `student_fault_confirmed` case opened or joined then, which covers only the make-ups among them. Resolved on an enrollment that had already ended: the case that end opened, which covers all of them, owed as refunds. NULL otherwise. Several suspension cases may name one case (a joined fault case after a restore). Plain index (§14). `cases.get`'s `covers` reads it, so no instant is compared (v1.15, the owner's decision of 2026-11-11 on PR #133's review; changelog row 34) |
 
 ### `gender_flags`
 
@@ -965,6 +966,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 48. `slot_holds`: `release_reason IS NULL OR released_at IS NOT NULL` — check constraint; a release reason only on a released hold (SRS FR-ADMIN-20 (a); Phase 3's pass, v1.15, the owner's decision of 2026-11-05).
 
+49. `disputes`: `covered_by_case_id IS NULL OR (kind = 'compensation_case' AND reason = 'student_suspended' AND status <> 'open' AND covered_by_case_id <> id)` — check constraint `disputes_covered_by_check`; the link only on a closed suspension case, never to itself (v1.15, the owner's decision of 2026-11-11 on PR #133's review).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -1256,5 +1259,11 @@ Amended on 2026-11-06 on Phase 3's sixth analysis (`specs/004-sessions/plan.md`,
 | # | Change | Migration |
 |---|---|---|
 | 33 | §5 `sessions.provider_room_id` noted unused: the video room is named for the session's `id`, so nothing writes it (the join writes nothing to `sessions`); the column stays, NULL, and its removal is a Not scheduled item of `specs/004-sessions/tasks.md` | none |
+
+Amended on 2026-11-11 on PR #133's review, round 1, Major 1 (B39; the owner's decision (c); the note under T036 of `specs/004-sessions/tasks.md`):
+
+| # | Change | Migration |
+|---|---|---|
+| 34 | §10 `disputes.covered_by_case_id` (FK → `disputes`, nullable, plain index `disputes_covered_by_case_id_idx`, §14) and §15 rule 49: a closed `student_suspended` case names the case that owes the sessions its suspension cancelled, so a confirmed fault's case and an end's case find them by id, not by comparing `resolved_at` (the database's clock) with `created_at` (the application's) (SRS FR-ADMIN-5 as amended) | `20261111120000_case_covered_by` (B39) |
 
 Two tables are added: 44 tables.
