@@ -73,7 +73,11 @@ import {
 } from './admin-outcome.service.js';
 import { lockTeacherSlots } from './cancellation.repository.js';
 import type { Completion } from './completion.service.js';
-import type { EnrollmentPageItem, EnrollmentSide } from './enrollment-side.port.js';
+import type {
+  EnrollmentPageItem,
+  EnrollmentSide,
+  EnrollmentStatus,
+} from './enrollment-side.port.js';
 import {
   lockRows,
   type OpenRemedy,
@@ -194,6 +198,15 @@ const FROZEN_KEPT: ReadonlySet<DisputesResolveInput['resolution']> = new Set([
 const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
 
 /**
+ * The party's enrollments a `party_*` ruling locks. A read filter (`EnrollmentPageFilter`, the
+ * `where` of `EnrollmentSide.enrollmentPage`), never a write: the confirmation gate
+ * (`tests/pipeline/confirmation-path.spec.ts`) reads any `status: 'confirmed'` literal as a write,
+ * so the value is a named constant, as `remedy-offer.sweep.ts` reads it (the owner's decision of
+ * 2026-11-10; the follow-up under T034).
+ */
+const CONFIRMED: EnrollmentStatus = 'confirmed';
+
+/**
  * The final status R-308 maps the resolution to; null when it keeps a frozen outcome not yet written.
  * The input's schema requires `consumed`, `against` and `party` for their resolutions.
  */
@@ -234,8 +247,8 @@ export function createDisputeResolution({
   ): Promise<readonly EnrollmentPageItem[]> => {
     const filter =
       role === 'student'
-        ? { status: 'confirmed' as const, studentUserIds: [userId] }
-        : { status: 'confirmed' as const, teacherUserIds: [userId] };
+        ? { status: CONFIRMED, studentUserIds: [userId] }
+        : { status: CONFIRMED, teacherUserIds: [userId] };
     const all: EnrollmentPageItem[] = [];
     let cursor: string | undefined;
     // Bounded: each page moves past its last id, and the party's enrollments are finite.
