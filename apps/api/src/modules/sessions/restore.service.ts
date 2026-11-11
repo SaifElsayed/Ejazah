@@ -451,6 +451,13 @@ export function createRestore({
 
     // The writes.
     if (!(await enrollments.restore(tx, enrollmentId))) throw refused(log, ids, 'not_restorable');
+    // The answer's status is the one the database now holds, read back on this transaction, never a
+    // literal: R-HONEST-1's gate counts any object setting `confirmed` off the confirmation path as a
+    // write (`tests/pipeline/confirmation-path.spec.ts`; the follow-up under T061, B40).
+    const restored = await enrollments.enrollmentFor(tx, enrollmentId);
+    if (restored?.status !== 'confirmed') {
+      throw new Error('restore: the enrollment, restored under its lock, does not read confirmed');
+    }
     try {
       await store.generate(tx, toSchedule, now, leadHours, plan);
     } catch (error: unknown) {
@@ -493,7 +500,7 @@ export function createRestore({
     );
     return {
       enrollmentId,
-      status: 'confirmed',
+      status: restored.status,
       sessionsCreated: planned.map((week) => {
         const sessionId = created.get(week.sequenceNumber);
         if (sessionId === undefined)

@@ -209,7 +209,9 @@ function restoreOf() {
     enrollments: {
       enrollmentFor: async () => {
         calls.push(['enrollmentFor']);
-        return given.terms;
+        // Once `restore` has answered true, the row reads `confirmed`, as the database would.
+        const restored = calls.some(([name]) => name === 'restore') && given.restored;
+        return restored && given.terms !== null ? { ...given.terms, status: 'confirmed' } : given.terms;
       },
       lockEnrollments: async (_tx, ids) => void calls.push(['lockEnrollments', ids]),
       eventsOf: async () => given.events,
@@ -345,6 +347,7 @@ describe('sessions.restore: the restore (FR-455)', () => {
       ['partiesOf', [STUDENT, TEACHER]],
       ['slotOf'],
       ['restore'],
+      ['enrollmentFor'],
       ['generate', 4, NOW, 24, { count: 2, firstSequenceNumber: 6 }],
       ['offerLocked', sid(3), { restoredCase: CASE }],
       [
