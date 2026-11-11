@@ -149,3 +149,66 @@ export async function cancelledInJoinPeriod(
   });
   return rows.map(({ id }) => id);
 }
+
+/** One page of the read of the sessions due a close (T067). */
+export interface RoomClosePage {
+  /** The sessions of the page due a close, in id order. */
+  readonly due: readonly string[];
+  /** The last session id the page read when the page was full; undefined at the last page. */
+  readonly next: string | undefined;
+}
+
+/**
+ * T067 (FR-501; SRS FR-SESS-21; the note under T067, Q5 and Q6): one page of the sessions due a
+ * close at their scheduled end, whatever their status, no lock. The page reads, in id order after
+ * `after`, at most `limit` sessions whose `scheduled_end_at` is at or before `endedBy` (the run's
+ * instant less the grace) and after `endedAfter` (that less the retries) and that someone joined;
+ * of them, `due` keeps those with no `room_ended` at or after the latest `joined`, by
+ * `occurred_at`, so a room created again after an earlier end is closed too (Q6). That second half
+ * compares two rows of the same session, which Prisma's filters cannot say, and raw SQL stays in
+ * the kernel (R-API-6), so it is a second read: the latest `joined` and `room_ended` of the page's
+ * sessions, over the `session_id` index. The first read is by time and events with no index, as
+ * `cancelledInJoinPeriod`'s is (R-DB-9 adds none; its plan is in the note under T067).
+ */
+export async function dueRoomCloses(
+  tx: Client,
+  endedBy: Date,
+  endedAfter: Date,
+  after: string | undefined,
+  limit: number,
+): Promise<RoomClosePage> {
+  const sessions = await tx.session.findMany({
+    where: {
+      scheduledEndAt: { lte: endedBy, gt: endedAfter },
+      participantEvents: { some: { eventType: 'joined' } },
+      ...(after === undefined ? {} : { id: { gt: after } }),
+    },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: { id: true },
+  });
+  const ids = sessions.map(({ id }) => id);
+  const next = ids.length < limit ? undefined : ids.at(-1);
+  if (ids.length === 0) return { due: [], next };
+  const latest = await tx.sessionParticipantEvent.groupBy({
+    by: ['sessionId', 'eventType'],
+    where: { sessionId: { in: ids }, eventType: { in: ['joined', 'room_ended'] } },
+    _max: { occurredAt: true },
+  });
+  const latestOf = (eventType: 'joined' | 'room_ended'): Map<string, number> =>
+    new Map(
+      latest.flatMap(({ sessionId, eventType: type, _max }) =>
+        type === eventType && _max.occurredAt !== null
+          ? [[sessionId, _max.occurredAt.getTime()] as const]
+          : [],
+      ),
+    );
+  const joined = latestOf('joined');
+  const ended = latestOf('room_ended');
+  const due = ids.filter((id) => {
+    const joinedAt = joined.get(id);
+    const endedAt = ended.get(id);
+    return joinedAt !== undefined && (endedAt === undefined || endedAt < joinedAt);
+  });
+  return { due, next };
+}

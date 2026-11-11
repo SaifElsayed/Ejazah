@@ -91,6 +91,10 @@ const SUBJECTS = [
  * the migration `20261108120000_sessions_pass` deletes its row), and `chat_retention_days` defaults
  * to 30 (the owner's decision of 2026-11-05): a database already seeded keeps its row, since the
  * seed inserts only what is missing (R-PROC-11).
+ *
+ * T067 (specs/004-sessions/data-model.md §4; SRS §3.14, FR-SESS-21, DEC-64, DEC-65): the two rows of
+ * the room's close at the scheduled end, its grace and its retries, inserted only where missing as
+ * every row is.
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
@@ -169,6 +173,10 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_outcome_correction', { limit: 10, window_seconds: 60 }],
   ['rate_limit_live_channel', { limit: 10, window_seconds: 60 }],
   ['live_channel_max_connections_per_user', 3],
+  // T067: minutes after the scheduled end before the room is closed, and the minutes after that
+  // during which the close is asked again, a positive whole number of minutes.
+  ['room_close_grace_minutes', 0],
+  ['room_close_retry_minutes', 10],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';
