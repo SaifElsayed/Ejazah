@@ -527,9 +527,9 @@ Scoped to the enrollment (FR-SESS-6). Persisted; admin-readable only under open 
 | attachment_filename | text, nullable | |
 | attachment_mime | text, nullable | Verified server-side, not trusted from client; `application/pdf` or `text/plain` only (§15 rule 47; SRS FR-SESS-7 as amended on 2026-11-05) |
 | sent_at | timestamptz | |
-| purged_at | timestamptz, nullable | Retention marker; body/attachment nulled, row kept for counts |
+| purged_at | timestamptz, nullable | Retention marker; body, `attachment_filename` and `attachment_mime` nulled with it, row kept for counts; `attachment_key` kept until its file is removed after the purge's commit, then cleared, so a failed removal is retried by the next run, as `erase-deleted-files` retries (v1.15, changelog row 35) |
 
-Check constraint: at least one of `body` / `attachment_key`, unless `purged_at` is set: the retention purge nulls both and keeps the row (note under T051).
+Check constraint: at least one of `body` / `attachment_key`, unless `purged_at` is set: the retention purge nulls the body and the attachment's name and type and keeps the row, its key until the file is removed (note under T051; changelog row 35).
 
 ## 7. Payments
 
@@ -642,7 +642,7 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | resolution_notes | text, nullable | Mandatory on resolve |
 | resolved_by_admin_id | FK → admin_users, nullable | |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution, by the database's `clock_timestamp()` in the update that closes the row, the enrollment's row locked first (note under T082 of `specs/003-booking/tasks.md`; v1.15) |
-| covered_by_case_id | FK → disputes, nullable | On a closed `student_suspended` case only: the case that owes the sessions its suspension cancelled, written with the closing (rule 49). Dismissed on a confirmed enrollment, the fault confirmed: the `student_fault_confirmed` case opened or joined then, which covers only the make-ups among them. Resolved on an enrollment that had already ended: the case that end opened, which covers all of them, owed as refunds. NULL otherwise. Several suspension cases may name one case (a joined fault case after a restore). Plain index (§14). `cases.get`'s `covers` reads it, so no instant is compared (v1.15, the owner's decision of 2026-11-11 on PR #133's review; changelog row 34) |
+| covered_by_case_id | FK → disputes, nullable | On a closed `student_suspended` case only: the case that owes the sessions its suspension cancelled, written with the closing (rule 49). Dismissed on a confirmed enrollment, the fault confirmed: the `student_fault_confirmed` case opened or joined then, which covers only the make-ups among them. Resolved on an enrollment that had already ended: the case that end opened, which covers all of them, owed as refunds. NULL otherwise. The link sits on the suspension case because each closed suspension case owes its sessions to one case (the sentence first written here, «a joined fault case after a restore», was wrong: a restore closes the fault case `dismissed` `restored` and refuses a closed one, so a fault case is never joined twice; PR #133's review, round 2, nit 2; changelog row 35). Plain index (§14). `cases.get`'s `covers` reads it, so no instant is compared (v1.15, the owner's decision of 2026-11-11 on PR #133's review; changelog row 34) |
 
 ### `gender_flags`
 
@@ -1265,5 +1265,6 @@ Amended on 2026-11-11 on PR #133's review, round 1, Major 1 (B39; the owner's de
 | # | Change | Migration |
 |---|---|---|
 | 34 | §10 `disputes.covered_by_case_id` (FK → `disputes`, nullable, plain index `disputes_covered_by_case_id_idx`, §14) and §15 rule 49: a closed `student_suspended` case names the case that owes the sessions its suspension cancelled, so a confirmed fault's case and an end's case find them by id, not by comparing `resolved_at` (the database's clock) with `created_at` (the application's) (SRS FR-ADMIN-5 as amended) | `20261111120000_case_covered_by` (B39) |
+| 35 | §6 `chat_messages.attachment_key`: the retention purge nulls the body and the attachment's name and type and sets `purged_at`, and keeps the key until its file is removed after the commit, then clears it, so a failed removal is retried by the next run (rules 8 and 47 already allow a purged row holding its key; the owner's decision of 2026-11-11 on B40's conflict check, Q2, T039 of `specs/004-sessions/tasks.md`). §10 `covered_by_case_id`'s note: the wrong reason for the link's place corrected (PR #133's review, round 2, nit 2) | none (text only) |
 
 Two tables are added: 44 tables.
