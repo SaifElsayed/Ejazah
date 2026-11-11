@@ -9,11 +9,17 @@
 // the database's clock, each in its own transaction under the enrollment's and the session's locks,
 // with T015's completion check: sessions' evaluation (`modules/sessions/evaluation.service.ts`),
 // whose head holds the rules. The rooms come first: a cancelled session's participant leaves the
-// room within the sweep's minute (FR-482), however many sessions are due.
+// room within the sweep's minute (FR-482), however many sessions are due. Last (T067, FR-501; the
+// note under T067, Q7 (a)), it ends the room of every session due a close at its scheduled end plus
+// `room_close_grace_minutes`, whatever its status, one `video room ended` line
+// `{ sessionId, reason }` per call: after the settlement, so the settlement never waits on the
+// provider or on the step's settings, and the step's own failure is caught inside it (one error
+// line with no id, reported), the run completing.
 //
 // Run twice, it leaves what one run leaves (R-API-14): a session is settled once, by the
 // `evaluated_at` guard read under its locks, with one `settled` row; a room ended stays ended, a
-// second `endRoom` changing nothing; no enrollment is ended, since no count is checked (R-322).
+// second `endRoom` changing nothing, and a close at the scheduled end writes no row; no enrollment
+// is ended, since no count is checked (R-322).
 import { z } from 'zod';
 
 import {
@@ -89,6 +95,7 @@ export function evaluateSessions(
     run: async () => {
       await evaluation.endCancelledRooms();
       await evaluation.settleDue();
+      await evaluation.endScheduledRooms();
     },
   });
 }

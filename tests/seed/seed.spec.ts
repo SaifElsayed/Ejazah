@@ -6,8 +6,8 @@
 // (T170), the twenty-six Phase 1 rows of specs/002-identity/data-model.md §4 (T002), the three rows
 // that give the administrator's sign-in and the provider nonce limits of their own (T133), the five
 // Phase 2 rows of specs/003-booking/data-model.md §4 (T002), the seventeen Phase 3 rows of
-// specs/004-sessions/data-model.md §4 (T001; `teacher_no_show_threshold` no longer planted), and
-// one administrator, each with a fixed identifier and a fixed instant; every other table stays
+// specs/004-sessions/data-model.md §4 (T001; `teacher_no_show_threshold` no longer planted), the
+// two rows of the room's close in the same table (T067), and one administrator, each with a fixed identifier and a fixed instant; every other table stays
 // empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
@@ -122,6 +122,10 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_outcome_correction: { limit: 10, window_seconds: 60 },
   rate_limit_live_channel: { limit: 10, window_seconds: 60 },
   live_channel_max_connections_per_user: 3,
+  // T067: the room's close at the scheduled end, its grace and its retries (SRS §3.14, FR-SESS-21,
+  // DEC-64, DEC-65).
+  room_close_grace_minutes: 0,
+  room_close_retry_minutes: 10,
 };
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
@@ -272,6 +276,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '71', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '73', admins: '1' }]);
   });
 });

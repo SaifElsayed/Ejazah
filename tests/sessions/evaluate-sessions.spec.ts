@@ -22,7 +22,15 @@
 //   - the double-run spec: one outcome, one event row, the enrollment not ended, the room ended once;
 //   - K6: a later run with no `room_ended` recorded calls `endRoom` again and changes nothing; once
 //     the provider's `room_ended` is recorded, no call; none once the join period has ended, or
-//     before it opens; each call one `video room ended` line of exactly `{ sessionId }`.
+//     before it opens; each call one `video room ended` line of exactly `{ sessionId }`;
+//   - T067 (FR-501; SRS FR-SESS-21; the note under T067, Q5 to Q8): the room of a session someone
+//     joined, with no `room_ended` at or after the latest join, ended at its scheduled end plus
+//     `room_close_grace_minutes`, whatever its status (disputed, `under_threshold`, settled), and
+//     asked again each run until `room_close_retry_minutes` more have passed; a room created again
+//     after an earlier `room_ended` closed too (Q6); never for a session nobody joined, one whose
+//     room ended after the latest join, one before its end plus the grace or one past the bound; the
+//     grace's and the bound's boundaries to the second; a failed call retried by the next run; each
+//     line's keys exactly; a missing setting leaving the settlement done (Q7 (a)).
 //
 // THE SWEEP IS GLOBAL, and this file runs beside other files' database specs (the `node` project):
 // a run settles every due session of the database. So the job is given the module's store narrowed
@@ -58,7 +66,10 @@ import { transactionsOver } from '../../apps/api/src/platform/db/transaction.rep
 import { createLogger } from '../../apps/api/src/platform/logging/logger';
 import { createVideoPort, type VideoConfig } from '../../apps/api/src/platform/ports/video/index';
 import type { VideoPort } from '../../apps/api/src/platform/ports/video/video.port';
-import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
+import {
+  SettingError,
+  type SettingsReader,
+} from '../../apps/api/src/platform/settings/settings-reader';
 import { addMinutes, addSeconds } from '../../packages/time/src/index';
 import {
   connectAsApplication,
@@ -78,6 +89,9 @@ const CONFIG: VideoConfig = {
 const ZONE = 'Africa/Abidjan';
 const DELAY_MINUTES = 2;
 const LEAD_MINUTES = 15;
+/** Not the default 0, so a session inside its grace shows (T067). */
+const GRACE_MINUTES = 1;
+const RETRY_MINUTES = 10;
 /** What pino writes on every line, beside a line's own fields. */
 const PINO_FIELDS = ['hostname', 'level', 'msg', 'pid', 'time'];
 const ROOM_TIMEOUTS = { emptyTimeoutSeconds: 300, departureTimeoutSeconds: 20 };
@@ -88,6 +102,8 @@ const SETTINGS: Readonly<Record<string, number>> = {
   join_window_minutes: 10,
   minimum_connection_seconds: 60,
   early_join_lead_minutes: LEAD_MINUTES,
+  room_close_grace_minutes: GRACE_MINUTES,
+  room_close_retry_minutes: RETRY_MINUTES,
   dispute_window_hours: 72,
   slot_release_buffer_weeks: 0,
   first_session_lead_hours: 24,
@@ -169,6 +185,10 @@ const ownStore: EvaluationStore = {
   },
   cancelledInJoinPeriod: async (tx, at, joinOpensBy) =>
     (await evaluationStore.cancelledInJoinPeriod(tx, at, joinOpensBy)).filter((id) => own.has(id)),
+  dueRoomCloses: async (tx, endedBy, endedAfter, after, limit) => {
+    const page = await evaluationStore.dueRoomCloses(tx, endedBy, endedAfter, after, limit);
+    return { due: page.due.filter((id) => own.has(id)), next: page.next };
+  },
 };
 
 /** The video port a world's job ends rooms through, with each `endRoom` call it was asked. */
@@ -177,7 +197,8 @@ interface Rooms {
   readonly endCalls: string[];
 }
 
-function roomsOf(): Rooms {
+/** `failOnce`: the sessions whose next `endRoom` call fails, once each (an unreachable provider). */
+function roomsOf(failOnce: Set<string> = new Set()): Rooms {
   const port = createVideoPort(CONFIG);
   const endCalls: string[] = [];
   return {
@@ -190,19 +211,20 @@ function roomsOf(): Rooms {
         port.verifyAndParseParticipantEvent(body, headers),
       endRoom: async (id) => {
         endCalls.push(id);
+        if (failOnce.delete(id)) throw new Error('provider unreachable');
         await port.endRoom(id);
       },
     },
   };
 }
 
-/** One run of the job as `worker.ts` builds it, over `rooms`. */
-async function run(rooms: Rooms = roomsOf()): Promise<void> {
+/** One run of the job as `worker.ts` builds it, over `rooms`, reading `reader`'s settings. */
+async function run(rooms: Rooms = roomsOf(), reader: SettingsReader = settings): Promise<void> {
   const enrollments = createEnrollmentSide({ settings });
   const completion = createCompletion({ enrollments, settings });
   await evaluateSessions({
     database,
-    settings,
+    settings: reader,
     enrollments,
     completion,
     video: rooms.port,
@@ -560,18 +582,24 @@ describe(
   'evaluate-sessions run twice leaves what one run leaves (R-API-14; kernel.md, "Jobs")',
   { timeout: 60_000 },
   () => {
-    it('one outcome, one event row, no enrollment ended, the room ended once', async () => {
+    it('one outcome, one event row, no enrollment ended, the room ended once; the room due a close ended, nothing written (T067)', async () => {
       const reading = await runOnceAndTwice({
         world: async () => {
           const rooms = roomsOf();
           const due = await endedWorld();
           await deliver(due, 'teacher_no_show');
-          return { rooms, due, cancelled: await cancelledInItsJoinPeriod(rooms) };
+          const closing = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS, SETTLED_DONE);
+          return { rooms, due, cancelled: await cancelledInItsJoinPeriod(rooms), closing };
         },
         run: async ({ rooms }) => run(rooms),
-        observe: async ({ rooms, due, cancelled }) => ({
+        observe: async ({ rooms, due, cancelled, closing }) => ({
           due: await read(due),
           cancelled: { ...(await read(cancelled)), room: await roomOf(rooms, cancelled) },
+          closing: {
+            ...(await read(closing)),
+            room: await roomOf(rooms, closing),
+            participantEvents: await participantEventsOf(closing),
+          },
         }),
       });
 
@@ -586,6 +614,17 @@ describe(
           settled_rows: 0,
           enrollment: 'confirmed',
           room: 'ended',
+        },
+        closing: {
+          status: 'done',
+          outcome_under_dispute: null,
+          simultaneous_connected_seconds: 3600,
+          evaluated: true,
+          settled_rows: 0,
+          enrollment: 'confirmed',
+          room: 'ended',
+          // The two joins delivered; the close writes no row (the provider's `room_ended` is).
+          participantEvents: 2,
         },
       });
     });
@@ -662,6 +701,241 @@ describe(
 
       expect(callsOf(rooms, session)).toEqual([]);
       expect(await roomOf(rooms, session)).toBe('open');
+    });
+  },
+);
+
+/** A scheduled end whose end plus the grace passed two minutes ago: due a close (T067). */
+const DUE_A_CLOSE_SECONDS = -(GRACE_MINUTES + 2) * 60;
+
+/** A session already settled `done` (T067: a settled session's room is closed too). */
+const SETTLED_DONE = {
+  status: 'done',
+  evaluated_at: new Date(),
+  simultaneous_connected_seconds: 3600,
+} as const;
+
+/**
+ * A session whose scheduled end is `endsInSeconds` from the database's clock (before it when
+ * negative), its room open, both parties joined at its start through the webhook.
+ */
+async function joinedWorld(
+  rooms: Rooms,
+  endsInSeconds: number,
+  values: Readonly<Record<string, unknown>> = {},
+): Promise<World> {
+  const now = await databaseNow();
+  const session = await world(new Date(addSeconds(now, endsInSeconds - 60 * 60)), values);
+  await rooms.port.createRoom(session.sessionId, ROOM_TIMEOUTS);
+  expect(
+    await stand.deliverInOrder([
+      stand.joined(session.sessionId, session.teacherUserId, { at: session.startAt }),
+      stand.joined(session.sessionId, session.studentUserId, { at: session.startAt }),
+    ]),
+  ).toEqual([200, 200]);
+  return session;
+}
+
+/** How many `session_participant_events` rows the session has. */
+async function participantEventsOf(of: World): Promise<number> {
+  const { rows } = await db.query<{ count: number }>(
+    'SELECT count(*)::int AS count FROM session_participant_events WHERE session_id = $1::uuid',
+    [of.sessionId],
+  );
+  return rows[0]?.count ?? -1;
+}
+
+/** The lines of `msg` written for `session`. */
+function linesOf(session: World, msg: string): Record<string, unknown>[] {
+  return parsed().filter((line) => line.msg === msg && line.sessionId === session.sessionId);
+}
+
+/** A line's own keys, without pino's. */
+function ownKeys(line: Record<string, unknown> | undefined): string[] {
+  return Object.keys(line ?? {})
+    .filter((key) => !PINO_FIELDS.includes(key))
+    .sort();
+}
+
+/** Every session the module's read answers due a close for the two instants, a page at a time. */
+async function dueCloseIds(endedBy: Date, endedAfter: Date): Promise<string[]> {
+  const transactions = transactionsOver(database);
+  const ids: string[] = [];
+  let after: string | undefined;
+  for (;;) {
+    const page = await transactions.run((tx) =>
+      evaluationStore.dueRoomCloses(tx, endedBy, endedAfter, after, 500),
+    );
+    ids.push(...page.due);
+    if (page.next === undefined) return ids;
+    after = page.next;
+  }
+}
+
+describe(
+  'T067: the room ended at the session’s scheduled end plus the grace (FR-501, SRS FR-SESS-21, DEC-64, DEC-65)',
+  { timeout: 60_000 },
+  () => {
+    it.each([
+      ['disputed from its end, before the evaluation', { status: 'disputed' }],
+      [
+        'under_threshold',
+        {
+          status: 'under_threshold',
+          evaluated_at: new Date(),
+          simultaneous_connected_seconds: 600,
+        },
+      ],
+      ['settled', SETTLED_DONE],
+    ] as const)(
+      'a session %s: closed, one info line of exactly its id and reason',
+      async (_case, values) => {
+        const rooms = roomsOf();
+        const session = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS, values);
+
+        await run(rooms);
+
+        expect(callsOf(rooms, session)).toEqual([session.sessionId]);
+        expect(await roomOf(rooms, session)).toBe('ended');
+        const ended = linesOf(session, 'video room ended');
+        expect(ended).toHaveLength(1);
+        expect(ownKeys(ended[0])).toEqual(['reason', 'sessionId']);
+        expect(ended[0]).toMatchObject({ level: 'info', reason: 'scheduled_end' });
+        expect(reported).toEqual([]);
+      },
+    );
+
+    it('a room created again after an earlier room_ended, someone joining after it: closed (Q6)', async () => {
+      const rooms = roomsOf();
+      const session = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS);
+      expect(
+        await stand.deliverInOrder([
+          stand.roomEnded(session.sessionId, { at: new Date(addMinutes(session.startAt, 10)) }),
+          stand.joined(session.sessionId, session.studentUserId, {
+            at: new Date(addMinutes(session.startAt, 11)),
+            connection: 'second',
+          }),
+        ]),
+      ).toEqual([200, 200]);
+
+      await run(rooms);
+
+      expect(callsOf(rooms, session)).toEqual([session.sessionId]);
+      expect(await roomOf(rooms, session)).toBe('ended');
+    });
+
+    it.each([
+      ['a session nobody joined', 'nobody'],
+      ['a room the provider reported ended after the latest join', 'ended_after'],
+      ['a room the provider reported ended at the latest join’s instant', 'ended_at_join'],
+      ['a session before its end plus the grace', 'inside_grace'],
+      ['a session past its end plus the grace and the retries', 'past_bound'],
+    ] as const)('never called: %s', async (_case, kind) => {
+      const rooms = roomsOf();
+      const session = await (async () => {
+        if (kind === 'nobody') {
+          const now = await databaseNow();
+          const alone = await world(new Date(addSeconds(now, DUE_A_CLOSE_SECONDS - 60 * 60)));
+          await rooms.port.createRoom(alone.sessionId, ROOM_TIMEOUTS);
+          return alone;
+        }
+        if (kind === 'inside_grace') return joinedWorld(rooms, -30);
+        if (kind === 'past_bound') {
+          return joinedWorld(rooms, -(GRACE_MINUTES + RETRY_MINUTES + 1) * 60);
+        }
+        const joined = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS);
+        const at = kind === 'ended_at_join' ? joined.startAt : addMinutes(joined.startAt, 30);
+        expect(await stand.deliver(stand.roomEnded(joined.sessionId, { at: new Date(at) }))).toBe(
+          200,
+        );
+        return joined;
+      })();
+
+      await run(rooms);
+
+      expect(callsOf(rooms, session)).toEqual([]);
+      expect(await roomOf(rooms, session)).toBe('open');
+      expect(linesOf(session, 'video room ended')).toEqual([]);
+    });
+
+    it('the grace’s boundary to the second: not called while the end plus the grace is ahead, called by the first run at it', async () => {
+      const rooms = roomsOf();
+      // The end plus the grace ten seconds from now by the database's clock.
+      const session = await joinedWorld(rooms, 10 - GRACE_MINUTES * 60);
+      const closesAt = new Date(addMinutes(session.endAt, GRACE_MINUTES));
+
+      await run(rooms);
+      const early = [...callsOf(rooms, session)];
+      expect((await databaseNow()).getTime()).toBeLessThan(closesAt.getTime());
+      while ((await databaseNow()).getTime() <= closesAt.getTime()) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      await run(rooms);
+
+      expect(early).toEqual([]);
+      expect(callsOf(rooms, session)).toEqual([session.sessionId]);
+    });
+
+    it('the read’s two boundaries to the second: the end plus the grace at the instant is due, a second later is not; the bound reached is not due, a second short of it is', async () => {
+      const rooms = roomsOf();
+      const session = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS);
+      const end = session.endAt;
+      const second = (seconds: number) => new Date(addSeconds(end, seconds));
+      const retry = RETRY_MINUTES * 60;
+
+      // `endedBy` is the run's instant less the grace; `endedAfter` that less the retries.
+      expect(await dueCloseIds(end, second(-retry))).toContain(session.sessionId);
+      expect(await dueCloseIds(second(-1), second(-retry - 1))).not.toContain(session.sessionId);
+      expect(await dueCloseIds(second(retry), end)).not.toContain(session.sessionId);
+      expect(await dueCloseIds(second(retry - 1), second(-1))).toContain(session.sessionId);
+    });
+
+    it('a failed call: one warn line of exactly its id and reason, reported, the run going on; the next run calls again and closes it (Q7, Q8)', async () => {
+      const failOnce = new Set<string>();
+      const rooms = roomsOf(failOnce);
+      const session = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS);
+      const other = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS);
+      failOnce.add(session.sessionId);
+
+      await run(rooms);
+      const warned = linesOf(session, 'video room not ended');
+      const firstReports = reported.map(({ message }) => message);
+      const firstRoom = await roomOf(rooms, session);
+      const otherRoom = await roomOf(rooms, other);
+      await run(rooms);
+
+      expect(warned).toHaveLength(1);
+      expect(ownKeys(warned[0])).toEqual(['reason', 'sessionId']);
+      expect(warned[0]).toMatchObject({ level: 'warn', reason: 'end_room_failed' });
+      expect(firstReports).toEqual(['provider unreachable']);
+      expect(firstRoom).toBe('open');
+      expect(otherRoom).toBe('ended');
+      expect(callsOf(rooms, session)).toEqual([session.sessionId, session.sessionId]);
+      expect(await roomOf(rooms, session)).toBe('ended');
+      expect(linesOf(session, 'video room ended')).toHaveLength(1);
+    });
+
+    it('a setting missing: the settlement done, no call, one error line with no id and one report (Q7 (a), SC-403)', async () => {
+      const rooms = roomsOf();
+      const due = await endedWorld();
+      await deliver(due, 'done');
+      const closing = await joinedWorld(rooms, DUE_A_CLOSE_SECONDS);
+      const missing: SettingsReader = {
+        read: async (key, schema) => {
+          if (key === 'room_close_retry_minutes') throw new SettingError(key, 'missing');
+          return settings.read(key, schema);
+        },
+      };
+
+      await run(rooms, missing);
+
+      expect(await read(due)).toEqual(settled('done', 3600));
+      expect(callsOf(rooms, closing)).toEqual([]);
+      const failed = parsed().filter(({ msg }) => msg === 'video room close failed');
+      expect(failed).toHaveLength(1);
+      expect(ownKeys(failed[0])).toEqual([]);
+      expect(failed[0]).toMatchObject({ level: 'error' });
+      expect(reported.map(({ name }) => name)).toEqual(['SettingError']);
     });
   },
 );

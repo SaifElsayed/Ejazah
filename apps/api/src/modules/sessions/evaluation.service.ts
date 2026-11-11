@@ -29,6 +29,18 @@
 // changes nothing (the LiveKit adapter takes the provider's `not_found` as success), and the calls
 // stop when the join period ends. No `removeParticipant` (K5). The call is outside any transaction.
 //
+// A ROOM ENDED AT THE SCHEDULED END (T067; FR-501; SRS FR-SESS-21, DEC-64, DEC-65; the note under
+// T067, Q5 to Q8). After the settlement, the same run ends, through `endRoom` alone and outside any
+// transaction, the room of every session due a close, whatever its status (a session disputed from
+// its end, before the evaluation, included): someone joined it and no `room_ended` is recorded at or
+// after the latest join (a room created again after an earlier end is closed too, Q6), and its
+// `scheduled_end_at` plus `room_close_grace_minutes` is at or before the database's clock while that
+// plus `room_close_retry_minutes` is after it, read a page at a time in id order. Until the
+// provider's `room_ended` is recorded a later run calls again, at most once a minute per session
+// until the retries pass. The step's own failure (a setting missing, a read failing) is caught: one
+// error line with no id, reported, so the settlement, already done, never waits on it (Q7 (a),
+// SC-403).
+//
 // THE LOG (the owner's rule; research R-323, GAP-7). Each settlement, an automatic action, writes
 // one info line `{ sessionId, outcome }` after its commit; a session not settled because another
 // path got there first writes none. A completion T015's check made on that transaction writes one
@@ -37,7 +49,10 @@
 // exactly `{ sessionId }`, never a token, a name or an address, and no row (the provider's
 // `room_ended` event stays the record). A session whose evaluation fails writes one error line
 // `{ sessionId }` and is reported to error tracking, and the run goes on to the next, which a later
-// run retries; a failed `endRoom` one warn line `{ sessionId, reason }`, reported.
+// run retries; a failed `endRoom` one warn line `{ sessionId, reason }`, reported. A close at the
+// scheduled end writes one info line `video room ended` of exactly `{ sessionId, reason }`
+// (`scheduled_end`), and its failed call the same warn line, `end_room_failed`, reported, the run
+// going on (Q7, Q8: every failed call reported).
 import { addMinutes, type Interval } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -60,6 +75,8 @@ import {
   attendanceEventsOf,
   cancelledInJoinPeriod,
   dueForEvaluation,
+  dueRoomCloses,
+  type RoomClosePage,
   type SessionToSettle,
   sessionToSettle,
   settle,
@@ -69,10 +86,16 @@ import { outagesOverlapping } from './outages.repository.js';
 import { lockRows } from './remaining-sessions.repository.js';
 import { recordSessionEvents, type SessionEventRecord } from './session-events.repository.js';
 
-export type { SessionToSettle, Settlement } from './evaluation.repository.js';
+export type { RoomClosePage, SessionToSettle, Settlement } from './evaluation.repository.js';
 
 /** Minutes after the scheduled end before a session is evaluated (SRS §3.14, R-SESS-2). */
 export const EVALUATION_DELAY_SETTING = 'session_evaluation_delay_minutes';
+
+/** T067: minutes after the scheduled end before the room is ended (SRS §3.14, FR-SESS-21). */
+export const ROOM_CLOSE_GRACE_SETTING = 'room_close_grace_minutes';
+
+/** T067: minutes after the end plus the grace during which the close is asked again (DEC-65). */
+export const ROOM_CLOSE_RETRY_SETTING = 'room_close_retry_minutes';
 
 /**
  * The four attendance settings (SRS §3.14, FR-442 to FR-444), by the rules' names; T033's telemetry
@@ -120,6 +143,18 @@ export interface EvaluationStore {
    * plus the early-join lead, and an end after `at`) and that have no `room_ended` row, by id.
    */
   cancelledInJoinPeriod(tx: Transaction, at: Date, joinOpensBy: Date): Promise<readonly string[]>;
+  /**
+   * T067: one page of the sessions due a close, whatever their status: those someone joined with a
+   * scheduled end at or before `endedBy` and after `endedAfter`, in id order after `after`, at most
+   * `limit` read, kept when no `room_ended` is at or after their latest join; no lock.
+   */
+  dueRoomCloses(
+    tx: Transaction,
+    endedBy: Date,
+    endedAfter: Date,
+    after: string | undefined,
+    limit: number,
+  ): Promise<RoomClosePage>;
 }
 
 /** The evaluation's store over sessions' tables. */
@@ -132,6 +167,7 @@ export const evaluationStore: EvaluationStore = {
   settle,
   recordEvents: recordSessionEvents,
   cancelledInJoinPeriod,
+  dueRoomCloses,
 };
 
 /** What a run settled and what failed, by session id. */
@@ -145,6 +181,11 @@ export interface Evaluation {
   settleDue(): Promise<EvaluationRun>;
   /** Ends the room of every cancelled session in its join period with no `room_ended` row. */
   endCancelledRooms(): Promise<readonly string[]>;
+  /**
+   * T067: ends the room of every session due a close at its scheduled end; never throws, its own
+   * failure logged and reported (this file's head).
+   */
+  endScheduledRooms(): Promise<readonly string[]>;
 }
 
 /** What one settlement wrote, for its line after the commit. */
@@ -247,6 +288,25 @@ export function createEvaluation({
       return { outcome: attendance.outcome, disputed: session.status === 'disputed', completed };
     });
 
+  /**
+   * One `endRoom` call outside any transaction; whether it succeeded. A success writes one info line
+   * of `ended`'s fields, a failure one warn line `{ sessionId, reason }`, reported; never throws.
+   */
+  const endRoomOf = async (
+    sessionId: string,
+    ended: { readonly sessionId: string; readonly reason?: 'scheduled_end' },
+  ): Promise<boolean> => {
+    try {
+      await video.endRoom(sessionId);
+    } catch (error: unknown) {
+      log.warn({ sessionId, reason: 'end_room_failed' }, 'video room not ended');
+      report(error instanceof Error ? error : new Error(String(error)));
+      return false;
+    }
+    log.info(ended, 'video room ended');
+    return true;
+  };
+
   return {
     settleDue: async () => {
       const delayMinutes = await settings.read(EVALUATION_DELAY_SETTING, wholeNonNegative);
@@ -294,15 +354,34 @@ export function createEvaluation({
       });
       const ended: string[] = [];
       for (const sessionId of sessionIds) {
-        try {
-          await video.endRoom(sessionId);
-        } catch (error: unknown) {
-          log.warn({ sessionId, reason: 'end_room_failed' }, 'video room not ended');
-          report(error instanceof Error ? error : new Error(String(error)));
-          continue;
-        }
-        ended.push(sessionId);
-        log.info({ sessionId }, 'video room ended');
+        if (await endRoomOf(sessionId, { sessionId })) ended.push(sessionId);
+      }
+      return ended;
+    },
+
+    endScheduledRooms: async () => {
+      const ended: string[] = [];
+      try {
+        const graceMinutes = await settings.read(ROOM_CLOSE_GRACE_SETTING, wholeNonNegative);
+        const retryMinutes = await settings.read(ROOM_CLOSE_RETRY_SETTING, wholeNonNegative);
+        const at = await transactions.run((tx) => clock(tx));
+        const endedBy = new Date(addMinutes(at, -graceMinutes));
+        const endedAfter = new Date(addMinutes(endedBy, -retryMinutes));
+        let after: string | undefined;
+        do {
+          const page = await transactions.run((tx) =>
+            store.dueRoomCloses(tx, endedBy, endedAfter, after, pageSize),
+          );
+          for (const sessionId of page.due) {
+            if (await endRoomOf(sessionId, { sessionId, reason: 'scheduled_end' })) {
+              ended.push(sessionId);
+            }
+          }
+          after = page.next;
+        } while (after !== undefined);
+      } catch (error: unknown) {
+        log.error({}, 'video room close failed');
+        report(error instanceof Error ? error : new Error(String(error)));
       }
       return ended;
     },

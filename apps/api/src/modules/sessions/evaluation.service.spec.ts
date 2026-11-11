@@ -16,14 +16,21 @@
 //   - a session that fails is logged by its id and reported, and the run goes on;
 //   - the room of every cancelled session in its join period with no `room_ended` row is ended
 //     through `endRoom`, one info line `video room ended` with exactly `{ sessionId }`; a failed
-//     call one warn line `{ sessionId, reason }`, reported, and the run goes on.
+//     call one warn line `{ sessionId, reason }`, reported, and the run goes on;
+//   - T067 (FR-501; SRS FR-SESS-21; the note under T067, Q5 to Q8): the room of every session due a
+//     close (its scheduled end plus `room_close_grace_minutes` at or before the database's clock, and
+//     that plus `room_close_retry_minutes` after it), read a page at a time, ended through `endRoom`
+//     with one info line `video room ended` of exactly `{ sessionId, reason: 'scheduled_end' }`; a
+//     failed call one warn line `video room not ended` `{ sessionId, reason: 'end_room_failed' }`,
+//     reported, and the run goes on; the step's own failure (a missing setting, a failed read) one
+//     error line with no id and one report, never thrown.
 //
 // Over the real tables, through T010's harness: `tests/sessions/evaluate-sessions.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
-import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { AttendanceEvent } from './attendance.rules.js';
 import {
   createEvaluation,
@@ -38,6 +45,9 @@ const TX = {} as Transaction;
 const AT = new Date('2026-11-08T10:00:00Z');
 const DELAY_MINUTES = 2;
 const LEAD_MINUTES = 15;
+/** Not the default 0, so the close's arithmetic shows (T067). */
+const GRACE_MINUTES = 5;
+const RETRY_MINUTES = 10;
 const START = new Date('2026-11-08T08:00:00Z');
 const END = new Date('2026-11-08T09:00:00Z');
 const TEACHER = 'teacher-1';
@@ -49,13 +59,20 @@ const SETTINGS: Readonly<Record<string, number>> = {
   minimum_connection_seconds: 60,
   attendance_threshold_pct: 70,
   early_join_lead_minutes: LEAD_MINUTES,
+  room_close_grace_minutes: GRACE_MINUTES,
+  room_close_retry_minutes: RETRY_MINUTES,
 };
-const settings: SettingsReader = {
-  read: async (key, schema) => {
-    if (!(key in SETTINGS)) throw new Error(`unexpected setting ${key}`);
-    return schema.parse(SETTINGS[key]);
-  },
-};
+
+/** The settings reader, failing closed as the real one does on each key in `missing`. */
+function settingsWithout(missing: readonly string[] = []): SettingsReader {
+  return {
+    read: async (key, schema) => {
+      if (missing.includes(key)) throw new SettingError(key, 'missing');
+      if (!(key in SETTINGS)) throw new Error(`unexpected setting ${key}`);
+      return schema.parse(SETTINGS[key]);
+    },
+  };
+}
 
 /** A session as the store holds it: due, scheduled, unevaluated. */
 function session(id: string, values: Partial<SessionToSettle> = {}): SessionToSettle {
@@ -102,6 +119,9 @@ function worldOf({
   page = 10,
   completes = false,
   commitRefused = false,
+  dueCloses = [],
+  closeReadFails = false,
+  missingSettings = [],
 }: {
   sessions?: SessionToSettle[];
   attendance?: Readonly<Record<string, readonly AttendanceEvent[]>>;
@@ -117,6 +137,12 @@ function worldOf({
   completes?: boolean;
   /** The commit of a transaction that checked completion is refused, so it rolls back. */
   commitRefused?: boolean;
+  /** The sessions due a close (T067), by id; each page answers them in id order. */
+  dueCloses?: string[];
+  /** The read of the sessions due a close throws. */
+  closeReadFails?: boolean;
+  /** The settings the reader does not hold. */
+  missingSettings?: string[];
 } = {}) {
   let refuseCommit = false;
   const transactions: Transactions = {
@@ -174,6 +200,17 @@ function worldOf({
       calls.push(`cancelled ${at.toISOString()} ${joinOpensBy.toISOString()}`);
       return cancelled;
     },
+    async dueRoomCloses(_tx, endedBy, endedAfter, after, limit) {
+      calls.push(
+        `closes ${endedBy.toISOString()} ${endedAfter.toISOString()} ${after ?? '-'} ${String(limit)}`,
+      );
+      if (closeReadFails) throw new Error('read of the closes failed');
+      const read = dueCloses
+        .filter((id) => after === undefined || id > after)
+        .toSorted()
+        .slice(0, limit);
+      return { due: read, next: read.length < limit ? undefined : read.at(-1) };
+    },
   };
   const evaluation = createEvaluation({
     transactions,
@@ -196,7 +233,7 @@ function worldOf({
         ended.push(sessionId);
       },
     },
-    settings,
+    settings: settingsWithout(missingSettings),
     log: {
       info: (fields: Record<string, unknown>, message: string) =>
         void lines.push({ level: 'info', fields, message }),
@@ -430,5 +467,103 @@ describe('endCancelledRooms: a cancelled session’s room ended in its join peri
 
     expect(await world.evaluation.endCancelledRooms()).toEqual([]);
     expect(world.calls.filter((call) => call.startsWith('endRoom'))).toEqual([]);
+  });
+});
+
+describe('endScheduledRooms: the room ended at the session’s scheduled end (T067, FR-501, SRS FR-SESS-21)', () => {
+  it('asks for the sessions whose end plus the grace has passed and whose end plus the grace and the retries has not, then ends each room with one line of exactly its id and reason', async () => {
+    const world = worldOf({ dueCloses: ['x', 'y'] });
+
+    const ended = await world.evaluation.endScheduledRooms();
+
+    expect(ended).toEqual(['x', 'y']);
+    expect(world.calls).toEqual([
+      // Ended at or before AT less the grace, and after that less the retries.
+      `closes 2026-11-08T09:55:00.000Z 2026-11-08T09:45:00.000Z - 10`,
+      'endRoom x',
+      'endRoom y',
+    ]);
+    expect(world.lines).toEqual([
+      {
+        level: 'info',
+        fields: { sessionId: 'x', reason: 'scheduled_end' },
+        message: 'video room ended',
+      },
+      {
+        level: 'info',
+        fields: { sessionId: 'y', reason: 'scheduled_end' },
+        message: 'video room ended',
+      },
+    ]);
+    expect(Object.keys(world.lines[0]?.fields ?? {})).toEqual(['sessionId', 'reason']);
+    expect(world.reported).toEqual([]);
+  });
+
+  it('a call that fails: one warn line of exactly its id and reason, reported, and the next room is still ended (Q7, Q8)', async () => {
+    const world = worldOf({ dueCloses: ['x', 'y'], failingRooms: ['x'] });
+
+    const ended = await world.evaluation.endScheduledRooms();
+
+    expect(ended).toEqual(['y']);
+    expect(world.lines).toEqual([
+      {
+        level: 'warn',
+        fields: { sessionId: 'x', reason: 'end_room_failed' },
+        message: 'video room not ended',
+      },
+      {
+        level: 'info',
+        fields: { sessionId: 'y', reason: 'scheduled_end' },
+        message: 'video room ended',
+      },
+    ]);
+    expect(Object.keys(world.lines[0]?.fields ?? {})).toEqual(['sessionId', 'reason']);
+    expect(world.reported.map(({ message }) => message)).toEqual(['provider unreachable']);
+  });
+
+  it('reads the sessions due a close a page at a time after the last id, until a page that is not full', async () => {
+    const world = worldOf({ dueCloses: ['a', 'b', 'c'], page: 2 });
+
+    const ended = await world.evaluation.endScheduledRooms();
+
+    expect(world.calls.filter((call) => call.startsWith('closes'))).toEqual([
+      `closes 2026-11-08T09:55:00.000Z 2026-11-08T09:45:00.000Z - 2`,
+      `closes 2026-11-08T09:55:00.000Z 2026-11-08T09:45:00.000Z b 2`,
+    ]);
+    expect(ended).toEqual(['a', 'b', 'c']);
+  });
+
+  it('no session due a close: no call, no line', async () => {
+    const world = worldOf();
+
+    expect(await world.evaluation.endScheduledRooms()).toEqual([]);
+    expect(world.calls.filter((call) => call.startsWith('endRoom'))).toEqual([]);
+    expect(world.lines).toEqual([]);
+  });
+
+  it.each([['room_close_grace_minutes'], ['room_close_retry_minutes']])(
+    'the setting %s missing: one error line with no id, one report, nothing read, nothing thrown (Q7 (a))',
+    async (key) => {
+      const world = worldOf({ dueCloses: ['x'], missingSettings: [key] });
+
+      expect(await world.evaluation.endScheduledRooms()).toEqual([]);
+      expect(world.calls).toEqual([]);
+      expect(world.lines).toEqual([
+        { level: 'error', fields: {}, message: 'video room close failed' },
+      ]);
+      expect(world.reported).toHaveLength(1);
+      expect(world.reported[0]).toBeInstanceOf(SettingError);
+    },
+  );
+
+  it('the read failing: one error line with no id, one report, no call, nothing thrown (Q7 (a))', async () => {
+    const world = worldOf({ dueCloses: ['x'], closeReadFails: true });
+
+    expect(await world.evaluation.endScheduledRooms()).toEqual([]);
+    expect(world.calls.filter((call) => call.startsWith('endRoom'))).toEqual([]);
+    expect(world.lines).toEqual([
+      { level: 'error', fields: {}, message: 'video room close failed' },
+    ]);
+    expect(world.reported.map(({ message }) => message)).toEqual(['read of the closes failed']);
   });
 });
