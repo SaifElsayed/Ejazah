@@ -110,6 +110,8 @@ export const ATTENDANCE_SETTINGS = {
 
 const wholeNonNegative = z.int().nonnegative();
 const positive = z.number().positive();
+/** As `sessions.service.ts`' `positiveSeconds`: a retry period of 0 would close nothing, silently. */
+const positiveWhole = z.int().positive();
 
 /** A session the read of the due ones answers: its id and its enrollment's. */
 export interface DueSession {
@@ -363,7 +365,7 @@ export function createEvaluation({
       const ended: string[] = [];
       try {
         const graceMinutes = await settings.read(ROOM_CLOSE_GRACE_SETTING, wholeNonNegative);
-        const retryMinutes = await settings.read(ROOM_CLOSE_RETRY_SETTING, wholeNonNegative);
+        const retryMinutes = await settings.read(ROOM_CLOSE_RETRY_SETTING, positiveWhole);
         const at = await transactions.run((tx) => clock(tx));
         const endedBy = new Date(addMinutes(at, -graceMinutes));
         const endedAfter = new Date(addMinutes(endedBy, -retryMinutes));

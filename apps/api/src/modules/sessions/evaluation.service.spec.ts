@@ -63,13 +63,22 @@ const SETTINGS: Readonly<Record<string, number>> = {
   room_close_retry_minutes: RETRY_MINUTES,
 };
 
-/** The settings reader, failing closed as the real one does on each key in `missing`. */
-function settingsWithout(missing: readonly string[] = []): SettingsReader {
+/**
+ * The settings reader, failing closed as the real one does: on each key in `missing`, and on a
+ * value the caller's schema refuses (`changed` overrides the stored values).
+ */
+function settingsWithout(
+  missing: readonly string[] = [],
+  changed: Readonly<Record<string, number>> = {},
+): SettingsReader {
+  const stored = { ...SETTINGS, ...changed };
   return {
     read: async (key, schema) => {
       if (missing.includes(key)) throw new SettingError(key, 'missing');
-      if (!(key in SETTINGS)) throw new Error(`unexpected setting ${key}`);
-      return schema.parse(SETTINGS[key]);
+      if (!(key in stored)) throw new Error(`unexpected setting ${key}`);
+      const parsed = schema.safeParse(stored[key]);
+      if (!parsed.success) throw new SettingError(key, 'invalid');
+      return parsed.data;
     },
   };
 }
@@ -122,6 +131,7 @@ function worldOf({
   dueCloses = [],
   closeReadFails = false,
   missingSettings = [],
+  changedSettings = {},
 }: {
   sessions?: SessionToSettle[];
   attendance?: Readonly<Record<string, readonly AttendanceEvent[]>>;
@@ -143,6 +153,8 @@ function worldOf({
   closeReadFails?: boolean;
   /** The settings the reader does not hold. */
   missingSettings?: string[];
+  /** Stored values other than `SETTINGS`', by key. */
+  changedSettings?: Readonly<Record<string, number>>;
 } = {}) {
   let refuseCommit = false;
   const transactions: Transactions = {
@@ -233,7 +245,7 @@ function worldOf({
         ended.push(sessionId);
       },
     },
-    settings: settingsWithout(missingSettings),
+    settings: settingsWithout(missingSettings, changedSettings),
     log: {
       info: (fields: Record<string, unknown>, message: string) =>
         void lines.push({ level: 'info', fields, message }),
@@ -555,6 +567,25 @@ describe('endScheduledRooms: the room ended at the session’s scheduled end (T0
       expect(world.reported[0]).toBeInstanceOf(SettingError);
     },
   );
+
+  it('a retry period of 0 is refused by the reader, never a silent stop: no read, no call, one error line with no id, one report', async () => {
+    const world = worldOf({
+      dueCloses: ['x'],
+      changedSettings: { room_close_retry_minutes: 0 },
+    });
+
+    expect(await world.evaluation.endScheduledRooms()).toEqual([]);
+    expect(world.calls).toEqual([]);
+    expect(world.lines).toEqual([
+      { level: 'error', fields: {}, message: 'video room close failed' },
+    ]);
+    expect(world.reported).toHaveLength(1);
+    expect(world.reported[0]).toMatchObject({
+      name: 'SettingError',
+      key: 'room_close_retry_minutes',
+      problem: 'invalid',
+    });
+  });
 
   it('the read failing: one error line with no id, one report, no call, nothing thrown (Q7 (a))', async () => {
     const world = worldOf({ dueCloses: ['x'], closeReadFails: true });

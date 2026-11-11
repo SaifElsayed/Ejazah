@@ -174,7 +174,7 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_live_channel', { limit: 10, window_seconds: 60 }],
   ['live_channel_max_connections_per_user', 3],
   // T067: minutes after the scheduled end before the room is closed, and the minutes after that
-  // during which the close is asked again.
+  // during which the close is asked again, a positive whole number of minutes.
   ['room_close_grace_minutes', 0],
   ['room_close_retry_minutes', 10],
 ];

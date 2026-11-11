@@ -337,7 +337,7 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `rate_limit_live_channel` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 on research R-324) | `live.events`' own limit on opening the live channel, the user as subject, failing closed (FR-428) |
 | `live_channel_max_connections_per_user` | 3 (the same) | the most live streams one account holds, the oldest ended when one more opens (FR-428; R-324) |
 | `room_close_grace_minutes` | 0 (the owner's decision of 2026-11-09, DEC-64) | the minutes after a session's scheduled end before the `evaluate-sessions` sweep ends its video room (FR-501; SRS FR-SESS-21, §3.14; T067) |
-| `room_close_retry_minutes` | 10 (the owner's decision of 2026-11-11 on B40a's conflict check, Q5, DEC-65) | the minutes after the end plus the grace during which the sweep asks the provider again, each minute, until it reports the room ended (FR-501; SRS FR-SESS-21, §3.14; T067) |
+| `room_close_retry_minutes` | 10 (the owner's decision of 2026-11-11 on B40a's conflict check, Q5, DEC-65) | the minutes after the end plus the grace during which the sweep asks the provider again, each minute, until it reports the room ended; a positive whole number of minutes, since 0 would close nothing, so the reader refuses it and the step writes its error line and report each run (FR-501; SRS FR-SESS-21, §3.14; T067) |
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
