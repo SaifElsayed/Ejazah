@@ -31,6 +31,7 @@ const transpiled = [
   '@formatjs/.*',
   'intl-messageformat',
   'standard-navigation',
+  'eventsource-parser',
 ];
 
 module.exports = {
