@@ -21,6 +21,7 @@ import {
 import { useTheme } from '../../../../design/theme';
 import { tokens } from '../../../../design/tokens';
 import { type Locale, setLocale, useLocale, useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { BANNED_ROUTE, type SignInProvider, useAuthApi } from '../api';
 import { type SignInConflict, SignInConflictSheet } from '../components/SignInConflictSheet';
 import { devSignInEnabled } from '../dev-sign-in';
@@ -31,19 +32,19 @@ export function Welcome() {
   const { color } = useTheme();
   const auth = useAuthApi();
   const [busy, setBusy] = useState<SignInProvider | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const [conflict, setConflict] = useState<SignInConflict | null>(null);
 
   const signIn = async (provider: SignInProvider) => {
-    setFailed(false);
+    setFailure(null);
     setBusy(provider);
     try {
       const outcome = await auth.withProvider(provider);
       if (outcome.kind === 'onboarding') router.push('/(auth)/role');
       if (outcome.kind === 'conflict') setConflict(outcome);
       if (outcome.kind === 'banned') router.replace(BANNED_ROUTE);
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'auth.welcome.failed'));
     } finally {
       setBusy(null);
     }
@@ -79,9 +80,9 @@ export function Welcome() {
             <Feature icon="users" text={t('auth.welcome.feature.gender')} />
           </View>
         </View>
-        {failed ? (
+        {failure !== null ? (
           <Banner icon={{ name: 'alert-circle' }} tone="danger">
-            {t('auth.welcome.failed')}
+            {t(failure.key, failure.values)}
           </Banner>
         ) : null}
       </View>

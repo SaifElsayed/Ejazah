@@ -29,6 +29,7 @@ export function StudentAccount() {
       {account === undefined ? (
         <NotLoaded
           failed={me.isError}
+          error={me.error}
           onRetry={() => void me.refetch()}
           loading={<AccountLoading />}
         />

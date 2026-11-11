@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Banner, Button, NavHeader, Skeleton } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -26,15 +27,15 @@ export function TeacherCredentials() {
   const credentials = useCredentials();
   const actions = useCredentialActions();
   const dated = useCredentialDate();
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function openFile(credentialId: string): Promise<void> {
-    setFailed(false);
+    setFailure(null);
     try {
       const { url } = await actions.documentLink(credentialId);
       await Linking.openURL(url);
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     }
   }
 
@@ -50,6 +51,7 @@ export function TeacherCredentials() {
       {credentials.data === undefined ? (
         <NotLoaded
           failed={credentials.isError}
+          error={credentials.error}
           onRetry={() => void credentials.refetch()}
           loading={<Skeleton shape="block" />}
         />
@@ -70,9 +72,9 @@ export function TeacherCredentials() {
               onOpenFile={() => void openFile(credential.credentialId)}
             />
           ))}
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
           <Button

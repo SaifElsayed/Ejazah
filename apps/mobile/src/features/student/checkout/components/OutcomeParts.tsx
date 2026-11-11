@@ -95,14 +95,22 @@ export function OutcomeScreen({
 /** The status not read yet, its read failed, or the screen is leaving for another outcome. */
 export function OutcomeLoading({
   failed,
+  error,
   onRetry,
 }: {
   readonly failed: boolean;
+  /** The failed read's error, whose `RATE_LIMITED` says when to try again (T065). */
+  readonly error?: unknown;
   readonly onRetry: () => void;
 }) {
   return (
     <OutcomeScreen>
-      <NotLoaded failed={failed} onRetry={onRetry} loading={<Skeleton shape="block" />} />
+      <NotLoaded
+        failed={failed}
+        error={error}
+        onRetry={onRetry}
+        loading={<Skeleton shape="block" />}
+      />
     </OutcomeScreen>
   );
 }

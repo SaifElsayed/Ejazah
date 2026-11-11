@@ -63,6 +63,7 @@ export function ApplySubjects() {
         {subjects.data === undefined ? (
           <NotLoaded
             failed={subjects.isError}
+            error={subjects.error}
             onRetry={() => void subjects.refetch()}
             loading={<Skeleton shape="block" />}
           />

@@ -54,7 +54,12 @@ export function TeacherProfile() {
       {!isTeacherId(teacherId) || isUnknownTeacher(profile.error) ? (
         <UnknownTeacher />
       ) : profile.data === undefined ? (
-        <NotLoaded failed={profile.isError} onRetry={retry} loading={<Skeleton shape="block" />} />
+        <NotLoaded
+          failed={profile.isError}
+          error={profile.error}
+          onRetry={retry}
+          loading={<Skeleton shape="block" />}
+        />
       ) : (
         <>
           <OfflineNotice onRetry={retry} />

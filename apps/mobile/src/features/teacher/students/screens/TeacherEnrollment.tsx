@@ -67,7 +67,7 @@ export function TeacherEnrollment() {
     >
       {offlineCached === undefined ? null : <OfflineNotice onRetry={retry} />}
       {enrollment === undefined ? (
-        <NotLoaded failed={!valid || read.state === 'failed'} onRetry={retry} />
+        <NotLoaded failed={!valid || read.state === 'failed'} error={query.error} onRetry={retry} />
       ) : (
         <EnrollmentBody enrollment={enrollment} />
       )}

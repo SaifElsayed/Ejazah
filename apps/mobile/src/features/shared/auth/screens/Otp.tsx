@@ -19,6 +19,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { BackBar, StackScreen } from '../../screen';
 import { BANNED_ROUTE, useAuthApi } from '../api';
 import { type SignInConflict, SignInConflictSheet } from '../components/SignInConflictSheet';
@@ -33,7 +34,7 @@ export function Otp() {
   const pending = getPendingEmail();
   const email = pending?.email ?? '';
   const [code, setCode] = useState('');
-  const [error, setError] = useState<'code' | 'other' | null>(null);
+  const [error, setError] = useState<'code' | ErrorMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState<SignInConflict | null>(null);
   const countdown = useCountdown();
@@ -47,7 +48,11 @@ export function Otp() {
       if (outcome.kind === 'conflict') setConflict(outcome);
       if (outcome.kind === 'banned') router.replace(BANNED_ROUTE);
     } catch (caught: unknown) {
-      setError(errorCodeOf(caught) === 'CODE_INVALID' ? 'code' : 'other');
+      setError(
+        errorCodeOf(caught) === 'CODE_INVALID'
+          ? 'code'
+          : genericErrorKey(caught, 'common.state.actionError'),
+      );
     } finally {
       setBusy(false);
     }
@@ -57,8 +62,8 @@ export function Otp() {
     countdown.restart();
     try {
       await auth.requestSignUpCode(email);
-    } catch {
-      setError('other');
+    } catch (caught: unknown) {
+      setError(genericErrorKey(caught, 'common.state.actionError'));
     }
   };
 
@@ -81,9 +86,9 @@ export function Otp() {
       }
     >
       <PageIntro title={t('auth.otp.title')} lede={t('auth.otp.lede', { email })} />
-      {error === 'other' ? (
+      {error !== null && error !== 'code' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(error.key, error.values)}
         </Banner>
       ) : null}
       <View style={{ gap: tokens.space['3'] }}>

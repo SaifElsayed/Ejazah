@@ -62,6 +62,7 @@ export function Enrollments() {
       <TabScreen header={header}>
         <NotLoaded
           failed={(items === undefined ? read.failed : ended.isError) || me.isError}
+          error={(items === undefined ? active.error : ended.error) ?? me.error}
           onRetry={retry}
         />
       </TabScreen>
@@ -71,7 +72,7 @@ export function Enrollments() {
   return (
     <TabScreen header={header}>
       <OfflineNotice onRetry={retry} />
-      {failed && online ? <LoadError onRetry={retry} /> : null}
+      {failed && online ? <LoadError error={active.error} onRetry={retry} /> : null}
       <EnrollmentTabs value="active" />
       {noneActive ? (
         <EmptyState

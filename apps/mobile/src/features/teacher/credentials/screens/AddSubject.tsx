@@ -8,6 +8,7 @@ import { useState } from 'react';
 
 import { ActionBar, Banner, Button, NavHeader, Select, Text } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useSubjectName, useSubjects } from '../../../../lib/subjects';
 import { PdfField, type UploadedPdf } from '../../../shared/documents';
 import { StackScreen } from '../../../shared/screen';
@@ -24,18 +25,18 @@ export function AddSubject() {
   const [picking, setPicking] = useState(false);
   const [file, setFile] = useState<UploadedPdf | undefined>(undefined);
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const chosen = subjects.data?.find(({ id }) => id === subjectId);
 
   async function send(): Promise<void> {
     if (subjectId === undefined || file === undefined) return;
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.add(subjectId, file.documentId);
       router.back();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSending(false);
     }
@@ -77,9 +78,9 @@ export function AddSubject() {
       <Text variant="caption" tone="muted">
         {t('teacher.credentials.add.note')}
       </Text>
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       <SubjectPicker

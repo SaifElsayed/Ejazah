@@ -35,6 +35,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { formatPoundAmount } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
@@ -47,7 +48,7 @@ import { piastersOfPounds, poundsOf, sessionCountOf } from '../price';
 const NEW = 'new';
 const TRACKS: readonly PackageTrack[] = ['recitation', 'ijazah_track'];
 
-type Refusal = 'subject' | 'frozen' | 'other';
+type Refusal = 'subject' | 'frozen' | ErrorMessage;
 
 export function PackageEditor() {
   const t = useT();
@@ -60,6 +61,7 @@ export function PackageEditor() {
     <StackScreen header={<EditorHeader title={t('teacher.packages.editor.title')} />}>
       <NotLoaded
         failed={list.isError || list.data !== undefined}
+        error={list.error}
         onRetry={() => void list.refetch()}
       />
     </StackScreen>
@@ -132,7 +134,7 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
           ? 'subject'
           : code === 'PACKAGE_FROZEN'
             ? 'frozen'
-            : 'other',
+            : genericErrorKey(caught, 'common.state.actionError'),
       );
     } finally {
       setSending(false);
@@ -263,13 +265,13 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
         </Banner>
       )}
 
-      {refusal === 'frozen' || refusal === 'other' ? (
+      {refusal === 'frozen' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(
-            refusal === 'frozen'
-              ? 'teacher.packages.editor.error.frozen'
-              : 'common.state.actionError',
-          )}
+          {t('teacher.packages.editor.error.frozen')}
+        </Banner>
+      ) : typeof refusal === 'object' ? (
+        <Banner icon={{ name: 'alert-circle' }} tone="danger">
+          {t(refusal.key, refusal.values)}
         </Banner>
       ) : null}
 

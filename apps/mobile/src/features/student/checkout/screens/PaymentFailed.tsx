@@ -17,6 +17,7 @@ import {
 } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import {
   OutcomeLoading,
   OutcomeScreen,
@@ -34,18 +35,24 @@ export function PaymentFailed() {
   const retryOrder = useRetryCheckout(enrollmentId);
   const packageLine = usePackageLine();
   const [retrying, setRetrying] = useState(false);
-  const [refused, setRefused] = useState(false);
+  const [refused, setRefused] = useState<ErrorMessage | null>(null);
   const outcome = status.data === undefined ? undefined : outcomeOf(status.data);
   useLeaveFor(outcome, 'failed', enrollmentId);
 
   if (status.data === undefined || outcome !== 'failed') {
-    return <OutcomeLoading failed={status.isError} onRetry={() => void status.refetch()} />;
+    return (
+      <OutcomeLoading
+        failed={status.isError}
+        error={status.error}
+        onRetry={() => void status.refetch()}
+      />
+    );
   }
   const { summary } = status.data;
 
   async function retry(): Promise<void> {
     setRetrying(true);
-    setRefused(false);
+    setRefused(null);
     // The screen stays busy once it leaves: the route it goes to replaces it.
     try {
       // The hosted page's opener goes on to `processing` once it closes.
@@ -55,7 +62,7 @@ export function PaymentFailed() {
         router.replace(outcomeRoute('expired', enrollmentId));
         return;
       }
-      setRefused(true);
+      setRefused(genericErrorKey(error, 'common.state.actionError'));
       setRetrying(false);
     }
   }
@@ -97,9 +104,9 @@ export function PaymentFailed() {
           { label: t('student.checkout.teacher'), value: summary.teacher.displayName },
         ]}
       />
-      {refused ? (
+      {refused !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(refused.key, refused.values)}
         </Banner>
       ) : null}
     </OutcomeScreen>
