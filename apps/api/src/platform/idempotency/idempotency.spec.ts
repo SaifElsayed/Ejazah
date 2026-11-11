@@ -77,6 +77,16 @@ class FakeStore implements IdempotencyStore<FakeTransaction> {
     return id;
   }
 
+  /** `claim`, answering null where `claim` throws, as `INSERT … ON CONFLICT DO NOTHING` does. */
+  async claimUnlessTaken(tx: FakeTransaction, row: NewKey): Promise<string | null> {
+    try {
+      return await this.claim(tx, row);
+    } catch (error: unknown) {
+      if (error instanceof KeyTakenError) return null;
+      throw error;
+    }
+  }
+
   async complete(tx: FakeTransaction, id: string, response: unknown): Promise<void> {
     for (const [name, row] of tx.writes) {
       if (row?.id === id) tx.writes.set(name, { ...row, status: 'completed', response });
@@ -416,5 +426,68 @@ describe('reading a key before the effect (T036, keyed in two steps)', () => {
       service.completed(request({ scope: 'not.listed' as IdempotentProcedure })),
     ).rejects.toThrow(/not a keyed procedure/);
     await expect(service.completed(request({ actorId: '' }))).rejects.toThrow(/anonymous/);
+  });
+});
+
+// B39 (the note under T059, Q1 (a)): `runOn` keys the request on the caller's transaction, the
+// administrator kind's, so the effect, its audit entry and the key commit as one; it answers whether
+// the outcome is a replay, so the kind admits a repeat that records no second entry.
+describe('keying on the caller’s transaction (runOn, B39, the note under T059)', () => {
+  it('runs the effect once on the transaction it is handed, then answers a repeat as a replay', async () => {
+    const { store, service, effect, runs } = setUp();
+
+    const first = await store.transaction((tx) => service.runOn(tx, request(), effect));
+    const second = await store.transaction((tx) => service.runOn(tx, request(), effect));
+
+    expect(first).toEqual({ outcome: { checkoutId: 'checkout-1' }, replayed: false });
+    expect(second).toEqual({ outcome: { checkoutId: 'checkout-1' }, replayed: true });
+    expect(runs()).toBe(1);
+    expect(store.committed.effects).toEqual(['checkout 1']);
+    expect(store.committed.keys.size).toBe(1);
+  });
+
+  it('refuses the same key with another input with CONFLICT, running nothing', async () => {
+    const { store, service, effect, runs } = setUp();
+    await store.transaction((tx) => service.runOn(tx, request(), effect));
+
+    const failure = await refusal(
+      store.transaction((tx) =>
+        service.runOn(tx, request({ input: { packageId: 'pkg-2', slotId: 'slot-9' } }), effect),
+      ),
+    );
+
+    expect(failure).toMatchObject({ code: 'CONFLICT' });
+    expect(runs()).toBe(1);
+  });
+
+  it('replaces a key past its expiry and runs the effect again', async () => {
+    const { store, service, effect, runs, later } = setUp();
+    await store.transaction((tx) => service.runOn(tx, request(), effect));
+
+    later(25);
+    const again = await store.transaction((tx) => service.runOn(tx, request(), effect));
+
+    expect(again).toEqual({ outcome: { checkoutId: 'checkout-2' }, replayed: false });
+    expect(runs()).toBe(2);
+    expect(store.committed.keys.size).toBe(1);
+  });
+
+  it('replays a key another transaction committed meanwhile (the claim answers null), running nothing', async () => {
+    const { store, service, effect, runs } = setUp();
+    store.beforeClaim = async () => {
+      await store.transaction((tx) =>
+        service.runOn(tx, request(), async (inner) => {
+          inner.effects.push('checkout by the competitor');
+          return { checkoutId: 'competitor' };
+        }),
+      );
+    };
+
+    const answer = await store.transaction((tx) => service.runOn(tx, request(), effect));
+
+    expect(answer).toEqual({ outcome: { checkoutId: 'competitor' }, replayed: true });
+    expect(runs()).toBe(0);
+    expect(store.committed.effects).toEqual(['checkout by the competitor']);
+    expect(store.committed.keys.size).toBe(1);
   });
 });

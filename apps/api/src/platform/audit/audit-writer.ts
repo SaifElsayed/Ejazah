@@ -16,7 +16,8 @@
 // The handler DESCRIBES, the caller kind WRITES: only the handler knows what it touched, so it
 // records the action, target, reason and snapshots on `ctx.audit`; the actor is taken from the
 // server-held administrator session, never from the handler or the input. A call that described no
-// record is refused and rolled back.
+// record is refused and rolled back, unless the handler marked it the replay of a keyed call
+// (`replayed()`, B39, the note under T059), whose first call's entry is the record.
 //
 // Snapshots go to the database as written: a handler puts no secret in `before` or `after`
 // (R-SEC-2), as it would log none.
@@ -60,6 +61,11 @@ export interface AuditRecord extends AuditEntry {
 /** Where a handler records what its action did; the caller kind writes it before committing. */
 export interface AuditTrail {
   record(entry: AuditEntry): void;
+  /**
+   * Marks the call a replay of a keyed call answered from its idempotency key's row (B39, the note
+   * under T059): the kind then admits it with no entry, the first call's entry being the record.
+   */
+  replayed(): void;
 }
 
 export interface AuditWriter {
