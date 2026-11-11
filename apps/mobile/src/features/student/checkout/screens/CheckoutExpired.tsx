@@ -84,6 +84,7 @@ export function CheckoutExpiredRoute() {
       <StackScreen header={null}>
         <NotLoaded
           failed={status.isError}
+          error={status.error}
           onRetry={() => void status.refetch()}
           loading={<Skeleton shape="block" />}
         />

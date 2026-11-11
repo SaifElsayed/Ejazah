@@ -21,6 +21,7 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { StackScreen } from '../../../shared/screen';
 import { PAYOUT_ROUTE } from '../../payout';
@@ -48,16 +49,16 @@ export function ApplicationApproved() {
   const format = useFormatters();
   const actions = useApplicationActions();
   const [leaving, setLeaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function leaveFor(route: Href): Promise<void> {
     setLeaving(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.markApprovedShown();
       router.replace(route);
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setLeaving(false);
     }
@@ -106,9 +107,9 @@ export function ApplicationApproved() {
           ))}
         </List>
       </View>
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
     </StackScreen>

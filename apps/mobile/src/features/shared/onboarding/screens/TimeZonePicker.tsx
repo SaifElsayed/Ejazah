@@ -24,6 +24,7 @@ import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { ME_QUERY_KEY } from '../../../../lib/account';
 import { useApi } from '../../../../lib/api';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { nameOrder } from '../../../../lib/formatters';
 import { useSession } from '../../../../lib/session';
 import { deviceTimeZone } from '../../../../lib/time-zone';
@@ -38,7 +39,7 @@ export function TimeZonePicker() {
   const { client } = useApi();
   const queries = useQueryClient();
   const [query, setQuery] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const signedIn = session.kind === 'signed-in';
   const current = signedIn
     ? queries.getQueryData<MeOutput>(ME_QUERY_KEY)?.timezone
@@ -60,7 +61,7 @@ export function TimeZonePicker() {
   }, [sorted, query]);
 
   const choose = async (zone: string) => {
-    setFailed(false);
+    setFailure(null);
     if (!signedIn) {
       updateDraft({ timezone: zone });
       router.back();
@@ -70,8 +71,8 @@ export function TimeZonePicker() {
       await client.api.account.setTimezone.mutate({ timezone: zone });
       await queries.invalidateQueries({ queryKey: ME_QUERY_KEY });
       router.back();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     }
   };
 
@@ -87,9 +88,9 @@ export function TimeZonePicker() {
           onChangeText={setQuery}
           placeholder={t('onboarding.timeZone.searchPlaceholder')}
         />
-        {failed ? (
+        {failure !== null ? (
           <Banner icon={{ name: 'alert-circle' }} tone="danger">
-            {t('common.state.actionError')}
+            {t(failure.key, failure.values)}
           </Banner>
         ) : null}
         {device === null || deviceCity === null || query.trim() !== '' ? null : (

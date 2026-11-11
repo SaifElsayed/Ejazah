@@ -32,6 +32,7 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { pickPhoto } from '../../../../lib/files';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
@@ -49,7 +50,7 @@ export function ProfileEditor() {
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const current = profile.data;
   const typedName = name ?? current?.displayName ?? '';
   const typedBio = bio ?? current?.bio ?? '';
@@ -64,12 +65,12 @@ export function ProfileEditor() {
   async function changePhoto(): Promise<void> {
     const picked = await pickPhoto();
     if (picked === null) return;
-    setFailed(false);
+    setFailure(null);
     setUploading(true);
     try {
       setPhotoUrl(await actions.uploadPhoto(picked));
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setUploading(false);
     }
@@ -88,13 +89,13 @@ export function ProfileEditor() {
       leaveToAccount();
       return;
     }
-    setFailed(false);
+    setFailure(null);
     setSaving(true);
     try {
       await Promise.all(writes);
       leaveToAccount();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSaving(false);
     }
@@ -124,14 +125,15 @@ export function ProfileEditor() {
       {current === undefined ? (
         <NotLoaded
           failed={profile.isError}
+          error={profile.error}
           onRetry={() => void profile.refetch()}
           loading={<Skeleton shape="block" />}
         />
       ) : (
         <>
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['4'] }}>

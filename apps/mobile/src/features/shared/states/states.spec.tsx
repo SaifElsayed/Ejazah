@@ -1,6 +1,8 @@
 // T034 (FR-205): the generic states every tab root and list uses where the design draws none:
 // loading rows, a danger banner with a retry, and the offline pattern. T138: `NotLoaded` in place of
 // data not read yet and `OfflineNotice` over cached data, by the connection the query cache knows.
+// T065 of specs/004-sessions: the failed read's error decides the banner's words, a `RATE_LIMITED`
+// refusal saying when to try again (`genericErrorKey`, lib/error-message.ts).
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, screen } from '@testing-library/react-native';
@@ -13,11 +15,19 @@ import {
   renderIn,
   styleOf,
 } from '../../../design/primitives/__tests__/harness';
-import { translate } from '../../../i18n';
+import { type MessageKey, type MessageValues, translate } from '../../../i18n';
+import { apiError } from '../__tests__/api-double';
 import { LoadError, LoadingRows, NotLoaded, OfflineBanner, OfflineNotice } from './index';
 
-const said = (direction: 'rtl' | 'ltr', key: Parameters<typeof translate>[1]) =>
-  translate(direction === 'rtl' ? 'ar' : 'en', key);
+const said = (direction: 'rtl' | 'ltr', key: MessageKey, values?: MessageValues) =>
+  translate(direction === 'rtl' ? 'ar' : 'en', key, values);
+
+/** A `RATE_LIMITED` refusal, with the seconds until its window ends when `seconds` is given. */
+const rateLimited = (seconds?: string) =>
+  apiError(
+    'RATE_LIMITED',
+    seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+  );
 
 describe('LoadingRows', () => {
   it('draws skeleton rows in place of a list', async () => {
@@ -37,7 +47,7 @@ describe('LoadError', () => {
   it('is a danger banner that says the data did not load, with a retry', async () => {
     const retry = jest.fn();
     await inBothDirections(
-      () => <LoadError onRetry={retry} />,
+      () => <LoadError error={new TypeError('Network request failed')} onRetry={retry} />,
       async (_rendered, direction) => {
         expect(screen.getByText(said(direction, 'common.state.loadError'))).toBeTruthy();
         await fireEvent.press(
@@ -46,6 +56,33 @@ describe('LoadError', () => {
       },
     );
     expect(retry).toHaveBeenCalledTimes(2);
+  });
+
+  it('says when to try again after a RATE_LIMITED refusal that gives the time (T065)', async () => {
+    await inBothDirections(
+      () => <LoadError error={rateLimited('61')} onRetry={() => undefined} />,
+      (_rendered, direction) => {
+        expect(
+          screen.getByText(said(direction, 'common.state.rateLimitedIn', { count: 2 })),
+        ).toBeTruthy();
+        expect(screen.queryByText(said(direction, 'common.state.loadError'))).toBeNull();
+      },
+    );
+  });
+
+  it('says to wait a little after a RATE_LIMITED refusal with no time (T065)', async () => {
+    await inBothDirections(
+      () => <LoadError error={rateLimited()} onRetry={() => undefined} />,
+      (_rendered, direction) => {
+        expect(screen.getByText(said(direction, 'common.state.rateLimited'))).toBeTruthy();
+        expect(screen.queryByText(said(direction, 'common.state.loadError'))).toBeNull();
+      },
+    );
+  });
+
+  it('keeps its own words for any other failure (T065)', async () => {
+    await renderIn('rtl', <LoadError error={apiError('INTERNAL')} onRetry={() => undefined} />);
+    expect(screen.getByText(said('rtl', 'common.state.loadError'))).toBeTruthy();
   });
 });
 
@@ -92,6 +129,11 @@ describe('NotLoaded', () => {
     expect(screen.getByText(said('rtl', 'common.state.loadError'))).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: said('rtl', 'common.action.retry') }));
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the failed read’s error to the banner, which says when to try again (T065)', async () => {
+    await renderIn('ltr', <NotLoaded failed error={rateLimited('31')} onRetry={() => undefined} />);
+    expect(screen.getByText(said('ltr', 'common.state.rateLimitedIn', { count: 1 }))).toBeTruthy();
   });
 
   it('is the offline banner with a retry while there is no connection, failed or not', async () => {

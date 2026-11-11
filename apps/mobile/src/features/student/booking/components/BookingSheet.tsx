@@ -30,6 +30,7 @@ import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { NotLoaded } from '../../../shared/states';
@@ -61,6 +62,7 @@ export function BookingSheet({
       {answer === undefined ? (
         <NotLoaded
           failed={slots.isError}
+          error={slots.error}
           onRetry={() => void slots.refetch()}
           loading={<Skeleton shape="block" />}
         />
@@ -94,7 +96,7 @@ function Booking({
   const [choice, setChoice] = useState<Choice | null>(null);
   const [taken, setTaken] = useState<readonly string[]>([]);
   const [lastTaken, setLastTaken] = useState<BookingSlot | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = slots.find(({ slotId }) => slotId === choice?.slotId && !taken.includes(slotId));
   const otherZone =
@@ -108,13 +110,13 @@ function Booking({
   function choose(slotId: string): void {
     if (choice?.slotId === slotId) return;
     setChoice({ slotId, key: Crypto.randomUUID() });
-    setFailed(false);
+    setFailure(null);
   }
 
   async function proceed(): Promise<void> {
     if (chosen === undefined || choice === null) return;
     setBusy(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await hold.place({
         packageId: item.packageId,
@@ -133,7 +135,7 @@ function Booking({
         onClose();
         router.push('/(student)/checkout/previous');
       } else {
-        setFailed(true);
+        setFailure(genericErrorKey(caught, 'common.state.actionError'));
       }
     } finally {
       setBusy(false);
@@ -159,8 +161,8 @@ function Booking({
       <PackageLine item={item} teacherZone={teacherZone} />
       {lastTaken !== null ? (
         <Alert text={t('student.booking.slotTaken', { slot: label(lastTaken) })} />
-      ) : failed ? (
-        <Alert text={t('common.state.actionError')} />
+      ) : failure !== null ? (
+        <Alert text={t(failure.key, failure.values)} />
       ) : null}
       <ScrollView style={{ flexGrow: 0, flexShrink: 1 }}>
         <View style={{ gap: tokens.space['3'] }}>

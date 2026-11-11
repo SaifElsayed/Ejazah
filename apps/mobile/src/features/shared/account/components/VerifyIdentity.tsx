@@ -28,6 +28,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { PdfField, type UploadedPdf } from '../../documents';
 import { StackScreen } from '../../screen';
@@ -90,7 +91,7 @@ export function VerifyIdentity() {
   const [type, setType] = useState<IdentityDocumentType>('national_id');
   const [document, setDocument] = useState<UploadedPdf | undefined>(undefined);
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const answer = request.data;
   const asking = answer?.open === true && answer.submittedAt === undefined;
   const zone = me.data?.timezone;
@@ -104,11 +105,11 @@ export function VerifyIdentity() {
   async function send(): Promise<void> {
     if (document === undefined) return;
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.submit(type, document.documentId);
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSending(false);
     }
@@ -144,6 +145,7 @@ export function VerifyIdentity() {
       {answer === undefined ? (
         <NotLoaded
           failed={request.isError}
+          error={request.error}
           onRetry={() => void request.refetch()}
           loading={<Skeleton shape="block" />}
         />
@@ -204,9 +206,9 @@ export function VerifyIdentity() {
           <Text variant="caption" tone="muted">
             {t('account.verifyIdentity.tip')}
           </Text>
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
         </View>

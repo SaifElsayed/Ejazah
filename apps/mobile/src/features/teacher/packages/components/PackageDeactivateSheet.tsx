@@ -10,6 +10,7 @@ import { View } from 'react-native';
 import { Banner, Button, IconTile, Sheet, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useSubjectName } from '../../../../lib/subjects';
 import { usePackageActions } from '../api';
 
@@ -25,23 +26,23 @@ export function PackageDeactivateSheet({
   const nameOf = useSubjectName();
   const actions = usePackageActions();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function pause(packageId: string): Promise<void> {
     setBusy(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.update({ packageId, isActive: false });
       onClose();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setBusy(false);
     }
   }
 
   const close = () => {
-    setFailed(false);
+    setFailure(null);
     onClose();
   };
 
@@ -68,9 +69,9 @@ export function PackageDeactivateSheet({
               ? t('teacher.packages.deactivateSheet.textNoEnrollments')
               : t('teacher.packages.deactivateSheet.text', { count: item.activeEnrollmentCount })}
           </Text>
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
           <View style={{ gap: tokens.space['2'] }}>

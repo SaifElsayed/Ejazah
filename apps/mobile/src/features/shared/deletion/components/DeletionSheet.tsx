@@ -21,6 +21,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { type DeletionConfirmation, type DeletionProof, useAccountDeletion } from '../api';
 
 export interface DeletionSheetCopy {
@@ -49,7 +50,7 @@ export function DeletionSheet({
   const [password, setPassword] = useState('');
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'proof' | 'other' | null>(null);
+  const [error, setError] = useState<'proof' | ErrorMessage | null>(null);
 
   const proof: DeletionProof =
     method === 'email' ? { kind: 'password', password } : { kind: 'provider', provider: method };
@@ -60,7 +61,11 @@ export function DeletionSheet({
     try {
       await deletion.deleteAccount(confirmation, proof);
     } catch (caught: unknown) {
-      setError(errorCodeOf(caught) === PROOF_REFUSED ? 'proof' : 'other');
+      setError(
+        errorCodeOf(caught) === PROOF_REFUSED
+          ? 'proof'
+          : genericErrorKey(caught, 'common.state.actionError'),
+      );
     } finally {
       setBusy(false);
     }
@@ -73,9 +78,9 @@ export function DeletionSheet({
         <Text variant="title-3">{copy.title}</Text>
         <Text tone="muted">{copy.text}</Text>
       </View>
-      {error === 'other' ? (
+      {error !== null && error !== 'proof' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(error.key, error.values)}
         </Banner>
       ) : null}
       {error === 'proof' && method !== 'email' ? (

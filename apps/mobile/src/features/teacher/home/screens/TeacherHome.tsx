@@ -33,7 +33,7 @@ export function TeacherHome({ notice }: { readonly notice?: ReactNode }) {
     return (
       <TabScreen header={header}>
         {notice}
-        <NotLoaded failed={read.state === 'failed'} onRetry={retry} />
+        <NotLoaded failed={read.state === 'failed'} error={today.error} onRetry={retry} />
       </TabScreen>
     );
   }

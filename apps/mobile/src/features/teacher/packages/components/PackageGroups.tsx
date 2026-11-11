@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { Banner, Section } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { usePackageActions } from '../api';
 import { PackageCard } from './PackageCard';
 import { PackageDeactivateSheet } from './PackageDeactivateSheet';
@@ -21,16 +22,16 @@ export function PackageGroups({
   const t = useT();
   const actions = usePackageActions();
   const [pausing, setPausing] = useState<TeacherPackage | undefined>(undefined);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const active = packages.filter(({ isActive }) => isActive);
   const paused = packages.filter(({ isActive }) => !isActive);
 
   async function activate(packageId: string): Promise<void> {
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.update({ packageId, isActive: true });
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     }
   }
 
@@ -46,9 +47,9 @@ export function PackageGroups({
 
   return (
     <>
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       {active.length === 0 ? null : (

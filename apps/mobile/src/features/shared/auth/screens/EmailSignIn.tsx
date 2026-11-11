@@ -19,6 +19,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { BackBar, StackScreen } from '../../screen';
 import { useAuthApi } from '../api';
 import { FieldAlert } from '../components/parts';
@@ -30,7 +31,7 @@ export function EmailSignIn() {
   const [password, setPassword] = useState('');
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'credentials' | 'other' | null>(null);
+  const [error, setError] = useState<'credentials' | ErrorMessage | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -38,7 +39,11 @@ export function EmailSignIn() {
     try {
       await auth.emailSignIn(email.trim(), password);
     } catch (caught: unknown) {
-      setError(errorCodeOf(caught) === 'SIGN_IN_FAILED' ? 'credentials' : 'other');
+      setError(
+        errorCodeOf(caught) === 'SIGN_IN_FAILED'
+          ? 'credentials'
+          : genericErrorKey(caught, 'common.state.actionError'),
+      );
     } finally {
       setBusy(false);
     }
@@ -70,9 +75,9 @@ export function EmailSignIn() {
       }
     >
       <PageIntro title={t('auth.emailSignIn.title')} />
-      {error === 'other' ? (
+      {error !== null && error !== 'credentials' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(error.key, error.values)}
         </Banner>
       ) : null}
       <Field label={t('auth.field.email')}>

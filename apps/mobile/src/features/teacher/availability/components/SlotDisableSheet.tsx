@@ -10,6 +10,7 @@ import { View } from 'react-native';
 import { Banner, Button, IconTile, Sheet, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { useSlotActions } from '../api';
 
@@ -26,16 +27,16 @@ export function SlotDisableSheet({
   const format = useFormatters();
   const actions = useSlotActions();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function disable(): Promise<void> {
     setBusy(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.update({ slotId: slot.id, isActive: false });
       onDone();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setBusy(false);
     }
@@ -53,9 +54,9 @@ export function SlotDisableSheet({
         </Text>
         <Text tone="muted">{t('teacher.availability.disableSheet.textBooked')}</Text>
       </View>
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       <View style={{ gap: tokens.space['2'] }}>

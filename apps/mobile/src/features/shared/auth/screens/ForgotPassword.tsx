@@ -16,6 +16,7 @@ import {
   TextLink,
 } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { BackBar, StackScreen } from '../../screen';
 import { useAuthApi } from '../api';
 import { setPendingEmail } from '../pending';
@@ -25,11 +26,11 @@ export function ForgotPassword() {
   const auth = useAuthApi();
   const [email, setEmail] = useState('');
   const [invalid, setInvalid] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
-    setFailed(false);
+    setFailure(null);
     const address = email.trim();
     setInvalid(!emailAddress.safeParse(address).success);
     if (!emailAddress.safeParse(address).success) return;
@@ -38,8 +39,8 @@ export function ForgotPassword() {
       await auth.requestPasswordReset(address);
       setPendingEmail(address);
       router.push('/(auth)/reset-password');
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setBusy(false);
     }
@@ -67,9 +68,9 @@ export function ForgotPassword() {
       }
     >
       <PageIntro title={t('auth.forgotPassword.title')} lede={t('auth.forgotPassword.lede')} />
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       <Field

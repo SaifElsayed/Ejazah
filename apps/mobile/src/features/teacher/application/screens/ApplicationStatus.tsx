@@ -79,6 +79,7 @@ export function ApplicationStatus() {
       {answer === undefined ? (
         <NotLoaded
           failed={application.isError}
+          error={application.error}
           onRetry={() => void application.refetch()}
           loading={<Skeleton shape="block" />}
         />

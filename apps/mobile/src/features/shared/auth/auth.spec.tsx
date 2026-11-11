@@ -21,7 +21,7 @@ import {
   styleOf,
 } from '../../../design/primitives/__tests__/harness';
 import type { ColorScheme } from '../../../design/tokens';
-import { getLocale, type MessageKey, translate } from '../../../i18n';
+import { getLocale, type MessageKey, type MessageValues, translate } from '../../../i18n';
 import { getSession, setSession } from '../../../lib/session';
 import { clearDraft, getDraft } from '../onboarding/draft';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
@@ -52,7 +52,7 @@ jest.mock('./dev-sign-in', () => ({
   devSignInEnabled: () => mockDevEnabled,
 }));
 
-const said = (direction: 'rtl' | 'ltr', key: MessageKey, values?: Record<string, string>) =>
+const said = (direction: 'rtl' | 'ltr', key: MessageKey, values?: MessageValues) =>
   translate(direction === 'rtl' ? 'ar' : 'en', key, values);
 const ar = (key: MessageKey, values?: Record<string, string>) => translate('ar', key, values);
 
@@ -274,6 +274,40 @@ describe('EmailSignIn', () => {
     expect(screen.getByText(ar('auth.emailSignIn.error.invalidCredentials'))).toBeTruthy();
     expect(getSession()).toEqual({ kind: 'signed-out' });
   });
+
+  // T065 of specs/004-sessions: an action refused with `RATE_LIMITED` says when to try again.
+  it.each([
+    ['gives the time', '61', 'common.state.rateLimitedIn', { count: 2 }],
+    ['gives no time', undefined, 'common.state.rateLimited', undefined],
+  ] as const)(
+    'says so in place of the generic banner when RATE_LIMITED %s (T065)',
+    async (_case, seconds, key, values) => {
+      mockApi.api.auth.email.signIn.mutate.mockRejectedValue(
+        apiError(
+          'RATE_LIMITED',
+          seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+        ),
+      );
+      await inBothDirections(
+        () => <EmailSignIn />,
+        async (_rendered, direction) => {
+          await fireEvent.changeText(
+            screen.getByLabelText(said(direction, 'auth.field.email')),
+            'amal@example.com',
+          );
+          await fireEvent.changeText(
+            screen.getByLabelText(said(direction, 'auth.field.password')),
+            'a long secret',
+          );
+          await fireEvent.press(
+            screen.getByRole('button', { name: said(direction, 'auth.emailSignIn.signIn') }),
+          );
+          expect(await screen.findByText(said(direction, key, values))).toBeTruthy();
+          expect(screen.queryByText(said(direction, 'common.state.actionError'))).toBeNull();
+        },
+      );
+    },
+  );
 
   it('leads to the forgotten password and to a new account', async () => {
     await renderIn('rtl', <EmailSignIn />);

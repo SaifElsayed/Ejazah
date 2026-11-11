@@ -14,7 +14,7 @@ export function Packages() {
   if (list.data === undefined) {
     return (
       <PackagesFrame published>
-        <NotLoaded failed={list.isError} onRetry={retry} />
+        <NotLoaded failed={list.isError} error={list.error} onRetry={retry} />
       </PackagesFrame>
     );
   }
