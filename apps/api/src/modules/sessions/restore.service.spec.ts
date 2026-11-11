@@ -10,12 +10,24 @@
 // else the enrollment restored, the K sessions still owed generated after the last number from the
 // first week at least L after the restore, each remedy the closing's case held offered again, and
 // the case closed `dismissed` `restored`.
+//
+// T066: `enrollment` to both parties, read under the locks, through the administrator kind's list
+// bound to the call's transaction, sent once it commits; nothing on a refusal, a rollback or a
+// replay; and inside the kind's declared deadlock retry, the committed attempt's event alone, once.
 import { dateColumnOf } from '@ijazah/time';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
+import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
+import type { LiveRegistry } from '../../platform/live/live-registry.js';
+import { createLogger } from '../../platform/logging/logger.js';
+import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
+import { createAdminCallerFactory, createAdminRouter } from '../../surfaces/procedures.js';
+import { unusedAdminServices } from '../../surfaces/services.fixtures.js';
 import type { CaseRecord } from '../moderation/index.js';
 import type {
   EnrollmentEventEntry,
@@ -24,7 +36,8 @@ import type {
   HeldTime,
 } from './enrollment-side.port.js';
 import type { RestoreSession } from './restore.repository.js';
-import { createRestore, type RestoreStore } from './restore.service.js';
+import { createRestore, type RestoreDependencies, type RestoreStore } from './restore.service.js';
+import { sessionsAdminRouter } from './sessions-admin.router.js';
 import type { PartyStanding } from './sessions.service.js';
 
 const tx = {} as Transaction;
@@ -204,7 +217,7 @@ const store: RestoreStore = {
   },
 };
 
-function restoreOf() {
+function restoreOf(overrides: Partial<RestoreDependencies> = {}) {
   return createRestore({
     enrollments: {
       enrollmentFor: async () => {
@@ -256,6 +269,7 @@ function restoreOf() {
     },
     clock: async () => NOW,
     store,
+    ...overrides,
   });
 }
 
@@ -582,5 +596,107 @@ describe('sessions.restore: no free week for a held remedy (the note under T061)
         msg: 'An enrollment restore was refused',
       },
     ]);
+  });
+});
+
+describe('sessions.restore: the live event (T066)', () => {
+  /**
+   * The administrator kind's after-commit point as `procedures.ts` runs it: the request's list bound to
+   * the call's transaction while it runs, flushed once it has committed, dropped on a rollback.
+   */
+  async function asAdministratorKind(commitFails = false): Promise<LiveMessage[]> {
+    const published: LiveMessage[] = [];
+    const live = new RequestLive(
+      { publish: (message) => void published.push(message) },
+      { warn: () => undefined },
+    );
+    const unbind = bindToTransaction(tx, live);
+    try {
+      await restore();
+      if (commitFails) throw new Error('the audit write failed');
+      live.flush();
+    } catch {
+      live.drop();
+    } finally {
+      unbind();
+    }
+    return published;
+  }
+
+  const restoredEvent = {
+    to: [STUDENT, TEACHER],
+    event: { type: 'enrollment', enrollmentId: ENROLLMENT },
+  };
+
+  it('sends enrollment to both parties once, after the commit', async () => {
+    expect(await asAdministratorKind()).toEqual([restoredEvent]);
+  });
+
+  it('sends nothing on a refusal, a rollback or a replay', async () => {
+    given.slot = {
+      ...(given.slot ?? { dayOfWeek: 4, startTimeLocal: '09:00:00', timezone: CAIRO }),
+      isActive: false,
+    };
+    expect(await asAdministratorKind()).toEqual([]);
+    given.slot = { dayOfWeek: 4, startTimeLocal: '09:00:00', timezone: CAIRO, isActive: true };
+    expect(await asAdministratorKind(true)).toEqual([]);
+    given.replayed = true;
+    expect(await asAdministratorKind()).toEqual([]);
+  });
+
+  it('inside the kind’s declared deadlock retry, sends the committed attempt’s event once', async () => {
+    const deadlock = () =>
+      Object.assign(new Error('deadlock detected'), {
+        name: 'DriverAdapterError',
+        cause: { originalCode: '40P01', originalMessage: 'deadlock detected' },
+      });
+    let attempts = 0;
+    // The key's completion, a statement after the effect, deadlocks on the first attempt.
+    const service = restoreOf({
+      idempotency: {
+        runOn: async (attemptTx, _request, effect) => {
+          attempts += 1;
+          // The first attempt rolled back: nothing it wrote is read by the second.
+          calls.length = 0;
+          const outcome = await effect(attemptTx);
+          if (attempts === 1) throw deadlock();
+          return { outcome, replayed: false };
+        },
+      },
+    });
+    const published: LiveMessage[] = [];
+    const bus: LiveBus = {
+      publish: (message) => void published.push(message),
+      subscribe: () => () => undefined,
+    };
+    const context = createAdminContext({
+      session: { adminId: ADMIN, sessionId: ADMIN, mfaVerified: true },
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        // Each attempt is a transaction of its own.
+        transactions: { run: (work) => work({} as Transaction) },
+        auditWriter: { write: async () => undefined },
+      },
+      services: new Proxy(unusedAdminServices, {
+        get: (target, name, receiver) =>
+          name === 'restore' ? service : Reflect.get(target, name, receiver),
+      }) as AdminSurfaceServices,
+      rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
+      clientAddress: '203.0.113.9',
+      live: { bus, registry: {} as LiveRegistry },
+    });
+    const caller = createAdminCallerFactory(createAdminRouter({ sessions: sessionsAdminRouter }))(
+      context,
+    );
+
+    const answer = await caller.sessions.restore({
+      enrollmentId: ENROLLMENT,
+      reason: REASON,
+      idempotencyKey: KEY,
+    });
+
+    expect(answer.enrollmentId).toBe(ENROLLMENT);
+    expect(attempts).toBe(2);
+    expect(published).toEqual([restoredEvent]);
   });
 });

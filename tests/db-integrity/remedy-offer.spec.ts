@@ -239,6 +239,7 @@ describe('an accepted cancellation offers its make-up in its transaction (T028, 
         { userId: confirmed.teacherId },
         { requestId, accept: true },
         SILENT,
+        { afterCommit: () => undefined },
       ),
     ).toMatchObject({ status: 'accepted', sessionStatus: 'cancelled_by_agreement' });
     expect(await remedyOf(sessionId)).toMatchObject({

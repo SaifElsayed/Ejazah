@@ -52,10 +52,17 @@
 // administrator kind has no after-commit point for a log line). The fault confirmed writes one line
 // of ids and counts; a closing on an enrollment that ended another way one line of ids and its
 // status. No note, name or free text.
+//
+// THE LIVE EVENT (T066; FR-427; research R-324, item 6; the note under T066, Q3 (a)). The fault
+// confirmed closes the enrollment: `enrollment` for both parties, read under its lock, added to
+// the administrator kind's after-commit list bound to this transaction (`publisherOn`), sent once
+// it commits. Cleared closes no enrollment (its offers are read when the screen opens, R-324 item
+// 7), and a closing on an enrollment that ended another way changes none: neither adds an event.
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode, type FieldIssue } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { readStanding } from '../identity/index.js';
 import {
@@ -288,6 +295,11 @@ export function createSuspensionCase({
       );
       const faultCaseId = ended.caseOf.get(enrollmentId) ?? null;
       await close(tx, ids, faultCaseId === null ? closing : { ...closing, coveredBy: faultCaseId });
+      // T066: the enrollment closed, to both parties once this transaction commits.
+      publisherOn(tx)?.afterCommit([terms.studentUserId, terms.teacherUserId], {
+        type: 'enrollment',
+        enrollmentId,
+      });
       log.info(
         {
           ...ids,

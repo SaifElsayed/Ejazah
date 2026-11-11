@@ -29,6 +29,8 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotentRequest } from '../../platform/idempotency/idempotency.service.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
+import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
+import { type LivePublisher, RequestLive } from '../../platform/live/live-publisher.js';
 import { DOCUMENT_LINK_TTL_SETTING } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ChatMessageRow } from './chat.repository.js';
@@ -249,8 +251,15 @@ function refusalLines(): Record<string, unknown>[] {
 const list = (userId: string, enrollmentId = ENROLLMENT, cursor?: string) =>
   services.list({ userId }, { enrollmentId, ...(cursor === undefined ? {} : { cursor }) }, log);
 
-const send = (userId: string, enrollmentId = ENROLLMENT, body = 'السلام عليكم') =>
-  services.send({ userId }, { enrollmentId, body, idempotencyKey: KEY }, log);
+/** T066: the request's after-commit list, for a case that reads no event. */
+const quiet: LivePublisher = { afterCommit: () => undefined };
+
+const send = (
+  userId: string,
+  enrollmentId = ENROLLMENT,
+  body = 'السلام عليكم',
+  live: LivePublisher = quiet,
+) => services.send({ userId }, { enrollmentId, body, idempotencyKey: KEY }, log, live);
 
 const setStatus = (status: ChatEnrollmentTerms['status']) => {
   const found = terms.get(ENROLLMENT);
@@ -594,5 +603,157 @@ describe('chat.attachmentLink (FR-489, R-SEC-3)', () => {
     attachments.set(DOCUMENT, { enrollmentId: ENROLLMENT, attachmentKey: null, purgedAt: NOW });
     await refusalOf(link(STRANGER));
     expect(refusalLines().map(({ reason }) => reason)).toEqual(['not_a_party']);
+  });
+});
+
+// T066 of specs/004-sessions — `chat.send`'s live event (FR-427, FR-496; research R-324, items 4 to
+// 6; contracts/app-surface.md, `LiveEvent`; the note under T066, Q3 (a)): one `chat` event to each
+// of the enrollment's two parties, read under the send's locks, the sender's other devices
+// included, `mine` computed for each recipient; added inside the keyed effect, so a replay, which
+// runs no effect, adds none; sent by the user kind once the handler resolves and dropped when it
+// throws (`surfaces/procedures.ts`, emulated here by `asUserKind`); never the body in a log line.
+describe('chat.send: the live event (T066)', () => {
+  /** The user kind's after-commit point as `procedures.ts` runs it: flushed on an answer, dropped on a throw. */
+  async function asUserKind<T>(call: (live: LivePublisher) => Promise<T>) {
+    const published: LiveMessage[] = [];
+    const bus: LiveBus = {
+      publish: (message) => {
+        trace.push('publish');
+        published.push(message);
+      },
+      subscribe: () => () => undefined,
+    };
+    const live = new RequestLive(bus, { warn: () => undefined });
+    const tracing: LivePublisher = {
+      afterCommit: (to, event, scope) => {
+        trace.push(`add ${event.type} for ${[...to].join(',')}`);
+        live.afterCommit(to, event, scope);
+      },
+    };
+    try {
+      const answer = await call(tracing);
+      live.flush();
+      return { answer, error: undefined, published };
+    } catch (error: unknown) {
+      live.drop();
+      return { answer: undefined, error, published };
+    }
+  }
+
+  const sent = (mine: boolean, body = 'السلام عليكم') => ({
+    type: 'chat',
+    enrollmentId: ENROLLMENT,
+    message: { messageId: NEW_MESSAGE, mine, body, sentAt: SENT.toISOString(), purged: false },
+  });
+
+  it('adds one chat event to each party inside the keyed transaction, mine for the sender only, sent once after the commit', async () => {
+    const { published } = await asUserKind((live) =>
+      send(STUDENT, ENROLLMENT, 'السلام عليكم', live),
+    );
+    expect(published).toEqual([
+      { to: [STUDENT], event: sent(true) },
+      { to: [TEACHER], event: sent(false) },
+    ]);
+    const added = trace.indexOf(`add chat for ${STUDENT}`);
+    expect(added).toBeGreaterThan(trace.indexOf(`insert message by ${STUDENT}`));
+    expect(added).toBeLessThan(trace.indexOf('commit'));
+    expect(trace.indexOf('publish')).toBeGreaterThan(trace.indexOf('commit'));
+  });
+
+  it('the teacher’s message reaches the teacher’s devices as mine and the student’s as not', async () => {
+    const { published } = await asUserKind((live) =>
+      send(TEACHER, ENROLLMENT, 'السلام عليكم', live),
+    );
+    expect(published).toEqual([
+      { to: [TEACHER], event: sent(true) },
+      { to: [STUDENT], event: sent(false) },
+    ]);
+  });
+
+  it.each([
+    ['a refusal under the locks (CHAT_CLOSED)', STUDENT, () => setStatus('completed')],
+    ['a stranger (NOT_FOUND)', STRANGER, () => undefined],
+  ])(
+    'sends nothing on %s: nothing added, the transaction rolled back',
+    async (_name, caller, arrange) => {
+      arrange();
+      const { error, published } = await asUserKind((live) =>
+        send(caller, ENROLLMENT, 'السلام عليكم', live),
+      );
+      expect(error).toBeInstanceOf(DomainError);
+      expect(published).toEqual([]);
+      expect(trace.some((step) => step.startsWith('add'))).toBe(false);
+    },
+  );
+
+  it('sends nothing when the transaction fails after the insert: what was added is dropped', async () => {
+    const failing = createChatServices({
+      transactions,
+      idempotency: {
+        run: <T>(_request: IdempotentRequest, effect: (tx: Transaction) => Promise<T>) =>
+          transactions.run(async (keyedTx) => {
+            await effect(keyedTx);
+            throw new Error('the commit failed');
+          }),
+      },
+      settings,
+      enrollments,
+      store,
+      storage,
+      clock: async () => SENT,
+    });
+    const { error, published } = await asUserKind((live) =>
+      failing.send(
+        { userId: STUDENT },
+        { enrollmentId: ENROLLMENT, body: 'نص', idempotencyKey: KEY },
+        log,
+        live,
+      ),
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(trace).toContain(`add chat for ${STUDENT}`);
+    expect(published).toEqual([]);
+  });
+
+  it('a replay of the same key runs no effect and sends nothing', async () => {
+    const outcomes = new Map<string, unknown>();
+    const replaying = createChatServices({
+      transactions,
+      idempotency: {
+        run: async <T>(request: IdempotentRequest, effect: (tx: Transaction) => Promise<T>) => {
+          if (outcomes.has(request.key)) return outcomes.get(request.key) as T;
+          const outcome = await transactions.run(effect);
+          outcomes.set(request.key, outcome);
+          return outcome;
+        },
+      },
+      settings,
+      enrollments,
+      store,
+      storage,
+      clock: async () => SENT,
+    });
+    const call = (live: LivePublisher) =>
+      replaying.send(
+        { userId: STUDENT },
+        { enrollmentId: ENROLLMENT, body: 'نص', idempotencyKey: KEY },
+        log,
+        live,
+      );
+    expect((await asUserKind(call)).published).toEqual([
+      { to: [STUDENT], event: sent(true, 'نص') },
+      { to: [TEACHER], event: sent(false, 'نص') },
+    ]);
+    const replay = await asUserKind(call);
+    expect(replay.answer).toMatchObject({ messageId: NEW_MESSAGE, mine: true });
+    expect(replay.published).toEqual([]);
+  });
+
+  it('writes no body in any log line, sent or refused', async () => {
+    await asUserKind((live) => send(STUDENT, ENROLLMENT, 'نص سري لا يُكتب', live));
+    setStatus('completed');
+    await asUserKind((live) => send(STUDENT, ENROLLMENT, 'نص سري لا يُكتب', live));
+    expect(lines.length).toBeGreaterThan(0);
+    expect(JSON.stringify(lines)).not.toContain('نص سري');
   });
 });

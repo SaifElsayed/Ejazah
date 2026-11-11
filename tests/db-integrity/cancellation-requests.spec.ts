@@ -61,6 +61,7 @@ import { transactionsOver } from '../../apps/api/src/platform/db/transaction.rep
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error.js';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository.js';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
+import type { LivePublisher } from '../../apps/api/src/platform/live/live-publisher.js';
 import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
 import { createVideoPort } from '../../apps/api/src/platform/ports/video/index.js';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
@@ -174,6 +175,9 @@ async function world(startsInSeconds = 3 * 60 * 60) {
 
 type World = Awaited<ReturnType<typeof world>>;
 
+// T066: the request's after-commit list, which these probes do not read.
+const noLive: LivePublisher = { afterCommit: () => undefined };
+
 const key = () => `probe-${randomUUID()}`;
 
 const ask = (w: World, userId: string, idempotencyKey = key()) =>
@@ -181,6 +185,7 @@ const ask = (w: World, userId: string, idempotencyKey = key()) =>
     { userId },
     { sessionId: w.sessionId, reason: 'سفر طارئ', idempotencyKey },
     log,
+    noLive,
   );
 
 async function refusalOf(call: Promise<unknown>): Promise<DomainError> {
@@ -255,7 +260,12 @@ describe('a request and its answer (FR-456, FR-457, FR-458, FR-495)', () => {
     });
 
     expect(
-      await services.cancellation.answer({ userId: w.teacherId }, { requestId, accept: true }, log),
+      await services.cancellation.answer(
+        { userId: w.teacherId },
+        { requestId, accept: true },
+        log,
+        noLive,
+      ),
     ).toEqual({ requestId, status: 'accepted', sessionStatus: 'cancelled_by_agreement' });
     const written = await writtenFor(w.sessionId);
     expect(written.session?.status).toBe('cancelled_by_agreement');
@@ -290,6 +300,7 @@ describe('a request and its answer (FR-456, FR-457, FR-458, FR-495)', () => {
         { userId: w.studentId },
         { requestId: first.requestId, accept: false },
         log,
+        noLive,
       ),
     ).toEqual({ requestId: first.requestId, status: 'declined', sessionStatus: 'scheduled' });
     const second = await ask(w, w.studentId);
@@ -321,7 +332,12 @@ describe('a request and its answer (FR-456, FR-457, FR-458, FR-495)', () => {
     expect(
       (
         await refusalOf(
-          services.cancellation.answer({ userId: w.studentId }, { requestId, accept: true }, log),
+          services.cancellation.answer(
+            { userId: w.studentId },
+            { requestId, accept: true },
+            log,
+            noLive,
+          ),
         )
       ).code,
     ).toBe('NOT_FOUND');
@@ -374,7 +390,7 @@ describe('the probe of SC-411: an answer racing the start changes nothing', () =
       let refusal: DomainError;
       try {
         const answering = refusalOf(
-          services.cancellation.answer({ userId: w.teacherId }, { requestId, accept }, log),
+          services.cancellation.answer({ userId: w.teacherId }, { requestId, accept }, log, noLive),
         );
         await seenWaitingOnSession(1);
         // Hold the session until its start has passed by the database's clock.
@@ -414,7 +430,7 @@ describe('an answer after another path cancelled the session (PR #126 follow-up 
       ]);
       const before = await writtenFor(w.sessionId);
       const refusal = await refusalOf(
-        services.cancellation.answer({ userId: w.teacherId }, { requestId, accept }, log),
+        services.cancellation.answer({ userId: w.teacherId }, { requestId, accept }, log, noLive),
       );
       expect(refusal.code).toBe('SESSION_NOT_SCHEDULED');
       expect(await writtenFor(w.sessionId)).toEqual(before);
@@ -445,7 +461,7 @@ describe('an answer after another path cancelled the session (PR #126 follow-up 
       expect(before.session?.status).toBe('cancelled_by_admin');
 
       const refusal = await refusalOf(
-        services.cancellation.answer({ userId: w.studentId }, { requestId, accept }, log),
+        services.cancellation.answer({ userId: w.studentId }, { requestId, accept }, log, noLive),
       );
       expect(refusal.code).toBe('SESSION_NOT_SCHEDULED');
       expect(await writtenFor(w.sessionId)).toEqual(before);
@@ -470,6 +486,7 @@ describe('the lists’ read: pendingCancellationsAmong', () => {
       { userId: declined.teacherId },
       { requestId: asked.requestId, accept: false },
       log,
+      noLive,
     );
     await ask(cancelled, cancelled.teacherId);
     await db.query(`UPDATE sessions SET status = 'cancelled_by_admin' WHERE id = $1`, [

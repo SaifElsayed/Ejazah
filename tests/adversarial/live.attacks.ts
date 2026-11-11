@@ -11,6 +11,10 @@
 //                         ACCOUNT_RESTRICTED, no stream opened; the requester's own stream receives
 //                         an event addressed to them and never one addressed to the other gender's
 //                         student (the server addresses every event; the client chooses no topic).
+//                         T066: a chat and a cancellation between A and B, the requester's student
+//                         and teacher, sent through the real `chat.send` and `sessions.cancellation`
+//                         over HTTP, reach A's and B's streams only, never C's: the other gender's
+//                         student, nor a stranger of A's own gender.
 //   forgedId              an input naming another user, or another sign-in session, refused: the
 //                         channel takes no input, so there is no topic to forge.
 //   guessedId             not applicable: the channel takes no id at all.
@@ -22,6 +26,20 @@ import { expect, vi } from 'vitest';
 
 import { addHours } from '../../packages/time/src/index.js';
 import { createApplication } from '../../apps/api/src/app.module.js';
+import {
+  type ChatEnrollments,
+  type ChatStore,
+  createChatServices,
+} from '../../apps/api/src/modules/chat/index.js';
+import {
+  type CancellationStore,
+  createSessionsServices,
+  type EnrollmentSide,
+  type SessionsStore,
+} from '../../apps/api/src/modules/sessions/index.js';
+import type { Transaction } from '../../apps/api/src/platform/db/prisma.repository.js';
+import type { Transactions } from '../../apps/api/src/platform/db/transaction.repository.js';
+import type { IdempotentRequest } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
 import { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
 import { InProcessLiveBus } from '../../apps/api/src/platform/live/live-bus.js';
 import { LiveRegistry } from '../../apps/api/src/platform/live/live-registry.js';
@@ -32,11 +50,9 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
-  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
-  unusedSessionsServices,
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
@@ -55,12 +71,36 @@ const SUSPENDED: Readonly<Record<Gender, string>> = {
   female: '0199d0a0-0000-7000-8000-0000000e1004',
 };
 const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000e1e01';
+// T066: for each gender, a teacher with an enrollment of that gender's student (A and B), its one
+// session, and a stranger student of the same gender (a C beside the other gender's student).
+const TEACHER: Readonly<Record<Gender, string>> = {
+  male: '0199d0a0-0000-7000-8000-0000000e1005',
+  female: '0199d0a0-0000-7000-8000-0000000e1006',
+};
+const STRANGER: Readonly<Record<Gender, string>> = {
+  male: '0199d0a0-0000-7000-8000-0000000e1007',
+  female: '0199d0a0-0000-7000-8000-0000000e1008',
+};
+const ENROLLMENT_OF: Readonly<Record<Gender, string>> = {
+  male: '0199d0a0-0000-7000-8000-0000000e1e11',
+  female: '0199d0a0-0000-7000-8000-0000000e1e12',
+};
+const SESSION_OF: Readonly<Record<Gender, string>> = {
+  male: '0199d0a0-0000-7000-8000-0000000e1511',
+  female: '0199d0a0-0000-7000-8000-0000000e1512',
+};
+const GENDERS = ['male', 'female'] as const;
 
-function sessionOf(userId: string, gender: Gender, suspended = false): UserSession {
+function sessionOf(
+  userId: string,
+  gender: Gender,
+  suspended = false,
+  role: 'student' | 'teacher' = 'student',
+): UserSession {
   return {
     userId,
     sessionId: `${userId}-session`,
-    role: 'student',
+    role,
     gender,
     preferredLanguage: 'ar',
     accountStatus: suspended ? 'suspended' : 'active',
@@ -74,7 +114,163 @@ const bearers: Readonly<Record<string, UserSession>> = {
   'student-female': sessionOf(STUDENT.female, 'female'),
   'suspended-male': sessionOf(SUSPENDED.male, 'male', true),
   'suspended-female': sessionOf(SUSPENDED.female, 'female', true),
+  'teacher-male': sessionOf(TEACHER.male, 'male', false, 'teacher'),
+  'teacher-female': sessionOf(TEACHER.female, 'female', false, 'teacher'),
+  'stranger-male': sessionOf(STRANGER.male, 'male'),
+  'stranger-female': sessionOf(STRANGER.female, 'female'),
 };
+
+/** Every fixture account's gender, as identity's records hold it. */
+const GENDER_OF: ReadonlyMap<string, Gender> = new Map(
+  Object.values(bearers).map(({ userId, gender }) => [userId, gender]),
+);
+
+const transactions: Transactions = { run: (work) => work({} as Transaction) };
+
+/** The kernel's idempotency as the services see it: one outcome per key, replayed after. */
+function keyedOnce() {
+  const outcomes = new Map<string, unknown>();
+  return {
+    run: async <T>(request: IdempotentRequest, effect: (tx: Transaction) => Promise<T>) => {
+      const key = `${request.scope}:${request.actorId}:${request.key}`;
+      if (outcomes.has(key)) return outcomes.get(key) as T;
+      const outcome = await transactions.run(effect);
+      outcomes.set(key, outcome);
+      return outcome;
+    },
+  };
+}
+
+const partiesOf = async (_tx: Transaction, userIds: readonly string[]) =>
+  new Map(
+    userIds.flatMap((userId) => {
+      const gender = GENDER_OF.get(userId);
+      return gender === undefined ? [] : [[userId, { gender }] as const];
+    }),
+  );
+
+/** The real `chat.send` over the two enrollments, its messages kept in memory (T066). */
+function chatOver() {
+  let sent = 0;
+  const enrollments: ChatEnrollments = {
+    enrollmentFor: async (_tx, id) => {
+      const gender = GENDERS.find((one) => ENROLLMENT_OF[one] === id);
+      return gender === undefined
+        ? null
+        : {
+            id,
+            status: 'confirmed',
+            studentUserId: STUDENT[gender],
+            teacherUserId: TEACHER[gender],
+          };
+    },
+    lockEnrollments: async () => undefined,
+  };
+  const store: ChatStore = {
+    partiesOf,
+    lockSender: async () => undefined,
+    messagePage: async () => [],
+    insertMessage: async (_tx, row) => {
+      sent += 1;
+      return {
+        id: `0199d0a0-0000-7000-8000-0000000ef${String(sent).padStart(3, '0')}`,
+        senderUserId: row.senderUserId,
+        body: row.body,
+        attachmentFilename: null,
+        attachmentMime: null,
+        sentAt: row.sentAt,
+        purgedAt: null,
+      };
+    },
+    attachmentOf: async () => null,
+    insertAttachment: async () => {
+      throw new Error('no document in this attack');
+    },
+  };
+  return createChatServices({
+    transactions,
+    idempotency: keyedOnce(),
+    settings: { read: async () => Promise.reject(new Error('chat.send reads no setting')) },
+    enrollments,
+    store,
+    clock: async () => new Date(),
+    storage: { temporaryLink: async () => 'https://files.invalid/none' },
+  });
+}
+
+type RequestRow = Awaited<ReturnType<CancellationStore['requestById']>> & object;
+
+/** The real `sessions.cancellation` over the two sessions, its requests kept in memory (T066). */
+function cancellationOver(settings: SettingsReader) {
+  const startsAt = new Date(addHours(new Date(), 24));
+  const requests = new Map<string, RequestRow>();
+  const sessionRow = (sessionId: string) => {
+    const gender = GENDERS.find((one) => SESSION_OF[one] === sessionId);
+    return gender === undefined
+      ? null
+      : {
+          id: sessionId,
+          enrollmentId: ENROLLMENT_OF[gender],
+          studentUserId: STUDENT[gender],
+          teacherUserId: TEACHER[gender],
+          sequenceNumber: 1,
+          makeupForSequenceNumber: null,
+          localDate: '2026-11-20',
+          startTimeLocal: '17:00:00',
+          timezone: 'Africa/Cairo',
+          startsAt,
+          endsAt: new Date(addHours(startsAt, 1)),
+          status: 'scheduled' as const,
+        };
+  };
+  const ofParty = (sessionId: string, userId: string) => {
+    const row = sessionRow(sessionId);
+    return row !== null && (row.studentUserId === userId || row.teacherUserId === userId)
+      ? row
+      : null;
+  };
+  const store: CancellationStore = {
+    sessionOfParty: async (_tx, sessionId, userId) => ofParty(sessionId, userId),
+    requestOfParty: async (_tx, requestId, userId) => {
+      const found = requests.get(requestId);
+      return found !== undefined && ofParty(found.sessionId, userId) !== null ? found : null;
+    },
+    partiesOf,
+    lockAccounts: async () => undefined,
+    lockTeacherSlots: async () => undefined,
+    lockSessions: async () => undefined,
+    lockRemediesOf: async () => undefined,
+    lockRequests: async () => undefined,
+    pendingRequestOf: async (_tx, sessionId) =>
+      [...requests.values()].find((row) => row.sessionId === sessionId && row.status === 'pending')
+        ?.id ?? null,
+    requestById: async (_tx, id) => requests.get(id) ?? null,
+    insertRequest: async (_tx, row) => {
+      const id = `0199d0a0-0000-7000-8000-0000000ec${String(requests.size + 1).padStart(3, '0')}`;
+      requests.set(id, { id, ...row, status: 'pending' });
+      return id;
+    },
+    answerRequest: async (_tx, id, answer) => {
+      const found = requests.get(id);
+      if (found?.status !== 'pending') return false;
+      requests.set(id, { ...found, status: answer });
+      return true;
+    },
+    cancelByAgreement: async () => true,
+    recordEvents: async () => undefined,
+  };
+  return createSessionsServices({
+    transactions,
+    settings,
+    video: {} as Parameters<typeof createSessionsServices>[0]['video'],
+    enrollmentSide: { lockEnrollments: async () => undefined } as unknown as EnrollmentSide,
+    store: {} as SessionsStore,
+    idempotency: keyedOnce(),
+    cancellationStore: store,
+    clock: async () => new Date(),
+    remedyOffer: { offerLocked: async () => null },
+  });
+}
 
 interface LiveWorld {
   readonly origin: string;
@@ -91,6 +287,8 @@ function liveWorld(): Promise<LiveWorld> {
       rate_limit_live_channel: { limit: 1_000, window_seconds: 60 },
       rate_limit_signed_in_default: { limit: 1_000, window_seconds: 60 },
       live_channel_max_connections_per_user: 3,
+      // T066: `chat.send`'s own limit.
+      rate_limit_chat_message: { limit: 1_000, window_seconds: 60 },
     };
     const settings: SettingsReader = {
       read: async (key, schema) => schema.parse(rows[key]),
@@ -124,8 +322,9 @@ function liveWorld(): Promise<LiveWorld> {
         discovery: unusedDiscoveryServices,
         booking: unusedBookingServices,
         checkout: unusedCheckoutServices,
-        sessions: unusedSessionsServices,
-        chat: unusedChatServices,
+        // T066: the real cancellation and chat, over the fixture's enrollments and sessions.
+        sessions: cancellationOver(settings),
+        chat: chatOver(),
       },
       adminServices: unusedAdminServices,
       live: { bus, registry },
@@ -200,6 +399,86 @@ function eventsOf(opened: Opened): unknown[] {
     .map((frame) => JSON.parse(frame.data) as unknown);
 }
 
+/** A mutation of the user surface over HTTP, as the phone sends it; its answer's data. */
+async function mutate(bearer: string, path: string, input: unknown): Promise<unknown> {
+  const { origin } = await liveWorld();
+  const response = await fetch(`${origin}/trpc/${path}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const answer = (await response.json()) as { result?: { data?: unknown } };
+  expect(response.status, `${path} answered`).toBe(200);
+  return answer.result?.data;
+}
+
+/**
+ * T066 (FR-496): a chat and a cancellation between A (the requester's student) and B (the
+ * requester's teacher) reach A's and B's streams and never C's, the other gender's student, nor a
+ * stranger of A's own gender; `mine` is each recipient's own.
+ */
+async function chatAndCancellationStayBetween(direction: Direction): Promise<void> {
+  const own = direction.requester;
+  const a = await open(`student-${own}`);
+  const b = await open(`teacher-${own}`);
+  const others = [await open(`student-${direction.other}`), await open(`stranger-${own}`)];
+  const enrollmentId = ENROLLMENT_OF[own];
+  const sessionId = SESSION_OF[own];
+  try {
+    await sendBetween(own, enrollmentId, sessionId);
+    const chat = (body: string, mine: boolean) =>
+      expect.objectContaining({
+        type: 'chat',
+        enrollmentId,
+        message: expect.objectContaining({ body, mine }),
+      });
+    const session = { type: 'session', sessionId, enrollmentId };
+    // A: both messages (its own as mine), then the answer to its request.
+    await vi.waitFor(() =>
+      expect(eventsOf(a)).toEqual([
+        chat('السلام عليكم', true),
+        chat('وعليكم السلام', false),
+        session,
+      ]),
+    );
+    // B: both messages (its own as mine), then the request it was asked.
+    await vi.waitFor(() =>
+      expect(eventsOf(b)).toEqual([
+        chat('السلام عليكم', false),
+        chat('وعليكم السلام', true),
+        session,
+      ]),
+    );
+    for (const other of others) expect(eventsOf(other)).toEqual([]);
+  } finally {
+    // Closed whatever the outcome, so a failure here never leaves a stream for the next attack.
+    for (const stream of [a, b, ...others]) stream.close();
+  }
+}
+
+/** A sends, B answers, A asks to cancel, B declines: each through the real procedure over HTTP. */
+async function sendBetween(own: Gender, enrollmentId: string, sessionId: string): Promise<void> {
+  await mutate(`student-${own}`, 'chat.send', {
+    enrollmentId,
+    body: 'السلام عليكم',
+    idempotencyKey: `live-attack-chat-a-${own}`,
+  });
+  await mutate(`teacher-${own}`, 'chat.send', {
+    enrollmentId,
+    body: 'وعليكم السلام',
+    idempotencyKey: `live-attack-chat-b-${own}`,
+  });
+  const requested = (await mutate(`student-${own}`, 'sessions.cancellation.request', {
+    sessionId,
+    reason: 'سفر',
+    idempotencyKey: `live-attack-cancel-${own}`,
+  })) as { requestId: string };
+  await mutate(`teacher-${own}`, 'sessions.cancellation.answer', {
+    requestId: requested.requestId,
+    accept: false,
+  });
+}
+
 /** Opens with an input, which the channel refuses: it takes none. */
 async function expectInputRefused(bearer: string, input: unknown, userId: string): Promise<void> {
   const { registry } = await liveWorld();
@@ -235,6 +514,9 @@ export const liveAttacks: readonly ProcedureAttacks[] = [
         bus.publish({ to: [STUDENT[direction.requester]], event: mine });
         await vi.waitFor(() => expect(eventsOf(own)).toEqual([mine]));
         own.close();
+        await vi.waitFor(() => expect(registry.count(STUDENT[direction.requester])).toBe(0));
+
+        await chatAndCancellationStayBetween(direction);
         await vi.waitFor(() => expect(registry.count(STUDENT[direction.requester])).toBe(0));
       },
       async forgedId(direction) {

@@ -27,13 +27,21 @@
 // THE LOG (the owner's rule). A refusal writes one info line of ids and a reason code, through
 // this file's one `refusal`; a cancellation writes one of ids and whether the case was opened
 // (an automatic action), never the reason, which the audit entry keeps.
+//
+// THE LIVE EVENT (T066; FR-427; research R-324, item 6; the note under T066, Q3 (a)). Once the
+// writes are done, the session's two participants are read from the session's own copies with no
+// lock (`participantIdsOfSession`; the session row is already held), and `session` is added for both
+// to the administrator kind's after-commit list bound to this transaction (`publisherOn`), sent once
+// it commits and dropped on a rollback.
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError, type ErrorCode } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { type CompensationCase, openCompensationCase } from '../moderation/index.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
+import { participantIdsOfSession, type SessionParties } from './participant-events.repository.js';
 import { cancelByAdmin, lockRows } from './remaining-sessions.repository.js';
 import { type SessionToCancel, sessionToCancel } from './session-cancel.repository.js';
 import { recordSessionEvents, type SessionEventRecord } from './session-events.repository.js';
@@ -41,6 +49,8 @@ import { recordSessionEvents, type SessionEventRecord } from './session-events.r
 /** What the cancellation reads and writes, each on the caller's transaction. */
 export interface SessionCancelStore {
   sessionToCancel(tx: Transaction, sessionId: string): Promise<SessionToCancel | null>;
+  /** T066: the session's two participants, from its own copies, with no lock. */
+  partiesOf(tx: Transaction, sessionId: string): Promise<SessionParties | null>;
   lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
   /** Cancels those of `ids` still `scheduled`, `cancelled_by_admin`. */
   cancelByAdmin(tx: Transaction, ids: readonly string[]): Promise<void>;
@@ -52,6 +62,7 @@ export interface SessionCancelStore {
 /** The store over sessions' tables and moderation's entry. */
 export const sessionCancelStore: SessionCancelStore = {
   sessionToCancel,
+  partiesOf: participantIdsOfSession,
   lockSessions: (tx, ids) => lockRows(tx, 'sessions', ids),
   cancelByAdmin,
   openCase: (tx, enrollmentId) => openCompensationCase(tx, enrollmentId, 'admin_cancellation'),
@@ -131,6 +142,15 @@ export function createSessionCancel({
         { adminId, sessionId, enrollmentId, caseId, caseOpened: opened },
         'A session was cancelled by an administrator',
       );
+      // T066: both participants, sent once this transaction commits.
+      const parties = await store.partiesOf(tx, sessionId);
+      // The session was read under its lock above, and a session is never hard-deleted.
+      if (parties === null) throw new Error('sessions: a locked session has no participants');
+      publisherOn(tx)?.afterCommit([parties.studentUserId, parties.teacherUserId], {
+        type: 'session',
+        sessionId,
+        enrollmentId,
+      });
       return { sessionId, status: 'cancelled_by_admin', caseId };
     },
   };

@@ -15,9 +15,16 @@
 // enrollment for a teacher's and none for a student's, and the enrollments `cancelled`
 // `account_deleted` with one row each. A student's suspension and ban (T005) and a teacher's
 // suspension, ban and revocation (T006) reach them too, below.
+//
+// T066 of specs/004-sessions: each confirmed enrollment the end decided on sends `enrollment` to its
+// other party, addressed from the rows read under the enrollments' lock, through the after-commit
+// list the action bound to its transaction (the administrator kind's, or the deletion's own), sent
+// once it commits, nothing on a rollback.
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { LiveMessage } from '../../platform/live/live-bus.js';
+import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
 import type { TerminationCause } from '../identity/index.js';
 import type { EnrollmentOutcome } from './enrollment-events.repository.js';
 import type { OrderStandings, ReleaseDependencies, ReleaseReason } from './holds.service.js';
@@ -524,5 +531,94 @@ describe('one info line per account end, ids and counts only (the note under T00
         cases: 0,
       }),
     ]);
+  });
+});
+
+// T066 of specs/004-sessions (FR-427; research R-324, item 6; the note under T066, Q3 (a)).
+describe('an account’s end tells the other party of each enrollment it decided on (T066)', () => {
+  /** The action's after-commit list bound to its transaction, flushed on its commit, dropped otherwise. */
+  async function boundTo(work: (call: Transaction) => Promise<void>, commitFails = false) {
+    const published: LiveMessage[] = [];
+    const live = new RequestLive(
+      { publish: (message) => void published.push(message) },
+      { warn: () => undefined },
+    );
+    const call = {} as Transaction;
+    const unbind = bindToTransaction(call, live);
+    try {
+      await work(call);
+      if (commitFails) throw new Error('the commit failed');
+      live.flush();
+    } catch {
+      live.drop();
+    } finally {
+      unbind();
+    }
+    return published;
+  }
+
+  const told = (to: string, enrollmentId: string) => ({
+    to: [to],
+    event: { type: 'enrollment', enrollmentId },
+  });
+
+  it.each(['suspended', 'banned', 'approval_revoked', 'account_deleted'] as const)(
+    'a teacher’s end (%s) sends enrollment to each student, never to the teacher',
+    async (cause) => {
+      const { subscriber } = world([
+        { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
+        { id: E2, studentUserId: OTHER_STUDENT, teacherUserId: TEACHER },
+      ]);
+      expect(await boundTo((call) => subscriber(call, TEACHER, cause))).toEqual([
+        told(STUDENT, E1),
+        told(OTHER_STUDENT, E2),
+      ]);
+    },
+  );
+
+  it.each(['suspended', 'banned', 'account_deleted'] as const)(
+    'a student’s end (%s) sends enrollment to each teacher, the enrollments kept by a suspension included',
+    async (cause) => {
+      const { subscriber } = world([
+        { id: E2, studentUserId: STUDENT, teacherUserId: HIGH_TEACHER },
+        { id: E1, studentUserId: STUDENT, teacherUserId: LOW_TEACHER },
+      ]);
+      expect(await boundTo((call) => subscriber(call, STUDENT, cause))).toEqual([
+        told(LOW_TEACHER, E1),
+        told(HIGH_TEACHER, E2),
+      ]);
+    },
+  );
+
+  it('sends nothing when the action rolls back, and nothing for an enrollment no longer confirmed under its lock', async () => {
+    const rolledBack = world([{ id: E1, studentUserId: STUDENT, teacherUserId: TEACHER }]);
+    expect(
+      await boundTo((call) => rolledBack.subscriber(call, TEACHER, 'suspended'), true),
+    ).toEqual([]);
+
+    const over = world([{ id: E1, studentUserId: STUDENT, teacherUserId: TEACHER }]);
+    let reads = 0;
+    const store: TerminationStore = {
+      ...over.store,
+      confirmedEnrollmentsOf: async (t, userId) => {
+        reads += 1;
+        return reads === 1 ? over.store.confirmedEnrollmentsOf(t, userId) : [];
+      },
+    };
+    const ended = terminationSubscriber({ orders, now: () => NOW, store, log: over.log });
+    expect(await boundTo((call) => ended(call, TEACHER, 'suspended'))).toEqual([]);
+  });
+
+  it('a released hold alone, with no confirmed enrollment, sends nothing', async () => {
+    const { subscriber } = world();
+    expect(await boundTo((call) => subscriber(call, TEACHER, 'suspended'))).toEqual([]);
+  });
+
+  it('on a transaction no action bound, sends nothing and still decides', async () => {
+    const { subscriber, journal } = world([
+      { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
+    ]);
+    await subscriber(tx, TEACHER, 'suspended');
+    expect(journal).toContain(`cancel-confirmed:${E1}:teacher_suspended`);
   });
 });

@@ -38,6 +38,13 @@
 //   (booking's `heldFileOwnersAmong`, bound in `main.ts`); a held person's files and keys stay, for
 //   `erase-deleted-files` to remove once the last matter closes, while the grant's revocation and
 //   the mail go on. A failed question is reported and removes nothing; the job asks again.
+// - THE LIVE CHANNEL (T063, T066 of specs/004-sessions; FR-429; research R-324, item 6; the note
+//   under T066, Q3 (a)). Each deletion keeps its own after-commit list (`RequestLive` over the
+//   process's bus), bound to its transaction while it runs (`bindToTransaction`), so a consequence
+//   handed only the transaction adds its events there through `publisherOn(tx)`: booking's
+//   subscriber tells the other party of each enrollment the deletion ends. After the commit, the
+//   person's `account` is published and the list sent; on a rollback the list is dropped. A replay
+//   of the key runs no effect, so it adds and sends nothing.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
@@ -48,6 +55,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { reportError } from '../../platform/errors/reporting.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
 import type { LiveBus } from '../../platform/live/live-bus.js';
+import { bindToTransaction, RequestLive, unboundBus } from '../../platform/live/live-publisher.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import { IdentityTokenError, type SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
@@ -164,19 +172,25 @@ export class DeletionService {
     // What the transaction read, kept in this call only: a replayed key runs no effect, so it does
     // no work after the commit either (the first call did).
     const call: { erased: ErasureSnapshot | null } = { erased: null };
-    await this.#dependencies.idempotency.run(
-      {
-        scope: 'account.delete',
-        key: input.idempotencyKey,
-        actorId: userId,
-        input: { confirmation: input.confirmation, reauth: input.reauth.kind },
-      },
-      async (tx) => {
-        call.erased = await this.#erase(tx, userId, at);
-        return null;
-      },
-    );
-    if (call.erased !== null) this.#afterCommit(userId, call.erased);
+    const live = this.#liveList();
+    try {
+      await this.#dependencies.idempotency.run(
+        {
+          scope: 'account.delete',
+          key: input.idempotencyKey,
+          actorId: userId,
+          input: { confirmation: input.confirmation, reauth: input.reauth.kind },
+        },
+        async (tx) => {
+          call.erased = await this.#erase(tx, userId, at, live);
+          return null;
+        },
+      );
+    } catch (error: unknown) {
+      live.drop();
+      throw error;
+    }
+    if (call.erased !== null) this.#afterCommit(userId, call.erased, live);
   }
 
   /** The web's email step: the same answer and work for every address (public-pages.md). */
@@ -202,23 +216,48 @@ export class DeletionService {
     const owner = await this.#accounts.findByEmail(address);
     if (owner === null) return true;
     const at = this.#now();
-    const erased = await this.#transactions.run((tx) => this.#erase(tx, owner.userId, at));
-    if (erased !== null) this.#afterCommit(owner.userId, erased);
+    const live = this.#liveList();
+    let erased: ErasureSnapshot | null;
+    try {
+      erased = await this.#transactions.run((tx) => this.#erase(tx, owner.userId, at, live));
+    } catch (error: unknown) {
+      live.drop();
+      throw error;
+    }
+    if (erased !== null) this.#afterCommit(owner.userId, erased, live);
     return true;
   }
 
-  /** The one transaction (ADR 0015 D3); null when the person was already deleted. */
-  async #erase(tx: Transaction, userId: string, at: Date): Promise<ErasureSnapshot | null> {
-    const snapshot = await readErasureSnapshot(tx, userId);
-    if (snapshot === null) return null;
-    const banned = await readBannedSignIn(tx, userId);
-    // Before the erasure, which takes the address and the identities with it (T097). Of two
-    // deletions racing on one person both may keep the hashes; a hash kept twice stays one row.
-    if (banned !== null) await this.#banned.keep(tx, banned);
-    if (!(await eraseAccount(tx, userId, at))) return null;
-    await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
-    await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted');
-    return snapshot;
+  /** T066: this deletion's after-commit list, over the process's bus (none bound: nowhere). */
+  #liveList(): RequestLive {
+    return new RequestLive(this.#dependencies.live ?? unboundBus, this.#dependencies.log);
+  }
+
+  /**
+   * The one transaction (ADR 0015 D3); null when the person was already deleted. `live` is bound to
+   * `tx` while it runs (T066), so a consequence reaches it through `publisherOn(tx)`.
+   */
+  async #erase(
+    tx: Transaction,
+    userId: string,
+    at: Date,
+    live: RequestLive,
+  ): Promise<ErasureSnapshot | null> {
+    const unbind = bindToTransaction(tx, live);
+    try {
+      const snapshot = await readErasureSnapshot(tx, userId);
+      if (snapshot === null) return null;
+      const banned = await readBannedSignIn(tx, userId);
+      // Before the erasure, which takes the address and the identities with it (T097). Of two
+      // deletions racing on one person both may keep the hashes; a hash kept twice stays one row.
+      if (banned !== null) await this.#banned.keep(tx, banned);
+      if (!(await eraseAccount(tx, userId, at))) return null;
+      await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
+      await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted');
+      return snapshot;
+    } finally {
+      unbind();
+    }
   }
 
   /** The proof, before any transaction (decision 5); SIGN_IN_FAILED for anything it refuses. */
@@ -269,8 +308,10 @@ export class DeletionService {
   }
 
   /** The work after the commit, each part on its own, detached from the request. */
-  #afterCommit(userId: string, { email, grants }: ErasureSnapshot): void {
+  #afterCommit(userId: string, { email, grants }: ErasureSnapshot, live: RequestLive): void {
     this.#endLiveStreams(userId);
+    // T066: what the consequences added on the deletion's transaction, now that it has committed.
+    live.flush();
     // Through a resolved promise, so a part that throws before it returns one (the grant's
     // decryption) is reported like a rejection and never escapes into the answered request.
     const reported = (work: () => Promise<void>) =>

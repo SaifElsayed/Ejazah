@@ -135,9 +135,15 @@ Clients reconnect after a random 1 to 15 s delay.
   deleted person's files wait while an enrollment of theirs has an open dispute, case or complaint (spec FR-487,
   research R-327; the owner's decision of 2026-11-05).
 
-- the live channel's registry, in-process bus and publisher into the user and administrator contexts, the publisher
-  into sessions, chat and identity's `StandingService`, deletion and sign-out, and `live.endAll()` first in
-  `onShutdown` (R-324).
+- the live channel's registry and in-process bus into the user and administrator contexts, the upload route and the
+  deletion, and `live.endAll()` first in `onShutdown` (R-324). The publisher is not bound here: it is per request
+  (`RequestLive`), handed to the user kinds' services by their routers (`ctx.live`: `chat.send`,
+  `sessions.cancellation.request` and `.answer`; the sign-out's procedure adds to it itself), to the chat upload's
+  handler by the upload route (`AcceptedUpload.live`), and bound to the administrator kind's transaction and to the
+  deletion's own (`bindToTransaction`), where a service handed only the transaction reaches it through
+  `publisherOn(tx)` (`StandingService`, `sessions.cancel`, a complaint's decision (a), a confirmed fault,
+  `sessions.restore`, and booking's subscriber for every account's end) (T066; the owner's decision of 2026-11-11,
+  Q3 (a)).
 
 The worker binds the same port for the sweeps, and hands `erase-deleted-files` the same `heldFileOwnersAmong` as its
 `held` option. The worker publishes nothing live (R-324).

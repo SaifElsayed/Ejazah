@@ -26,6 +26,14 @@
 // Every refusal writes one info line with the enrollment's and the caller's ids, the code and the
 // reason, nothing else (never the body), its error marked «logged» so the handler's one-place
 // refusal log writes no second line (PR #130's review, Minor 4).
+//
+// THE LIVE EVENT (T066 of specs/004-sessions; FR-427; research R-324, items 4 to 6; the note under
+// T066, Q3 (a)). The send is handed the request's after-commit list by its router (`ctx.live`) and
+// adds, inside the keyed effect, one `chat` event to each of the enrollment's two parties as the
+// locks read them, the sender's other devices included, the message in `chat.list`'s item shape
+// with `mine` computed for each recipient. A replay runs no effect and adds nothing; the participant
+// kind sends the list once the handler resolves and drops it when it throws. No log line carries
+// the body (R-SEC-2).
 import {
   type ChatAttachmentLinkInput,
   type ChatAttachmentLinkOutput,
@@ -48,6 +56,7 @@ import type {
   IdempotencyService,
   JsonValue,
 } from '../../platform/idempotency/idempotency.service.js';
+import type { LivePublisher } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/settings/keys.js';
@@ -128,7 +137,13 @@ export interface ChatCaller {
 
 export interface ChatServices {
   list(caller: ChatCaller, input: ChatListInput, log: Logger): Promise<ChatListOutput>;
-  send(caller: ChatCaller, input: ChatSendInput, log: Logger): Promise<ChatSendOutput>;
+  /** T066: `live` is the request's after-commit list (`ctx.live`), the message's `chat` events added to it. */
+  send(
+    caller: ChatCaller,
+    input: ChatSendInput,
+    log: Logger,
+    live: LivePublisher,
+  ): Promise<ChatSendOutput>;
   /** T038: a signed link to a message's document, valid `document_link_ttl_seconds`. */
   attachmentLink(
     caller: ChatCaller,
@@ -210,6 +225,26 @@ export function chatMessageOf(row: ChatMessageRow, userId: string): ChatMessage 
   };
 }
 
+/**
+ * T066: the message's `chat` event added for each of the enrollment's two parties, the sender first,
+ * `mine` computed for each, to be sent once the caller's transaction has committed.
+ */
+export function tellParties(
+  live: LivePublisher,
+  terms: Pick<ChatEnrollmentTerms, 'id' | 'studentUserId' | 'teacherUserId'>,
+  row: ChatMessageRow,
+): void {
+  const other =
+    row.senderUserId === terms.studentUserId ? terms.teacherUserId : terms.studentUserId;
+  for (const recipient of [row.senderUserId, other]) {
+    live.afterCommit([recipient], {
+      type: 'chat',
+      enrollmentId: terms.id,
+      message: chatMessageOf(row, recipient),
+    });
+  }
+}
+
 /** A message as the idempotency key stores it: its fields with a value, no `undefined` (JSON). */
 function storedOf({ body, attachment, ...message }: ChatMessage): JsonValue {
   return {
@@ -254,13 +289,13 @@ export function createChatServices({
 
     // The outcome is stored as it is answered and replayed from the store, so it is parsed by the
     // contract's schema on its way out, the first answer and a replay alike (as remedy's counter).
-    send: async ({ userId }, { idempotencyKey, ...asked }, log) =>
+    send: async ({ userId }, { idempotencyKey, ...asked }, log, live) =>
       chatSendOutput.parse(
         await idempotency.run(
           { scope: SEND_SCOPE, key: idempotencyKey, actorId: userId, input: asked },
           async (tx) => {
             const ids = { enrollmentId: asked.enrollmentId, userId };
-            await lockedParticipantOf(tx, ids, log);
+            const terms = await lockedParticipantOf(tx, ids, log);
             const sentAt = await clock(tx);
             const row = await store.insertMessage(tx, {
               enrollmentId: asked.enrollmentId,
@@ -268,6 +303,8 @@ export function createChatServices({
               body: asked.body,
               sentAt,
             });
+            // T066: inside the keyed effect, so a replay adds nothing.
+            tellParties(live, terms, row);
             return storedOf(chatMessageOf(row, userId));
           },
         ),

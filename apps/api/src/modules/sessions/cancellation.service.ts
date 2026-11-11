@@ -54,6 +54,13 @@
 // THE LOG (the owner's rule). Every refusal writes one info line, through this file's `refusal()`,
 // with the ids (the session or the request, the caller, and a pending request's id) and the reason
 // code, nothing else: never the reason the person wrote.
+//
+// THE LIVE EVENTS (T066; FR-427; research R-324, item 6; the note under T066, Q3 (a)). Each call is
+// handed the request's after-commit list by its router (`ctx.live`). A request adds `session` for the
+// counterparty inside the keyed effect, so a replay, which runs no effect, adds nothing; an answer,
+// not keyed, adds `session` for the requester inside its own transaction. Both are addressed from
+// the session and the request read under the locks; the participant kind sends the list once the
+// handler resolves and drops it when it throws.
 import type {
   SessionsCancellationAnswerInput,
   SessionsCancellationAnswerOutput,
@@ -73,6 +80,7 @@ import {
 } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { LivePublisher } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { sessionPartiesOf } from '../identity/index.js';
 import {
@@ -167,17 +175,22 @@ export interface CancellationCaller {
   readonly userId: string;
 }
 
-/** `sessions.cancellation.request` and `.answer`. */
+/**
+ * `sessions.cancellation.request` and `.answer`; T066: `live` is the request's after-commit list
+ * (`ctx.live`), the call's `session` event added to it.
+ */
 export interface CancellationServices {
   request(
     caller: CancellationCaller,
     input: SessionsCancellationRequestInput,
     log: Logger,
+    live: LivePublisher,
   ): Promise<SessionsCancellationRequestOutput>;
   answer(
     caller: CancellationCaller,
     input: SessionsCancellationAnswerInput,
     log: Logger,
+    live: LivePublisher,
   ): Promise<SessionsCancellationAnswerOutput>;
 }
 
@@ -278,8 +291,21 @@ export function createCancellationServices({
     }
   }
 
+  /** T066: `session` for `to`, the session's other party, read under the call's locks. */
+  const tell = (live: LivePublisher, to: string, session: PartySessionRow): void => {
+    live.afterCommit([to], {
+      type: 'session',
+      sessionId: session.id,
+      enrollmentId: session.enrollmentId,
+    });
+  };
+
+  /** The party of `session` who is not `userId`. */
+  const counterpartyOf = (session: PartySessionRow, userId: string): string =>
+    session.studentUserId === userId ? session.teacherUserId : session.studentUserId;
+
   return {
-    request: ({ userId }, { idempotencyKey, ...asked }, log) =>
+    request: ({ userId }, { idempotencyKey, ...asked }, log, live) =>
       idempotency.run(
         { scope: SCOPE, key: idempotencyKey, actorId: userId, input: asked },
         async (tx) => {
@@ -328,6 +354,8 @@ export function createCancellationServices({
               occurredAt: at,
             },
           ]);
+          // T066: inside the keyed effect, so a replay adds nothing.
+          tell(live, counterpartyOf(session, userId), session);
           return {
             requestId,
             status: 'pending' as const,
@@ -336,7 +364,7 @@ export function createCancellationServices({
         },
       ),
 
-    answer: async ({ userId }, { requestId, accept }, log) => {
+    answer: async ({ userId }, { requestId, accept }, log, live) => {
       const answered = await transactions.run(async (tx) => {
         const found = await store.requestOfParty(tx, requestId, userId);
         if (found === null) throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'not_a_party');
@@ -382,6 +410,8 @@ export function createCancellationServices({
           },
         ]);
         const offered = accept ? await offer.offerLocked(tx, session.id) : null;
+        // T066: to the requester, inside this transaction.
+        tell(live, request.requestedByUserId, session);
         return {
           offered,
           output: {

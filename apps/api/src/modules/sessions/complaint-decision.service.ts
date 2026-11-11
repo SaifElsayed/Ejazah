@@ -37,12 +37,19 @@
 //
 // THE LOG (the owner's rule). Each decision one info line `{ adminId, caseId, enrollmentId,
 // decision }` (and `newCaseId` for (a)), on the call's transaction; never the note.
+//
+// THE LIVE EVENT (T066; FR-427; research R-324, item 6; the note under T066, Q3 (a)). (a) adds
+// `enrollment` for both parties, read under the enrollment's lock, to the administrator kind's
+// after-commit list bound to this transaction (`publisherOn`), sent once it commits. (b)'s events
+// are the standing's (`account` to the teacher) and its subscriber's (`enrollment` to each
+// student); (c) closes no enrollment and adds none.
 import type { CasesDecideComplaintInput, CasesDecideComplaintOutput } from '@ijazah/contracts/admin';
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { lockAccount, lockApplication, type StandingService } from '../identity/index.js';
 import {
@@ -220,6 +227,11 @@ export function createComplaintDecision({
         );
         newCaseId = ended.caseOf.get(enrollmentId) ?? null;
         await close(tx, caseId, { status: 'resolved', resolution: 'enrollment_ended', note, adminId });
+        // T066: the enrollment closed, to both parties once this transaction commits.
+        publisherOn(tx)?.afterCommit([terms.studentUserId, terms.teacherUserId], {
+          type: 'enrollment',
+          enrollmentId,
+        });
       } else if (decision === 'suspend_teacher' && teacherUserId !== undefined) {
         try {
           await standing.suspend(tx, adminId, teacherUserId);

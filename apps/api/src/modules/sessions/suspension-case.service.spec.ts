@@ -19,12 +19,18 @@
 //
 // Over the real tables, quickstart.md §6's two paths at the API included:
 // `tests/db-integrity/suspension-case.spec.ts`.
+//
+// T066: the fault confirmed sends `enrollment` to both parties, read under the enrollment's lock,
+// through the administrator kind's list bound to the call's transaction, once it commits; cleared,
+// and a closing on an enrollment that ended another way, send nothing (no enrollment closed here).
 import type { LocalDate } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
+import type { LiveMessage } from '../../platform/live/live-bus.js';
+import { bindToTransaction, RequestLive } from '../../platform/live/live-publisher.js';
 import type { CaseClosing, CaseRecord } from '../moderation/index.js';
 import type { EnrollmentSide, EnrollmentStatus } from './enrollment-side.port.js';
 import type { Offered, OfferOptions } from './remedy-offer.service.js';
@@ -378,5 +384,74 @@ describe('the fault confirmed: cases.dismiss on a student_suspended case (R-313;
     const refusal = await refusalOf(service.confirmFault(tx, ADMIN, TARGET, DISMISSED.note));
     expect(refusal.details).toEqual([{ path: 'cause', code: 'not_open' }]);
     expect(calls.some(([name]) => name === 'cancel' || name === 'closeCase')).toBe(false);
+  });
+});
+
+/**
+ * The administrator kind's after-commit point as `procedures.ts` runs it: the request's list bound to
+ * the call's transaction while it runs, flushed once it has committed, dropped on a rollback.
+ */
+async function asAdministratorKind(
+  work: (call: Transaction) => Promise<unknown>,
+  commitFails = false,
+): Promise<LiveMessage[]> {
+  const published: LiveMessage[] = [];
+  const live = new RequestLive(
+    { publish: (message) => void published.push(message) },
+    { warn: () => undefined },
+  );
+  const call = {} as Transaction;
+  const unbind = bindToTransaction(call, live);
+  try {
+    await work(call);
+    if (commitFails) throw new Error('the audit write failed');
+    live.flush();
+  } catch {
+    live.drop();
+  } finally {
+    unbind();
+  }
+  return published;
+}
+
+describe('the live event of a suspended student’s case closed (T066)', () => {
+  it('the fault confirmed sends enrollment to both parties once, after the commit', async () => {
+    const { service } = suspensionOver();
+    expect(
+      await asAdministratorKind((call) =>
+        service.confirmFault(call, ADMIN, TARGET, DISMISSED.note),
+      ),
+    ).toEqual([
+      { to: [STUDENT, TEACHER], event: { type: 'enrollment', enrollmentId: ENROLLMENT } },
+    ]);
+  });
+
+  it('the fault confirmed sends nothing when the call rolls back, the case is no longer open, or the enrollment ended another way', async () => {
+    const rolledBack = suspensionOver();
+    expect(
+      await asAdministratorKind(
+        (call) => rolledBack.service.confirmFault(call, ADMIN, TARGET, DISMISSED.note),
+        true,
+      ),
+    ).toEqual([]);
+    const notOpen = suspensionOver({ caseStatus: 'resolved' });
+    expect(
+      await asAdministratorKind((call) =>
+        notOpen.service.confirmFault(call, ADMIN, TARGET, DISMISSED.note),
+      ),
+    ).toEqual([]);
+    const ended = suspensionOver({ status: 'cancelled' });
+    expect(
+      await asAdministratorKind((call) =>
+        ended.service.confirmFault(call, ADMIN, TARGET, DISMISSED.note),
+      ),
+    ).toEqual([]);
+  });
+
+  it('cleared sends nothing of its own', async () => {
+    const { service } = suspensionOver();
+    expect(
+      await asAdministratorKind((call) => service.clear(call, ADMIN, TARGET, RESOLVED.note)),
+    ).toEqual([]);
   });
 });

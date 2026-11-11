@@ -16,6 +16,8 @@ import {
   type RateLimiter,
   SIGNED_IN_DEFAULT_RATE_LIMIT,
 } from '../../platform/guards/rate-limit.guard.js';
+import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
+import type { LiveRegistry } from '../../platform/live/live-registry.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../surfaces/context.js';
 import {
@@ -320,5 +322,66 @@ describe("'chat.attachmentLink' (T038)", () => {
   it("is counted under the signed-in default: 'chat.attachmentLink'", async () => {
     await procedures['chat.attachmentLink'](callerAs(sessionOf('teacher')));
     expect(limited.map(([key]) => key)).toEqual([SIGNED_IN_DEFAULT_RATE_LIMIT]);
+  });
+});
+
+// T066 of specs/004-sessions (the note under T066, Q3 (a)): `chat.send` hands the service the
+// request's own after-commit list, `ctx.live`, which the participant kind sends once the handler
+// resolves and drops when it throws.
+describe("'chat.send': the request's live list (T066)", () => {
+  const EVENT = { type: 'chat', enrollmentId: ENROLLMENT, message: item } as const;
+
+  function liveCaller(fails: boolean) {
+    const published: LiveMessage[] = [];
+    const bus: LiveBus = {
+      publish: (message) => void published.push(message),
+      subscribe: () => () => undefined,
+    };
+    const adding: ChatServices = {
+      ...chat,
+      send: async (caller, input, _log, live) => {
+        calls.push(['send', caller, input]);
+        live.afterCommit([caller.userId], EVENT);
+        if (fails) throw new DomainError('CHAT_CLOSED');
+        return item;
+      },
+    };
+    const services = {
+      settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+      publicConfig: { supportEmail: 'support@ijazah.invalid' },
+      subjects: { listActive: async () => [] },
+      identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
+      teacherProfile: unusedTeacherProfileServices,
+      catalog: unusedCatalogServices,
+      discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
+      sessions: unusedSessionsServices,
+      chat: adding,
+    } satisfies AppServices;
+    const caller = callerFor(
+      createAppContext({
+        session: sessionOf('student'),
+        log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+        rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
+        clientAddress: '203.0.113.9',
+        services,
+        live: { bus, registry: {} as LiveRegistry },
+      }),
+    );
+    return { caller, published };
+  }
+
+  it('sends what the service added once the handler resolved', async () => {
+    const { caller, published } = liveCaller(false);
+    await procedures['chat.send'](caller);
+    expect(published).toEqual([{ to: [CALLER], event: EVENT }]);
+  });
+
+  it('drops what the service added when it throws', async () => {
+    const { caller, published } = liveCaller(true);
+    await expect(procedures['chat.send'](caller)).rejects.toEqual(refused('CHAT_CLOSED'));
+    expect(published).toEqual([]);
   });
 });
