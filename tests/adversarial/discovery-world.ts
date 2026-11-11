@@ -81,6 +81,8 @@ import {
   createDiscoveryCatalog,
   revokeSubjects,
 } from '../../apps/api/src/modules/catalog/index.js';
+// T037 of specs/004-sessions.
+import { createChatServices } from '../../apps/api/src/modules/chat/index.js';
 import {
   AccountConsequences,
   createIdentityServices,
@@ -135,6 +137,10 @@ import {
 import type {
   BookingSlotsInput,
   BookingSlotsOutput,
+  ChatListInput,
+  ChatListOutput,
+  ChatSendInput,
+  ChatSendOutput,
   CheckoutContinueInput,
   CheckoutContinueOutput,
   CheckoutCurrentOutput,
@@ -350,6 +356,9 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   video_departure_timeout_seconds: 20,
   // T026: `sessions.dispute.raise`'s window.
   dispute_window_hours: 72,
+  // T037 of specs/004-sessions: `chat.list`'s page and `chat.send`'s limit.
+  chat_page_size: 50,
+  rate_limit_chat_message: { limit: 30, window_seconds: 60 },
 };
 
 const settings: SettingsReader = {
@@ -425,6 +434,11 @@ export interface AppCaller {
         input: SessionsRemedyAnswerCounterInput,
       ): Promise<SessionsRemedyAnswerCounterOutput>;
     };
+  };
+  /** T037 of specs/004-sessions: an enrollment's chat read and written, attacked in `chat.attacks.ts`. */
+  readonly chat: {
+    list(input: ChatListInput): Promise<ChatListOutput>;
+    send(input: ChatSendInput): Promise<ChatSendOutput>;
   };
 }
 
@@ -704,6 +718,13 @@ async function build(): Promise<Built> {
       // T021: `sessions.cancellation.request` keyed as `main.ts` keys it; T026: `sessions.dispute.raise`
       // run in its transaction.
       idempotency,
+    }),
+    // As `main.ts` binds it (T037 of specs/004-sessions): over booking's side, `chat.send` keyed.
+    chat: createChatServices({
+      transactions: reads,
+      idempotency,
+      settings,
+      enrollments: createEnrollmentSide({ settings }),
     }),
   };
   const rateLimiter = new RateLimiter({
