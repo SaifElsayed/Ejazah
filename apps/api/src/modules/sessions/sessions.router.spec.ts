@@ -42,6 +42,8 @@ const CALLER = '0199d0a0-0000-7000-8000-00000000d001';
 const OTHER = '0199d0a0-0000-7000-8000-00000000d002';
 const SESSION = '0199d0a0-0000-7000-8000-00000000d0a1';
 const ENROLLMENT = '0199d0a0-0000-7000-8000-00000000d0e1';
+// T060.
+const COMPLAINT = '0199d0a0-0000-7000-8000-00000000d0f1';
 
 const surfaceRouter = createAppRouter({ sessions: sessionsRouter });
 const callerFor = createAppCallerFactory(surfaceRouter);
@@ -160,6 +162,15 @@ const sessions: SessionsServices = {
     if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
     // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
     return { ...raised, raisedByUserId: CALLER } as never;
+  },
+  // T060.
+  complaint: {
+    raise: async (caller, input) => {
+      calls.push(['complaint.raise', caller, input]);
+      if (input.enrollmentId !== ENROLLMENT) throw new DomainError('NOT_FOUND');
+      // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
+      return { complaintId: COMPLAINT, status: 'open', reason: input.reason } as never;
+    },
   },
   // T031.
   remedy: {
@@ -944,5 +955,127 @@ describe("'sessions.remedy.answerCounter' (T032)", () => {
       caller: 'participant',
     });
     expect(typeOf('sessions.remedy.answerCounter')).toBe('mutation');
+  });
+});
+
+// T060 of specs/004-sessions: `sessions.complaint.raise`, the participant kind (the note under T060,
+// F2: the service decides the caller is the enrollment's student), a mutation handing the service
+// the caller's own account and the validated input only, under its own declared limit,
+// `rate_limit_absence_complaint`, the student as subject (contracts/app-surface.md,
+// "`sessions.complaint`"; FR-452, SC-415).
+describe("'sessions.complaint.raise' (T060)", () => {
+  const raise = (caller: Caller, input: Record<string, unknown>) =>
+    caller.sessions.complaint.raise(input as never);
+  const REASON = 'غاب المعلم عن حصتين';
+
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted account ACCOUNT_RESTRICTED before the service: 'sessions.complaint.raise'", async () => {
+    await expect(
+      raise(callerAs(null), { enrollmentId: ENROLLMENT, reason: REASON }),
+    ).rejects.toEqual(refused('UNAUTHENTICATED'));
+    for (const who of RESTRICTED) {
+      await expect(
+        raise(callerAs(sessionOf(who)), { enrollmentId: ENROLLMENT, reason: REASON }),
+        who,
+      ).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the input trimmed, whatever else it says, and answers through the output schema: 'sessions.complaint.raise'", async () => {
+    const answer = await raise(callerAs(sessionOf('student')), {
+      enrollmentId: ENROLLMENT,
+      reason: `  ${REASON} `,
+      userId: OTHER,
+      gender: 'male',
+    });
+    expect(answer).toEqual({ complaintId: COMPLAINT, status: 'open' });
+    expect(calls).toEqual([
+      ['complaint.raise', { userId: CALLER }, { enrollmentId: ENROLLMENT, reason: REASON }],
+    ]);
+  });
+
+  it("answers the service's NOT_FOUND with no field: 'sessions.complaint.raise'", async () => {
+    await expect(
+      raise(callerAs(sessionOf('teacher')), { enrollmentId: OTHER, reason: REASON }),
+    ).rejects.toEqual(refused('NOT_FOUND'));
+  });
+
+  it("refuses an empty, blank or over-long reason and an enrollment id that is not one VALIDATION_FAILED before the service: 'sessions.complaint.raise'", async () => {
+    for (const input of [
+      { enrollmentId: ENROLLMENT, reason: '' },
+      { enrollmentId: ENROLLMENT, reason: '   ' },
+      { enrollmentId: ENROLLMENT, reason: 'x'.repeat(501) },
+      { enrollmentId: 'not-an-id', reason: REASON },
+      { enrollmentId: ENROLLMENT },
+    ]) {
+      const thrown: unknown = await raise(callerAs(sessionOf('student')), input).catch(
+        (error: unknown) => error,
+      );
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+    await raise(callerAs(sessionOf('student')), { enrollmentId: ENROLLMENT, reason: 'x'.repeat(500) });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("is a mutation of the participant kind declaring rate_limit_absence_complaint: 'sessions.complaint.raise'", () => {
+    expect(metaOf('sessions.complaint.raise')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+      rateLimit: 'rate_limit_absence_complaint',
+    });
+    expect(typeOf('sessions.complaint.raise')).toBe('mutation');
+  });
+
+  it("refuses a call over rate_limit_absence_complaint RATE_LIMITED before the service, the student as subject, nothing reached (SC-415): 'sessions.complaint.raise'", async () => {
+    const read: string[] = [];
+    const hits: string[] = [];
+    const rateLimiter = new RateLimiter({
+      settings: {
+        read: async (key, schema) => {
+          read.push(key);
+          return schema.parse({ limit: 5, window_seconds: 3600 });
+        },
+      },
+      counter: {
+        hit: async (key) => {
+          hits.push(key);
+          return 6;
+        },
+      },
+      subjectKey: Buffer.alloc(32, 6),
+    });
+    const services: AppServices = {
+      settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+      publicConfig: { supportEmail: 'support@ijazah.invalid' },
+      subjects: { listActive: async () => [] },
+      identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
+      teacherProfile: unusedTeacherProfileServices,
+      catalog: unusedCatalogServices,
+      discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
+      sessions,
+    };
+    const caller = callerFor(
+      createAppContext({
+        session: sessionOf('student'),
+        log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+        rateLimiter,
+        clientAddress: '203.0.113.9',
+        services,
+      }),
+    );
+    const thrown: unknown = await raise(caller, { enrollmentId: ENROLLMENT, reason: REASON }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(toErrorShape(thrown as never).body.code).toBe('RATE_LIMITED');
+    expect(read).toEqual(['rate_limit_absence_complaint']);
+    expect(hits).toHaveLength(1);
+    expect(calls).toEqual([]);
   });
 });

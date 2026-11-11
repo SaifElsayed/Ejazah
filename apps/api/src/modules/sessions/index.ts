@@ -492,3 +492,23 @@ export {
   type RevisionStore,
   revisionStore,
 } from './revision.service.js';
+/**
+ * T060 of specs/004-sessions (FR-452, FR-453; research R-322, «The complaint» and «The decision»):
+ * `sessions.complaint.raise` reaches the surface through `createSessionsServices`
+ * (`services.sessions.complaint`), its store narrowable by the race probe; `cases.decideComplaint`
+ * is composed into the administrator surface's `cases`; `lockForStanding` is the one lock sequence
+ * of a standing move, a `party_*` ruling's and a complaint's decision (b) (Q4 (a)).
+ */
+export {
+  type AbsenceComplaint,
+  type AbsenceComplaintStore,
+  absenceComplaintStore,
+  createAbsenceComplaint,
+} from './absence-complaint.service.js';
+export {
+  type ComplaintDecision,
+  type ComplaintDecisionStore,
+  complaintDecisionStore,
+  createComplaintDecision,
+} from './complaint-decision.service.js';
+export { lockForStanding, type StandingLockStore } from './standing-locks.js';

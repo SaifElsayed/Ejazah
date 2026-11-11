@@ -84,6 +84,9 @@ function surface(refuse?: DomainError) {
     },
     // T064's procedure has its own spec (`cases-open-manual.router.spec.ts`).
     openManual: () => Promise.reject(new Error('cases.openManual: not reached by this spec')),
+    // T060's procedure has its own spec (`cases-decide-complaint.router.spec.ts`).
+    decideComplaint: () =>
+      Promise.reject(new Error('cases.decideComplaint: not reached by this spec')),
   };
   const contexts = adminContextsOver({ cases });
   return {

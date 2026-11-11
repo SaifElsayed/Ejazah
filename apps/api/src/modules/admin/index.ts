@@ -25,6 +25,9 @@ import { createPaymentsMonitorService } from '../payments/index.js';
 import {
   type CaseClosingService,
   type CaseQueue,
+  // T060.
+  type ComplaintDecision,
+  createComplaintDecision,
   createCaseClosing,
   createCaseQueue,
   createCompletion,
@@ -136,7 +139,11 @@ export interface AdminServices {
    * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
    * the process's logger.
    */
-  readonly cases: CaseQueue & CaseClosingService & ManualCaseService;
+  readonly cases: CaseQueue &
+    CaseClosingService &
+    ManualCaseService &
+    // T060: a complaint of a teacher's absence decided.
+    ComplaintDecision;
   /**
    * The sessions module's review queue, composed here for the surface (T033 of specs/004-sessions,
    * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
@@ -251,6 +258,13 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       ...createManualCase({
         enrollments: dependencies.enrollmentSide,
         idempotency: dependencies.idempotency,
+        log: dependencies.log,
+      }),
+      // T060: a complaint decided (R-322), (b) over this module's standing and booking's holds lock.
+      ...createComplaintDecision({
+        enrollments: dependencies.enrollmentSide,
+        standing,
+        lockActiveHolds: lockActiveHoldsOf,
         log: dependencies.log,
       }),
     },

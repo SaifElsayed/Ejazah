@@ -42,7 +42,10 @@
 //     `scheduled` sessions in one call; their open remedies in one call; then the dispute. Each call
 //     is in id order. `StandingService` and its consequences then run on these locks: its account
 //     and application locks and the subscriber's keys, holds, enrollments, sessions and remedies are
-//     ones already held, so no session is taken after one with a greater id (F1).
+//     ones already held, so no session is taken after one with a greater id (F1). The sequence is
+//     `standing-locks.ts`' `lockForStanding`, which a complaint decided `suspend_teacher` takes too
+//     (T060; the owner's decision of 2026-11-11 on B40's conflict check, Q4 (a)), moved there
+//     unchanged in what it locks.
 // The dispute and the session are read again under the locks (rule 1). Every row written references
 // the enrollment, the session and the dispute, all held, and no account.
 //
@@ -73,19 +76,13 @@ import {
 } from './admin-outcome.service.js';
 import { lockTeacherSlots } from './cancellation.repository.js';
 import type { Completion } from './completion.service.js';
-import type {
-  EnrollmentPageItem,
-  EnrollmentSide,
-  EnrollmentStatus,
-} from './enrollment-side.port.js';
-import {
-  lockRows,
-  type OpenRemedy,
-  openRemediesOf,
-  type RemainingSession,
-  scheduledSessionsOf,
-} from './remaining-sessions.repository.js';
+import type { EnrollmentSide } from './enrollment-side.port.js';
+import { lockRows, openRemediesOf, scheduledSessionsOf } from './remaining-sessions.repository.js';
 import { type SessionToResolve, sessionToResolve } from './review.repository.js';
+import { type LockActiveHolds, lockForStanding, type StandingLockStore } from './standing-locks.js';
+
+// Moved to `standing-locks.ts` with the lock sequence (T060, Q4 (a)); re-exported for the entry.
+export type { LockActiveHolds, LockedHolds } from './standing-locks.js';
 
 /** The standing moves a ruling calls (identity's entry, `002:T144`); `main.ts` hands the instance. */
 export type DisputeStanding = Pick<
@@ -93,34 +90,14 @@ export type DisputeStanding = Pick<
   'suspend' | 'ban' | 'suspendStudent' | 'banStudent'
 >;
 
-/** An account's active holds, locked, and the enrollments they were placed for (booking's). */
-export interface LockedHolds {
-  readonly holdIds: readonly string[];
-  readonly enrollmentIds: readonly string[];
-}
-
 /**
- * Booking's `lockActiveHoldsOf` (kernel.md's `party_*` row; the owner's decision of 2026-11-11 on
- * lane A's questions, item 3), handed in by the admin module's composition, since sessions reads
- * no booking table and booking already depends on sessions' entry (R-API-6).
+ * What the ruling reads, locks and writes, each on the caller's transaction; the standing move's
+ * locks are `StandingLockStore`'s (`standing-locks.ts`).
  */
-export type LockActiveHolds = (tx: Transaction, userId: string) => Promise<LockedHolds>;
-
-/** What the ruling reads, locks and writes, each on the caller's transaction. */
-export interface DisputeResolutionStore {
+export interface DisputeResolutionStore extends StandingLockStore {
   /** Moderation's: the session dispute, or null. */
   disputeOf(tx: Transaction, disputeId: string): Promise<SessionDisputeRow | null>;
   sessionToResolve(tx: Transaction, sessionId: string): Promise<SessionToResolve | null>;
-  /** Identity's account lock. */
-  lockAccount(tx: Transaction, userId: string): Promise<void>;
-  /** Identity's application lock, after the account (L-A). */
-  lockApplication(tx: Transaction, userId: string): Promise<void>;
-  lockTeacherSlots(tx: Transaction, teacherUserId: string): Promise<void>;
-  scheduledSessionsOf(
-    tx: Transaction,
-    enrollmentIds: readonly string[],
-  ): Promise<readonly RemainingSession[]>;
-  openRemediesOf(tx: Transaction, enrollmentIds: readonly string[]): Promise<readonly OpenRemedy[]>;
   lockRows(tx: Transaction, table: LockedTable, ids: readonly string[]): Promise<void>;
   /** Moderation's: the dispute's row lock, last. */
   lockDispute(tx: Transaction, disputeId: string): Promise<void>;
@@ -195,17 +172,6 @@ const FROZEN_KEPT: ReadonlySet<DisputesResolveInput['resolution']> = new Set([
   'party_banned',
 ]);
 
-const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
-
-/**
- * The party's enrollments a `party_*` ruling locks. A read filter (`EnrollmentPageFilter`, the
- * `where` of `EnrollmentSide.enrollmentPage`), never a write: the confirmation gate
- * (`tests/pipeline/confirmation-path.spec.ts`) reads any `status: 'confirmed'` literal as a write,
- * so the value is a named constant, as `remedy-offer.sweep.ts` reads it (the owner's decision of
- * 2026-11-10; the follow-up under T034).
- */
-const CONFIRMED: EnrollmentStatus = 'confirmed';
-
 /**
  * The final status R-308 maps the resolution to; null when it keeps a frozen outcome not yet written.
  * The input's schema requires `consumed`, `against` and `party` for their resolutions.
@@ -239,53 +205,19 @@ export function createDisputeResolution({
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: DisputeResolutionStore;
 }): DisputeResolution {
-  /** The party's confirmed enrollments, every page, read under the account's lock. */
-  const confirmedOf = async (
-    tx: Transaction,
-    role: 'student' | 'teacher',
-    userId: string,
-  ): Promise<readonly EnrollmentPageItem[]> => {
-    const filter =
-      role === 'student'
-        ? { status: CONFIRMED, studentUserIds: [userId] }
-        : { status: CONFIRMED, teacherUserIds: [userId] };
-    const all: EnrollmentPageItem[] = [];
-    let cursor: string | undefined;
-    // Bounded: each page moves past its last id, and the party's enrollments are finite.
-    for (;;) {
-      const page = await enrollments.enrollmentPage(tx, filter, cursor);
-      all.push(...page.items);
-      if (page.nextCursor === undefined) return all;
-      cursor = page.nextCursor;
-    }
-  };
-
-  /** A standing ruling's locks, in kernel.md's `party_*` row's order (this file's head). */
-  const lockForStanding = async (
+  /** A standing ruling's locks, `standing-locks.ts`' `lockForStanding` (this file's head). */
+  const lockStanding = async (
     tx: Transaction,
     seen: SessionToResolve,
     party: 'student' | 'teacher',
     banned: boolean,
   ): Promise<string> => {
     const partyUserId = party === 'student' ? seen.studentUserId : seen.teacherUserId;
-    await store.lockAccount(tx, partyUserId);
-    if (party === 'teacher' && banned) await store.lockApplication(tx, partyUserId);
-    const confirmed = await confirmedOf(tx, party, partyUserId);
-    for (const key of sortedUnique([partyUserId, ...confirmed.map((e) => e.teacherUserId)])) {
-      await store.lockTeacherSlots(tx, key);
-    }
-    const holds = await lockActiveHolds(tx, partyUserId);
-    const confirmedIds = sortedUnique(confirmed.map(({ enrollmentId }) => enrollmentId));
-    await enrollments.lockEnrollments(
+    await lockForStanding(
       tx,
-      sortedUnique([seen.enrollmentId, ...holds.enrollmentIds, ...confirmedIds]),
+      { enrollments, lockActiveHolds, store },
+      { party, partyUserId, banned, enrollmentId: seen.enrollmentId, sessionId: seen.id },
     );
-    const remaining = await store.scheduledSessionsOf(tx, confirmedIds);
-    await store.lockRows(tx, 'sessions', sortedUnique([seen.id, ...remaining.map(({ id }) => id)]));
-    const remedies = await store.openRemediesOf(tx, confirmedIds);
-    if (remedies.length > 0) {
-      await store.lockRows(tx, 'session_remedies', sortedUnique(remedies.map(({ id }) => id)));
-    }
     return partyUserId;
   };
 
@@ -326,7 +258,7 @@ export function createDisputeResolution({
         await enrollments.lockEnrollments(tx, [enrollmentId]);
         await store.lockRows(tx, 'sessions', [sessionId]);
       } else {
-        partyUserId = await lockForStanding(tx, seenSession, standingParty, banned);
+        partyUserId = await lockStanding(tx, seenSession, standingParty, banned);
       }
       await store.lockDispute(tx, disputeId);
 

@@ -88,6 +88,9 @@ import type {
   auditGetOutput,
   auditListInput,
   auditListOutput,
+  // T060.
+  casesDecideComplaintInput,
+  casesDecideComplaintOutput,
   casesDismissInput,
   casesDismissOutput,
   casesGetInput,
@@ -568,6 +571,12 @@ export interface AdminSurfaceServices {
       readonly answer: z.input<typeof casesOpenManualOutput>;
       readonly replayed: boolean;
     }>;
+    // T060: an open complaint of a teacher's absence decided on the call's transaction.
+    decideComplaint(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesDecideComplaintInput>,
+    ): Answer<typeof casesDecideComplaintOutput>;
   };
   /**
    * The review queue (FR-446, FR-450, FR-477; T033 of specs/004-sessions), the sessions module's,

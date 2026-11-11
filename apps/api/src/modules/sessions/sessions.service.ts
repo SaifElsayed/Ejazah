@@ -70,6 +70,7 @@ import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { readSlot } from '../catalog/index.js';
 import { sessionPartiesOf } from '../identity/index.js';
+import { type AbsenceComplaint, createAbsenceComplaint } from './absence-complaint.service.js';
 import { type CancellationRequestRow, latestRequestOf } from './cancellation.repository.js';
 import {
   type CancellationServices,
@@ -158,6 +159,8 @@ export interface SessionsServices extends DisputeRaise {
   readonly cancellation: CancellationServices;
   /** T031: `sessions.remedy.choose`, `.accept`, `.counterOptions` and `.counter`; T032 `.answerCounter`. */
   readonly remedy: RemedyServices;
+  /** T060: `sessions.complaint.raise`, the student's complaint of the teacher's absence. */
+  readonly complaint: AbsenceComplaint;
 }
 
 export interface SessionsDependencies {
@@ -289,6 +292,8 @@ export function createSessionsServices({
 
   return {
     raiseDispute,
+    // T060: `sessions.complaint.raise` (`absence-complaint.service.ts`), over the same transactions.
+    complaint: createAbsenceComplaint({ transactions, enrollments: enrollmentSide }),
     get: async ({ userId }, { sessionId }, log) => {
       const lead = await leadMinutes();
       return transactions.run(async (tx) => {

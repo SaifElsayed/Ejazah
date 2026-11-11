@@ -115,7 +115,7 @@ const booking: BookingServices = {
   enrollment: async (...args) => {
     calls.push(['enrollment', ...args]);
     if (args[1].enrollmentId !== OWN) throw new DomainError('NOT_FOUND');
-    return enrollmentAnswer ?? { ...item, sessions: [item.next] };
+    return enrollmentAnswer ?? { ...item, sessions: [item.next], complaintOpen: false };
   },
   students: unreached('teacher.students.list'),
   student: unreached('teacher.students.get'),
@@ -236,7 +236,7 @@ describe("'enrollments.get' (T049)", () => {
 
   it('answers a deleted teacher deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {
     const deleted = { teacherId: TEACHER, displayName: '', displayNameOrNull: null, deleted: true };
-    enrollmentAnswer = { ...item, teacher: deleted, sessions: [item.next] };
+    enrollmentAnswer = { ...item, teacher: deleted, sessions: [item.next], complaintOpen: false };
     const answer = await calls$.get(callerAs(sessionOf('student')));
     expect(answer.teacher).toEqual(deleted);
   });

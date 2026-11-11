@@ -30,6 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { expect } from 'vitest';
 
 import type {
+  SessionsComplaintRaiseInput,
   SessionsDisputeRaiseInput,
   SessionsGetInput,
   SessionsJoinInput,
@@ -319,3 +320,125 @@ const disputeAttacks: ProcedureAttacks = {
 };
 
 export const sessionDisputeAttacks: readonly ProcedureAttacks[] = [disputeAttacks];
+
+// T060 of specs/004-sessions — `sessions.complaint.raise`'s attacks (FR-496, FR-452; R-GENDER-2,
+// R-GENDER-4), in the same world, on each pair's confirmed enrollment: an enrollment the requester is
+// not the student of — the other gender's pair's, from either party; their own, raised by its
+// teacher; a forged or a guessed id — answers exactly as an id that never existed; the student's own
+// is never answered so: raised, or refused COMPLAINT_OPEN once raised.
+//
+//   directCall            the student raises their own enrollment's complaint (a second
+//                         COMPLAINT_OPEN with the open one's id); the teacher raising one on it, and
+//                         either party on the other gender's enrollment, as nonexistent.
+//   forgedId              the other pair's enrollment, the own pair's session ids (sent as an
+//                         enrollment id) and the parties' user ids.
+//   guessedId             random ids, the other enrollment's neighbour and its upper-case spelling.
+//   tamperedToken         a tampered bearer token: unauthenticated before any service.
+//   clientSuppliedGender  the input carrying the other gender is ignored; after an administrator's
+//                         correction of the teacher's gender, the student's own enrollment answers as
+//                         a nonexistent one, and again as their own once restored.
+const COMPLAINT_HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, FR-452, FR-496, SC-407';
+
+/** One complaint on `enrollmentId`, as the phone sends it. */
+function complain(caller: AppCaller, enrollmentId: string, extra: Record<string, unknown> = {}) {
+  return caller.sessions.complaint.raise({
+    enrollmentId,
+    reason: 'غاب المعلم في الفحص',
+    ...extra,
+  } as SessionsComplaintRaiseInput);
+}
+
+/** The enrollment answers the complaint as one that never existed. */
+function expectComplaintHidden(caller: AppCaller, enrollmentId: string): Promise<void> {
+  return expectAnswersAsNonexistent(
+    () => complain(caller, enrollmentId),
+    () => complain(caller, randomUUID()),
+  );
+}
+
+/** The student's own enrollment is answered as theirs: raised, or refused as already raised. */
+async function expectOwnComplaint(attempt: () => Promise<unknown>): Promise<void> {
+  try {
+    const raised = (await attempt()) as { status?: unknown };
+    expect(raised.status).toBe('open');
+  } catch (error) {
+    const cause: unknown = error instanceof Error ? error.cause : undefined;
+    expect(typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'code') : error).toBe(
+      'COMPLAINT_OPEN',
+    );
+  }
+}
+
+const complaintAttacks: ProcedureAttacks = {
+  path: 'sessions.complaint.raise',
+  holds: COMPLAINT_HOLDS,
+  attacks: {
+    async directCall(direction) {
+      const { own, theirs } = await pairsFor(direction);
+      await expectOwnComplaint(() => complain(own.student.caller, own.enrollmentId));
+      const second = await refusalOf(() => complain(own.student.caller, own.enrollmentId));
+      expect(second.code).toBe('COMPLAINT_OPEN');
+      expect(second.details).toEqual([
+        { path: 'complaintId', code: expect.any(String) as unknown },
+      ]);
+      await expectComplaintHidden(own.teacher.caller, own.enrollmentId);
+      for (const party of partiesOf(own)) {
+        await expectComplaintHidden(party.caller, theirs.enrollmentId);
+      }
+    },
+    async forgedId(direction) {
+      const { own, theirs } = await pairsFor(direction);
+      for (const party of partiesOf(own)) {
+        for (const forged of [
+          theirs.enrollmentId,
+          own.sessions.open,
+          own.sessions.ended,
+          own.student.userId,
+          own.teacher.userId,
+        ]) {
+          await expectComplaintHidden(party.caller, forged);
+        }
+      }
+    },
+    async guessedId(direction) {
+      const { own, theirs } = await pairsFor(direction);
+      for (const guessed of [
+        randomUUID(),
+        neighbourOf(theirs.enrollmentId),
+        theirs.enrollmentId.toUpperCase(),
+      ]) {
+        await expectComplaintHidden(own.student.caller, guessed);
+      }
+    },
+    async tamperedToken(direction) {
+      const { surface, own, theirs } = await pairsFor(direction);
+      for (const token of tamperedTokens(
+        direction,
+        own.student.accessToken,
+        theirs.student.sessionId,
+      )) {
+        const tampered = await surface.bearing(token);
+        await expectUnauthenticated(() => complain(tampered, own.enrollmentId));
+      }
+    },
+    async clientSuppliedGender(direction) {
+      const { surface, own, theirs } = await pairsFor(direction);
+      const withGender = { gender: direction.other };
+      await expectAnswersAsNonexistent(
+        () => complain(own.student.caller, theirs.enrollmentId, withGender),
+        () => complain(own.student.caller, randomUUID(), withGender),
+      );
+      await expectOwnComplaint(() => complain(own.student.caller, own.enrollmentId, withGender));
+      // After an administrator's correction of the teacher's gender (K2): the server's record.
+      await surface.setGender(own.teacher.userId, direction.other);
+      try {
+        await expectComplaintHidden(own.student.caller, own.enrollmentId);
+      } finally {
+        await surface.setGender(own.teacher.userId, direction.requester);
+      }
+      await expectOwnComplaint(() => complain(own.student.caller, own.enrollmentId));
+    },
+  },
+};
+
+export const sessionComplaintAttacks: readonly ProcedureAttacks[] = [complaintAttacks];

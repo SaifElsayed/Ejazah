@@ -9,6 +9,8 @@
 // `cases.dismiss` `case.dismissed`, each on the case (`dispute`, T002's target type), the closing's
 // mandatory note as the entry's reason. A refusal rolls the call back, its audit entry with it.
 import {
+  casesDecideComplaintInput,
+  casesDecideComplaintOutput,
   casesDismissInput,
   casesDismissOutput,
   casesGetInput,
@@ -97,5 +99,27 @@ export const casesAdminRouter = createAdminRouter({
       },
     });
     return answer;
+  }),
+
+  // T060 (FR-453; research R-322, «The decision»): an open complaint decided, under the signed-in
+  // default limit; audited `complaint.decided` on the complaint (`dispute`), the note as the reason
+  // and the decision in `after`. What each decision does is `complaint-decision.service.ts`'.
+  decideComplaint: adminProcedure({
+    input: casesDecideComplaintInput,
+    output: casesDecideComplaintOutput,
+  }).mutation(async ({ ctx, input }) => {
+    const decided = await ctx.services.cases.decideComplaint(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    ctx.audit.record({
+      action: 'complaint.decided',
+      targetType: 'dispute',
+      targetId: input.caseId,
+      reason: input.note,
+      after: { decision: input.decision },
+    });
+    return decided;
   }),
 });
