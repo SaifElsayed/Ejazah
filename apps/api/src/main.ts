@@ -45,6 +45,7 @@ const [
   { standInCheckoutRoutes },
   { CONFIRM_ENROLLMENT },
   sessionsModule,
+  chat,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -76,6 +77,7 @@ const [
   import('./platform/web/stand-in-checkout.js'),
   import('./jobs/confirm-enrollment.js'),
   import('./modules/sessions/index.js'),
+  import('./modules/chat/index.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -263,6 +265,16 @@ const services = {
     store: sessionsModule.sessionsStore,
     idempotency,
   }),
+  // `chat.list`, `chat.send` and `chat.attachmentLink` (T037, T038 of specs/004-sessions): the
+  // enrollment's parties and status through booking's side (R-301), `chat.send` keyed by the
+  // kernel's idempotency, an attachment's link through the storage port (R-SEC-3).
+  chat: chat.createChatServices({
+    transactions: transactionsOver(database),
+    idempotency,
+    settings,
+    enrollments: enrollmentSide,
+    storage: ports.storage,
+  }),
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -304,6 +316,14 @@ const routes = {
     storage: ports.storage,
     settings,
     database,
+  }),
+  // The upload route's third use (T038 of specs/004-sessions): `POST /uploads/chat`, a PDF or UTF-8
+  // text document sent in an enrollment's chat, never an image (R-SEC-4, R-SEC-5).
+  [chat.CHAT_UPLOAD_PATH]: chat.createChatUploadRoute({
+    ...uploads,
+    storage: ports.storage,
+    transactions: transactionsOver(database),
+    enrollments: enrollmentSide,
   }),
   ...filesRoutes(ports.storage),
   // The gateway's signed webhook (T077): its raw body read under the request limit, verified by the
@@ -361,6 +381,15 @@ const adminServices = createAdminServices({
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,
   // `sessions.review.revise` and `cases.openManual`.
   idempotency,
+  // T040 of specs/004-sessions: the two ports of the reads inside an open matter (contracts/kernel.md,
+  // "The composition root"), so sessions imports neither verification nor chat (R-301).
+  disputeHeldFiles: verification.createDisputeHeldFiles({
+    database,
+    storage: ports.storage,
+    cipher,
+    settings,
+  }),
+  disputeChat: chat.createDisputeChat({ enrollments: enrollmentSide, settings }),
   inviteQueue: {
     queue: async (adminId) => {
       await queue().add(DELIVER_ADMIN_INVITE, { adminId });
