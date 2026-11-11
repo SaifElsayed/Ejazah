@@ -74,8 +74,11 @@ export type { SessionToSettle, Settlement } from './evaluation.repository.js';
 /** Minutes after the scheduled end before a session is evaluated (SRS §3.14, R-SESS-2). */
 export const EVALUATION_DELAY_SETTING = 'session_evaluation_delay_minutes';
 
-/** The four attendance settings (SRS §3.14, FR-442 to FR-444), by the rules' names. */
-const ATTENDANCE_SETTINGS = {
+/**
+ * The four attendance settings (SRS §3.14, FR-442 to FR-444), by the rules' names; T033's telemetry
+ * reads the same four (the owner's decision of 2026-11-11 on lane A's questions, item 4).
+ */
+export const ATTENDANCE_SETTINGS = {
   joinWindowMinutes: 'join_window_minutes',
   minimumConnectionSeconds: 'minimum_connection_seconds',
   attendanceThresholdPct: 'attendance_threshold_pct',

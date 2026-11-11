@@ -405,3 +405,90 @@ export {
   type RemedyWindows,
   type RemedyWindowsDependencies,
 } from './remedy.service.js';
+/**
+ * T035 (FR-478, FR-422; research R-312): the compensation-case queue's reads (`cases.list`,
+ * `cases.get` and its `covers`) and the closing of a case (`cases.resolve`, `cases.dismiss`), each
+ * on the administrator call's transaction; the `cases` namespace of the administrator surface.
+ */
+export { type CaseQueue, createCaseQueue } from './case-queue.service.js';
+export {
+  type CaseClosingService,
+  createCaseClosing,
+} from './case-closing.service.js';
+export { casesAdminRouter } from './cases-admin.router.js';
+/**
+ * T036 (FR-486; research R-313): a suspended student's case closed, cleared (its sessions offered)
+ * or the fault confirmed (an enrollment's end), which T035's `cases.resolve` and `cases.dismiss`
+ * hand a `student_suspended` case to.
+ */
+export {
+  createSuspensionCase,
+  type SuspensionCase,
+  type SuspensionCaseTarget,
+} from './suspension-case.service.js';
+/**
+ * T064 (FR-493; research R-326): an administrator's manual compensation case (`cases.openManual`),
+ * keyed on the administrator call's transaction, with an open remedy handed to the student's case.
+ */
+export {
+  createManualCase,
+  type ManualCaseAnswer,
+  type ManualCaseDependencies,
+  type ManualCaseService,
+} from './manual-case.service.js';
+/**
+ * T033 of specs/004-sessions (FR-446, FR-450, FR-477; R-SESS-6; research R-323 GAP-2): the review
+ * queue (`sessions.review.list/get/resolve`), composed into the administrator surface's services;
+ * the telemetry reader `disputes.get` reads too (T034); and the one writer of an administrator's
+ * outcome, which T034's resolution and T059's revision and correction write through.
+ */
+export {
+  createSessionReview,
+  type SessionReview,
+  type SessionReviewStore,
+  sessionReviewStore,
+} from './review.service.js';
+export { createTelemetryReader, type TelemetryReader, type TelemetryStore } from './telemetry.js';
+export {
+  type AdminOutcomeEvent,
+  type AdminOutcomeStore,
+  type AdminOutcomeWrite,
+  writeAdminOutcome,
+} from './admin-outcome.service.js';
+/**
+ * T034 of specs/004-sessions (FR-421, FR-474 to FR-476; research R-308): the administrator's
+ * disputes queue (`disputes.list/get`) and its resolution (`disputes.resolve`), composed into the
+ * administrator surface's services, with the standing moves a `party_*` ruling calls handed in
+ * (`DisputeStanding`, identity's `StandingService`); and the router `admin.router.ts` mounts at
+ * `disputes`.
+ */
+export {
+  createDisputeQueue,
+  type DisputeQueue,
+  type DisputeQueueStore,
+  disputeQueueStore,
+} from './dispute-queue.service.js';
+export {
+  createDisputeResolution,
+  type DisputeResolution,
+  type DisputeResolutionStore,
+  disputeResolutionStore,
+  type DisputeStanding,
+  type LockActiveHolds,
+  type LockedHolds,
+} from './dispute-resolution.service.js';
+export { disputesAdminRouter } from './disputes-admin.router.js';
+/**
+ * T059 of specs/004-sessions (SRS FR-DISPUTE-7; FR-439, FR-472; research R-308, R-323 GAP-3): a
+ * ruling's revision (`disputes.revise`) and the correction of an outcome nobody disputed
+ * (`sessions.review.revise`), each keyed through the kernel's `IdempotencyService.runOn` on the
+ * administrator call's transaction, composed into the administrator surface's services; and
+ * `disputes.get`'s `revisable` and `revisions` (`revisionView`).
+ */
+export {
+  createRevisions,
+  type Keyed,
+  type Revisions,
+  type RevisionStore,
+  revisionStore,
+} from './revision.service.js';

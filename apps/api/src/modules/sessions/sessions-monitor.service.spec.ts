@@ -139,6 +139,8 @@ function world(options: WorldOptions = {}) {
             timezone: CAIRO,
             durationMinutes: 60,
             sessionCount: 8,
+            studentUserId: STUDENT,
+            teacherUserId: TEACHER,
           }
         : options.terms,
   };

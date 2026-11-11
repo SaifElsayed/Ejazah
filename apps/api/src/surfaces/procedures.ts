@@ -636,7 +636,10 @@ export interface AuditedCall {
   readonly administrator: AdministratorCaller;
   /** The call's one transaction: every write of the action goes through it. */
   readonly tx: Transaction;
-  /** Where the action records what it touched; at least one record, or the call is refused. */
+  /**
+   * Where the action records what it touched; at least one record, or the call is refused unless it
+   * marks itself a keyed call's replay (`replayed()`).
+   */
   readonly audit: AuditTrail;
 }
 
@@ -678,11 +681,18 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
         const unbind = bindToTransaction(tx, ctx.live);
         try {
           const entries: AuditEntry[] = [];
-          const audit: AuditTrail = { record: (entry) => void entries.push(entry) };
+          let replayed = false;
+          const audit: AuditTrail = {
+            record: (entry) => void entries.push(entry),
+            replayed: () => {
+              replayed = true;
+            },
+          };
           const called = await next({ ctx: { tx, audit } });
           // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
           if (!called.ok) throw called.error;
-          if (entries.length === 0) {
+          // A replay of a keyed call records nothing: the first call's entry is the record (B39).
+          if (entries.length === 0 && !replayed) {
             throw new Error(
               'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
             );

@@ -70,6 +70,21 @@ export class IdempotencyRepository implements IdempotencyStore<Transaction> {
     }
   }
 
+  // B39 (the note under T059): `runOn`'s claim, on a transaction it does not own. A unique violation
+  // would abort that transaction (25P02), so the conflict is answered by Postgres instead: the insert
+  // waits on an uncommitted claim of the same key, then inserts nothing if that claim committed, or
+  // inserts if it rolled back. Prisma's `skipDuplicates` is that `INSERT … ON CONFLICT DO NOTHING
+  // RETURNING`, as in payments.repository.ts; the id is the database's `uuidv7()`, so the one unique
+  // a new row can meet is (scope, actor_id, key).
+  async claimUnlessTaken(tx: Transaction, key: NewKey): Promise<string | null> {
+    const rows = await tx.idempotencyKey.createManyAndReturn({
+      data: [{ ...key, status: 'in_progress' }],
+      skipDuplicates: true,
+      select: { id: true },
+    });
+    return rows[0]?.id ?? null;
+  }
+
   async complete(tx: Transaction, id: string, response: StoredOutcome): Promise<void> {
     await tx.idempotencyKey.update({
       where: { id },

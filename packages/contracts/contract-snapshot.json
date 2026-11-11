@@ -667,6 +667,226 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "cases.dismiss": {
+        "input": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.note": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["dismissed"] }
+        }
+      },
+      "cases.get": {
+        "input": { "$": { "type": "object" }, "$.caseId": { "required": true, "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.case": { "required": true, "type": "object" },
+          "$.case.caseId": { "required": true, "type": "string" },
+          "$.case.closedAt": { "type": "string" },
+          "$.case.enrollmentId": { "required": true, "type": "string" },
+          "$.case.kind": {
+            "required": true,
+            "type": "string",
+            "values": ["absence_complaint", "compensation_case"]
+          },
+          "$.case.note": { "type": "string" },
+          "$.case.openedAt": { "required": true, "type": "string" },
+          "$.case.reason": {
+            "type": "string",
+            "values": [
+              "absence_termination",
+              "admin_cancellation",
+              "admin_opened_for_student",
+              "admin_opened_for_teacher",
+              "counter_unanswered",
+              "duplicate_payment",
+              "makeup_refused",
+              "party_restricted",
+              "refund_choice",
+              "slot_unavailable",
+              "student_banned",
+              "student_fault_confirmed",
+              "student_suspended",
+              "teacher_ended"
+            ]
+          },
+          "$.case.resolution": {
+            "type": "string",
+            "values": ["compensation_ordered", "enrollment_ended", "party_suspended"]
+          },
+          "$.case.status": {
+            "required": true,
+            "type": "string",
+            "values": ["dismissed", "open", "resolved"]
+          },
+          "$.complaint": { "type": "object" },
+          "$.complaint.decision": {
+            "type": "string",
+            "values": ["close", "end_enrollment", "suspend_teacher"]
+          },
+          "$.complaint.raisedAt": { "required": true, "type": "string" },
+          "$.complaint.reason": { "required": true, "type": "string" },
+          "$.covers": { "required": true, "type": "array" },
+          "$.covers[]": { "type": "object" },
+          "$.covers[].remedy": { "type": "object" },
+          "$.covers[].remedy.kind": {
+            "required": true,
+            "type": "string",
+            "values": ["makeup", "refund"]
+          },
+          "$.covers[].remedy.remedyId": { "required": true, "type": "string" },
+          "$.covers[].remedy.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "awaiting_choice",
+              "booked",
+              "counter_proposed",
+              "frozen",
+              "lapsed",
+              "proposed",
+              "refund_case"
+            ]
+          },
+          "$.covers[].sequenceNumber": { "required": true, "type": "integer" },
+          "$.covers[].sessionId": { "required": true, "type": "string" },
+          "$.covers[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.enrollment": { "required": true, "type": "object" },
+          "$.enrollment.enrollmentId": { "required": true, "type": "string" },
+          "$.enrollment.repeatedAbsence": { "required": true, "type": "boolean" },
+          "$.enrollment.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.enrollment.student": { "required": true, "type": "object" },
+          "$.enrollment.student.deleted": { "required": true, "type": "boolean" },
+          "$.enrollment.student.displayName": { "required": true, "type": "null|string" },
+          "$.enrollment.student.userId": { "required": true, "type": "string" },
+          "$.enrollment.teacher": { "required": true, "type": "object" },
+          "$.enrollment.teacher.deleted": { "required": true, "type": "boolean" },
+          "$.enrollment.teacher.displayName": { "required": true, "type": "null|string" },
+          "$.enrollment.teacher.userId": { "required": true, "type": "string" },
+          "$.enrollment.teacherNoShows": { "required": true, "type": "integer" },
+          "$.enrollment.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          },
+          "$.paymentsLink": { "required": true, "type": "object" },
+          "$.paymentsLink.enrollmentId": { "required": true, "type": "string" }
+        }
+      },
+      "cases.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.status": { "type": "string", "values": ["dismissed", "open", "resolved"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].caseId": { "required": true, "type": "string" },
+          "$.items[].closedAt": { "type": "string" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].kind": {
+            "required": true,
+            "type": "string",
+            "values": ["absence_complaint", "compensation_case"]
+          },
+          "$.items[].openedAt": { "required": true, "type": "string" },
+          "$.items[].reason": {
+            "type": "string",
+            "values": [
+              "absence_termination",
+              "admin_cancellation",
+              "admin_opened_for_student",
+              "admin_opened_for_teacher",
+              "counter_unanswered",
+              "duplicate_payment",
+              "makeup_refused",
+              "party_restricted",
+              "refund_choice",
+              "slot_unavailable",
+              "student_banned",
+              "student_fault_confirmed",
+              "student_suspended",
+              "teacher_ended"
+            ]
+          },
+          "$.items[].repeatedAbsence": { "required": true, "type": "boolean" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["dismissed", "open", "resolved"]
+          },
+          "$.items[].teacherNoShows": { "required": true, "type": "integer" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "cases.openManual": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.party": { "required": true, "type": "string", "values": ["student", "teacher"] },
+          "$.reason": { "required": true, "type": "string" },
+          "$.remedyId": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.handedRemedy": { "type": "object" },
+          "$.handedRemedy.remedyId": { "required": true, "type": "string" },
+          "$.handedRemedy.sessionId": { "required": true, "type": "string" },
+          "$.joined": { "required": true, "type": "boolean" },
+          "$.party": { "required": true, "type": "string", "values": ["student", "teacher"] },
+          "$.status": { "required": true, "type": "string", "values": ["open"] }
+        }
+      },
+      "cases.resolve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.note": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.caseId": { "required": true, "type": "string" },
+          "$.status": { "required": true, "type": "string", "values": ["resolved"] }
+        }
+      },
       "credentials.approve": {
         "input": {
           "$": { "type": "object" },
@@ -793,6 +1013,246 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "disputes.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.chatAvailable": { "required": true, "type": "boolean" },
+          "$.dispute": { "required": true, "type": "object" },
+          "$.dispute.disputeId": { "required": true, "type": "string" },
+          "$.dispute.enrollmentId": { "required": true, "type": "string" },
+          "$.dispute.outcomeUnderDispute": {
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.dispute.raisedAt": { "required": true, "type": "string" },
+          "$.dispute.raisedBy": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.dispute.reason": { "required": true, "type": "string" },
+          "$.dispute.resolution": {
+            "type": "string",
+            "values": [
+              "compensation_ordered",
+              "no_show_recorded",
+              "party_banned",
+              "party_suspended",
+              "re_marked",
+              "upheld"
+            ]
+          },
+          "$.dispute.resolutionNotes": { "type": "string" },
+          "$.dispute.resolvedAt": { "type": "string" },
+          "$.dispute.sessionId": { "required": true, "type": "string" },
+          "$.dispute.status": {
+            "required": true,
+            "type": "string",
+            "values": ["dismissed", "open", "resolved"]
+          },
+          "$.revisable": { "required": true, "type": "boolean" },
+          "$.revisions": { "required": true, "type": "array" },
+          "$.revisions[]": { "type": "object" },
+          "$.revisions[].outcomeAfter": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.revisions[].outcomeBefore": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.revisions[].revisedAt": { "required": true, "type": "string" },
+          "$.telemetry": { "required": true, "type": "object" },
+          "$.telemetry.events": { "required": true, "type": "array" },
+          "$.telemetry.events[]": { "type": "object" },
+          "$.telemetry.events[].connectionRef": { "type": "string" },
+          "$.telemetry.events[].occurredAt": { "required": true, "type": "string" },
+          "$.telemetry.events[].party": {
+            "required": true,
+            "type": "string",
+            "values": ["room", "student", "teacher"]
+          },
+          "$.telemetry.events[].type": {
+            "required": true,
+            "type": "string",
+            "values": ["joined", "left", "room_ended"]
+          },
+          "$.telemetry.intervals": { "required": true, "type": "object" },
+          "$.telemetry.intervals.student": { "required": true, "type": "array" },
+          "$.telemetry.intervals.student[]": { "type": "object" },
+          "$.telemetry.intervals.student[].endsAt": { "required": true, "type": "string" },
+          "$.telemetry.intervals.student[].startsAt": { "required": true, "type": "string" },
+          "$.telemetry.intervals.teacher": { "required": true, "type": "array" },
+          "$.telemetry.intervals.teacher[]": { "type": "object" },
+          "$.telemetry.intervals.teacher[].endsAt": { "required": true, "type": "string" },
+          "$.telemetry.intervals.teacher[].startsAt": { "required": true, "type": "string" },
+          "$.telemetry.intervals.together": { "required": true, "type": "array" },
+          "$.telemetry.intervals.together[]": { "type": "object" },
+          "$.telemetry.intervals.together[].endsAt": { "required": true, "type": "string" },
+          "$.telemetry.intervals.together[].startsAt": { "required": true, "type": "string" },
+          "$.telemetry.joined": { "required": true, "type": "object" },
+          "$.telemetry.joined.student": { "required": true, "type": "boolean" },
+          "$.telemetry.joined.teacher": { "required": true, "type": "boolean" },
+          "$.telemetry.outages": { "required": true, "type": "array" },
+          "$.telemetry.outages[]": { "type": "object" },
+          "$.telemetry.outages[].endsAt": { "required": true, "type": "string" },
+          "$.telemetry.outages[].outageId": { "required": true, "type": "string" },
+          "$.telemetry.outages[].startsAt": { "required": true, "type": "string" },
+          "$.telemetry.schedule": { "required": true, "type": "object" },
+          "$.telemetry.schedule.endsAt": { "required": true, "type": "string" },
+          "$.telemetry.schedule.localDate": { "required": true, "type": "string" },
+          "$.telemetry.schedule.startTimeLocal": { "required": true, "type": "string" },
+          "$.telemetry.schedule.startsAt": { "required": true, "type": "string" },
+          "$.telemetry.schedule.timezone": { "required": true, "type": "string" },
+          "$.telemetry.sessionId": { "required": true, "type": "string" },
+          "$.telemetry.simultaneousSeconds": { "required": true, "type": "integer" },
+          "$.telemetry.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          }
+        }
+      },
+      "disputes.list": {
+        "input": { "$": { "type": "object" }, "$.cursor": { "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].disputeId": { "required": true, "type": "string" },
+          "$.items[].outcomeUnderDispute": {
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          },
+          "$.items[].raisedAt": { "required": true, "type": "string" },
+          "$.items[].raisedBy": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.items[].repeatedAbsence": { "required": true, "type": "boolean" },
+          "$.items[].sessionId": { "required": true, "type": "string" },
+          "$.items[].teacherNoShows": { "required": true, "type": "integer" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "disputes.resolve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.against": { "type": "string", "values": ["student", "teacher"] },
+          "$.consumed": { "type": "boolean" },
+          "$.disputeId": { "required": true, "type": "string" },
+          "$.party": { "type": "string", "values": ["student", "teacher"] },
+          "$.reason": { "required": true, "type": "string" },
+          "$.resolution": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "compensation_ordered",
+              "no_show_recorded",
+              "party_banned",
+              "party_suspended",
+              "re_marked",
+              "upheld"
+            ]
+          }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" },
+          "$.sessionStatus": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          }
+        }
+      },
+      "disputes.revise": {
+        "input": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.outcome": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.disputeId": { "required": true, "type": "string" },
+          "$.notUndone": { "required": true, "type": "array" },
+          "$.notUndone[]": {
+            "type": "string",
+            "values": ["enrollment_ended", "party_banned", "party_suspended"]
+          },
+          "$.previousStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.sessionStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          }
+        }
       },
       "documents.accept": {
         "input": {
@@ -1402,6 +1862,154 @@
           "$.outageId": { "required": true, "type": "string" },
           "$.reclassified": { "required": true, "type": "integer" },
           "$.startsAt": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.review.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.events": { "required": true, "type": "array" },
+          "$.events[]": { "type": "object" },
+          "$.events[].connectionRef": { "type": "string" },
+          "$.events[].occurredAt": { "required": true, "type": "string" },
+          "$.events[].party": {
+            "required": true,
+            "type": "string",
+            "values": ["room", "student", "teacher"]
+          },
+          "$.events[].type": {
+            "required": true,
+            "type": "string",
+            "values": ["joined", "left", "room_ended"]
+          },
+          "$.intervals": { "required": true, "type": "object" },
+          "$.intervals.student": { "required": true, "type": "array" },
+          "$.intervals.student[]": { "type": "object" },
+          "$.intervals.student[].endsAt": { "required": true, "type": "string" },
+          "$.intervals.student[].startsAt": { "required": true, "type": "string" },
+          "$.intervals.teacher": { "required": true, "type": "array" },
+          "$.intervals.teacher[]": { "type": "object" },
+          "$.intervals.teacher[].endsAt": { "required": true, "type": "string" },
+          "$.intervals.teacher[].startsAt": { "required": true, "type": "string" },
+          "$.intervals.together": { "required": true, "type": "array" },
+          "$.intervals.together[]": { "type": "object" },
+          "$.intervals.together[].endsAt": { "required": true, "type": "string" },
+          "$.intervals.together[].startsAt": { "required": true, "type": "string" },
+          "$.joined": { "required": true, "type": "object" },
+          "$.joined.student": { "required": true, "type": "boolean" },
+          "$.joined.teacher": { "required": true, "type": "boolean" },
+          "$.outages": { "required": true, "type": "array" },
+          "$.outages[]": { "type": "object" },
+          "$.outages[].endsAt": { "required": true, "type": "string" },
+          "$.outages[].outageId": { "required": true, "type": "string" },
+          "$.outages[].startsAt": { "required": true, "type": "string" },
+          "$.schedule": { "required": true, "type": "object" },
+          "$.schedule.endsAt": { "required": true, "type": "string" },
+          "$.schedule.localDate": { "required": true, "type": "string" },
+          "$.schedule.startTimeLocal": { "required": true, "type": "string" },
+          "$.schedule.startsAt": { "required": true, "type": "string" },
+          "$.schedule.timezone": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.simultaneousSeconds": { "required": true, "type": "integer" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "both_no_show",
+              "cancelled_by_admin",
+              "cancelled_by_agreement",
+              "disputed",
+              "done",
+              "provider_outage",
+              "scheduled",
+              "student_no_show",
+              "teacher_no_show",
+              "under_threshold"
+            ]
+          }
+        }
+      },
+      "sessions.review.list": {
+        "input": { "$": { "type": "object" }, "$.cursor": { "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].endsAt": { "required": true, "type": "string" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].parties": { "required": true, "type": "object" },
+          "$.items[].parties.student": { "required": true, "type": "object" },
+          "$.items[].parties.student.deleted": { "required": true, "type": "boolean" },
+          "$.items[].parties.student.displayName": { "required": true, "type": "null|string" },
+          "$.items[].parties.student.userId": { "required": true, "type": "string" },
+          "$.items[].parties.teacher": { "required": true, "type": "object" },
+          "$.items[].parties.teacher.deleted": { "required": true, "type": "boolean" },
+          "$.items[].parties.teacher.displayName": { "required": true, "type": "null|string" },
+          "$.items[].parties.teacher.userId": { "required": true, "type": "string" },
+          "$.items[].sessionId": { "required": true, "type": "string" },
+          "$.items[].simultaneousSeconds": { "required": true, "type": "integer" },
+          "$.items[].startsAt": { "required": true, "type": "string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["provider_outage", "under_threshold"]
+          },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "sessions.review.resolve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.outcome": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.reason": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          }
+        }
+      },
+      "sessions.review.revise": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.outcome": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.reason": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.previousStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          },
+          "$.sessionId": { "required": true, "type": "string" },
+          "$.sessionStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["both_no_show", "done", "student_no_show", "teacher_no_show"]
+          }
         }
       },
       "students.ban": {

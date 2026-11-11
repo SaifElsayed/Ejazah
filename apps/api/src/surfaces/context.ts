@@ -88,6 +88,16 @@ import type {
   auditGetOutput,
   auditListInput,
   auditListOutput,
+  casesDismissInput,
+  casesDismissOutput,
+  casesGetInput,
+  casesGetOutput,
+  casesListInput,
+  casesListOutput,
+  casesOpenManualInput,
+  casesOpenManualOutput,
+  casesResolveInput,
+  casesResolveOutput,
   homeSummaryOutput,
   outagesListInput,
   outagesListOutput,
@@ -102,6 +112,22 @@ import type {
   sessionsMonitorGetOutput,
   sessionsMonitorListInput,
   sessionsMonitorListOutput,
+  sessionsReviewGetInput,
+  sessionsReviewGetOutput,
+  sessionsReviewListInput,
+  sessionsReviewListOutput,
+  sessionsReviewResolveInput,
+  sessionsReviewResolveOutput,
+  disputesGetInput,
+  disputesGetOutput,
+  disputesListInput,
+  disputesListOutput,
+  disputesResolveInput,
+  disputesResolveOutput,
+  sessionsReviewReviseInput,
+  sessionsReviewReviseOutput,
+  disputesReviseInput,
+  disputesReviseOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -503,6 +529,107 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof sessionsMonitorGetInput>,
     ): Answer<typeof sessionsMonitorGetOutput>;
+  };
+  /**
+   * The compensation-case queue (FR-478, FR-422; T035 and T036 of specs/004-sessions), the sessions
+   * module's, composed by the admin module: two reads and the two closings on the call's
+   * transaction, a `student_suspended` case's closing carrying its effect (T036).
+   */
+  readonly cases: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesListInput>,
+    ): Answer<typeof casesListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesGetInput>,
+    ): Answer<typeof casesGetOutput>;
+    resolve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesResolveInput>,
+    ): Answer<typeof casesResolveOutput>;
+    dismiss(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesDismissInput>,
+    ): Answer<typeof casesDismissOutput>;
+    /**
+     * T064: an administrator's manual case, keyed on the call's transaction; whether the answer
+     * was replayed from its key's row, for the kind to record no second entry.
+     */
+    openManual(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesOpenManualInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof casesOpenManualOutput>;
+      readonly replayed: boolean;
+    }>;
+  };
+  /**
+   * The review queue (FR-446, FR-450, FR-477; T033 of specs/004-sessions), the sessions module's,
+   * composed by the admin module: the queue and a session's telemetry read, and an outcome written
+   * on the call's transaction under the enrollment's and the session's locks.
+   */
+  readonly review: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewListInput>,
+    ): Answer<typeof sessionsReviewListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewGetInput>,
+    ): Answer<typeof sessionsReviewGetOutput>;
+    resolve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewResolveInput>,
+    ): Answer<typeof sessionsReviewResolveOutput>;
+    /** T059: the correction, keyed on the call's transaction; `replayed` from the key's row. */
+    revise(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsReviewReviseInput>,
+    ): Promise<{
+      readonly outcome: z.input<typeof sessionsReviewReviseOutput>;
+      readonly replayed: boolean;
+    }>;
+  };
+  /**
+   * The disputes queue and its resolution (FR-421, FR-474 to FR-476; T034 of specs/004-sessions),
+   * the sessions module's over moderation's rows, composed by the admin module with identity's
+   * standing for a `party_*` ruling.
+   */
+  readonly disputes: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesListInput>,
+    ): Answer<typeof disputesListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesGetInput>,
+    ): Answer<typeof disputesGetOutput>;
+    resolve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesResolveInput>,
+    ): Answer<typeof disputesResolveOutput>;
+    /** T059: a ruling's revision, keyed on the call's transaction; `replayed` from the key's row. */
+    revise(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesReviseInput>,
+    ): Promise<{
+      readonly outcome: z.input<typeof disputesReviseOutput>;
+      readonly replayed: boolean;
+    }>;
   };
 }
 

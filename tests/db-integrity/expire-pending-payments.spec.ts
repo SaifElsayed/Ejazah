@@ -523,3 +523,30 @@ describe('expire-pending-payments runs twice as once (R-API-14)', () => {
     expect(twice).toEqual(once);
   });
 });
+
+// T064 of specs/004-sessions (FR-493; research R-326; the note under T064 on the covering rule's
+// tests, after the note under T004, PR #127's review, round 1, Minor 1): a manual case, open or
+// closed, covers no paid order, so the sweep hands an unconfirmed one on and the job confirms it.
+describe('expire-pending-payments with a manual case (T064, R-326)', () => {
+  it.each(
+    (['admin_opened_for_student', 'admin_opened_for_teacher'] as const).flatMap((reason) =>
+      (['open', 'closed'] as const).map((state) => [reason, state] as const),
+    ),
+  )(
+    'with a %s case %s, hands the unconfirmed paid order on; confirmed, no duplicate_payment case',
+    async (reason, state) => {
+      const on = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
+      const { caseId } = await database.$transaction((tx) =>
+        openCompensationCase(tx, on.enrollmentId, reason),
+      );
+      if (state === 'closed') await closeCase(caseId, 'dismissed', true);
+      const paid = await order(on.enrollmentId);
+      await sweepThenConfirm(paid);
+      expect(await enrollmentOf(on.enrollmentId)).toMatchObject({
+        status: 'confirmed',
+        cancellationReason: null,
+      });
+      expect((await casesOf(on.enrollmentId)).map(({ reason: of }) => of)).toEqual([reason]);
+    },
+  );
+});

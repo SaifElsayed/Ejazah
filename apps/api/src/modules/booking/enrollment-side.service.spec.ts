@@ -61,6 +61,8 @@ function world(options: WorldOptions) {
     timezone: 'Africa/Cairo',
     durationMinutes: 60,
     sessionCount: 8,
+    studentUserId: id(3),
+    teacherUserId: id(4),
   };
   const store: EnrollmentSideStore = {
     enrollmentTermsById: async (_tx, asked) => (asked === terms.id ? terms : null),

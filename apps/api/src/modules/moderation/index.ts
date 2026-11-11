@@ -61,3 +61,43 @@ export {
   type EnrollmentCase,
   sessionsEverDisputedAmong,
 } from './compensation-case.repository.js';
+
+/**
+ * T035 of specs/004-sessions (FR-422, FR-478; research R-312): an administrator's closing of a case
+ * (`closeCase`: the enrollment's lock, then one conditional update writing the closing and
+ * `resolved_at` by the database's clock), and the queue's reads of `disputes` for sessions'
+ * `cases.*`, with no lock.
+ */
+export { type CaseClosing, closeCase } from './compensation-case.service.js';
+export {
+  type CaseQueuePage,
+  caseQueuePage,
+  type CaseQueuePosition,
+  type CaseQueueQuery,
+  type CaseQueueRow,
+  type CaseRecord,
+  caseRecordOf,
+  latestCaseOf,
+  type SuspensionCase,
+  suspensionCasesCoveredBy,
+} from './compensation-case.repository.js';
+/**
+ * T034 of specs/004-sessions (FR-474 to FR-476, FR-422; research R-308): the administrator's
+ * disputes queue's reads of session disputes, with no lock; the dispute's row lock, last in the one
+ * order; and the ruling, moderation's row only (`resolveSessionDispute`, one conditional update
+ * `WHERE status = 'open'`), which sessions' resolution calls on its transaction.
+ */
+export { resolveSessionDispute } from './session-dispute.service.js';
+export {
+  lockDispute,
+  type SessionDisputeResolution,
+  type SessionDisputeRow,
+  type SessionDisputeRuling,
+  sessionDisputeOf,
+  sessionDisputesPage,
+} from './session-dispute.repository.js';
+/**
+ * T059 of specs/004-sessions (FR-472, FR-439): a session's session disputes, oldest first, with no
+ * lock, which a ruling's revision and an outcome's correction read under the session's lock.
+ */
+export { sessionDisputesOfSession } from './session-dispute.repository.js';

@@ -23,7 +23,10 @@ import type {
 
 type Client = Pick<Transaction, 'enrollment' | 'enrollmentEvent'>;
 
-/** The enrollment's snapshot, slot and status; null when there is none. */
+/**
+ * The enrollment's snapshot, slot, status and two parties (the note under T064, B34); null when
+ * there is none.
+ */
 export async function enrollmentTermsById(tx: Client, id: string): Promise<EnrollmentTerms | null> {
   const row = await tx.enrollment.findUnique({
     where: { id },
@@ -35,6 +38,8 @@ export async function enrollmentTermsById(tx: Client, id: string): Promise<Enrol
       snapshotSlotTimezone: true,
       snapshotDurationMinutes: true,
       snapshotSessionCount: true,
+      studentUserId: true,
+      teacherUserId: true,
     },
   });
   if (row === null) return null;
@@ -46,6 +51,8 @@ export async function enrollmentTermsById(tx: Client, id: string): Promise<Enrol
     timezone: row.snapshotSlotTimezone,
     durationMinutes: row.snapshotDurationMinutes,
     sessionCount: row.snapshotSessionCount,
+    studentUserId: row.studentUserId,
+    teacherUserId: row.teacherUserId,
   };
 }
 

@@ -2,11 +2,13 @@
 // Only the three composition files may import it (R-API-4, T143): main.ts, worker.ts, admin.router.ts.
 import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
-import type { Database } from '../../platform/db/prisma.repository.js';
+import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
+import { lockActiveHoldsOf } from '../booking/index.js';
 import {
   createCredentialReviewService,
   type CredentialReviewService,
@@ -21,13 +23,30 @@ import {
 } from '../identity/index.js';
 import { createPaymentsMonitorService } from '../payments/index.js';
 import {
+  type CaseClosingService,
+  type CaseQueue,
+  createCaseClosing,
+  createCaseQueue,
   createCompletion,
+  createDisputeQueue,
+  createDisputeResolution,
+  createManualCase,
   createOutageServices,
+  createRemedyOffer,
+  createRevisions,
   createSessionCancel,
+  createSessionReview,
   createSessionsMonitor,
+  createSuspensionCase,
+  createTelemetryReader,
+  type DisputeQueue,
+  type DisputeResolution,
   type EnrollmentSide,
+  type ManualCaseService,
   type OutageServices,
+  type Revisions,
   type SessionCancel,
+  type SessionReview,
   type SessionsMonitor,
 } from '../sessions/index.js';
 import {
@@ -112,6 +131,24 @@ export interface AdminServices {
    * specs/004-sessions, FR-479): over the bound `EnrollmentSide`'s reads and the settings.
    */
   readonly monitor: SessionsMonitor;
+  /**
+   * The sessions module's compensation-case queue and its closings, composed here for the surface
+   * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
+   * the process's logger.
+   */
+  readonly cases: CaseQueue & CaseClosingService & ManualCaseService;
+  /**
+   * The sessions module's review queue, composed here for the surface (T033 of specs/004-sessions,
+   * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
+   */
+  readonly review: SessionReview & { readonly revise: Revisions['correctOutcome'] };
+  /**
+   * The sessions module's disputes queue and ruling, composed here for the surface (T034 of
+   * specs/004-sessions, FR-474 to FR-476): with this module's `StandingService` for a `party_*`
+   * ruling and booking's `lockActiveHoldsOf` for the party's holds (kernel.md's `party_*` row).
+   */
+  readonly disputes: DisputeQueue &
+    DisputeResolution & { readonly revise: Revisions['reviseRuling'] };
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -132,7 +169,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    */
   readonly enrollmentSide: EnrollmentSide;
   /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
-  readonly log: Pick<Logger, 'info'>;
+  readonly log: Pick<Logger, 'info' | 'warn'>;
+  /**
+   * The kernel's idempotency, keyed on the administrator kind's transaction (`runOn`; B39, the notes
+   * under T059 and T064): `disputes.revise`, `sessions.review.revise` and `cases.openManual`.
+   */
+  readonly idempotency: IdempotencyService<Transaction>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -186,6 +228,84 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       settings: dependencies.settings,
       log: dependencies.log,
     }),
+    cases: {
+      ...createCaseQueue({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      ...createCaseClosing({
+        log: dependencies.log,
+        // T036: a suspended student's case closed; T028's offer writes its no-free-week warn line.
+        suspension: createSuspensionCase({
+          enrollments: dependencies.enrollmentSide,
+          offers: createRemedyOffer({
+            enrollments: dependencies.enrollmentSide,
+            settings: dependencies.settings,
+            log: dependencies.log,
+          }),
+          log: dependencies.log,
+        }),
+      }),
+      // T064: the manual case (R-326), keyed on the call's transaction.
+      ...createManualCase({
+        enrollments: dependencies.enrollmentSide,
+        idempotency: dependencies.idempotency,
+        log: dependencies.log,
+      }),
+    },
+    ...adminSessionServices(dependencies, standing),
+  };
+}
+
+/**
+ * T033 and T034 of specs/004-sessions: the review queue and the disputes queue, over one completion
+ * check and one telemetry reader; a `party_*` ruling's standing is the instance above (the owner's
+ * decision of 2026-11-11 on lane A's question: each lane its own composition lines).
+ */
+function adminSessionServices(
+  dependencies: AdminServiceDependencies,
+  standing: StandingService,
+): Pick<AdminServices, 'review' | 'disputes'> {
+  const completion = createCompletion({
+    enrollments: dependencies.enrollmentSide,
+    settings: dependencies.settings,
+  });
+  const telemetry = createTelemetryReader({ settings: dependencies.settings });
+  // T059: the revision and the correction, keyed through the shared idempotency.
+  const revisions = createRevisions({
+    enrollments: dependencies.enrollmentSide,
+    idempotency: dependencies.idempotency,
+    settings: dependencies.settings,
+    log: dependencies.log,
+  });
+  return {
+    review: {
+      ...createSessionReview({
+        enrollments: dependencies.enrollmentSide,
+        completion,
+        telemetry,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      revise: revisions.correctOutcome,
+    },
+    disputes: {
+      ...createDisputeQueue({
+        telemetry,
+        revisions,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      revise: revisions.reviseRuling,
+      ...createDisputeResolution({
+        enrollments: dependencies.enrollmentSide,
+        standing,
+        lockActiveHolds: lockActiveHoldsOf,
+        completion,
+        log: dependencies.log,
+      }),
+    },
   };
 }
 

@@ -28,21 +28,28 @@ model Dispute {
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   resolvedAt        DateTime?          @map("resolved_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  // On a closed `student_suspended` case only (ERD §15 rule 49): the case that owes the sessions
+  // its suspension cancelled (B39, the owner's decision (c) on PR #133's Major 1; ERD row 34).
+  coveredByCaseId   String?            @map("covered_by_case_id") @db.Uuid
 
   enrollment      Enrollment @relation(fields: [enrollmentId], references: [id])
   session         Session?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   raisedBy        User?      @relation(fields: [raisedByUserId], references: [id], onDelete: Restrict)
   resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
+  coveredBy       Dispute?   @relation("CaseCoveredBy", fields: [coveredByCaseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   // Phase 1 (T012, ADR 0018): the refund cases that point at this dispute.
   remedies      SessionRemedy[]
   // Phase 3 (T001): the session events that name this case, dispute or complaint.
   sessionEvents SessionEvent[]
+  // B39: the closed suspension cases whose sessions this case owes.
+  covering      Dispute[]      @relation("CaseCoveredBy")
 
   @@index([enrollmentId])
   @@index([sessionId])
   @@index([raisedByUserId])
   @@index([resolvedByAdminId])
+  @@index([coveredByCaseId])
   @@map("disputes")
 }
 

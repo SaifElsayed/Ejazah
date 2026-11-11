@@ -357,6 +357,10 @@ const adminServices = createAdminServices({
   // one `EnrollmentSide` above, and logs a completion and a refusal.
   enrollmentSide,
   log,
+  // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
+  // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,
+  // `sessions.review.revise` and `cases.openManual`.
+  idempotency,
   inviteQueue: {
     queue: async (adminId) => {
       await queue().add(DELIVER_ADMIN_INVITE, { adminId });

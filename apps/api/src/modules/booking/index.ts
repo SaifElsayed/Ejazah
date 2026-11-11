@@ -273,6 +273,13 @@ export {
  */
 export { heldFileOwnersAmong } from './held-files.service.js';
 /**
+ * T034 of specs/004-sessions (kernel.md's `party_*` row; the owner's decision of 2026-11-11 on
+ * lane A's questions, item 3): the account's active holds, the ones this subscriber releases,
+ * locked in one call, and the enrollments they were placed for; a dispute's `party_*` ruling takes
+ * them after the slots' keys and before the enrollments.
+ */
+export { type LockedHolds, lockActiveHoldsOf } from './termination.subscriber.js';
+/**
  * Each enrollment's session length (T048, ADR 0009 D2), for the time zone re-resolution job, on the
  * caller's transaction and with no lock.
  */

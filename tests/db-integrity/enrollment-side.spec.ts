@@ -246,10 +246,13 @@ describe('EnrollmentSide.lockEnrollments (T008, T005)', () => {
 describe('EnrollmentSide.enrollmentFor (T008, FR-424)', () => {
   it("answers the snapshot's track, zone, length and count, the slot and the status", async () => {
     const { enrollmentId } = await enrollmentIn('confirmed');
-    const { rows } = await db.query<{ slot_id: string }>(
-      'SELECT slot_id FROM enrollments WHERE id = $1',
-      [enrollmentId],
-    );
+    const { rows } = await db.query<{
+      slot_id: string;
+      student_user_id: string;
+      teacher_user_id: string;
+    }>('SELECT slot_id, student_user_id, teacher_user_id FROM enrollments WHERE id = $1', [
+      enrollmentId,
+    ]);
     await rolledBack(async (tx) => {
       expect(await side.enrollmentFor(tx, enrollmentId)).toEqual({
         id: enrollmentId,
@@ -259,6 +262,9 @@ describe('EnrollmentSide.enrollmentFor (T008, FR-424)', () => {
         timezone: 'Africa/Cairo',
         durationMinutes: 60,
         sessionCount: 4,
+        // T064 (its B34 note): the enrollment's two parties.
+        studentUserId: rows[0]?.student_user_id,
+        teacherUserId: rows[0]?.teacher_user_id,
       });
     });
   });

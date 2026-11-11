@@ -246,6 +246,31 @@ export function evaluateAttendance(
   };
 }
 
+/** Each party's connected time and the two together, as the telemetry shows them (T033). */
+export interface ConnectedIntervals {
+  readonly teacher: readonly Interval[];
+  readonly student: readonly Interval[];
+  readonly together: readonly Interval[];
+}
+
+/**
+ * T033 of specs/004-sessions (FR-477, FR-SESS-9; the owner's decision of 2026-11-11 on lane A's
+ * questions, item 2): the intervals the evaluation measures, for the administrator's telemetry. Each
+ * party's union of their connections (steps 1 and 2, the same spans `evaluateAttendance` reads), and
+ * the two together clipped to the scheduled window (step 4), whose measure is the evaluation's
+ * simultaneous seconds. Pure; the outages play no part.
+ */
+export function connectedIntervals(
+  events: readonly AttendanceEvent[],
+  window: Omit<AttendanceWindow, 'outages'>,
+): ConnectedIntervals {
+  const scheduled: Interval = { startsAt: window.startsAt, endsAt: window.endsAt };
+  const byUser = spansByUser(events, unixSeconds(window.endsAt));
+  const teacher = union((byUser.get(window.teacherUserId) ?? []).map(intervalOf));
+  const student = union((byUser.get(window.studentUserId) ?? []).map(intervalOf));
+  return { teacher, student, together: clip(intersect(teacher, student), scheduled) };
+}
+
 /** SRS §3.7.5's table, the outage first (FR-444). */
 function outcomeOf(
   outage: boolean,

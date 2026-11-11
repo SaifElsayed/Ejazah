@@ -46,6 +46,8 @@ const TERMS: EnrollmentTerms = {
   timezone: 'Africa/Cairo',
   durationMinutes: 60,
   sessionCount: 4,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
 };
 
 /** A Sunday in December, Cairo at +02:00: 09:00 local is 07:00Z. */

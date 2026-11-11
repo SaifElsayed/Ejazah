@@ -19,18 +19,50 @@ const CORRECTABLE_OUTCOMES: ReadonlySet<string> = new Set([
   'both_no_show',
 ]);
 
-/** Whether the session's outcome may be corrected at `now`. */
-export function isCorrectable(
-  session: {
-    readonly status: string;
-    readonly scheduledEndAt: Date;
-    readonly hasRemedy: boolean;
-    readonly everDisputed: boolean;
-  },
+/** A session as the correction decides on it. */
+export interface CorrectableSession {
+  readonly status: string;
+  readonly scheduledEndAt: Date;
+  readonly hasRemedy: boolean;
+  readonly everDisputed: boolean;
+}
+
+/**
+ * Why a correction is refused (T059): `CONFLICT` `not_settled` (`scheduled` or cancelled),
+ * `SESSION_UNDER_REVIEW`, `DISPUTE_OPEN`, `RULING_FINAL` (`window_closed` or `remedy_offered`),
+ * or `CONFLICT` `ruled` (a dispute of the session was resolved: `disputes.revise` revises it).
+ */
+export type CorrectionRefusal =
+  | { readonly code: 'CONFLICT'; readonly cause: 'not_settled' | 'ruled' }
+  | { readonly code: 'SESSION_UNDER_REVIEW' }
+  | { readonly code: 'DISPUTE_OPEN' }
+  | { readonly code: 'RULING_FINAL'; readonly cause: 'window_closed' | 'remedy_offered' };
+
+const UNDER_REVIEW: ReadonlySet<string> = new Set(['under_threshold', 'provider_outage']);
+
+/**
+ * T059 (B39's conflict check, F2): the correction's refusal at `now`, or null when it is admitted,
+ * in the note's order: what the session is (not settled, under review, disputed) before when (the
+ * window, then a remedy), and a ruling last, so a ruling past its window reads final.
+ */
+export function correctionRefusal(
+  session: CorrectableSession,
   { now, disputeWindowHours }: { readonly now: Date; readonly disputeWindowHours: number },
-): boolean {
-  if (!CORRECTABLE_OUTCOMES.has(session.status)) return false;
-  if (session.hasRemedy || session.everDisputed) return false;
+): CorrectionRefusal | null {
+  if (UNDER_REVIEW.has(session.status)) return { code: 'SESSION_UNDER_REVIEW' };
+  if (session.status === 'disputed') return { code: 'DISPUTE_OPEN' };
+  if (!CORRECTABLE_OUTCOMES.has(session.status)) return { code: 'CONFLICT', cause: 'not_settled' };
   const closesAt = new Date(addHours(session.scheduledEndAt, disputeWindowHours));
-  return now.getTime() < closesAt.getTime();
+  if (now.getTime() >= closesAt.getTime()) return { code: 'RULING_FINAL', cause: 'window_closed' };
+  if (session.hasRemedy) return { code: 'RULING_FINAL', cause: 'remedy_offered' };
+  if (session.everDisputed) return { code: 'CONFLICT', cause: 'ruled' };
+  return null;
+}
+
+/** Whether the session's outcome may be corrected at `now`: no refusal (`correctionRefusal`). */
+export function isCorrectable(
+  session: CorrectableSession,
+  window: { readonly now: Date; readonly disputeWindowHours: number },
+): boolean {
+  return correctionRefusal(session, window) === null;
 }
