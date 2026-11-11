@@ -108,6 +108,12 @@ import type {
   sessionsReviewListOutput,
   sessionsReviewResolveInput,
   sessionsReviewResolveOutput,
+  disputesGetInput,
+  disputesGetOutput,
+  disputesListInput,
+  disputesListOutput,
+  disputesResolveInput,
+  disputesResolveOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -531,6 +537,28 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof sessionsReviewResolveInput>,
     ): Answer<typeof sessionsReviewResolveOutput>;
+  };
+  /**
+   * The disputes queue and its resolution (FR-421, FR-474 to FR-476; T034 of specs/004-sessions),
+   * the sessions module's over moderation's rows, composed by the admin module with identity's
+   * standing for a `party_*` ruling.
+   */
+  readonly disputes: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesListInput>,
+    ): Answer<typeof disputesListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesGetInput>,
+    ): Answer<typeof disputesGetOutput>;
+    resolve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesResolveInput>,
+    ): Answer<typeof disputesResolveOutput>;
   };
 }
 

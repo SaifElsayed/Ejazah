@@ -10,9 +10,15 @@
 // the database holds it (rule 46, `disputes_one_open_per_session_key`), the caller's read under the
 // session's lock being the first line; a second open one is answered null, never a second row.
 //
-// A dispute carries no amount (R-MONEY-6): an administrator resolves it (T034), outside this file.
+// A dispute carries no amount (R-MONEY-6). An administrator resolves it (T034): sessions decides the
+// final outcome and orchestrates; `resolveSessionDispute` below closes this module's row only.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { insertSessionDispute, type NewSessionDispute } from './session-dispute.repository.js';
+import {
+  closeSessionDispute,
+  insertSessionDispute,
+  type NewSessionDispute,
+  type SessionDisputeRuling,
+} from './session-dispute.repository.js';
 
 /**
  * Opens the session's dispute, `open`, raised by the participant with their reason, on the caller's
@@ -24,4 +30,21 @@ export function openSessionDispute(
   dispute: NewSessionDispute,
 ): Promise<string | null> {
   return insertSessionDispute(tx, dispute);
+}
+
+/**
+ * T034 of specs/004-sessions/tasks.md (FR-422, FR-476; research R-308): the administrator's ruling
+ * on a session dispute, moderation's row only (sessions writes the session's outcome and its event
+ * on the same transaction, and orchestrates the call). One conditional update `WHERE status =
+ * 'open'` writes `resolved`, the resolution, the mandatory reason as `resolution_notes`, the
+ * administrator and `resolved_at`, the database's clock the caller read under its locks; whether it
+ * closed the dispute. The caller holds the dispute's lock (`lockDispute`) and read it open under it,
+ * so a false is a broken invariant for it to throw. `compensation_ordered` records the decision only:
+ * no amount is read or written here (FR-DISPUTE-6, R-MONEY-6).
+ */
+export function resolveSessionDispute(
+  tx: Transaction,
+  ruling: SessionDisputeRuling,
+): Promise<boolean> {
+  return closeSessionDispute(tx, ruling);
 }

@@ -7,6 +7,7 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
+import { lockActiveHoldsOf } from '../booking/index.js';
 import {
   createCredentialReviewService,
   type CredentialReviewService,
@@ -22,11 +23,15 @@ import {
 import { createPaymentsMonitorService } from '../payments/index.js';
 import {
   createCompletion,
+  createDisputeQueue,
+  createDisputeResolution,
   createOutageServices,
   createSessionCancel,
   createSessionReview,
   createSessionsMonitor,
   createTelemetryReader,
+  type DisputeQueue,
+  type DisputeResolution,
   type EnrollmentSide,
   type OutageServices,
   type SessionCancel,
@@ -120,6 +125,12 @@ export interface AdminServices {
    * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
    */
   readonly review: SessionReview;
+  /**
+   * The sessions module's disputes queue and ruling, composed here for the surface (T034 of
+   * specs/004-sessions, FR-474 to FR-476): with this module's `StandingService` for a `party_*`
+   * ruling and booking's `lockActiveHoldsOf` for the party's holds (kernel.md's `party_*` row).
+   */
+  readonly disputes: DisputeQueue & DisputeResolution;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -194,17 +205,19 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       settings: dependencies.settings,
       log: dependencies.log,
     }),
-    ...adminSessionServices(dependencies),
+    ...adminSessionServices(dependencies, standing),
   };
 }
 
 /**
- * T033 of specs/004-sessions: the review queue, over one completion check and one telemetry reader
- * (the owner's decision of 2026-11-11 on lane A's question: each lane its own composition lines).
+ * T033 and T034 of specs/004-sessions: the review queue and the disputes queue, over one completion
+ * check and one telemetry reader; a `party_*` ruling's standing is the instance above (the owner's
+ * decision of 2026-11-11 on lane A's question: each lane its own composition lines).
  */
 function adminSessionServices(
   dependencies: AdminServiceDependencies,
-): Pick<AdminServices, 'review'> {
+  standing: StandingService,
+): Pick<AdminServices, 'review' | 'disputes'> {
   const completion = createCompletion({
     enrollments: dependencies.enrollmentSide,
     settings: dependencies.settings,
@@ -218,6 +231,16 @@ function adminSessionServices(
       settings: dependencies.settings,
       log: dependencies.log,
     }),
+    disputes: {
+      ...createDisputeQueue({ telemetry, settings: dependencies.settings, log: dependencies.log }),
+      ...createDisputeResolution({
+        enrollments: dependencies.enrollmentSide,
+        standing,
+        lockActiveHolds: lockActiveHoldsOf,
+        completion,
+        log: dependencies.log,
+      }),
+    },
   };
 }
 

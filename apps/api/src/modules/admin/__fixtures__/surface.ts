@@ -100,8 +100,9 @@ export function surfaceOf(
     // The sessions module's cancellation and monitor have their own router spec (the same file).
     sessionCancel: unusedAdminServices.sessionCancel,
     monitor: unusedAdminServices.monitor,
-    // The review queue has its own router spec (T033).
+    // The review queue and the disputes queue have their own router specs (T033, T034).
     review: unusedAdminServices.review,
+    disputes: unusedAdminServices.disputes,
   };
   const administration = {
     transactions: transactionsOver(database),

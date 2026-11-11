@@ -424,3 +424,26 @@ export {
   type AdminOutcomeWrite,
   writeAdminOutcome,
 } from './admin-outcome.service.js';
+/**
+ * T034 of specs/004-sessions (FR-421, FR-474 to FR-476; research R-308): the administrator's
+ * disputes queue (`disputes.list/get`) and its resolution (`disputes.resolve`), composed into the
+ * administrator surface's services, with the standing moves a `party_*` ruling calls handed in
+ * (`DisputeStanding`, identity's `StandingService`); and the router `admin.router.ts` mounts at
+ * `disputes`.
+ */
+export {
+  createDisputeQueue,
+  type DisputeQueue,
+  type DisputeQueueStore,
+  disputeQueueStore,
+} from './dispute-queue.service.js';
+export {
+  createDisputeResolution,
+  type DisputeResolution,
+  type DisputeResolutionStore,
+  disputeResolutionStore,
+  type DisputeStanding,
+  type LockActiveHolds,
+  type LockedHolds,
+} from './dispute-resolution.service.js';
+export { disputesAdminRouter } from './disputes-admin.router.js';

@@ -5,8 +5,13 @@
 //
 // No lock here: the caller holds the raiser's `users` row, the enrollment and the session (kernel.md,
 // the «dispute raised» row) before the insert, whose foreign keys reference the three.
+//
+// T034: the administrator's resolution takes the dispute's own row lock here (`lockDispute`), last
+// in the one order, after the caller's enrollments, sessions and remedies; the closing is one
+// conditional update `WHERE status = 'open'`.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { isUniqueViolation } from '../../platform/db/db-errors.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 type Client = Pick<Transaction, 'dispute'>;
 
@@ -68,4 +73,142 @@ export async function latestSessionDisputesOf(
     latest.set(sessionId, { disputeId: id, status, raisedByUserId });
   }
   return latest;
+}
+
+// ---------------------------------------------------------------------------------------------
+// T034 of specs/004-sessions/tasks.md (FR-474, FR-475, FR-476, FR-422; research R-308;
+// contracts/kernel.md, «evaluation, a review or dispute resolution» and the `party_*` row): the
+// administrator's reads of a session dispute, its row lock and its one closing update.
+// ---------------------------------------------------------------------------------------------
+
+/** A session dispute's resolution (R-308); `enrollment_ended` is a complaint's only. */
+export type SessionDisputeResolution =
+  | 'upheld'
+  | 're_marked'
+  | 'no_show_recorded'
+  | 'compensation_ordered'
+  | 'party_suspended'
+  | 'party_banned';
+
+/** A session dispute as the administrator reads it. */
+export interface SessionDisputeRow {
+  readonly id: string;
+  readonly enrollmentId: string;
+  readonly sessionId: string;
+  readonly raisedByUserId: string | null;
+  readonly reason: string;
+  readonly status: 'open' | 'resolved' | 'dismissed';
+  readonly createdAt: Date;
+  readonly resolution: SessionDisputeResolution | null;
+  readonly resolutionNotes: string | null;
+  readonly resolvedAt: Date | null;
+}
+
+interface SelectedDispute extends Omit<SessionDisputeRow, 'sessionId' | 'resolution'> {
+  readonly sessionId: string | null;
+  readonly resolution: SessionDisputeRow['resolution'] | 'enrollment_ended';
+}
+
+/** A selected row as a session dispute: its session set (rule 46) and no complaint's resolution. */
+function disputeRowOf(row: SelectedDispute): SessionDisputeRow {
+  if (row.sessionId === null || row.resolution === 'enrollment_ended') {
+    throw new Error('moderation: a session dispute broke rule 46');
+  }
+  return { ...row, sessionId: row.sessionId, resolution: row.resolution };
+}
+
+/** The session dispute, with no lock; null when there is none of that kind. */
+export async function sessionDisputeOf(
+  tx: Client,
+  disputeId: string,
+): Promise<SessionDisputeRow | null> {
+  const row = await tx.dispute.findFirst({
+    where: { id: disputeId, kind: 'session_dispute' },
+    select: {
+      id: true,
+      enrollmentId: true,
+      sessionId: true,
+      raisedByUserId: true,
+      reason: true,
+      status: true,
+      createdAt: true,
+      resolution: true,
+      resolutionNotes: true,
+      resolvedAt: true,
+    },
+  });
+  return row === null ? null : disputeRowOf(row);
+}
+
+/**
+ * A page of session disputes with no lock: the open ones oldest first after `after`, or the closed
+ * ones newest first before `after`; at most `limit`. Over the primary key, filtered by kind and
+ * status, which no index covers (R-DB-9: none added before a measured slow query).
+ */
+export async function sessionDisputesPage(
+  tx: Client,
+  group: 'open' | 'closed',
+  after: string | undefined,
+  limit: number,
+): Promise<readonly SessionDisputeRow[]> {
+  const open = group === 'open';
+  const rows = await tx.dispute.findMany({
+    where: {
+      kind: 'session_dispute',
+      status: open ? 'open' : { in: ['resolved', 'dismissed'] },
+      ...(after === undefined ? {} : { id: open ? { gt: after } : { lt: after } }),
+    },
+    orderBy: { id: open ? 'asc' : 'desc' },
+    take: limit,
+    select: {
+      id: true,
+      enrollmentId: true,
+      sessionId: true,
+      raisedByUserId: true,
+      reason: true,
+      status: true,
+      createdAt: true,
+      resolution: true,
+      resolutionNotes: true,
+      resolvedAt: true,
+    },
+  });
+  return rows.map(disputeRowOf);
+}
+
+/** Locks the dispute's row `FOR UPDATE` (kernel.md: `disputes` after the sessions and remedies). */
+export async function lockDispute(tx: Transaction, disputeId: string): Promise<void> {
+  await lockRows(tx, 'disputes', [disputeId]);
+}
+
+/** A session dispute's closing, as the administrator rules it (FR-422, FR-476). */
+export interface SessionDisputeRuling {
+  readonly disputeId: string;
+  readonly resolution: SessionDisputeResolution;
+  /** The administrator's mandatory reason, `resolution_notes`. */
+  readonly notes: string;
+  readonly adminId: string;
+  /** The database's clock (`clockTimestamp`), read under the caller's locks. */
+  readonly resolvedAt: Date;
+}
+
+/**
+ * Closes the session dispute `resolved` where it is still open, writing the resolution, its notes,
+ * the administrator and the instant in one conditional update; whether it moved the row.
+ */
+export async function closeSessionDispute(
+  tx: Client,
+  { disputeId, resolution, notes, adminId, resolvedAt }: SessionDisputeRuling,
+): Promise<boolean> {
+  const { count } = await tx.dispute.updateMany({
+    where: { id: disputeId, kind: 'session_dispute', status: 'open' },
+    data: {
+      status: 'resolved',
+      resolution,
+      resolutionNotes: notes,
+      resolvedByAdminId: adminId,
+      resolvedAt,
+    },
+  });
+  return count === 1;
 }

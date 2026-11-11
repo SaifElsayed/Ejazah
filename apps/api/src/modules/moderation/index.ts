@@ -61,3 +61,19 @@ export {
   type EnrollmentCase,
   sessionsEverDisputedAmong,
 } from './compensation-case.repository.js';
+
+/**
+ * T034 of specs/004-sessions (FR-474 to FR-476, FR-422; research R-308): the administrator's
+ * disputes queue's reads of session disputes, with no lock; the dispute's row lock, last in the one
+ * order; and the ruling, moderation's row only (`resolveSessionDispute`, one conditional update
+ * `WHERE status = 'open'`), which sessions' resolution calls on its transaction.
+ */
+export { resolveSessionDispute } from './session-dispute.service.js';
+export {
+  lockDispute,
+  type SessionDisputeResolution,
+  type SessionDisputeRow,
+  type SessionDisputeRuling,
+  sessionDisputeOf,
+  sessionDisputesPage,
+} from './session-dispute.repository.js';
