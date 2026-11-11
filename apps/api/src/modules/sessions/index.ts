@@ -498,3 +498,29 @@ export {
   type RevisionStore,
   revisionStore,
 } from './revision.service.js';
+/**
+ * T040 of specs/004-sessions (spec FR-487; research R-327, «The administrator's read»): the reads
+ * inside an open matter (`disputes.heldFiles`, `disputes.heldFileLink`), composed into the
+ * administrator surface's services; and the `DisputeHeldFiles` port `main.ts` binds to
+ * verification's `createDisputeHeldFiles()`, so sessions imports no verification (R-301).
+ * The `DisputeChat` port (FR-475, R-314) `main.ts` binds to chat's `createDisputeChat()` for
+ * `disputes.chat`, so sessions imports no chat (R-301, C5).
+ */
+export {
+  createDisputeMatterReads,
+  type DisputeMatterDependencies,
+  type DisputeMatterReads,
+  type DisputeMatterStore,
+  disputeMatterStore,
+} from './dispute-matter.service.js';
+export type {
+  DisputeHeldFiles,
+  HeldFile,
+  HeldFileKind,
+  HeldFileLink,
+} from './dispute-held-files.port.js';
+export type {
+  DisputeChat,
+  DisputeChatMessage,
+  DisputeChatPage,
+} from './dispute-chat.port.js';

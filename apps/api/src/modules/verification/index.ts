@@ -202,3 +202,14 @@ export function createEncryptedColumns(
 ): readonly EncryptedColumn[] {
   return [new VerificationRepository(database).documentStorageKeys()];
 }
+
+/**
+ * T040 of specs/004-sessions (spec FR-487; research R-327, «The administrator's read»): the binding
+ * of sessions' `DisputeHeldFiles` port, which `main.ts` hands the administrator's services: a
+ * deleted party's held documents and photo, read only inside an open matter.
+ */
+export {
+  createDisputeHeldFiles,
+  type DisputeHeldFilesDependencies,
+  type HeldFilesStore,
+} from './dispute-held-files.js';

@@ -83,6 +83,17 @@ function surface() {
       revise: async () => {
         throw new Error('revise is not reached here');
       },
+      // T040's three reads have their own specs (`disputes-held-files.router.spec.ts`,
+      // `disputes-chat.router.spec.ts`).
+      heldFiles: async () => {
+        throw new Error('heldFiles is not reached here');
+      },
+      heldFileLink: async () => {
+        throw new Error('heldFileLink is not reached here');
+      },
+      chat: async () => {
+        throw new Error('chat is not reached here');
+      },
       list: async (_tx, adminId, input) => {
         reached.push(['list', adminId, input]);
         return PAGE;

@@ -18,9 +18,23 @@
 // (`IdempotencyService.runOn`, the note under T059), and audits `dispute.revised` on the dispute
 // with the reason on its first run only: a replay records no entry (`ctx.audit.replayed()`), the
 // first call's being the record. What it does is `revision.service.ts`'.
+//
+// T040 (spec FR-487, FR-480; research R-327, «The administrator's read»): `disputes.heldFiles` audits
+// `dispute.held_files_listed` on the dispute, one entry per list; `disputes.heldFileLink` audits
+// `held_file.view` on the dispute with the `fileRef` in `after`, one entry per press, as
+// `documents.link` records `document.view`. The list's output schema names a file by its reference
+// only, so neither a link nor a storage key leaves it. What each does is `dispute-matter.service.ts`'.
+// `disputes.chat` audits `chat.read` on the dispute's enrollment, one entry per page read; its output
+// schema names each sender by its role only (R-314).
 import {
+  disputesChatInput,
+  disputesChatOutput,
   disputesGetInput,
   disputesGetOutput,
+  disputesHeldFileLinkInput,
+  disputesHeldFileLinkOutput,
+  disputesHeldFilesInput,
+  disputesHeldFilesOutput,
   disputesListInput,
   disputesListOutput,
   disputesResolveInput,
@@ -99,4 +113,45 @@ export const disputesAdminRouter = createAdminRouter({
     }
     return outcome;
   }),
+
+  // T040: a deleted party's held files, inside the open matter only.
+  heldFiles: adminProcedure({
+    input: disputesHeldFilesInput,
+    output: disputesHeldFilesOutput,
+  }).query(async ({ ctx, input }) => {
+    const listed = await ctx.services.disputes.heldFiles(ctx.tx, ctx.administrator.adminId, input);
+    ctx.audit.record({
+      action: 'dispute.held_files_listed',
+      targetType: 'dispute',
+      targetId: input.disputeId,
+    });
+    return listed;
+  }),
+
+  heldFileLink: adminProcedure({
+    input: disputesHeldFileLinkInput,
+    output: disputesHeldFileLinkOutput,
+  }).mutation(async ({ ctx, input }) => {
+    const link = await ctx.services.disputes.heldFileLink(ctx.tx, ctx.administrator.adminId, input);
+    ctx.audit.record({
+      action: 'held_file.view',
+      targetType: 'dispute',
+      targetId: input.disputeId,
+      after: { fileRef: input.fileRef },
+    });
+    return link;
+  }),
+
+  // T040: the enrollment's chat, inside the open matter only.
+  chat: adminProcedure({ input: disputesChatInput, output: disputesChatOutput }).query(
+    async ({ ctx, input }) => {
+      const { enrollmentId, page } = await ctx.services.disputes.chat(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      ctx.audit.record({ action: 'chat.read', targetType: 'enrollment', targetId: enrollmentId });
+      return page;
+    },
+  ),
 });
