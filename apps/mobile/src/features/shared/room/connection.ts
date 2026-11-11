@@ -23,6 +23,12 @@
 // before Android's prompts, and stopped with the share. One share starts at a time, stopping it is
 // bounded as leaving is (PR #130's review, round 1), and none starts while one stops (round 2).
 // Nothing here outlives the screen.
+//
+// B40a, T019's follow-up (b): a first join refused `JOIN_NOT_OPEN` (the phone's clock ahead of the
+// server's) says when joining opens and asks `sessions.join` again on the same schedule as a lost
+// room (`rejoin.ts`, no new constant), until it joins, a final refusal, or the scheduled end
+// (`sessions.get`'s `endsAt`, which the screen hands in); a try with no answer is tried again.
+// T065: a first join that failed keeps its error, so the screen can say `RATE_LIMITED`'s time.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import type { TrackReference } from '@livekit/react-native';
@@ -52,8 +58,8 @@ export type RoomPhase =
   | { readonly kind: 'refused' }
   /** The same account joined from another device: no automatic try; the room can be taken back. */
   | { readonly kind: 'anotherDevice' }
-  /** The first join had no answer; the participant may try again. */
-  | { readonly kind: 'failed' }
+  /** The first join had no answer; the participant may try again. `error`: what refused it (T065). */
+  | { readonly kind: 'failed'; readonly error?: unknown }
   /** The room was lost and the scheduled end came before it could be joined again. */
   | { readonly kind: 'ended' };
 
@@ -103,8 +109,11 @@ function settled(work: Promise<unknown>): Promise<void> {
   });
 }
 
-/** Who asked for a join: the screen opening, the schedule after a loss, or the participant's press. */
-type AttemptMode = 'first' | 'again' | 'takeBack';
+/**
+ * Who asked for a join: the screen opening, the schedule after a loss, the participant's press, or
+ * the schedule after `JOIN_NOT_OPEN` (follow-up (b)).
+ */
+type AttemptMode = 'first' | 'again' | 'takeBack' | 'notOpen';
 
 export class RoomConnection {
   phase: RoomPhase = { kind: 'connecting' };
@@ -131,6 +140,8 @@ export class RoomConnection {
   constructor(
     private readonly join: () => Promise<SessionsJoinOutput>,
     private readonly changed: () => void,
+    /** The session's scheduled end (`sessions.get`'s `endsAt`), when the screen has read it. */
+    private readonly scheduledEnd: () => string | undefined = () => undefined,
   ) {}
 
   /** Starts the audio session, then the first join. */
@@ -346,19 +357,44 @@ export class RoomConnection {
     const code = errorCodeOf(error);
     if (isFinalRefusal(code)) {
       this.set({ kind: 'refused' });
-    } else if (mode === 'first' && code === 'JOIN_NOT_OPEN') {
+    } else if ((mode === 'first' || mode === 'notOpen') && code === 'JOIN_NOT_OPEN') {
       const opensAt = errorDetailsOf(error).find((detail) => detail.path === 'opensAt')?.code;
       this.set({ kind: 'notOpen', opensAt });
+      this.notOpenAgain();
+    } else if (mode === 'notOpen') {
+      this.notOpenAgain();
     } else {
-      this.notJoined(mode);
+      this.notJoined(mode, error);
     }
   }
 
   /** A try that did not reach the room: what follows depends on who asked for it. */
-  private notJoined(mode: AttemptMode): void {
-    if (mode === 'first') this.set({ kind: 'failed' });
+  private notJoined(mode: AttemptMode, error?: unknown): void {
+    if (mode === 'first' || mode === 'notOpen') this.set({ kind: 'failed', error });
     else if (mode === 'takeBack') this.offerTakeBack();
     else this.again();
+  }
+
+  /**
+   * Follow-up (b): the next try after `JOIN_NOT_OPEN` on `rejoin.ts`' schedule, or none once the
+   * scheduled end comes first, when the session is shown ended.
+   */
+  private notOpenAgain(): void {
+    const delay = rejoinDelayMs(this.failures);
+    this.failures += 1;
+    const end = this.endsAt ?? this.scheduledEnd();
+    const left = end === undefined ? undefined : secondsUntil(end, new Date()) * MS_PER_SECOND;
+    if (left !== undefined && left <= delay) {
+      this.timer = setTimeout(() => {
+        this.timer = undefined;
+        this.set({ kind: 'ended' });
+      }, left);
+      return;
+    }
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.attempt('notOpen');
+    }, delay);
   }
 
   private listen(room: Room): void {
