@@ -421,14 +421,19 @@ describe('the channel at the root (T065): signed in and `active`', () => {
   });
 
   it('stays closed while signed out, and while the app is in the background', async () => {
-    appState('background');
+    // Signed out with the app in the foreground: each condition is tried on its own.
+    appState('active');
     const api = clientWithChannel();
     const queries = new QueryClient();
-    const hook = await renderHook(() => useLiveChannel(api.client as never, queries));
+    const signedOut = await renderHook(() => useLiveChannel(api.client as never, queries));
     expect(api.subscribe).not.toHaveBeenCalled();
+    await signedOut.unmount();
+
+    Object.assign(AppState, { currentState: 'background' });
     await signIn();
+    const background = await renderHook(() => useLiveChannel(api.client as never, queries));
     expect(api.subscribe).not.toHaveBeenCalled();
-    await hook.unmount();
+    await background.unmount();
   });
 
   it('on UNAUTHENTICATED reads account.me once through the client, then reopens', async () => {
