@@ -16,7 +16,10 @@
 // and its parties through `EnrollmentSide` (sessions reads no booking table, R-301), and what it
 // covers (R-312, R-313), each session once, by sequence number:
 //   - the sessions whose remedy the case holds (`session_remedies.case_id`);
-//   - the sessions whose `cancelled_by_admin` event names it (`session_events.case_id`, C4);
+//   - the sessions whose `cancelled_by_admin` event names it (`session_events.case_id`, C4), but
+//     for a `dismissed` `student_suspended` case only its ordinary ones, owed nothing: the make-ups
+//     it cancelled are owed under the fault case (T036; the owner's decision of 2026-11-11 on lane
+//     B's questions, item 2, (c));
 //   - for the case an enrollment's end opened (`absence_termination`, `teacher_ended`,
 //     `student_banned`, `student_fault_confirmed`): every session of the enrollment owed a remedy
 //     never offered (`teacher_no_show`, `both_no_show`, `cancelled_by_agreement` with no remedy row;
@@ -63,6 +66,7 @@ import {
 } from '../moderation/index.js';
 import {
   type CoveredSessionRow,
+  type MakeupFilter,
   owedNeverOfferedOf,
   sessionsCancelledByCases,
   sessionsOfCaseRemedies,
@@ -102,7 +106,7 @@ export interface CaseQueueStore {
   sessionsCancelledByCases(
     tx: Transaction,
     caseIds: readonly string[],
-    options: { readonly makeupsOnly: boolean },
+    options: { readonly makeups: MakeupFilter },
   ): Promise<readonly CoveredSessionRow[]>;
   owedNeverOfferedOf(tx: Transaction, enrollmentId: string): Promise<readonly CoveredSessionRow[]>;
 }
@@ -262,15 +266,23 @@ export function createCaseQueue({
             .toSorted((one, other) => one.resolvedAt!.getTime() - other.resolvedAt!.getTime())
             .at(0)
         : undefined;
+    // A dismissed suspension case keeps the ordinary sessions it cancelled, owed nothing, and
+    // leaves out the make-ups, owed under the fault case (T036; the owner's decision of 2026-11-11
+    // on lane B's questions, item 2, (c)).
+    const faultConfirmed =
+      record.kind === 'compensation_case' &&
+      record.reason === 'student_suspended' &&
+      record.status === 'dismissed';
     const parts = await Promise.all([
       store.sessionsOfCaseRemedies(tx, record.caseId),
-      store.sessionsCancelledByCases(tx, [record.caseId, ...resolvedAfterTheEnd], {
-        makeupsOnly: false,
+      store.sessionsCancelledByCases(tx, [record.caseId], {
+        makeups: faultConfirmed ? 'none' : 'any',
       }),
+      store.sessionsCancelledByCases(tx, resolvedAfterTheEnd, { makeups: 'any' }),
       ends ? store.owedNeverOfferedOf(tx, record.enrollmentId) : [],
       dismissedHere === undefined
         ? []
-        : store.sessionsCancelledByCases(tx, [dismissedHere.caseId], { makeupsOnly: true }),
+        : store.sessionsCancelledByCases(tx, [dismissedHere.caseId], { makeups: 'only' }),
     ]);
     const bySession = new Map<string, CoveredSessionRow>();
     for (const row of parts.flat()) {

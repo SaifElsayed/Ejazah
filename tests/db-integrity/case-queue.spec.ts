@@ -319,9 +319,11 @@ describe('cases.get: each part of covers (R-312, R-313; C1, I1, U1, U2)', () => 
     // The ordinary Teacher-No-Show is owed and never offered: covered too, by the end's rule (C1).
     const answer = await getCase(fault);
     expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([ordinary, makeup]);
-    // The dismissed case itself covers the two its suspension cancelled, and no more.
+    // T036 (the owner's decision of 2026-11-11 on lane B's questions, item 2, (c)): the dismissed
+    // case keeps the ordinary session its suspension cancelled, owed nothing, and leaves out the
+    // make-up, owed under the fault case.
     const dismissed = await getCase(suspended);
-    expect(dismissed.covers.map(({ sessionId }) => sessionId)).toEqual([cancelledOrdinary, makeup]);
+    expect(dismissed.covers.map(({ sessionId }) => sessionId)).toEqual([cancelledOrdinary]);
   });
 
   it('the first end’s case covers what a suspension case open at the end, resolved after it, cancelled (U2), and not one resolved before', async () => {

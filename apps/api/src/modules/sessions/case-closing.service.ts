@@ -12,6 +12,11 @@
 // decides (R-322). CONFLICT with `details.cause` `not_open` for a case no longer open: the
 // conditional update changed no row (the note under T035, Q2).
 //
+// A SUSPENDED STUDENT'S CASE (T036). A `student_suspended` case is handed to the suspension service
+// (`suspension-case.service.ts`): `cases.resolve` is the student cleared, its sessions offered,
+// and `cases.dismiss` the fault confirmed, an enrollment's end; that service takes its own row's
+// locks, refuses its own causes and closes the case through `closeCase` itself.
+//
 // NO COMPLETION CHECK (the note under T035, F9). Closing a case that holds an enrollment's
 // completion (`student_suspended`, `admin_cancellation`) releases the hold, and `advance-remedies`'
 // completion step completes the enrollment on its next run, within a minute.
@@ -23,6 +28,7 @@ import { DomainError, type ErrorCode, type FieldIssue } from '../../platform/err
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { type CaseClosing, closeCase, type CaseRecord, caseRecordOf } from '../moderation/index.js';
+import type { SuspensionCase } from './suspension-case.service.js';
 
 /** What the closing reads and writes, each through moderation's entry; faked in a spec. */
 export interface CaseClosingStore {
@@ -84,9 +90,12 @@ function refusal(
 
 export function createCaseClosing({
   log,
+  suspension,
   store = caseClosingStore,
 }: {
   readonly log: Pick<Logger, 'info'>;
+  /** T036: a `student_suspended` case's two closings, with their effect. */
+  readonly suspension: Pick<SuspensionCase, 'clear' | 'confirmFault'>;
   readonly store?: CaseClosingStore;
 }): CaseClosingService {
   /** The compensation case, or the refusal of anything else (this file's head). */
@@ -121,6 +130,10 @@ export function createCaseClosing({
   return {
     resolve: async (tx, adminId, { caseId, note }) => {
       const found = await compensationCase(tx, adminId, caseId);
+      if (found.reason === 'student_suspended') {
+        await suspension.clear(tx, adminId, { caseId, enrollmentId: found.enrollmentId }, note);
+        return { caseId, status: 'resolved' };
+      }
       await close(tx, found, {
         status: 'resolved',
         resolution: 'compensation_ordered',
@@ -132,6 +145,10 @@ export function createCaseClosing({
 
     dismiss: async (tx, adminId, { caseId, note }) => {
       const found = await compensationCase(tx, adminId, caseId);
+      if (found.reason === 'student_suspended') {
+        await suspension.confirmFault(tx, adminId, { caseId, enrollmentId: found.enrollmentId }, note);
+        return { caseId, status: 'dismissed' };
+      }
       await close(tx, found, { status: 'dismissed', resolution: null, note, adminId });
       return { caseId, status: 'dismissed' };
     },

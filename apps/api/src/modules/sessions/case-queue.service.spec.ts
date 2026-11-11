@@ -124,7 +124,8 @@ function queueOver(world: World) {
       reads.push(['cancelledBy', caseIds, options]);
       return caseIds.flatMap((caseId) =>
         (world.cancelledBy?.[caseId] ?? []).filter(
-          (row) => !options.makeupsOnly || row.sequenceNumber > 100,
+          (row) =>
+            options.makeups === 'any' || (options.makeups === 'only') === row.sequenceNumber > 100,
         ),
       );
     },
@@ -376,6 +377,22 @@ describe('cases.get (FR-478; R-312, R-313)', () => {
     const answer = await queue.get(tx, ADMIN, { caseId: CASE });
     expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(105)]);
   });
+
+  it.each([
+    ['dismissed', [id(1)]],
+    ['resolved', [id(1), id(105)]],
+    ['open', [id(1), id(105)]],
+  ] as const)(
+    'a suspension case %s covers what it cancelled, a dismissed one leaving out the make-ups (T036, (c))',
+    async (status, expected) => {
+      const { queue } = queueOver({
+        records: { [CASE]: record({ reason: 'student_suspended', status }) },
+        cancelledBy: { [CASE]: [covered(1), covered(105)] },
+      });
+      const answer = await queue.get(tx, ADMIN, { caseId: CASE });
+      expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual(expected);
+    },
+  );
 
   it('the case an enrollment’s end opened covers what a suspension case open at the end, later resolved, cancelled (U2)', async () => {
     const resolvedLater = id(511);

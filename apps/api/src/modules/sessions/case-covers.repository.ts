@@ -57,21 +57,25 @@ export async function sessionsOfCaseRemedies(
   return rows.map(coveredRow);
 }
 
+/** Which of the cancelled sessions a read keeps: the make-ups only, none of them, or any. */
+export type MakeupFilter = 'only' | 'none' | 'any';
+
 /**
- * The sessions whose `cancelled_by_admin` event names one of `caseIds` (C4), only the make-ups
- * (`makeup_for_session_id` set) when `makeupsOnly`.
+ * The sessions whose `cancelled_by_admin` event names one of `caseIds` (C4), the make-ups
+ * (`makeup_for_session_id` set) kept as `makeups` says.
  */
 export async function sessionsCancelledByCases(
   tx: Client,
   caseIds: readonly string[],
-  { makeupsOnly }: { readonly makeupsOnly: boolean },
+  { makeups }: { readonly makeups: MakeupFilter },
 ): Promise<CoveredSessionRow[]> {
   if (caseIds.length === 0) return [];
   const rows = await tx.session.findMany({
     where: {
       deletedAt: null,
       events: { some: { kind: 'cancelled_by_admin', caseId: { in: [...caseIds] } } },
-      ...(makeupsOnly ? { makeupForSessionId: { not: null } } : {}),
+      ...(makeups === 'only' ? { makeupForSessionId: { not: null } } : {}),
+      ...(makeups === 'none' ? { makeupForSessionId: null } : {}),
     },
     orderBy: { sequenceNumber: 'asc' },
     select: {

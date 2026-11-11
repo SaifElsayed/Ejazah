@@ -416,3 +416,13 @@ export {
   createCaseClosing,
 } from './case-closing.service.js';
 export { casesAdminRouter } from './cases-admin.router.js';
+/**
+ * T036 (FR-486; research R-313): a suspended student's case closed, cleared (its sessions offered)
+ * or the fault confirmed (an enrollment's end), which T035's `cases.resolve` and `cases.dismiss`
+ * hand a `student_suspended` case to.
+ */
+export {
+  createSuspensionCase,
+  type SuspensionCase,
+  type SuspensionCaseTarget,
+} from './suspension-case.service.js';

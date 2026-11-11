@@ -27,8 +27,10 @@ import {
   createCaseQueue,
   createCompletion,
   createOutageServices,
+  createRemedyOffer,
   createSessionCancel,
   createSessionsMonitor,
+  createSuspensionCase,
   type EnrollmentSide,
   type OutageServices,
   type SessionCancel,
@@ -142,7 +144,7 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    */
   readonly enrollmentSide: EnrollmentSide;
   /** The process's logger: the outage record's lines, «Enrollment completed» included (T016, T015). */
-  readonly log: Pick<Logger, 'info'>;
+  readonly log: Pick<Logger, 'info' | 'warn'>;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -202,7 +204,19 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
         settings: dependencies.settings,
         log: dependencies.log,
       }),
-      ...createCaseClosing({ log: dependencies.log }),
+      ...createCaseClosing({
+        log: dependencies.log,
+        // T036: a suspended student's case closed; T028's offer writes its no-free-week warn line.
+        suspension: createSuspensionCase({
+          enrollments: dependencies.enrollmentSide,
+          offers: createRemedyOffer({
+            enrollments: dependencies.enrollmentSide,
+            settings: dependencies.settings,
+            log: dependencies.log,
+          }),
+          log: dependencies.log,
+        }),
+      }),
     },
   };
 }

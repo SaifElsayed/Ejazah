@@ -10,7 +10,10 @@
 //     `cases.decideComplaint` alone decides (R-322); refused CONFLICT with `details.cause`
 //     `not_open` when the case is no longer open (`closeCase` answering null; the note under T035,
 //     Q2); each refusal logged once with ids and its reason, marked «logged»;
-//   - no completion check (the note under T035, F9).
+//   - no completion check (the note under T035, F9);
+//   - T036: a `student_suspended` case is handed to the suspension service, `cases.resolve` as the
+//     student cleared and `cases.dismiss` as the fault confirmed, which close it themselves
+//     (`suspension-case.service.spec.ts`); no other reason reaches it.
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -42,6 +45,7 @@ function record(overrides: Partial<CaseRecord> = {}): CaseRecord {
 
 function closingOver(found: CaseRecord | null, closes = true) {
   const closings: [string, CaseClosing][] = [];
+  const handed: unknown[][] = [];
   const lines: unknown[] = [];
   const store: CaseClosingStore = {
     caseRecordOf: async () => found,
@@ -51,7 +55,13 @@ function closingOver(found: CaseRecord | null, closes = true) {
     },
   };
   const log = { info: (fields: unknown) => lines.push(fields) };
-  return { closing: createCaseClosing({ log, store }), closings, lines };
+  const suspension = {
+    clear: async (_tx: Transaction, adminId: string, target: unknown, note: string) =>
+      void handed.push(['clear', adminId, target, note]),
+    confirmFault: async (_tx: Transaction, adminId: string, target: unknown, note: string) =>
+      void handed.push(['confirmFault', adminId, target, note]),
+  };
+  return { closing: createCaseClosing({ log, suspension, store }), closings, lines, handed };
 }
 
 async function refusalOf(call: Promise<unknown>): Promise<DomainError> {
@@ -88,6 +98,28 @@ describe('cases.resolve and cases.dismiss close a compensation case (FR-422)', (
     expect(closings).toEqual([
       [CASE, { status: 'dismissed', resolution: null, note: 'لا شيء مستحق', adminId: ADMIN }],
     ]);
+  });
+});
+
+describe('a student_suspended case is the suspension service’s (T036)', () => {
+  it.each([
+    ['resolve', 'clear', 'resolved'],
+    ['dismiss', 'confirmFault', 'dismissed'],
+  ] as const)('%s hands it to %s and answers %s', async (close, path, status) => {
+    const { closing, closings, handed } = closingOver(record({ reason: 'student_suspended' }));
+    expect(await closing[close](tx, ADMIN, { caseId: CASE, note: 'n' })).toEqual({
+      caseId: CASE,
+      status,
+    });
+    expect(handed).toEqual([[path, ADMIN, { caseId: CASE, enrollmentId: ENROLLMENT }, 'n']]);
+    expect(closings).toEqual([]);
+  });
+
+  it('hands no other reason to it', async () => {
+    const { closing, handed } = closingOver(record({ reason: 'student_banned' }));
+    await closing.resolve(tx, ADMIN, { caseId: CASE, note: 'n' });
+    await closing.dismiss(tx, ADMIN, { caseId: CASE, note: 'n' });
+    expect(handed).toEqual([]);
   });
 });
 
