@@ -13,6 +13,13 @@ export type Procedure = jest.Mock<(input?: unknown) => Promise<unknown>>;
 
 const procedure = (): Procedure => jest.fn(async () => undefined);
 
+/** A subscription's mock: the stream it opens never says anything (T065). */
+export type Subscription = jest.Mock<
+  (input: unknown, handlers: unknown) => { unsubscribe: jest.Mock<() => void> }
+>;
+
+const subscription = (): Subscription => jest.fn(() => ({ unsubscribe: jest.fn<() => void>() }));
+
 /** Every procedure the B10b, B11b, B15 and B16 screens call, each a mock. */
 export function fakeProcedures() {
   return {
@@ -108,6 +115,10 @@ export function fakeProcedures() {
         get: { query: procedure() },
       },
       today: { query: procedure() },
+    },
+    // B40a (T065): the live channel the root opens while signed in; a stream that never says anything.
+    live: {
+      events: { subscribe: subscription() },
     },
   };
 }

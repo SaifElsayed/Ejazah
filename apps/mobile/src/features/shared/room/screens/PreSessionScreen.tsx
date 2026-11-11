@@ -6,6 +6,10 @@
 // joining opens, in both zones; the microphone granted here, and the system settings when it was
 // refused for good; the camera off, turned on only in the room (T019). The join waits for the
 // period and the microphone (`pre-session.ts`).
+//
+// T065 (FR-427; research R-324, item 6): «انضمّ الطرف الآخر» while `sessions.get`'s
+// `counterpartyInRoom` says the counterparty is in the room, recorded from the provider's
+// webhooks; a hint, never a decision: the join waits as before.
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -33,6 +37,12 @@ import { NotLoaded } from '../../states';
 import { useSessionRead } from '../api';
 import { ZoneLines } from '../components/ZoneLines';
 import { type PreSession, SESSION_STATUS_LABEL, usePreSession } from '../pre-session';
+
+/**
+ * `sessions.get`'s answer with T065's `counterpartyInRoom` (lane A1 adds it to the contract,
+ * required; read as optional until the integration merges it).
+ */
+type SessionRead = SessionsGetOutput & { readonly counterpartyInRoom?: boolean };
 
 /** The route's `id`, or '' when the link carries none. */
 function useSessionParam(): string {
@@ -97,7 +107,7 @@ function Loaded({
   roomRoute,
 }: {
   readonly header: ReactNode;
-  readonly session: SessionsGetOutput;
+  readonly session: SessionRead;
   readonly viewerZone: string;
   readonly counterpartyRole: PartyRole;
   readonly roomRoute: string;
@@ -126,6 +136,9 @@ function Loaded({
           <Avatar initials={initialsOf(avatarNameOf(party))} size="lg" />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text variant="headline">{partyName(party, counterpartyRole)}</Text>
+            {session.counterpartyInRoom === true ? (
+              <Badge label={t('session.pre.counterpartyInRoom')} tone="success" />
+            ) : null}
           </View>
         </View>
       </Card>

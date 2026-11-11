@@ -21,6 +21,7 @@ import {
   errorDetailsOf,
   filePart,
   photoPart,
+  retryNetworkFailure,
   UPLOAD_FILE_NAME,
   UPLOAD_PHOTO_NAMES,
   UPLOAD_TIMEOUT_MS,
@@ -874,5 +875,127 @@ describe('the timeouts (T146)', () => {
     expect(await stateOf(call)).toBe('rejected');
     expect(errorCodeOf(await caught)).toBeUndefined();
     expect(hung.signals[0]?.aborted).toBe(true);
+  });
+});
+
+// T065 of specs/004-sessions (research R-324, items 2 and 8; R-325, item 3): the live channel's
+// subscription goes through its own link and its own EventSource, never through `timed()`, and a
+// refused opening reaches the subscriber as `httpSubscriptionLink` hands it, its code and its
+// `retryAfterSeconds` read through `errorCodeOf` and `errorDetailsOf`. The query cache retries only
+// a failure with no API code: a refusal, `RATE_LIMITED` included, is never sent again by itself.
+describe('the live channel’s subscription (T065)', () => {
+  const encoder = new TextEncoder();
+
+  /** A server answering `live.events` with the frames `frames` writes, the stream left open. */
+  function streamingServer(frames: string, server = fakeServer(() => ok(subjects))) {
+    const opens: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchImpl = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const target = typeof input === 'string' ? input : input.toString();
+      if (!target.includes('live.events')) return server.fetch(input, init);
+      opens.push({ url: target, init });
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(frames));
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    });
+    return { opens, server, fetch: fetchImpl as unknown as typeof fetch };
+  }
+
+  function clientOver(fetchImpl: typeof fetch) {
+    return createApiClient({
+      url,
+      sessions: memorySessions({ accessToken: 'a65', refreshToken: 'r65' }).store,
+      onSignedOut: jest.fn(),
+      fetch: fetchImpl,
+    });
+  }
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('opens `live.events` as a GET stream with the bearer in its header, while a call still goes as before', async () => {
+    const streaming = streamingServer('event: connected\ndata: {}\n\n');
+    const client = clientOver(streaming.fetch);
+    const started = new Promise<void>((resolve) => {
+      const subscription = client.api.live.events.subscribe(undefined, {
+        onStarted: () => {
+          subscription.unsubscribe();
+          resolve();
+        },
+      });
+    });
+    await started;
+    await expect(client.api.catalog.subjects.list.query()).resolves.toEqual(subjects);
+
+    expect(streaming.opens).toHaveLength(1);
+    const [open] = streaming.opens;
+    expect(open?.url).toBe(`${url}/live.events`);
+    const headers = new Headers(open?.init?.headers);
+    expect(headers.get('authorization')).toBe('Bearer a65');
+    expect(headers.get('accept')).toBe('text/event-stream');
+    expect(open?.url).not.toContain('a65');
+    expect(streaming.server.calls.map((call) => call.path)).toEqual(['catalog.subjects.list']);
+  });
+
+  it('keeps the stream past CALL_TIMEOUT_MS: no call timeout aborts it', async () => {
+    jest.useFakeTimers();
+    const streaming = streamingServer('event: connected\ndata: {}\n\n');
+    const client = clientOver(streaming.fetch);
+    const onError = jest.fn();
+    const onStarted = jest.fn();
+    const subscription = client.api.live.events.subscribe(undefined, { onStarted, onError });
+    await jest.advanceTimersByTimeAsync(0);
+    await jest.advanceTimersByTimeAsync(CALL_TIMEOUT_MS + 1_000);
+    expect(onStarted).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(streaming.opens[0]?.init?.signal?.aborted).toBe(false);
+    subscription.unsubscribe();
+  });
+
+  it('hands a refused opening to the subscriber with its code and retryAfterSeconds', async () => {
+    const refusal = {
+      code: 'RATE_LIMITED',
+      message: 'Too many requests.',
+      details: [{ path: 'retryAfterSeconds', code: '31' }],
+    };
+    const streaming = streamingServer(
+      `event: connected\ndata: {}\n\nevent: serialized-error\ndata: ${JSON.stringify(refusal)}\n\n`,
+    );
+    const client = clientOver(streaming.fetch);
+    const error = await new Promise<unknown>((resolve) => {
+      client.api.live.events.subscribe(undefined, { onError: resolve });
+    });
+    expect(errorCodeOf(error)).toBe('RATE_LIMITED');
+    expect(errorDetailsOf(error)).toEqual([{ path: 'retryAfterSeconds', code: '31' }]);
+  });
+});
+
+describe('the query cache’s retry rule (T065, R-325 item 3)', () => {
+  it('retries a failure with no API code, up to TanStack’s three', () => {
+    const offline = new TypeError('Network request failed');
+    expect([0, 1, 2, 3].map((failures) => retryNetworkFailure(failures, offline))).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it('never retries an API refusal, RATE_LIMITED included', async () => {
+    for (const code of ['RATE_LIMITED', 'NOT_FOUND', 'INTERNAL', 'UNAUTHENTICATED']) {
+      const server = fakeServer(() => refused(code, code === 'RATE_LIMITED' ? 429 : 400));
+      const client = createApiClient({
+        url,
+        sessions: memorySessions(null).store,
+        onSignedOut: jest.fn(),
+        fetch: server.fetch,
+      });
+      const error = await client.api.catalog.subjects.list.query().catch((caught) => caught);
+      expect(errorCodeOf(error)).toBe(code);
+      expect(retryNetworkFailure(0, error)).toBe(false);
+    }
   });
 });

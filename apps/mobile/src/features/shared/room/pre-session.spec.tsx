@@ -249,3 +249,33 @@ describe('PreSessionScreen (FR-434, FR-494)', () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 });
+
+// T065 of specs/004-sessions (FR-427; research R-324, item 6; contracts/app-surface.md, `sessions.get`):
+// the counterparty's presence before joining, from `sessions.get`'s `counterpartyInRoom`, recorded
+// from the video provider's webhooks. A hint only: the join waits for the period and the microphone
+// as before, whatever it says.
+describe('PreSessionScreen: the counterparty in the room (T065, FR-427)', () => {
+  it('says «انضمّ الطرف الآخر» while sessions.get says the counterparty is in the room', async () => {
+    mockApi.sessions.get.query.mockResolvedValue(session({ counterpartyInRoom: true }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      expect(await screen.findByText('يوسف أحمد')).toBeTruthy();
+      expect(shown(said(direction, 'session.pre.counterpartyInRoom'))).toBeTruthy();
+    });
+    expect(translate('ar', 'session.pre.counterpartyInRoom')).toContain('انضمّ الطرف الآخر');
+  });
+
+  it('says nothing of it while they are not, and decides nothing by it', async () => {
+    mockApi.sessions.get.query.mockResolvedValue(session({ counterpartyInRoom: false }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      expect(await screen.findByText('يوسف أحمد')).toBeTruthy();
+      expect(absent(said(direction, 'session.pre.counterpartyInRoom'))).toBeNull();
+    });
+    jest.setSystemTime(new Date(EARLY));
+    queries.removeQueries({ queryKey: ['sessions'] });
+    mockApi.sessions.get.query.mockResolvedValue(session({ counterpartyInRoom: true }));
+    await renderIn('rtl', ui());
+    expect(await screen.findByText(said('rtl', 'session.pre.counterpartyInRoom'))).toBeTruthy();
+    const join = screen.getByRole('button', { name: said('rtl', 'session.pre.join') });
+    expect(join.props.accessibilityState?.disabled).toBe(true);
+  });
+});

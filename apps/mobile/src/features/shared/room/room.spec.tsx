@@ -45,9 +45,21 @@ let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 
 const mockBack = jest.fn();
+/** What the screen last asked of the navigator's removal prevention: the system's back (T019 (a)). */
+let mockPreventRemove: {
+  readonly prevent: boolean;
+  readonly callback?: (blocked: { data: { action: unknown }; repeat: () => void }) => void;
+} = { prevent: false };
 jest.mock('expo-router', () => ({
   router: { back: () => mockBack(), push: jest.fn() },
   useLocalSearchParams: () => ({ id: '0193a6f0-0000-7000-8000-0000000000c1' }),
+  usePreventRemove: (
+    prevent: boolean,
+    callback?: (blocked: { data: { action: unknown }; repeat: () => void }) => void,
+  ) => {
+    mockPreventRemove = callback === undefined ? { prevent } : { prevent, callback };
+    return () => undefined;
+  },
 }));
 
 const startAudio = AudioSession.startAudioSession as unknown as jest.Mock;
@@ -999,5 +1011,176 @@ describe('RoomScreen: a share while one starts, and a stop that fails (PR #130�
     await press('rtl', 'session.room.stopShare');
     await advance(0);
     expect(shareButton().props.accessibilityState?.disabled).toBe(true);
+  });
+});
+
+// The follow-ups placed in B40a under T019 (the notes under T019, B40a): (a) leaving by the system's
+// back awaits `close()`, so the old room's audio session is stopped before the screen goes and
+// before any next room starts its own; (b) `notOpen` (the phone's clock ahead of the server's)
+// asks `sessions.join` again on T019's own schedule (`rejoin.ts`), until a final refusal or the
+// scheduled end, with no new constant. T065: the room's generic error says when to try again
+// after `RATE_LIMITED` (`genericErrorKey`).
+describe('RoomScreen: leaving by the system’s back (T019 follow-up (a), B40a)', () => {
+  /** The system's back: the navigator blocks the removal and hands the screen its action. */
+  const systemBack = async (repeat: () => void) => {
+    expect(mockPreventRemove.prevent).toBe(true);
+    await act(async () => {
+      mockPreventRemove.callback?.({ data: { action: { type: 'GO_BACK' } }, repeat });
+      await Promise.resolve();
+    });
+  };
+
+  it('keeps the screen until close() has stopped the audio, then lets the back go on', async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+    const disconnecting = deferred<void>();
+    room().disconnect.mockReturnValueOnce(disconnecting.promise);
+    const repeat = jest.fn();
+    await systemBack(repeat);
+    expect(room().disconnect).toHaveBeenCalledTimes(1);
+    expect(stopAudio).not.toHaveBeenCalled();
+    expect(repeat).not.toHaveBeenCalled();
+    await act(async () => {
+      disconnecting.resolve(undefined);
+    });
+    await advance(0);
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+    expect(repeat).toHaveBeenCalledTimes(1);
+    expect(repeat.mock.invocationCallOrder[0]).toBeGreaterThan(
+      stopAudio.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('starts the next room’s audio only after the old room’s was stopped', async () => {
+    await renderIn('ltr', ui());
+    await screen.findByText(said('ltr', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+    const repeat = jest.fn();
+    await systemBack(repeat);
+    await advance(0);
+    expect(repeat).toHaveBeenCalledTimes(1);
+    await screen.unmount();
+    startAudio.mockClear();
+    await renderIn('ltr', ui());
+    await screen.findByText(said('ltr', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+    expect(startAudio.mock.invocationCallOrder[0]).toBeGreaterThan(
+      stopAudio.mock.invocationCallOrder.at(-1) ?? 0,
+    );
+  });
+
+  it('leaves once when the header’s back and the system’s back both come', async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' }));
+    const disconnecting = deferred<void>();
+    room().disconnect.mockReturnValueOnce(disconnecting.promise);
+    const repeat = jest.fn();
+    await press('rtl', 'session.room.leave');
+    await systemBack(repeat);
+    await act(async () => {
+      disconnecting.resolve(undefined);
+    });
+    await advance(0);
+    expect(room().disconnect).toHaveBeenCalledTimes(1);
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+    expect(mockBack.mock.calls.length + repeat.mock.calls.length).toBe(1);
+  });
+});
+
+describe('RoomScreen: joining before the server’s period opens (T019 follow-up (b), B40a)', () => {
+  const notOpen = () =>
+    apiError('JOIN_NOT_OPEN', [{ path: 'opensAt', code: '2026-11-11T16:05:00.000Z' }]);
+
+  it('says when joining opens, in Arabic and English', async () => {
+    join().mockRejectedValue(notOpen());
+    await inBothDirections(ui, async (_rendered, direction) => {
+      expect(await screen.findByText(said(direction, 'session.pre.opensAt'))).toBeTruthy();
+    });
+  });
+
+  it('asks sessions.join again after 2, 4, 8 and 16 s, then every 30 s, and joins once it opens', async () => {
+    join().mockRejectedValue(notOpen());
+    await renderIn('rtl', ui());
+    expect(await screen.findByText(said('rtl', 'session.pre.opensAt'))).toBeTruthy();
+    expect(join()).toHaveBeenCalledTimes(1);
+    for (const [wait, joins] of [
+      [1_999, 1],
+      [1, 2],
+      [4_000, 3],
+      [8_000, 4],
+      [16_000, 5],
+      [29_999, 5],
+      [1, 6],
+    ] as const) {
+      await advance(wait);
+      expect(join()).toHaveBeenCalledTimes(joins);
+    }
+    join().mockResolvedValue(grant());
+    await advance(30_000);
+    expect(
+      await screen.findByText(said('rtl', 'session.room.waitingFor', { name: 'يوسف أحمد' })),
+    ).toBeTruthy();
+    expect(room().connect).toHaveBeenCalledWith('wss://video.ijazah.test', 'token-1');
+    await advance(10 * 60_000);
+    expect(join()).toHaveBeenCalledTimes(7);
+  });
+
+  it('keeps trying through a try that has no answer', async () => {
+    join().mockRejectedValueOnce(notOpen()).mockRejectedValueOnce(new Error('offline'));
+    await renderIn('ltr', ui());
+    expect(await screen.findByText(said('ltr', 'session.pre.opensAt'))).toBeTruthy();
+    await advance(2_000);
+    expect(join()).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(said('ltr', 'session.pre.opensAt'))).toBeTruthy();
+    await advance(4_000);
+    expect(join()).toHaveBeenCalledTimes(3);
+    expect(
+      await screen.findByText(said('ltr', 'session.room.waitingFor', { name: 'يوسف أحمد' })),
+    ).toBeTruthy();
+  });
+
+  it('stops at a final refusal', async () => {
+    join().mockRejectedValueOnce(notOpen()).mockRejectedValueOnce(apiError('JOIN_CLOSED'));
+    await renderIn('rtl', ui());
+    expect(await screen.findByText(said('rtl', 'session.pre.opensAt'))).toBeTruthy();
+    await advance(2_000);
+    expect(await screen.findByText(said('rtl', 'session.pre.unavailable'))).toBeTruthy();
+    await advance(10 * 60_000);
+    expect(join()).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops at the scheduled end, and says the session has ended', async () => {
+    join().mockRejectedValue(notOpen());
+    await renderIn('rtl', ui());
+    expect(await screen.findByText(said('rtl', 'session.pre.opensAt'))).toBeTruthy();
+    // The session ends at 16:45, 2,700 s after the phone's now: the first try, four at 2, 6, 14 and
+    // 30 s, then one every 30 s while more than 30 s is left, from 60 s to 2,670 s (88).
+    await advance(45 * 60_000);
+    expect(await screen.findByText(said('rtl', 'session.room.ended'))).toBeTruthy();
+    expect(join()).toHaveBeenCalledTimes(1 + 4 + 88);
+    await advance(60 * 60_000);
+    expect(join()).toHaveBeenCalledTimes(1 + 4 + 88);
+  });
+});
+
+describe('RoomScreen: the generic error after RATE_LIMITED (T065)', () => {
+  it('says when to try again when the refusal gives a time, in Arabic and English', async () => {
+    join().mockRejectedValue(apiError('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      expect(
+        await screen.findByText(said(direction, 'common.state.rateLimitedIn', { count: 2 })),
+      ).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'common.state.actionError'))).toBeNull();
+    });
+  });
+
+  it('says to wait a little when it gives none, and the screen’s own words for any other failure', async () => {
+    join().mockRejectedValue(apiError('RATE_LIMITED'));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      expect(await screen.findByText(said(direction, 'common.state.rateLimited'))).toBeTruthy();
+    });
+    await screen.unmount();
+    join().mockRejectedValue(new Error('offline'));
+    await renderIn('rtl', ui());
+    expect(await screen.findByText(said('rtl', 'common.state.actionError'))).toBeTruthy();
   });
 });

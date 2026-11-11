@@ -36,6 +36,17 @@
 // and fails as an unreachable server's does, with no API code; a refresh that hangs thus fails,
 // the calls waiting on it are freed with the session kept, and the next call refreshes afresh.
 //
+// THE LIVE CHANNEL (T065 of specs/004-sessions; research R-324, item 2). A subscription goes through
+// tRPC's `httpSubscriptionLink` (a `splitLink`) over lib/live.ts' EventSource, on the bare transport
+// and never through `timed()`, which reads the whole body and aborts after `CALL_TIMEOUT_MS`; the
+// EventSource reads the bearer from the session store at each open. Every other call goes as above.
+// A refused opening reaches the subscriber as the link hands it, its body in the error's `cause`,
+// which `errorCodeOf` and `errorDetailsOf` read as they read a call's.
+//
+// THE RETRY RULE (T065; research R-325, item 3). The query cache retries only a failure with no API
+// code (no answer: offline, a timeout), up to TanStack's default three; an API refusal, `RATE_LIMITED`
+// included, is never sent again by itself, or one refusal would count four times against a limit.
+//
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
 import { type PublicConfig, publicConfigOutput, refreshOutput } from '@ijazah/contracts';
@@ -43,12 +54,15 @@ import {
   createTRPCClient,
   createTRPCUntypedClient,
   httpLink,
+  httpSubscriptionLink,
+  splitLink,
   TRPCClientError,
   type TRPCClient,
 } from '@trpc/client';
 import { File } from 'expo-file-system';
 
 import type { AppRouter } from '../../../api/src/surfaces/app.router';
+import { liveEventSource } from './live';
 import type { SessionStore } from './storage';
 
 export interface ApiClientOptions {
@@ -173,7 +187,19 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const uploadFetch = sessionFetchWithin(UPLOAD_TIMEOUT_MS);
 
   const api = createTRPCClient<AppRouter>({
-    links: [httpLink({ url, fetch: asFetchEsque(sessionFetch) })],
+    links: [
+      splitLink({
+        condition: (operation) => operation.type === 'subscription',
+        true: httpSubscriptionLink({
+          url,
+          EventSource: liveEventSource({
+            sessions,
+            fetch: (target, init) => transport(target, init),
+          }),
+        }),
+        false: httpLink({ url, fetch: asFetchEsque(sessionFetch) }),
+      }),
+    ],
   });
 
   let config: Promise<PublicConfig> | null = null;
@@ -277,6 +303,14 @@ function asFetchEsque(
 export function errorCodeOf(error: unknown): string | undefined {
   const code = codeOf(bodyOf(error));
   return typeof code === 'string' ? code : undefined;
+}
+
+/** TanStack's default number of retries, kept for a failure with no API code. */
+const NETWORK_RETRIES = 3;
+
+/** The query cache's `retry` rule: a failure with no API code only, never a refusal (T065). */
+export function retryNetworkFailure(failureCount: number, error: unknown): boolean {
+  return errorCodeOf(error) === undefined && failureCount < NETWORK_RETRIES;
 }
 
 /** One detail of an API error: the field and the reason (contracts/README.md "Errors"). */

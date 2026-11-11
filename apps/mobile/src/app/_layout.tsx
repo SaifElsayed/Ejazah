@@ -29,6 +29,11 @@
 // T078: the stacks, this one and the role groups', take the scheme's navigation theme, so a pushed
 // screen's card, the system bars' insets included, is the scheme's background and not
 // react-navigation's light default.
+//
+// T065 of specs/004-sessions (research R-324, items 3 and 8; R-325, item 3): one live channel here,
+// while the person is signed in and the app is `active` (lib/live-channel.ts); and the query
+// cache retries only a failure with no API code, never a refusal, `RATE_LIMITED` included
+// (`retryNetworkFailure`, lib/client.ts), so a refused read counts once against a limit.
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   ThemeProvider as NavigationThemeProvider,
@@ -49,7 +54,9 @@ import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
 import { ApiProvider, useApi } from '../lib/api';
+import { retryNetworkFailure } from '../lib/client';
 import { followAppState } from '../lib/focus';
+import { useLiveChannel } from '../lib/live-channel';
 import { registerVideoGlobals } from '../lib/livekit';
 import { followNetInfo } from '../lib/online';
 import {
@@ -68,7 +75,9 @@ followAppState();
 registerVideoGlobals();
 
 export default function RootLayout() {
-  const [queries] = useState(() => new QueryClient());
+  const [queries] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: retryNetworkFailure } } }),
+  );
   return (
     <ThemeProvider>
       <DirectionProvider>
@@ -87,6 +96,8 @@ function SessionGuard({ queries }: { readonly queries: QueryClient }) {
   const segments = useSegments();
   useRestoreSession();
   const me = useLanding();
+  const { client } = useApi();
+  useLiveChannel(client, queries);
   // What one account read is never shown to the next on a shared device (review of B6, finding 4),
   // nor what one person typed: every draft, and the pending address with its password (T136).
   useEffect(() => {
