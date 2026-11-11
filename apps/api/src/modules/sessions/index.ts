@@ -111,6 +111,12 @@ export {
   disputeWindowHours,
 } from './completion.service.js';
 /**
+ * T039 of specs/004-sessions (Q-B1 (b), the owner's decision of 2026-11-11; FR-473): the two
+ * cancellations, never disputed, which chat's purge leaves out of an enrollment's last end, as
+ * completion does.
+ */
+export { UNDISPUTABLE } from './completion.service.js';
+/**
  * T016 (FR-445, R-307): the provider outage windows, `sessions.outages.record` and `.list`, behind
  * the administrator surface's `sessions` namespace, and the record's store over sessions' tables,
  * which the race probe narrows as it narrows `evaluationStore`.
@@ -492,3 +498,54 @@ export {
   type RevisionStore,
   revisionStore,
 } from './revision.service.js';
+/**
+ * T040 of specs/004-sessions (spec FR-487; research R-327, «The administrator's read»): the reads
+ * inside an open matter (`disputes.heldFiles`, `disputes.heldFileLink`), composed into the
+ * administrator surface's services; and the `DisputeHeldFiles` port `main.ts` binds to
+ * verification's `createDisputeHeldFiles()`, so sessions imports no verification (R-301).
+ * The `DisputeChat` port (FR-475, R-314) `main.ts` binds to chat's `createDisputeChat()` for
+ * `disputes.chat`, so sessions imports no chat (R-301, C5).
+ */
+export {
+  createDisputeMatterReads,
+  type DisputeMatterDependencies,
+  type DisputeMatterReads,
+  type DisputeMatterStore,
+  disputeMatterStore,
+} from './dispute-matter.service.js';
+export type {
+  DisputeHeldFiles,
+  HeldFile,
+  HeldFileKind,
+  HeldFileLink,
+} from './dispute-held-files.port.js';
+export type {
+  DisputeChat,
+  DisputeChatMessage,
+  DisputeChatPage,
+} from './dispute-chat.port.js';
+/**
+ * T060 of specs/004-sessions (FR-452, FR-453; research R-322, «The complaint» and «The decision»):
+ * `sessions.complaint.raise` reaches the surface through `createSessionsServices`
+ * (`services.sessions.complaint`), its store narrowable by the race probe; `cases.decideComplaint`
+ * is composed into the administrator surface's `cases`; `lockForStanding` is the one lock sequence
+ * of a standing move, a `party_*` ruling's and a complaint's decision (b) (Q4 (a)).
+ */
+export {
+  type AbsenceComplaint,
+  type AbsenceComplaintStore,
+  absenceComplaintStore,
+  createAbsenceComplaint,
+} from './absence-complaint.service.js';
+export {
+  type ComplaintDecision,
+  type ComplaintDecisionStore,
+  complaintDecisionStore,
+  createComplaintDecision,
+} from './complaint-decision.service.js';
+export { lockForStanding, type StandingLockStore } from './standing-locks.js';
+/**
+ * T061 of specs/004-sessions (FR-454, FR-455; research R-322, «The restore»): an administrator's
+ * restore, keyed on the call's transaction, composed into the administrator surface's `restore`.
+ */
+export { createRestore, type Restore, type RestoreStore, restoreStore } from './restore.service.js';

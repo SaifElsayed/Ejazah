@@ -6,6 +6,8 @@
 // filename, an extension or a declared content type, so there is no code path where a client's
 // claim decides anything, not even when it happens to agree with the content. An upload whose
 // bytes match no known signature has no type, and a path that accepts only known types refuses it.
+// T038 of specs/004-sessions adds one function that reads a name, `refuseImageFilename`: it can only
+// refuse a file the content already admitted (FR-490 «by its extension»), never admit one.
 //
 // THE SIGNATURES are the WHATWG MIME Sniffing Standard's (https://mimesniff.spec.whatwg.org/, §6.1
 // "Matching an image type pattern" and the PDF pattern of §7.1), plus two image families it does
@@ -45,8 +47,14 @@ export type SniffedType =
   | 'image/webp'
   | 'image/x-icon';
 
+/**
+ * The types an upload kind may accept: what sniffing recognises, and the `chat` kind's `text/plain`,
+ * which no signature names and the whole stream decides (T038 of specs/004-sessions).
+ */
+export type AcceptedType = SniffedType | 'text/plain';
+
 /** An upload once its leading bytes are read: its type, or none, and the whole body to store. */
-export interface SniffedUpload<TType extends SniffedType | undefined = SniffedType | undefined> {
+export interface SniffedUpload<TType extends AcceptedType | undefined = SniffedType | undefined> {
   readonly type: TType;
   readonly body: AsyncIterable<Uint8Array>;
 }
@@ -139,14 +147,197 @@ export async function sniffUpload(body: AsyncIterable<Uint8Array>): Promise<Snif
   return { type: sniffContentType(leading), body: replay(head, ended ? undefined : source) };
 }
 
-/** The kinds of upload this phase takes, and the types each admits (FR-151). */
-export type UploadKind = 'identity' | 'credential' | 'photo';
+/**
+ * The kinds of upload, and the sniffed types each admits (FR-151). T038 of specs/004-sessions adds
+ * `chat`, decided by `acceptChatUpload` below: a PDF by its signature, or text by its whole stream.
+ */
+export type UploadKind = 'identity' | 'credential' | 'photo' | 'chat';
 
 export const uploadKinds: Readonly<Record<UploadKind, readonly SniffedType[]>> = {
   identity: ['application/pdf'],
   credential: ['application/pdf'],
   photo: ['image/jpeg', 'image/png'],
+  chat: ['application/pdf'],
 };
+
+// ---------------------------------------------------------------------------------------------
+// T038 of specs/004-sessions: the `chat` kind (FR-489, FR-490; R-SEC-4, R-SEC-5; research R-314;
+// plan.md decision 12; the notes under T038).
+//
+// Refused whenever the sniffer names an image, whatever the name (R-SEC-5); accepted as
+// `application/pdf` by `%PDF-`; accepted as `text/plain` when no signature matches and the whole
+// stream, checked as it streams, decodes as UTF-8 with no WHATWG binary data byte (0x00–0x08, 0x0B,
+// 0x0E–0x1A, 0x1C–0x1F; https://mimesniff.spec.whatwg.org/#binary-data-byte); anything else refused.
+// An SVG is an image written as text, so the text path refuses a stream whose text begins, after a
+// byte-order mark, white space, an XML declaration or processing instruction, comments or a
+// doctype, with an `<svg` element, or whose doctype names `svg` (the owner's Q1 (a) of 2026-11-11).
+// A name whose extension is an image's, `.svg` and `.svgz` among them, is refused by
+// `refuseImageFilename`, which the route calls after the content check (FR-490 «by its extension»).
+// Office files are not admitted (decision 12). Every refusal is `ATTACHMENT_REFUSED` with no field;
+// its cause stays on the error (`refusal`) for the route's one log line, never on the wire.
+// ---------------------------------------------------------------------------------------------
+
+/** Why a chat document was refused: an image by its content or its name, or not text. */
+export type AttachmentRefusal = 'image_content' | 'image_extension' | 'not_text';
+
+/** `ATTACHMENT_REFUSED`, with the cause the route logs; the client sees the code and message only. */
+export class AttachmentRefusedError extends DomainError {
+  readonly refusal: AttachmentRefusal;
+
+  constructor(refusal: AttachmentRefusal) {
+    super('ATTACHMENT_REFUSED');
+    this.refusal = refusal;
+  }
+}
+
+/** The extensions of an image, compared without case: the sniffer's types', and SVG's. */
+export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
+  'apng',
+  'avif',
+  'bmp',
+  'cur',
+  'gif',
+  'heic',
+  'heics',
+  'heif',
+  'heifs',
+  'ico',
+  'jfif',
+  'jpe',
+  'jpeg',
+  'jpg',
+  'pjp',
+  'pjpeg',
+  'png',
+  'svg',
+  'svgz',
+  'tif',
+  'tiff',
+  'webp',
+]);
+
+/**
+ * Refuses a name whose extension is an image's (`image_extension`). Trailing dots and blanks are
+ * dropped first, as a file system drops them, so `photo.png.` is a PNG's name.
+ */
+export function refuseImageFilename(filename: string): void {
+  const name = filename.replace(/[.\s]+$/u, '');
+  const dot = name.lastIndexOf('.');
+  if (dot === -1) return;
+  if (IMAGE_EXTENSIONS.has(name.slice(dot + 1).toLowerCase())) {
+    throw new AttachmentRefusedError('image_extension');
+  }
+}
+
+/** Whether `byte` is a WHATWG binary data byte. */
+function isBinaryDataByte(byte: number): boolean {
+  return (
+    byte <= 0x08 ||
+    byte === 0x0b ||
+    (byte >= 0x0e && byte <= 0x1a) ||
+    (byte >= 0x1c && byte <= 0x1f)
+  );
+}
+
+/** What the start of a text shows: an SVG, plain text, or not yet known. */
+type TextStart = 'svg' | 'text' | 'undecided';
+
+// Blanks, the byte-order mark among them (ECMAScript's `\s` holds U+FEFF), which the decoder leaves
+// at the head of the text (`ignoreBOM`).
+const LEADING_BLANKS = /^\s+/u;
+const SVG_ELEMENT = /^<svg(?:[\s/>]|$)/iu;
+const SVG_DOCTYPE = /^<!doctype\s+svg(?:[\s>[]|$)/iu;
+const SVG_DOCTYPE_SO_FAR = /^<!doctype\s+svg$/iu;
+const DOCTYPE = /^<!doctype/iu;
+/** What a text may open with before its first element and is not yet whole: wait for more. */
+const OPENINGS = ['<svg', '<!--', '<!doctype', '<?'];
+
+/**
+ * Reads the start of a text as it streams, and answers whether it opens as an SVG: after any
+ * byte-order mark, blanks, processing instructions (an XML declaration among them), comments and
+ * doctypes, an `<svg` element; or a doctype naming `svg`. Each part is consumed once it closes,
+ * and the search for an open part's close resumes where it stopped, so a long comment is read in
+ * one pass, never again from its start.
+ */
+function textStartReader(): (text: string, ended: boolean) => TextStart {
+  let rest = '';
+  let searchedTo = 0;
+  const consume = (length: number): void => {
+    rest = rest.slice(length);
+    searchedTo = 0;
+  };
+  return (text, ended) => {
+    rest += text;
+    for (;;) {
+      const blanks = LEADING_BLANKS.exec(rest);
+      if (blanks !== null) {
+        consume(blanks[0].length);
+        continue;
+      }
+      if (rest === '') return ended ? 'text' : 'undecided';
+      const doctype = DOCTYPE.test(rest);
+      if (doctype && SVG_DOCTYPE.test(rest)) {
+        // `<!doctype svg` with nothing after it yet may still name `svgx`.
+        return SVG_DOCTYPE_SO_FAR.test(rest) && !ended ? 'undecided' : 'svg';
+      }
+      const closer = rest.startsWith('<!--')
+        ? '-->'
+        : rest.startsWith('<?')
+          ? '?>'
+          : doctype
+            ? '>'
+            : undefined;
+      if (closer === undefined) break;
+      const end = rest.indexOf(closer, Math.max(searchedTo, 2));
+      if (end === -1) {
+        if (ended) return 'text';
+        searchedTo = Math.max(0, rest.length - closer.length + 1);
+        return 'undecided';
+      }
+      consume(end + closer.length);
+    }
+    if (SVG_ELEMENT.test(rest) && (rest.length > '<svg'.length || ended)) return 'svg';
+    if (ended) return 'text';
+    const begun = rest.toLowerCase();
+    return OPENINGS.some((opening) => opening.startsWith(begun)) ? 'undecided' : 'text';
+  };
+}
+
+/** `body` handed on as it streams, refused at the first chunk that shows it is not plain text. */
+async function* plainText(body: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const readStart = textStartReader();
+  let start: TextStart = 'undecided';
+  const decide = (text: string, ended: boolean): void => {
+    if (start !== 'undecided') return;
+    start = readStart(text, ended);
+    if (start === 'svg') throw new AttachmentRefusedError('image_content');
+  };
+  const decoded = (chunk?: Uint8Array): string => {
+    try {
+      return chunk === undefined ? decoder.decode() : decoder.decode(chunk, { stream: true });
+    } catch {
+      throw new AttachmentRefusedError('not_text');
+    }
+  };
+  for await (const chunk of body) {
+    if (chunk.some(isBinaryDataByte)) throw new AttachmentRefusedError('not_text');
+    decide(decoded(chunk), false);
+    yield chunk;
+  }
+  decide(decoded(), true);
+}
+
+/** The `chat` kind's decision on `body`: a PDF, text checked as it streams, or refused. */
+async function acceptChatUpload(
+  body: AsyncIterable<Uint8Array>,
+): Promise<SniffedUpload<'application/pdf' | 'text/plain'>> {
+  const upload = await sniffUpload(body);
+  if (upload.type === 'application/pdf') return { type: upload.type, body: upload.body };
+  // Every other type the sniffer names is an image (R-SEC-5).
+  if (upload.type !== undefined) throw new AttachmentRefusedError('image_content');
+  return { type: 'text/plain', body: plainText(upload.body) };
+}
 
 /**
  * The most pixels (width × height) a profile photo may declare before it is decoded (T145; the
@@ -227,7 +418,7 @@ async function* within(body: AsyncIterable<Uint8Array>, limit: number): AsyncIte
 export async function acceptUploadOfKind(
   { settings, rateLimiter }: UploadGuard,
   { kind, uploaderId, body, declaredLength }: UploadOfKind,
-): Promise<SniffedUpload<SniffedType>> {
+): Promise<SniffedUpload<AcceptedType>> {
   // The uploader the route authenticated, as a user (T062); the route's fixed name as the procedure.
   await rateLimiter.check(
     UPLOAD_RATE_LIMIT,
@@ -236,7 +427,10 @@ export async function acceptUploadOfKind(
   );
   const limit = await settings.read(UPLOAD_MAX_BYTES_SETTING, uploadMaxBytes);
   if (declaredLength !== undefined && declaredLength > limit) throw tooLarge();
-  const upload = await acceptUpload(body, uploadKinds[kind]);
+  // T038 of specs/004-sessions: the chat kind decides by its own rules (above); every other kind
+  // admits the sniffed types its list names and nothing else.
+  const upload =
+    kind === 'chat' ? await acceptChatUpload(body) : await acceptUpload(body, uploadKinds[kind]);
   return { type: upload.type, body: within(upload.body, limit) };
 }
 

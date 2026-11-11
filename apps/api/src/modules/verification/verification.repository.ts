@@ -108,6 +108,51 @@ export async function readDocument(
   return { id: row.id, userId: row.userId, storageKeyEncrypted: row.storageKeyEncrypted };
 }
 
+/**
+ * T040 of specs/004-sessions (spec FR-487; research R-327, «The administrator's read», item 4): a
+ * deleted person's document whose key is still held, as the dispute's held-files read lists it. The
+ * two readers below are used only by `createDisputeHeldFiles()`; `readDocument` above stays as it
+ * is, so every other path still answers an erased document as none.
+ */
+export interface HeldDocument {
+  readonly id: string;
+  readonly userId: string;
+  readonly documentType: 'national_id' | 'passport' | 'credential' | 'other';
+  readonly uploadedAt: Date;
+}
+
+/**
+ * The erased documents of `userIds` still holding a key, in id order, on the reading transaction
+ * (T040): a person's documents, as `erasedWithKeyOf` reads them; no key is selected.
+ */
+export async function heldErasedDocumentsOf(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  userIds: readonly string[],
+): Promise<HeldDocument[]> {
+  return tx.verificationDocument.findMany({
+    where: {
+      userId: { in: [...userIds] },
+      erasedAt: { not: null },
+      storageKeyEncrypted: { not: null },
+    },
+    orderBy: { id: 'asc' },
+    select: { id: true, userId: true, documentType: true, uploadedAt: true },
+  });
+}
+
+/** The erased document `id` while it still holds a key, on the reading transaction; null otherwise (T040). */
+export async function readHeldErasedDocument(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  id: string,
+): Promise<StoredDocument | null> {
+  const row = await tx.verificationDocument.findFirst({
+    where: { id, erasedAt: { not: null }, storageKeyEncrypted: { not: null } },
+    select: { id: true, userId: true, storageKeyEncrypted: true },
+  });
+  if (row?.storageKeyEncrypted == null) return null;
+  return { id: row.id, userId: row.userId, storageKeyEncrypted: row.storageKeyEncrypted };
+}
+
 /** A document of a deleted person whose key is still held: its file is still to be removed. */
 export interface ErasedDocumentRow {
   readonly id: string;

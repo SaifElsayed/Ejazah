@@ -172,3 +172,25 @@ export type CasesResolveOutput = z.infer<typeof casesResolveOutput>;
 export type CasesDismissOutput = z.infer<typeof casesDismissOutput>;
 export type CasesOpenManualInput = z.infer<typeof casesOpenManualInput>;
 export type CasesOpenManualOutput = z.infer<typeof casesOpenManualOutput>;
+
+/**
+ * T060 (FR-453; research R-322, «The decision»; admin-surface.md, `cases.decideComplaint`): an
+ * administrator decides an open complaint of a teacher's absence, with a mandatory note: end the
+ * enrollment, suspend the teacher, or close it. `newCaseId` is the `absence_termination` case an
+ * enrollment's end opens. No amount crosses (R-MONEY-6).
+ */
+export const casesDecideComplaintInput = z.object({
+  caseId: z.uuid(),
+  decision: complaintDecision,
+  note: adminReason,
+});
+
+export const casesDecideComplaintOutput = z.object({
+  caseId: z.uuid(),
+  status: z.enum(['resolved', 'dismissed']),
+  enrollmentStatus,
+  newCaseId: z.uuid().optional(),
+});
+
+export type CasesDecideComplaintInput = z.infer<typeof casesDecideComplaintInput>;
+export type CasesDecideComplaintOutput = z.infer<typeof casesDecideComplaintOutput>;

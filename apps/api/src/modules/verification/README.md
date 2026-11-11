@@ -35,3 +35,4 @@ The rules live in the services: `application.service.ts` (the teacher's applicat
 - FR-160 to FR-162 (the queue, the call, the decisions): `application-review.service.ts`.
 - FR-166 (an identity request): `verification-request.service.ts`.
 - FR-141 (a deleted person's documents erased): `document-erasure.ts`.
+- FR-487 (a deleted party's verification documents whose keys are still held, listed and linked only for sessions' reads inside an open matter, through the `DisputeHeldFiles` port; `readDocument` unchanged, so every other path still answers an erased document as none; T040 of specs/004-sessions): `dispute-held-files.ts`, the held readers in `verification.repository.ts`.

@@ -16,6 +16,8 @@ import { type RateLimitCounter, RateLimiter } from './rate-limit.guard.js';
 import {
   acceptUpload,
   acceptUploadOfKind,
+  AttachmentRefusedError,
+  refuseImageFilename,
   sniffContentType,
   sniffUpload,
   UPLOAD_MAX_BYTES_SETTING,
@@ -289,4 +291,227 @@ describe('the upload kinds (T020, FR-151)', () => {
     });
     expect(guard.counter.hits).toBe(3);
   });
+});
+
+// T038 of specs/004-sessions (FR-489, FR-490; R-SEC-4, R-SEC-5; research R-314; plan.md decision
+// 12; the notes under T038): the `chat` kind. Refused whenever the sniffer names an image, whatever
+// the name; a PDF by `%PDF-`; `text/plain` when no signature matches and the whole stream, checked as
+// it streams, is UTF-8 with no WHATWG binary data byte and is not an SVG (an image written as text,
+// the owner's Q1 (a)); anything else refused. A name with an image's extension is refused by
+// `refuseImageFilename`, which the route calls after the content check. Each refusal is
+// `ATTACHMENT_REFUSED` with no field on the wire, its cause kept on the error for the route's log.
+describe('the chat kind (T038 of specs/004-sessions)', () => {
+  const PDF = Buffer.concat([ascii('%PDF-1.7\n'), Buffer.alloc(119, 0x20), ascii('%%EOF\n')]);
+  const ARABIC = Buffer.from(
+    'بسم الله الرحمن الرحيم\nسورة الفاتحة، الآية ١\r\n\tتجويد\f\u001b',
+    'utf8',
+  );
+  const uploader = '0199d0a0-0000-7000-8000-000000000001';
+
+  function guardOf(): UploadGuard & { readonly limited: unknown[][] } {
+    const limited: unknown[][] = [];
+    const settings: SettingsReader = {
+      read: async (key, schema) => {
+        if (key === UPLOAD_MAX_BYTES_SETTING) return schema.parse(1_000_000);
+        throw new SettingError(key, 'missing');
+      },
+    };
+    const rateLimiter = {
+      check: async (...args: unknown[]) => {
+        limited.push(args);
+      },
+    } as unknown as RateLimiter;
+    return { settings, rateLimiter, limited };
+  }
+
+  /** The chat kind's answer for `data`, its body read to the end: the type, or the refusal. */
+  async function chatOutcome(data: Uint8Array, size = 7): Promise<string> {
+    try {
+      const upload = await acceptUploadOfKind(guardOf(), {
+        kind: 'chat',
+        uploaderId: uploader,
+        body: chunks(data, size),
+      });
+      const received = await collect(upload.body);
+      expect(received.equals(Buffer.from(data))).toBe(true);
+      return upload.type;
+    } catch (error: unknown) {
+      if (error instanceof AttachmentRefusedError) {
+        expect(error.code).toBe('ATTACHMENT_REFUSED');
+        return `refused ${error.refusal}`;
+      }
+      throw error;
+    }
+  }
+
+  it.each([
+    ['a PNG', PNG],
+    ['a JPEG', bytes(0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46)],
+    ['a GIF87a', ascii('GIF87a\x01\x00\x01\x00')],
+    ['a GIF89a', ascii('GIF89a\x01\x00\x01\x00')],
+    ['a WebP', ascii('RIFF\x24\x00\x00\x00WEBPVP8 ')],
+    ['a BMP', ascii('BM\x3a\x00\x00\x00\x00\x00')],
+    ['an icon', bytes(0x00, 0x00, 0x01, 0x00, 0x01, 0x00)],
+    ['a cursor', bytes(0x00, 0x00, 0x02, 0x00, 0x01, 0x00)],
+    ['a little-endian TIFF', bytes(0x49, 0x49, 0x2a, 0x00, 0x08, 0x00)],
+    ['a big-endian TIFF', bytes(0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x08)],
+    ['a HEIC photo', ftyp('heic', 'mif1', 'heic')],
+    ['a HEIF image', ftyp('mif1', 'mif1')],
+    ['an AVIF image', ftyp('avif', 'mif1', 'miaf')],
+  ])('refuses %s by its content, ATTACHMENT_REFUSED (image_content)', async (_, data) => {
+    expect(await chatOutcome(data)).toBe('refused image_content');
+  });
+
+  it('accepts a PDF by %PDF-, every byte handed back', async () => {
+    expect(await chatOutcome(PDF)).toBe('application/pdf');
+  });
+
+  it('accepts UTF-8 text as text/plain, a character split across chunks, tab, line ends, form feed and escape allowed', async () => {
+    expect(await chatOutcome(ARABIC, 1)).toBe('text/plain');
+    expect(await chatOutcome(Buffer.concat([bytes(0xef, 0xbb, 0xbf), ARABIC]), 3)).toBe(
+      'text/plain',
+    );
+  });
+
+  it.each([0x00, 0x01, 0x08, 0x0b, 0x0e, 0x1a, 0x1c, 0x1f])(
+    'refuses text carrying the binary data byte %d, found as it streams (not_text)',
+    async (byte) => {
+      const data = Buffer.concat([ARABIC, ARABIC, bytes(byte), ascii('tail')]);
+      expect(await chatOutcome(data)).toBe('refused not_text');
+    },
+  );
+
+  it('refuses the stream at the chunk that carries the binary byte, after the earlier chunks', async () => {
+    const data = Buffer.concat([Buffer.alloc(64, 0x61), bytes(0x00), Buffer.alloc(64, 0x61)]);
+    const upload = await acceptUploadOfKind(guardOf(), {
+      kind: 'chat',
+      uploaderId: uploader,
+      body: chunks(data, 16),
+    });
+    const received: Uint8Array[] = [];
+    await expect(
+      (async () => {
+        for await (const chunk of upload.body) received.push(chunk);
+      })(),
+    ).rejects.toBeInstanceOf(AttachmentRefusedError);
+    expect(Buffer.concat(received).byteLength).toBe(64);
+  });
+
+  it.each([
+    ['a lone continuation byte', Buffer.concat([ARABIC, bytes(0x80), ascii('x')])],
+    ['an invalid lead byte', Buffer.concat([ascii('note '), bytes(0xff), ascii('x')])],
+    ['an overlong encoding', Buffer.concat([ascii('a'), bytes(0xc0, 0xaf)])],
+    ['a sequence cut short at the end', Buffer.concat([ARABIC, bytes(0xd8)])],
+    ['Latin-1 text', Buffer.from('café résumé', 'latin1')],
+    ['a document in a ZIP container', bytes(0x50, 0x4b, 0x03, 0x04, 0x14, 0x00)],
+  ])('refuses %s as not text (not_text)', async (_, data) => {
+    expect(await chatOutcome(data)).toBe('refused not_text');
+  });
+
+  const BYTE_ORDER_MARK = String.fromCodePoint(0xfeff);
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect/></svg>';
+
+  it.each([
+    ['an SVG', SVG],
+    ['an SVG after a byte-order mark and white space', `${BYTE_ORDER_MARK} \n\t${SVG}`],
+    ['an SVG after an XML declaration', `<?xml version="1.0" encoding="UTF-8"?>\n${SVG}`],
+    ['an SVG after a comment', `<!-- drawn by hand -->\n${SVG}`],
+    [
+      'an SVG after a doctype',
+      `<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">${SVG}`,
+    ],
+    ['an upper-case SVG element', '<SVG></SVG>'],
+    ['an SVG element closed at once', '<svg/>'],
+    ['a doctype naming svg whatever follows', '<!DOCTYPE svg>\n<g/>'],
+    [
+      'an SVG after a processing instruction and two comments',
+      '<?xml-stylesheet href="a.css"?><!--a--><!--b-->\r\n<svg>',
+    ],
+  ])('refuses %s as an image by its content (image_content)', async (_, text) => {
+    expect(await chatOutcome(Buffer.from(text, 'utf8'), 1)).toBe('refused image_content');
+    expect(await chatOutcome(Buffer.from(text, 'utf8'), 64)).toBe('refused image_content');
+  });
+
+  it.each([
+    ['a text mentioning an SVG later', `ملاحظة: ${SVG}`],
+    ['an element whose name only starts with svg', '<svgnote>نص</svgnote>'],
+    ['an XML file of another kind', '<?xml version="1.0"?>\n<notes><n>تجويد</n></notes>'],
+    ['a comment and nothing else', '<!-- just a comment -->\n'],
+    ['an empty file', ''],
+  ])('accepts %s as text/plain', async (_, text) => {
+    expect(await chatOutcome(Buffer.from(text, 'utf8'), 2)).toBe('text/plain');
+  });
+
+  it('answers a refusal as ATTACHMENT_REFUSED, 400, with no field and nothing of the cause', async () => {
+    const failure = await acceptUploadOfKind(guardOf(), {
+      kind: 'chat',
+      uploaderId: uploader,
+      body: chunks(PNG, 7),
+    }).catch((error: unknown) => error);
+    const mapped = mapError(failure);
+    expect(mapped.status).toBe(400);
+    expect(mapped.body).toEqual({
+      code: 'ATTACHMENT_REFUSED',
+      message: 'This file cannot be sent in the chat.',
+    });
+  });
+
+  it('counts the uploader under rate_limit_upload as uploads.chat, before anything is read', async () => {
+    const guard = guardOf();
+    await acceptUploadOfKind(guard, { kind: 'chat', uploaderId: uploader, body: chunks(PDF, 9) });
+    expect(guard.limited).toEqual([
+      [UPLOAD_RATE_LIMIT, { kind: 'user', userId: uploader }, 'uploads.chat'],
+    ]);
+  });
+
+  it.each([
+    'photo.png',
+    'PHOTO.PNG',
+    'scan.jpg',
+    'scan.jpeg',
+    'a.gif',
+    'a.webp',
+    'a.bmp',
+    'a.ico',
+    'a.tif',
+    'a.tiff',
+    'a.heic',
+    'a.heif',
+    'a.avif',
+    'drawing.svg',
+    'drawing.svgz',
+    'تجويد.pdf.png',
+    'photo.png.',
+    'photo.png ',
+    '.png',
+  ])('refuses the name %j by its image extension (image_extension)', (filename) => {
+    let thrown: unknown;
+    try {
+      refuseImageFilename(filename);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(AttachmentRefusedError);
+    expect((thrown as AttachmentRefusedError).refusal).toBe('image_extension');
+  });
+
+  it.each(['تجويد.pdf', 'notes.txt', 'png', 'photo.png.pdf', 'a.svg.txt', 'readme'])(
+    'admits the name %j',
+    (filename) => {
+      expect(() => {
+        refuseImageFilename(filename);
+      }).not.toThrow();
+    },
+  );
+
+  // The review session's condition 1 of 2026-11-11 on T038's route change: the document and photo
+  // kinds keep their behaviour, so UTF-8 text is still refused there.
+  it.each(['identity', 'credential', 'photo'] as const)(
+    'still refuses UTF-8 text on the %s kind, VALIDATION_FAILED',
+    async (kind) => {
+      await expect(
+        acceptUploadOfKind(guardOf(), { kind, uploaderId: uploader, body: chunks(ARABIC, 7) }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    },
+  );
 });

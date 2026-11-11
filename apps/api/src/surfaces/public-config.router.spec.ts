@@ -17,6 +17,7 @@ import { platformRouter } from './public-config.router.js';
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -75,6 +76,7 @@ function fixture(changes: Readonly<Record<string, unknown>> = {}) {
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   const router = createAppRouter({ platform: platformRouter });
   const caller = createAppCallerFactory(router)(

@@ -100,7 +100,8 @@ describe('the tabs and the session statuses', () => {
     expect(listedSession.safeParse(withoutId).success).toBe(false);
     expect(listedSession.safeParse({ ...session, sessionId: 'session-1' }).success).toBe(false);
     expect(
-      enrollmentsGetOutput.parse({ ...item, sessions: [session] }).sessions[0]?.sessionId,
+      enrollmentsGetOutput.parse({ ...item, sessions: [session], complaintOpen: false }).sessions[0]
+        ?.sessionId,
     ).toBe(session.sessionId);
   });
 
@@ -200,8 +201,11 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
       nextCursor: ids.enrollment,
     });
     expect(enrollmentsListOutput.parse({ items: [] })).toEqual({ items: [] });
-    const detail = { ...item, sessions: [session] };
+    const detail = { ...item, sessions: [session], complaintOpen: false };
     expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
     expect(enrollmentsGetOutput.safeParse(item).success).toBe(false);
+    // 004:T060 (FR-452): the detail says whether the student's complaint is open, always.
+    expect(enrollmentsGetOutput.parse({ ...detail, complaintOpen: true }).complaintOpen).toBe(true);
+    expect(enrollmentsGetOutput.safeParse({ ...item, sessions: [session] }).success).toBe(false);
   });
 });

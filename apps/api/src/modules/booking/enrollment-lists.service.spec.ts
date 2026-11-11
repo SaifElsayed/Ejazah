@@ -130,6 +130,8 @@ function storeOf(
     pending?: readonly string[];
     /** 004:T028: each session's remedy status. */
     remedies?: Record<string, 'awaiting_choice' | 'proposed' | 'frozen' | 'booked'>;
+    /** 004:T060: the enrollments whose complaint is open. */
+    complaints?: readonly string[];
   } = {},
 ): { store: EnrollmentListsStore; asked: Asked } {
   const asked: Asked = { ended: [], listed: [], prefix: [], day: [], pending: [] };
@@ -176,6 +178,8 @@ function storeOf(
           return status === undefined ? [] : [[id, status] as const];
         }),
       ),
+    // 004:T060.
+    complaintOpenOf: async (_tx, enrollmentId) => (data.complaints ?? []).includes(enrollmentId),
   };
   return { store, asked };
 }
@@ -676,5 +680,18 @@ describe('remedyStatus (004:T028)', () => {
     expect(taught.sessions[0]?.remedyStatus).toBe('awaiting_choice');
     const today = await teacherTodayOf(tx, store, TEACHER, NOW);
     expect(today.sessions[0]?.remedyStatus).toBe('awaiting_choice');
+  });
+});
+
+describe('complaintOpen (004:T060, FR-452)', () => {
+  it('answers the enrollment’s detail complaintOpen while its complaint is open, read through moderation’s entry', async () => {
+    const open = storeOf({ listed: row(E1), names: { [TEACHER]: 'أحمد سالم' }, complaints: [E1] });
+    expect(
+      (await studentEnrollmentOf(tx, open.store, STUDENT, { enrollmentId: E1 }, NOW)).complaintOpen,
+    ).toBe(true);
+    const none = storeOf({ listed: row(E1), names: { [TEACHER]: 'أحمد سالم' }, complaints: [E2] });
+    expect(
+      (await studentEnrollmentOf(tx, none.store, STUDENT, { enrollmentId: E1 }, NOW)).complaintOpen,
+    ).toBe(false);
   });
 });

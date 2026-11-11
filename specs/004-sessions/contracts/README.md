@@ -54,7 +54,9 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   On B39's conflict check (the owner's decision of 2026-11-11, Q2; B37's precedent), `CONFLICT` with `details.cause`
   `not_open` on `cases.resolve` and `cases.dismiss` (a case no longer open, T035), and (Q5 (a)) `no_free_week` on
   `cases.resolve` of a `student_suspended` case when T028's offer finds no free week for a session the suspension
-  cancelled, the case left open (T036). Every
+  cancelled, the case left open (T036); on B40 (the review session's ruling on that precedent), `no_free_week` on
+  `sessions.restore` when the offer finds no free week for a remedy the closing's case held, the case left open
+  (T061). Every
   refusal writes nothing. Changed, additively (the owner's decision of 2026-11-06 on the sixth analysis, item 6; T062):
   Phase 1's `RATE_LIMITED` refusal from a rate limit's counter carries the time until its window ends,
   `details: [{ path: 'retryAfterSeconds', code: '<n>' }]`, a positive whole number of seconds as text, read from the

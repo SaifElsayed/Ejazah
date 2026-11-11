@@ -86,7 +86,12 @@ import {
 } from '@trpc/server';
 import { z, ZodError } from 'zod';
 import type { AuditEntry, AuditTrail } from '../platform/audit/audit-writer.js';
+import { isDeadlock } from '../platform/db/db-errors.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
+import {
+  type DeadlockIds,
+  runRetryingDeadlockOnce,
+} from '../platform/db/transaction.repository.js';
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
 import { isRefusalLogged, markRefusalLogged } from '../platform/errors/logged-refusal.js';
@@ -351,6 +356,23 @@ export interface AdminProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut> extends
   TOutOut
 > {
   readonly rateLimit?: RateLimitDeclaration<AdministratorContext, TInOut>;
+  /**
+   * T061 of specs/004-sessions (L5; contracts/kernel.md, `adminProcedure`): the call's whole
+   * transaction run through T002's `runRetryingDeadlockOnce`, a deadlock retried once in a new one
+   * and a second answering `refusal()`. Optional; only `sessions.restore` declares it (the owner's
+   * confirmation of 2026-11-06 on the small check).
+   */
+  readonly deadlock?: DeadlockDeclaration<TInOut>;
+}
+
+/** What a deadlock's retry is logged with and refused by (T002's `DeadlockTrace`, T061). */
+export interface DeadlockDeclaration<TInput> {
+  /** The procedure, as T002's `warn` lines name it. */
+  readonly operation: string;
+  /** The closed ids of those lines, from the call's input. */
+  readonly ids: (input: TInput) => DeadlockIds;
+  /** The caller's clear refusal after a second deadlock. */
+  readonly refusal: () => Error;
 }
 
 /** A signed-in user as the limiter counts them: `user:<userId>` (T062). */
@@ -652,6 +674,7 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
   input,
   output,
   rateLimit,
+  deadlock,
 }: AdminProcedureDeclaration<TIn, TInOut, TOutIn, TOutOut>): CallerKind<
   AdminContext,
   AdminMeta,
@@ -673,43 +696,58 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
     rateLimit === undefined
       ? builder.use(throttleDefault(administratorSubject))
       : builder.use(throttle(rateLimit, administratorSubject))
-  ).use(async ({ ctx, next }) => {
+  ).use(async ({ ctx, next, input: called }) => {
     const { transactions, auditWriter } = ctx.administration;
-    const result = await transactions
-      .run(async (tx) => {
-        // A service handed only `tx` reaches this request's after-commit list through it (T063).
-        const unbind = bindToTransaction(tx, ctx.live);
-        try {
-          const entries: AuditEntry[] = [];
-          let replayed = false;
-          const audit: AuditTrail = {
-            record: (entry) => void entries.push(entry),
-            replayed: () => {
-              replayed = true;
-            },
-          };
-          const called = await next({ ctx: { tx, audit } });
-          // tRPC hands a failure back as a result; thrown, it rolls the transaction back.
-          if (!called.ok) throw called.error;
-          // A replay of a keyed call records nothing: the first call's entry is the record (B39).
-          if (entries.length === 0 && !replayed) {
-            throw new Error(
-              'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
-            );
-          }
-          for (const entry of entries) {
-            await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
-          }
-          return called;
-        } finally {
-          unbind();
+    // T061: a declared deadlock retry reruns the whole transaction, its audit entry with it.
+    const run = <T>(work: (tx: Transaction) => Promise<T>): Promise<T> =>
+      deadlock === undefined
+        ? transactions.run(work)
+        : runRetryingDeadlockOnce(transactions, work, deadlock.refusal, {
+            log: ctx.log,
+            operation: deadlock.operation,
+            ids: deadlock.ids(called as TInOut),
+          });
+    const result = await run(async (tx) => {
+      // Each attempt starts with an empty after-commit list: a declared deadlock's retry reruns the
+      // whole transaction, so what a rolled-back attempt queued is never sent (T061, T063).
+      ctx.live.drop();
+      // A service handed only `tx` reaches this request's after-commit list through it (T063).
+      const unbind = bindToTransaction(tx, ctx.live);
+      try {
+        const entries: AuditEntry[] = [];
+        let replayed = false;
+        const audit: AuditTrail = {
+          record: (entry) => void entries.push(entry),
+          replayed: () => {
+            replayed = true;
+          },
+        };
+        const answered = await next({ ctx: { tx, audit } });
+        // tRPC hands a failure back as a result; thrown, it rolls the transaction back. A declared
+        // deadlock at a statement is thrown as the database's own, for the retry to read (T061).
+        if (!answered.ok) {
+          throw deadlock !== undefined && isDeadlock(answered.error.cause)
+            ? answered.error.cause
+            : answered.error;
         }
-      })
-      .catch((error: unknown) => {
-        // Rolled back: nothing the call added is sent (T063).
-        ctx.live.drop();
-        throw error;
-      });
+        // A replay of a keyed call records nothing: the first call's entry is the record (B39).
+        if (entries.length === 0 && !replayed) {
+          throw new Error(
+            'An administrative call recorded no audit entry; nothing it wrote is kept (FR-049, R-API-12).',
+          );
+        }
+        for (const entry of entries) {
+          await auditWriter.write(tx, { ...entry, adminId: ctx.administrator.adminId });
+        }
+        return answered;
+      } finally {
+        unbind();
+      }
+    }).catch((error: unknown) => {
+      // Rolled back: nothing the call added is sent (T063).
+      ctx.live.drop();
+      throw error;
+    });
     // THE ADMINISTRATOR KIND'S AFTER-COMMIT POINT (T063; contracts/kernel.md, `LivePublisher`):
     // `transactions.run` has committed, so the request's live events go out now, and only now.
     ctx.live.flush();

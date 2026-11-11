@@ -25,9 +25,15 @@ import { createPaymentsMonitorService } from '../payments/index.js';
 import {
   type CaseClosingService,
   type CaseQueue,
+  // T060.
+  type ComplaintDecision,
+  createComplaintDecision,
   createCaseClosing,
   createCaseQueue,
   createCompletion,
+  // T061.
+  createRestore,
+  type Restore,
   createDisputeQueue,
   createDisputeResolution,
   createManualCase,
@@ -48,6 +54,13 @@ import {
   type SessionCancel,
   type SessionReview,
   type SessionsMonitor,
+} from '../sessions/index.js';
+// T040 of specs/004-sessions: the reads inside an open matter, over the held-files and chat ports.
+import {
+  createDisputeMatterReads,
+  type DisputeChat,
+  type DisputeHeldFiles,
+  type DisputeMatterReads,
 } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
@@ -136,7 +149,11 @@ export interface AdminServices {
    * (T035 of specs/004-sessions, FR-478, FR-422): over the bound `EnrollmentSide`, the settings and
    * the process's logger.
    */
-  readonly cases: CaseQueue & CaseClosingService & ManualCaseService;
+  readonly cases: CaseQueue &
+    CaseClosingService &
+    ManualCaseService &
+    // T060: a complaint of a teacher's absence decided.
+    ComplaintDecision;
   /**
    * The sessions module's review queue, composed here for the surface (T033 of specs/004-sessions,
    * FR-477): over the bound `EnrollmentSide`'s lock, sessions' completion and its telemetry.
@@ -148,7 +165,12 @@ export interface AdminServices {
    * ruling and booking's `lockActiveHoldsOf` for the party's holds (kernel.md's `party_*` row).
    */
   readonly disputes: DisputeQueue &
-    DisputeResolution & { readonly revise: Revisions['reviseRuling'] };
+    DisputeResolution & { readonly revise: Revisions['reviseRuling'] } &
+    // T040: the reads inside an open matter (`disputes.heldFiles`, `disputes.heldFileLink`,
+    // `disputes.chat`).
+    DisputeMatterReads;
+  /** T061 of specs/004-sessions: the sessions module's restore, keyed on the call's transaction. */
+  readonly restore: Restore;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -175,6 +197,18 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * under T059 and T064): `disputes.revise`, `sessions.review.revise` and `cases.openManual`.
    */
   readonly idempotency: IdempotencyService<Transaction>;
+  /**
+   * T040 of specs/004-sessions (spec FR-487, research R-327): sessions' `DisputeHeldFiles` port,
+   * bound by `main.ts` to verification's `createDisputeHeldFiles()` (contracts/kernel.md, "The
+   * composition root"), for `disputes.heldFiles` and `disputes.heldFileLink`.
+   */
+  readonly disputeHeldFiles: DisputeHeldFiles;
+  /**
+   * T040 of specs/004-sessions (FR-475, research R-314): sessions' `DisputeChat` port, bound by
+   * `main.ts` to chat's `createDisputeChat()` (contracts/kernel.md, "The composition root"), for
+   * `disputes.chat`.
+   */
+  readonly disputeChat: DisputeChat;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -253,8 +287,27 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
         idempotency: dependencies.idempotency,
         log: dependencies.log,
       }),
+      // T060: a complaint decided (R-322), (b) over this module's standing and booking's holds lock.
+      ...createComplaintDecision({
+        enrollments: dependencies.enrollmentSide,
+        standing,
+        lockActiveHolds: lockActiveHoldsOf,
+        log: dependencies.log,
+      }),
     },
     ...adminSessionServices(dependencies, standing),
+    // T061: the restore (R-322), keyed on the call's transaction, T028's offer widened for it.
+    restore: createRestore({
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
+      offers: createRemedyOffer({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      settings: dependencies.settings,
+      log: dependencies.log,
+    }),
   };
 }
 
@@ -303,6 +356,13 @@ function adminSessionServices(
         standing,
         lockActiveHolds: lockActiveHoldsOf,
         completion,
+        log: dependencies.log,
+      }),
+      // T040: the reads inside an open matter, over the bound held-files and chat ports.
+      ...createDisputeMatterReads({
+        enrollments: dependencies.enrollmentSide,
+        heldFiles: dependencies.disputeHeldFiles,
+        chat: dependencies.disputeChat,
         log: dependencies.log,
       }),
     },

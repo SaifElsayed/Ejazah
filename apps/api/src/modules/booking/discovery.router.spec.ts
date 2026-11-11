@@ -22,6 +22,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedIdentityServices,
   unusedSessionsServices,
@@ -113,6 +114,7 @@ function callerAs(session: UserSession | null): Caller {
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

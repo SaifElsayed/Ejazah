@@ -40,6 +40,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -385,6 +386,7 @@ const caller = createAppCallerFactory(
       booking: unusedBookingServices,
       checkout: unusedCheckoutServices,
       sessions: unusedSessionsServices,
+      chat: unusedChatServices,
     },
   }),
 );

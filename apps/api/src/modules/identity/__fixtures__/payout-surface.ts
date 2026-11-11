@@ -12,6 +12,7 @@ import { createAppCallerFactory, createAppRouter } from '../../../surfaces/proce
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -125,6 +126,7 @@ export function appContextFor(
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   return createAppContext({ session, log, rateLimiter, clientAddress: '203.0.113.9', services });
 }

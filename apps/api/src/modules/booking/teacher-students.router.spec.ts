@@ -26,6 +26,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -172,6 +173,7 @@ function callerAs(who: UserSession | null, bookingServices: BookingServices = bo
     booking: bookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

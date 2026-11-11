@@ -374,3 +374,17 @@ export function createEncryptedColumns(
     repository.providerRefreshTokens(),
   ];
 }
+
+/**
+ * T040 of specs/004-sessions (spec FR-487; research R-327, «The administrator's read», item 4): a
+ * deleted person's photo while its key is still held, for verification's `createDisputeHeldFiles()`
+ * alone, over the repository the erase sweep reads (`DeletedPhotosRepository`); past the
+ * soft-delete filter, so outside any transaction (the note under T040, F6). Null for a live person
+ * or a photo already removed.
+ */
+export function createHeldPhotos(database: Pick<Database, 'includeDeleted'>): {
+  heldPhotoOf(userId: string): Promise<HeldPhoto | null>;
+} {
+  const photos = new DeletedPhotosRepository(database);
+  return { heldPhotoOf: (userId) => photos.heldOf(userId) };
+}

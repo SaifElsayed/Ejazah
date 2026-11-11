@@ -14,6 +14,12 @@
 // as overlapping another of the teacher or the student (ERD §15 rule 19) leaves none of them; the
 // refusal is thrown as it is, the caller naming it (`isExclusionViolation`, T006) and rolling back.
 //
+// A PLAN (T061 of specs/004-sessions; FR-424, FR-455; research R-322, step 4): widened additively
+// with a count and a first sequence number, so an administrator's restore creates the sessions it
+// still owes, numbered after the last, from the first occurrence at least the lead after the
+// restore. With none, the snapshot's count numbered from one, as before; a count of none writes
+// nothing.
+//
 // THE LOCKS (T005's rules, `platform/db/row-lock.ts`). A `sessions` row references both accounts
 // and the enrollment, so this function takes the caller's transaction and expects it to hold, in
 // this order: both accounts in one `lockRows(tx, 'users', [studentUserId, teacherUserId])` call,
@@ -73,19 +79,30 @@ function recurringSlotOf(enrollment: EnrollmentToSchedule): RecurringSlot {
   };
 }
 
-/** The enrollment's sessions by FR-368's rule, confirmed at `confirmedAt` with a lead of `leadHours`. */
+/** T061: how many sessions to place, and the number of the first (FR-424). */
+export interface GenerationPlan {
+  readonly count: number;
+  readonly firstSequenceNumber: number;
+}
+
+/**
+ * The enrollment's sessions by FR-368's rule, confirmed at `confirmedAt` with a lead of `leadHours`;
+ * `plan`'s count numbered from its first number when given (T061), else the snapshot's from one.
+ */
 export function sessionsFor(
   enrollment: EnrollmentToSchedule,
   confirmedAt: Date,
   leadHours: number,
+  plan: GenerationPlan = { count: enrollment.snapshotSessionCount, firstSequenceNumber: 1 },
 ): readonly ScheduledSession[] {
+  if (plan.count === 0) return [];
   const slot = recurringSlotOf(enrollment);
   const first = firstOccurrenceAfter(slot, confirmedAt, leadHours);
   return resolveOccurrences(slot, {
     fromLocalDate: first.requestedLocalDate,
-    count: enrollment.snapshotSessionCount,
+    count: plan.count,
   }).map((occurrence, index) => ({
-    sequenceNumber: index + 1,
+    sequenceNumber: plan.firstSequenceNumber + index,
     scheduledDateLocal: occurrence.requestedLocalDate,
     scheduledStartTimeLocal: occurrence.requestedStartTimeLocal,
     timezone: occurrence.timezone,
@@ -122,8 +139,10 @@ export async function generateForEnrollment(
   enrollment: EnrollmentToSchedule,
   confirmedAt: Date,
   leadHours: number,
+  plan?: GenerationPlan,
 ): Promise<readonly ScheduledSession[]> {
-  const sessions = sessionsFor(enrollment, confirmedAt, leadHours);
+  const sessions = sessionsFor(enrollment, confirmedAt, leadHours, plan);
+  if (sessions.length === 0) return sessions;
   await insertSessions(
     tx,
     sessions.map((session) => rowOf(enrollment, session)),

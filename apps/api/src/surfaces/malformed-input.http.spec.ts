@@ -38,6 +38,7 @@ import { html } from '../platform/web/html.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
 import {
   unusedBookingServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedSessionsServices,
@@ -143,6 +144,7 @@ const services = {
   booking: unusedBookingServices,
   checkout: unusedCheckoutServices,
   sessions: unusedSessionsServices,
+  chat: unusedChatServices,
 };
 
 const sessions = {

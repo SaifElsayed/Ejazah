@@ -36,7 +36,8 @@
 // through sessions' entry (R-API-6): sessions decides what is pending. `disputed` (004:T026): the
 // session's status is `disputed`, as sessions' `isDisputed` answers it. `remedyStatus` (004:T028): the
 // session's remedy by its status, sessions' `remedyStatusesAmong` through its entry, absent while it
-// has none.
+// has none. `complaintOpen` (004:T060, FR-452): whether the student's complaint of the teacher's
+// absence is open, moderation's `openComplaintOf` through its entry, on the detail only.
 //
 // A DELETED PARTY (T007, `003:T090`; FR-426). Identity's names leave out a deleted account (the
 // client's extension, its name erased, FR-141), and a live account always has its name (ERD §15
@@ -71,6 +72,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { type PackageRow, subjectSummariesOf } from '../catalog/index.js';
 import { accountTimezone, displayNamesOf } from '../identity/index.js';
+import { openComplaintOf } from '../moderation/index.js';
 import {
   type DaySession,
   type EnrollmentSessionRow,
@@ -155,6 +157,8 @@ export interface EnrollmentListsStore {
     tx: Transaction,
     sessionIds: readonly string[],
   ): Promise<ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>>;
+  /** 004:T060: whether the enrollment's complaint of the teacher's absence is open (moderation's). */
+  complaintOpenOf(tx: Transaction, enrollmentId: string): Promise<boolean>;
 }
 
 /** The store over booking's own queries and the owners' entries (R-API-6). */
@@ -173,6 +177,7 @@ export const enrollmentListsStore: EnrollmentListsStore = {
   timezoneOf: accountTimezone,
   pendingCancellationsOf: pendingCancellationsAmong,
   remedyStatusesOf: remedyStatusesAmong,
+  complaintOpenOf: async (tx, enrollmentId) => (await openComplaintOf(tx, enrollmentId)) !== null,
 };
 
 /** The read's instant, and the ended tab's page size read before the transaction. */
@@ -371,12 +376,16 @@ export async function studentEnrollmentOf(
 ): Promise<EnrollmentsGetOutput> {
   const row = await store.listedOf(tx, enrollmentId, { studentUserId });
   if (row === null) throw new DomainError('NOT_FOUND');
-  const context = await contextOf(tx, store, [row], ofTeacher, now);
+  const [context, complaintOpen] = await Promise.all([
+    contextOf(tx, store, [row], ofTeacher, now),
+    store.complaintOpenOf(tx, row.id),
+  ]);
   return {
     ...studentItemOf(row, context),
     sessions: (context.sessions.get(row.id) ?? []).map((one) =>
       listedSessionOf(one, context.pending, context.remedies),
     ),
+    complaintOpen,
   };
 }
 

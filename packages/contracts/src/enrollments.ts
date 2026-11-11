@@ -136,6 +136,11 @@ export const enrollmentsGetInput = z.object({ enrollmentId: z.uuid() });
 /** The enrollment and every session of it by sequence number (FR-390). */
 export const enrollmentsGetOutput = studentEnrollmentItem.extend({
   sessions: z.array(listedSession),
+  /**
+   * 004:T060 (FR-452; app-surface.md, `complaintOpen`): whether the student's complaint of the
+   * teacher's absence is open, so the button reads «شكوتك قيد المراجعة»; additive (R-API-9).
+   */
+  complaintOpen: z.boolean(),
 });
 
 export type EnrollmentListTab = z.infer<typeof enrollmentListTab>;

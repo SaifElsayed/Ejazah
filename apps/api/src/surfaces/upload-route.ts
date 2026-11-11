@@ -19,12 +19,19 @@
 //
 // It lives beside the surfaces, as the public-configuration router does, because it reads the
 // session types and the bearer the surfaces define, and the kernel depends on nothing above it.
+//
+// T038 of specs/004-sessions (the chat's documents, `POST /uploads/chat`, the third use; approved
+// on 2026-11-11 under five conditions): the handler is handed the fields that preceded the file
+// (`fields`), the type is any the kind accepts (`text/plain` for the chat's text), and a route may
+// name a `refused` hook, called with each refusal once the caller and the fields are known, before
+// the answer, which it never changes: a hook that throws is caught and the refusal still answered.
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DomainError } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
 import { reportError } from '../platform/errors/reporting.js';
 import {
+  type AcceptedType,
   acceptUploadOfKind,
   type SniffedType,
   UPLOAD_MAX_BYTES_SETTING,
@@ -81,14 +88,25 @@ export interface Uploader {
 export interface AcceptedUpload<TKind extends UploadKind> {
   readonly uploader: Uploader;
   readonly kind: TKind;
-  readonly type: SniffedType;
+  /** T038: `text/plain` only for the chat kind; every other kind's type is a sniffed one, as before. */
+  readonly type: TKind extends 'chat' ? AcceptedType : SniffedType;
   readonly bytes: Buffer;
   readonly filename: string | undefined;
+  /** T038 of specs/004-sessions: the text fields that preceded the file, as `kindOf` read them. */
+  readonly fields: ReadonlyMap<string, string>;
   /**
    * The upload's after-commit list (T063): events added here go out once `handle` resolves, its
    * own transaction committed, and none when it throws (T066's chat documents use it).
    */
   readonly live: LivePublisher;
+}
+
+/** T038 of specs/004-sessions: what a refusal hook is handed beside the error. */
+export interface RefusedUpload {
+  readonly uploader: Uploader;
+  readonly fields: ReadonlyMap<string, string>;
+  /** The request's logger. */
+  readonly log: Logger;
 }
 
 export interface UploadRoute<TKind extends UploadKind> {
@@ -98,6 +116,11 @@ export interface UploadRoute<TKind extends UploadKind> {
   readonly refuses: readonly AccountStatus[];
   /** Stores the file and answers what the client gets, as JSON with status 201. */
   readonly handle: (upload: AcceptedUpload<TKind>) => Promise<object>;
+  /**
+   * T038 of specs/004-sessions: hears each refusal once the caller and the fields are known, before
+   * the answer, which it never changes; a throw from it is caught.
+   */
+  readonly refused?: (error: unknown, upload: RefusedUpload) => void;
 }
 
 /** A `kindOf` reading the `kind` field, admitting the kinds named and nothing else. */
@@ -162,6 +185,8 @@ export function uploadRoute<TKind extends UploadKind>(
     );
     const requestLog = requestLogger(log, correlationId).child({ clientAddress });
     const afterCommit = new RequestLive(live ?? unboundBus, requestLog);
+    // T038: what the route's refusal hook is handed, once the caller and the fields are known.
+    let heard: RefusedUpload | undefined;
     void (async () => {
       try {
         const { pathname } = new URL(request.url ?? '/', 'http://local');
@@ -192,6 +217,12 @@ export function uploadRoute<TKind extends UploadKind>(
           }
         }
         const file = await firstFileOf(request, FIELD_LIMITS);
+        const uploader = {
+          userId: session.userId,
+          role: session.role,
+          accountStatus: session.accountStatus,
+        };
+        heard = { uploader, fields: file.fields, log: requestLog };
         const kind = route.kindOf(file.fields);
         const upload = await acceptUploadOfKind(guard, {
           kind,
@@ -202,15 +233,13 @@ export function uploadRoute<TKind extends UploadKind>(
         const chunks: Uint8Array[] = [];
         for await (const chunk of upload.body) chunks.push(chunk);
         const result = await route.handle({
-          uploader: {
-            userId: session.userId,
-            role: session.role,
-            accountStatus: session.accountStatus,
-          },
+          uploader,
           kind,
-          type: upload.type,
+          // The guard admits for each kind only that kind's types (above).
+          type: upload.type as AcceptedUpload<TKind>['type'],
           bytes: Buffer.concat(chunks),
           filename: file.filename,
+          fields: file.fields,
           live: afterCommit,
         });
         // The upload route's after-commit point (T063): the handler's transaction has committed.
@@ -229,6 +258,14 @@ export function uploadRoute<TKind extends UploadKind>(
         if (mapped.unexpected) {
           requestLog.error({ err: error }, 'Unexpected error on an upload route');
           reportError(error, correlationId);
+        }
+        if (heard !== undefined && route.refused !== undefined) {
+          try {
+            route.refused(error, heard);
+          } catch {
+            // T038: the hook never changes the answer; its failure is named, never its error's text.
+            requestLog.warn({}, 'An upload route’s refusal hook failed');
+          }
         }
         refuse(request, response, mapped);
       }

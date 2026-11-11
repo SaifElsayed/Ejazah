@@ -88,6 +88,9 @@ import type {
   auditGetOutput,
   auditListInput,
   auditListOutput,
+  // T060.
+  casesDecideComplaintInput,
+  casesDecideComplaintOutput,
   casesDismissInput,
   casesDismissOutput,
   casesGetInput,
@@ -128,6 +131,16 @@ import type {
   sessionsReviewReviseOutput,
   disputesReviseInput,
   disputesReviseOutput,
+  // T040 of specs/004-sessions: a deleted party's held files.
+  disputesHeldFilesInput,
+  disputesHeldFilesOutput,
+  disputesHeldFileLinkInput,
+  disputesHeldFileLinkOutput,
+  disputesChatInput,
+  disputesChatOutput,
+  // T061.
+  sessionsRestoreInput,
+  sessionsRestoreOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -143,6 +156,8 @@ import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
+// T037 of specs/004-sessions.
+import type { ChatServices } from '../modules/chat/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
@@ -276,6 +291,8 @@ export interface AppServices {
   readonly checkout: CheckoutServices;
   /** `sessions.get` and `sessions.join`: the sessions module's services (T011 of specs/004-sessions). */
   readonly sessions: SessionsServices;
+  /** T037 of specs/004-sessions: `chat.list` and `chat.send`, the chat module's services. */
+  readonly chat: ChatServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
@@ -568,6 +585,12 @@ export interface AdminSurfaceServices {
       readonly answer: z.input<typeof casesOpenManualOutput>;
       readonly replayed: boolean;
     }>;
+    // T060: an open complaint of a teacher's absence decided on the call's transaction.
+    decideComplaint(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof casesDecideComplaintInput>,
+    ): Answer<typeof casesDecideComplaintOutput>;
   };
   /**
    * The review queue (FR-446, FR-450, FR-477; T033 of specs/004-sessions), the sessions module's,
@@ -628,6 +651,41 @@ export interface AdminSurfaceServices {
       input: z.output<typeof disputesReviseInput>,
     ): Promise<{
       readonly outcome: z.input<typeof disputesReviseOutput>;
+      readonly replayed: boolean;
+    }>;
+    /** T040: a deleted party's held files inside the open matter, metadata only (FR-487, R-327). */
+    heldFiles(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesHeldFilesInput>,
+    ): Answer<typeof disputesHeldFilesOutput>;
+    /** T040: one signed link to one of them, per press. */
+    heldFileLink(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesHeldFileLinkInput>,
+    ): Answer<typeof disputesHeldFileLinkOutput>;
+    /** T040: a page of the enrollment's chat inside the open matter, and its enrollment. */
+    chat(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesChatInput>,
+    ): Promise<{
+      readonly enrollmentId: string;
+      readonly page: z.input<typeof disputesChatOutput>;
+    }>;
+  };
+  /**
+   * T061 of specs/004-sessions (FR-454, FR-455): an administrator's restore, the sessions module's,
+   * keyed on the call's transaction; `replayed` from the key's row.
+   */
+  readonly restore: {
+    restore(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsRestoreInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof sessionsRestoreOutput>;
       readonly replayed: boolean;
     }>;
   };

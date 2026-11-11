@@ -448,3 +448,51 @@ export const sessionsReviewReviseOutput = z.object({
 
 export type SessionsReviewReviseInput = z.infer<typeof sessionsReviewReviseInput>;
 export type SessionsReviewReviseOutput = z.infer<typeof sessionsReviewReviseOutput>;
+
+// T061 of specs/004-sessions (FR-454, FR-455, FR-470; SRS FR-CANCEL-8; research R-322, «The
+// restore»; ADR 0023 D4; admin-surface.md, `sessions.restore`): an administrator restores an
+// enrollment an administrator's decision closed, within the restore window, with a mandatory reason,
+// keyed under the administrator's idempotency key. Refused `RESTORE_REFUSED` with `details.cause`
+// one of eight causes, writing nothing. No amount crosses and `confirmed_at` is never written.
+
+/** Why a restore was refused (R-322, steps 1 to 6). */
+export const restoreRefusalCause = z.enum([
+  'not_restorable',
+  'window_closed',
+  'case_closed',
+  'party_restricted',
+  'slot_inactive',
+  'slot_changed',
+  'slot_taken',
+  'time_taken',
+]);
+
+export const sessionsRestoreInput = z.object({
+  enrollmentId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+/** One session the restore created, its local date, start and zone beside its instant. */
+export const restoredSession = z.object({
+  sessionId: z.uuid(),
+  sequenceNumber: z.int().positive(),
+  localDate: calendarDate,
+  startTimeLocal: slotStartTimeLocal,
+  timezone: timeZone,
+  startsAt: z.iso.datetime(),
+});
+
+export const sessionsRestoreOutput = z.object({
+  enrollmentId: z.uuid(),
+  status: z.literal('confirmed'),
+  sessionsCreated: z.array(restoredSession),
+  /** The remedies the closing's case held, offered again. */
+  remediesOffered: z.int().nonnegative(),
+  /** The closing's case, closed `dismissed` with the note `restored`. */
+  caseId: z.uuid(),
+});
+
+export type RestoreRefusalCause = z.infer<typeof restoreRefusalCause>;
+export type SessionsRestoreInput = z.infer<typeof sessionsRestoreInput>;
+export type SessionsRestoreOutput = z.infer<typeof sessionsRestoreOutput>;

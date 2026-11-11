@@ -58,6 +58,7 @@ const [
   { evaluateSessions },
   { expireCancellationRequests },
   { advanceRemedies },
+  { purgeChat },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -93,6 +94,7 @@ const [
   import('./jobs/evaluate-sessions.js'),
   import('./jobs/expire-cancellation-requests.js'),
   import('./jobs/advance-remedies.js'),
+  import('./jobs/purge-chat.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -227,6 +229,10 @@ const jobs: readonly Job[] = [
   // a make-up offered its remedy once its outcome is final, frozen remedies offered again, and the
   // completion check, which an open student_suspended or admin_cancellation case holds (Q3 (a)).
   advanceRemedies({ database, settings, enrollments: enrollmentSide, completion, log }),
+  // The chat purge (T039 of specs/004-sessions, FR-492), daily: each ended enrollment's chat once its
+  // last disputable session's window and `chat_retention_days` have passed and nothing is open on
+  // it, under its lock; the files removed after the commit and retried by the next run.
+  purgeChat({ database, settings, storage: ports.storage, log }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);

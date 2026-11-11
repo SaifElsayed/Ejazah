@@ -14,6 +14,13 @@ counter left unanswered handed to a case; a proposal booked at the choice window
 least the remedy's lead away, then handed to a `makeup_refused` case and reported once). Each item is on its own
 transaction and its failure caught on its own; every read is paged.
 
+`purge-chat` (daily; T039 of specs/004-sessions, FR-492) runs chat's purge through the module's entry: first the
+purged messages whose file a previous run could not remove, then each ended enrollment whose last disputable
+session's end plus `dispute_window_hours` and `chat_retention_days` has passed with no open dispute, case or
+complaint, each in its own transaction under its enrollment's lock; the files removed after the commit, the key kept
+until then, so a failed removal is retried by the next run. It deletes for good: the bodies, the attachments' names
+and types, and the files.
+
 Every job is idempotent and proves it with a double-run assertion in its own test (R-API-14, FR-052).
 Push delivery is reachable only from the queued notification job (R-API-15).
 

@@ -16,6 +16,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -120,6 +121,7 @@ export function profileSurfaceOf(teacherProfile: TeacherProfileServices) {
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

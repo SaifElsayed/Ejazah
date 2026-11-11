@@ -81,6 +81,12 @@ import {
   createDiscoveryCatalog,
   revokeSubjects,
 } from '../../apps/api/src/modules/catalog/index.js';
+// T037 of specs/004-sessions.
+import {
+  CHAT_UPLOAD_PATH,
+  createChatServices,
+  createChatUploadRoute,
+} from '../../apps/api/src/modules/chat/index.js';
 import {
   AccountConsequences,
   createIdentityServices,
@@ -127,6 +133,8 @@ import {
 import { appRouter } from '../../apps/api/src/surfaces/app.router.js';
 import { type AppServices, createAppContext } from '../../apps/api/src/surfaces/context.js';
 import { createAppCallerFactory } from '../../apps/api/src/surfaces/procedures.js';
+// T038 of specs/004-sessions: the chat's documents kept in memory, each operation recorded.
+import { multipart, storageStub } from '../../apps/api/src/surfaces/upload-fixtures.js';
 import {
   unusedCatalogServices,
   unusedTeacherProfileServices,
@@ -135,6 +143,12 @@ import {
 import type {
   BookingSlotsInput,
   BookingSlotsOutput,
+  ChatAttachmentLinkInput,
+  ChatAttachmentLinkOutput,
+  ChatListInput,
+  ChatListOutput,
+  ChatSendInput,
+  ChatSendOutput,
   CheckoutContinueInput,
   CheckoutContinueOutput,
   CheckoutCurrentOutput,
@@ -160,6 +174,8 @@ import type {
   SessionsCancellationAnswerOutput,
   SessionsCancellationRequestInput,
   SessionsCancellationRequestOutput,
+  SessionsComplaintRaiseInput,
+  SessionsComplaintRaiseOutput,
   SessionsDisputeRaiseInput,
   SessionsDisputeRaiseOutput,
   SessionsGetInput,
@@ -333,6 +349,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   rate_limit_payment_initiation: { limit: 10, window_seconds: 600 },
   // Every signed-in call with no limit of its own is counted by it since T062 (FR-470).
   rate_limit_signed_in_default: { limit: 150, window_seconds: 60 },
+  // 004:T060: `sessions.complaint.raise` declares its own limit (FR-452).
+  rate_limit_absence_complaint: { limit: 5, window_seconds: 3600 },
   slot_hold_ttl_minutes: 10,
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
@@ -350,6 +368,12 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   video_departure_timeout_seconds: 20,
   // T026: `sessions.dispute.raise`'s window.
   dispute_window_hours: 72,
+  // T037 of specs/004-sessions: `chat.list`'s page and `chat.send`'s limit.
+  chat_page_size: 50,
+  rate_limit_chat_message: { limit: 30, window_seconds: 60 },
+  // T038: the chat's documents, as seeded (`document_link_ttl_seconds` is above).
+  upload_max_bytes: 10_485_760,
+  rate_limit_upload: { limit: 20, window_seconds: 600 },
 };
 
 const settings: SettingsReader = {
@@ -425,6 +449,17 @@ export interface AppCaller {
         input: SessionsRemedyAnswerCounterInput,
       ): Promise<SessionsRemedyAnswerCounterOutput>;
     };
+    /** T060: the student's complaint of the teacher's absence, attacked in `sessions.attacks.ts`. */
+    readonly complaint: {
+      raise(input: SessionsComplaintRaiseInput): Promise<SessionsComplaintRaiseOutput>;
+    };
+  };
+  /** T037 of specs/004-sessions: an enrollment's chat read and written, attacked in `chat.attacks.ts`. */
+  readonly chat: {
+    list(input: ChatListInput): Promise<ChatListOutput>;
+    send(input: ChatSendInput): Promise<ChatSendOutput>;
+    /** T038: a signed link to a message's document, attacked in `chat.attacks.ts`. */
+    attachmentLink(input: ChatAttachmentLinkInput): Promise<ChatAttachmentLinkOutput>;
   };
 }
 
@@ -529,6 +564,19 @@ export interface DiscoverySurface {
   readonly video: RecordedVideo;
   /** T011 (K2): the account's gender changed in place, as the server's record after a correction. */
   setGender(userId: string, gender: Gender): Promise<void>;
+  /**
+   * T038 of specs/004-sessions: `POST /uploads/chat` on the world's server, as the phone sends it:
+   * the bearer, then the fields in order, then one file.
+   */
+  uploadChat(
+    accessToken: string,
+    fields: Readonly<Record<string, string>>,
+    file: Buffer,
+  ): Promise<Response>;
+  /** T038: the chat's in-memory storage, each operation recorded. */
+  readonly chatStorage: ReturnType<typeof storageStub>;
+  /** T038: removes a spec's chat documents, their rows by id and their files by their exact keys. */
+  discardChatDocuments(messageIds: readonly string[]): Promise<void>;
 }
 
 /** An account standing a case moves a teacher to (SRS §3.7.1, `002:T143`). */
@@ -584,8 +632,15 @@ async function build(): Promise<Built> {
 
   // The webhook is bound once the origin is known: the stand-in's port is built from it.
   let route: ReturnType<typeof createPaymentWebhookRoute> | undefined;
+  // T038 of specs/004-sessions: the chat's upload route, bound once the services are.
+  let chatUpload: ReturnType<typeof createChatUploadRoute> | undefined;
   const server = createServer((request, response) => {
     const url = request.url ?? '/';
+    if (chatUpload !== undefined && url === CHAT_UPLOAD_PATH) {
+      request.url = '/';
+      chatUpload(request, response);
+      return;
+    }
     if (
       route === undefined ||
       (url !== PAYMENT_WEBHOOK_PATH && !url.startsWith(`${PAYMENT_WEBHOOK_PATH}/`))
@@ -666,6 +721,8 @@ async function build(): Promise<Built> {
   const catalog = createDiscoveryCatalog(settings, storage);
   const reads = transactionsOver(database);
   const video = recordedVideo(encryptionKey);
+  // T038: the chat's documents and their links, in memory.
+  const chatStorage = storageStub();
   const services: AppServices = {
     settings,
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
@@ -705,6 +762,15 @@ async function build(): Promise<Built> {
       // run in its transaction.
       idempotency,
     }),
+    // As `main.ts` binds it (T037 of specs/004-sessions): over booking's side, `chat.send` keyed.
+    chat: createChatServices({
+      transactions: reads,
+      idempotency,
+      settings,
+      enrollments: createEnrollmentSide({ settings }),
+      // T038: `chat.attachmentLink`'s signed links.
+      storage: chatStorage,
+    }),
   };
   const rateLimiter = new RateLimiter({
     settings,
@@ -712,6 +778,15 @@ async function build(): Promise<Built> {
     subjectKey: Buffer.alloc(32, 1),
   });
   const resolve = resolveUserSession(identityBase);
+  // As `main.ts` mounts it (T038 of specs/004-sessions): over the identity resolver and the guard.
+  chatUpload = createChatUploadRoute({
+    sessions: resolve,
+    guard: { settings, rateLimiter },
+    log,
+    storage: chatStorage,
+    transactions: reads,
+    enrollments: createEnrollmentSide({ settings }),
+  });
   const bearing = async (accessToken: string): Promise<AppCaller> =>
     callerFactory(
       createAppContext({
@@ -1071,6 +1146,29 @@ async function build(): Promise<Built> {
     video,
     async setGender(userId, gender) {
       await database.user.update({ where: { id: userId }, data: { gender } });
+    },
+    uploadChat(accessToken, fields, file) {
+      const payload = multipart([
+        ...Object.entries(fields).map(([name, value]) => ({ name, value })),
+        { name: 'file', filename: 'upload.bin', type: 'application/octet-stream', bytes: file },
+      ]);
+      return fetch(`${origin}${CHAT_UPLOAD_PATH}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${accessToken}`, 'content-type': payload.contentType },
+        body: new Uint8Array(payload.body),
+      });
+    },
+    chatStorage,
+    async discardChatDocuments(messageIds) {
+      if (messageIds.length === 0) return;
+      const rows = await database.chatMessage.findMany({
+        where: { id: { in: [...messageIds] } },
+        select: { attachmentKey: true },
+      });
+      await database.chatMessage.deleteMany({ where: { id: { in: [...messageIds] } } });
+      for (const { attachmentKey } of rows) {
+        if (attachmentKey !== null) await chatStorage.remove(attachmentKey);
+      }
     },
     async allTabIds(gender) {
       // SRS §3.7.1's five conjuncts as written, and FR-332's "with an active package".

@@ -553,7 +553,7 @@ describe('EnrollmentsEnded', () => {
 });
 
 describe('EnrollmentDetail', () => {
-  const detail: EnrollmentsGetOutput = { ...ongoing, sessions };
+  const detail: EnrollmentsGetOutput = { ...ongoing, sessions, complaintOpen: false };
 
   it('draws the enrollment, its weekly time in both zones, its progress and every session with its status', async () => {
     mockApi.api.enrollments.get.query.mockResolvedValue(detail);

@@ -47,6 +47,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -217,6 +218,7 @@ function fixture(
     booking: unusedBookingServices,
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
+    chat: unusedChatServices,
   };
   const callerFor = createAppCallerFactory(router);
   const anonymous = () =>
