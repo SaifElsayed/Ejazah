@@ -347,12 +347,14 @@ const routes = {
   }),
   // The video provider's signed webhook (T012 of specs/004-sessions, R-SESS-7): its raw body read
   // under the request limit, verified through the video port before anything runs, and an
-  // attendance event recorded once under its provider id.
+  // attendance event recorded once under its provider id; T065: once it commits, the other
+  // participant (both, for the room's end) is sent `session` over the bus.
   [sessionsModule.VIDEO_WEBHOOK_PATH]: sessionsModule.createVideoWebhookRoute({
     transactions: transactionsOver(database),
     video: ports.video,
     log,
     maxBodyBytes: config.MAX_REQUEST_BODY_BYTES,
+    live: liveBus,
   }),
   // The stand-in's hosted page (T012, R-213): a route only while the payment port is the stand-in
   // (`PAYMENT_GATEWAY=fake`); it posts its signed events to the webhook above over HTTP.
