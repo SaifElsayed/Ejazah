@@ -18,6 +18,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { CaseRecord } from '../moderation/index.js';
+import type { DisputeChatPage } from './dispute-chat.port.js';
 import type { DisputeHeldFiles, HeldFile } from './dispute-held-files.port.js';
 import { createDisputeMatterReads } from './dispute-matter.service.js';
 import type { EnrollmentTerms } from './enrollment-side.port.js';
@@ -31,6 +32,19 @@ const TEACHER = '0199d0a0-0000-7000-8000-000000000902';
 const DOCUMENT = '0199d0a0-0000-7000-8000-000000000a01';
 const UPLOADED_AT = new Date('2026-10-01T08:30:00.000Z');
 const LINK = { url: 'https://storage.invalid/signed', expiresAt: '2026-11-11T09:05:00.000Z' };
+const PAGE: DisputeChatPage = {
+  messages: [
+    {
+      messageId: '0199d0a0-0000-7000-8000-0000000c0001',
+      senderRole: 'teacher',
+      body: 'السلام عليكم',
+      sentAt: '2026-11-09T08:00:00.000Z',
+      purged: false,
+    },
+  ],
+  nextCursor: '0199d0a0-0000-7000-8000-0000000c0001',
+};
+const CURSOR = '0199d0a0-0000-7000-8000-0000000c0009';
 
 function record(
   status: CaseRecord['status'] = 'open',
@@ -76,6 +90,7 @@ function world({
   terms = TERMS as EnrollmentTerms | null,
   held = HELD,
   link = LINK as typeof LINK | null,
+  page = PAGE as DisputeChatPage | null,
 } = {}) {
   const asked: unknown[][] = [];
   const lines: { fields: Record<string, unknown>; message: string | undefined }[] = [];
@@ -97,6 +112,12 @@ function world({
       },
     },
     heldFiles: port,
+    chat: {
+      chatPage: async (_tx, enrollmentId, cursor) => {
+        asked.push(['chatPage', enrollmentId, cursor]);
+        return page;
+      },
+    },
     log: {
       info: (fields: Record<string, unknown>, message?: string) =>
         void lines.push({ fields, message }),
@@ -264,5 +285,55 @@ describe('disputes.heldFileLink (FR-487, R-327)', () => {
       ).code,
     ).toBe('NOT_FOUND');
     expect(asked).toEqual([['caseRecordOf', DISPUTE]]);
+  });
+});
+
+describe('disputes.chat (FR-475, R-314)', () => {
+  it.each(['session_dispute', 'compensation_case', 'absence_complaint'] as const)(
+    'answers the port’s page of the enrollment’s chat inside an open %s, with its enrollment',
+    async (kind) => {
+      const { reads, asked } = world({ dispute: record('open', kind) });
+      expect(await reads.chat(tx, ADMIN, { disputeId: DISPUTE, cursor: CURSOR })).toEqual({
+        enrollmentId: ENROLLMENT,
+        page: PAGE,
+      });
+      expect(asked).toEqual([
+        ['caseRecordOf', DISPUTE],
+        ['chatPage', ENROLLMENT, CURSOR],
+      ]);
+    },
+  );
+
+  it.each(['resolved', 'dismissed'] as const)(
+    'a %s dispute is CONFLICT not_open, the chat never asked, one line of ids',
+    async (status) => {
+      const { reads, asked, lines } = world({ dispute: record(status) });
+      const error = await refusalOf(reads.chat(tx, ADMIN, { disputeId: DISPUTE }));
+      expect(error.code).toBe('CONFLICT');
+      expect(error.details).toEqual([{ path: 'cause', code: 'not_open' }]);
+      expect(isRefusalLogged(error)).toBe(true);
+      expect(asked).toEqual([['caseRecordOf', DISPUTE]]);
+      expect(lines.map(({ fields }) => fields)).toEqual([
+        {
+          adminId: ADMIN,
+          disputeId: DISPUTE,
+          enrollmentId: ENROLLMENT,
+          errorCode: 'CONFLICT',
+          cause: 'not_open',
+        },
+      ]);
+    },
+  );
+
+  it('no dispute is NOT_FOUND, the chat never asked', async () => {
+    const { reads, asked } = world({ dispute: null });
+    expect((await refusalOf(reads.chat(tx, ADMIN, { disputeId: DISPUTE }))).code).toBe('NOT_FOUND');
+    expect(asked).toEqual([['caseRecordOf', DISPUTE]]);
+  });
+
+  it('an enrollment the chat does not find is NOT_FOUND', async () => {
+    const { reads, lines } = world({ page: null });
+    expect((await refusalOf(reads.chat(tx, ADMIN, { disputeId: DISPUTE }))).code).toBe('NOT_FOUND');
+    expect(lines.map(({ fields }) => fields.cause)).toEqual(['no_enrollment']);
   });
 });

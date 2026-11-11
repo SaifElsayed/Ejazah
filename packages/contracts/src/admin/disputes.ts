@@ -5,6 +5,7 @@
 // `revisions` are T059's, added then (R-API-9).
 import { z } from 'zod';
 
+import { chatMessage } from '../chat.js';
 import { sessionStatus } from '../enrollments.js';
 import { idempotencyKey } from '../idempotency-key.js';
 import { adminReason } from './admins.js';
@@ -196,3 +197,21 @@ export type DisputesHeldFilesOutput = z.infer<typeof disputesHeldFilesOutput>;
 export type HeldFileItem = z.infer<typeof heldFile>;
 export type DisputesHeldFileLinkInput = z.infer<typeof disputesHeldFileLinkInput>;
 export type DisputesHeldFileLinkOutput = z.infer<typeof disputesHeldFileLinkOutput>;
+
+// T040 of specs/004-sessions (FR-475, FR-480; research R-314; admin-surface.md, `disputes.chat`): the
+// enrollment's chat, read by an administrator while a dispute of it is open, the page as `chat.list`
+// answers it with each sender named by its role in place of `mine`.
+export const disputesChatInput = z.object({ disputeId: z.uuid(), cursor: z.uuid().optional() });
+
+export const disputeChatMessage = chatMessage
+  .omit({ mine: true })
+  .extend({ senderRole: z.enum(['student', 'teacher']) });
+
+export const disputesChatOutput = z.object({
+  messages: z.array(disputeChatMessage),
+  nextCursor: z.uuid().optional(),
+});
+
+export type DisputesChatInput = z.infer<typeof disputesChatInput>;
+export type DisputeChatMessage = z.infer<typeof disputeChatMessage>;
+export type DisputesChatOutput = z.infer<typeof disputesChatOutput>;

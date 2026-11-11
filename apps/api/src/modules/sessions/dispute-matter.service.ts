@@ -1,6 +1,6 @@
 // T040 of specs/004-sessions/tasks.md (FR-475, FR-480, spec FR-487; SRS FR-AUTH-14 as amended on
 // 2026-11-06; research R-301, R-314, R-327 «The administrator's read»; contracts/admin-surface.md,
-// `disputes.heldFiles` and `disputes.heldFileLink`; contracts/kernel.md, "The composition root"; the
+// `disputes.chat`, `disputes.heldFiles` and `disputes.heldFileLink`; contracts/kernel.md, "The composition root"; the
 // notes under T040): what an administrator reads inside an open matter, on the administrator call's
 // transaction. The audit entries are the router's.
 //
@@ -18,6 +18,11 @@
 // reference, kind, owner's role and upload date where recorded, never a link or a storage key
 // (U4); the link is one per call, and a reference the port does not mint is `NOT_FOUND`.
 //
+// THE CHAT. The `DisputeChat` port, bound by `main.ts` to chat's `createDisputeChat()` (sessions
+// imports no chat, R-301; C5), asked with the open dispute's enrollment only: the page as `chat.list`
+// answers it, each sender named by its role (R-314). The router audits each page `chat.read` on the
+// enrollment, so the answer names it.
+//
 // THE LOG (the owner's rule). A refusal writes one info line of ids and its cause, marked «logged»;
 // never the reference, which is the caller's text. A read writes none.
 import type {
@@ -31,6 +36,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { type CaseRecord, caseRecordOf } from '../moderation/index.js';
+import type { DisputeChat, DisputeChatPage } from './dispute-chat.port.js';
 import type { DisputeHeldFiles } from './dispute-held-files.port.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 
@@ -55,12 +61,20 @@ export interface DisputeMatterReads {
     adminId: string,
     input: { readonly disputeId: string; readonly fileRef: string },
   ): Promise<DisputesHeldFileLinkOutput>;
+  /** `disputes.chat`: a page of the enrollment's chat, and the enrollment the audit names. */
+  chat(
+    tx: Transaction,
+    adminId: string,
+    input: { readonly disputeId: string; readonly cursor?: string },
+  ): Promise<{ readonly enrollmentId: string; readonly page: DisputeChatPage }>;
 }
 
 export interface DisputeMatterDependencies {
   readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor'>;
   /** The port `main.ts` binds to verification's `createDisputeHeldFiles()`. */
   readonly heldFiles: DisputeHeldFiles;
+  /** The port `main.ts` binds to chat's `createDisputeChat()`. */
+  readonly chat: DisputeChat;
   /** For the refusals' lines. */
   readonly log: Pick<Logger, 'info'>;
   readonly store?: DisputeMatterStore;
@@ -98,6 +112,7 @@ interface OpenMatter {
 export function createDisputeMatterReads({
   enrollments,
   heldFiles,
+  chat,
   log,
   store = disputeMatterStore,
 }: DisputeMatterDependencies): DisputeMatterReads {
@@ -162,6 +177,15 @@ export function createDisputeMatterReads({
         throw refusal(log, { adminId, disputeId, enrollmentId }, 'NOT_FOUND', 'not_held');
       }
       return link;
+    },
+
+    chat: async (tx, adminId, { disputeId, cursor }) => {
+      const { enrollmentId } = await openDispute(tx, adminId, disputeId);
+      const page = await chat.chatPage(tx, enrollmentId, cursor);
+      if (page === null) {
+        throw refusal(log, { adminId, disputeId, enrollmentId }, 'NOT_FOUND', 'no_enrollment');
+      }
+      return { enrollmentId, page };
     },
   };
 }

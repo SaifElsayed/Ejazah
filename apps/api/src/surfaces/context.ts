@@ -133,6 +133,8 @@ import type {
   disputesHeldFilesOutput,
   disputesHeldFileLinkInput,
   disputesHeldFileLinkOutput,
+  disputesChatInput,
+  disputesChatOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -651,6 +653,15 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof disputesHeldFileLinkInput>,
     ): Answer<typeof disputesHeldFileLinkOutput>;
+    /** T040: a page of the enrollment's chat inside the open matter, and its enrollment. */
+    chat(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof disputesChatInput>,
+    ): Promise<{
+      readonly enrollmentId: string;
+      readonly page: z.input<typeof disputesChatOutput>;
+    }>;
   };
 }
 

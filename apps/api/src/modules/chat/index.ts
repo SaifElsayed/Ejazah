@@ -13,3 +13,7 @@ export {
   type ChatServices,
   createChatServices,
 } from './chat.service.js';
+
+// T040 of specs/004-sessions: the binding of sessions' `DisputeChat` port (`disputes.chat`; FR-475,
+// research R-301, R-314), which `main.ts` hands the administrator's services.
+export { createDisputeChat, type DisputeChatDependencies } from './dispute-chat.js';

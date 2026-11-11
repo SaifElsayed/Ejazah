@@ -24,7 +24,11 @@
 // `held_file.view` on the dispute with the `fileRef` in `after`, one entry per press, as
 // `documents.link` records `document.view`. The list's output schema names a file by its reference
 // only, so neither a link nor a storage key leaves it. What each does is `dispute-matter.service.ts`'.
+// `disputes.chat` audits `chat.read` on the dispute's enrollment, one entry per page read; its output
+// schema names each sender by its role only (R-314).
 import {
+  disputesChatInput,
+  disputesChatOutput,
   disputesGetInput,
   disputesGetOutput,
   disputesHeldFileLinkInput,
@@ -137,4 +141,17 @@ export const disputesAdminRouter = createAdminRouter({
     });
     return link;
   }),
+
+  // T040: the enrollment's chat, inside the open matter only.
+  chat: adminProcedure({ input: disputesChatInput, output: disputesChatOutput }).query(
+    async ({ ctx, input }) => {
+      const { enrollmentId, page } = await ctx.services.disputes.chat(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      ctx.audit.record({ action: 'chat.read', targetType: 'enrollment', targetId: enrollmentId });
+      return page;
+    },
+  ),
 });

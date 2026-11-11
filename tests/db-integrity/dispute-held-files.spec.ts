@@ -33,6 +33,7 @@ import {
   createEnrollmentSide,
   heldFileOwnersAmong,
 } from '../../apps/api/src/modules/booking/index.js';
+import { createDisputeChat } from '../../apps/api/src/modules/chat/index.js';
 import { createErasedPhotos } from '../../apps/api/src/modules/identity/index.js';
 import { createDisputeMatterReads } from '../../apps/api/src/modules/sessions/index.js';
 import {
@@ -79,6 +80,7 @@ const ADMIN = randomUUID();
 const SETTINGS: Readonly<Record<string, unknown>> = {
   document_link_ttl_seconds: 300,
   slot_release_buffer_weeks: 1,
+  chat_page_size: 50,
 };
 
 const settings: SettingsReader = {
@@ -132,6 +134,7 @@ const reads = () =>
   createDisputeMatterReads({
     enrollments: createEnrollmentSide({ settings }),
     heldFiles: createDisputeHeldFiles({ database, storage, cipher, settings }),
+    chat: createDisputeChat({ enrollments: createEnrollmentSide({ settings }), settings }),
     log: { info: () => undefined },
   });
 
@@ -452,5 +455,47 @@ describe('the ordinary readers while a file is held (FR-487, the fifth analysis,
         reads().heldFileLink(tx, ADMIN, { disputeId: caseId, fileRef: `document:${documentId}` }),
       ),
     ).toMatchObject({ url: `https://storage.invalid/${key}` });
+  });
+});
+
+describe('disputes.chat over the real tables (FR-475, R-314)', () => {
+  it('answers the enrollment’s chat newest first, each sender by its role, inside the open matter only', async () => {
+    const world = await matter();
+    const first = await insertRow(db, 'chat_messages', {
+      enrollment_id: world.enrollmentId,
+      sender_user_id: world.studentId,
+      body: 'السلام عليكم',
+      sent_at: '2026-11-09T08:00:00Z',
+    });
+    const second = await insertRow(db, 'chat_messages', {
+      enrollment_id: world.enrollmentId,
+      sender_user_id: world.teacherId,
+      body: 'وعليكم السلام',
+      sent_at: '2026-11-09T08:01:00Z',
+    });
+    const read = () => inTx((tx) => reads().chat(tx, ADMIN, { disputeId: world.caseId }));
+    expect(await read()).toEqual({
+      enrollmentId: world.enrollmentId,
+      page: {
+        messages: [
+          {
+            messageId: second,
+            senderRole: 'teacher',
+            body: 'وعليكم السلام',
+            sentAt: '2026-11-09T08:01:00.000Z',
+            purged: false,
+          },
+          {
+            messageId: first,
+            senderRole: 'student',
+            body: 'السلام عليكم',
+            sentAt: '2026-11-09T08:00:00.000Z',
+            purged: false,
+          },
+        ],
+      },
+    });
+    await closeCase(world.caseId);
+    expect(await codeOf(read())).toEqual({ code: 'CONFLICT', cause: 'not_open' });
   });
 });
