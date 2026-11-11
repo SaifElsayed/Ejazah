@@ -10,13 +10,18 @@
 // `teachers` since T068; the payments module's `payments`, the read-only monitor, since Phase 2's
 // T052; the identity module's `students` since Phase 3's T005; the sessions module's `sessions`
 // since Phase 3's T016 (its outage windows; the monitor, the review queue, the cancellation and
-// the restore join it in their tasks). Its anonymous procedures are exactly
+// the restore join it in their tasks), and its `disputes` (T034, T059) and `cases` (T035, T064)
+// since B39. Its anonymous procedures are exactly
 // the six of `auth.*` that sign an administrator in (`admin.router.spec.ts`).
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
 import { credentialsAdminRouter } from '../modules/catalog/index.js';
 import { studentsRouter, teachersRouter } from '../modules/identity/index.js';
 import { paymentsAdminRouter } from '../modules/payments/index.js';
-import { sessionsAdminRouter } from '../modules/sessions/index.js';
+import {
+  casesAdminRouter,
+  disputesAdminRouter,
+  sessionsAdminRouter,
+} from '../modules/sessions/index.js';
 import { applicationsRouter, documentsRouter, usersRouter } from '../modules/verification/index.js';
 import { createAdminRouter } from './procedures.js';
 
@@ -33,6 +38,8 @@ export const adminRouter = createAdminRouter({
   students: studentsRouter,
   payments: paymentsAdminRouter,
   sessions: sessionsAdminRouter,
+  disputes: disputesAdminRouter,
+  cases: casesAdminRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */
