@@ -22,7 +22,7 @@ const LONGEST_WAIT_MS = 60_000;
 
 /** Whether the request is shown expired at `now`: the server's `expired`, or pending past `expiresAt`. */
 export function cancellationShownExpired(
-  cancellation: CancellationView | undefined,
+  cancellation: Pick<CancellationView, 'status' | 'expiresAt'> | undefined,
   now: Date,
 ): boolean {
   if (cancellation === undefined) return false;
@@ -40,7 +40,7 @@ export function useCancellationShownExpired(cancellation: CancellationView | und
       setShown(false);
       return;
     }
-    const view = { status, expiresAt } as CancellationView;
+    const view = { status, expiresAt };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const follow = () => {
       const now = new Date();

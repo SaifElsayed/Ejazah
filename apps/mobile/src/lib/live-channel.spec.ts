@@ -229,6 +229,28 @@ describe('the channel’s reopenings (T065)', () => {
     channel.stop();
   });
 
+  // PR #135's review, round 1, Minor 1: a `chat` event carries a message for the open chat to merge
+  // (T045, contracts/app-surface.md's `chat` row), never a re-read of the enrollment's screens.
+  it('re-reads nothing and reads no account.me on a `chat` event, until T045 merges it', () => {
+    const { channel, ports, latest } = channelOver();
+    channel.setActive(true);
+    latest().onData({
+      type: 'chat',
+      enrollmentId: ENROLLMENT_ID,
+      message: {
+        messageId: '0193a6f0-0000-7000-8000-0000000000f1',
+        mine: false,
+        body: 'السلام عليكم',
+        sentAt: '2026-11-12T10:00:00.000Z',
+        purged: false,
+      },
+    });
+    expect(ports.signal).not.toHaveBeenCalled();
+    expect(ports.readAccount).not.toHaveBeenCalled();
+    expect(ports.reread).not.toHaveBeenCalled();
+    channel.stop();
+  });
+
   it('closes when the app leaves `active`, reopens when it returns, and drops a pending reopening', async () => {
     const { channel, ports, latest, closed } = channelOver(() => 0.5);
     channel.setActive(true);

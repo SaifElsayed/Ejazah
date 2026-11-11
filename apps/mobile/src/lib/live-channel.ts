@@ -31,7 +31,8 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { ME_QUERY_KEY } from './account';
-import { type ApiClient, errorCodeOf, errorDetailsOf } from './client';
+import { type ApiClient, errorCodeOf } from './client';
+import { retryAfterSecondsOf } from './error-message';
 import { useSession } from './session';
 
 /** The backoff's first delay: the phone cannot read settings before it connects (R-324, item 8). */
@@ -55,8 +56,6 @@ export const REREAD_EVERY_MS = 1_000;
 const MS_PER_SECOND = 1_000;
 const RATE_LIMITED = 'RATE_LIMITED';
 const UNAUTHENTICATED = 'UNAUTHENTICATED';
-const RETRY_AFTER_SECONDS = 'retryAfterSeconds';
-const WHOLE_NUMBER = /^\d+$/;
 
 /** A source of uniform draws in [0, 1). */
 export type Random = () => number;
@@ -82,12 +81,8 @@ export function serverEndDelayMs(random: Random): number {
 
 /** The wait a `RATE_LIMITED` refusal asks for: its `retryAfterSeconds`, else 60 s. */
 export function rateLimitedDelayMs(error: unknown): number {
-  const detail = errorDetailsOf(error).find(({ path }) => path === RETRY_AFTER_SECONDS);
-  if (detail === undefined || !WHOLE_NUMBER.test(detail.code)) return RATE_LIMITED_FALLBACK_MS;
-  const seconds = Number(detail.code);
-  return Number.isSafeInteger(seconds) && seconds > 0
-    ? seconds * MS_PER_SECOND
-    : RATE_LIMITED_FALLBACK_MS;
+  const seconds = retryAfterSecondsOf(error);
+  return seconds === undefined ? RATE_LIMITED_FALLBACK_MS : seconds * MS_PER_SECOND;
 }
 
 /** What tRPC's subscription calls back. */
@@ -98,13 +93,16 @@ export interface LiveHandlers {
   onComplete(): void;
 }
 
+/** The two signals that make the open screens read again (T065). */
+export type LiveSignal = Extract<LiveEvent, { type: 'session' | 'enrollment' }>;
+
 /** What the channel needs from the app. */
 export interface LivePorts {
   open(handlers: LiveHandlers): { unsubscribe(): void };
   /** `account.me` once, through the normal client. */
   readAccount(): Promise<unknown>;
   /** A `session` or `enrollment` signal: its open screens read again. */
-  signal(event: Exclude<LiveEvent, { type: 'account' }>): void;
+  signal(event: LiveSignal): void;
   /** The open live screens read again. */
   reread(): void;
   readonly random?: Random;
@@ -183,7 +181,10 @@ export class LiveChannel {
     if (!parsed.success) return;
     const event = parsed.data;
     if (event.type === 'account') void this.ports.readAccount().catch(() => undefined);
-    else this.ports.signal(event);
+    // A `chat` event carries a message for the open chat to merge by `messageId` (T045,
+    // contracts/app-surface.md's `chat` row), never a re-read: ignored until T045 merges it
+    // (PR #135's review, round 1, Minor 1).
+    else if (event.type !== 'chat') this.ports.signal(event);
   }
 
   async #failed(error: unknown, started: boolean): Promise<void> {
@@ -258,7 +259,7 @@ export class Rereads {
   constructor(private readonly queries: QueryClient) {}
 
   /** A `session` or `enrollment` signal: the screens holding its ids, and an enrollment's lists. */
-  signal(event: Exclude<LiveEvent, { type: 'account' }>): void {
+  signal(event: LiveSignal): void {
     const ids: readonly string[] =
       event.type === 'session' ? [event.sessionId, event.enrollmentId] : [event.enrollmentId];
     this.#readAgain(

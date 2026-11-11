@@ -38,9 +38,6 @@ import { useSessionRead } from '../api';
 import { ZoneLines } from '../components/ZoneLines';
 import { type PreSession, SESSION_STATUS_LABEL, usePreSession } from '../pre-session';
 
-/** `sessions.get`'s answer, `counterpartyInRoom` (T065) among it. */
-type SessionRead = SessionsGetOutput;
-
 /** The route's `id`, or '' when the link carries none. */
 function useSessionParam(): string {
   const params = useLocalSearchParams<{ id: string }>();
@@ -105,7 +102,7 @@ function Loaded({
   roomRoute,
 }: {
   readonly header: ReactNode;
-  readonly session: SessionRead;
+  readonly session: SessionsGetOutput;
   readonly viewerZone: string;
   readonly counterpartyRole: PartyRole;
   readonly roomRoute: string;
@@ -134,7 +131,7 @@ function Loaded({
           <Avatar initials={initialsOf(avatarNameOf(party))} size="lg" />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text variant="headline">{partyName(party, counterpartyRole)}</Text>
-            {session.counterpartyInRoom === true ? (
+            {session.counterpartyInRoom ? (
               <Badge label={t('session.pre.counterpartyInRoom')} tone="success" />
             ) : null}
           </View>

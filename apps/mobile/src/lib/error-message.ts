@@ -32,8 +32,11 @@ export function genericErrorKey(error: unknown, fallback: GenericErrorFallback):
   return { key: 'common.state.rateLimitedIn', values: { count } };
 }
 
-/** The refusal's `retryAfterSeconds` when it is a positive whole number, else undefined. */
-function retryAfterSecondsOf(error: unknown): number | undefined {
+/**
+ * The refusal's `retryAfterSeconds` when it is a positive whole number, else undefined: the one
+ * reading of T062's detail, for the message here and the live channel's wait (lib/live-channel.ts).
+ */
+export function retryAfterSecondsOf(error: unknown): number | undefined {
   const detail = errorDetailsOf(error).find(({ path }) => path === RETRY_AFTER_SECONDS);
   if (detail === undefined || !WHOLE_NUMBER.test(detail.code)) return undefined;
   const seconds = Number(detail.code);
