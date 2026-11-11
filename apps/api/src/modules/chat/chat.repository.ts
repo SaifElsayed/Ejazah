@@ -80,6 +80,53 @@ export async function insertMessage(
   });
 }
 
+/** T038: a message's document as `chat.attachmentLink` decides on it; the key never leaves chat. */
+export interface ChatAttachmentRow {
+  readonly enrollmentId: string;
+  readonly attachmentKey: string | null;
+  readonly purgedAt: Date | null;
+}
+
+/** T038: a document's message to insert: the key private, the name and the type by content. */
+export interface NewChatAttachment {
+  readonly enrollmentId: string;
+  readonly senderUserId: string;
+  readonly attachmentKey: string;
+  readonly attachmentFilename: string;
+  readonly attachmentMime: 'application/pdf' | 'text/plain';
+  readonly sentAt: Date;
+}
+
+/** T038: the message's enrollment, its document's key and its purge, by the primary key; no lock. */
+export async function attachmentOf(
+  tx: Pick<Transaction, 'chatMessage'>,
+  messageId: string,
+): Promise<ChatAttachmentRow | null> {
+  return tx.chatMessage.findUnique({
+    where: { id: messageId },
+    select: { enrollmentId: true, attachmentKey: true, purgedAt: true },
+  });
+}
+
+/** T038: inserts a document's message, no body, and answers it as a page shows it. */
+export async function insertAttachment(
+  tx: Pick<Transaction, 'chatMessage'>,
+  row: NewChatAttachment,
+): Promise<ChatMessageRow> {
+  return tx.chatMessage.create({
+    data: row,
+    select: {
+      id: true,
+      senderUserId: true,
+      body: true,
+      attachmentFilename: true,
+      attachmentMime: true,
+      sentAt: true,
+      purgedAt: true,
+    },
+  });
+}
+
 /** Locks the sender's `users` row, `FOR UPDATE` (the `chat.send` row of contracts/kernel.md). */
 export async function lockSender(tx: Transaction, userId: string): Promise<void> {
   await lockRows(tx, 'users', [userId]);

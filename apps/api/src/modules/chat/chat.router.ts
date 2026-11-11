@@ -5,8 +5,16 @@
 // (R-GENDER-4), and the output parsed by its schema, which strips a field it does not name.
 // `chat.send` is keyed by the kernel's idempotency in the service and counted under its own limit,
 // `rate_limit_chat_message`, per caller (FR-491); `chat.list` under the signed-in default (T062).
-// Mounted under `chat` by `app.router.ts`.
-import { chatListInput, chatListOutput, chatSendInput, chatSendOutput } from '@ijazah/contracts';
+// Mounted under `chat` by `app.router.ts`. T038: `chat.attachmentLink`, a read of the same kind under
+// the signed-in default, answering a signed link to a message's document.
+import {
+  chatAttachmentLinkInput,
+  chatAttachmentLinkOutput,
+  chatListInput,
+  chatListOutput,
+  chatSendInput,
+  chatSendOutput,
+} from '@ijazah/contracts';
 
 import type { RateLimitKey } from '../../platform/guards/rate-limit.guard.js';
 import { createAppRouter, participantProcedure } from '../../surfaces/procedures.js';
@@ -25,5 +33,13 @@ export const chatRouter = createAppRouter({
     rateLimit: { key: CHAT_MESSAGE_RATE_LIMIT, subject: 'caller' },
   }).mutation(({ ctx, input }) =>
     ctx.services.chat.send({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
+
+  // T038.
+  attachmentLink: participantProcedure({
+    input: chatAttachmentLinkInput,
+    output: chatAttachmentLinkOutput,
+  }).query(({ ctx, input }) =>
+    ctx.services.chat.attachmentLink({ userId: ctx.caller.userId }, input, ctx.log),
   ),
 });

@@ -29,6 +29,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotentRequest } from '../../platform/idempotency/idempotency.service.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
+import { DOCUMENT_LINK_TTL_SETTING } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ChatMessageRow } from './chat.repository.js';
 import {
@@ -48,6 +49,10 @@ const STRANGER = '0199d0a0-0000-7000-8000-00000000c003';
 const NEW_MESSAGE = '0199d0a0-0000-7000-8000-00000000f0ff';
 const KEY = 'chat-send-0199d0a0-0000-7000';
 const SENT = new Date('2026-11-11T10:00:00.000Z');
+// T038: the process's clock when a link is minted, and the link's life (`document_link_ttl_seconds`).
+const NOW = new Date('2026-11-11T12:00:00.000Z');
+const LINK_SECONDS = 300;
+const DOCUMENT = '0199d0a0-0000-7000-8000-00000000f0d1';
 
 const message = (n: number, overrides: Partial<ChatMessageRow> = {}): ChatMessageRow => ({
   id: `0199d0a0-0000-7000-8000-00000000f0${String(n).padStart(2, '0')}`,
@@ -68,6 +73,12 @@ let inserted: unknown[];
 /** Applied once the enrollment's lock is taken: what another transaction committed meanwhile. */
 let underLock: (() => void) | undefined;
 let pageSize: number;
+// T038: the messages' attachments as `attachmentOf` reads them, and the links minted.
+let attachments: Map<
+  string,
+  { enrollmentId: string; attachmentKey: string | null; purgedAt: Date | null }
+>;
+let links: unknown[][];
 let keyed: IdempotentRequest[];
 let lines: Record<string, unknown>[];
 let log: Logger;
@@ -100,6 +111,7 @@ const idempotency = {
 const settings: SettingsReader = {
   read: async (key, schema) => {
     trace.push(`setting ${key}`);
+    if (key === DOCUMENT_LINK_TTL_SETTING) return schema.parse(LINK_SECONDS);
     if (key !== CHAT_PAGE_SIZE_SETTING) throw new Error(`unexpected setting ${key}`);
     return schema.parse(pageSize);
   },
@@ -149,6 +161,23 @@ const store: ChatStore = {
       purgedAt: null,
     };
   },
+  // T038.
+  attachmentOf: async (_tx, messageId) => {
+    trace.push(`read attachment of ${messageId}`);
+    return attachments.get(messageId) ?? null;
+  },
+  insertAttachment: async () => {
+    throw new Error('no upload in this spec');
+  },
+};
+
+/** T038: the storage port's link, recorded. */
+const storage = {
+  temporaryLink: async (key: string, seconds: number) => {
+    trace.push('link');
+    links.push([key, seconds]);
+    return `https://files.invalid/${key}?expires=${String(seconds)}`;
+  },
 };
 
 beforeEach(() => {
@@ -168,6 +197,8 @@ beforeEach(() => {
   inserted = [];
   underLock = undefined;
   pageSize = 2;
+  attachments = new Map();
+  links = [];
   keyed = [];
   lines = [];
   log = createLogger({
@@ -185,6 +216,8 @@ beforeEach(() => {
     settings,
     enrollments,
     store,
+    storage,
+    now: () => NOW,
     clock: async () => {
       trace.push('clock');
       return SENT;
@@ -462,5 +495,104 @@ describe('chat.send (FR-488, FR-491)', () => {
     setStatus('completed');
     genders.set(TEACHER, 'male');
     expect((await refusalOf(send(STUDENT))).code).toBe('NOT_FOUND');
+  });
+});
+
+// T038 of specs/004-sessions — `chat.attachmentLink` (FR-489, R-SEC-3; contracts/app-surface.md,
+// "`chat`"; contracts/kernel.md, the row «`chat.list`, `chat.attachmentLink`»): the message and its
+// enrollment's two parties read in one transaction with no lock, the genders compared, then a link
+// valid `document_link_ttl_seconds` minted after the commit. A message that does not exist, one of an
+// enrollment the caller is not a party of, one whose counterparty is of the other gender, a purged
+// one and one with no document answer one NOT_FOUND, nothing minted.
+describe('chat.attachmentLink (FR-489, R-SEC-3)', () => {
+  const link = (userId: string, messageId = DOCUMENT) =>
+    services.attachmentLink({ userId }, { messageId }, log);
+
+  beforeEach(() => {
+    attachments.set(DOCUMENT, {
+      enrollmentId: ENROLLMENT,
+      attachmentKey: 'chat/0199d0a0-0000-7000-8000-00000000f0d1.pdf',
+      purgedAt: null,
+    });
+  });
+
+  it.each([
+    ['the student', STUDENT],
+    ['the teacher', TEACHER],
+  ])(
+    '%s gets a link valid document_link_ttl_seconds, minted after the commit',
+    async (_name, userId) => {
+      expect(await link(userId)).toEqual({
+        url: `https://files.invalid/chat/0199d0a0-0000-7000-8000-00000000f0d1.pdf?expires=${String(LINK_SECONDS)}`,
+        expiresAt: '2026-11-11T12:05:00Z',
+      });
+      expect(trace).toEqual([
+        `setting ${DOCUMENT_LINK_TTL_SETTING}`,
+        'begin',
+        `read attachment of ${DOCUMENT}`,
+        `read enrollment ${ENROLLMENT}`,
+        `read parties ${STUDENT},${TEACHER}`,
+        'commit',
+        'link',
+      ]);
+      expect(trace.some((step) => step.startsWith('lock'))).toBe(false);
+    },
+  );
+
+  it.each([
+    ['a stranger', STRANGER, DOCUMENT, 'not_a_party'],
+    ['a message that does not exist', STUDENT, NOWHERE, 'no_message'],
+  ])('%s answers NOT_FOUND, nothing minted', async (_name, userId, messageId, reason) => {
+    const error = await refusalOf(link(userId, messageId));
+    expect(error.code).toBe('NOT_FOUND');
+    expect(error.details).toBeUndefined();
+    expect(links).toEqual([]);
+    expect(refusalLines()).toEqual([
+      {
+        messageId,
+        ...(messageId === DOCUMENT ? { enrollmentId: ENROLLMENT } : {}),
+        userId,
+        errorCode: 'NOT_FOUND',
+        reason,
+      },
+    ]);
+  });
+
+  it.each([
+    ['the student', STUDENT, TEACHER],
+    ['the teacher', TEACHER, STUDENT],
+  ])(
+    '%s whose counterparty is of the other gender answers NOT_FOUND, after an administrator’s correction too',
+    async (_name, caller, other) => {
+      expect((await link(caller)).url).toContain('chat/');
+      genders.set(other, 'male');
+      const error = await refusalOf(link(caller));
+      expect(error.code).toBe('NOT_FOUND');
+      expect(links).toHaveLength(1);
+    },
+  );
+
+  it('a purged message answers NOT_FOUND though its key is kept until its file is removed (T039)', async () => {
+    attachments.set(DOCUMENT, {
+      enrollmentId: ENROLLMENT,
+      attachmentKey: 'chat/kept.pdf',
+      purgedAt: new Date('2026-12-30T00:00:00.000Z'),
+    });
+    const error = await refusalOf(link(STUDENT));
+    expect(error.code).toBe('NOT_FOUND');
+    expect(links).toEqual([]);
+    expect(refusalLines().map(({ reason }) => reason)).toEqual(['purged']);
+  });
+
+  it('a message with no document answers NOT_FOUND', async () => {
+    attachments.set(DOCUMENT, { enrollmentId: ENROLLMENT, attachmentKey: null, purgedAt: null });
+    expect((await refusalOf(link(TEACHER))).code).toBe('NOT_FOUND');
+    expect(refusalLines().map(({ reason }) => reason)).toEqual(['no_attachment']);
+  });
+
+  it('a stranger is refused before the purge is told: NOT_FOUND, not_a_party', async () => {
+    attachments.set(DOCUMENT, { enrollmentId: ENROLLMENT, attachmentKey: null, purgedAt: NOW });
+    await refusalOf(link(STRANGER));
+    expect(refusalLines().map(({ reason }) => reason)).toEqual(['not_a_party']);
   });
 });

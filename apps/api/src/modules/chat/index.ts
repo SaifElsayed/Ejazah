@@ -13,3 +13,11 @@ export {
   type ChatServices,
   createChatServices,
 } from './chat.service.js';
+
+// T038 of specs/004-sessions: `POST /uploads/chat` (FR-489, FR-490; research R-314), the upload
+// route's third use, which `main.ts` mounts at `CHAT_UPLOAD_PATH`.
+export {
+  CHAT_UPLOAD_PATH,
+  type ChatUploadDependencies,
+  createChatUploadRoute,
+} from './chat-upload.controller.js';

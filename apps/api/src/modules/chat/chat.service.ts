@@ -27,6 +27,8 @@
 // reason, nothing else (never the body), its error marked «logged» so the handler's one-place
 // refusal log writes no second line (PR #130's review, Minor 4).
 import {
+  type ChatAttachmentLinkInput,
+  type ChatAttachmentLinkOutput,
   type ChatListInput,
   type ChatListOutput,
   type ChatMessage,
@@ -34,6 +36,7 @@ import {
   type ChatSendOutput,
   chatSendOutput,
 } from '@ijazah/contracts';
+import { addSeconds } from '@ijazah/time';
 import { z } from 'zod';
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
@@ -46,14 +49,20 @@ import type {
   JsonValue,
 } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
+import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
+import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { sessionPartiesOf } from '../identity/index.js';
 import {
+  attachmentOf,
+  type ChatAttachmentRow,
   type ChatMessageRow,
   type ChatPageQuery,
+  insertAttachment,
   insertMessage,
   lockSender,
   messagePage,
+  type NewChatAttachment,
   type NewChatMessage,
 } from './chat.repository.js';
 
@@ -97,6 +106,10 @@ export interface ChatStore {
   lockSender(tx: Transaction, userId: string): Promise<void>;
   messagePage(tx: Transaction, query: ChatPageQuery): Promise<ChatMessageRow[]>;
   insertMessage(tx: Transaction, row: NewChatMessage): Promise<ChatMessageRow>;
+  /** T038: a message's document, its enrollment and its purge, or null when there is no message. */
+  attachmentOf(tx: Transaction, messageId: string): Promise<ChatAttachmentRow | null>;
+  /** T038: a document's message, inserted. */
+  insertAttachment(tx: Transaction, row: NewChatAttachment): Promise<ChatMessageRow>;
 }
 
 /** The chat's repository and identity's entry, as the services use them by default. */
@@ -105,6 +118,8 @@ export const chatStore: ChatStore = {
   lockSender,
   messagePage,
   insertMessage,
+  attachmentOf,
+  insertAttachment,
 };
 
 export interface ChatCaller {
@@ -114,6 +129,12 @@ export interface ChatCaller {
 export interface ChatServices {
   list(caller: ChatCaller, input: ChatListInput, log: Logger): Promise<ChatListOutput>;
   send(caller: ChatCaller, input: ChatSendInput, log: Logger): Promise<ChatSendOutput>;
+  /** T038: a signed link to a message's document, valid `document_link_ttl_seconds`. */
+  attachmentLink(
+    caller: ChatCaller,
+    input: ChatAttachmentLinkInput,
+    log: Logger,
+  ): Promise<ChatAttachmentLinkOutput>;
 }
 
 export interface ChatDependencies {
@@ -124,14 +145,32 @@ export interface ChatDependencies {
   readonly store?: ChatStore;
   /** The database's clock on the transaction (`clock_timestamp()`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
+  /** T038: the storage port's signed links (R-SEC-3). */
+  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  /** T038: the process's clock, from which a link's `expiresAt` is told (as `documentLinkFor`). */
+  readonly now?: () => Date;
 }
 
 /** Why a chat call was refused, as its log line names it. */
-export type ChatRefusalReason = 'not_a_party' | 'gender_differs' | 'not_confirmed';
+export type ChatRefusalReason =
+  | 'not_a_party'
+  | 'gender_differs'
+  | 'not_confirmed'
+  // T038: `chat.attachmentLink`'s.
+  | 'no_message'
+  | 'purged'
+  | 'no_attachment';
 
 export interface ChatRefusalIds {
-  readonly enrollmentId: string;
+  readonly enrollmentId?: string;
   readonly userId: string;
+  /** T038: the message `chat.attachmentLink` names. */
+  readonly messageId?: string;
+}
+
+/** The ids of a call on an enrollment's chat. */
+export interface ChatEnrollmentIds extends ChatRefusalIds {
+  readonly enrollmentId: string;
 }
 
 /**
@@ -189,6 +228,8 @@ export function createChatServices({
   enrollments,
   store = chatStore,
   clock = clockTimestamp,
+  storage,
+  now = () => new Date(),
 }: ChatDependencies): ChatServices {
   const { participantOf, lockedParticipantOf } = createChatAccess({ enrollments, store });
 
@@ -231,6 +272,26 @@ export function createChatServices({
           },
         ),
       ),
+
+    // T038: the message and its enrollment's parties read with no lock (the note under T037, Q3
+    // (a)); the link minted after the commit, so no transaction waits on the storage port.
+    attachmentLink: async ({ userId }, { messageId }, log) => {
+      const ttl = await settings.read(DOCUMENT_LINK_TTL_SETTING, documentLinkTtl);
+      const key = await transactions.run(async (tx) => {
+        const found = await store.attachmentOf(tx, messageId);
+        if (found === null)
+          throw chatRefusal(log, { messageId, userId }, 'NOT_FOUND', 'no_message');
+        const ids = { enrollmentId: found.enrollmentId, messageId, userId };
+        await participantOf(tx, ids, log);
+        if (found.purgedAt !== null) throw chatRefusal(log, ids, 'NOT_FOUND', 'purged');
+        if (found.attachmentKey === null) {
+          throw chatRefusal(log, ids, 'NOT_FOUND', 'no_attachment');
+        }
+        return found.attachmentKey;
+      });
+      const url = await storage.temporaryLink(key, ttl);
+      return { url, expiresAt: addSeconds(now(), ttl) };
+    },
   };
 }
 
@@ -247,17 +308,23 @@ export function createChatAccess({
   readonly enrollments: ChatEnrollments;
   readonly store: Pick<ChatStore, 'partiesOf' | 'lockSender'>;
 }): {
-  participantOf(tx: Transaction, ids: ChatRefusalIds, log: Logger): Promise<ChatEnrollmentTerms>;
+  participantOf(tx: Transaction, ids: ChatEnrollmentIds, log: Logger): Promise<ChatEnrollmentTerms>;
+  /** T038: `participantOf` and the status `confirmed`, with no lock (the upload's check before storing). */
+  openParticipantOf(
+    tx: Transaction,
+    ids: ChatEnrollmentIds,
+    log: Logger,
+  ): Promise<ChatEnrollmentTerms>;
   lockedParticipantOf(
     tx: Transaction,
-    ids: ChatRefusalIds,
+    ids: ChatEnrollmentIds,
     log: Logger,
   ): Promise<ChatEnrollmentTerms>;
 } {
   /** The enrollment when the caller is one of its parties; NOT_FOUND otherwise. */
   async function partyEnrollment(
     tx: Transaction,
-    ids: ChatRefusalIds,
+    ids: ChatEnrollmentIds,
     log: Logger,
   ): Promise<ChatEnrollmentTerms> {
     const terms = await enrollments.enrollmentFor(tx, ids.enrollmentId);
@@ -274,7 +341,7 @@ export function createChatAccess({
   async function sameGender(
     tx: Transaction,
     terms: ChatEnrollmentTerms,
-    ids: ChatRefusalIds,
+    ids: ChatEnrollmentIds,
     log: Logger,
   ): Promise<void> {
     const parties = await store.partiesOf(tx, [terms.studentUserId, terms.teacherUserId].sort());
@@ -288,19 +355,34 @@ export function createChatAccess({
     }
   }
 
+  /** Any status but `confirmed`, a pending one included, `CHAT_CLOSED` (F17). */
+  function open(terms: ChatEnrollmentTerms, ids: ChatEnrollmentIds, log: Logger): void {
+    if (terms.status !== 'confirmed') throw chatRefusal(log, ids, 'CHAT_CLOSED', 'not_confirmed');
+  }
+
+  const participantOf = async (
+    tx: Transaction,
+    ids: ChatEnrollmentIds,
+    log: Logger,
+  ): Promise<ChatEnrollmentTerms> => {
+    const terms = await partyEnrollment(tx, ids, log);
+    await sameGender(tx, terms, ids, log);
+    return terms;
+  };
+
   return {
-    participantOf: async (tx, ids, log) => {
-      const terms = await partyEnrollment(tx, ids, log);
-      await sameGender(tx, terms, ids, log);
+    participantOf,
+    openParticipantOf: async (tx, ids, log) => {
+      const terms = await participantOf(tx, ids, log);
+      open(terms, ids, log);
       return terms;
     },
     lockedParticipantOf: async (tx, ids, log) => {
       await partyEnrollment(tx, ids, log);
       await store.lockSender(tx, ids.userId);
       await enrollments.lockEnrollments(tx, [ids.enrollmentId]);
-      const terms = await partyEnrollment(tx, ids, log);
-      await sameGender(tx, terms, ids, log);
-      if (terms.status !== 'confirmed') throw chatRefusal(log, ids, 'CHAT_CLOSED', 'not_confirmed');
+      const terms = await participantOf(tx, ids, log);
+      open(terms, ids, log);
       return terms;
     },
   };

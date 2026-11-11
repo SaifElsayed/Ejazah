@@ -62,7 +62,49 @@ export const chatSendInput = z.object({
 /** The message sent, as `chat.list` shows it. */
 export const chatSendOutput = chatMessage;
 
+// ---------------------------------------------------------------------------------------------
+// T038: the chat's documents (app-surface.md, `POST /uploads/chat` and `chat.attachmentLink`; FR-489;
+// R-SEC-3). The upload is a multipart POST outside tRPC: its two fields precede the file, and its
+// 201 answer is parsed by `chatUploadOutput`. A document is reached only through a signed link that
+// expires; no answer carries its storage key.
+// ---------------------------------------------------------------------------------------------
+
+/** The longest document name, in characters (the multipart field holds at most 256 bytes). */
+export const CHAT_FILENAME_MAX_LENGTH = 120;
+
+/** The fields `POST /uploads/chat` takes before its file: the enrollment and the document's name. */
+export const chatUploadFields = z.object({
+  enrollmentId: z.uuid(),
+  filename: z
+    .string()
+    .trim()
+    .min(1)
+    .max(CHAT_FILENAME_MAX_LENGTH)
+    // A name, never a path, and nothing a header or a log would read as a control.
+    .regex(/^[^\p{Cc}/\\]+$/u),
+});
+
+/** `POST /uploads/chat`'s 201 answer: the message the document became. */
+export const chatUploadOutput = z.object({
+  messageId: z.uuid(),
+  attachment: chatAttachment,
+  sentAt: z.iso.datetime(),
+});
+
+/** A message's document, as the caller names it. */
+export const chatAttachmentLinkInput = z.object({ messageId: z.uuid() });
+
+/** A signed link to the document, valid `document_link_ttl_seconds` (R-SEC-3). */
+export const chatAttachmentLinkOutput = z.object({
+  url: z.url(),
+  expiresAt: z.iso.datetime(),
+});
+
 export type ChatMessage = z.infer<typeof chatMessage>;
+export type ChatUploadFields = z.infer<typeof chatUploadFields>;
+export type ChatUploadOutput = z.infer<typeof chatUploadOutput>;
+export type ChatAttachmentLinkInput = z.infer<typeof chatAttachmentLinkInput>;
+export type ChatAttachmentLinkOutput = z.infer<typeof chatAttachmentLinkOutput>;
 export type ChatListInput = z.infer<typeof chatListInput>;
 export type ChatListOutput = z.infer<typeof chatListOutput>;
 export type ChatSendInput = z.infer<typeof chatSendInput>;

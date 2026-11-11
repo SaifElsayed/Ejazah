@@ -1,0 +1,16 @@
+# T038 of specs/004-sessions: the corpus files are bytes, never text to normalise (R-SEC-5).
+*.txt binary
+*.svg binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.bmp binary
+*.ico binary
+*.cur binary
+*.tif binary
+*.tiff binary
+*.heic binary
+*.heif binary
+*.avif binary

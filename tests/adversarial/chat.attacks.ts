@@ -24,7 +24,11 @@ import { randomUUID } from 'node:crypto';
 
 import { expect } from 'vitest';
 
-import type { ChatListInput, ChatSendInput } from '../../packages/contracts/src/index.js';
+import type {
+  ChatAttachmentLinkInput,
+  ChatListInput,
+  ChatSendInput,
+} from '../../packages/contracts/src/index.js';
 import { expectUnauthenticated, neighbourOf, tamperedTokens } from './discovery.attacks.js';
 import { type AppCaller, discoverySurface, type SessionPair } from './discovery-world.js';
 import {
@@ -164,3 +168,146 @@ function attacksOn(procedure: Procedure): ProcedureAttacks {
 }
 
 export const chatAttacks: readonly ProcedureAttacks[] = [attacksOn('list'), attacksOn('send')];
+
+// T038 of specs/004-sessions — `chat.attachmentLink`'s attacks (FR-496, SC-407; FR-489, FR-432;
+// R-GENDER-1, R-GENDER-2, R-GENDER-4; R-SEC-3), in the same world, on a document each pair's student
+// uploads through `POST /uploads/chat` for the attack and removes after it, row and file, whatever
+// the outcome (`discardChatDocuments`): a message of the other gender's pair, a forged or a guessed
+// id, from either party, answers exactly as an id that never existed; the requester's own document
+// is answered a link, so no attack passes on a refusal of everything.
+//
+//   directCall            both parties of the pair get a link to its document; the other gender's
+//                         document by its id, from either party.
+//   forgedId              the other pair's document, the own enrollment's and a session's id, the
+//                         parties' user ids, sent as a message id.
+//   guessedId             random ids, the other document's neighbour and its upper-case spelling.
+//   tamperedToken         a tampered bearer token: unauthenticated before any service.
+//   clientSuppliedGender  the input carrying the other gender is ignored; after an administrator's
+//                         correction of the teacher's gender the own document answers as a
+//                         nonexistent one, from either party, and again as theirs once restored.
+const LINK_HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, R-SEC-3, FR-432, FR-489, FR-496, SC-407';
+
+/** A PDF's leading bytes, padded past the sniffing head. */
+const DOCUMENT = Buffer.concat([Buffer.from('%PDF-1.4\n', 'latin1'), Buffer.alloc(200, 0x20)]);
+
+/** One link to `messageId`, as the phone asks it. */
+function linkOf(caller: AppCaller, messageId: string, extra: Record<string, unknown> = {}) {
+  return caller.chat.attachmentLink({ messageId, ...extra } as ChatAttachmentLinkInput);
+}
+
+/** The document answers the link as one that never existed. */
+function expectDocumentHidden(caller: AppCaller, messageId: string): Promise<void> {
+  return expectAnswersAsNonexistent(
+    () => linkOf(caller, messageId),
+    () => linkOf(caller, randomUUID()),
+  );
+}
+
+/** The requester's own document is answered a link. */
+async function expectOwnLink(caller: AppCaller, messageId: string, extra = {}): Promise<void> {
+  const answer = await linkOf(caller, messageId, extra);
+  expect(answer.url).toMatch(/chat%2F|chat\//);
+}
+
+/**
+ * Runs `attack` with a document uploaded by each pair's student, both removed after it, row and
+ * file, whatever the attack's outcome.
+ */
+async function withDocuments(
+  direction: Direction,
+  attack: (pairs: {
+    readonly surface: Awaited<ReturnType<typeof discoverySurface>>;
+    readonly own: SessionPair;
+    readonly theirs: SessionPair;
+    readonly ownDocument: string;
+    readonly theirDocument: string;
+  }) => Promise<void>,
+): Promise<void> {
+  const { surface, own, theirs } = await pairsFor(direction);
+  const made: string[] = [];
+  try {
+    for (const pair of [own, theirs]) {
+      const response = await surface.uploadChat(
+        pair.student.accessToken,
+        { enrollmentId: pair.enrollmentId, filename: 'درس.pdf' },
+        DOCUMENT,
+      );
+      expect(response.status).toBe(201);
+      made.push(((await response.json()) as { messageId: string }).messageId);
+    }
+    const [ownDocument, theirDocument] = made as [string, string];
+    await attack({ surface, own, theirs, ownDocument, theirDocument });
+  } finally {
+    await surface.discardChatDocuments(made);
+  }
+}
+
+const linkAttacks: ProcedureAttacks = {
+  path: 'chat.attachmentLink',
+  holds: LINK_HOLDS,
+  attacks: {
+    directCall: (direction) =>
+      withDocuments(direction, async ({ own, ownDocument, theirDocument }) => {
+        for (const party of partiesOf(own)) {
+          await expectOwnLink(party.caller, ownDocument);
+          await expectDocumentHidden(party.caller, theirDocument);
+        }
+      }),
+    forgedId: (direction) =>
+      withDocuments(direction, async ({ own, theirDocument }) => {
+        for (const party of partiesOf(own)) {
+          for (const forged of [
+            theirDocument,
+            own.enrollmentId,
+            own.sessions.open,
+            own.student.userId,
+            own.teacher.userId,
+          ]) {
+            await expectDocumentHidden(party.caller, forged);
+          }
+        }
+      }),
+    guessedId: (direction) =>
+      withDocuments(direction, async ({ own, theirDocument }) => {
+        for (const guessed of [
+          randomUUID(),
+          neighbourOf(theirDocument),
+          theirDocument.toUpperCase(),
+        ]) {
+          await expectDocumentHidden(own.student.caller, guessed);
+        }
+      }),
+    tamperedToken: (direction) =>
+      withDocuments(direction, async ({ surface, own, theirs, ownDocument }) => {
+        for (const token of tamperedTokens(
+          direction,
+          own.student.accessToken,
+          theirs.student.sessionId,
+        )) {
+          const tampered = await surface.bearing(token);
+          await expectUnauthenticated(() => linkOf(tampered, ownDocument));
+        }
+      }),
+    clientSuppliedGender: (direction) =>
+      withDocuments(direction, async ({ surface, own, ownDocument, theirDocument }) => {
+        const withGender = { gender: direction.other };
+        await expectAnswersAsNonexistent(
+          () => linkOf(own.student.caller, theirDocument, withGender),
+          () => linkOf(own.student.caller, randomUUID(), withGender),
+        );
+        await expectOwnLink(own.student.caller, ownDocument, withGender);
+        // After an administrator's correction of the teacher's gender: the server's record.
+        await surface.setGender(own.teacher.userId, direction.other);
+        try {
+          for (const party of partiesOf(own)) {
+            await expectDocumentHidden(party.caller, ownDocument);
+          }
+        } finally {
+          await surface.setGender(own.teacher.userId, direction.requester);
+        }
+        await expectOwnLink(own.student.caller, ownDocument);
+      }),
+  },
+};
+
+export const chatDocumentAttacks: readonly ProcedureAttacks[] = [linkAttacks];

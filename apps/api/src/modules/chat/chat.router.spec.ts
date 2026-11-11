@@ -107,7 +107,17 @@ const chat: ChatServices = {
     if (input.enrollmentId !== ENROLLMENT) throw new DomainError('NOT_FOUND');
     return { ...item, body: input.body, senderUserId: CALLER } as never;
   },
+  // T038.
+  attachmentLink: async (caller, input) => {
+    calls.push(['attachmentLink', caller, input]);
+    if (input.messageId !== MESSAGE) throw new DomainError('NOT_FOUND');
+    // A field no schema names, as a careless service might add it: stripped.
+    return { ...linked, attachmentKey: 'chat/x.pdf' } as never;
+  },
 };
+
+// T038: what `chat.attachmentLink` answers.
+const linked = { url: 'https://files.invalid/chat/x.pdf?sig=1', expiresAt: '2026-11-11T10:05:00Z' };
 
 beforeEach(() => {
   calls = [];
@@ -153,6 +163,9 @@ const procedures = {
   'chat.list': (caller: Caller, enrollmentId = ENROLLMENT) => caller.chat.list({ enrollmentId }),
   'chat.send': (caller: Caller, enrollmentId = ENROLLMENT) =>
     caller.chat.send({ enrollmentId, body: 'السلام عليكم', idempotencyKey: KEY }),
+  // T038.
+  'chat.attachmentLink': (caller: Caller, messageId = MESSAGE) =>
+    caller.chat.attachmentLink({ messageId }),
 } as const;
 
 describe("'chat.list' (T037)", () => {
@@ -264,5 +277,48 @@ describe("'chat.send' (T037)", () => {
     expect(limited).toEqual([
       [CHAT_MESSAGE_RATE_LIMIT, { kind: 'user', userId: CALLER }, 'chat.send'],
     ]);
+  });
+});
+
+// T038 of specs/004-sessions: `chat.attachmentLink`, the participant kind, a read under the signed-in
+// default; the caller's own account and the message handed to the service; the link answered, a key
+// stripped.
+describe("'chat.attachmentLink' (T038)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED before the service: 'chat.attachmentLink'", async () => {
+    await expect(procedures['chat.attachmentLink'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it.each(['suspended student', 'banned student', 'suspended teacher', 'banned teacher'] as const)(
+    "refuses a %s ACCOUNT_RESTRICTED before the service: 'chat.attachmentLink'",
+    async (who) => {
+      await expect(procedures['chat.attachmentLink'](callerAs(sessionOf(who)))).rejects.toEqual(
+        refused('ACCOUNT_RESTRICTED'),
+      );
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it.each(['student', 'teacher'] as const)(
+    "hands the service the %s's own account and the message, the link answered with no key: 'chat.attachmentLink'",
+    async (who) => {
+      expect(await procedures['chat.attachmentLink'](callerAs(sessionOf(who)))).toEqual(linked);
+      expect(calls).toEqual([['attachmentLink', { userId: CALLER }, { messageId: MESSAGE }]]);
+    },
+  );
+
+  it("answers the service's NOT_FOUND with no field: 'chat.attachmentLink'", async () => {
+    const { status, body } = await shapeOf(
+      procedures['chat.attachmentLink'](callerAs(sessionOf('student')), NOWHERE),
+    );
+    expect(status).toBe(404);
+    expect(Object.keys(body).sort()).toEqual(['code', 'message']);
+  });
+
+  it("is counted under the signed-in default: 'chat.attachmentLink'", async () => {
+    await procedures['chat.attachmentLink'](callerAs(sessionOf('teacher')));
+    expect(limited.map(([key]) => key)).toEqual([SIGNED_IN_DEFAULT_RATE_LIMIT]);
   });
 });
