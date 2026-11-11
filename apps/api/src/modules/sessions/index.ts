@@ -111,6 +111,12 @@ export {
   disputeWindowHours,
 } from './completion.service.js';
 /**
+ * T039 of specs/004-sessions (Q-B1 (b), the owner's decision of 2026-11-11; FR-473): the two
+ * cancellations, never disputed, which chat's purge leaves out of an enrollment's last end, as
+ * completion does.
+ */
+export { UNDISPUTABLE } from './completion.service.js';
+/**
  * T016 (FR-445, R-307): the provider outage windows, `sessions.outages.record` and `.list`, behind
  * the administrator surface's `sessions` namespace, and the record's store over sessions' tables,
  * which the race probe narrows as it narrows `evaluationStore`.

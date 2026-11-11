@@ -83,7 +83,7 @@ const SETTLED: ReadonlySet<CompletionSession['status']> = new Set([
 ]);
 
 /** The two cancellations, never disputed (FR-473), so without a dispute window. */
-const UNDISPUTABLE: ReadonlySet<CompletionSession['status']> = new Set([
+export const UNDISPUTABLE: ReadonlySet<CompletionSession['status']> = new Set([
   'cancelled_by_agreement',
   'cancelled_by_admin',
 ]);
