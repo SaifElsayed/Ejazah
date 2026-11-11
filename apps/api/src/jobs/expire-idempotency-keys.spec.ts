@@ -38,6 +38,7 @@ function storeOf(rows: readonly StoredKey[]): IdempotencyStore<never> & { rows: 
     transaction: unused,
     find: unused,
     claim: unused,
+    claimUnlessTaken: unused,
     complete: unused,
     remove: unused,
     async removeExpired(now) {

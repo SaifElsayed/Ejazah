@@ -124,6 +124,17 @@ function surfaceOver(database: FakeDatabase) {
       return input.teacherIds.length;
     }),
     viewUnaudited: adminProcedure({ input: z.void(), output: z.string() }).query(() => 'seen'),
+    // B39 (the note under T059): a repeat answered from its key's row records no second entry.
+    approveReplayed: adminProcedure(approvalCall).mutation(({ ctx }) => {
+      ctx.audit.replayed();
+      return 'approved';
+    }),
+    approveRecordedAndReplayed: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
+      database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
+      ctx.audit.record(approval);
+      ctx.audit.replayed();
+      return 'approved';
+    }),
     disable: adminProcedure(approvalCall).mutation(({ input, ctx }) => {
       database.stage(ctx.tx, { table: 'teacher_approvals', teacherId: input.teacherId });
       ctx.audit.record(disabling);
@@ -273,6 +284,33 @@ describe('the administrator caller kind writes its own audit record (T099, FR-04
       'teacher_approvals',
       'audit_logs',
       'audit_logs',
+    ]);
+  });
+
+  // B39 (the note under T059, Q1 (a)): a repeat answered from its idempotency key's row records no
+  // entry, the first call's being the record; the kind admits it only when the handler says so. A
+  // call that says neither is still refused (the case above).
+  it('admits a call that recorded no entry when the handler marks it a replay, writing no audit row', async () => {
+    const database = new FakeDatabase();
+    const write = vi.fn(writerOver(database).write);
+    const caller = callerOver(database, { write }, 'admin-1');
+
+    expect(await caller.approveReplayed({ teacherId: 't1' })).toBe('approved');
+
+    expect(database.opened).toBe(1);
+    expect(write).not.toHaveBeenCalled();
+    expect(database.committed).toEqual([]);
+  });
+
+  it('writes the entries of a call that records them and also marks a replay, as usual', async () => {
+    const database = new FakeDatabase();
+    const caller = callerOver(database, writerOver(database), 'admin-1');
+
+    expect(await caller.approveRecordedAndReplayed({ teacherId: 't1' })).toBe('approved');
+
+    expect(database.committed).toEqual([
+      { table: 'teacher_approvals', teacherId: 't1' },
+      { table: 'audit_logs', record: { adminId: 'admin-1', ...approval } },
     ]);
   });
 

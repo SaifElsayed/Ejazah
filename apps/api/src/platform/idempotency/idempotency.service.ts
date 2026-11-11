@@ -38,6 +38,17 @@
 // THE EFFECT runs inside the one interactive transaction, under Prisma's default limit (5 s), and
 // holds a database connection for as long as it runs. So an effect writes rows and does nothing
 // slow: a consumer keeps a gateway or any other network call outside it (ARCHITECTURE §8.1).
+//
+// ON THE CALLER'S TRANSACTION (B39, the note under T059 in specs/004-sessions/tasks.md, Q1 (a)).
+// `run` opens a transaction of its own, but the administrator caller kind runs its handler in one
+// transaction and writes the call's audit entry there, so a keyed administrator call needs its key,
+// its effect and its entry to commit as one. `runOn(tx, request, effect)` keys on the transaction it
+// is handed: it claims the key with `INSERT … ON CONFLICT DO NOTHING`, so a concurrent duplicate
+// waits on the first claim and replays its committed row, and the caller's transaction is never
+// aborted by a unique violation. It answers `replayed`, which the handler passes on to the kind
+// (`AuditTrail.replayed()`): a replay records no second entry, the first call's being the record.
+// The retention is read inside the caller's transaction, since it is already open. A caller that
+// keys before it locks any row waits on a duplicate's claim holding no lock of the one order.
 import { createHash } from 'node:crypto';
 import { type IdempotentProcedure, isIdempotentProcedure } from '@ijazah/contracts';
 import { addSeconds } from '@ijazah/time';
@@ -98,6 +109,11 @@ export interface IdempotencyStore<TTransaction> {
   find(tx: TTransaction, scope: string, actorId: string, key: string): Promise<StoredKey | null>;
   /** Inserts the key `in_progress`. Throws `KeyTakenError` when the (scope, actor, key) is taken. */
   claim(tx: TTransaction, key: NewKey): Promise<string>;
+  /**
+   * Inserts the key `in_progress` without aborting `tx` when it is taken: answers its id, or null
+   * when the (scope, actor, key) is taken, after waiting on a claim not yet committed.
+   */
+  claimUnlessTaken(tx: TTransaction, key: NewKey): Promise<string | null>;
   complete(tx: TTransaction, id: string, response: StoredOutcome): Promise<void>;
   remove(tx: TTransaction, id: string): Promise<void>;
   /** Deletes every key whose `expires_at` is not after `now`; answers how many. */
@@ -238,6 +254,49 @@ export class IdempotencyService<TTransaction> {
     const hash = requestHash(request);
     if (row.requestHash === hash && row.status !== 'completed') return undefined;
     return this.#replay<TResult>(row, hash);
+  }
+
+  /**
+   * Runs `effect` once for this request on `tx`, the caller's own transaction, and answers its
+   * outcome and whether it was replayed from the key's row; the effect does not run on a replay.
+   * The same key with another input is refused as `run` refuses it. A concurrent duplicate's claim
+   * is waited on and its committed row replayed, and `tx` is never aborted (B39, the note under
+   * T059).
+   */
+  async runOn<TResult extends JsonValue>(
+    tx: TTransaction,
+    request: IdempotentRequest,
+    effect: (tx: TTransaction) => Promise<TResult>,
+  ): Promise<{ readonly outcome: TResult; readonly replayed: boolean }> {
+    const { scope, actorId } = parsePrincipal(request);
+    const key = parseKey(request.key);
+    const hours = await this.#settings.read(IDEMPOTENCY_RETENTION_SETTING, retentionHours);
+    const now = this.#clock();
+    const hash = requestHash(request);
+
+    const existing = await this.#store.find(tx, scope, actorId, key);
+    if (existing !== null) {
+      if (existing.expiresAt > now) {
+        return { outcome: this.#replay<TResult>(existing, hash), replayed: true };
+      }
+      await this.#store.remove(tx, existing.id);
+    }
+    const id = await this.#store.claimUnlessTaken(tx, {
+      scope,
+      actorId,
+      key,
+      requestHash: hash,
+      expiresAt: new Date(addSeconds(now, hours * SECONDS_PER_HOUR)),
+    });
+    if (id === null) {
+      // A duplicate committed its claim first; at READ COMMITTED this statement sees its row.
+      const taken = await this.#store.find(tx, scope, actorId, key);
+      if (taken === null) throw new KeyTakenError();
+      return { outcome: this.#replay<TResult>(taken, hash), replayed: true };
+    }
+    const outcome = await effect(tx);
+    await this.#store.complete(tx, id, { outcome });
+    return { outcome, replayed: false };
   }
 
   /** Deletes every key past its retention (the `expire-idempotency-keys` job). */
