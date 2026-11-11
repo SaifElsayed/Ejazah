@@ -1,10 +1,11 @@
 // T034 of specs/004-sessions (FR-421, FR-474, FR-475, FR-476, FR-480; research R-308) — the
 // administrator surface's `disputes` procedures as they are served (admin-surface.md, "`disputes`").
 // `disputes.list` audited `disputes.listed` on the reader, `disputes.get` `dispute.viewed` on the
-// dispute, `disputes.resolve` `dispute.resolved` on the dispute with its mandatory reason; each
-// refused to an anonymous caller and an unverified second factor, reaching and writing nothing; a
-// resolution's input refused when it lacks what its resolution names (`consumed`, `against`,
-// `party`); a service's refusal rolling its audit entry back. What each does is
+// dispute, `disputes.resolve` `dispute.resolved` on the dispute with its mandatory reason, the
+// resolution, the party a standing ruling reaches and the session's final status (PR #133's review,
+// round 1, Minor 3); each refused to an anonymous caller and an unverified second factor, reaching
+// and writing nothing; a resolution's input refused when it lacks what its resolution names
+// (`consumed`, `against`, `party`); a service's refusal rolling its audit entry back. What each does is
 // `dispute-queue.service.spec.ts`', `dispute-resolution.service.spec.ts`' and
 // `tests/db-integrity/dispute-resolution.spec.ts`'.
 import { describe, expect, it } from 'vitest';
@@ -159,8 +160,33 @@ describe('disputes.resolve (FR-476, FR-480)', () => {
         targetType: 'dispute',
         targetId: DISPUTE,
         reason: RESOLVE.reason,
+        after: { resolution: 'upheld', sessionStatus: 'teacher_no_show' },
       },
     ]);
+  });
+
+  it.each([
+    ['party_suspended', 'student'],
+    ['party_banned', 'teacher'],
+  ] as const)('audits a %s ruling with the party it reaches', async (resolution, party) => {
+    const { as, written } = surface();
+    await as(VERIFIED).disputes.resolve({ ...RESOLVE, resolution, party });
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'dispute.resolved',
+        targetType: 'dispute',
+        targetId: DISPUTE,
+        reason: RESOLVE.reason,
+        after: { resolution, party, sessionStatus: 'teacher_no_show' },
+      },
+    ]);
+  });
+
+  it('names no party for a ruling that reaches none, whatever the input carries', async () => {
+    const { as, written } = surface();
+    await as(VERIFIED).disputes.resolve({ ...RESOLVE, party: 'teacher' });
+    expect(written[0]?.after).toEqual({ resolution: 'upheld', sessionStatus: 'teacher_no_show' });
   });
 
   it('a refused resolution is CONFLICT and audits nothing', async () => {

@@ -7,7 +7,9 @@
 //
 // `disputes.list` audits `disputes.listed` on the reader; `disputes.get` audits `dispute.viewed` on
 // the dispute; `disputes.resolve` audits `dispute.resolved` on the dispute, with the mandatory
-// reason. A refusal rolls the call back, its audit entry with it. What each does is
+// reason and, as its `after`, the resolution, the party a `party_*` ruling suspends or bans, and the
+// session's final status (PR #133's review, round 1, Minor 3). A refusal rolls the call back, its
+// audit entry with it. What each does is
 // `dispute-queue.service.ts`' and `dispute-resolution.service.ts`'.
 //
 // T059 (SRS FR-DISPUTE-7; FR-470, FR-472, FR-480): `disputes.revise` declares its own limit,
@@ -63,6 +65,13 @@ export const disputesAdminRouter = createAdminRouter({
         targetType: 'dispute',
         targetId: resolved.disputeId,
         reason: input.reason,
+        after: {
+          resolution: input.resolution,
+          ...(input.party !== undefined && input.resolution.startsWith('party_')
+            ? { party: input.party }
+            : {}),
+          sessionStatus: resolved.sessionStatus,
+        },
       });
       return resolved;
     },
