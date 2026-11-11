@@ -23,6 +23,8 @@ import {
   teacherTodayProcedure,
 } from '../modules/booking/index.js';
 import { packagesRouter, slotsRouter, subjectsRouter } from '../modules/catalog/index.js';
+// T037 of specs/004-sessions: the chat module's `chat`.
+import { chatRouter } from '../modules/chat/index.js';
 import {
   accountRouter,
   authRouter,
@@ -65,6 +67,8 @@ export const appRouter = createAppRouter({
   checkout: checkoutRouter,
   enrollments: enrollmentsRouter,
   sessions: sessionsRouter,
+  // T037 of specs/004-sessions: the chat module's `chat`.
+  chat: chatRouter,
   // T063 of specs/004-sessions: the live channel, one subscription per signed-in device.
   live: liveRouter,
 });

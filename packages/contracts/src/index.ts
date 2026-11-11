@@ -11,6 +11,8 @@ export * from './auth.js';
 export { type AuthorityAllowList, authorityAllowList } from './authority-allow-list.js';
 export * from './booking.js';
 export * from './catalog.js';
+// T037 of specs/004-sessions: the `chat` namespace.
+export * from './chat.js';
 export * from './checkout.js';
 export * from './discovery.js';
 export * from './empty-input.js';
