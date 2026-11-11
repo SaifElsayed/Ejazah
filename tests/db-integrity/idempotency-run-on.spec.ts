@@ -16,8 +16,8 @@
 // Each probe keys with an actor of its own and removes its rows afterwards.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
-import type { IdempotentProcedure } from '@ijazah/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { IdempotentProcedure } from '../../packages/contracts/src/index.js';
 import {
   closeDatabase,
   type Database,

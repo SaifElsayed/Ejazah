@@ -158,24 +158,30 @@ function adminCall<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
   }, OPTIONS);
 }
 
-const revisions = createRevisions({
-  enrollments: sideFor('revise'),
-  idempotency: new IdempotencyService<Transaction>({
-    store: new IdempotencyRepository(database),
-    settings,
-  }),
-  settings,
-  log: SILENT,
-});
-
+let revisions: ReturnType<typeof createRevisions>;
 /** The participant's raise, as `main.ts` builds the sessions services. */
-const raising = createSessionsServices({
-  transactions: transactionsOver(database),
-  settings,
-  video: {} as never,
-  enrollmentSide: sideFor('raise'),
-  store: sessionsStore,
-  idempotency: new IdempotencyService<Transaction>({ store: new StoppingKeys('raise'), settings }),
+let raising: ReturnType<typeof createSessionsServices>;
+
+// Built once the first `beforeAll` has opened `database` (hooks run in the order they are declared),
+// never at module scope, where `database` is not assigned yet (the follow-up under T059).
+beforeAll(() => {
+  revisions = createRevisions({
+    enrollments: sideFor('revise'),
+    idempotency: new IdempotencyService<Transaction>({
+      store: new IdempotencyRepository(database),
+      settings,
+    }),
+    settings,
+    log: SILENT,
+  });
+  raising = createSessionsServices({
+    transactions: transactionsOver(database),
+    settings,
+    video: {} as never,
+    enrollmentSide: sideFor('raise'),
+    store: sessionsStore,
+    idempotency: new IdempotencyService<Transaction>({ store: new StoppingKeys('raise'), settings }),
+  });
 });
 
 const key = (): string => `probe-${randomUUID()}`;
@@ -395,7 +401,9 @@ describe('disputes.revise over the real tables (FR-472)', () => {
         'SELECT status::text FROM enrollments WHERE id = $1::uuid',
         [w.enrollmentId],
       );
-      expect(rows[0]?.status).toBe(options.enrollmentStatus ?? 'confirmed');
+      expect(rows[0]?.status).toBe(
+        'enrollmentStatus' in options ? options.enrollmentStatus : 'confirmed',
+      );
     },
   );
 
