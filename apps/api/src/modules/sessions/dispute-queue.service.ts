@@ -4,11 +4,12 @@
 // R-API-6) and sessions' own. Nothing is locked or written; the audit entries are the router's.
 //
 // THE LIST. The open session disputes first, oldest first, then the closed ones, newest first, in
-// pages of `admin_list_page_size`; the cursor is the last dispute's id, whose own status tells which
-// part the next page continues. Each names who raised it (the raiser is one of the session's two
-// accounts), the frozen outcome (absent before the evaluation, R-308), and its session's enrollment's
-// Teacher-No-Show count and the repeated-absence mark (T015, FR-451), read when listed; nothing
-// follows from them (R-322).
+// pages of `admin_list_page_size`; the cursor is the last dispute's part and id, `open:<id>` or
+// `closed:<id>`, so a dispute resolved between two pages skips nothing (PR #133's review, round 1,
+// Minor 2). Each names who raised it (the raiser is one of the session's two accounts), the frozen
+// outcome (absent before the evaluation, R-308), and its session's enrollment's Teacher-No-Show
+// count and the repeated-absence mark (T015, FR-451), read when listed; nothing follows from them
+// (R-322).
 //
 // THE DETAIL. The dispute, its session's telemetry (`telemetry.ts`, T033), and `chatAvailable`, from
 // the open dispute alone: the chat itself is read by `disputes.chat` (T040) through the
@@ -129,11 +130,10 @@ export function createDisputeQueue({
     cursor: string | undefined,
     limit: number,
   ): Promise<readonly SessionDisputeRow[]> => {
-    const at = cursor === undefined ? undefined : await store.disputeOf(tx, cursor);
-    if (at !== undefined && at !== null && at.status !== 'open') {
-      return store.disputesPage(tx, 'closed', cursor, limit);
-    }
-    const open = await store.disputesPage(tx, 'open', at === undefined ? undefined : cursor, limit);
+    // The cursor's form is checked by the contract's schema.
+    const [part, after] = cursor === undefined ? ['open', undefined] : cursor.split(':');
+    if (part === 'closed') return store.disputesPage(tx, 'closed', after, limit);
+    const open = await store.disputesPage(tx, 'open', after, limit);
     if (open.length >= limit) return open;
     return [...open, ...(await store.disputesPage(tx, 'closed', undefined, limit - open.length))];
   };
@@ -175,7 +175,10 @@ export function createDisputeQueue({
       const last = page.at(-1);
       return {
         items,
-        ...(read.length > pageSize && last !== undefined ? { nextCursor: last.id } : {}),
+        // A row's status is the part it was read in, by the same statement.
+        ...(read.length > pageSize && last !== undefined
+          ? { nextCursor: `${last.status === 'open' ? 'open' : 'closed'}:${last.id}` }
+          : {}),
       };
     },
 

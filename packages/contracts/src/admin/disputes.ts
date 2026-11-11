@@ -10,8 +10,14 @@ import { idempotencyKey } from '../idempotency-key.js';
 import { adminReason } from './admins.js';
 import { adminOutcome, telemetry } from './sessions.js';
 
-/** A page of the list starts after this dispute. */
-export const disputesListCursor = z.uuid();
+/**
+ * A page of the list starts after this position: the queue's part (`open`, oldest first; `closed`,
+ * newest first) and the last dispute of the page before, so a dispute resolved between two pages
+ * skips nothing (PR #133's review, round 1, Minor 2).
+ */
+export const disputesListCursor = z
+  .string()
+  .regex(/^(open|closed):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
 export const disputesListInput = z.object({ cursor: disputesListCursor.optional() });
 

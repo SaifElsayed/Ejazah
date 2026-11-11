@@ -1,10 +1,11 @@
 // T034 of specs/004-sessions/tasks.md (FR-451, FR-475; research R-308; contracts/admin-surface.md,
 // `disputes.list` and `disputes.get`) — `createDisputeQueue` over a recorded store. The list: the
 // open disputes first, then the closed ones from their start, a page of `admin_list_page_size`
-// with a cursor while more follow, the cursor's own status telling which part continues; each item
-// with who raised it, the frozen outcome and its enrollment's Teacher-No-Show count and mark. The
-// detail: the dispute, its session's telemetry and `chatAvailable` from the open dispute alone; no
-// session dispute, `NOT_FOUND` with one line. Over the real tables:
+// with a cursor while more follow, the cursor naming the part it continues (`open:<id>` or
+// `closed:<id>`), so a dispute resolved between two pages skips nothing (PR #133's review, round 1,
+// Minor 2); each item with who raised it, the frozen outcome and its enrollment's Teacher-No-Show
+// count and mark. The detail: the dispute, its session's telemetry and `chatAvailable` from the
+// open dispute alone; no session dispute, `NOT_FOUND` with one line. Over the real tables:
 // `tests/db-integrity/dispute-resolution.spec.ts`.
 import type { SessionStatus } from '@ijazah/contracts';
 import type { Telemetry } from '@ijazah/contracts/admin';
@@ -57,14 +58,19 @@ const TELEMETRY = { sessionId: OPEN[0]?.sessionId } as Telemetry;
 function world({ pageSize = 3, flag = 2 } = {}) {
   const journal: string[] = [];
   const logged: { fields: Record<string, unknown>; message: string }[] = [];
-  const all = [...OPEN, ...CLOSED];
+  const all = [...OPEN, ...CLOSED].map((row) => ({ ...row }));
   const store: DisputeQueueStore = {
     disputeOf: async (_tx, id) => all.find((row) => row.id === id) ?? null,
+    // As moderation's `sessionDisputesPage`: the open part by id ascending after the cursor, the
+    // closed part by id descending before it, each read by the rows' status now.
     disputesPage: async (_tx, group, after, limit) => {
       journal.push(`${group} after ${after ?? '-'} limit ${String(limit)}`);
-      const rows = group === 'open' ? OPEN : CLOSED;
-      const from = after === undefined ? 0 : rows.findIndex((row) => row.id === after) + 1;
-      return rows.slice(from, from + limit);
+      const open = group === 'open';
+      return all
+        .filter((row) => (row.status === 'open') === open)
+        .filter((row) => after === undefined || (open ? row.id > after : row.id < after))
+        .toSorted((one, other) => (open ? 1 : -1) * one.id.localeCompare(other.id))
+        .slice(0, limit);
     },
     disputedSessionsAmong: async (_tx, ids) =>
       new Map(
@@ -131,7 +137,12 @@ function world({ pageSize = 3, flag = 2 } = {}) {
     } as unknown as Parameters<typeof createDisputeQueue>[0]['log'],
     store,
   });
-  return { service, journal, logged };
+  /** An administrator's ruling between two reads: the dispute moves to the closed part. */
+  const resolve = (id: string | undefined): void => {
+    const row = all.find((one) => one.id === id);
+    if (row !== undefined) row.status = 'resolved';
+  };
+  return { service, journal, logged, resolve };
 }
 
 describe('disputes.list (FR-475, FR-451)', () => {
@@ -143,7 +154,7 @@ describe('disputes.list (FR-475, FR-451)', () => {
       OPEN[1]?.id,
       CLOSED[0]?.id,
     ]);
-    expect(page.nextCursor).toBe(CLOSED[0]?.id);
+    expect(page.nextCursor).toBe(`closed:${String(CLOSED[0]?.id)}`);
     expect(journal).toEqual([
       'open after - limit 4',
       'closed after - limit 2',
@@ -170,16 +181,29 @@ describe('disputes.list (FR-475, FR-451)', () => {
 
   it('continues the closed part after a closed cursor, and the open part after an open one', async () => {
     const closed = world({ pageSize: 3 });
-    const after = await closed.service.list(tx, ADMIN, { cursor: CLOSED[0]?.id });
+    const after = await closed.service.list(tx, ADMIN, {
+      cursor: `closed:${String(CLOSED[0]?.id)}`,
+    });
     expect(after.items.map(({ disputeId }) => disputeId)).toEqual([CLOSED[1]?.id]);
     expect(after.nextCursor).toBeUndefined();
     expect(closed.journal[0]).toBe(`closed after ${String(CLOSED[0]?.id)} limit 4`);
 
     const open = world({ pageSize: 1 });
-    const next = await open.service.list(tx, ADMIN, { cursor: OPEN[0]?.id });
+    const next = await open.service.list(tx, ADMIN, { cursor: `open:${String(OPEN[0]?.id)}` });
     expect(next.items.map(({ disputeId }) => disputeId)).toEqual([OPEN[1]?.id]);
-    expect(next.nextCursor).toBe(OPEN[1]?.id);
+    expect(next.nextCursor).toBe(`open:${String(OPEN[1]?.id)}`);
     expect(open.journal[0]).toBe(`open after ${String(OPEN[0]?.id)} limit 2`);
+  });
+
+  it('continues the open part after a dispute of the page before was resolved, skipping none', async () => {
+    const { service, resolve } = world({ pageSize: 1 });
+    const first = await service.list(tx, ADMIN, {});
+    expect(first.items.map(({ disputeId }) => disputeId)).toEqual([OPEN[0]?.id]);
+    resolve(OPEN[0]?.id);
+    const next = await service.list(tx, ADMIN, { cursor: first.nextCursor });
+    expect(next.items.map(({ disputeId }) => disputeId)).toEqual([OPEN[1]?.id]);
+    const rest = await service.list(tx, ADMIN, { cursor: next.nextCursor });
+    expect(rest.items.map(({ disputeId }) => disputeId)).toEqual([CLOSED[0]?.id]);
   });
 });
 
