@@ -82,6 +82,8 @@ function surface(refuse?: DomainError) {
       reached.push(['dismiss', adminId, input]);
       return answer({ caseId: input.caseId, status: 'dismissed' as const });
     },
+    // T064's procedure has its own spec (`cases-open-manual.router.spec.ts`).
+    openManual: () => Promise.reject(new Error('cases.openManual: not reached by this spec')),
   };
   const contexts = adminContextsOver({ cases });
   return {

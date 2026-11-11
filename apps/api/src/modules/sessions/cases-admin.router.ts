@@ -15,6 +15,8 @@ import {
   casesGetOutput,
   casesListInput,
   casesListOutput,
+  casesOpenManualInput,
+  casesOpenManualOutput,
   casesResolveInput,
   casesResolveOutput,
 } from '@ijazah/contracts/admin';
@@ -64,4 +66,36 @@ export const casesAdminRouter = createAdminRouter({
       return dismissed;
     },
   ),
+
+  // T064 (FR-493; research R-326): the manual case, its own limit checked before the transaction
+  // (R-321), keyed on the call's transaction; a replay records no second entry (the note under
+  // T064, Q1 (a)), the first call's being the record. Audited `case.opened_manually` on the case
+  // opened or joined, with the reason, the party, `joined` and the remedy handed.
+  openManual: adminProcedure({
+    input: casesOpenManualInput,
+    output: casesOpenManualOutput,
+    rateLimit: { key: 'rate_limit_manual_compensation_case', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { answer, replayed } = await ctx.services.cases.openManual(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return answer;
+    }
+    ctx.audit.record({
+      action: 'case.opened_manually',
+      targetType: 'dispute',
+      targetId: answer.caseId,
+      reason: input.reason,
+      after: {
+        party: answer.party,
+        joined: answer.joined,
+        handedRemedy: answer.handedRemedy === undefined ? null : { ...answer.handedRemedy },
+      },
+    });
+    return answer;
+  }),
 });

@@ -212,6 +212,8 @@ const terms: EnrollmentTerms = {
   timezone: 'Africa/Cairo',
   durationMinutes: 45,
   sessionCount: 8,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
 };
 
 /** T026: the dispute view (`dispute-view.ts`) as this spec fakes it; what it reads is its own spec's. */

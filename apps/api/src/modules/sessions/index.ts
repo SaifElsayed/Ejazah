@@ -416,3 +416,13 @@ export {
   createCaseClosing,
 } from './case-closing.service.js';
 export { casesAdminRouter } from './cases-admin.router.js';
+/**
+ * T064 (FR-493; research R-326): an administrator's manual compensation case (`cases.openManual`),
+ * keyed on the administrator call's transaction, with an open remedy handed to the student's case.
+ */
+export {
+  createManualCase,
+  type ManualCaseAnswer,
+  type ManualCaseDependencies,
+  type ManualCaseService,
+} from './manual-case.service.js';

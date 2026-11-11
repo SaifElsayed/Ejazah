@@ -30,6 +30,8 @@ const terms = (status: EnrollmentStatus): EnrollmentTerms => ({
   timezone: 'Africa/Cairo',
   durationMinutes: 60,
   sessionCount: 4,
+  studentUserId: '0199d0a0-0000-7000-8000-0000000000b1',
+  teacherUserId: '0199d0a0-0000-7000-8000-0000000000c1',
 });
 
 const settled = (

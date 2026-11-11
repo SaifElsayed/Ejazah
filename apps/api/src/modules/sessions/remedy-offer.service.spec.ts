@@ -138,6 +138,8 @@ beforeEach(() => {
     timezone: CAIRO,
     durationMinutes: 60,
     sessionCount: 4,
+    studentUserId: STUDENT,
+    teacherUserId: TEACHER,
   };
   suspended = false;
   lastReached = new Date('2026-11-26T00:00:00Z');

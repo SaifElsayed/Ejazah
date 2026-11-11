@@ -6,8 +6,11 @@
 //
 // WHAT EACH REASON HANDS OVER (data-model.md §3, the remedy table). `refund_choice`: an
 // `awaiting_choice` remedy. `counter_unanswered`: a `counter_proposed` one. `makeup_refused`: a
-// `proposed` one, or an `awaiting_choice` one past its choice window. A remedy in any other state,
-// `frozen` included (a suspended student's, which nothing advances), is refused `REMEDY_NOT_OPEN`.
+// `proposed` one, or an `awaiting_choice` one past its choice window. `admin_opened_for_student`
+// (an administrator's manual case, `cases.openManual`, T064; the note under T064, F6): any of the
+// four open ones, `frozen` included, its `kind` left as it is. A remedy in any other state, and a
+// `frozen` one for the first three reasons (a suspended student's, which nothing advances), is
+// refused `REMEDY_NOT_OPEN`.
 // The times a reason depends on (the answer window's close, the choice window's, the lead before
 // the proposal's start) are the caller's to decide, under the locks below, which it takes before
 // it reads them; those this takes again are the ones it already holds.
@@ -60,23 +63,29 @@ import {
 } from './remedy-case.repository.js';
 import { recordSessionEvents, type SessionEventRecord } from './session-events.repository.js';
 
-/** Why a remedy is handed to a case: the three of `COMPENSATION_REASONS` this hand-off opens. */
+/** Why a remedy is handed to a case: the four of `COMPENSATION_REASONS` this hand-off opens. */
 export const REMEDY_CASE_REASONS = [
   'refund_choice',
   'counter_unanswered',
   'makeup_refused',
+  // T064: the student's manual case (R-326).
+  'admin_opened_for_student',
 ] as const;
 
 export type RemedyCaseReason = (typeof REMEDY_CASE_REASONS)[number];
 
 /** The two hand-offs the system makes on its own (Q11 (a)), each with one line after its commit. */
-export type AutomaticRemedyCaseReason = Exclude<RemedyCaseReason, 'refund_choice'>;
+export type AutomaticRemedyCaseReason = Exclude<
+  RemedyCaseReason,
+  'refund_choice' | 'admin_opened_for_student'
+>;
 
 /** The states each reason hands over (this file's head). */
 const HANDED_FROM: Readonly<Record<RemedyCaseReason, readonly RemedyStatus[]>> = {
   refund_choice: ['awaiting_choice'],
   counter_unanswered: ['counter_proposed'],
   makeup_refused: ['proposed', 'awaiting_choice'],
+  admin_opened_for_student: ['awaiting_choice', 'proposed', 'counter_proposed', 'frozen'],
 };
 
 /** The reasons that make the remedy a refund; `makeup_refused` leaves its `kind` (Q6 (a)). */
