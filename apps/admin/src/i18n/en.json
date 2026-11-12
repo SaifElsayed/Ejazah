@@ -2192,6 +2192,181 @@
         "title": "No user matches the search"
       },
       "title": "Users"
+    },
+    "sessions": {
+      "title": "Enrollments and sessions",
+      "lede": "Every enrollment and its sessions as they stand. From here a session not yet settled is cancelled, an enrollment an administrator's decision closed is restored, an outcome nobody disputed is corrected, and a compensation case is opened. Payment status is on the payments page alone.",
+      "filters": {
+        "student": "Student's name",
+        "teacher": "Teacher's name",
+        "namePlaceholder": "Start of the name",
+        "from": "From day",
+        "to": "To day",
+        "datePlaceholder": "Day / month / year",
+        "dateInvalid": "This date does not exist. Type the day, then the month, then the year.",
+        "datesHint": "Enrollments with a session on, after or before these days, in the session's time zone."
+      },
+      "columns": {
+        "student": "Student",
+        "teacher": "Teacher",
+        "status": "Status",
+        "progress": "Sessions",
+        "noShows": "Teacher absences",
+        "next": "Next session"
+      },
+      "progress": "{done} of {total} · {remaining} remaining",
+      "noNext": "No upcoming session",
+      "empty": {
+        "title": "No enrollment matches the search",
+        "text": "Try another name or day, or remove a filter."
+      },
+      "emptyAll": {
+        "title": "No enrollments yet",
+        "text": "Every enrollment created on the platform appears here."
+      },
+      "pagerPage": "Page {page} · newest first",
+      "time": {
+        "session": "{date} · {time} · {city} time",
+        "panel": "Your time: {date} · {time}"
+      },
+      "detail": {
+        "a11y": "Enrollment details",
+        "heading": "{student} with {teacher}",
+        "student": "Student",
+        "teacher": "Teacher",
+        "track": "Track",
+        "progress": "Sessions",
+        "payments": "Payment status on the payments page",
+        "openCase": "Open a compensation case",
+        "restore": "Restore the enrollment",
+        "restorableUntil": "This enrollment can be restored until {when}.",
+        "footer": "Every action here asks for a written reason; the action and its reason are logged under your name in the audit log.",
+        "sessionsTitle": "Sessions",
+        "sessionsEmpty": "This enrollment has no sessions.",
+        "session": "Session {n}",
+        "makeupFor": "Make-up for session {n}",
+        "underDispute": "Outcome under dispute: {outcome}",
+        "cancel": "Cancel the session",
+        "correct": "Correct the outcome",
+        "telemetry": "Connection record",
+        "casesTitle": "Compensation cases",
+        "casesEmpty": "This enrollment has no compensation case.",
+        "viewCase": "View the case",
+        "timelineTitle": "What happened to the enrollment · newest first",
+        "timelineEmpty": "Nothing recorded yet."
+      },
+      "remedy": {
+        "title": "Remedy · {kind}",
+        "kind": {
+          "makeup": "Make-up session",
+          "refund": "Refund of the session"
+        },
+        "status": {
+          "awaitingChoice": "Awaiting the student's choice",
+          "proposed": "Proposed time awaiting the student",
+          "counterProposed": "Student's proposal awaiting the teacher",
+          "booked": "Make-up session booked",
+          "refundCase": "With the administration in a compensation case",
+          "frozen": "Paused",
+          "lapsed": "Closed when the student's account was deleted"
+        },
+        "offeredAt": "Offered {when}",
+        "choiceClosesAt": "The student's choice closes {when}",
+        "proposal": "Proposed time: {time}",
+        "counter": "Student's proposal: {time}, sent {when}",
+        "answerClosesAt": "The teacher's answer closes {when}",
+        "decidedAt": "Decided {when}",
+        "bookingRetried": "Booking refused, retried until {when}",
+        "handToCase": "Hand the remedy to the student's case"
+      },
+      "caseReason": {
+        "slotUnavailable": "The slot could not be booked after payment",
+        "partyRestricted": "A party's account is restricted",
+        "duplicatePayment": "Duplicate payment",
+        "absenceTermination": "Enrollment ended for the teacher's absence",
+        "adminCancellation": "A session cancelled by the administration",
+        "teacherEnded": "The teacher suspended or their account ended",
+        "studentSuspended": "The student suspended",
+        "studentBanned": "The student banned",
+        "studentFaultConfirmed": "A suspended student's fault confirmed",
+        "refundChoice": "The student chose a refund",
+        "counterUnanswered": "The teacher did not answer the student's proposal",
+        "makeupRefused": "The make-up session could not be booked",
+        "adminOpenedForStudent": "Opened by the administration for the student",
+        "adminOpenedForTeacher": "Opened by the administration for the teacher"
+      },
+      "caseStatus": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "dismissed": "Closed"
+      },
+      "event": {
+        "withSession": "{event} · session {n}",
+        "outcomeChange": "{before} → {after}",
+        "previousStart": "It was set for {when}",
+        "kind": {
+          "confirmed": "The enrollment was confirmed",
+          "orderFailed": "A payment order failed",
+          "cancelled": "The enrollment was cancelled · {reason}",
+          "completed": "The enrollment was completed",
+          "terminatedNoShow": "The enrollment ended for the teacher's absence",
+          "restored": "The enrollment was restored",
+          "settled": "The session's outcome was settled",
+          "cancellationRequested": "A cancellation of the session was requested",
+          "cancellationAccepted": "The cancellation request was accepted",
+          "cancellationDeclined": "The cancellation request was declined",
+          "cancellationExpired": "The cancellation request lapsed",
+          "cancelledByAdmin": "The administration cancelled the session",
+          "remedyOffered": "A remedy was offered",
+          "counterProposed": "The student proposed another make-up time",
+          "counterAccepted": "The teacher accepted the student's proposal",
+          "counterDeclined": "The teacher declined the student's proposal",
+          "counterWithdrawn": "The student's proposal was withdrawn",
+          "remedyFrozen": "The remedy was paused",
+          "makeupBooked": "A make-up session was booked",
+          "remedyHandedToCase": "The remedy was handed to a case",
+          "remedyLapsed": "The remedy closed when the student's account was deleted",
+          "disputeRaised": "A dispute of the outcome was raised",
+          "disputeResolved": "The dispute was resolved",
+          "disputeRevised": "The dispute's ruling was revised",
+          "reviewResolved": "The session's review was resolved",
+          "outageReclassified": "The session moved to «Service outage»",
+          "complaintRaised": "An absence complaint was raised",
+          "complaintDecided": "The complaint was decided",
+          "outcomeCorrected": "The outcome was corrected",
+          "instantsReresolved": "The session's time was recomputed",
+          "counterBookingRefused": "The student's proposal could not be booked and was released"
+        }
+      },
+      "cancel": {
+        "title": "Cancel session {n}",
+        "effect": "The session becomes «Cancelled by admin» with no penalty on either party, and a compensation case opens on the enrollment, or the cancellation joins its open case if there is one.",
+        "reasonLabel": "Reason for cancelling",
+        "confirm": "Cancel the session",
+        "refused": {
+          "notScheduled": "This session is no longer upcoming: it was settled or cancelled, or it is disputed and its outcome is decided on the disputes page. Nothing changed.",
+          "notFound": "This session was not found. Nothing changed."
+        }
+      },
+      "restore": {
+        "title": "Restore the enrollment",
+        "until": "The restore is open until {when}.",
+        "effect": "The enrollment becomes active again, its remaining sessions are created from the nearest weekly time after the first-session lead, each remedy the closing's case held is offered again, and that case closes with the note «restored». The cancelled sessions stay as they are.",
+        "reasonLabel": "Reason for restoring",
+        "confirm": "Restore the enrollment",
+        "refused": {
+          "notRestorable": "This closing cannot be restored from here. Nothing changed.",
+          "windowClosed": "The restore window has passed. Nothing changed.",
+          "caseClosed": "The closing's case was closed, so the enrollment is not restored through it. Nothing changed.",
+          "partyRestricted": "A party's account is not active, or the teacher's approval does not stand. Nothing changed.",
+          "slotInactive": "The teacher deactivated this enrollment's weekly slot. Nothing changed.",
+          "slotChanged": "The teacher changed the weekly slot's day, time or time zone since the enrollment's sessions were created, and the student is not moved to a new time. Nothing changed.",
+          "slotTaken": "The weekly slot is taken by another student in a week the restore would fill. Nothing changed.",
+          "timeTaken": "A session the restore would create overlaps a session, an open hold or a reserved make-up time of either party. Nothing changed.",
+          "noFreeWeek": "No free week was found for a remedy the closing's case held, so the case stays open. Nothing changed.",
+          "notFound": "This enrollment was not found. Nothing changed."
+        }
+      }
     }
   }
 }
