@@ -1520,6 +1520,42 @@
         "users": "Users"
       }
     },
+    "outages": {
+      "columns": {
+        "end": "End",
+        "reason": "Reason",
+        "recordedBy": "Recorded by",
+        "start": "Start"
+      },
+      "dialog": {
+        "confirm": "Record the outage",
+        "effect": "The window is recorded in the chosen zone’s time. Each settled session whose time overlaps it, still inside its dispute window and not disputed, moves to the review queue for you to choose its outcome; each session evaluated after the record whose time overlaps it is settled “Service outage” with no absence against anyone.",
+        "endDate": "End day",
+        "endTime": "End time",
+        "reason": "Reason for the record",
+        "refused": {
+          "endNotAfterStart": "The end must be after the start. Nothing was recorded.",
+          "zoneUnknown": "This time zone is not known; write it as the IANA list does, such as Africa/Cairo. Nothing was recorded."
+        },
+        "startDate": "Start day",
+        "startTime": "Start time",
+        "timeHint": "24-hour clock.",
+        "timeInvalid": "Write the time on the 24-hour clock, such as 14:30.",
+        "timePlaceholder": "14:30",
+        "title": "Record a video service outage",
+        "zone": "Time zone",
+        "zoneHint": "Its city: {city}"
+      },
+      "empty": {
+        "text": "Each video service outage an administrator records appears here.",
+        "title": "No recorded outages"
+      },
+      "lede": "The windows in which the video service was out, as administrators recorded them, newest first. No absence is counted against anyone in a session whose time overlaps a recorded window.",
+      "pagerPage": "Page {page} · newest first",
+      "record": "Record an outage",
+      "recorded": "{count, plural, =0 {The outage was recorded; no session moved to the review queue.} one {The outage was recorded; one session moved to the review queue.} other {The outage was recorded; # sessions moved to the review queue.}}",
+      "title": "Video outages"
+    },
     "payments": {
       "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
       "columns": {
@@ -1648,6 +1684,58 @@
         "open": "Open"
       },
       "title": "Reports"
+    },
+    "review": {
+      "empty": {
+        "text": "Each session whose simultaneous connection is below the attendance threshold, and each session a recorded video outage moved, appears here."
+      },
+      "lede": "Sessions the automatic evaluation could not settle: a simultaneous connection below the attendance threshold, or a recorded outage of the video service. Choose each session’s outcome with a mandatory reason recorded in the audit log, after reading its connection record.",
+      "pagerPage": "Page {page} · oldest first",
+      "resolve": {
+        "effect": "The session’s outcome becomes the one chosen and it leaves the review queue. If the outcome owes the student a remedy, it is offered once the session’s dispute window has closed, not now.",
+        "refused": {
+          "notFound": "This session was not found. Nothing changed.",
+          "notUnderReview": "This session is no longer in the review queue; its outcome may have been settled already. Nothing changed."
+        },
+        "title": "Settle the session’s outcome"
+      },
+      "seconds": "{count, plural, =0 {No simultaneous connection} one {# second} other {# seconds}}",
+      "telemetry": {
+        "correct": "Correct the outcome",
+        "events": {
+          "roomEnded": "The room was closed",
+          "studentJoined": "Student joined",
+          "studentLeft": "Student left",
+          "teacherJoined": "Teacher joined",
+          "teacherLeft": "Teacher left"
+        },
+        "eventsTitle": "Recorded joins and leaves",
+        "inPanelZone": "In the panel’s time · {city}",
+        "inSessionZone": "In the session’s time · {city}",
+        "intervals": {
+          "student": "Student connected",
+          "teacher": "Teacher connected",
+          "together": "Both connected together"
+        },
+        "intervalsTitle": "Connected time",
+        "joined": "Joined the room",
+        "joinedStudent": "Student",
+        "joinedTeacher": "Teacher",
+        "noEvents": "No join or leave was recorded for this session.",
+        "noInterval": "No connected time.",
+        "noOutages": "No recorded outage overlaps its time.",
+        "notJoined": "Did not join the room",
+        "outagesTitle": "Recorded video outages over its time",
+        "refused": {
+          "notFound": "This session was not found.",
+          "notSettled": "This session is still scheduled; its connection record can be read once its outcome is settled or it is cancelled."
+        },
+        "resolve": "Settle the outcome",
+        "sessionStart": "{date} · starts {time}",
+        "simultaneous": "Simultaneous connection",
+        "span": "{start} – {end}",
+        "title": "The session’s connection record"
+      }
     },
     "reviews": {
       "a11y": {
