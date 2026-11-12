@@ -20,3 +20,8 @@ export {
 } from './cancellation-request';
 export { CancellationPanel } from './components/CancellationPanel';
 export { participantReasonOf, reasonTooLong } from './reason';
+// T042: the dispute's control, its raise and its words, and its panel; the reason form the
+// student's complaint shares.
+export { type ReasonFormWords, ReasonForm } from './components/ReasonForm';
+export { DisputePanel } from './components/DisputePanel';
+export { disputeRaiseShown, disputeRefusal, type RaiseDispute, useRaiseDispute } from './dispute';

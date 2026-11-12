@@ -9,7 +9,8 @@
 // back arrow returns where it was opened from (the tab or the home). Each session's status after
 // settlement is its badge (004:T020, FR-495): a disputed session reads «محل نزاع», the outcome
 // frozen beside it never answered nor drawn (R-308); the sessions are keyed by their id. A session
-// with a pending cancellation request says so on its row (004:T041, FR-495).
+// with a pending cancellation request says so on its row (004:T041, FR-495). On a confirmed
+// enrollment, the complaint of the teacher's absence (004:T042, FR-452; `ComplaintPanel`).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -37,6 +38,7 @@ import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { enrollmentQueryKey, isAwaitingPayment, useEnrollment } from '../api';
+import { ComplaintPanel } from '../components/ComplaintPanel';
 import { ConfirmingNotice } from '../components/ConfirmingNotice';
 import { EnrollmentStatusBadge, PackageLine, SessionCounts } from '../components/EnrollmentCard';
 import { PendingOrderBadge } from '../components/PendingOrderBadge';
@@ -114,6 +116,7 @@ export function EnrollmentDetail() {
       {read.over && isAwaitingPayment(shown) && orders.isConfirming(shown.enrollmentId) ? (
         <ConfirmingNotice enrollmentId={shown.enrollmentId} onCheckAgain={read.retry} />
       ) : null}
+      <ComplaintPanel enrollment={shown} />
       {shown.sessions.length === 0 ? null : (
         <Section title={t('student.enrollmentDetail.sessions')}>
           <List>
