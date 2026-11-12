@@ -1868,6 +1868,28 @@
         },
         "title": "Correct the session's outcome"
       },
+      "heldFiles": {
+        "empty": "No files are held for this matter.",
+        "kind": {
+          "credential": "Credential document",
+          "other": "Other document",
+          "photo": "Profile photo"
+        },
+        "note": "Readable while this matter is open. Each opening of a file makes a short-lived link and is recorded under your name in the audit log.",
+        "owner": {
+          "student": "Belongs to the student",
+          "teacher": "Belongs to the teacher"
+        },
+        "refused": {
+          "fileNotFound": "This file is no longer held for this matter. No link was made.",
+          "notFound": "This matter was not found.",
+          "notOpen": "This matter is no longer open, so its held files are not read here."
+        },
+        "title": "The deleted party's held files",
+        "uploaded": "Uploaded {date}",
+        "view": "View",
+        "viewFile": "View the {owner, select, student {student's} other {teacher's}} {file}"
+      },
       "keyReused": "This request was already sent with different input, or is still being processed. Close the dialog and read the page again before you retry.",
       "manualCase": {
         "close": "Close",
