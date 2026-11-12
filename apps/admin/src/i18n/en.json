@@ -289,6 +289,149 @@
         "yes": "Yes"
       }
     },
+    "cases": {
+      "action": {
+        "decide": "Decide the complaint",
+        "dismiss": "Dismiss the case",
+        "resolve": "Resolve the case"
+      },
+      "close": {
+        "dismiss": {
+          "effect": "The case closes as dismissed, with your note. No money moves here.",
+          "title": "Dismiss the case"
+        },
+        "noteHint": "Required, up to {max} characters, recorded in the audit log.",
+        "noteLabel": "Closing note: what Platform Administration did outside the platform",
+        "noteTooLong": "The note is longer than {max} characters.",
+        "refused": {
+          "noFreeWeek": "There is no free week for a make-up of one of the sessions the suspension cancelled, so the case was not resolved and stays open. Nothing changed.",
+          "notFound": "This case was not found, or it is a complaint, decided from its own dialog. Nothing changed.",
+          "notOpen": "This case is no longer open; it was closed meanwhile. Read the page again. Nothing changed.",
+          "studentSuspended": "The student’s account is still suspended. Reinstate the account from the users page first, then resolve the case. Nothing changed."
+        },
+        "resolve": {
+          "effect": "The case closes as resolved, compensation ordered, with your note. No money moves here: Platform Administration carries out the compensation outside the platform, and a refund is recorded when the payment gateway reports it.",
+          "title": "Resolve the case"
+        },
+        "suspended": {
+          "dismiss": {
+            "effect": "Dismissing confirms the student’s fault: the enrollment is cancelled and its time returns to booking, its upcoming make-up sessions are cancelled, and every remedy still owed on it is handed to a new case, “A suspended student’s fault confirmed”. The ordinary sessions the suspension cancelled are owed nothing.",
+            "ended": "If the enrollment already ended another way, it is not ended again, and the case closes with no other effect."
+          },
+          "resolve": {
+            "effect": "Resolving clears the student: the case closes, and for each session the suspension cancelled the student is offered now what a teacher’s absence owes: on recitation a make-up session or a refund, as the student chooses; on the ijazah track a make-up session.",
+            "ended": "If the enrollment already ended another way, nothing is offered, and those sessions join the case that end opened.",
+            "reinstate": "Resolving is refused while the student’s account is suspended; reinstate the account first."
+          }
+        }
+      },
+      "closedAt": "Closed {date}",
+      "columns": {
+        "case": "Case",
+        "enrollment": "Enrollment",
+        "status": "Status"
+      },
+      "decide": {
+        "close": {
+          "effect": "The complaint closes as dismissed, and nothing else changes.",
+          "label": "Close the complaint"
+        },
+        "closeDialog": "Close",
+        "done": "The decision was made.",
+        "endEnrollment": {
+          "effect": "Every upcoming session of the enrollment, make-ups included, is cancelled by the administration, the enrollment ends for the teacher’s absence, every remedy still owed is handed to a new compensation case, and the complaint closes as resolved. Only while the enrollment is running.",
+          "label": "End the enrollment"
+        },
+        "legend": "Decision",
+        "newCase": "A new compensation case was opened with what is still owed on the enrollment.",
+        "noteLabel": "Decision note",
+        "refused": {
+          "notConfirmed": "The enrollment is no longer running, so it cannot be ended. Decide the complaint by suspending the teacher or closing it. Nothing changed.",
+          "notFound": "This complaint was not found, or it was already decided. Nothing changed."
+        },
+        "suspendTeacher": {
+          "effect": "The teacher’s account is suspended now, so the teacher’s running enrollments end as a teacher’s suspension ends them: their upcoming sessions are cancelled and a compensation case is opened for each. The complaint closes as resolved.",
+          "label": "Suspend the teacher"
+        },
+        "title": "Decide the complaint of a teacher’s absence",
+        "viewNewCase": "View the new case"
+      },
+      "detail": {
+        "a11y": "Case details",
+        "closingTitle": "Closing",
+        "complaintTitle": "The complaint",
+        "coversEmpty": "No session is covered by this case.",
+        "coversTitle": "What the case covers",
+        "decisionLabel": "Decision",
+        "enrollmentStatus": "Enrollment status",
+        "enrollmentTitle": "Enrollment",
+        "noShows": "Teacher absences",
+        "note": "Closing note",
+        "openManual": "Open a case on this enrollment",
+        "paymentsNote": "This enrollment’s payment orders are on the payments page; a case carries no amount.",
+        "raisedAt": "Raised {date}",
+        "remedyKind": {
+          "makeup": "Make-up session",
+          "refund": "Refund"
+        },
+        "remedyStatus": {
+          "awaitingChoice": "Awaiting the student’s choice",
+          "booked": "Booked",
+          "counterProposed": "The student proposed another time",
+          "frozen": "Frozen",
+          "lapsed": "Lapsed",
+          "proposed": "Time proposed",
+          "refundCase": "Handed to a case"
+        },
+        "resolution": {
+          "compensationOrdered": "Resolved, compensation ordered",
+          "enrollmentEnded": "The enrollment ended",
+          "partySuspended": "The teacher’s account suspended"
+        },
+        "session": "Session {number}",
+        "sessionsLink": "The enrollment’s sessions",
+        "student": "Student",
+        "teacher": "Teacher",
+        "track": "Track"
+      },
+      "empty": {
+        "text": "Choose another status, or show all.",
+        "title": "No cases with this status"
+      },
+      "emptyAll": {
+        "text": "Compensation cases and complaints of a teacher’s absence appear here when they are opened.",
+        "title": "No cases or complaints"
+      },
+      "kind": {
+        "absenceComplaint": "The student’s complaint of the teacher’s absence"
+      },
+      "lede": "Compensation cases and complaints of a teacher’s absence. No money moves here: what Platform Administration decides is carried out outside the platform, and a refund is recorded when the payment gateway reports it.",
+      "openManual": "Open a case",
+      "openedAt": "Opened {date}",
+      "pagerPage": "Page {page}",
+      "reason": {
+        "absenceTermination": "Enrollment ended on a complaint of the teacher’s absence",
+        "adminCancellation": "A session cancelled by the administration",
+        "adminOpenedForStudent": "Opened by the administration for the student",
+        "adminOpenedForTeacher": "Opened by the administration for the teacher",
+        "counterUnanswered": "The student’s other time, left unanswered by the teacher",
+        "duplicatePayment": "A second payment for the same enrollment",
+        "makeupRefused": "A make-up session could not be booked",
+        "partyRestricted": "Paid while a party could no longer be booked",
+        "refundChoice": "The student chose a refund over a make-up session",
+        "slotUnavailable": "Paid after the time was no longer available",
+        "studentBanned": "The student was banned",
+        "studentFaultConfirmed": "A suspended student’s fault confirmed",
+        "studentSuspended": "The student was suspended; the case awaits review",
+        "teacherEnded": "The teacher’s account was suspended, revoked, banned or deleted"
+      },
+      "status": {
+        "dismissed": "Dismissed",
+        "open": "Open",
+        "resolved": "Resolved"
+      },
+      "title": "Cases and complaints"
+    },
     "chatLog": {
       "a11y": {
         "back": "Back to the dispute",

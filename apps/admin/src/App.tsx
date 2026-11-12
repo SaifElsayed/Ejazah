@@ -30,6 +30,7 @@ import { ConsolePageShell } from './pages/_layout/shells';
 import { AdminAdmins } from './pages/settings/admins/AdminAdmins';
 import { AdminApplications } from './pages/applications/AdminApplications';
 import { AdminAudit } from './pages/audit/AdminAudit';
+import { AdminCases } from './pages/cases/AdminCases';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
 import { AdminDisputes } from './pages/disputes/AdminDisputes';
 import { AdminHome } from './pages/home/AdminHome';
@@ -101,6 +102,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/review" element={<AdminReview />} />
               <Route path="/outages" element={<AdminOutages />} />
               <Route path="/disputes" element={<AdminDisputes />} />
+              <Route path="/cases" element={<AdminCases />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>
