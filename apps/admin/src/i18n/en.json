@@ -1869,6 +1869,30 @@
         "title": "Correct the session's outcome"
       },
       "keyReused": "This request was already sent with different input, or is still being processed. Close the dialog and read the page again before you retry.",
+      "manualCase": {
+        "close": "Close",
+        "confirm": "Open the case",
+        "effect": "A compensation case is opened for this party on the enrollment, or the request joins their case already open on it. Nothing changes in the sessions or the payments.",
+        "effectRemedy": "The open remedy is handed to the student's case: the student no longer chooses it, and any time held for it is released.",
+        "enrollmentInvalid": "Enter a valid enrollment ID.",
+        "enrollmentLabel": "Enrollment ID",
+        "joined": "This party already had an open case on the enrollment; the request joined it and no new case was opened.",
+        "opened": "A new case was opened for this party.",
+        "partyLegend": "The case is for",
+        "partyStudent": "The student",
+        "partyTeacher": "The teacher",
+        "reasonHint": "1 to {max} characters, recorded in the audit log.",
+        "reasonLabel": "Reason for opening the case",
+        "reasonTooLong": "The reason is longer than {max} characters.",
+        "refused": {
+          "notFound": "The enrollment was not found, or the remedy is not one of its. Nothing was opened.",
+          "rateLimited": "Too many requests in a short time. Wait a little, then try again. Nothing was opened.",
+          "remedyNotOpen": "This remedy is no longer open: its session was booked, it was handed to a case, or it lapsed. Nothing was opened."
+        },
+        "remedyParty": "The remedy is owed to the student, so the case is the student's.",
+        "title": "Open a compensation case",
+        "viewCase": "View the case"
+      },
       "noShows": {
         "count": "Teacher absences: {count}",
         "mark": "Repeated absence"
