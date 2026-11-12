@@ -224,3 +224,117 @@ export async function sessionPartiesOf(
     ),
   );
 }
+
+type AccountStatusValue = 'active' | 'suspended' | 'verification_required' | 'banned';
+
+/**
+ * A user as the user directory's list shows one (T058 of specs/004-sessions, FR-481): deleted ones
+ * included, without their name (FR-426); the role null only for an account without its role row.
+ */
+export interface DirectoryUser {
+  readonly id: string;
+  readonly displayName: string | null;
+  readonly deleted: boolean;
+  readonly role: 'student' | 'teacher' | null;
+  readonly accountStatus: AccountStatusValue;
+}
+
+/**
+ * A page of every user, deleted ones included, newest first by the time-ordered id, after `after`
+ * (the last id of the page before), at most `limit` rows (T058 of specs/004-sessions; the owner's
+ * decision Q8 of 2026-11-12). Past the soft-delete filter through `includeDeleted`, so outside any
+ * transaction, as `DeletedPhotosRepository` reads (soft-delete.repository.ts, «The opt-in»). Over
+ * the primary key; no lock, no write.
+ */
+export async function userDirectoryPage(
+  database: Pick<Database, 'includeDeleted'>,
+  after: string | undefined,
+  limit: number,
+): Promise<readonly DirectoryUser[]> {
+  const rows = await database.includeDeleted.user.findMany({
+    where: after === undefined ? {} : { id: { lt: after } },
+    orderBy: { id: 'desc' },
+    take: limit,
+    select: {
+      id: true,
+      displayName: true,
+      deletedAt: true,
+      accountStatus: true,
+      roles: { select: { role: true } },
+    },
+  });
+  return rows.map(({ id, displayName, deletedAt, accountStatus, roles }) => ({
+    id,
+    displayName: deletedAt === null ? displayName : null,
+    deleted: deletedAt !== null,
+    role: roles[0]?.role ?? null,
+    accountStatus,
+  }));
+}
+
+/**
+ * A user's record as the user directory reads it (T058 of specs/004-sessions, SRS FR-ADMIN-4): the
+ * name (null once deleted), email, sign-up instant, gender, date of birth, role, account status, and
+ * a teacher profile's bio, qualification summary and verification status. The date of birth is for
+ * the minor flag the caller derives alone, never answered further (PDPL; R-DB-4).
+ */
+export interface UserRecordRow {
+  readonly id: string;
+  readonly displayName: string | null;
+  readonly email: string | null;
+  readonly createdAt: Date;
+  readonly deleted: boolean;
+  readonly gender: 'male' | 'female';
+  readonly dateOfBirth: Date | null;
+  readonly accountStatus: AccountStatusValue;
+  readonly role: 'student' | 'teacher' | null;
+  readonly teacherProfile: {
+    readonly bio: string;
+    readonly qualification: string;
+    readonly verificationStatus:
+      'pending' | 'approved' | 'rejected' | 'suspended' | 'banned' | 'revoked';
+  } | null;
+}
+
+/**
+ * The user's record, deleted or not, through `includeDeleted` (outside any transaction, as the page
+ * above); null when no such user ever existed. One statement by the primary key; no lock, no write.
+ */
+export async function userRecordOf(
+  database: Pick<Database, 'includeDeleted'>,
+  userId: string,
+): Promise<UserRecordRow | null> {
+  const user = await database.includeDeleted.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      displayName: true,
+      email: true,
+      createdAt: true,
+      deletedAt: true,
+      gender: true,
+      dateOfBirth: true,
+      accountStatus: true,
+      roles: { select: { role: true } },
+      teacherProfile: {
+        select: { bio: true, qualificationSummary: true, verificationStatus: true },
+      },
+    },
+  });
+  if (user === null) return null;
+  const { deletedAt, displayName, roles, teacherProfile, ...account } = user;
+  return {
+    ...account,
+    displayName: deletedAt === null ? displayName : null,
+    deleted: deletedAt !== null,
+    role: roles[0]?.role ?? null,
+    teacherProfile:
+      teacherProfile === null
+        ? null
+        : {
+            bio: teacherProfile.bio,
+            qualification: teacherProfile.qualificationSummary,
+            verificationStatus: teacherProfile.verificationStatus,
+          },
+  };
+}

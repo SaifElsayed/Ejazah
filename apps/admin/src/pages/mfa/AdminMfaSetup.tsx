@@ -18,9 +18,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Banner, Button, Field, IconButton, Otp, Skeleton } from '../../design/components';
-import { type MessageKey, useT } from '../../i18n';
+import { useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { RecoveryCodes } from './RecoveryCodes';
 import { TOTP_PERIOD_SECONDS, useStartOver } from './start-over';
 
@@ -40,10 +41,10 @@ export function AdminMfaSetup() {
   const { client, sessions } = useAdmin();
   const startOver = useStartOver();
   const keyLabel = useId();
-  const [begun, setBegun] = useState<Begun | 'failed' | null>(null);
+  const [begun, setBegun] = useState<Begun | { readonly failed: ErrorMessage } | null>(null);
   const [code, setCode] = useState('');
   const [confirming, setConfirming] = useState(false);
-  const [failure, setFailure] = useState<MessageKey | null>(null);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const [codes, setCodes] = useState<readonly string[] | null>(null);
   const [saved, setSaved] = useState(false);
   const started = useRef(false);
@@ -58,7 +59,7 @@ export function AdminMfaSetup() {
     } catch (error) {
       if (startOver(error)) return;
       if (errorCodeOf(error) === 'FORBIDDEN') sessions.setStep('mfa');
-      else setBegun('failed');
+      else setBegun({ failed: errorMessageKey(error, 'admin.mfaSetup.loadError') });
     }
   }, [client, sessions, startOver]);
 
@@ -81,7 +82,9 @@ export function AdminMfaSetup() {
       if (startOver(error)) return;
       setCode('');
       setFailure(
-        errorCodeOf(error) === 'CODE_INVALID' ? 'admin.mfa.codeInvalid' : 'admin.mfa.failed',
+        errorCodeOf(error) === 'CODE_INVALID'
+          ? { key: 'admin.mfa.codeInvalid' }
+          : errorMessageKey(error, 'admin.mfa.failed'),
       );
     } finally {
       setConfirming(false);
@@ -93,7 +96,8 @@ export function AdminMfaSetup() {
     if (typed.length === CODE_LENGTH && !confirming && codes === null) void confirm(typed);
   }
 
-  const ready = begun !== null && begun !== 'failed' ? begun : null;
+  const failed = begun !== null && 'failed' in begun ? begun.failed : null;
+  const ready = begun !== null && 'uri' in begun ? begun : null;
 
   return (
     <>
@@ -103,10 +107,10 @@ export function AdminMfaSetup() {
           <p className="page-intro__lede">{t('admin.mfaSetup.lede', { email: ready.email })}</p>
         )}
       </div>
-      {begun === 'failed' ? (
+      {failed !== null ? (
         <div className="stack gap-4">
           <Banner icon={{ name: 'alert-circle' }} tone="danger">
-            {t('admin.mfaSetup.loadError')}
+            {t(failed.key, failed.values)}
           </Banner>
           <div className="row">
             <Button
@@ -149,7 +153,7 @@ export function AdminMfaSetup() {
               {t('admin.mfaSetup.step2.text', { seconds: TOTP_PERIOD_SECONDS })}
             </p>
             <Field label={t('admin.mfaSetup.step2.codeLabel')}>
-              <Otp value={code} onChange={enter} error={failure === 'admin.mfa.codeInvalid'} />
+              <Otp value={code} onChange={enter} error={failure?.key === 'admin.mfa.codeInvalid'} />
             </Field>
             {codes !== null ? (
               <Banner icon={{ name: 'circle-check' }} tone="success">
@@ -157,7 +161,7 @@ export function AdminMfaSetup() {
               </Banner>
             ) : failure === null ? null : (
               <Banner icon={{ name: 'alert-circle' }} tone="danger">
-                {t(failure)}
+                {t(failure.key, failure.values)}
               </Banner>
             )}
           </li>

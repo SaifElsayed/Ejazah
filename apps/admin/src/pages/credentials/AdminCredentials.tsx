@@ -26,6 +26,7 @@ import {
   Toolbar,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, dayMonthYear } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
@@ -85,6 +86,7 @@ export function AdminCredentials() {
   };
   const verifiedTab = tab === 'approved';
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const [emptyTitle, emptyText] = EMPTY[search === '' ? tab : 'search'];
 
   const table =
@@ -96,7 +98,7 @@ export function AdminCredentials() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.credentials.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">
@@ -274,10 +276,11 @@ function CredentialDocument({ detail, onLoaded }: { readonly detail: CredentialD
     teacher: detail.teacher.displayName,
   });
   if (link.isError || pdf.failed) {
+    const linkFailure = errorMessageKey(link.error, 'admin.dialogs.documentViewer.loadError');
     return (
       <div className="stack gap-3">
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.documentViewer.loadError')}
+          {t(linkFailure.key, linkFailure.values)}
         </Banner>
         <div className="self-start">
           <Button

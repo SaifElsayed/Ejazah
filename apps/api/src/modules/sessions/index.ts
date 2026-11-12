@@ -91,6 +91,17 @@ export {
 } from './repeated-absence.service.js';
 export type { EnrollmentNoShowCount } from './repeated-absence.repository.js';
 /**
+ * T058 (FR-451, FR-481; the owner's decision Q7 (a) of 2026-11-12): a teacher's marked enrollments,
+ * each with its student (sessions' own `student_user_id`) and its status (through `EnrollmentSide`),
+ * for the user directory's `users.get`. No lock, no write.
+ */
+export {
+  createMarkedEnrollments,
+  type MarkedEnrollment,
+  type MarkedEnrollments,
+  type MarkedEnrollmentsStore,
+} from './marked-enrollments.service.js';
+/**
  * T025 (FR-459; SRS FR-CANCEL-5): the cancellation requests a user made, in total and within
  * `cancellation_requests_recent_days`, counted from sessions' own table when read and never stored
  * (R-DB-4), for the user directory's `users.get` (T058). No lock, no write.

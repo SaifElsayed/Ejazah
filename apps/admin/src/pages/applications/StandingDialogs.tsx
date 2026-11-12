@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Banner, Dialog, Field, Icon, IconTile, Input, Segmented } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import type { ApplicationDetail } from './queries';
 
 type Kind = 'suspend' | 'revokeApproval' | 'ban';
@@ -66,7 +67,7 @@ export function StandingDialog({
   const act = useStandingActions();
   const [kind, setKind] = useState<Kind>('suspend');
   const [reason, setReason] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   const drawn = DRAWN[kind];
   const kindLabel = (value: Kind) =>
     t(
@@ -95,10 +96,10 @@ export function StandingDialog({
           disabled: reason.trim() === '',
           loading: act.isPending,
           onPress: () => {
-            setFailed(false);
+            setFailed(null);
             act.mutate(
               { kind, input: { teacherUserId: detail.teacherUserId, reason: reason.trim() } },
-              { onSuccess: onClose, onError: () => setFailed(true) },
+              { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) },
             );
           },
         },
@@ -109,7 +110,7 @@ export function StandingDialog({
         value={kind}
         onChange={(value) => {
           setKind(value as Kind);
-          setFailed(false);
+          setFailed(null);
         }}
         options={(['suspend', 'revokeApproval', 'ban'] as const).map((value) => ({
           value,
@@ -131,9 +132,9 @@ export function StandingDialog({
           placeholder={t('admin.dialogs.suspendTeacher.reasonPlaceholder')}
         />
       </Field>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>
@@ -150,7 +151,7 @@ export function ReinstateDialog({
   const t = useT();
   const act = useStandingActions();
   const [reason, setReason] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   return (
     <Dialog
       open
@@ -169,13 +170,13 @@ export function ReinstateDialog({
           disabled: reason.trim() === '',
           loading: act.isPending,
           onPress: () => {
-            setFailed(false);
+            setFailed(null);
             act.mutate(
               {
                 kind: 'reinstate',
                 input: { teacherUserId: detail.teacherUserId, reason: reason.trim() },
               },
-              { onSuccess: onClose, onError: () => setFailed(true) },
+              { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) },
             );
           },
         },
@@ -203,9 +204,9 @@ export function ReinstateDialog({
           placeholder={t('admin.dialogs.confirm.common.reasonPlaceholder')}
         />
       </Field>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>

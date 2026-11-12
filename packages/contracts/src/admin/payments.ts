@@ -31,6 +31,11 @@ export const paymentsListInput = z.object({
   /** An order reference, matched exactly, or the start of a student's name, folded (R-203). */
   search: adminSearch.optional(),
   cursor: paymentsListCursor.optional(),
+  /**
+   * One enrollment's orders alone (B42, T047; the note under T047, Q6 (a)): the link from
+   * `/sessions` and `/cases`, no payment id crossing to them (FR-497). Additive (R-API-9).
+   */
+  enrollmentId: z.uuid().optional(),
 });
 
 /** A person the monitor names: their display name alone. */
@@ -62,8 +67,19 @@ export const paymentsGetInput = z.object({ paymentId: z.uuid() });
 /** ERD `payment_event_type`, of a gateway order: its signed events. */
 export const paymentEventType = z.enum(['paid', 'failed', 'expired', 'refunded']);
 
-/** ERD `enrollment_event_kind`: an outcome booking recorded for the enrollment (R-216). */
-export const enrollmentOutcomeKind = z.enum(['confirmed', 'order_failed', 'cancelled']);
+/**
+ * ERD `enrollment_event_kind`: an outcome booking recorded for the enrollment (R-216); Phase 3's
+ * `completed`, `terminated_no_show` and `restored` added by B42's T047 (the follow-up under T047;
+ * additive, R-API-9).
+ */
+export const enrollmentOutcomeKind = z.enum([
+  'confirmed',
+  'order_failed',
+  'cancelled',
+  'completed',
+  'terminated_no_show',
+  'restored',
+]);
 
 /**
  * Why a hold was released (ERD `hold_release_reason`; T001 of specs/004-sessions, data-model §2.12).

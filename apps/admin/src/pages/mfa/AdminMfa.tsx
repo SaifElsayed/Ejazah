@@ -10,6 +10,7 @@ import { AuthCard, Banner, Button, Field, Otp } from '../../design/components';
 import { useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { AUTH_PATHS } from '../../lib/session';
 import { TOTP_PERIOD_SECONDS, useStartOver } from './start-over';
 
@@ -22,7 +23,7 @@ export function AdminMfa() {
   const startOver = useStartOver();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<'codeInvalid' | 'failed' | null>(null);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function verify(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -34,7 +35,11 @@ export function AdminMfa() {
     } catch (error) {
       if (startOver(error)) return;
       setCode('');
-      setFailure(errorCodeOf(error) === 'CODE_INVALID' ? 'codeInvalid' : 'failed');
+      setFailure(
+        errorCodeOf(error) === 'CODE_INVALID'
+          ? { key: 'admin.mfa.codeInvalid' }
+          : errorMessageKey(error, 'admin.mfa.failed'),
+      );
     } finally {
       setBusy(false);
     }
@@ -47,11 +52,11 @@ export function AdminMfa() {
           label={t('admin.mfa.codeLabel')}
           hint={t('admin.mfa.refreshHint', { seconds: TOTP_PERIOD_SECONDS })}
         >
-          <Otp value={code} onChange={setCode} error={failure === 'codeInvalid'} />
+          <Otp value={code} onChange={setCode} error={failure?.key === 'admin.mfa.codeInvalid'} />
         </Field>
         {failure === null ? null : (
           <Banner icon={{ name: 'alert-circle' }} tone="danger">
-            {t(failure === 'codeInvalid' ? 'admin.mfa.codeInvalid' : 'admin.mfa.failed')}
+            {t(failure.key, failure.values)}
           </Banner>
         )}
         <div className="row row--center">

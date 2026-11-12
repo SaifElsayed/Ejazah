@@ -289,6 +289,149 @@
         "yes": "Yes"
       }
     },
+    "cases": {
+      "action": {
+        "decide": "Decide the complaint",
+        "dismiss": "Dismiss the case",
+        "resolve": "Resolve the case"
+      },
+      "close": {
+        "dismiss": {
+          "effect": "The case closes as dismissed, with your note. No money moves here.",
+          "title": "Dismiss the case"
+        },
+        "noteHint": "Required, up to {max} characters, recorded in the audit log.",
+        "noteLabel": "Closing note: what Platform Administration did outside the platform",
+        "noteTooLong": "The note is longer than {max} characters.",
+        "refused": {
+          "noFreeWeek": "There is no free week for a make-up of one of the sessions the suspension cancelled, so the case was not resolved and stays open. Nothing changed.",
+          "notFound": "This case was not found, or it is a complaint, decided from its own dialog. Nothing changed.",
+          "notOpen": "This case is no longer open; it was closed meanwhile. Read the page again. Nothing changed.",
+          "studentSuspended": "The student’s account is still suspended. Reinstate the account from the users page first, then resolve the case. Nothing changed."
+        },
+        "resolve": {
+          "effect": "The case closes as resolved, compensation ordered, with your note. No money moves here: Platform Administration carries out the compensation outside the platform, and a refund is recorded when the payment gateway reports it.",
+          "title": "Resolve the case"
+        },
+        "suspended": {
+          "dismiss": {
+            "effect": "Dismissing confirms the student’s fault: the enrollment is cancelled and its time returns to booking, its upcoming make-up sessions are cancelled, and every remedy still owed on it is handed to a new case, “A suspended student’s fault confirmed”. The ordinary sessions the suspension cancelled are owed nothing.",
+            "ended": "If the enrollment already ended another way, it is not ended again, and the case closes with no other effect."
+          },
+          "resolve": {
+            "effect": "Resolving clears the student: the case closes, and for each session the suspension cancelled the student is offered now what a teacher’s absence owes: on recitation a make-up session or a refund, as the student chooses; on the ijazah track a make-up session.",
+            "ended": "If the enrollment already ended another way, nothing is offered, and those sessions join the case that end opened.",
+            "reinstate": "Resolving is refused while the student’s account is suspended; reinstate the account first."
+          }
+        }
+      },
+      "closedAt": "Closed {date}",
+      "columns": {
+        "case": "Case",
+        "enrollment": "Enrollment",
+        "status": "Status"
+      },
+      "decide": {
+        "close": {
+          "effect": "The complaint closes as dismissed, and nothing else changes.",
+          "label": "Close the complaint"
+        },
+        "closeDialog": "Close",
+        "done": "The decision was made.",
+        "endEnrollment": {
+          "effect": "Every upcoming session of the enrollment, make-ups included, is cancelled by the administration, the enrollment ends for the teacher’s absence, every remedy still owed is handed to a new compensation case, and the complaint closes as resolved. Only while the enrollment is running.",
+          "label": "End the enrollment"
+        },
+        "legend": "Decision",
+        "newCase": "A new compensation case was opened with what is still owed on the enrollment.",
+        "noteLabel": "Decision note",
+        "refused": {
+          "notConfirmed": "The enrollment is no longer running, so it cannot be ended. Decide the complaint by suspending the teacher or closing it. Nothing changed.",
+          "notFound": "This complaint was not found, or it was already decided. Nothing changed."
+        },
+        "suspendTeacher": {
+          "effect": "The teacher’s account is suspended now, so the teacher’s running enrollments end as a teacher’s suspension ends them: their upcoming sessions are cancelled and a compensation case is opened for each. The complaint closes as resolved.",
+          "label": "Suspend the teacher"
+        },
+        "title": "Decide the complaint of a teacher’s absence",
+        "viewNewCase": "View the new case"
+      },
+      "detail": {
+        "a11y": "Case details",
+        "closingTitle": "Closing",
+        "complaintTitle": "The complaint",
+        "coversEmpty": "No session is covered by this case.",
+        "coversTitle": "What the case covers",
+        "decisionLabel": "Decision",
+        "enrollmentStatus": "Enrollment status",
+        "enrollmentTitle": "Enrollment",
+        "noShows": "Teacher absences",
+        "note": "Closing note",
+        "openManual": "Open a case on this enrollment",
+        "paymentsNote": "This enrollment’s payment orders are on the payments page; a case carries no amount.",
+        "raisedAt": "Raised {date}",
+        "remedyKind": {
+          "makeup": "Make-up session",
+          "refund": "Refund"
+        },
+        "remedyStatus": {
+          "awaitingChoice": "Awaiting the student’s choice",
+          "booked": "Booked",
+          "counterProposed": "The student proposed another time",
+          "frozen": "Frozen",
+          "lapsed": "Lapsed",
+          "proposed": "Time proposed",
+          "refundCase": "Handed to a case"
+        },
+        "resolution": {
+          "compensationOrdered": "Resolved, compensation ordered",
+          "enrollmentEnded": "The enrollment ended",
+          "partySuspended": "The teacher’s account suspended"
+        },
+        "session": "Session {number}",
+        "sessionsLink": "The enrollment’s sessions",
+        "student": "Student",
+        "teacher": "Teacher",
+        "track": "Track"
+      },
+      "empty": {
+        "text": "Choose another status, or show all.",
+        "title": "No cases with this status"
+      },
+      "emptyAll": {
+        "text": "Compensation cases and complaints of a teacher’s absence appear here when they are opened.",
+        "title": "No cases or complaints"
+      },
+      "kind": {
+        "absenceComplaint": "The student’s complaint of the teacher’s absence"
+      },
+      "lede": "Compensation cases and complaints of a teacher’s absence. No money moves here: what Platform Administration decides is carried out outside the platform, and a refund is recorded when the payment gateway reports it.",
+      "openManual": "Open a case",
+      "openedAt": "Opened {date}",
+      "pagerPage": "Page {page}",
+      "reason": {
+        "absenceTermination": "Enrollment ended on a complaint of the teacher’s absence",
+        "adminCancellation": "A session cancelled by the administration",
+        "adminOpenedForStudent": "Opened by the administration for the student",
+        "adminOpenedForTeacher": "Opened by the administration for the teacher",
+        "counterUnanswered": "The student’s other time, left unanswered by the teacher",
+        "duplicatePayment": "A second payment for the same enrollment",
+        "makeupRefused": "A make-up session could not be booked",
+        "partyRestricted": "Paid while a party could no longer be booked",
+        "refundChoice": "The student chose a refund over a make-up session",
+        "slotUnavailable": "Paid after the time was no longer available",
+        "studentBanned": "The student was banned",
+        "studentFaultConfirmed": "A suspended student’s fault confirmed",
+        "studentSuspended": "The student was suspended; the case awaits review",
+        "teacherEnded": "The teacher’s account was suspended, revoked, banned or deleted"
+      },
+      "status": {
+        "dismissed": "Dismissed",
+        "open": "Open",
+        "resolved": "Resolved"
+      },
+      "title": "Cases and complaints"
+    },
     "chatLog": {
       "a11y": {
         "back": "Back to the dispute",
@@ -397,6 +540,8 @@
       },
       "pdf": "PDF",
       "progress": "{done} of {total}",
+      "rateLimited": "Too many requests. Nothing changed; wait a little and try again.",
+      "rateLimitedIn": "Too many requests. Nothing changed; try again in {count, plural, one {# minute} other {# minutes}}.",
       "reasonAuditPlaceholder": "Recorded with the decision in the audit log",
       "reasonLoggedWithAction": "The reason is recorded with the action in the audit log.",
       "reasonRequiredPlaceholder": "Write a clear reason",
@@ -1020,6 +1165,24 @@
         "effectsTitle": "What happens on confirmation",
         "faultLabel": "Violation confirmed",
         "faultText": "Nothing is owed, as with a student absence.",
+        "honest": {
+          "ban": {
+            "account": "The account becomes banned and is signed out on every device.",
+            "cases": "A case is opened on each cancelled enrollment and their open remedies are handed to it; nothing is owed unless the administration decides otherwise in the case.",
+            "sessions": "Every upcoming session of theirs is cancelled now, their confirmed enrollments are cancelled with them for the reason “admin”, and the freed times return to booking."
+          },
+          "reinstate": {
+            "account": "Only the account is restored, and its owner can sign in again.",
+            "cancelled": "Nothing cancelled during the suspension comes back; each enrollment’s case decides.",
+            "remedies": "The frozen remedies are offered to them again, each with a new full choice window."
+          },
+          "suspend": {
+            "account": "The account becomes suspended and is signed out on every device.",
+            "enrollments": "Their confirmed enrollments stay confirmed and keep their slots, each with a compensation case opened, pending the review.",
+            "remedies": "Every remedy now offered to them is frozen: a pending counter-proposal is withdrawn, the times reserved for it are released, and nothing advances while the account is suspended.",
+            "sessions": "Every upcoming session of theirs is cancelled now, recorded as cancelled by the administration."
+          }
+        },
         "kinds": {
           "ban": "Ban account · permanent",
           "suspend": "Suspend account · temporary until review"
@@ -1084,6 +1247,14 @@
       }
     },
     "disputes": {
+      "chat": {
+        "attachment": "Attached document: {name}",
+        "meta": "{sender} · {date} · {time}",
+        "more": "Older messages",
+        "notFound": "This dispute was not found.",
+        "notOpen": "This dispute is no longer open, so the enrollment's chat is not shown here.",
+        "purged": "This message's content was removed when its retention period ended."
+      },
       "columns": {
         "autoOutcome": "Automatic outcome",
         "session": "Session",
@@ -1155,18 +1326,117 @@
       "lede": "{count, plural, one {# open dispute} other {# open disputes}} over session outcomes. The dispute window is {hours} hours from the end of the session, and every decision is recorded in the audit log.",
       "ledeEmpty": "No open disputes now. Every decision is recorded in the audit log.",
       "pagerSummary": "{shown} of {total} · open first",
+      "queue": {
+        "columns": {
+          "dispute": "Dispute",
+          "outcome": "Outcome under dispute"
+        },
+        "empty": {
+          "text": "Each dispute a student or teacher raises over a session's outcome appears here.",
+          "title": "No disputes"
+        },
+        "notEvaluated": "Not evaluated yet",
+        "pagerPage": "Page {page} · open first"
+      },
+      "queueLede": "Every dispute a student or teacher raises over a session's outcome: the open ones first, oldest first, then the closed ones. Every decision and its reason are recorded in the audit log.",
       "raisedByStudent": "Raised by the student · {date}",
       "raisedByTeacher": "Raised by the teacher · {date}",
+      "resolve": {
+        "againstLegend": "Absence recorded against",
+        "effect": {
+          "banned": "The chosen party's account is banned now, with what a ban brings on its usual path, and the session keeps the outcome “{outcome}”. The ban is not acted on from this page.",
+          "keepsOutcome": "The session keeps the outcome “{outcome}”, and the dispute closes.",
+          "remedyLater": "If the outcome owes the student a remedy, it is offered once the session's dispute window has passed, not now.",
+          "studentNoShow": "The session's outcome becomes “Student absent” and counts against the package, and the dispute closes.",
+          "suspended": "The chosen party's account is suspended now, with what a suspension brings on its usual path, and the session keeps the outcome “{outcome}”. The suspension is not lifted from this page.",
+          "teacherNoShow": "The session's outcome becomes “Teacher absent”, and the dispute closes. The absence joins the enrollment's count of teacher absences; nothing follows from the count automatically."
+        },
+        "refused": {
+          "alreadyBanned": "This party's account is already banned, so the whole ruling was refused. Rule otherwise. Nothing changed.",
+          "alreadySuspended": "This party's account is already suspended, so the whole ruling was refused. Rule otherwise, and act on the account from its own page. Nothing changed.",
+          "notApproved": "This teacher's approval does not stand now, so they are neither suspended nor banned from here, and the whole ruling was refused. Nothing changed.",
+          "notEvaluated": "This session has not been evaluated yet, so there is no outcome to keep: re-mark it or record an absence, or wait for the evaluation. Nothing changed.",
+          "notFound": "This dispute, or the chosen party's account, was not found. Nothing changed.",
+          "notOpen": "This dispute is no longer open; it may have just been resolved. Close the dialog and read the page again. Nothing changed.",
+          "standing": "The action on this party's account was refused, so the whole ruling was refused. Nothing changed."
+        },
+        "title": "Rule on the dispute"
+      },
+      "revise": {
+        "done": "The ruling was revised: the session's outcome is now “{after}”, where it was “{before}”.",
+        "effect": "Only the session's outcome changes, to the one chosen; the earlier ruling stays recorded and the revision is written beside it. A revision lifts no suspension or ban, and reopens no enrollment that ended. If the new outcome owes the student a remedy, it is offered once the session's dispute window has passed, not now.",
+        "notUndone": {
+          "enrollment_ended": "The enrollment is no longer active, and the revision does not reopen it.",
+          "party_banned": "The account ban the earlier ruling ordered stays as it is; the revision does not lift it. It is acted on through its usual path.",
+          "party_suspended": "The account suspension the earlier ruling ordered stays as it is; the revision does not lift it. It is lifted on its usual path."
+        },
+        "notUndoneTitle": "What stays as it was",
+        "outcomeLegend": "The correct outcome",
+        "reasonLabel": "Reason for the revision (required)",
+        "refused": {
+          "disputeOpen": "This session has an open dispute, which is resolved first, before any revision. Nothing changed.",
+          "keyReused": "This request was already sent with different input, or is still being processed. Close the dialog and read the page again before you retry.",
+          "notFound": "This dispute was not found. Nothing changed.",
+          "notNow": "This ruling cannot be revised now. Nothing changed.",
+          "remedyOffered": "This ruling cannot be revised: the student has been offered a remedy for the session. Nothing changed.",
+          "superseded": "A later dispute over this session was resolved; revise that one's ruling instead. Nothing changed.",
+          "underReview": "The session was reclassified after the ruling because of a service outage, and it is in the review queue; its outcome is settled on the session review page. Nothing changed.",
+          "windowClosed": "This ruling cannot be revised: the session's dispute window has passed. Nothing changed."
+        },
+        "title": "Revise the ruling"
+      },
+      "ruling": {
+        "compensation_ordered": "Compensation ordered for the student",
+        "no_show_recorded": "Absence recorded",
+        "party_banned": "A party's account banned",
+        "party_suspended": "A party's account suspended",
+        "re_marked": "Session re-marked",
+        "upheld": "Outcome upheld"
+      },
       "search": {
         "label": "Search",
         "placeholder": "Student or teacher name"
+      },
+      "state": {
+        "dismissed": "Dismissed",
+        "open": "Open",
+        "resolved": "Resolved"
       },
       "tabs": {
         "all": "All",
         "decided": "Decided",
         "open": "Open"
       },
-      "title": "Disputes"
+      "telemetry": {
+        "eventsNone": "No join or leave was recorded.",
+        "joined": "Joined",
+        "outage": "{from} – {to}",
+        "outagesTitle": "Recorded service outages",
+        "roomEnded": "The room closed",
+        "schedule": "Scheduled",
+        "scheduleValue": "{date} · {time} · {city} time",
+        "studentLeft": "The student left",
+        "studentNotJoined": "The student did not join",
+        "teacherLeft": "The teacher left",
+        "teacherNotJoined": "The teacher did not join",
+        "together": "Simultaneous connection",
+        "togetherValue": "{duration} (min:sec)",
+        "zoneNote": "Times here are in {city} time, the session's zone."
+      },
+      "title": "Disputes",
+      "view": {
+        "enrollmentLink": "View the enrollment and its sessions",
+        "partiesTitle": "The parties",
+        "reasonTitle": "The reason, as its raiser wrote it",
+        "reviseButton": "Revise the ruling",
+        "revision": "From “{before}” to “{after}” · {date} · {time}",
+        "revisionsNone": "This ruling has not been revised.",
+        "revisionsNote": "The ruling stays as issued, and each revision is written beside it. Each revision's reason is in the audit log.",
+        "revisionsTitle": "Revisions of the ruling",
+        "rulingAt": "Issued {date} · {time}",
+        "rulingNotes": "Reason for the ruling",
+        "rulingTitle": "The ruling"
+      }
     },
     "enrollments": {
       "a11y": {
@@ -1486,6 +1756,7 @@
       "items": {
         "applications": "Applications",
         "audit": "Audit log",
+        "cases": "Cases and complaints",
         "compensation": "Compensation",
         "credentials": "Credential review",
         "disputes": "Disputes",
@@ -1494,6 +1765,7 @@
         "home": "Overview",
         "ijazahRequests": "Ijazah requests",
         "ijazahs": "Ijazahs",
+        "outages": "Video outages",
         "payments": "Payments",
         "reports": "Reports",
         "reviews": "Reviews",
@@ -1501,6 +1773,42 @@
         "settings": "Settings",
         "users": "Users"
       }
+    },
+    "outages": {
+      "columns": {
+        "end": "End",
+        "reason": "Reason",
+        "recordedBy": "Recorded by",
+        "start": "Start"
+      },
+      "dialog": {
+        "confirm": "Record the outage",
+        "effect": "The window is recorded in the chosen zone’s time. Each settled session whose time overlaps it, still inside its dispute window and not disputed, moves to the review queue for you to choose its outcome; each session evaluated after the record whose time overlaps it is settled “Service outage” with no absence against anyone.",
+        "endDate": "End day",
+        "endTime": "End time",
+        "reason": "Reason for the record",
+        "refused": {
+          "endNotAfterStart": "The end must be after the start. Nothing was recorded.",
+          "zoneUnknown": "This time zone is not known; write it as the IANA list does, such as Africa/Cairo. Nothing was recorded."
+        },
+        "startDate": "Start day",
+        "startTime": "Start time",
+        "timeHint": "24-hour clock.",
+        "timeInvalid": "Write the time on the 24-hour clock, such as 14:30.",
+        "timePlaceholder": "14:30",
+        "title": "Record a video service outage",
+        "zone": "Time zone",
+        "zoneHint": "Its city: {city}"
+      },
+      "empty": {
+        "text": "Each video service outage an administrator records appears here.",
+        "title": "No recorded outages"
+      },
+      "lede": "The windows in which the video service was out, as administrators recorded them, newest first. No absence is counted against anyone in a session whose time overlaps a recorded window.",
+      "pagerPage": "Page {page} · newest first",
+      "record": "Record an outage",
+      "recorded": "{count, plural, =0 {The outage was recorded; no session moved to the review queue.} one {The outage was recorded; one session moved to the review queue.} other {The outage was recorded; # sessions moved to the review queue.}}",
+      "title": "Video outages"
     },
     "payments": {
       "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
@@ -1530,7 +1838,10 @@
           "orderFailed": "The failed order was recorded on the enrollment",
           "paid": "Gateway reported the payment succeeded",
           "refunded": "The gateway reported a refund",
-          "transaction": "Transaction number {id}"
+          "transaction": "Transaction number {id}",
+          "enrollmentCompleted": "The enrollment was completed",
+          "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
+          "enrollmentRestored": "The enrollment was restored"
         },
         "eventsTitle": "What happened to the order",
         "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
@@ -1542,7 +1853,13 @@
         "paidOrdersTitle": "Paid orders of this enrollment",
         "referencesTitle": "References",
         "subtitle": "{student} · {subject} · {sessions} with {teacher}",
-        "transactionNo": "Transaction number"
+        "transactionNo": "Transaction number",
+        "holdsTitle": "Slot holds",
+        "holdsEmpty": "This enrollment has no hold.",
+        "holdPlaced": "Held {placed} · expires {expires}",
+        "holdReleased": "Released {released} · {reason}",
+        "holdNotReleased": "Not released",
+        "holdReasonNotRecorded": "reason not recorded"
       },
       "empty": {
         "text": "Try another reference or name, or remove a filter.",
@@ -1570,6 +1887,16 @@
         "paymentFailed": "Payment failed",
         "slotUnavailable": "Slot unavailable after payment",
         "teacherSuspended": "Teacher suspended"
+      },
+      "enrollmentFilter": "One enrollment's orders",
+      "holdReasons": {
+        "converted": "Became the enrollment",
+        "expired": "Expired",
+        "checkoutAbandoned": "The student started a new payment",
+        "slotUnavailable": "The slot could not be booked",
+        "admin": "Administration's decision",
+        "teacherSuspended": "Teacher suspended",
+        "accountDeleted": "Account deleted"
       }
     },
     "reports": {
@@ -1630,6 +1957,58 @@
         "open": "Open"
       },
       "title": "Reports"
+    },
+    "review": {
+      "empty": {
+        "text": "Each session whose simultaneous connection is below the attendance threshold, and each session a recorded video outage moved, appears here."
+      },
+      "lede": "Sessions the automatic evaluation could not settle: a simultaneous connection below the attendance threshold, or a recorded outage of the video service. Choose each session’s outcome with a mandatory reason recorded in the audit log, after reading its connection record.",
+      "pagerPage": "Page {page} · oldest first",
+      "resolve": {
+        "effect": "The session’s outcome becomes the one chosen and it leaves the review queue. If the outcome owes the student a remedy, it is offered once the session’s dispute window has closed, not now.",
+        "refused": {
+          "notFound": "This session was not found. Nothing changed.",
+          "notUnderReview": "This session is no longer in the review queue; its outcome may have been settled already. Nothing changed."
+        },
+        "title": "Settle the session’s outcome"
+      },
+      "seconds": "{count, plural, =0 {No simultaneous connection} one {# second} other {# seconds}}",
+      "telemetry": {
+        "correct": "Correct the outcome",
+        "events": {
+          "roomEnded": "The room was closed",
+          "studentJoined": "Student joined",
+          "studentLeft": "Student left",
+          "teacherJoined": "Teacher joined",
+          "teacherLeft": "Teacher left"
+        },
+        "eventsTitle": "Recorded joins and leaves",
+        "inPanelZone": "In the panel’s time · {city}",
+        "inSessionZone": "In the session’s time · {city}",
+        "intervals": {
+          "student": "Student connected",
+          "teacher": "Teacher connected",
+          "together": "Both connected together"
+        },
+        "intervalsTitle": "Connected time",
+        "joined": "Joined the room",
+        "joinedStudent": "Student",
+        "joinedTeacher": "Teacher",
+        "noEvents": "No join or leave was recorded for this session.",
+        "noInterval": "No connected time.",
+        "noOutages": "No recorded outage overlaps its time.",
+        "notJoined": "Did not join the room",
+        "outagesTitle": "Recorded video outages over its time",
+        "refused": {
+          "notFound": "This session was not found.",
+          "notSettled": "This session is still scheduled; its connection record can be read once its outcome is settled or it is cancelled."
+        },
+        "resolve": "Settle the outcome",
+        "sessionStart": "{date} · starts {time}",
+        "simultaneous": "Simultaneous connection",
+        "span": "{start} – {end}",
+        "title": "The session’s connection record"
+      }
     },
     "reviews": {
       "a11y": {
@@ -1849,6 +2228,81 @@
       },
       "title": "Settings"
     },
+    "shared": {
+      "correction": {
+        "confirm": "Correct the outcome",
+        "effect": "The session's outcome becomes the one chosen. If the new outcome owes the student a remedy, it is offered by the next remedies run, not now.",
+        "outcomeLegend": "The correct outcome",
+        "reasonLabel": "Reason for the correction",
+        "refused": {
+          "disputeOpen": "This session has an open dispute; its outcome is settled on the disputes page. Nothing changed.",
+          "final": "This outcome cannot be corrected now. Nothing changed.",
+          "notFound": "This session was not found. Nothing changed.",
+          "notSettled": "This session has not been settled yet, or it was cancelled, so there is no outcome to correct. Nothing changed.",
+          "openDispute": "Open the dispute",
+          "remedyOffered": "This outcome cannot be corrected: the student has been offered a remedy for it. Nothing changed.",
+          "ruled": "A dispute over this session was resolved; its outcome is corrected by revising that dispute's ruling. Nothing changed.",
+          "underReview": "This session is in the review queue; its outcome is settled on the session review page. Nothing changed.",
+          "windowClosed": "This outcome cannot be corrected: the session's dispute window has passed. Nothing changed."
+        },
+        "title": "Correct the session's outcome"
+      },
+      "heldFiles": {
+        "empty": "No files are held for this matter.",
+        "kind": {
+          "credential": "Credential document",
+          "other": "Other document",
+          "photo": "Profile photo"
+        },
+        "note": "Readable while this matter is open. Each opening of a file makes a short-lived link and is recorded under your name in the audit log.",
+        "owner": {
+          "student": "Belongs to the student",
+          "teacher": "Belongs to the teacher"
+        },
+        "refused": {
+          "fileNotFound": "This file is no longer held for this matter. No link was made.",
+          "notFound": "This matter was not found.",
+          "notOpen": "This matter is no longer open, so its held files are not read here."
+        },
+        "title": "The deleted party's held files",
+        "uploaded": "Uploaded {date}",
+        "view": "View",
+        "viewFile": "View the {owner, select, student {student's} other {teacher's}} {file}"
+      },
+      "keyReused": "This request was already sent with different input, or is still being processed. Close the dialog and read the page again before you retry.",
+      "manualCase": {
+        "close": "Close",
+        "confirm": "Open the case",
+        "effect": "A compensation case is opened for this party on the enrollment, or the request joins their case already open on it. Nothing changes in the sessions or the payments.",
+        "effectRemedy": "The open remedy is handed to the student's case: the student no longer chooses it, and any time held for it is released.",
+        "enrollmentInvalid": "Enter a valid enrollment ID.",
+        "enrollmentLabel": "Enrollment ID",
+        "joined": "This party already had an open case on the enrollment; the request joined it and no new case was opened.",
+        "opened": "A new case was opened for this party.",
+        "partyLegend": "The case is for",
+        "partyStudent": "The student",
+        "partyTeacher": "The teacher",
+        "reasonHint": "1 to {max} characters, recorded in the audit log.",
+        "reasonLabel": "Reason for opening the case",
+        "reasonTooLong": "The reason is longer than {max} characters.",
+        "refused": {
+          "notFound": "The enrollment was not found, or the remedy is not one of its. Nothing was opened.",
+          "rateLimited": "Too many requests in a short time. Wait a little, then try again. Nothing was opened.",
+          "remedyNotOpen": "This remedy is no longer open: its session was booked, it was handed to a case, or it lapsed. Nothing was opened."
+        },
+        "remedyParty": "The remedy is owed to the student, so the case is the student's.",
+        "title": "Open a compensation case",
+        "viewCase": "View the case"
+      },
+      "noShows": {
+        "count": "Teacher absences: {count}",
+        "mark": "Repeated absence"
+      },
+      "party": {
+        "deletedStudent": "Deleted student",
+        "deletedTeacher": "Deleted teacher"
+      }
+    },
     "signIn": {
       "continue": "Continue",
       "email": "Email",
@@ -2046,6 +2500,18 @@
         "suspend": "Suspend account",
         "timeZone": "Time zone"
       },
+      "directory": {
+        "deletedAccount": "Deleted account",
+        "emptyAll": {
+          "text": "Every account created on the platform appears here.",
+          "title": "No users yet"
+        },
+        "lede": "Students and teachers, the newest sign-ups first. Search by the start of a name.",
+        "noRole": "No role",
+        "pagerPage": "Page {page} · newest first",
+        "searchEmptyText": "Try the start of another name.",
+        "searchPlaceholder": "Start of the name"
+      },
       "filter": {
         "age": "Age",
         "ageAll": "All",
@@ -2070,6 +2536,26 @@
       "lede": "Students and teachers. Every suspension, bar or ban needs a reason and is recorded in the audit log.",
       "pagerSummary": "{shown} of {total} · by last activity",
       "reactivate": "Reactivate",
+      "record": {
+        "bio": "Bio",
+        "cancellationsRecent": "Recent requests",
+        "cancellationsTotal": "All requests",
+        "deleted": "Deleted",
+        "email": "Email",
+        "noRepeatedAbsences": "No enrollment carries the repeated-absence mark.",
+        "openEnrollment": "Open the enrollment",
+        "qualification": "Qualification",
+        "repeatedAbsences": "Enrollments marked for repeated absence",
+        "verification": "Teacher verification",
+        "verificationStatus": {
+          "approved": "Approved",
+          "banned": "Banned",
+          "pending": "Pending review",
+          "rejected": "Rejected",
+          "revoked": "Approval revoked",
+          "suspended": "Suspended"
+        }
+      },
       "roleWithStatus": "{role} · {status}",
       "search": {
         "label": "Search",
@@ -2080,6 +2566,181 @@
         "title": "No user matches the search"
       },
       "title": "Users"
+    },
+    "sessions": {
+      "title": "Enrollments and sessions",
+      "lede": "Every enrollment and its sessions as they stand. From here a session not yet settled is cancelled, an enrollment an administrator's decision closed is restored, an outcome nobody disputed is corrected, and a compensation case is opened. Payment status is on the payments page alone.",
+      "filters": {
+        "student": "Student's name",
+        "teacher": "Teacher's name",
+        "namePlaceholder": "Start of the name",
+        "from": "From day",
+        "to": "To day",
+        "datePlaceholder": "Day / month / year",
+        "dateInvalid": "This date does not exist. Type the day, then the month, then the year.",
+        "datesHint": "Enrollments with a session on, after or before these days, in the session's time zone."
+      },
+      "columns": {
+        "student": "Student",
+        "teacher": "Teacher",
+        "status": "Status",
+        "progress": "Sessions",
+        "noShows": "Teacher absences",
+        "next": "Next session"
+      },
+      "progress": "{done} of {total} · {remaining} remaining",
+      "noNext": "No upcoming session",
+      "empty": {
+        "title": "No enrollment matches the search",
+        "text": "Try another name or day, or remove a filter."
+      },
+      "emptyAll": {
+        "title": "No enrollments yet",
+        "text": "Every enrollment created on the platform appears here."
+      },
+      "pagerPage": "Page {page} · newest first",
+      "time": {
+        "session": "{date} · {time} · {city} time",
+        "panel": "Your time: {date} · {time}"
+      },
+      "detail": {
+        "a11y": "Enrollment details",
+        "heading": "{student} with {teacher}",
+        "student": "Student",
+        "teacher": "Teacher",
+        "track": "Track",
+        "progress": "Sessions",
+        "payments": "Payment status on the payments page",
+        "openCase": "Open a compensation case",
+        "restore": "Restore the enrollment",
+        "restorableUntil": "This enrollment can be restored until {when}.",
+        "footer": "Every action here asks for a written reason; the action and its reason are logged under your name in the audit log.",
+        "sessionsTitle": "Sessions",
+        "sessionsEmpty": "This enrollment has no sessions.",
+        "session": "Session {n}",
+        "makeupFor": "Make-up for session {n}",
+        "underDispute": "Outcome under dispute: {outcome}",
+        "cancel": "Cancel the session",
+        "correct": "Correct the outcome",
+        "telemetry": "Connection record",
+        "casesTitle": "Compensation cases",
+        "casesEmpty": "This enrollment has no compensation case.",
+        "viewCase": "View the case",
+        "timelineTitle": "What happened to the enrollment · newest first",
+        "timelineEmpty": "Nothing recorded yet."
+      },
+      "remedy": {
+        "title": "Remedy · {kind}",
+        "kind": {
+          "makeup": "Make-up session",
+          "refund": "Refund of the session"
+        },
+        "status": {
+          "awaitingChoice": "Awaiting the student's choice",
+          "proposed": "Proposed time awaiting the student",
+          "counterProposed": "Student's proposal awaiting the teacher",
+          "booked": "Make-up session booked",
+          "refundCase": "With the administration in a compensation case",
+          "frozen": "Paused",
+          "lapsed": "Closed when the student's account was deleted"
+        },
+        "offeredAt": "Offered {when}",
+        "choiceClosesAt": "The student's choice closes {when}",
+        "proposal": "Proposed time: {time}",
+        "counter": "Student's proposal: {time}, sent {when}",
+        "answerClosesAt": "The teacher's answer closes {when}",
+        "decidedAt": "Decided {when}",
+        "bookingRetried": "Booking refused, retried until {when}",
+        "handToCase": "Hand the remedy to the student's case"
+      },
+      "caseReason": {
+        "slotUnavailable": "The slot could not be booked after payment",
+        "partyRestricted": "A party's account is restricted",
+        "duplicatePayment": "Duplicate payment",
+        "absenceTermination": "Enrollment ended for the teacher's absence",
+        "adminCancellation": "A session cancelled by the administration",
+        "teacherEnded": "The teacher suspended or their account ended",
+        "studentSuspended": "The student suspended",
+        "studentBanned": "The student banned",
+        "studentFaultConfirmed": "A suspended student's fault confirmed",
+        "refundChoice": "The student chose a refund",
+        "counterUnanswered": "The teacher did not answer the student's proposal",
+        "makeupRefused": "The make-up session could not be booked",
+        "adminOpenedForStudent": "Opened by the administration for the student",
+        "adminOpenedForTeacher": "Opened by the administration for the teacher"
+      },
+      "caseStatus": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "dismissed": "Closed"
+      },
+      "event": {
+        "withSession": "{event} · session {n}",
+        "outcomeChange": "{before} → {after}",
+        "previousStart": "It was set for {when}",
+        "kind": {
+          "confirmed": "The enrollment was confirmed",
+          "orderFailed": "A payment order failed",
+          "cancelled": "The enrollment was cancelled · {reason}",
+          "completed": "The enrollment was completed",
+          "terminatedNoShow": "The enrollment ended for the teacher's absence",
+          "restored": "The enrollment was restored",
+          "settled": "The session's outcome was settled",
+          "cancellationRequested": "A cancellation of the session was requested",
+          "cancellationAccepted": "The cancellation request was accepted",
+          "cancellationDeclined": "The cancellation request was declined",
+          "cancellationExpired": "The cancellation request lapsed",
+          "cancelledByAdmin": "The administration cancelled the session",
+          "remedyOffered": "A remedy was offered",
+          "counterProposed": "The student proposed another make-up time",
+          "counterAccepted": "The teacher accepted the student's proposal",
+          "counterDeclined": "The teacher declined the student's proposal",
+          "counterWithdrawn": "The student's proposal was withdrawn",
+          "remedyFrozen": "The remedy was paused",
+          "makeupBooked": "A make-up session was booked",
+          "remedyHandedToCase": "The remedy was handed to a case",
+          "remedyLapsed": "The remedy closed when the student's account was deleted",
+          "disputeRaised": "A dispute of the outcome was raised",
+          "disputeResolved": "The dispute was resolved",
+          "disputeRevised": "The dispute's ruling was revised",
+          "reviewResolved": "The session's review was resolved",
+          "outageReclassified": "The session moved to «Service outage»",
+          "complaintRaised": "An absence complaint was raised",
+          "complaintDecided": "The complaint was decided",
+          "outcomeCorrected": "The outcome was corrected",
+          "instantsReresolved": "The session's time was recomputed",
+          "counterBookingRefused": "The student's proposal could not be booked and was released"
+        }
+      },
+      "cancel": {
+        "title": "Cancel session {n}",
+        "effect": "The session becomes «Cancelled by admin» with no penalty on either party, and a compensation case opens on the enrollment, or the cancellation joins its open case if there is one.",
+        "reasonLabel": "Reason for cancelling",
+        "confirm": "Cancel the session",
+        "refused": {
+          "notScheduled": "This session is no longer upcoming: it was settled or cancelled, or it is disputed and its outcome is decided on the disputes page. Nothing changed.",
+          "notFound": "This session was not found. Nothing changed."
+        }
+      },
+      "restore": {
+        "title": "Restore the enrollment",
+        "until": "The restore is open until {when}.",
+        "effect": "The enrollment becomes active again, its remaining sessions are created from the nearest weekly time after the first-session lead, each remedy the closing's case held is offered again, and that case closes with the note «restored». The cancelled sessions stay as they are.",
+        "reasonLabel": "Reason for restoring",
+        "confirm": "Restore the enrollment",
+        "refused": {
+          "notRestorable": "This closing cannot be restored from here. Nothing changed.",
+          "windowClosed": "The restore window has passed. Nothing changed.",
+          "caseClosed": "The closing's case was closed, so the enrollment is not restored through it. Nothing changed.",
+          "partyRestricted": "A party's account is not active, or the teacher's approval does not stand. Nothing changed.",
+          "slotInactive": "The teacher deactivated this enrollment's weekly slot. Nothing changed.",
+          "slotChanged": "The teacher changed the weekly slot's day, time or time zone since the enrollment's sessions were created, and the student is not moved to a new time. Nothing changed.",
+          "slotTaken": "The weekly slot is taken by another student in a week the restore would fill. Nothing changed.",
+          "timeTaken": "A session the restore would create overlaps a session, an open hold or a reserved make-up time of either party. Nothing changed.",
+          "noFreeWeek": "No free week was found for a remedy the closing's case held, so the case stays open. Nothing changed.",
+          "notFound": "This enrollment was not found. Nothing changed."
+        }
+      }
     }
   }
 }

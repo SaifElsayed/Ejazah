@@ -75,7 +75,7 @@ describe('the guard', () => {
   });
 
   it('sends an unknown path home', () => {
-    renderAt('/disputes', verified);
+    renderAt('/no-such-page', verified);
     expect(heading('admin.home.title')).toBeTruthy();
   });
 });
@@ -127,8 +127,17 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.home'), '/'],
       [translate('ar', 'admin.nav.items.applications'), '/applications'],
       [translate('ar', 'admin.nav.items.credentials'), '/credentials'],
+      // B42 (the note under T048, T049 and T050, Q4): Phase 3's three queues.
+      [translate('ar', 'admin.nav.items.sessionReview'), '/review'],
+      [translate('ar', 'admin.nav.items.disputes'), '/disputes'],
+      [translate('ar', 'admin.nav.items.cases'), '/cases'],
+      // B42 (the note under T047 and T048, Q4): the monitor and the outages, records.
+      [translate('ar', 'admin.nav.items.enrollments'), '/sessions'],
+      // B42 (the note under T058, Q4): the user directory.
+      [translate('ar', 'admin.nav.items.users'), '/users'],
       // T053: the payments monitor, before the settings as the board orders the group.
       [translate('ar', 'admin.nav.items.payments'), '/payments'],
+      [translate('ar', 'admin.nav.items.outages'), '/outages'],
       [translate('ar', 'admin.nav.items.settings'), '/settings/admins'],
       [translate('ar', 'admin.nav.items.audit'), '/audit'],
     ]);

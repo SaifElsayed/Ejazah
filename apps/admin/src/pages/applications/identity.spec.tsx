@@ -507,3 +507,78 @@ describe('require-ID (FR-166)', () => {
     },
   );
 });
+
+describe('T058: RATE_LIMITED on the documents', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it('the viewer’s link says when to try again, and still offers a retry', async () => {
+    const api = fakeApi();
+    api.documents.link.mutate.mockRejectedValueOnce(limited('61'));
+    open(api);
+    fireEvent.click(
+      (await detail()).getByRole('button', { name: ar('admin.common.documentType.nationalId') }),
+    );
+    const viewer = await dialog(ar('admin.common.documentType.nationalId'));
+    expect(await viewer.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(viewer.queryByText(ar('admin.dialogs.documentViewer.loadError'))).toBeNull();
+    expect(viewer.getByRole('button', { name: ar('admin.common.action.retry') })).toBeTruthy();
+  });
+
+  it('a document’s decision says to wait a little when no time is given', async () => {
+    const api = fakeApi(
+      detailOf({
+        accountStatus: 'verification_required',
+        identityRequest: {
+          ...request,
+          document: {
+            documentId: NEW_DOCUMENT,
+            type: 'national_id',
+            submittedAt: '2026-10-17T09:00:00.000Z',
+          },
+        },
+      }),
+    );
+    open(api);
+    const panel = await detail();
+    const block = within(
+      panel
+        .getByText(ar('admin.applications.detail.identityRequest.title'))
+        .closest('section') as HTMLElement,
+    );
+    fireEvent.click(
+      block.getByRole('button', { name: ar('admin.common.documentType.nationalId') }),
+    );
+    const viewer = await dialog(ar('admin.common.documentType.nationalId'));
+    await waitFor(() =>
+      expect(api.documents.link.mutate).toHaveBeenCalledWith({ documentId: NEW_DOCUMENT }),
+    );
+    api.documents.accept.mutate.mockRejectedValue(limited());
+    fireEvent.click(
+      viewer.getByRole('button', { name: ar('admin.dialogs.documentViewer.accept') }),
+    );
+    const confirm = await dialog(
+      ar('admin.dialogs.confirm.acceptDocument.title', { name: row.displayName }),
+    );
+    fireEvent.click(
+      confirm.getByRole('button', { name: ar('admin.dialogs.confirm.acceptDocument.confirm') }),
+    );
+    expect(await confirm.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(confirm.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+
+  it('require-ID says when to try again', async () => {
+    const { api } = open();
+    api.users.requireIdentity.mutate.mockRejectedValue(limited('31'));
+    fireEvent.click(
+      (await detail()).getByRole('button', { name: ar('admin.common.action.requireId') }),
+    );
+    const asking = await dialog(ar('admin.dialogs.requireId.title'));
+    fireEvent.change(asking.getByLabelText(ar('admin.dialogs.requireId.reasonLabel')), {
+      target: { value: 'سبب' },
+    });
+    fireEvent.click(asking.getByRole('button', { name: ar('admin.dialogs.requireId.confirm') }));
+    expect(await asking.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
+    expect(asking.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

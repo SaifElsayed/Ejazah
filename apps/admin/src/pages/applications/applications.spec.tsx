@@ -632,3 +632,69 @@ describe('the actions each state allows (FR-162)', () => {
     }
   });
 });
+
+describe('T058: RATE_LIMITED on the applications', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it('the queue says when to try again', async () => {
+    const api = fakeApi();
+    api.applications.list.query.mockRejectedValue(limited('61'));
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the detail says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.applications.get.query.mockRejectedValue(limited());
+    open(api);
+    const detail = within(await select(rowA.displayName));
+    expect(await detail.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(detail.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the approval says when to try again', async () => {
+    const api = fakeApi();
+    const ready = detailOf(rowB, { call: { completedOn: '2026-10-13', outcome: 'suitable' } });
+    ready.credentials = [{ ...(ready.credentials[0] as object), status: 'approved' }] as never;
+    api.applications.get.query.mockResolvedValue(ready);
+    api.applications.approve.mutate.mockRejectedValue(limited('120'));
+    open(api);
+    const detail = within(await select(rowB.displayName));
+    const approve = await detail.findByRole('button', {
+      name: ar('admin.applications.detail.approve'),
+    });
+    await waitFor(() => expect(approve).toHaveProperty('disabled', false));
+    fireEvent.click(approve);
+    const dialog = within(await screen.findByRole('dialog'));
+    fireEvent.click(
+      dialog.getByRole('button', { name: ar('admin.dialogs.confirm.approveApplication.confirm') }),
+    );
+    expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+
+  it('a decision says when to try again', async () => {
+    const api = fakeApi();
+    api.applications.ban.mutate.mockRejectedValue(limited('31'));
+    open(api);
+    const detail = within(await select(rowA.displayName));
+    fireEvent.click(
+      await detail.findByRole('button', { name: ar('admin.applications.detail.reject') }),
+    );
+    const dialog = within(
+      await screen.findByRole('dialog', {
+        name: ar('admin.dialogs.decision.title', { name: rowA.displayName }),
+      }),
+    );
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.dialogs.decision.kinds.ban') }));
+    fireEvent.click(dialog.getByLabelText(ar('admin.dialogs.decision.ban.reasons.impersonation')));
+    fireEvent.change(dialog.getByLabelText(ar('admin.dialogs.decision.ban.noteLabel')), {
+      target: { value: 'انتحال.' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.dialogs.decision.ban.confirm') }));
+    expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

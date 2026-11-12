@@ -7,7 +7,8 @@
 // status: a gateway may report neither on a paid order), the status, and a paid order of a cancelled
 // enrollment marked. Pages are keyset pages: the pager offers the pages already read and the next
 // one while the server writes a cursor. A row opens its order beside the table (`PaymentPanel`);
-// `?payment=` opens one at once (the audit log's link). No control writes (FR-401); the page is a
+// `?payment=` opens one at once (the audit log's link). B42, T047 (the note under T047, Q6 (a)):
+// `?enrollment=` lists that enrollment's orders alone, the filter shown as a removable chip. No control writes (FR-401); the page is a
 // console page behind the second factor (FR-402).
 //
 // Left out, as the board draws them with no requirement behind them this phase: the filter panel
@@ -32,6 +33,7 @@ import {
   Toolbar,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
@@ -52,12 +54,15 @@ export function AdminPayments() {
   const [typed, setTyped] = useState('');
   const search = useSettled(typed);
   const [selected, setSelected] = useState<string | null>(params.get('payment'));
+  // B42, T047 (the note under T047, Q6 (a)): `?enrollment=`, the link from `/sessions` and `/cases`.
+  const [enrollmentId, setEnrollmentId] = useState<string | null>(params.get('enrollment'));
   // The cursor of each page read so far: the first page has none.
   const [cursors, setCursors] = useState<readonly (string | undefined)[]>([undefined]);
   const [page, setPage] = useState(1);
   const filter: PaymentsFilter = {
     ...(status === undefined ? {} : { status }),
     ...(search === '' ? {} : { search }),
+    ...(enrollmentId === null ? {} : { enrollmentId }),
   };
   const list = usePaymentsPage(filter, cursors[page - 1]);
 
@@ -71,6 +76,7 @@ export function AdminPayments() {
   }
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const next = listed?.nextCursor;
   const pageCount = page === cursors.length && next !== undefined ? page + 1 : cursors.length;
   const go = (target: number) => {
@@ -80,6 +86,7 @@ export function AdminPayments() {
   const clearAll = () => {
     setStatus(undefined);
     setTyped('');
+    setEnrollmentId(null);
   };
 
   const table =
@@ -91,7 +98,7 @@ export function AdminPayments() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.payments.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">
@@ -106,7 +113,7 @@ export function AdminPayments() {
         <Skeleton shape="block" />
       )
     ) : listed.items.length === 0 ? (
-      status === undefined && search === '' && page === 1 ? (
+      status === undefined && search === '' && enrollmentId === null && page === 1 ? (
         <EmptyState
           icon={{ name: 'credit-card' }}
           title={t('admin.payments.emptyAll.title')}
@@ -178,6 +185,15 @@ export function AdminPayments() {
     );
 
   const chips = [
+    ...(enrollmentId === null
+      ? []
+      : [
+          {
+            key: 'enrollment',
+            content: t('admin.payments.enrollmentFilter'),
+            onRemove: () => setEnrollmentId(null),
+          },
+        ]),
     ...(status === undefined
       ? []
       : [

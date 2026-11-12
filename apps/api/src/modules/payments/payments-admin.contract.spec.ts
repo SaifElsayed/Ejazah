@@ -8,7 +8,11 @@
 // refused by `payments-admin.router.spec.ts` ("refuses a malformed cursor, an unknown status and an
 // empty search as VALIDATION_FAILED, writing nothing"); a field the schema does not name is
 // stripped there too ("answers only the fields its schema names", for the list and the detail).
-import { paymentsListInput, paymentsListItem } from '@ijazah/contracts/admin';
+import {
+  enrollmentOutcomeKind,
+  paymentsListInput,
+  paymentsListItem,
+} from '@ijazah/contracts/admin';
 import { describe, expect, it } from 'vitest';
 
 const ITEM = {
@@ -31,6 +35,28 @@ describe('payments.list’s input', () => {
 
   it('refuses a search over its bound', () => {
     expect(paymentsListInput.safeParse({ search: 'م'.repeat(101) }).success).toBe(false);
+  });
+
+  // B42, T047 (the note under T047, Q6 (a)): one enrollment's orders, the link from `/sessions` and
+  // `/cases`; additive (R-API-9).
+  it('takes an enrollment id, optional, and refuses one that is not a uuid', () => {
+    const enrollmentId = '0199d0a0-0000-7000-8000-0000000000e1';
+    expect(paymentsListInput.parse({ enrollmentId })).toEqual({ enrollmentId });
+    expect(paymentsListInput.safeParse({ enrollmentId: 'e1' }).success).toBe(false);
+  });
+});
+
+// B42, T047 (the follow-up under T047): Phase 3's three outcomes of an enrollment on the timeline.
+describe('an enrollment’s outcome kinds', () => {
+  it('are Phase 2’s three and Phase 3’s completed, terminated_no_show and restored', () => {
+    expect(enrollmentOutcomeKind.options).toEqual([
+      'confirmed',
+      'order_failed',
+      'cancelled',
+      'completed',
+      'terminated_no_show',
+      'restored',
+    ]);
   });
 });
 

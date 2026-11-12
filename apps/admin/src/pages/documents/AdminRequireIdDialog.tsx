@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/components';
 import { useT } from '../../i18n';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { useIdentityActions } from './queries';
 
 export function AdminRequireIdDialog({
@@ -26,14 +27,14 @@ export function AdminRequireIdDialog({
   const t = useT();
   const { requireIdentity } = useIdentityActions();
   const [reason, setReason] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   const written = reason.trim();
 
   const confirm = () => {
-    setFailed(false);
+    setFailed(null);
     requireIdentity.mutate(
       { targetUserId: userId, reason: written },
-      { onSuccess: onClose, onError: () => setFailed(true) },
+      { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) },
     );
   };
 
@@ -91,9 +92,9 @@ export function AdminRequireIdDialog({
           placeholder={t('admin.dialogs.requireId.reasonPlaceholder')}
         />
       </Field>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>

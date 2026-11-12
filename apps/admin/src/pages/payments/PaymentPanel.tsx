@@ -4,6 +4,9 @@
 // enrollment's package, status and progress, every paid order of the enrollment when it has more
 // than one (a compensation case covers each, the note under T052), and the order's history as a
 // timeline. The footer says no money moves here. There is no button: nothing on the monitor writes.
+// B42, T047 (R-323 GAP-8): the enrollment's holds, oldest first as the server answered them, each
+// placed and expiring, then released with its reason, a release with none read «not recorded», or
+// not released.
 import { piasters } from '@ijazah/money';
 
 import {
@@ -16,9 +19,10 @@ import {
   Timeline,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
-import { formatPounds } from '../../lib/format';
+import { errorMessageKey } from '../../lib/error-message';
+import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
-import { amountOrDash, orderHistory } from './history';
+import { amountOrDash, HOLD_RELEASE_REASONS, orderHistory } from './history';
 import { type PaymentDetail, type PaymentStatus, usePayment } from './queries';
 
 /** Each status's word and tone, as the table and the panel draw it. */
@@ -47,11 +51,12 @@ const ENROLLMENT_STATUS: Readonly<
 export function PaymentPanel({ paymentId }: { readonly paymentId: string }) {
   const t = useT();
   const read = usePayment(paymentId);
+  const loadFailure = errorMessageKey(read.error, 'admin.common.loadError.text');
   if (read.data !== undefined) return <PaymentDetailPanel detail={read.data} />;
   if (read.isError) {
     return (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     );
   }
@@ -66,6 +71,11 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
   const subjectName = (subject: { readonly nameAr: string; readonly nameEn: string }) =>
     locale === 'ar' ? subject.nameAr : subject.nameEn;
   const status = PAYMENT_STATUS[detail.status];
+  const at = (value: string) =>
+    t('admin.common.dateTime', {
+      date: dayMonth(value, locale, zone),
+      time: timeOfDay(value, locale, zone),
+    });
   return (
     <Panel
       header={
@@ -159,6 +169,38 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
               {t('admin.common.progress', { done: enrollment.completed, total: enrollment.total })}
             </span>
           </span>
+        </section>
+      )}
+      {enrollment === undefined ? null : (
+        <section className="section" aria-label={t('admin.payments.detail.holdsTitle')}>
+          <h2 className="group-label">{t('admin.payments.detail.holdsTitle')}</h2>
+          {enrollment.holds.length === 0 ? (
+            <p className="text-callout tone-muted">{t('admin.payments.detail.holdsEmpty')}</p>
+          ) : (
+            <ul className="stack gap-2">
+              {enrollment.holds.map((hold) => (
+                <li key={hold.holdId} className="stack text-callout">
+                  <span>
+                    {t('admin.payments.detail.holdPlaced', {
+                      placed: at(hold.placedAt),
+                      expires: at(hold.expiresAt),
+                    })}
+                  </span>
+                  <span className="text-caption tone-muted">
+                    {hold.releasedAt === undefined
+                      ? t('admin.payments.detail.holdNotReleased')
+                      : t('admin.payments.detail.holdReleased', {
+                          released: at(hold.releasedAt),
+                          reason:
+                            hold.releaseReason === undefined
+                              ? t('admin.payments.detail.holdReasonNotRecorded')
+                              : t(HOLD_RELEASE_REASONS[hold.releaseReason]),
+                        })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
       {detail.paidOrders.length > 1 ? (

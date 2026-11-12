@@ -249,6 +249,17 @@ export { accountTimezone } from './users.repository.js';
 export { displayNamesOf } from './users.repository.js';
 /** A session's parties' gender, standing, approval and name, for sessions' read and join (T011 of specs/004-sessions). */
 export { type SessionPartyRecord, sessionPartiesOf } from './users.repository.js';
+/**
+ * T058 of specs/004-sessions (FR-481, SRS FR-ADMIN-4; the owner's decision Q8 of 2026-11-12): the
+ * user directory's two readers for verification's `users.list` and `users.get`, deleted users
+ * included through `includeDeleted`, outside any transaction.
+ */
+export {
+  type DirectoryUser,
+  userDirectoryPage,
+  userRecordOf,
+  type UserRecordRow,
+} from './users.repository.js';
 
 /**
  * The visibility predicate (T010, `002:T143`, SRS §3.7.1, R-201): the only way any module learns

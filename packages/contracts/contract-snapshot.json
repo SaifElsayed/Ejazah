@@ -1128,6 +1128,15 @@
             "type": "string",
             "values": ["dismissed", "open", "resolved"]
           },
+          "$.parties": { "required": true, "type": "object" },
+          "$.parties.student": { "required": true, "type": "object" },
+          "$.parties.student.deleted": { "required": true, "type": "boolean" },
+          "$.parties.student.displayName": { "required": true, "type": "null|string" },
+          "$.parties.student.userId": { "required": true, "type": "string" },
+          "$.parties.teacher": { "required": true, "type": "object" },
+          "$.parties.teacher.deleted": { "required": true, "type": "boolean" },
+          "$.parties.teacher.displayName": { "required": true, "type": "null|string" },
+          "$.parties.teacher.userId": { "required": true, "type": "string" },
           "$.revisable": { "required": true, "type": "boolean" },
           "$.revisions": { "required": true, "type": "array" },
           "$.revisions[]": { "type": "object" },
@@ -1532,7 +1541,14 @@
           "$.outcomes[].kind": {
             "required": true,
             "type": "string",
-            "values": ["cancelled", "confirmed", "order_failed"]
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "order_failed",
+              "restored",
+              "terminated_no_show"
+            ]
           },
           "$.outcomes[].occurredAt": { "required": true, "type": "string" },
           "$.paidOrders": { "required": true, "type": "array" },
@@ -1559,6 +1575,7 @@
         "input": {
           "$": { "type": "object" },
           "$.cursor": { "type": "string" },
+          "$.enrollmentId": { "type": "string" },
           "$.search": { "type": "string" },
           "$.status": {
             "type": "string",
@@ -2196,6 +2213,87 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "users.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.targetUserId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.accountStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "banned", "suspended", "verification_required"]
+          },
+          "$.cancellationRequests": { "required": true, "type": "object" },
+          "$.cancellationRequests.recent": { "required": true, "type": "integer" },
+          "$.cancellationRequests.total": { "required": true, "type": "integer" },
+          "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.isMinor": { "required": true, "type": "boolean" },
+          "$.profile": { "required": true, "type": "object" },
+          "$.profile.deleted": { "required": true, "type": "boolean" },
+          "$.profile.displayName": { "required": true, "type": "null|string" },
+          "$.profile.email": { "required": true, "type": "null|string" },
+          "$.profile.joinedAt": { "required": true, "type": "string" },
+          "$.profile.teacher": { "type": "object" },
+          "$.profile.teacher.bio": { "required": true, "type": "string" },
+          "$.profile.teacher.qualification": { "required": true, "type": "string" },
+          "$.repeatedAbsences": { "type": "array" },
+          "$.repeatedAbsences[]": { "type": "object" },
+          "$.repeatedAbsences[].enrollmentId": { "required": true, "type": "string" },
+          "$.repeatedAbsences[].status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "cancelled",
+              "completed",
+              "confirmed",
+              "pending_payment",
+              "terminated_no_show"
+            ]
+          },
+          "$.repeatedAbsences[].student": { "required": true, "type": "object" },
+          "$.repeatedAbsences[].student.deleted": { "required": true, "type": "boolean" },
+          "$.repeatedAbsences[].student.displayName": { "required": true, "type": "null|string" },
+          "$.repeatedAbsences[].student.userId": { "required": true, "type": "string" },
+          "$.repeatedAbsences[].teacherNoShows": { "required": true, "type": "integer" },
+          "$.role": { "required": true, "type": "null|string", "values": ["student", "teacher"] },
+          "$.userId": { "required": true, "type": "string" },
+          "$.verificationStatus": {
+            "required": true,
+            "type": "null|string",
+            "values": ["approved", "banned", "pending", "rejected", "revoked", "suspended"]
+          }
+        }
+      },
+      "users.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.name": { "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].accountStatus": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "banned", "suspended", "verification_required"]
+          },
+          "$.items[].deleted": { "required": true, "type": "boolean" },
+          "$.items[].displayName": { "required": true, "type": "null|string" },
+          "$.items[].role": {
+            "required": true,
+            "type": "null|string",
+            "values": ["student", "teacher"]
+          },
+          "$.items[].userId": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
       },
       "users.requireIdentity": {
         "input": {

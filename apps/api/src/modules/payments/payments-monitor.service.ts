@@ -4,7 +4,7 @@
 //
 // THE LIST. Newest first by the order's time-ordered id, keyset pages of `admin_list_page_size`, one
 // row more read than the page so a cursor is written only while more orders follow. The status
-// filter is the query's. A search matches an order reference exactly, or a student's name by its
+// filter is the query's, and so is the enrollment's (B42, T047; the note under T047, Q6 (a)). A search matches an order reference exactly, or a student's name by its
 // folded prefix (R-203) through the kernel's `idsWithFoldedNamePrefix` over the students of the
 // orders read, so no name is matched outside them. The student is booking's (the order's enrollment)
 // and the name identity's, each through its entry (R-API-6), so a name search cannot be one query
@@ -143,7 +143,12 @@ export class PaymentsMonitorService {
     // Without a search one read fills the page; with one, the reads go on until it is full, each
     // window twice the last, so a scan of n orders takes a number of reads logarithmic in n.
     for (;;) {
-      const rows = await this.#store.orderPage(tx, { status: query.status, after, limit: window });
+      const rows = await this.#store.orderPage(tx, {
+        status: query.status,
+        enrollmentId: query.enrollmentId,
+        after,
+        limit: window,
+      });
       const parties = await this.#store.enrollmentPartiesAmong(tx, [
         ...new Set(rows.map(({ enrollmentId }) => enrollmentId)),
       ]);

@@ -480,3 +480,56 @@ describe('AdminMfaSetup (FR-171)', () => {
     expect(heading('admin.signIn.title')).toBeTruthy();
   });
 });
+
+describe('T058: RATE_LIMITED on the sign-in pages (rate_limit_admin_authentication)', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+  const pending = { token: 'pending-1', step: 'mfa' } as const;
+
+  it('the sign-in says when to try again, in place of its one refusal', async () => {
+    const { auth } = renderAt('/sign-in');
+    auth.signIn.mutate.mockRejectedValue(limited('61'));
+    type('admin.signIn.email', 'sara@example.com');
+    type('admin.signIn.password', 'a password');
+    press('admin.signIn.continue');
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.signIn.error'))).toBeNull();
+  });
+
+  it('the invite link’s page says to wait a little when no time is given', async () => {
+    const { auth } = renderAt('/set-password#token=invite-1');
+    auth.setPassword.mutate.mockRejectedValue(limited());
+    type('admin.setPassword.password', 'a long passphrase');
+    type('admin.setPassword.confirm', 'a long passphrase');
+    press('admin.setPassword.save');
+    expect(await screen.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.setPassword.failed'))).toBeNull();
+  });
+
+  it('the second factor says when to try again', async () => {
+    const { auth } = renderAt('/mfa', pending);
+    auth.mfa.verify.mutate.mockRejectedValue(limited('120'));
+    typeCode('123456');
+    press('admin.mfa.signIn');
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.mfa.failed'))).toBeNull();
+  });
+
+  it('the recovery code says when to try again', async () => {
+    const { auth } = renderAt('/mfa/recovery', pending);
+    auth.mfa.recover.mutate.mockRejectedValue(limited('31'));
+    type('admin.mfaRecovery.codeLabel', '4F7K-29QX');
+    press('admin.mfaRecovery.signIn');
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.mfa.failed'))).toBeNull();
+  });
+
+  it('the setup that cannot begin says to wait a little, and still offers a retry', async () => {
+    renderAt('/mfa/setup', { token: 'pending-3', step: 'setup' }, {
+      arrange: (auth) => auth.mfa.setup.begin.mutate.mockRejectedValue(limited()),
+    });
+    expect(await screen.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.mfaSetup.loadError'))).toBeNull();
+    expect(screen.getByRole('button', { name: ar('admin.common.action.retry') })).toBeTruthy();
+  });
+});

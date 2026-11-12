@@ -23,6 +23,7 @@ import {
   TextLink,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonthYear } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { CredentialConfirm, type CredentialDecision } from './CredentialConfirm';
@@ -59,13 +60,14 @@ export function CredentialPanel({
 }) {
   const t = useT();
   const credential = useCredential(credentialId);
+  const loadFailure = errorMessageKey(credential.error, 'admin.common.loadError.text');
   // Said above the panel, which the next read draws anew (B14c review, round 1, finding 1).
   const [moved, setMoved] = useState(false);
   const detail = credential.data;
   if (detail === undefined) {
     return credential.isError ? (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     ) : (
       <Skeleton shape="block" />

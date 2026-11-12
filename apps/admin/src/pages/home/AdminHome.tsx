@@ -18,6 +18,7 @@ import {
   TextLink,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { cityName, dayMonth, timeOfDay, weekdayDate } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { actionText, targetHref, targetText } from '../audit/actions';
@@ -32,6 +33,7 @@ export function AdminHome() {
   const zone = panelTimeZone();
   const summary = useHomeSummary();
   const answer = summary.data;
+  const loadFailure = errorMessageKey(summary.error, 'admin.common.loadError.text');
 
   /** What a card says of the oldest: its age in days, «from today» under a day. */
   const oldest = (hours: number | undefined) =>
@@ -59,7 +61,7 @@ export function AdminHome() {
                 <strong>
                   {t('admin.common.loadError.title', { page: t('admin.home.title') })}
                 </strong>
-                <span>{t('admin.common.loadError.text')}</span>
+                <span>{t(loadFailure.key, loadFailure.values)}</span>
               </span>
             </Banner>
             <div className="row">

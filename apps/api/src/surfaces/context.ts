@@ -141,6 +141,11 @@ import type {
   // T061.
   sessionsRestoreInput,
   sessionsRestoreOutput,
+  // T058.
+  usersGetInput,
+  usersGetOutput,
+  usersListInput,
+  usersListOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -682,6 +687,23 @@ export interface AdminSurfaceServices {
       readonly answer: z.input<typeof sessionsRestoreOutput>;
       readonly replayed: boolean;
     }>;
+  };
+  /**
+   * T058 of specs/004-sessions (FR-481, FR-459; SRS FR-ADMIN-4): the user directory, the
+   * verification module's over identity's and sessions' entries, composed by the admin module: two
+   * reads on the call's transaction, nothing written but the call's audit entry.
+   */
+  readonly users: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof usersListInput>,
+    ): Answer<typeof usersListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof usersGetInput>,
+    ): Answer<typeof usersGetOutput>;
   };
 }
 

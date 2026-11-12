@@ -13,6 +13,7 @@ import { useLocation } from 'react-router';
 import { AuthCard, Banner, Button, Field, Input } from '../../design/components';
 import { useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 
 /** Why a page sent the person back to the sign-in page. */
 export type SignInNotice = 'passwordSet' | 'sessionExpired';
@@ -35,21 +36,21 @@ export function AdminSignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
 
   async function signIn(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
       const { next, sessionToken } = await client.api.auth.signIn.mutate({
         email: email.trim(),
         password,
       });
       sessions.write({ token: sessionToken, step: next });
-    } catch {
+    } catch (error) {
       setPassword('');
-      setFailed(true);
+      setFailed(errorMessageKey(error, 'admin.signIn.error'));
     } finally {
       setBusy(false);
     }
@@ -58,9 +59,9 @@ export function AdminSignIn() {
   return (
     <AuthCard title={t('admin.signIn.title')} lede={t('admin.signIn.lede')}>
       <form className="stack gap-4" onSubmit={(event) => void signIn(event)}>
-        {failed ? (
+        {failed !== null ? (
           <Banner icon={{ name: 'alert-circle' }} tone="danger">
-            {t('admin.signIn.error')}
+            {t(failed.key, failed.values)}
           </Banner>
         ) : notice === undefined ? null : (
           <Banner

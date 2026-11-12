@@ -107,6 +107,8 @@ export function surfaceOf(
     // The review queue and the disputes queue have their own router specs (T033, T034).
     review: unusedAdminServices.review,
     disputes: unusedAdminServices.disputes,
+    // T058 of specs/004-sessions: the user directory has its own router spec (`verification/documents.router.spec.ts`).
+    users: unusedAdminServices.users,
   };
   const administration = {
     transactions: transactionsOver(database),

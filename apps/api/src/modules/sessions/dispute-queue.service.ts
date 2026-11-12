@@ -15,7 +15,9 @@
 // the open dispute alone: the chat itself is read by `disputes.chat` (T040) through the
 // `DisputeChat` port. A dispute that is not a session dispute, or none, is `NOT_FOUND`. T059 adds
 // `revisable`, `disputes.revise`'s one rule read with no lock (`ruling-revision.ts`), and
-// `revisions`, the ruling's `dispute_revised` rows oldest first (`revision.service.ts`).
+// `revisions`, the ruling's `dispute_revised` rows oldest first (`revision.service.ts`). B42 (T049,
+// Q5 (b)) adds `parties`, the session's student and teacher named through identity's entry as
+// `cases.get` names its enrollment's, a deleted account (no name answered) unnamed (FR-426).
 //
 // THE LOG (the owner's rule). A refusal writes one info line of ids and its cause, marked
 // «logged»; a read writes none.
@@ -25,6 +27,7 @@ import type {
   DisputesListInput,
   DisputesListItem,
   DisputesListOutput,
+  MonitorParty,
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
@@ -33,6 +36,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { displayNamesOf } from '../identity/index.js';
 import {
   type SessionDisputeRow,
   sessionDisputeOf,
@@ -73,6 +77,8 @@ export interface DisputeQueueStore {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<ReadonlyMap<string, number>>;
+  /** Identity's: display names by account, a deleted account absent. */
+  namesOf(tx: Transaction, userIds: readonly string[]): Promise<ReadonlyMap<string, string>>;
   telemetrySession(tx: Transaction, sessionId: string): Promise<TelemetrySession | null>;
 }
 
@@ -81,6 +87,7 @@ export const disputeQueueStore: DisputeQueueStore = {
   disputesPage: sessionDisputesPage,
   disputedSessionsAmong,
   teacherNoShowCountsOf,
+  namesOf: displayNamesOf,
   telemetrySession,
 };
 
@@ -101,6 +108,14 @@ const raisedByOf = (
   session: Pick<DisputedSessionRow, 'studentUserId'>,
 ): 'student' | 'teacher' =>
   dispute.raisedByUserId === session.studentUserId ? 'student' : 'teacher';
+
+/** A party as this phase names one: a deleted account (no name answered) unnamed (FR-426). */
+function partyOf(userId: string, names: ReadonlyMap<string, string>): MonitorParty {
+  const displayName = names.get(userId);
+  return displayName === undefined
+    ? { userId, displayName: null, deleted: true }
+    : { userId, displayName, deleted: false };
+}
 
 function notFound(log: Pick<Logger, 'info'>, adminId: string, disputeId: string): DomainError {
   log.info(
@@ -203,6 +218,7 @@ export function createDisputeQueue({
         ...(dispute.resolvedAt === null ? {} : { resolvedAt: dispute.resolvedAt.toISOString() }),
       };
       const view = await revisions.revisionView(tx, dispute);
+      const names = await store.namesOf(tx, [session.studentUserId, session.teacherUserId]);
       return {
         dispute: detail,
         telemetry: await telemetry.of(tx, session),
@@ -213,6 +229,10 @@ export function createDisputeQueue({
           outcomeAfter,
           revisedAt: revisedAt.toISOString(),
         })),
+        parties: {
+          student: partyOf(session.studentUserId, names),
+          teacher: partyOf(session.teacherUserId, names),
+        },
       };
     },
   };

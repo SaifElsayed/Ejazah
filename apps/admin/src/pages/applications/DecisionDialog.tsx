@@ -18,6 +18,7 @@ import {
   Segmented,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { dayMonthYear } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import type { Allowed } from './decisions';
@@ -109,7 +110,7 @@ export function DecisionDialog({
   const [kind, setKind] = useState<DecisionKind>(initial);
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   const text = KINDS[kind];
   const kinds = (['reject', 'requestInfo', 'ban'] as const).filter(
     (candidate) => allowed[candidate],
@@ -119,9 +120,9 @@ export function DecisionDialog({
 
   const decide = () => {
     if (reason === null) return;
-    setFailed(false);
+    setFailed(null);
     const teacherUserId = detail.teacherUserId;
-    const settled = { onSuccess: onClose, onError: () => setFailed(true) };
+    const settled = { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) };
     const written = note.trim();
     switch (kind) {
       case 'reject':
@@ -180,7 +181,7 @@ export function DecisionDialog({
         onChange={(value) => {
           setKind(value as DecisionKind);
           setReason(null);
-          setFailed(false);
+          setFailed(null);
         }}
         options={kinds.map((candidate) => ({
           value: candidate,
@@ -205,9 +206,9 @@ export function DecisionDialog({
       <Banner icon={{ name: text.bannerIcon }} tone={text.bannerTone}>
         {t(text.banner)}
       </Banner>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>
