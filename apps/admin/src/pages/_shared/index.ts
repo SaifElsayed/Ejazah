@@ -2,5 +2,8 @@
 // credited to its tasks. A page imports them from here and edits none.
 // - `PartyName`, `partyLabel`: a deleted party's stand-in (FR-426; T047, T049, T050, T058).
 // - `NoShowMark`: the Teacher-No-Show count and the repeated-absence mark (FR-451; same tasks).
-export { partyLabel, PartyName, type PartyRole } from './PartyName';
+// - `CorrectionDialog`: an undisputed outcome's correction over T059's `sessions.review.revise`
+//   (FR-439; T047, T048).
+export { CorrectionDialog, type CorrectionDialogProps } from './CorrectionDialog';
 export { NoShowMark } from './NoShowMark';
+export { partyLabel, PartyName, type PartyRole } from './PartyName';

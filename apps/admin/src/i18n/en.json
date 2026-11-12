@@ -1850,6 +1850,25 @@
       "title": "Settings"
     },
     "shared": {
+      "correction": {
+        "confirm": "Correct the outcome",
+        "effect": "The session's outcome becomes the one chosen. If the new outcome owes the student a remedy, it is offered by the next remedies run, not now.",
+        "outcomeLegend": "The correct outcome",
+        "reasonLabel": "Reason for the correction",
+        "refused": {
+          "disputeOpen": "This session has an open dispute; its outcome is settled on the disputes page. Nothing changed.",
+          "final": "This outcome cannot be corrected now. Nothing changed.",
+          "notFound": "This session was not found. Nothing changed.",
+          "notSettled": "This session has not been settled yet, or it was cancelled, so there is no outcome to correct. Nothing changed.",
+          "openDispute": "Open the dispute",
+          "remedyOffered": "This outcome cannot be corrected: the student has been offered a remedy for it. Nothing changed.",
+          "ruled": "A dispute over this session was resolved; its outcome is corrected by revising that dispute's ruling. Nothing changed.",
+          "underReview": "This session is in the review queue; its outcome is settled on the session review page. Nothing changed.",
+          "windowClosed": "This outcome cannot be corrected: the session's dispute window has passed. Nothing changed."
+        },
+        "title": "Correct the session's outcome"
+      },
+      "keyReused": "This request was already sent with different input, or is still being processed. Close the dialog and read the page again before you retry.",
       "noShows": {
         "count": "Teacher absences: {count}",
         "mark": "Repeated absence"
