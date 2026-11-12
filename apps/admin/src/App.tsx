@@ -30,6 +30,7 @@ import { ConsolePageShell } from './pages/_layout/shells';
 import { AdminAdmins } from './pages/settings/admins/AdminAdmins';
 import { AdminApplications } from './pages/applications/AdminApplications';
 import { AdminAudit } from './pages/audit/AdminAudit';
+import { AdminCases } from './pages/cases/AdminCases';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
 import { AdminHome } from './pages/home/AdminHome';
 import { AdminMfa } from './pages/mfa/AdminMfa';
@@ -93,6 +94,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
               <Route path="/payments" element={<AdminPayments />} />
+              <Route path="/cases" element={<AdminCases />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>
