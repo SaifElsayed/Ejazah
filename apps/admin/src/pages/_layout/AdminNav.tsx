@@ -54,6 +54,8 @@ export const NAV_GROUPS: readonly {
     entries: [
       // B42 (the note under T047, Q4): the enrollment and session monitor.
       { path: '/sessions', label: 'admin.nav.items.enrollments', icon: 'calendar' },
+      // B42 (the note under T058, Q4): the user directory.
+      { path: '/users', label: 'admin.nav.items.users', icon: 'users' },
       // T053: the payments monitor, before the settings as the board orders the group.
       { path: '/payments', label: 'admin.nav.items.payments', icon: 'credit-card' },
       // B42 (the note under T048, Q4): the video outages.

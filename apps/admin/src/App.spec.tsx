@@ -133,6 +133,8 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.cases'), '/cases'],
       // B42 (the note under T047 and T048, Q4): the monitor and the outages, records.
       [translate('ar', 'admin.nav.items.enrollments'), '/sessions'],
+      // B42 (the note under T058, Q4): the user directory.
+      [translate('ar', 'admin.nav.items.users'), '/users'],
       // T053: the payments monitor, before the settings as the board orders the group.
       [translate('ar', 'admin.nav.items.payments'), '/payments'],
       [translate('ar', 'admin.nav.items.outages'), '/outages'],
