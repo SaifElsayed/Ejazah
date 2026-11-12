@@ -540,6 +540,8 @@
       },
       "pdf": "PDF",
       "progress": "{done} من {total}",
+      "rateLimited": "طلبات كثيرة. لم يتغيّر شيء؛ انتظر قليلًا ثم حاول مرة أخرى.",
+      "rateLimitedIn": "طلبات كثيرة. لم يتغيّر شيء؛ حاول مرة أخرى بعد {count, plural, one {دقيقة} two {دقيقتين} few {# دقائق} many {# دقيقة} other {# دقيقة}}.",
       "reasonAuditPlaceholder": "يُسجَّل مع القرار في سجل التدقيق",
       "reasonLoggedWithAction": "يُسجَّل السبب مع الإجراء في سجل التدقيق.",
       "reasonRequiredPlaceholder": "اكتب سببًا واضحًا",

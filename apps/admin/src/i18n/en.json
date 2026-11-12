@@ -540,6 +540,8 @@
       },
       "pdf": "PDF",
       "progress": "{done} of {total}",
+      "rateLimited": "Too many requests. Nothing changed; wait a little and try again.",
+      "rateLimitedIn": "Too many requests. Nothing changed; try again in {count, plural, one {# minute} other {# minutes}}.",
       "reasonAuditPlaceholder": "Recorded with the decision in the audit log",
       "reasonLoggedWithAction": "The reason is recorded with the action in the audit log.",
       "reasonRequiredPlaceholder": "Write a clear reason",
