@@ -5,7 +5,6 @@
 // The panel draws the «held files» section only from this answer. The telemetry and the ruling's
 // revisions are `dispute-resolution.spec.ts`' and `ruling-revision.spec.ts`'; here they are stubs.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
-import type { Telemetry } from '@ijazah/contracts/admin';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDisputeQueue } from '../../apps/api/src/modules/sessions/index.js';
@@ -16,6 +15,7 @@ import {
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
+import type { Telemetry } from '../../packages/contracts/src/admin/index.js';
 import { connectAsApplication, type Db, insertRow, makeAdmin, makeSession } from './harness';
 
 const settings: SettingsReader = {
