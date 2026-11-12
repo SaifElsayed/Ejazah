@@ -1849,6 +1849,16 @@
       },
       "title": "الإعدادات"
     },
+    "shared": {
+      "noShows": {
+        "count": "غياب المعلم: {count}",
+        "mark": "غياب متكرر"
+      },
+      "party": {
+        "deletedStudent": "طالب محذوف",
+        "deletedTeacher": "معلم محذوف"
+      }
+    },
     "signIn": {
       "continue": "متابعة",
       "email": "البريد الإلكتروني",

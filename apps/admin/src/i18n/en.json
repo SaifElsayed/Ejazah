@@ -1849,6 +1849,16 @@
       },
       "title": "Settings"
     },
+    "shared": {
+      "noShows": {
+        "count": "Teacher absences: {count}",
+        "mark": "Repeated absence"
+      },
+      "party": {
+        "deletedStudent": "Deleted student",
+        "deletedTeacher": "Deleted teacher"
+      }
+    },
     "signIn": {
       "continue": "Continue",
       "email": "Email",
